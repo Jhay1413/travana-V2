@@ -40,6 +40,10 @@ interface JsonMappingInput {
   outboundArriveAirport?: string;
   inboundDepartAirport?: string;
   inboundArriveAirport?: string;
+  outboundDepartAirportName?: string;
+  outboundArriveAirportName?: string;
+  inboundDepartAirportName?: string;
+  inboundArriveAirportName?: string;
   roomType?: string;
   lodgeCode?: string | null;
   lodgeName?: string;
@@ -131,15 +135,19 @@ export const jsonMapperService = {
     };
 
     const airportCache = new Map<string, Promise<string>>();
-    const resolveAirport = (codeOrName?: string | null): Promise<string> => {
-      const key = norm(codeOrName);
+    const resolveAirport = (code?: string | null, name?: string | null): Promise<string> => {
+      const lookup = (code || name || '').trim();
+      const key = norm(lookup);
       if (!key) return Promise.resolve('');
       let p = airportCache.get(key);
       if (!p) {
         p = (async () => {
-          const rec = await jsonMapperRepository.findAirportByCodeOrName(codeOrName!);
-          if (!rec) { warnings.push(`Airport "${codeOrName}" not found in database`); return ''; }
-          return rec.id;
+          const rec = await jsonMapperRepository.findAirportByCodeOrName(lookup);
+          if (rec) return rec.id;
+          // Not found → create it (both columns are NOT NULL, so fall back name↔code).
+          const created = await jsonMapperRepository.createAirport(code?.trim() || lookup, name?.trim() || code?.trim() || lookup);
+          warnings.push(`Created new airport: "${name?.trim() || lookup}"`);
+          return created.id;
         })();
         airportCache.set(key, p);
       }
@@ -241,10 +249,10 @@ export const jsonMapperService = {
     boardBasisId = await resolveBoardBasis(input.boardBasis);
     tourOperatorId = await resolveTourOperator(input.tourOperator);
 
-    const outboundDepartAirportId = await resolveAirport(input.outboundDepartAirport);
-    const outboundArriveAirportId = await resolveAirport(input.outboundArriveAirport);
-    const inboundDepartAirportId = await resolveAirport(input.inboundDepartAirport);
-    const inboundArriveAirportId = await resolveAirport(input.inboundArriveAirport);
+    const outboundDepartAirportId = await resolveAirport(input.outboundDepartAirport, input.outboundDepartAirportName);
+    const outboundArriveAirportId = await resolveAirport(input.outboundArriveAirport, input.outboundArriveAirportName);
+    const inboundDepartAirportId = await resolveAirport(input.inboundDepartAirport, input.inboundDepartAirportName);
+    const inboundArriveAirportId = await resolveAirport(input.inboundArriveAirport, input.inboundArriveAirportName);
 
     roomTypeId = await resolveRoomType(input.roomType);
 

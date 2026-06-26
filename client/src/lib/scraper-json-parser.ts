@@ -2,9 +2,11 @@ export interface ScraperFlight {
   flight_number?: string | null;
   flight_ref?: string | null;
   departing_airport?: string;
+  departing_airport_name?: string;
   flight_type?: string;
   departure_date_time?: string;
   arrival_airport?: string;
+  arrival_airport_name?: string;
   arrival_date_time?: string;
 }
 
@@ -39,7 +41,9 @@ export interface ScraperJson {
   check_in_date_time?: string;
   arrival_date_time?: string;
   departure_airport?: string;
+  departure_airport_name?: string;
   arrival_airport?: string;
+  arrival_airport_name?: string;
   country?: string;
   destination?: string;
   resort?: string;
@@ -233,16 +237,20 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
       checkInDate: checkInDate,
       checkInTime: checkInTime,
       outboundDepartAirport: outbound?.departing_airport || data.departure_airport || "",
+      outboundDepartAirportName: outbound?.departing_airport_name || data.departure_airport_name || "",
       outboundDepartDate: outDep.date,
       outboundDepartTime: outDep.time,
       outboundArriveAirport: outbound?.arrival_airport || data.arrival_airport || "",
+      outboundArriveAirportName: outbound?.arrival_airport_name || data.arrival_airport_name || "",
       outboundArriveDate: outArr.date,
       outboundArriveTime: outArr.time,
       outboundFlightNumber: outbound?.flight_number || "",
       inboundDepartAirport: inbound?.departing_airport || "",
+      inboundDepartAirportName: inbound?.departing_airport_name || "",
       inboundDepartDate: inDep.date,
       inboundDepartTime: inDep.time,
       inboundArriveAirport: inbound?.arrival_airport || "",
+      inboundArriveAirportName: inbound?.arrival_airport_name || "",
       inboundArriveDate: inArr.date,
       inboundArriveTime: inArr.time,
       inboundFlightNumber: inbound?.flight_number || "",

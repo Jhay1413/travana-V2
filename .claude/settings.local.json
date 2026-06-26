@@ -104,7 +104,9 @@
       "Bash(grep -v \"findPipelineByStatus\\\\|enquiry.service\\\\|enquiry_table\\\\|enquiry\\\\.status\\\\|data\\\\.status\\\\|//\\\\|UPPER\\\\|dashboard.repository\\\\|branch-overview\\\\|organization-overview\")",
       "Bash(grep -v \"^$\")",
       "Bash(python -c ' *)",
-      "Bash(grep -iE \"enquiry-to-quote|client\\\\\\\\\\\\\\\\index|enquiry\\\\\\\\\\\\\\\\index|client/index|enquiry/index\")"
+      "Bash(grep -iE \"enquiry-to-quote|client\\\\\\\\\\\\\\\\index|enquiry\\\\\\\\\\\\\\\\index|client/index|enquiry/index\")",
+      "Bash(xargs grep -l \"getAgentStats\\\\|agentDashboard\\\\|agent.*dashboard\")",
+      "Workflow(code-review)"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -37,7 +37,7 @@ import type {
   BranchesPerformanceResponse,
   TourOperatorBreakdownRow,
 } from "./organization-overview.types";
-import { totalBookingCommissionExpr, totalQuoteCommissionExpr } from "../../utils/commission-sql";
+import { totalBookingCommissionExpr, totalQuoteCommissionExpr, totalUpsellCommissionExpr, totalUpsellSalesExpr } from "../../utils/commission-sql";
 import { quoteStatsConds } from "../../utils/quote-conditions";
 
 const bookingActiveCond = sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`;
@@ -110,10 +110,10 @@ export const organizationOverviewRepository = {
 
       db
         .select({
-          todayCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-          weekCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-          monthCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-          ytdCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          todayCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: todayStart.toISOString() })}), 0)`,
+          weekCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: weekStart.toISOString() })}), 0)`,
+          monthCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
+          ytdCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: yearStart.toISOString() })}), 0)`,
           monthBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()})`,
         })
         .from(booking)
@@ -1051,12 +1051,12 @@ export const organizationOverviewRepository = {
       db
         .select({
           branchId: transaction.branch_id,
-          today: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-          week: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-          month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          today: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: todayStart.toISOString() })}), 0)`,
+          week: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: weekStart.toISOString() })}), 0)`,
+          month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
           rangeBookings: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()})`,
-          rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-          rangeSales: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN COALESCE(${booking.sales_price}, 0) ELSE 0 END), 0)`,
+          rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: from.toISOString(), end: to.toISOString() })}), 0)`,
+          rangeSales: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN COALESCE(${booking.sales_price}, 0) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellSalesExpr(booking.id, { start: from.toISOString(), end: to.toISOString() })}), 0)`,
         })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))

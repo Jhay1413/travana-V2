@@ -131,6 +131,11 @@ export const jsonMapperRepository = {
     return row;
   },
 
+  async createAirport(code: string, name: string, countryId?: string) {
+    const [row] = await db.insert(airport).values({ airport_code: code.toUpperCase().trim(), airport_name: name.trim(), ...(countryId ? { country_id: countryId } : {}) }).returning();
+    return row;
+  },
+
   async createPark(name: string, code?: string) {
     const [row] = await db.insert(park).values({ name, code: code || null }).returning();
     return row;

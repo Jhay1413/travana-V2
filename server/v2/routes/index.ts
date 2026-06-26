@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { isAuthenticated } from '../middlewares/auth';
 import { orgBranchScope } from '../middlewares/org-branch-scope';
+import { errorHandler } from '../middlewares/error.middleware';
 
 import onboardingRoutes from '../modules/onboarding/onboarding.routes';
 import userRoutes from '../modules/user/user.routes';
@@ -120,5 +121,11 @@ router.use('/platform-admin',     isAuthenticated, platformAdminRoutes);
 router.use('/user-org-roles',     ...auth, userOrgRolesRoutes);
 router.use('/lookup',             lookupRoutes);
 router.use('/settings',           isAuthenticated, settingsRoutes);
+
+// v2 error handler — must be LAST so it catches errors from every v2 route above.
+// Without this, v2 errors bubble to the global v1 errorHandler, whose `instanceof
+// AppError` check fails against the v2 AppError class and turns every operational
+// error (404/400/409) into a generic 500.
+router.use(errorHandler);
 
 export default router;

@@ -84,9 +84,9 @@ export const dashboardRepository = {
 
     const bookingProfitBase = db
       .select({
-        todayProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
-        weekProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
-        monthProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0)`,
+        todayProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+        weekProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+        monthProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
       })
       .from(booking)
       .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
@@ -119,7 +119,7 @@ export const dashboardRepository = {
     const bookingMonthBase = db
       .select({
         monthCount: sql<number>`COUNT(*)`,
-        monthProfit: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+        monthProfit: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
       })
       .from(booking)
       .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
@@ -168,11 +168,16 @@ export const dashboardRepository = {
           ...quoteStatsConds(),
         ));
 
+    // Per-agent booking revenue/commission for bookings CREATED this month.
+    // Upsell revenue/commission is aggregated separately (agentUpsellScoped) and
+    // merged in below — it must be windowed by booking_upsell.added_at, NOT gated
+    // by this query's booking.date_created filter, so an upsell added this month on
+    // a booking created in an earlier month is still credited to the agent.
     const agentBookingBase = db
       .select({
         agentId: transaction.user_id,
         revenue: sql<number>`COALESCE(SUM(CAST(${booking.sales_price} AS DECIMAL)), 0)`,
-        commission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+        commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
         bookings: sql<number>`COUNT(*)`,
       })
       .from(booking)
@@ -191,6 +196,37 @@ export const dashboardRepository = {
       : agentBookingBase.where(and(
           gte(booking.date_created, monthStart),
           sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+          eq(transaction.is_test, false),
+        )).groupBy(transaction.user_id);
+
+    // Per-agent upsell revenue/commission, recognised by `added_at` this month
+    // (independent of when the underlying booking was created). Merged onto the
+    // booking totals above so cross-month upsells are credited correctly.
+    const agentUpsellBase = db
+      .select({
+        agentId: transaction.user_id,
+        upsellRevenue: sql<number>`COALESCE(SUM(CAST(${booking_upsell.sales_price} AS DECIMAL)), 0)`,
+        upsellCommission: sql<number>`COALESCE(SUM(CAST(${booking_upsell.commission} AS DECIMAL)), 0)`,
+      })
+      .from(booking_upsell)
+      .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
+
+    const agentUpsellScoped = orgId
+      ? agentUpsellBase
+          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          .where(and(
+            eq(booking_upsell.is_active, true),
+            gte(booking_upsell.added_at, monthStart),
+            sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
+            eq(transaction.is_test, false),
+            ...orgFilter,
+          ))
+          .groupBy(transaction.user_id)
+      : agentUpsellBase.where(and(
+          eq(booking_upsell.is_active, true),
+          gte(booking_upsell.added_at, monthStart),
+          sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
           eq(transaction.is_test, false),
         )).groupBy(transaction.user_id);
 
@@ -226,8 +262,8 @@ export const dashboardRepository = {
       ? db.select({ id: userTable.id, name: userTable.name, firstName: userTable.firstName, email: userTable.email }).from(userTable).where(eq(userTable.orgId, orgId))
       : db.select({ id: userTable.id, name: userTable.name, firstName: userTable.firstName, email: userTable.email }).from(userTable);
 
-    const [bookingProfitStats, upsellProfitStats, bookingMonthStats, openQuoteStats, agentBookingRows, agentQuoteRows, allUsers] = await Promise.all([
-      bookingProfitScoped, upsellProfitScoped, bookingMonthScoped, openQuoteScoped, agentBookingScoped, agentQuoteScoped, allUsersQuery,
+    const [bookingProfitStats, upsellProfitStats, bookingMonthStats, openQuoteStats, agentBookingRows, agentUpsellRows, agentQuoteRows, allUsers] = await Promise.all([
+      bookingProfitScoped, upsellProfitScoped, bookingMonthScoped, openQuoteScoped, agentBookingScoped, agentUpsellScoped, agentQuoteScoped, allUsersQuery,
     ]);
 
     const agentMap = new Map<string, { id: string; name: string; revenue: number; commission: number; bookings: number; quotes: number }>();
@@ -246,6 +282,15 @@ export const dashboardRepository = {
         agent.revenue = Number(row.revenue);
         agent.commission = Number(row.commission);
         agent.bookings = Number(row.bookings);
+      }
+    }
+    // Add upsells (recognised by added_at) on top of the booking totals.
+    for (const row of agentUpsellRows) {
+      const agentId = row.agentId;
+      if (agentId && agentMap.has(agentId)) {
+        const agent = agentMap.get(agentId)!;
+        agent.revenue += Number(row.upsellRevenue);
+        agent.commission += Number(row.upsellCommission);
       }
     }
     for (const row of agentQuoteRows) {

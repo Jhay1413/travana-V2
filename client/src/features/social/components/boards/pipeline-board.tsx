@@ -247,9 +247,10 @@ interface CardProps {
   clientName: string;
   onDragStart: (t: Transaction, s: PipelineStage) => void;
   onCardClick: (t: Transaction, s: PipelineStage) => void;
+  onMarkLost: (t: Transaction, s: PipelineStage) => void;
 }
 
-function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick }: CardProps) {
+function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick, onMarkLost }: CardProps) {
   const [, setLocation] = useLocation();
   const [isDragging, setIsDragging] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -267,8 +268,6 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
   const quoteStatus = (t.quotes?.[0] as any)?.quote_status || null;
   const hex = STAGE_HEX[stage];
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const updateQuoteMutation = useUpdateQuote();
   const setPrimaryQuoteMutation = useSetPrimaryQuote();
 
   useEffect(() => {
@@ -343,29 +342,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick 
                       onClick={(e) => {
                         e.stopPropagation();
                         setShowMenu(false);
-                        const mainQuote = t.quotes?.find(q => !(q as any).isQuoteCopy) || t.quotes?.[0];
-                        if (!mainQuote) return;
-                        updateQuoteMutation.mutate(
-                          { id: mainQuote.id, data: { quote_status: "lost" } },
-                          {
-                            onSuccess: () => {
-                              queryClient.invalidateQueries({ queryKey: transactionKeys.all });
-                              toast({ title: "Deal marked as lost" });
-                            },
-                            onError: (error: unknown) => {
-                              const axiosErr = error as { response?: { status?: number } } | null;
-                              if (axiosErr?.response?.status === 409) {
-                                toast({
-                                  title: "Reassign the primary quote first",
-                                  description:
-                                    "This is the primary quote and other active quotes exist. Choose a new primary, then mark this one lost.",
-                                });
-                              } else {
-                                toast({ title: "Failed to mark as lost", variant: "destructive" });
-                              }
-                            },
-                          }
-                        );
+                        onMarkLost(t, stage);
                       }}
                     >
                       <X className="w-3.5 h-3.5" />
@@ -492,6 +469,7 @@ interface ColProps {
   onDragStart: (t: Transaction, s: PipelineStage) => void;
   onDrop: (id: string, from: PipelineStage, to: PipelineStage) => void;
   onCardClick: (t: Transaction, s: PipelineStage) => void;
+  onMarkLost: (t: Transaction, s: PipelineStage) => void;
   isDragActive: boolean;
   dragFromStage: PipelineStage | null;
   hasNextPage: boolean;
@@ -502,7 +480,7 @@ interface ColProps {
 
 const PAGE_SIZE = 10;
 
-function StageColumn({ stage, transactions, total, totalValue, totalProfit, getClientName, onDragStart, onDrop, onCardClick, isDragActive, dragFromStage, hasNextPage, isFetchingNextPage, fetchNextPage, isLoading }: ColProps) {
+function StageColumn({ stage, transactions, total, totalValue, totalProfit, getClientName, onDragStart, onDrop, onCardClick, onMarkLost, isDragActive, dragFromStage, hasNextPage, isFetchingNextPage, fetchNextPage, isLoading }: ColProps) {
   const [isOver, setIsOver] = useState(false);
   const [page, setPage] = useState(0);
   const hex = STAGE_HEX[stage];
@@ -568,7 +546,7 @@ function StageColumn({ stage, transactions, total, totalValue, totalProfit, getC
         ) : (
           <>
             {visible.map((tx) => (
-              <DealCard key={tx.id} transaction={tx} stage={stage} clientName={getClientName(tx.client_id)} onDragStart={onDragStart} onCardClick={onCardClick} />
+              <DealCard key={tx.id} transaction={tx} stage={stage} clientName={getClientName(tx.client_id)} onDragStart={onDragStart} onCardClick={onCardClick} onMarkLost={onMarkLost} />
             ))}
             {isFetchingNextPage && <div className="flex justify-center py-2"><Loader2 className="h-4 w-4 animate-spin text-gray-300" /></div>}
             {(canPrev || canNext) && (
@@ -1211,6 +1189,45 @@ export default function PipelineBoard({
     setSelectedDeal({ transaction: t, stage: s });
   }, []);
 
+  // Mark the deal's primary quote lost. Optimistically remove the card from its
+  // current column so it disappears instantly; reconcile (or roll back) on settle.
+  // "Mark as Lost" is only offered on the Quoted / In Play stages.
+  const handleMarkLost = useCallback((tx: Transaction, stage: PipelineStage) => {
+    const mainQuote = tx.quotes?.find((q) => !q.isQuoteCopy) ?? tx.quotes?.[0];
+    if (!mainQuote) { toast({ title: "No quote found", variant: "destructive" }); return; }
+
+    // Query key must match the usePipelineColumn() call for this column exactly.
+    const key =
+      stage === "In Play"
+        ? transactionKeys.pipeline("in_play", agentFilter, undefined)
+        : transactionKeys.pipeline("quote", agentFilter, quoteStatusParam);
+    const prev = queryClient.getQueryData<any>(key);
+
+    queryClient.setQueryData<any>(key, (old: any) => {
+      if (!old?.pages) return old;
+      return {
+        ...old,
+        pages: old.pages.map((p: any, i: number) => ({
+          ...p,
+          items: p.items.filter((t: Transaction) => t.id !== tx.id),
+          total: i === 0 ? Math.max(0, (p.total ?? 0) - 1) : p.total,
+        })),
+      };
+    });
+
+    updateQuoteMutation.mutate(
+      { id: mainQuote.id, data: { quote_status: "lost" } },
+      {
+        onSuccess: () => { toast({ title: "Deal marked as lost" }); },
+        onError: () => {
+          queryClient.setQueryData(key, prev); // roll back the optimistic removal
+          toast({ title: "Failed to mark as lost", variant: "destructive" });
+        },
+        onSettled: () => { queryClient.invalidateQueries({ queryKey: key }); },
+      },
+    );
+  }, [agentFilter, quoteStatusParam, queryClient, toast, updateQuoteMutation]);
+
   const handleDrop = useCallback((txId: string, from: PipelineStage, to: PipelineStage) => {
     setDragState({ active: false, fromStage: null });
     if (from === to) return;
@@ -1463,6 +1480,7 @@ export default function PipelineBoard({
                     onDragStart={handleDragStart}
                     onDrop={handleDrop}
                     onCardClick={handleCardClick}
+                    onMarkLost={handleMarkLost}
                     isDragActive={dragState.active}
                     dragFromStage={dragState.fromStage}
                     hasNextPage={!!q.hasNextPage}

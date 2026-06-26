@@ -391,15 +391,14 @@ export const newQuoteService = {
       }
     }
 
-    // Fetch the current row when needed for price calculation, to capture the
-    // previous status (lost → active transitions), or to run the lost guard
-    // (primary-quote protection) BEFORE writing.
+    // Fetch the current row when needed for price calculation or to capture the
+    // previous status (lost → active transitions) BEFORE writing.
     const isSettingLost = 'quote_status' in quoteData && quoteData.quote_status === 'lost';
     const needsPrevStatus = 'quote_status' in quoteData && !isSettingLost;
     const needsPriceCalc = 'sales_price' in quoteData || 'adult' in quoteData || 'child' in quoteData || 'discounts' in quoteData || 'service_charge' in quoteData;
 
     let preUpdateRow: Quote | undefined;
-    if (needsPriceCalc || needsPrevStatus || isSettingLost) {
+    if (needsPriceCalc || needsPrevStatus) {
       preUpdateRow = await newQuoteRepository.findById(id);
     }
 
@@ -407,17 +406,8 @@ export const newQuoteService = {
       quoteData.price_per_person = calcPricePerPerson(quoteData.sales_price ?? preUpdateRow.sales_price, quoteData.adult ?? preUpdateRow.adult, quoteData.child ?? preUpdateRow.child, quoteData.discounts ?? preUpdateRow.discounts, quoteData.service_charge ?? preUpdateRow.service_charge);
     }
 
-    // Lost guard: must run BEFORE the write so a rejected request never persists
-    // 'lost' on the primary quote.
-    if (isSettingLost && preUpdateRow?.transaction_id) {
-      if (preUpdateRow.isQuoteCopy === false) {
-        const activeSiblingCount = await newQuoteRepository.countActiveSiblings(preUpdateRow.transaction_id, id);
-        if (activeSiblingCount > 0) {
-          throw new AppError("Reassign the primary quote before marking it lost", 409);
-        }
-      }
-    }
-
+    // Marking a quote lost always succeeds — even the primary quote with active
+    // sibling quotes. We simply set this quote to 'lost' (no sibling check).
     const prevStatus = preUpdateRow?.quote_status ?? null;
 
     let q;

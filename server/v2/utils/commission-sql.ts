@@ -75,6 +75,37 @@ export function totalUpsellCommissionExpr(
 }
 
 /**
+ * Total ACTIVE upsell sales price for a single booking, recognised by `added_at`.
+ *
+ * Mirrors `totalUpsellCommissionExpr` exactly but sums `booking_upsell.sales_price`
+ * instead of `.commission`. Use this wherever a revenue/sales figure must include
+ * upsell sales attributed to the period the upsell was added.
+ *
+ * Pass `range` to restrict to upsells added within a half-open `[start, end)`
+ * window; either bound may be omitted for an open-ended window. Omit `range`
+ * entirely to sum every active upsell's sales price on the booking.
+ *
+ * @param bookingIdRef defaults to `booking.id`; pass a different reference when
+ *   the query aliases the booking table or compares against a subquery.
+ */
+export function totalUpsellSalesExpr(
+  bookingIdRef: SQL | unknown = booking.id,
+  range?: { start?: Date | string; end?: Date | string },
+): SQL<number> {
+  const bounds: SQL[] = [];
+  if (range?.start) bounds.push(sql`AND ${booking_upsell.added_at} >= ${range.start}`);
+  if (range?.end) bounds.push(sql`AND ${booking_upsell.added_at} < ${range.end}`);
+  const rangeCond = bounds.length ? sql.join(bounds, sql` `) : sql``;
+  return sql<number>`COALESCE((
+    SELECT SUM(CAST(${booking_upsell.sales_price} AS DECIMAL))
+    FROM ${booking_upsell}
+    WHERE ${booking_upsell.booking_id} = ${bookingIdRef}
+      AND ${booking_upsell.is_active} = true
+      ${rangeCond}
+  ), 0)`;
+}
+
+/**
  * Total commission for a single quote row:
  *   quote.package_commission + SUM(line-item.commission) for every quote_* line-item table.
  */

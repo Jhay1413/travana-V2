@@ -104,16 +104,16 @@ export const branchOverviewRepository = {
       (() => {
         const q = db
           .select({
-            // KPI profit tiles mirror the admin dashboard's definition (org-level,
-            // all branches) so the per-branch numbers reconcile to it: package
-            // commission only, and no is_active filter. See dashboard.repository.ts.
-            // Upsell commission is added on top, recognised by `added_at` (the period
-            // it was added), so a SUM over ALL scoped bookings — not just those
-            // created in the window — is required (this query has no date_created filter).
-            todayCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: todayStart.toISOString() })}), 0)`,
-            weekCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: weekStart.toISOString() })}), 0)`,
-            monthCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
-            ytdCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN CAST(${booking.package_commission} AS DECIMAL) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: yearStart.toISOString() })}), 0)`,
+            // KPI profit tiles: full line-item booking commission (package + all
+            // line-item tables) for bookings created in each window, plus active
+            // upsell commission recognised by `added_at` for the same window.
+            // A SUM over ALL scoped bookings feeds each correlated upsell subquery —
+            // no date_created filter on the outer query is needed because the upsell
+            // subquery's own added_at range bound handles the window.
+            todayCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: todayStart.toISOString() })}), 0)`,
+            weekCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: weekStart.toISOString() })}), 0)`,
+            monthCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
+            ytdCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: yearStart.toISOString() })}), 0)`,
             monthBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()})`,
           })
           .from(booking)
@@ -504,15 +504,15 @@ export const branchOverviewRepository = {
     const joinClient = needsClientJoin(scope);
     const baseCond = buildScopeConditions(scope);
 
-    // Per-agent commission mirrors the KPI profit tiles: package commission only
-    // (no line-item commissions, no is_active filter), with upsell commission added
-    // on top via a separate added_at-based aggregate below.
+    // Per-agent commission: full line-item booking commission (package + all
+    // line-item tables) for bookings created in the month window. Upsell commission
+    // is added on top via a separate added_at-based aggregate below.
     const bookingAgg = (() => {
       const q = db
         .select({
           agentId: transaction.user_id,
           bookings: sql<number>`COUNT(*)`,
-          commission: sql<number>`COALESCE(SUM(CAST(${booking.package_commission} AS DECIMAL)), 0)`,
+          commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
         })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
@@ -866,15 +866,17 @@ export const branchOverviewRepository = {
     const baseCond = buildScopeConditions(scope);
 
     // Per-agent aggregation across multiple windows in a single SQL pass.
+    // Each commission field = full line-item booking commission (date_created window)
+    // + active upsell commission recognised by added_at for the same window.
     const buildAgg = () => {
       const q = db
         .select({
           agentId: transaction.user_id,
-          today: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-          week: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
-          month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          today: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${todayStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: todayStart.toISOString() })}), 0)`,
+          week: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: weekStart.toISOString() })}), 0)`,
+          month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
           rangeBookings: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()})`,
-          rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
+          rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: from.toISOString(), end: to.toISOString() })}), 0)`,
         })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id));

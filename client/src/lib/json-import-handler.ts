@@ -371,9 +371,13 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
     boardBasis: result.fields.boardBasis,
     tourOperator: result.fields.tourOperator,
     outboundDepartAirport: result.fields.outboundDepartAirport,
+    outboundDepartAirportName: result.fields.outboundDepartAirportName,
     outboundArriveAirport: result.fields.outboundArriveAirport,
+    outboundArriveAirportName: result.fields.outboundArriveAirportName,
     inboundDepartAirport: result.fields.inboundDepartAirport,
+    inboundDepartAirportName: result.fields.inboundDepartAirportName,
     inboundArriveAirport: result.fields.inboundArriveAirport,
+    inboundArriveAirportName: result.fields.inboundArriveAirportName,
     roomType: result.fields.roomType,
     isLodgeQuote,
     lodgeCode: lodgeCodeVal,
@@ -399,10 +403,10 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   const idOnlyFields = new Set([
     "country", "destination", "resort", "accommodation", "accommodationId",
     "boardBasis", "boardBasisId", "tourOperator", "tourOperatorId",
-    "outboundDepartAirport", "outboundDepartAirportId",
-    "outboundArriveAirport", "outboundArriveAirportId",
-    "inboundDepartAirport", "inboundDepartAirportId",
-    "inboundArriveAirport", "inboundArriveAirportId",
+    "outboundDepartAirport", "outboundDepartAirportName", "outboundDepartAirportId",
+    "outboundArriveAirport", "outboundArriveAirportName", "outboundArriveAirportId",
+    "inboundDepartAirport", "inboundDepartAirportName", "inboundDepartAirportId",
+    "inboundArriveAirport", "inboundArriveAirportName", "inboundArriveAirportId",
     "roomType",
   ]);
   for (const [k, v] of Object.entries(result.fields)) {
@@ -421,6 +425,10 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   if (idMapping.outboundArriveAirportId) setValue("outboundArriveAirportId", idMapping.outboundArriveAirportId);
   if (idMapping.inboundDepartAirportId) setValue("inboundDepartAirportId", idMapping.inboundDepartAirportId);
   if (idMapping.inboundArriveAirportId) setValue("inboundArriveAirportId", idMapping.inboundArriveAirportId);
+  // Invalidate airports so any newly-created airport row is available in the dropdown.
+  if (idMapping.outboundDepartAirportId || idMapping.outboundArriveAirportId || idMapping.inboundDepartAirportId || idMapping.inboundArriveAirportId) {
+    queryClient.invalidateQueries({ queryKey: ["airports"] });
+  }
   if (idMapping.roomTypeId) setValue("roomType", idMapping.roomTypeId);
 
   const serverDetectedLodge = (idMapping as unknown as Record<string, unknown>).isLodge === true;
@@ -690,6 +698,10 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
       if (result.outboundArriveAirportId) setValue("outboundArriveAirportId", result.outboundArriveAirportId as never);
       if (result.inboundDepartAirportId) setValue("inboundDepartAirportId", result.inboundDepartAirportId as never);
       if (result.inboundArriveAirportId) setValue("inboundArriveAirportId", result.inboundArriveAirportId as never);
+      // Invalidate airports so any newly-created airport row is available in the dropdown.
+      if (result.outboundDepartAirportId || result.outboundArriveAirportId || result.inboundDepartAirportId || result.inboundArriveAirportId) {
+        queryClient.invalidateQueries({ queryKey: ["airports"] });
+      }
     }
 
     // Apply extra hotels / transfers / car hire / attractions / lounge / parking.
