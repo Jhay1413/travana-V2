@@ -231,11 +231,15 @@ export const newQuoteRepository = {
     return row;
   },
 
-  /** Atomically flip primary: set chosenQuoteId to isQuoteCopy=false and oldPrimaryId to isQuoteCopy=true. */
-  async flipPrimary(chosenQuoteId: string, oldPrimaryId: string): Promise<void> {
+  /** Atomically flip primary: set chosenQuoteId to isQuoteCopy=false and oldPrimaryId to isQuoteCopy=true.
+   *  When chosenExpiry is provided, the newly promoted primary's date_expiry is refreshed in the same txn. */
+  async flipPrimary(chosenQuoteId: string, oldPrimaryId: string, chosenExpiry?: Date): Promise<void> {
     await db.transaction(async (tx) => {
       await tx.update(quote).set({ isQuoteCopy: true }).where(eq(quote.id, oldPrimaryId));
-      await tx.update(quote).set({ isQuoteCopy: false }).where(eq(quote.id, chosenQuoteId));
+      await tx
+        .update(quote)
+        .set({ isQuoteCopy: false, ...(chosenExpiry ? { date_expiry: chosenExpiry } : {}) })
+        .where(eq(quote.id, chosenQuoteId));
     });
   },
 

@@ -152,9 +152,14 @@ export function useClientQuoteGroups(
         }
       }
 
-      // Append any orphan children (no main row in the same transaction).
+      // Append orphan children that have no main row in the same transaction.
+      // Copy quotes (isQuoteCopy) are NEVER shown standalone — they only appear
+      // nested under their main via the dropdown. So when their main is lost,
+      // deleted, or sitting in another group, the copy is omitted entirely
+      // rather than promoted to its own row. Non-copy "secondary" orphans keep
+      // their existing standalone behavior.
       const orphans = childRows.filter(
-        (c) => !mainRows.some((m) => m.transactionId === c.transactionId),
+        (c) => !c.isQuoteCopy && !mainRows.some((m) => m.transactionId === c.transactionId),
       );
       for (const o of orphans) items.push({ type: "quote", row: o, isChild: true });
 

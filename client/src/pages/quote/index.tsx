@@ -1,13 +1,19 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute, Redirect } from "wouter";
-import { ChevronLeft, Link as LinkIcon, Pin, PinOff, Share2, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronDown, Link as LinkIcon, Pin, PinOff, Share2, Sparkles, Star } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useQuote, useClient, useUsers, quoteKeys, bookingKeys, transactionKeys } from "@/hooks/queries";
-import { useUpdateTransaction } from "@/hooks/mutations";
+import { useUpdateTransaction, useSetPrimaryQuote } from "@/hooks/mutations";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import { useClientTicketCreate } from "@/features/client/components/hooks";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
@@ -28,7 +34,6 @@ import { QuoteConvertDialog } from "@/features/quote/components/QuoteConvertDial
 import { QuoteDeleteDialog } from "@/features/quote/components/QuoteDeleteDialog";
 import { QuoteExpiryDialog } from "@/features/quote/components/QuoteExpiryDialog";
 import { QuoteGuruSheet } from "@/features/quote/components/QuoteGuruSheet";
-import { QuoteTagsCard } from "@/features/quote/components/QuoteTagsCard";
 import { QuoteMediaPanel } from "@/features/quote/components/QuoteMediaPanel";
 import { QuoteExpiryPill } from "@/features/quote/components/QuoteExpiryPill";
 import { QuoteActionsRow } from "@/features/quote/components/QuoteActionsRow";
@@ -69,6 +74,23 @@ export default function QuotePage() {
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
   const updateTransactionMutation = useUpdateTransaction();
+  const setPrimaryQuoteMutation = useSetPrimaryQuote();
+  const handleSetAsMainQuote = () => {
+    if (setPrimaryQuoteMutation.isPending) return;
+    setPrimaryQuoteMutation.mutate(quoteId, {
+      onSuccess: () => {
+        toast({ title: "Set as main quote", description: "This quote is now the main quote." });
+        queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+      },
+      onError: (err: any) => {
+        toast({
+          title: "Couldn't set as main quote",
+          description: err?.response?.data?.message || err?.message || "Please try again.",
+          variant: "destructive",
+        });
+      },
+    });
+  };
   const {
     showSharePopup, setShowSharePopup,
     shareToken, shareCopied, shareLoading,
@@ -187,20 +209,6 @@ export default function QuotePage() {
                     openFilePicker={openImageFilePicker}
                   />
 
-                  <QuoteTagsCard
-                    tags={quote.tags}
-                    newTag={newTag}
-                    setNewTag={setNewTag}
-                    showTagSuggestions={showTagSuggestions}
-                    setShowTagSuggestions={setShowTagSuggestions}
-                    tagInputRef={tagInputRef}
-                    tagSuggestionsRef={tagSuggestionsRef}
-                    allTags={allTags}
-                    removeTag={removeTag}
-                    addTag={addTag}
-                    addTagFromSuggestion={addTagFromSuggestion}
-                  />
-
                 </div>
 
                 <div className="min-w-0" data-testid="section-itinerary-summary">
@@ -240,12 +248,28 @@ export default function QuotePage() {
                                 <span className="text-xs font-medium text-black/55"> ({currency.format(quote.pricePerPerson)}pp)</span>
                               </div>
                               {quote.isCopyQuote && (
-                                <span
-                                  className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
-                                  data-testid="pill-quote-copy"
-                                >
-                                  Copy Quote
-                                </span>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center gap-1 rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-500/20 focus:outline-none"
+                                      data-testid="pill-quote-copy"
+                                    >
+                                      Copy Quote
+                                      <ChevronDown className="h-3 w-3" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="w-44 rounded-xl">
+                                    <DropdownMenuItem
+                                      onClick={handleSetAsMainQuote}
+                                      disabled={setPrimaryQuoteMutation.isPending}
+                                      data-testid="button-set-as-main-quote"
+                                    >
+                                      <Star className="mr-2 h-4 w-4" />
+                                      Set as main quote
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               )}
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55" data-testid="text-quote-meta">

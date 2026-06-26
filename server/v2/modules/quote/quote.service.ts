@@ -515,16 +515,20 @@ export const newQuoteService = {
       return chosenQuote;
     }
 
+    // A freshly promoted primary gets a fresh 6-day expiry window.
+    const SIX_DAYS_MS = 6 * 24 * 60 * 60 * 1000;
+    const newExpiry = new Date(Date.now() + SIX_DAYS_MS);
+
     // Find the current primary to flip.
     const currentPrimary = await newQuoteRepository.findCurrentPrimary(chosenQuote.transaction_id, quoteId);
     if (!currentPrimary) {
       // No existing primary — just set the chosen quote directly.
-      await newQuoteRepository.update(quoteId, { isQuoteCopy: false });
+      await newQuoteRepository.update(quoteId, { isQuoteCopy: false, date_expiry: newExpiry });
       return newQuoteRepository.findById(quoteId);
     }
 
-    // Atomic flip: old primary → isQuoteCopy=true, chosen → isQuoteCopy=false.
-    await newQuoteRepository.flipPrimary(quoteId, currentPrimary.id);
+    // Atomic flip: old primary → isQuoteCopy=true, chosen → isQuoteCopy=false (with a refreshed expiry).
+    await newQuoteRepository.flipPrimary(quoteId, currentPrimary.id, newExpiry);
     return newQuoteRepository.findById(quoteId);
   },
 
