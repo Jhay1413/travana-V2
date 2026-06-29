@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useFieldArray, useFormContext, type Control } from "react-hook-form";
 import type { ExtrasFormValues } from "@/features/booking/types";
+import { useCruiseStayAccommodations } from "@/features/quote/components/hooks/use-cruise-stay-accommodations";
 import {
   ArrowLeftRight,
   Car,
@@ -629,7 +630,7 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
 
 // ─── Main Extras Section ──────────────────────────────────────────────────────
 
-export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourOperatorId = "" }: { control: Control<ExtrasFormValues>; initialAccomLabels?: string[]; mainTourOperatorId?: string }) {
+export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourOperatorId = "", isCruise = false }: { control: Control<ExtrasFormValues>; initialAccomLabels?: string[]; mainTourOperatorId?: string; isCruise?: boolean }) {
   const { setValue } = useFormContext();
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
@@ -646,7 +647,12 @@ export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourO
   const { fields: attractionTickets, append: addAttractionTicket, remove: removeAttractionTicket } = useFieldArray({ control, name: "attractionTickets" });
   const { fields: loungePasses, append: addLoungePass, remove: removeLoungePass } = useFieldArray({ control, name: "loungePasses" });
   const { fields: airportParkings, append: addAirportParking, remove: removeAirportParking } = useFieldArray({ control, name: "airportParkings" });
-  const { fields: extraAccommodations, append: addExtraAccommodation, remove: removeExtraAccommodation } = useFieldArray({ control, name: "extraAccommodations" });
+  const { fields: extraAccommodations, append: addExtraAccommodation, remove: removeExtraAccommodation, replace: replaceExtraAccommodations } = useFieldArray({ control, name: "extraAccommodations" });
+
+  // Auto-manage pre/post-cruise hotel rows from the stay counts, and keep
+  // extra-accommodation check-in dates aligned with the cruise date. Uses this
+  // section's own field array so the managed rows render immediately.
+  useCruiseStayAccommodations({ isCruise, replace: replaceExtraAccommodations as unknown as (items: any[]) => void });
 
   const totalExtras = transfers.length + carHires.length + attractionTickets.length + loungePasses.length + airportParkings.length + extraAccommodations.length;
 

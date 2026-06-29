@@ -215,7 +215,7 @@ export function QuoteRHFForm({
         />
 
         {/* ── TRAVEL DETAILS ────────────────────────────────────────────────── */}
-        <QuoteTravelDetailsSection />
+        <QuoteTravelDetailsSection showCruiseStay={isCruise} />
 
         {/* ── HOT TUB BREAK: LODGE DETAILS ─────────────────────────────────── */}
         {isHotTubBreak && <QuoteLodgeDetailsSection />}
@@ -230,7 +230,7 @@ export function QuoteRHFForm({
         {showFlights && <QuoteFlightsSection />}
 
         {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
-        <QuoteExtrasSection control={control as unknown as Control<ExtrasFormValues>} initialAccomLabels={initialExtraAccomLabels} mainTourOperatorId={tourOperatorId ?? ""} />
+        <QuoteExtrasSection control={control as unknown as Control<ExtrasFormValues>} initialAccomLabels={initialExtraAccomLabels} mainTourOperatorId={tourOperatorId ?? ""} isCruise={isCruise} />
 
         {/* ── PRICING ───────────────────────────────────────────────────────── */}
         <QuotePricingSection />

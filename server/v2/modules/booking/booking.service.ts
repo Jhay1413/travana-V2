@@ -87,6 +87,8 @@ interface CruisePayloadData {
   debarkation?: string;
   cruiseExtras?: string;
   cruiseOnly?: boolean;
+  preCruiseStay?: number;
+  postCruiseStay?: number;
   cruiseItinerary?: Array<Record<string, unknown>>;
 }
 
@@ -108,10 +110,10 @@ type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;
 // Build the cruise persistence payload from a form payload, or null when no
 // cruise data is present (so non-cruise bookings never touch booking_cruise).
 function buildCruiseData(src: CruisePayloadData & { main_tour_operator_id?: unknown }): Record<string, unknown> | null {
-  const { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary } = src;
+  const { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary, preCruiseStay, postCruiseStay } = src;
   const hasCruise = !!(cruiseLine || shipName || cruiseTitle || cruiseDate || cabinType || cabinNumber || embarkation || debarkation || cruiseExtras || (Array.isArray(cruiseItinerary) && cruiseItinerary.length));
   if (!hasCruise) return null;
-  return { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary, tourOperatorId: src.main_tour_operator_id ?? null };
+  return { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary, preCruiseStay, postCruiseStay, tourOperatorId: src.main_tour_operator_id ?? null };
 }
 
 export const bookingService = {
@@ -448,7 +450,7 @@ export const bookingService = {
       outboundFlight, inboundFlight, primaryAccommodation,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       childAges,
-      cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseOnly, cruiseItinerary,
+      cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseOnly, preCruiseStay, postCruiseStay, cruiseItinerary,
       ...bookingFields
     } = data;
 

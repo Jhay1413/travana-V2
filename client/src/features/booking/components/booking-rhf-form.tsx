@@ -1089,6 +1089,48 @@ export function BookingRHFForm({
                 </FormItem>
               )}
             />
+
+            {isCruise && (
+              <>
+                <FormField
+                  control={control}
+                  name="preCruiseStay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-black/60">Pre-Cruise Stay (nights)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          {...field}
+                          className="h-9 rounded-xl border-black/10 bg-white/70"
+                          min={0}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={control}
+                  name="postCruiseStay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-black/60">Post-Cruise Stay (nights)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          {...field}
+                          className="h-9 rounded-xl border-black/10 bg-white/70"
+                          min={0}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
           </div>
 
           {Number(passengersChildren) > 0 && (
@@ -1954,7 +1996,7 @@ export function BookingRHFForm({
         )}
 
         {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
-        <BookingExtrasSection control={control as unknown as Control<ExtrasFormValues>} initialAccomLabels={initialExtraAccomLabels} mainTourOperatorId={tourOperatorId ?? ""} />
+        <BookingExtrasSection control={control as unknown as Control<ExtrasFormValues>} initialAccomLabels={initialExtraAccomLabels} mainTourOperatorId={tourOperatorId ?? ""} isCruise={isCruise} />
 
         {/* ── UPSELLS ───────────────────────────────────────────────────────── */}
         <BookingUpsellsSection

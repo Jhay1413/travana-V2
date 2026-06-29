@@ -205,6 +205,8 @@ function buildCreatePayload(
             debarkation: values.debarkation || undefined,
             cruiseExtras: values.cruiseExtras || undefined,
             cruiseOnly: values.cruiseOnly,
+            preCruiseStay: values.preCruiseStay ?? 0,
+            postCruiseStay: values.postCruiseStay ?? 0,
             cruiseItinerary: values.cruiseItinerary ?? [],
           }
         : {}),

@@ -78,6 +78,8 @@ interface CruisePayloadData {
   debarkation?: string;
   cruiseExtras?: string;
   cruiseOnly?: boolean;
+  preCruiseStay?: number;
+  postCruiseStay?: number;
   cruiseItinerary?: Array<Record<string, unknown>>;
 }
 
@@ -101,10 +103,10 @@ interface QuoteRelationData extends CruisePayloadData {
 // Build the cruise persistence payload from a form payload, or null when no
 // cruise data is present (so non-cruise quotes never touch quote_cruise).
 function buildCruiseData(src: CruisePayloadData & { main_tour_operator_id?: unknown }): Record<string, unknown> | null {
-  const { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary } = src;
+  const { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary, preCruiseStay, postCruiseStay } = src;
   const hasCruise = !!(cruiseLine || shipName || cruiseTitle || cruiseDate || cabinType || cabinNumber || embarkation || debarkation || cruiseExtras || (Array.isArray(cruiseItinerary) && cruiseItinerary.length));
   if (!hasCruise) return null;
-  return { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary, tourOperatorId: src.main_tour_operator_id ?? null };
+  return { cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseItinerary, preCruiseStay, postCruiseStay, tourOperatorId: src.main_tour_operator_id ?? null };
 }
 
 type CreateQuotePayload = InsertQuote & QuoteRelationData;
@@ -197,7 +199,7 @@ export const newQuoteService = {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       childAges,
-      cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseOnly, cruiseItinerary,
+      cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseOnly, preCruiseStay, postCruiseStay, cruiseItinerary,
       ...quoteFields
     } = data;
 
@@ -367,7 +369,7 @@ export const newQuoteService = {
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber,
-      embarkation, debarkation, cruiseExtras, cruiseOnly, cruiseItinerary, lead_source, images, tags, childAges,
+      embarkation, debarkation, cruiseExtras, cruiseOnly, preCruiseStay, postCruiseStay, cruiseItinerary, lead_source, images, tags, childAges,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       ...quoteFields
     } = data;

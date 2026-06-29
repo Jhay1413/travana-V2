@@ -120,6 +120,8 @@ export function useQuoteToFormValues(quoteData: any) {
         .filter(Boolean)
         .join(", "),
       cruiseOnly: false,
+      preCruiseStay: quoteData.cruises?.[0]?.pre_cruise_stay ?? 0,
+      postCruiseStay: quoteData.cruises?.[0]?.post_cruise_stay ?? 0,
       cruiseItinerary: (quoteData.cruises?.[0]?.itinerary || []).map((d: any) => ({
         day: Number(d.day_number) || 0,
         description: d.description || "",

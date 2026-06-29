@@ -153,6 +153,8 @@ function buildDefaultValues(bookingData: any): BookingFormValues {
       .map((e: any) => e.name)
       .filter(Boolean)
       .join(", "),
+    preCruiseStay: bookingData.cruises?.[0]?.pre_cruise_stay ?? 0,
+    postCruiseStay: bookingData.cruises?.[0]?.post_cruise_stay ?? 0,
     cruiseItinerary: (bookingData.cruises?.[0]?.itinerary || []).map((d: any) => ({
       day: Number(d.day_number) || 0,
       description: d.description || "",
@@ -326,6 +328,8 @@ function buildUpdatePayload(
     payload.debarkation = values.debarkation || undefined;
     payload.cruiseExtras = values.cruiseExtras || undefined;
     payload.cruiseOnly = values.cruiseOnly;
+    payload.preCruiseStay = values.preCruiseStay ?? 0;
+    payload.postCruiseStay = values.postCruiseStay ?? 0;
     payload.cruiseItinerary = values.cruiseItinerary ?? [];
   }
 

@@ -80,6 +80,10 @@ export const quoteFormSchema = z.object({
   debarkation: z.string().default(""),
   cruiseExtras: z.string().default(""),
   cruiseOnly: z.boolean().default(false),
+  // Nights spent in a hotel before / after the cruise. Drive the auto-managed
+  // pre/post extra accommodations (see use-cruise-stay-accommodations).
+  preCruiseStay: z.coerce.number().int().min(0).default(0),
+  postCruiseStay: z.coerce.number().int().min(0).default(0),
   // Day-by-day itinerary — no direct UI; populated from JSON import, persisted on save.
   cruiseItinerary: z.array(z.object({ day: z.number(), description: z.string(), subDescription: z.string().default("") })).default([]),
 
@@ -173,6 +177,9 @@ export const quoteFormSchema = z.object({
     cost: z.coerce.number().min(0).default(0),
     commission: z.coerce.number().min(0).default(0),
     isIncludedInPackage: z.boolean().default(true),
+    // Marks rows auto-created from pre/post-cruise stay so they can be
+    // reconciled without touching manually-added accommodations.
+    cruiseStay: z.enum(["pre", "post"]).optional(),
   })).default([]),
   tags: z.array(z.string()).default([]),
   is_test: z.boolean().default(false),
@@ -239,6 +246,8 @@ export const defaultQuoteFormValues: QuoteFormValues = {
   debarkation: "",
   cruiseExtras: "",
   cruiseOnly: false,
+  preCruiseStay: 0,
+  postCruiseStay: 0,
   cruiseItinerary: [],
   price: 0,
   commission: 0,

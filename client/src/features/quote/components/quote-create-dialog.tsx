@@ -199,6 +199,8 @@ export function buildQuotePayload(
     payload.debarkation = values.debarkation || undefined;
     payload.cruiseExtras = values.cruiseExtras || undefined;
     payload.cruiseOnly = values.cruiseOnly;
+    payload.preCruiseStay = values.preCruiseStay ?? 0;
+    payload.postCruiseStay = values.postCruiseStay ?? 0;
     payload.cruiseItinerary = values.cruiseItinerary ?? [];
   }
 

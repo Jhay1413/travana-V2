@@ -272,6 +272,8 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
       .map((e: { name: string | null }) => e.name)
       .filter(Boolean)
       .join(", "),
+    preCruiseStay: quoteData.cruises?.[0]?.pre_cruise_stay ?? 0,
+    postCruiseStay: quoteData.cruises?.[0]?.post_cruise_stay ?? 0,
     cruiseItinerary: (quoteData.cruises?.[0]?.itinerary || []).map((d: { day_number: number | null; description: string | null; sub_description: string | null }) => ({
       day: Number(d.day_number) || 0,
       description: d.description || "",
@@ -472,6 +474,8 @@ function buildUpdatePayload(
     payload.debarkation = values.debarkation || null;
     payload.cruiseExtras = values.cruiseExtras || null;
     payload.cruiseOnly = values.cruiseOnly;
+    payload.preCruiseStay = values.preCruiseStay ?? 0;
+    payload.postCruiseStay = values.postCruiseStay ?? 0;
     payload.cruiseItinerary = values.cruiseItinerary ?? [];
   }
 

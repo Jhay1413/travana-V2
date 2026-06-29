@@ -7,7 +7,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import type { QuoteFormValues } from "@/features/quote/types";
 
-export function QuoteTravelDetailsSection() {
+export function QuoteTravelDetailsSection({ showCruiseStay = false }: { showCruiseStay?: boolean }) {
   const { control } = useFormContext<QuoteFormValues>();
   const passengersChildren = useWatch({ control, name: "passengersChildren" });
 
@@ -143,6 +143,38 @@ export function QuoteTravelDetailsSection() {
             </FormItem>
           )}
         />
+
+        {showCruiseStay && (
+          <>
+            <FormField
+              control={control}
+              name="preCruiseStay"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-medium text-black/60">Pre-Cruise Stay (nights)</FormLabel>
+                  <FormControl>
+                    <Input type="number" {...field} className="h-9 rounded-xl border-black/10 bg-white/70" min={0} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={control}
+              name="postCruiseStay"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-medium text-black/60">Post-Cruise Stay (nights)</FormLabel>
+                  <FormControl>
+                    <Input type="number" {...field} className="h-9 rounded-xl border-black/10 bg-white/70" min={0} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </>
+        )}
       </div>
 
       {Number(passengersChildren) > 0 && (

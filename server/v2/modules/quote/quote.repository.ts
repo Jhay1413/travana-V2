@@ -1006,6 +1006,8 @@ export const newQuoteRepository = {
       debarkation: (data.debarkation as string) || null,
       cruise_name: (data.cruiseTitle as string) || null,
       tour_operator_id: (data.tourOperatorId as string) || null,
+      pre_cruise_stay: Number(data.preCruiseStay) || 0,
+      post_cruise_stay: Number(data.postCruiseStay) || 0,
     };
 
     const [existing] = await db.select().from(quote_cruise).where(eq(quote_cruise.quote_id, quoteId)).limit(1);
@@ -1014,7 +1016,7 @@ export const newQuoteRepository = {
       [cruiseRow] = await db.update(quote_cruise).set(values).where(eq(quote_cruise.id, existing.id)).returning();
     } else {
       [cruiseRow] = await db.insert(quote_cruise)
-        .values({ ...values, quote_id: quoteId, pre_cruise_stay: 0, post_cruise_stay: 0 })
+        .values({ ...values, quote_id: quoteId })
         .returning();
     }
 
