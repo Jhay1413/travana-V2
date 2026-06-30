@@ -5,9 +5,7 @@ import { userRepository } from '../user/user.repository';
 import { notificationRepository } from '../notification/notification.repository';
 import { asyncHandler } from '../../utils/async-handler';
 import { getUserId } from '../../utils/get-user-id';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { s3Client, getS3Bucket } from '../../config/s3';
-import { randomUUID } from 'crypto';
+import { uploadImageToS3 } from '../../utils/image-storage';
 import multer from 'multer';
 
 const VALID_CATEGORIES = ['general', 'supplier', 'target', 'incentive', 'training'];
@@ -104,11 +102,11 @@ export const announcementController = {
     if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
     const file = (req as any).file;
     if (!file) return res.status(400).json({ success: false, message: 'No image file provided' });
-    const ext = file.originalname.split('.').pop() || 'jpg';
-    const key = `hub-images/${randomUUID()}.${ext}`;
-    const bucket = getS3Bucket();
-    await s3Client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: file.buffer, ContentType: file.mimetype }));
-    const imageUrl = `https://${bucket}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    // Store via the shared helper so the DB holds a stable proxy URL
+    // (/api/v2/files/img?key=...) that 302-redirects to a short-lived presigned
+    // URL — the same pattern quote/booking images use. A direct public S3 URL
+    // would 403 against the private bucket and the image would never load.
+    const imageUrl = await uploadImageToS3(file, 'hub-images');
     res.json({ success: true, data: { imageUrl } });
   }),
 

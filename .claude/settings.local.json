@@ -106,7 +106,9 @@
       "Bash(python -c ' *)",
       "Bash(grep -iE \"enquiry-to-quote|client\\\\\\\\\\\\\\\\index|enquiry\\\\\\\\\\\\\\\\index|client/index|enquiry/index\")",
       "Bash(xargs grep -l \"getAgentStats\\\\|agentDashboard\\\\|agent.*dashboard\")",
-      "Workflow(code-review)"
+      "Workflow(code-review)",
+      "Bash(xargs grep -l \"totalBookingCommissionExpr\")",
+      "Bash(grep -A 50 \"getAgentsPerformance\" C:\\\\\\\\Users\\\\\\\\Christian\\\\\\\\Desktop\\\\\\\\travana-v2\\\\\\\\travana-V2\\\\\\\\server\\\\\\\\v2\\\\\\\\modules\\\\\\\\organization-overview\\\\\\\\organization-overview.repository.ts)"
     ],
     "additionalDirectories": [
       "/tmp"

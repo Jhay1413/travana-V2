@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { clientTable, transaction, quote, booking, booking_upsell, user as userTable } from "@shared/schema";
-import { sql, eq, and, gte, lte, isNull } from "drizzle-orm";
+import { sql, eq, and, gte, lt, isNull } from "drizzle-orm";
 import { quoteStatsConds } from "../../utils/quote-conditions";
 import { totalBookingCommissionExpr } from "../../utils/commission-sql";
 
@@ -413,8 +413,11 @@ export const dashboardRepository = {
   async getMyProfit(userId: string): Promise<{ profitThisMonth: number }> {
     try {
       const now = new Date();
+      // Bound the month window exactly like getAgentStats / getAgentsPerformance:
+      // [startOfMonth, monthEnd) — first of this month inclusive, first of next
+      // month exclusive — so this figure matches the agent dashboard precisely.
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
       const [[bookingResult], [upsellResult]] = await Promise.all([
         db
@@ -432,7 +435,7 @@ export const dashboardRepository = {
               eq(transaction.is_test, false),
               sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
               gte(booking.date_created, startOfMonth),
-              lte(booking.date_created, endOfMonth)
+              lt(booking.date_created, monthEnd)
             )
           ),
 
@@ -454,7 +457,7 @@ export const dashboardRepository = {
               sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
               sql`${booking_upsell.is_active} = true`,
               gte(booking_upsell.added_at, startOfMonth),
-              lte(booking_upsell.added_at, endOfMonth)
+              lt(booking_upsell.added_at, monthEnd)
             )
           ),
       ]);

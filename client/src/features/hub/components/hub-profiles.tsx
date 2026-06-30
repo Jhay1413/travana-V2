@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import defaultCoverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
 import { useHubPosts, useCreateHubPost, useToggleHubPostLike, useAddHubPostComment } from "@/features/social/api/use-hub-post-queries";
+import { useAnnouncements, useBulkLikes } from "@/features/announcement/api/use-announcement-queries";
+import { AnnouncementCard } from "@/features/hub/components/hub-news";
 import {
   Award,
   BookOpen,
@@ -671,6 +673,7 @@ export default function HubProfiles() {
   const { data: currentUser } = useCurrentUser();
   const { data: myProfit } = useMyProfit();
   const { data: allUsers } = useUsers();
+  const { data: hrRecord } = useMyHrRecord();
   const mentionUsers: MentionUser[] = useMemo(() => {
     if (!allUsers) return [];
     return allUsers.map((u: any) => ({ id: u.id, name: u.name || `${u.firstName || ""} ${u.lastName || ""}`.trim(), image: u.image || u.profileImageUrl || null, role: u.role || "" }));
@@ -927,6 +930,21 @@ export default function HubProfiles() {
   const pinnedPosts = timeline.filter((p) => p.pinned);
   const regularPosts = timeline.filter((p) => !p.pinned);
 
+  // Pinned News & Announcements surface at the top of the profile timeline as
+  // fully-interactive cards (like/share wired to the announcement endpoints via
+  // the shared AnnouncementCard).
+  const { data: announcements } = useAnnouncements();
+  const { data: announcementLikes } = useBulkLikes();
+  const pinnedAnnouncements = useMemo(
+    () => (announcements || []).filter((a) => a.pinned),
+    [announcements],
+  );
+
+  const holidayAllowance = hrRecord?.holidayAllowance ?? 0;
+  const holidayUsed = hrRecord?.holidayUsedDays ?? 0;
+  const holidayLeft = Math.max(0, holidayAllowance - holidayUsed);
+  const trophyCount = MOCK_ACHIEVEMENTS.filter((a) => a.earned).length;
+
   const tabs: { key: ProfileTab; label: string; icon: React.ElementType }[] = [
     { key: "timeline", label: "Timeline", icon: FileText },
     { key: "knowledge", label: "Knowledge", icon: BookOpen },
@@ -1010,13 +1028,13 @@ export default function HubProfiles() {
                 {/* Stats Row */}
                 <div className="flex items-center gap-6 mt-4 flex-wrap">
                   <div className="text-center">
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">{profile.contributions}</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Posts</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{holidayLeft}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Holiday Days Left</p>
                   </div>
                   <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
                   <div className="text-center">
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">{profile.dealWins}</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Deal Wins</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{holidayUsed}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Holiday Used</p>
                   </div>
                   <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
                   <div className="text-center">
@@ -1024,7 +1042,7 @@ export default function HubProfiles() {
                       <p className="text-lg font-bold text-slate-900 dark:text-white">{profile.reputationScore}</p>
                       <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                     </div>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Reputation</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Rating</p>
                   </div>
                   <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
                   <div className="text-center">
@@ -1041,6 +1059,14 @@ export default function HubProfiles() {
                         : "—"}
                     </p>
                     <p className="text-[10px] text-slate-500 uppercase tracking-wider">Profit This Month</p>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
+                  <div className="text-center">
+                    <div className="flex items-center gap-1">
+                      <p className="text-lg font-bold text-slate-900 dark:text-white">{trophyCount}</p>
+                      <Trophy className="h-4 w-4 text-amber-500" />
+                    </div>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-wider">Trophies</p>
                   </div>
                 </div>
               </div>
@@ -1160,6 +1186,22 @@ export default function HubProfiles() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Pinned News & Announcements */}
+                {pinnedAnnouncements.length > 0 && (
+                  <div className="space-y-4">
+                    {pinnedAnnouncements.map((a, i) => (
+                      <AnnouncementCard
+                        key={a.id}
+                        post={a}
+                        index={i}
+                        canManage={false}
+                        onEdit={() => {}}
+                        likeData={announcementLikes?.[a.id]}
+                      />
+                    ))}
+                  </div>
+                )}
 
                 {/* Pinned Posts */}
                 {pinnedPosts.length > 0 && (

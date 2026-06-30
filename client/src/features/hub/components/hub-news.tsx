@@ -171,7 +171,7 @@ export default function HubNews({ role: hubRole = "Senior Agent" }: { role?: Hub
   );
 }
 
-function AnnouncementCard({
+export function AnnouncementCard({
   post,
   index,
   canManage,
