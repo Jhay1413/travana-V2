@@ -3,14 +3,19 @@ import { bookingApi } from "@/api";
 import { bookingKeys, dashboardKeys, bookingUpsellKeys } from "@/hooks/queries";
 import { upsellToPayload } from "@/features/booking/types";
 import type { UpsellPayload, UpsellItemValue } from "@/features/booking/types";
+import { organizationOverviewKeys } from "@/features/organization/api/use-organization-overview-queries";
+import { branchOverviewKeys } from "@/features/organization/api/use-branch-overview-queries";
 
 // Upsell commission is recognised by `added_at`, so any create/edit/delete can
 // shift a month's profit — invalidate the upsell list, the parent booking
-// detail, and the dashboard.
+// detail, the dashboard, and the org/branch overview stats (their trend feeds
+// the Commission vs Target tab).
 function invalidateUpsellRelated(queryClient: QueryClient, bookingId?: string) {
   queryClient.invalidateQueries({ queryKey: bookingUpsellKeys.all });
   queryClient.invalidateQueries({ queryKey: bookingKeys.all });
   queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+  queryClient.invalidateQueries({ queryKey: organizationOverviewKeys.all });
+  queryClient.invalidateQueries({ queryKey: branchOverviewKeys.all });
   if (bookingId) {
     queryClient.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
   }

@@ -221,7 +221,7 @@ export const branchOverviewRepository = {
         const q = db
           .select({
             month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${booking.date_created}), 'YYYY-MM')`,
-            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
+            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: trendStart.toISOString(), end: trendEnd.toISOString() })}), 0)`,
             bookings: sql<number>`COUNT(*)`,
           })
           .from(booking)

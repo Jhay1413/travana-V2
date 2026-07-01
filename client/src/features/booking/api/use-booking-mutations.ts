@@ -3,6 +3,8 @@ import { bookingApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
 import { bookingKeys, transactionKeys, quoteKeys, dashboardKeys } from "@/hooks/queries";
 import { referralKeys } from "@/features/referral/api/use-referral-queries";
+import { organizationOverviewKeys } from "@/features/organization/api/use-organization-overview-queries";
+import { branchOverviewKeys } from "@/features/organization/api/use-branch-overview-queries";
 import type { Booking } from "@/features/quote/types";
 
 export function useConvertToBooking() {
@@ -16,6 +18,8 @@ export function useConvertToBooking() {
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
       queryClient.invalidateQueries({ queryKey: referralKeys.all });
+      queryClient.invalidateQueries({ queryKey: organizationOverviewKeys.all });
+      queryClient.invalidateQueries({ queryKey: branchOverviewKeys.all });
     },
   });
 }
@@ -29,6 +33,8 @@ export function useUpdateBooking() {
       queryClient.invalidateQueries({ queryKey: bookingKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+      queryClient.invalidateQueries({ queryKey: organizationOverviewKeys.all });
+      queryClient.invalidateQueries({ queryKey: branchOverviewKeys.all });
     },
   });
 }
@@ -41,6 +47,8 @@ export function useDeleteBooking() {
       queryClient.invalidateQueries({ queryKey: bookingKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+      queryClient.invalidateQueries({ queryKey: organizationOverviewKeys.all });
+      queryClient.invalidateQueries({ queryKey: branchOverviewKeys.all });
     },
   });
 }
@@ -54,6 +62,8 @@ export function useAdminDeleteBooking() {
       queryClient.invalidateQueries({ queryKey: bookingKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
+      queryClient.invalidateQueries({ queryKey: organizationOverviewKeys.all });
+      queryClient.invalidateQueries({ queryKey: branchOverviewKeys.all });
     },
   });
 }

@@ -475,6 +475,7 @@ export const reportsRepository = {
             and(
               gte(booking.date_created, yearStart),
               lte(booking.date_created, yearEnd),
+              sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
               eq(transaction.is_test, false),
               eq(transaction.branch_id, scope.branchId),
             ),
@@ -497,6 +498,7 @@ export const reportsRepository = {
             and(
               gte(booking.date_created, yearStart),
               lte(booking.date_created, yearEnd),
+              sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
               eq(transaction.is_test, false),
               eq(transaction.branch_id, scope.branchId),
             ),
