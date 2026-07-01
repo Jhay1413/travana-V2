@@ -151,10 +151,21 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
             cruiseLine: cruises[0].cruise_line || "",
             ship: cruises[0].ship || "",
             cabinType: cruises[0].cabin_type || "",
+            cabinNumber: cruises[0].cabin_number || "",
             cruiseName: cruises[0].cruise_name || "",
             cruiseDate: cruises[0].cruise_date || "",
+            embarkation: cruises[0].embarkation || "",
+            debarkation: cruises[0].debarkation || "",
             preCruiseStay: cruises[0].pre_cruise_stay || 0,
             postCruiseStay: cruises[0].post_cruise_stay || 0,
+            itinerary: (cruises[0].itinerary || [])
+              .slice()
+              .sort((a, b) => (a.day_number ?? 0) - (b.day_number ?? 0))
+              .map((i) => ({
+                dayNumber: i.day_number,
+                description: i.description,
+                subDescription: i.sub_description,
+              })),
           }
         : undefined,
     haysRef: ("hays_ref" in apiData ? apiData.hays_ref : undefined) || undefined,

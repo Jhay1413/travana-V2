@@ -1,14 +1,23 @@
 import { db } from '../../config/database';
-import { hubPostsTable, hubPostCommentsTable, hubPostLikesTable, user as userTable } from '@shared/schema';
+import { hubPostsTable, hubPostCommentsTable, hubPostLikesTable, hubPostHidesTable, user as userTable } from '@shared/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 
 export const hubPostRepository = {
   async findAll(userId?: string) {
-    const posts = await db
+    // Exclude posts the requesting user has hidden from their own wall.
+    let hiddenIds: Set<string> = new Set();
+    if (userId) {
+      const hidden = await db.select({ postId: hubPostHidesTable.postId }).from(hubPostHidesTable).where(eq(hubPostHidesTable.userId, userId));
+      hiddenIds = new Set(hidden.map((h) => h.postId));
+    }
+
+    const allPosts = await db
       .select({ id: hubPostsTable.id, authorId: hubPostsTable.authorId, authorName: hubPostsTable.authorName, type: hubPostsTable.type, content: hubPostsTable.content, image: hubPostsTable.image, badge: hubPostsTable.badge, destination: hubPostsTable.destination, value: hubPostsTable.value, pinned: hubPostsTable.pinned, likes: hubPostsTable.likes, createdAt: hubPostsTable.createdAt, authorImage: userTable.image, authorRole: userTable.role })
       .from(hubPostsTable)
       .leftJoin(userTable, eq(hubPostsTable.authorId, userTable.id))
       .orderBy(desc(hubPostsTable.createdAt));
+
+    const posts = allPosts.filter((p) => !hiddenIds.has(p.id));
 
     const postIds = posts.map((p) => p.id);
     if (postIds.length === 0) return [];
@@ -45,6 +54,10 @@ export const hubPostRepository = {
 
   async remove(id: string) {
     await db.delete(hubPostsTable).where(eq(hubPostsTable.id, id));
+  },
+
+  async hide(postId: string, userId: string) {
+    await db.insert(hubPostHidesTable).values({ postId, userId }).onConflictDoNothing();
   },
 
   async toggleLike(postId: string, userId: string) {

@@ -57,23 +57,6 @@ export interface KnowledgeEntry {
   saved: boolean;
 }
 
-export interface DealWin {
-  id: string;
-  agentName: string;
-  avatar: string;
-  destination: string;
-  saleValue: string;
-  summary: string;
-  objectionHandled: string;
-  date: string;
-}
-
-export interface LeaderboardEntry {
-  name: string;
-  avatar: string;
-  value: string;
-}
-
 export interface NewsPost {
   id: string;
   author: string;
@@ -244,21 +227,6 @@ export const knowledgeEntries: KnowledgeEntry[] = [
   { id: "7", title: "Tenerife Year-Round Weather Guide", category: "Destination Guides", author: "Emma Davis", date: "Nov 28, 2025", likes: 12, tags: ["Canary Islands", "Weather", "Year-Round"], excerpt: "Month-by-month weather breakdown to help position Tenerife in every season.", saved: false },
   { id: "8", title: "Jet2 vs TUI: Package Comparison", category: "Supplier Notes", author: "Ryan Foster", date: "Nov 25, 2025", likes: 28, tags: ["Jet2", "TUI", "Comparison"], excerpt: "An honest comparison of Jet2 and TUI packages from an agent's perspective.", saved: false },
 ];
-
-export const dealWins: DealWin[] = [
-  { id: "1", agentName: "James Cooper", avatar: "JC", destination: "Tenerife", saleValue: "£4,200", summary: "Family of 4, 10 nights at Hard Rock Hotel. Customer initially wanted self-catering but was upsold to half board.", objectionHandled: "\"We can cook ourselves for cheaper\"", date: "Today" },
-  { id: "2", agentName: "Lisa Hart", avatar: "LH", destination: "Maldives", saleValue: "£6,800", summary: "Honeymoon couple, 7 nights at Baros Maldives. Upgraded from Lily Beach after showing the overwater villa photos.", objectionHandled: "\"Is it worth the extra money?\"", date: "Yesterday" },
-  { id: "3", agentName: "Sarah Mitchell", avatar: "SM", destination: "Antalya", saleValue: "£3,400", summary: "Repeat customer, 14 nights all inclusive at Titanic Mardan Palace. Closed within 20 minutes.", objectionHandled: "\"We went last year, want something different\"", date: "2 days ago" },
-  { id: "4", agentName: "Tom Blake", avatar: "TB", destination: "Mediterranean Cruise", saleValue: "£5,200", summary: "Retired couple, 14-night MSC cruise with balcony cabin. Added drinks and excursion package.", objectionHandled: "\"We've never cruised before\"", date: "3 days ago" },
-  { id: "5", agentName: "Emma Davis", avatar: "ED", destination: "Lanzarote", saleValue: "£2,800", summary: "Young couple, 7 nights at Princesa Yaiza. First-time bookers converted from online browsing.", objectionHandled: "\"Found it cheaper online\"", date: "4 days ago" },
-  { id: "6", agentName: "Ryan Foster", avatar: "RF", destination: "Dubai", saleValue: "£6,000", summary: "Birthday trip, 5 nights at Atlantis The Palm. Multi-generational booking for 6 guests.", objectionHandled: "\"Dubai is too commercial\"", date: "5 days ago" },
-];
-
-export const leaderboard = {
-  topSeller: { name: "Lisa Hart", avatar: "LH", value: "£18,400" } as LeaderboardEntry,
-  topContributor: { name: "Sarah Mitchell", avatar: "SM", value: "12 articles" } as LeaderboardEntry,
-  mostImproved: { name: "Ryan Foster", avatar: "RF", value: "+34% close rate" } as LeaderboardEntry,
-};
 
 export const newsPosts: NewsPost[] = [
   {

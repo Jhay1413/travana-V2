@@ -27,6 +27,14 @@ import {
   Bell,
   Globe,
   Star,
+  Ship,
+  Anchor,
+  Bed,
+  MapPin,
+  Users,
+  TreePine,
+  PawPrint,
+  Tag,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { EnrichedQuote } from "@/features/quote/types";
@@ -98,10 +106,43 @@ function getFirstImage(q: EnrichedQuote): string | null {
   return null;
 }
 
+function getCruise(q: EnrichedQuote) {
+  return q.cruises && q.cruises.length > 0 ? q.cruises[0] : undefined;
+}
+
+function isCruiseQuote(q: EnrichedQuote): boolean {
+  return (q.cruises?.length ?? 0) > 0
+    || (q.quote_type || "").toLowerCase().includes("cruise")
+    || (q.holiday_type_name || "").toLowerCase().includes("cruise");
+}
+
+function isLodgeQuote(q: EnrichedQuote): boolean {
+  return q.quote_type === "hot_tub_break"
+    || !!q.lodge_id
+    || !!q.park_id
+    || (q.quote_type || "").toLowerCase().includes("lodge")
+    || (q.holiday_type_name || "").toLowerCase().includes("lodge");
+}
+
+function getGuests(q: EnrichedQuote): number {
+  return (q.adult ?? 0) + (q.child ?? 0);
+}
+
+function DetailRow({ icon: Icon, label, value, testId }: { icon: typeof Hotel; label: string; value: React.ReactNode; testId?: string }) {
+  return (
+    <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+      <Icon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+      <span>{label}:</span>
+      <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={testId}>{value}</span>
+    </div>
+  );
+}
+
 
 function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPortalToggle, onPushNotify, onFeaturedToggle }: { post: SocialPost; onGeneratePost: (quote: EnrichedQuote) => void; onViewPost: (quote: EnrichedQuote) => void; isGenerating: boolean; onPortalToggle: (quoteId: string, checked: boolean) => void; onPushNotify: (quoteId: string) => void; onFeaturedToggle: (quoteId: string, checked: boolean) => void; }) {
   const { quote } = post;
   const imageUrl = getFirstImage(quote);
+  const cruise = getCruise(quote);
   const tourOp = quote.main_tour_operator_name;
   const pricePerPerson = quote.price_per_person ? `${formatPrice(quote.price_per_person)}pp` : formatPrice(quote.sales_price);
 
@@ -136,13 +177,37 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
           <Badge className="shrink-0 bg-blue-500 text-white border-0 text-xs font-bold px-3 py-1.5 rounded-lg shadow" data-testid={`badge-price-${quote.id}`}>{pricePerPerson}</Badge>
         </div>
         <div className="space-y-1.5 text-xs">
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Hotel className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Hotel:</span><span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-hotel-${quote.id}`}>{getHotelName(quote)}</span></div>
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Plane className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Departing:</span><span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-departing-${quote.id}`}>{getDepartingAirport(quote)}</span></div>
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Moon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Nights:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-nights-${quote.id}`}>{quote.num_of_nights}</span></div>
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><UtensilsCrossed className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Board:</span><span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-board-${quote.id}`}>{getBoardBasis(quote)}</span></div>
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Date:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-travel-date-${quote.id}`}>{formatDate(quote.travel_date)}</span></div>
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><CalendarClock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Scheduled:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-scheduled-${quote.id}`}>{formatDateTime(quote.postSchedule)}</span></div>
-          <div className="flex items-center gap-2 text-black/70 dark:text-white/70"><Clock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" /><span>Created:</span><span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-created-${quote.id}`}>{formatDateTime(quote.date_created)}</span></div>
+          {isCruiseQuote(quote) ? (
+            <>
+              <DetailRow icon={Ship} label="Cruise Line" value={cruise?.cruise_line || "—"} testId={`text-cruise-line-${quote.id}`} />
+              <DetailRow icon={Anchor} label="Ship" value={cruise?.ship || "—"} testId={`text-ship-${quote.id}`} />
+              <DetailRow icon={Bed} label="Cabin Type" value={cruise?.cabin_type || "—"} testId={`text-cabin-type-${quote.id}`} />
+              <DetailRow icon={Calendar} label="Departure Date" value={formatDate(cruise?.cruise_date)} testId={`text-departure-date-${quote.id}`} />
+              <DetailRow icon={MapPin} label="Leaving From" value={cruise?.embarkation || "—"} testId={`text-leaving-from-${quote.id}`} />
+              <DetailRow icon={Moon} label="Nights" value={quote.num_of_nights} testId={`text-nights-${quote.id}`} />
+              <DetailRow icon={Users} label="Guests" value={getGuests(quote)} testId={`text-guests-${quote.id}`} />
+            </>
+          ) : isLodgeQuote(quote) ? (
+            <>
+              <DetailRow icon={TreePine} label="Park" value={quote.park_name || "—"} testId={`text-park-${quote.id}`} />
+              <DetailRow icon={Hotel} label="Lodge" value={quote.lodge_name || quote.lodge_type || "—"} testId={`text-lodge-${quote.id}`} />
+              <DetailRow icon={Tag} label="LP Code" value={(quote as any).lodge_code || "—"} testId={`text-lp-code-${quote.id}`} />
+              <DetailRow icon={Calendar} label="Check-in Date" value={formatDate(quote.travel_date)} testId={`text-checkin-date-${quote.id}`} />
+              <DetailRow icon={Moon} label="Nights" value={quote.num_of_nights} testId={`text-nights-${quote.id}`} />
+              <DetailRow icon={Users} label="Guests" value={getGuests(quote)} testId={`text-guests-${quote.id}`} />
+              <DetailRow icon={PawPrint} label="Pets" value={quote.pets} testId={`text-pets-${quote.id}`} />
+            </>
+          ) : (
+            <>
+              <DetailRow icon={Hotel} label="Hotel" value={getHotelName(quote)} testId={`text-hotel-${quote.id}`} />
+              <DetailRow icon={Plane} label="Departing" value={getDepartingAirport(quote)} testId={`text-departing-${quote.id}`} />
+              <DetailRow icon={Moon} label="Nights" value={quote.num_of_nights} testId={`text-nights-${quote.id}`} />
+              <DetailRow icon={UtensilsCrossed} label="Board" value={getBoardBasis(quote)} testId={`text-board-${quote.id}`} />
+              <DetailRow icon={Calendar} label="Date" value={formatDate(quote.travel_date)} testId={`text-travel-date-${quote.id}`} />
+            </>
+          )}
+          <DetailRow icon={CalendarClock} label="Scheduled" value={formatDateTime(quote.postSchedule)} testId={`text-scheduled-${quote.id}`} />
+          <DetailRow icon={Clock} label="Created" value={formatDateTime(quote.date_created)} testId={`text-created-${quote.id}`} />
         </div>
         {quote.quote_ref && <div className="text-xs text-black/60 dark:text-white/50">View Link: <a href={quote.quote_ref} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline" data-testid={`link-view-${quote.id}`}>View</a></div>}
         <div className="space-y-2 mt-1">

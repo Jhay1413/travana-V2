@@ -24,6 +24,7 @@ export function QuoteItinerarySpecs({ quote, quoteData }: QuoteItinerarySpecsPro
         <div className="grid content-start gap-2" data-testid="col-itinerary-left">
           <SpecRow testId="travel-date" label="Travel Date" value={formatUKDate(quote.travelDate)} />
           <SpecRow testId="lodge-type" label="Lodge Type" value={quote.lodge?.type || "—"} />
+          <SpecRow testId="lodge-name" label="Lodge Name" value={quoteData?.lodge_name || quote.lodge?.name || "—"} />
           <SpecRow testId="pets" label="Pets" value={quote.pets} />
           <SpecRow
             testId="guests"

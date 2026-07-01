@@ -1,10 +1,14 @@
 import { db } from '../../config/database';
-import { hubAnnouncementTable, hubAnnouncementLikesTable } from '@shared/schema';
+import { hubAnnouncementTable, hubAnnouncementLikesTable, hubAnnouncementHidesTable } from '@shared/schema';
 import { and, count, desc, eq } from 'drizzle-orm';
 
 export const announcementRepository = {
-  async findAll() {
-    return db.select().from(hubAnnouncementTable).orderBy(desc(hubAnnouncementTable.createdAt));
+  async findAll(category?: string) {
+    const query = db.select().from(hubAnnouncementTable);
+    if (category) {
+      return query.where(eq(hubAnnouncementTable.category, category)).orderBy(desc(hubAnnouncementTable.createdAt));
+    }
+    return query.orderBy(desc(hubAnnouncementTable.createdAt));
   },
 
   async findById(id: string) {
@@ -31,6 +35,20 @@ export const announcementRepository = {
 
   async remove(id: string) {
     await db.delete(hubAnnouncementTable).where(eq(hubAnnouncementTable.id, id));
+  },
+
+  // ─── Per-user hide (profile wall) ───────────────────────────────────────────
+
+  async hide(announcementId: string, userId: string) {
+    await db.insert(hubAnnouncementHidesTable).values({ announcementId, userId }).onConflictDoNothing();
+  },
+
+  async findHiddenIdsByUser(userId: string): Promise<string[]> {
+    const rows = await db
+      .select({ announcementId: hubAnnouncementHidesTable.announcementId })
+      .from(hubAnnouncementHidesTable)
+      .where(eq(hubAnnouncementHidesTable.userId, userId));
+    return rows.map((r) => r.announcementId);
   },
 
   // ─── Likes ────────────────────────────────────────────────────────────────

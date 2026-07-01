@@ -41,6 +41,10 @@ export const hubPostApi = {
     await axios.delete(`${BASE}/${id}`);
   },
 
+  async hide(id: string): Promise<void> {
+    await axios.post(`${BASE}/${id}/hide`);
+  },
+
   async toggleLike(id: string): Promise<{ liked: boolean }> {
     const { data } = await axios.post(`${BASE}/${id}/like`);
     return data;

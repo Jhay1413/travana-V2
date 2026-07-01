@@ -120,6 +120,20 @@
       "when": 1782272172475,
       "tag": "0016_empty_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782879573176,
+      "tag": "0017_fast_sue_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782880676668,
+      "tag": "0018_abnormal_legion",
+      "breakpoints": true
     }
   ]
 }

@@ -2,8 +2,8 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import defaultCoverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
-import { useHubPosts, useCreateHubPost, useToggleHubPostLike, useAddHubPostComment } from "@/features/social/api/use-hub-post-queries";
-import { useAnnouncements, useBulkLikes } from "@/features/announcement/api/use-announcement-queries";
+import { useHubPosts, useCreateHubPost, useToggleHubPostLike, useAddHubPostComment, useDeleteHubPost, useHideHubPost } from "@/features/social/api/use-hub-post-queries";
+import { useAnnouncements, useBulkLikes, useHiddenAnnouncements, useHideAnnouncement } from "@/features/announcement/api/use-announcement-queries";
 import { AnnouncementCard } from "@/features/hub/components/hub-news";
 import {
   Award,
@@ -23,6 +23,7 @@ import {
   Image,
   Loader2,
   MapPin,
+  EyeOff,
   MessageCircle,
   MoreHorizontal,
   Pen,
@@ -36,6 +37,7 @@ import {
   Target,
   ThumbsUp,
   Trophy,
+  Trash2,
   TrendingUp,
   Upload,
   Users,
@@ -65,12 +67,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 type ProfileTab = "timeline" | "knowledge" | "training" | "achievements" | "about" | "leave";
 
 interface TimelinePost {
   id: string;
+  authorId?: string;
   type: "deal" | "knowledge" | "training" | "blog" | "milestone" | "review";
   content: string;
   date: string;
@@ -454,13 +463,16 @@ interface TimelinePostCardProps {
   onComment: (id: string, text: string) => void;
   onShare: (id: string) => void;
   onSave: (id: string) => void;
+  onHide: (id: string) => void;
+  onRemove: (id: string) => void;
+  canRemove: boolean;
   profileAvatar: string;
   profileName: string;
   profileRole: string;
   profileImage?: string | null;
 }
 
-function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAvatar, profileName, profileRole, profileImage }: TimelinePostCardProps) {
+function TimelinePostCard({ post, onLike, onComment, onShare, onSave, onHide, onRemove, canRemove, profileAvatar, profileName, profileRole, profileImage }: TimelinePostCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
   const [saved, setSaved] = useState(false);
@@ -526,9 +538,32 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
               </div>
             </div>
           </div>
-          <button className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition">
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition"
+                data-testid={`post-menu-${post.id}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => onHide(post.id)} data-testid={`post-hide-${post.id}`}>
+                <EyeOff className="mr-2 h-4 w-4" />
+                Hide from my wall
+              </DropdownMenuItem>
+              {canRemove && (
+                <DropdownMenuItem
+                  onClick={() => onRemove(post.id)}
+                  className="text-red-600 focus:text-red-600"
+                  data-testid={`post-remove-${post.id}`}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remove
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="mt-3 text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line">
@@ -670,6 +705,7 @@ function TimelinePostCard({ post, onLike, onComment, onShare, onSave, profileAva
 }
 
 export default function HubProfiles() {
+  const { toast } = useToast();
   const { data: currentUser } = useCurrentUser();
   const { data: myProfit } = useMyProfit();
   const { data: allUsers } = useUsers();
@@ -751,10 +787,13 @@ export default function HubProfiles() {
   const createPostMutation = useCreateHubPost();
   const toggleLikeMutation = useToggleHubPostLike();
   const addCommentMutation = useAddHubPostComment();
+  const deletePostMutation = useDeleteHubPost();
+  const hidePostMutation = useHideHubPost();
   const timeline: TimelinePost[] = useMemo(() => {
     if (!dbPosts || dbPosts.length === 0) return MOCK_TIMELINE;
     return dbPosts.map((p: any) => ({
       id: p.id,
+      authorId: p.authorId || undefined,
       type: p.type || "deal",
       content: p.content,
       date: p.date || formatTimeAgo(p.createdAt),
@@ -900,6 +939,25 @@ export default function HubProfiles() {
 
   const savePost = (_id: string) => {};
 
+  const canManagePosts = ["admin", "manager"].includes((currentUser?.role || "").toLowerCase());
+  const canRemovePost = (post: TimelinePost) =>
+    canManagePosts || (!!post.authorId && post.authorId === currentUser?.id);
+
+  const hidePost = (id: string) => {
+    hidePostMutation.mutate(id, {
+      onSuccess: () => toast({ title: "Hidden from your wall" }),
+      onError: () => toast({ title: "Failed to hide post", variant: "destructive" }),
+    });
+  };
+
+  const removePost = (id: string) => {
+    if (!window.confirm("Remove this post for everyone?")) return;
+    deletePostMutation.mutate(id, {
+      onSuccess: () => toast({ title: "Post removed" }),
+      onError: () => toast({ title: "Failed to remove post", variant: "destructive" }),
+    });
+  };
+
   const handleCreatePost = () => {
     if (!newPostText.trim()) return;
     const badgeMap: Record<string, string> = {
@@ -930,15 +988,25 @@ export default function HubProfiles() {
   const pinnedPosts = timeline.filter((p) => p.pinned);
   const regularPosts = timeline.filter((p) => !p.pinned);
 
-  // Pinned News & Announcements surface at the top of the profile timeline as
+  // "Post to all" announcements surface at the top of the profile timeline as
   // fully-interactive cards (like/share wired to the announcement endpoints via
-  // the shared AnnouncementCard).
+  // the shared AnnouncementCard). Pinning only affects ordering on the News page
+  // — an announcement reaches profile walls only when broadcast with postToAll.
   const { data: announcements } = useAnnouncements();
   const { data: announcementLikes } = useBulkLikes();
-  const pinnedAnnouncements = useMemo(
-    () => (announcements || []).filter((a) => a.pinned),
-    [announcements],
-  );
+  const { data: hiddenAnnouncementIds } = useHiddenAnnouncements();
+  const hideAnnouncementMutation = useHideAnnouncement();
+  const broadcastAnnouncements = useMemo(() => {
+    const hidden = new Set(hiddenAnnouncementIds || []);
+    return (announcements || []).filter((a) => a.postToAll && !hidden.has(a.id));
+  }, [announcements, hiddenAnnouncementIds]);
+
+  const hideAnnouncement = (id: string) => {
+    hideAnnouncementMutation.mutate(id, {
+      onSuccess: () => toast({ title: "Hidden from your wall" }),
+      onError: () => toast({ title: "Failed to hide", variant: "destructive" }),
+    });
+  };
 
   const holidayAllowance = hrRecord?.holidayAllowance ?? 0;
   const holidayUsed = hrRecord?.holidayUsedDays ?? 0;
@@ -1187,10 +1255,10 @@ export default function HubProfiles() {
                   </div>
                 </div>
 
-                {/* Pinned News & Announcements */}
-                {pinnedAnnouncements.length > 0 && (
+                {/* Broadcast News & Announcements (Post to all) */}
+                {broadcastAnnouncements.length > 0 && (
                   <div className="space-y-4">
-                    {pinnedAnnouncements.map((a, i) => (
+                    {broadcastAnnouncements.map((a, i) => (
                       <AnnouncementCard
                         key={a.id}
                         post={a}
@@ -1198,6 +1266,7 @@ export default function HubProfiles() {
                         canManage={false}
                         onEdit={() => {}}
                         likeData={announcementLikes?.[a.id]}
+                        onHide={hideAnnouncement}
                       />
                     ))}
                   </div>
@@ -1207,7 +1276,7 @@ export default function HubProfiles() {
                 {pinnedPosts.length > 0 && (
                   <div className="space-y-4">
                     {pinnedPosts.map((post) => (
-                      <TimelinePostCard key={post.id} post={post} onLike={toggleLike} onComment={addComment} onShare={sharePost} onSave={savePost} profileAvatar={profile.avatar} profileName={profile.name} profileRole={profile.role} profileImage={profileImage} />
+                      <TimelinePostCard key={post.id} post={post} onLike={toggleLike} onComment={addComment} onShare={sharePost} onSave={savePost} onHide={hidePost} onRemove={removePost} canRemove={canRemovePost(post)} profileAvatar={profile.avatar} profileName={profile.name} profileRole={profile.role} profileImage={profileImage} />
                     ))}
                   </div>
                 )}
@@ -1215,7 +1284,7 @@ export default function HubProfiles() {
                 {/* Regular Posts */}
                 <div className="space-y-4">
                   {regularPosts.map((post) => (
-                    <TimelinePostCard key={post.id} post={post} onLike={toggleLike} onComment={addComment} onShare={sharePost} onSave={savePost} profileAvatar={profile.avatar} profileName={profile.name} profileRole={profile.role} profileImage={profileImage} />
+                    <TimelinePostCard key={post.id} post={post} onLike={toggleLike} onComment={addComment} onShare={sharePost} onSave={savePost} onHide={hidePost} onRemove={removePost} canRemove={canRemovePost(post)} profileAvatar={profile.avatar} profileName={profile.name} profileRole={profile.role} profileImage={profileImage} />
                   ))}
                 </div>
               </div>

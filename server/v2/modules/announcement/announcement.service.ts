@@ -2,8 +2,8 @@ import { announcementRepository } from './announcement.repository';
 import { AppError } from '../../utils/error-handler';
 
 export const announcementService = {
-  async findAll() {
-    return announcementRepository.findAll();
+  async findAll(category?: string) {
+    return announcementRepository.findAll(category);
   },
 
   async findById(id: string) {
@@ -30,5 +30,15 @@ export const announcementService = {
 
   async remove(id: string) {
     await announcementRepository.remove(id);
+  },
+
+  async hide(announcementId: string, userId: string) {
+    const row = await announcementRepository.findById(announcementId);
+    if (!row) throw new AppError('Announcement not found', 404);
+    await announcementRepository.hide(announcementId, userId);
+  },
+
+  async findHiddenIds(userId: string) {
+    return announcementRepository.findHiddenIdsByUser(userId);
   },
 };

@@ -59,7 +59,6 @@ export default function HubDashboard() {
               {[
                 { label: "Continue Training", path: "/hub/training", color: "text-blue-600 dark:text-blue-400" },
                 { label: "Browse Knowledge Vault", path: "/hub/knowledge", color: "text-emerald-600 dark:text-emerald-400" },
-                { label: "View Deal Wins", path: "/hub/deals", color: "text-amber-600 dark:text-amber-400" },
                 { label: "AI Destination Intel", path: "/hub/ai-intel", color: "text-purple-600 dark:text-purple-400" },
               ].map((link) => (
                 <Link

@@ -30,8 +30,9 @@ import { useUpdateQuote, useDeleteQuote } from "@/hooks/mutations";
 import { useSetPrimaryQuoteImage } from "@/features/quote/api/use-quote-image-mutations";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
 import { useQuoteData } from "@/features/social/components/social-quote/hooks";
-import { currency, formatUKDate, formatLeadSource } from "@/features/social/components/social-quote/utils";
+import { currency, formatUKDate } from "@/features/social/components/social-quote/utils";
 import { StatusPill, QuoteSummaryTimeline } from "@/features/social/components/social-quote";
+import { QuoteItinerarySpecs } from "@/features/quote/components/QuoteItinerarySpecs";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { QuoteEditDialog } from "@/features/quote/components/quote-edit-dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -83,6 +84,27 @@ export default function SocialQuotePage() {
   );
 
   const isHotTub = (rawData as any)?.quote_type === "hot_tub_break" || quote?.packageType?.toLowerCase().includes("hot tub");
+  const isCruise = !!quote?.cruise || !!quote?.packageType?.toLowerCase().includes("cruise");
+  const isLodge = isHotTub || !!quote?.lodge || !!quote?.packageType?.toLowerCase().includes("lodge");
+  // Reuse the client quote's itinerary spec renderer so the social post shows the
+  // exact same package holiday / cruise / hot tub layout. QuoteItinerarySpecs consumes
+  // the quote-feature cruise shape (itinerary uses `day`), so adapt the social
+  // display shape (itinerary uses `dayNumber`) before handing it over.
+  const quoteForSpecs = quote
+    ? {
+        ...quote,
+        cruise: quote.cruise
+          ? {
+              ...quote.cruise,
+              itinerary: (quote.cruise.itinerary ?? []).map((i) => ({
+                day: i.dayNumber ?? 0,
+                description: i.description ?? "",
+                subDescription: i.subDescription ?? "",
+              })),
+            }
+          : undefined,
+      }
+    : quote;
   const guruDestination = isHotTub
     ? [quote?.lodge?.parkName, quote?.lodge?.parkLocation].filter(Boolean).join(", ")
     : quote?.destinationName || quote?.destination || "";
@@ -477,152 +499,9 @@ export default function SocialQuotePage() {
                   </div>
                 </div>
 
-                {/* Quote Details */}
+                {/* Quote Details — mirror the client quote page (package holiday / cruise / hot tub) */}
                 <div className="min-w-0" data-testid="col-social-quote-details">
-                  <div className="mt-3 grid gap-2 md:grid-cols-2" data-testid="grid-social-quote-specs">
-                    {quote.packageType?.toLowerCase().includes("hot tub") ? (
-                      <>
-                        <div className="grid content-start gap-2" data-testid="col-social-quote-left">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-travel-date">
-                            <div className="text-xs font-semibold text-black/65">Travel Date</div>
-                            <div className="text-xs font-semibold text-black">{formatUKDate(quote.travelDate)}</div>
-                          </div>
-                          {quote.lodge?.parkName && (
-                            <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-park-name">
-                              <div className="text-xs font-semibold text-black/65">Park</div>
-                              <div className="text-xs font-semibold text-black">{quote.lodge.parkName}</div>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-lodge-type">
-                            <div className="text-xs font-semibold text-black/65">Lodge</div>
-                            <div className="text-xs font-semibold text-black">{quote.lodge?.name || quote.lodge?.type || "—"}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-pets">
-                            <div className="text-xs font-semibold text-black/65">Pets</div>
-                            <div className="text-xs font-semibold text-black">{quote.pets}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-guests">
-                            <div className="text-xs font-semibold text-black/65">Number of Guests</div>
-                            <div className="text-xs font-semibold text-black">{quote.passengers.adults + quote.passengers.children}</div>
-                          </div>
-                        </div>
-                        <div className="grid content-start gap-2" data-testid="col-social-quote-right">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-operator">
-                            <div className="text-xs font-semibold text-black/65">Tour Operator</div>
-                            <div className="text-xs font-semibold text-black">{quote.commissions.tourOperator}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-passengers">
-                            <div className="text-xs font-semibold text-black/65">Passengers</div>
-                            <div className="text-xs font-semibold text-black">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children${quote.passengers.childAges?.length ? ` (${quote.passengers.childAges.join(", ")})` : ""}` : ""}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-nights">
-                            <div className="text-xs font-semibold text-black/65">Number of Nights</div>
-                            <div className="text-xs font-semibold text-black">{quote.nights}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-lead-source">
-                            <div className="text-xs font-semibold text-black/65">Lead Source</div>
-                            <div className="text-xs font-semibold text-black">{formatLeadSource(quote.leadSource)}</div>
-                          </div>
-                        </div>
-                      </>
-                    ) : quote.packageType?.toLowerCase().includes("cruise") ? (
-                      <>
-                        <div className="grid content-start gap-2" data-testid="col-social-quote-left">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-travel-date">
-                            <div className="text-xs font-semibold text-black/65">Travel Date</div>
-                            <div className="text-xs font-semibold text-black">{formatUKDate(quote.travelDate)}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-cruise-line">
-                            <div className="text-xs font-semibold text-black/65">Cruise Line</div>
-                            <div className="text-xs font-semibold text-black">{quote.cruise?.cruiseLine || "—"}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-ship">
-                            <div className="text-xs font-semibold text-black/65">Ship</div>
-                            <div className="text-xs font-semibold text-black">{quote.cruise?.ship || "—"}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-cabin-type">
-                            <div className="text-xs font-semibold text-black/65">Cabin Type</div>
-                            <div className="text-xs font-semibold text-black">{quote.cruise?.cabinType || "—"}</div>
-                          </div>
-                        </div>
-                        <div className="grid content-start gap-2" data-testid="col-social-quote-right">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-operator">
-                            <div className="text-xs font-semibold text-black/65">Tour Operator</div>
-                            <div className="text-xs font-semibold text-black">{quote.commissions.tourOperator}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-cruise-date">
-                            <div className="text-xs font-semibold text-black/65">Cruise Date</div>
-                            <div className="text-xs font-semibold text-black">{quote.cruise?.cruiseDate ? formatUKDate(quote.cruise.cruiseDate) : "—"}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-pre-cruise">
-                            <div className="text-xs font-semibold text-black/65">Pre-Cruise Stay</div>
-                            <div className="text-xs font-semibold text-black">{quote.cruise?.preCruiseStay || 0} nights</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-post-cruise">
-                            <div className="text-xs font-semibold text-black/65">Post-Cruise Stay</div>
-                            <div className="text-xs font-semibold text-black">{quote.cruise?.postCruiseStay || 0} nights</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-passengers">
-                            <div className="text-xs font-semibold text-black/65">Passengers</div>
-                            <div className="text-xs font-semibold text-black">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children${quote.passengers.childAges?.length ? ` (${quote.passengers.childAges.join(", ")})` : ""}` : ""}
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="grid content-start gap-2" data-testid="col-social-quote-left">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-travel-date">
-                            <div className="text-xs font-semibold text-black/65">Travel Date</div>
-                            <div className="text-xs font-semibold text-black">{formatUKDate(quote.travelDate)}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-hotel">
-                            <div className="text-xs font-semibold text-black/65">Hotel</div>
-                            <div className="text-xs font-semibold text-black">{quote.accommodation.property}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-room">
-                            <div className="text-xs font-semibold text-black/65">Room Type</div>
-                            <div className="text-xs font-semibold text-black">{quote.accommodation.roomType}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-board">
-                            <div className="text-xs font-semibold text-black/65">Board Basis</div>
-                            <div className="text-xs font-semibold text-black">{quote.accommodation.board}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-transfer">
-                            <div className="text-xs font-semibold text-black/65">Transfer Type</div>
-                            <div className="text-xs font-semibold text-black">{quote.transferType || "Private Transfer"}</div>
-                          </div>
-                        </div>
-                        <div className="grid content-start gap-2" data-testid="col-social-quote-right">
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-operator">
-                            <div className="text-xs font-semibold text-black/65">Tour Operator</div>
-                            <div className="text-xs font-semibold text-black">{quote.commissions.tourOperator}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-departure-airport">
-                            <div className="text-xs font-semibold text-black/65">Departure Airport</div>
-                            <div className="text-xs font-semibold text-black">{quote.flights.outbound.from}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-passengers">
-                            <div className="text-xs font-semibold text-black/65">Passengers</div>
-                            <div className="text-xs font-semibold text-black">
-                              {quote.passengers.adults} Adults{quote.passengers.children ? `, ${quote.passengers.children} Children (${quote.passengers.childAges.join(", ")})` : ""}
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-nights">
-                            <div className="text-xs font-semibold text-black/65">Number of Nights</div>
-                            <div className="text-xs font-semibold text-black">{quote.nights}</div>
-                          </div>
-                          <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-lead-source">
-                            <div className="text-xs font-semibold text-black/65">Lead Source</div>
-                            <div className="text-xs font-semibold text-black">{formatLeadSource(quote.leadSource)}</div>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  <QuoteItinerarySpecs quote={quoteForSpecs} quoteData={rawData} />
                 </div>
               </div>
             </Card>

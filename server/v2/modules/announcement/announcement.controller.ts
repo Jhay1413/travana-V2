@@ -8,7 +8,7 @@ import { getUserId } from '../../utils/get-user-id';
 import { uploadImageToS3 } from '../../utils/image-storage';
 import multer from 'multer';
 
-const VALID_CATEGORIES = ['general', 'supplier', 'target', 'incentive', 'training'];
+const VALID_CATEGORIES = ['latest_news', 'supplier_codes', 'club_travana'];
 
 export const imageUpload = multer({
   storage: multer.memoryStorage(),
@@ -77,8 +77,11 @@ async function notifyMentionedUsers(content: string, authorId: string, authorNam
 }
 
 export const announcementController = {
-  getAll: asyncHandler(async (_req: Request, res: Response) => {
-    const items = await announcementService.findAll();
+  getAll: asyncHandler(async (req: Request, res: Response) => {
+    const category = typeof req.query.category === 'string' && VALID_CATEGORIES.includes(req.query.category)
+      ? req.query.category
+      : undefined;
+    const items = await announcementService.findAll(category);
     res.json({ success: true, data: items });
   }),
 
@@ -87,10 +90,10 @@ export const announcementController = {
     if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
     const { name, role } = await getUserInfo(userId);
     if (role !== 'admin' && role !== 'manager') return res.status(403).json({ success: false, message: 'Only Admin or Manager can post announcements' });
-    const { title, content, category, pinned, imageUrl } = req.body;
+    const { title, content, category, pinned, postToAll, imageUrl } = req.body;
     if (!content?.trim()) return res.status(400).json({ success: false, message: 'Content is required' });
-    const cat = VALID_CATEGORIES.includes(category) ? category : 'general';
-    const item = await announcementService.create({ authorId: userId, authorName: name, category: cat, title: title?.trim() || null, content: content.trim(), imageUrl: imageUrl || null, pinned: !!pinned });
+    const cat = VALID_CATEGORIES.includes(category) ? category : 'latest_news';
+    const item = await announcementService.create({ authorId: userId, authorName: name, category: cat, title: title?.trim() || null, content: content.trim(), imageUrl: imageUrl || null, pinned: !!pinned, postToAll: !!postToAll });
     const postTitle = title?.trim() || 'New announcement';
     await notifyAllUsersExcept(userId, 'hub_post', 'New Post on TheHub', `${name || 'Someone'} posted: ${postTitle}`, '/hub/news');
     await notifyMentionedUsers(content, userId, name || 'Someone');
@@ -121,12 +124,13 @@ export const announcementController = {
     if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
     const { role } = await getUserInfo(userId);
     if (role !== 'admin' && role !== 'manager') return res.status(403).json({ success: false, message: 'Only Admin or Manager can edit announcements' });
-    const { title, content, category, pinned, imageUrl } = req.body;
+    const { title, content, category, pinned, postToAll, imageUrl } = req.body;
     const updates: Record<string, any> = {};
     if (title !== undefined) updates.title = title?.trim() || null;
     if (content !== undefined) updates.content = content.trim();
     if (category !== undefined && VALID_CATEGORIES.includes(category)) updates.category = category;
     if (pinned !== undefined) updates.pinned = !!pinned;
+    if (postToAll !== undefined) updates.postToAll = !!postToAll;
     if (imageUrl !== undefined) updates.imageUrl = imageUrl || null;
     const item = await announcementService.update(req.params.id as string, updates);
     res.json({ success: true, data: item });
@@ -148,6 +152,19 @@ export const announcementController = {
     if (role !== 'admin' && role !== 'manager') return res.status(403).json({ success: false, message: 'Only Admin or Manager can delete announcements' });
     await announcementService.remove(req.params.id as string);
     res.json({ success: true, message: 'Announcement deleted' });
+  }),
+
+  hide: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    await announcementService.hide(req.params.id as string, userId);
+    res.json({ success: true, message: 'Announcement hidden from your wall' });
+  }),
+
+  getHidden: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const ids = userId ? await announcementService.findHiddenIds(userId) : [];
+    res.json({ success: true, data: ids });
   }),
 
   like: asyncHandler(async (req: Request, res: Response) => {

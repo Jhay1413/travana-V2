@@ -31,6 +31,13 @@ export const hubPostController = {
     res.json({ success: true, message: 'Post deleted' });
   }),
 
+  hide: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    await hubPostService.hide(req.params.id as string, userId);
+    res.json({ success: true, message: 'Post hidden' });
+  }),
+
   like: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });

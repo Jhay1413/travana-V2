@@ -9,6 +9,14 @@ import {
   Moon,
   Plane,
   UtensilsCrossed,
+  Ship,
+  Anchor,
+  Bed,
+  MapPin,
+  Users,
+  TreePine,
+  PawPrint,
+  Tag,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,10 +27,14 @@ import {
   spFormatDate,
   spFormatPrice,
   spGetBoardBasis,
+  spGetCruise,
   spGetDepartingAirport,
   spGetFirstImage,
+  spGetGuests,
   spGetHotelName,
   spGetSubtitle,
+  spIsCruiseQuote,
+  spIsLodgeQuote,
 } from "./helpers";
 
 export type SocialFilter = "all" | "today" | "tomorrow" | "range";
@@ -223,56 +235,111 @@ export function SocialPostsTab({
                     </div>
 
                     <div className="space-y-1.5 text-xs">
-                      <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
-                        <Hotel className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
-                        <span>Hotel:</span>
-                        <span
-                          className="font-semibold text-black/90 dark:text-white/90 truncate"
-                          data-testid={`text-overview-hotel-${quote.id}`}
-                        >
-                          {spGetHotelName(quote)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
-                        <Plane className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
-                        <span>Departing:</span>
-                        <span
-                          className="font-semibold text-black/90 dark:text-white/90 truncate"
-                          data-testid={`text-overview-departing-${quote.id}`}
-                        >
-                          {spGetDepartingAirport(quote)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
-                        <Moon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
-                        <span>Nights:</span>
-                        <span
-                          className="font-semibold text-black/90 dark:text-white/90"
-                          data-testid={`text-overview-nights-${quote.id}`}
-                        >
-                          {quote.num_of_nights}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
-                        <UtensilsCrossed className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
-                        <span>Board:</span>
-                        <span
-                          className="font-semibold text-black/90 dark:text-white/90 truncate"
-                          data-testid={`text-overview-board-${quote.id}`}
-                        >
-                          {spGetBoardBasis(quote)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
-                        <Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
-                        <span>Date:</span>
-                        <span
-                          className="font-semibold text-black/90 dark:text-white/90"
-                          data-testid={`text-overview-travel-date-${quote.id}`}
-                        >
-                          {spFormatDate(quote.travel_date)}
-                        </span>
-                      </div>
+                      {spIsCruiseQuote(quote) ? (
+                        <>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Ship className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Cruise Line:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-cruise-line-${quote.id}`}>{spGetCruise(quote)?.cruise_line || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Anchor className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Ship:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-ship-${quote.id}`}>{spGetCruise(quote)?.ship || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Bed className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Cabin Type:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-cabin-type-${quote.id}`}>{spGetCruise(quote)?.cabin_type || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Departure Date:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-departure-date-${quote.id}`}>{spFormatDate(spGetCruise(quote)?.cruise_date)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <MapPin className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Leaving From:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-leaving-from-${quote.id}`}>{spGetCruise(quote)?.embarkation || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Moon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Nights:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-nights-${quote.id}`}>{quote.num_of_nights}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Users className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Guests:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-guests-${quote.id}`}>{spGetGuests(quote)}</span>
+                          </div>
+                        </>
+                      ) : spIsLodgeQuote(quote) ? (
+                        <>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <TreePine className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Park:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-park-${quote.id}`}>{quote.park_name || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Hotel className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Lodge:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-lodge-${quote.id}`}>{quote.lodge_name || quote.lodge_type || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Tag className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>LP Code:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-lp-code-${quote.id}`}>{(quote as any).lodge_code || "—"}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Check-in Date:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-checkin-date-${quote.id}`}>{spFormatDate(quote.travel_date)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Moon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Nights:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-nights-${quote.id}`}>{quote.num_of_nights}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Users className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Guests:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-guests-${quote.id}`}>{spGetGuests(quote)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <PawPrint className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Pets:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-pets-${quote.id}`}>{quote.pets}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Hotel className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Hotel:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-hotel-${quote.id}`}>{spGetHotelName(quote)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Plane className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Departing:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-departing-${quote.id}`}>{spGetDepartingAirport(quote)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Moon className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Nights:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-nights-${quote.id}`}>{quote.num_of_nights}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <UtensilsCrossed className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Board:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-overview-board-${quote.id}`}>{spGetBoardBasis(quote)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
+                            <Calendar className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
+                            <span>Date:</span>
+                            <span className="font-semibold text-black/90 dark:text-white/90" data-testid={`text-overview-travel-date-${quote.id}`}>{spFormatDate(quote.travel_date)}</span>
+                          </div>
+                        </>
+                      )}
                       <div className="flex items-center gap-2 text-black/70 dark:text-white/70">
                         <CalendarClock className="w-3.5 h-3.5 shrink-0 text-black/40 dark:text-white/40" />
                         <span>Date Created:</span>

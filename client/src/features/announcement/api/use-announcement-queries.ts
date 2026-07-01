@@ -3,13 +3,15 @@ import { announcementApi } from "./announcement.api";
 
 export const announcementKeys = {
   all: ["announcements"] as const,
+  list: (category?: string) => ["announcements", category ?? "all"] as const,
   likes: ["announcement-likes"] as const,
+  hidden: ["announcement-hidden"] as const,
 };
 
-export function useAnnouncements() {
+export function useAnnouncements(category?: string) {
   return useQuery({
-    queryKey: announcementKeys.all,
-    queryFn: () => announcementApi.getAll(),
+    queryKey: announcementKeys.list(category),
+    queryFn: () => announcementApi.getAll(category ? { category } : undefined),
     staleTime: 30_000,
   });
 }
@@ -17,7 +19,7 @@ export function useAnnouncements() {
 export function useCreateAnnouncement() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { title?: string; content: string; category: string; pinned?: boolean; imageUrl?: string }) =>
+    mutationFn: (input: { title?: string; content: string; category: string; pinned?: boolean; postToAll?: boolean; imageUrl?: string }) =>
       announcementApi.create(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: announcementKeys.all });
@@ -29,7 +31,7 @@ export function useCreateAnnouncement() {
 export function useUpdateAnnouncement() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...input }: { id: string; title?: string; content?: string; category?: string; pinned?: boolean; imageUrl?: string }) =>
+    mutationFn: ({ id, ...input }: { id: string; title?: string; content?: string; category?: string; pinned?: boolean; postToAll?: boolean; imageUrl?: string }) =>
       announcementApi.update(id, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: announcementKeys.all }),
   });
@@ -67,6 +69,22 @@ export function useToggleLike() {
       qc.invalidateQueries({ queryKey: announcementKeys.likes });
       qc.invalidateQueries({ queryKey: ["notifications"] });
     },
+  });
+}
+
+export function useHiddenAnnouncements() {
+  return useQuery({
+    queryKey: announcementKeys.hidden,
+    queryFn: () => announcementApi.getHidden(),
+    staleTime: 30_000,
+  });
+}
+
+export function useHideAnnouncement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => announcementApi.hide(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: announcementKeys.hidden }),
   });
 }
 

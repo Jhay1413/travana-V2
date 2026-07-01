@@ -91,10 +91,14 @@ export type QuoteDisplay = {
     cruiseLine: string;
     ship: string;
     cabinType: string;
+    cabinNumber: string;
     cruiseName: string;
     cruiseDate: string;
+    embarkation: string;
+    debarkation: string;
     preCruiseStay: number;
     postCruiseStay: number;
+    itinerary: { dayNumber: number | null; description: string | null; subDescription: string | null }[];
   };
   pets: number;
   haysRef?: string;

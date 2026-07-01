@@ -10,10 +10,13 @@ const router = Router();
 router.get('/', hubPostController.getAll);
 
 router.post('/', requireOrgRole(['org_admin', 'platform_admin']), hubPostController.create);
-router.delete('/:id', requireOrgRole(['org_admin', 'platform_admin']), hubPostController.remove);
+// Deletion is authorized inside the service (post author OR admin/manager), so the
+// route stays open to authenticated users and the service enforces ownership.
+router.delete('/:id', hubPostController.remove);
 
-// Like / comment are user-level interactions, kept open to all authenticated users.
+// Like / comment / hide are user-level interactions, kept open to all authenticated users.
 router.post('/:id/like', hubPostController.like);
 router.post('/:id/comment', hubPostController.comment);
+router.post('/:id/hide', hubPostController.hide);
 
 export default router;

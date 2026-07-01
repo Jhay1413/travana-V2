@@ -1857,11 +1857,12 @@ export const hubAnnouncementTable = pgTable("hub_announcements", {
   id: uuid("id").primaryKey().defaultRandom(),
   authorId: text("author_id").notNull(),
   authorName: text("author_name"),
-  category: text("category").notNull().default("general"),
+  category: text("category").notNull().default("latest_news"),
   title: text("title"),
   content: text("content").notNull(),
   imageUrl: text("image_url"),
   pinned: boolean("pinned").notNull().default(false),
+  postToAll: boolean("post_to_all").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
@@ -1880,6 +1881,20 @@ export const hubAnnouncementLikesTable = pgTable("hub_announcement_likes", {
 }));
 
 export type HubAnnouncementLike = typeof hubAnnouncementLikesTable.$inferSelect;
+
+// Per-user "hide from my wall" for broadcast (postToAll) announcements. The
+// announcement still shows on the News page; it's only removed from the
+// hiding user's profile timeline.
+export const hubAnnouncementHidesTable = pgTable("hub_announcement_hides", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  announcementId: uuid("announcement_id").notNull().references(() => hubAnnouncementTable.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  uniqueHide: unique().on(table.announcementId, table.userId),
+}));
+
+export type HubAnnouncementHide = typeof hubAnnouncementHidesTable.$inferSelect;
 
 export const quoteViewsTable = pgTable("quote_views", {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
@@ -1966,6 +1981,19 @@ export const hubPostLikesTable = pgTable("hub_post_likes", {
 }, (table) => ({
   uniquePostLike: unique().on(table.postId, table.userId),
 }));
+
+// Per-user "hide from my wall": a post stays visible to everyone else but is
+// filtered out of the timeline for users who have hidden it.
+export const hubPostHidesTable = pgTable("hub_post_hides", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  postId: uuid("post_id").notNull().references(() => hubPostsTable.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  uniquePostHide: unique().on(table.postId, table.userId),
+}));
+
+export type HubPostHide = typeof hubPostHidesTable.$inferSelect;
 
 export const portalMessages = pgTable("portal_messages", {
   id: uuid("id").primaryKey().defaultRandom(),

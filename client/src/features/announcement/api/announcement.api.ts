@@ -4,17 +4,17 @@ import axios from "@/api/client/axios-client";
 const BASE = "/api/v2/announcements";
 
 export const announcementApi = {
-  async getAll(): Promise<HubAnnouncement[]> {
-    const { data } = await axios.get(BASE);
+  async getAll(params?: { category?: string }): Promise<HubAnnouncement[]> {
+    const { data } = await axios.get(BASE, { params });
     return data;
   },
 
-  async create(input: { title?: string; content: string; category: string; pinned?: boolean; imageUrl?: string }): Promise<HubAnnouncement> {
+  async create(input: { title?: string; content: string; category: string; pinned?: boolean; postToAll?: boolean; imageUrl?: string }): Promise<HubAnnouncement> {
     const { data } = await axios.post(BASE, input);
     return data;
   },
 
-  async update(id: string, input: { title?: string; content?: string; category?: string; pinned?: boolean }): Promise<HubAnnouncement> {
+  async update(id: string, input: { title?: string; content?: string; category?: string; pinned?: boolean; postToAll?: boolean; imageUrl?: string }): Promise<HubAnnouncement> {
     const { data } = await axios.patch(`${BASE}/${id}`, input);
     return data;
   },
@@ -45,6 +45,15 @@ export const announcementApi = {
 
   async sharePost(id: string): Promise<void> {
     await axios.post(`${BASE}/${id}/share`);
+  },
+
+  async hide(id: string): Promise<void> {
+    await axios.post(`${BASE}/${id}/hide`);
+  },
+
+  async getHidden(): Promise<string[]> {
+    const { data } = await axios.get(`${BASE}/hidden`);
+    return data;
   },
 
   async uploadImage(file: File): Promise<{ imageUrl: string }> {

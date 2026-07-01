@@ -16,7 +16,6 @@ import {
   Shield,
   Sparkles,
   Sun,
-  Trophy,
   User,
   X,
 } from "lucide-react";
@@ -30,7 +29,6 @@ const NAV_ITEMS = [
   { key: "profiles", label: "My Profile", icon: User, path: "/hub/profiles" },
   { key: "training", label: "Training Centre", icon: GraduationCap, path: "/hub/training" },
   { key: "knowledge", label: "Knowledge Vault", icon: BookOpen, path: "/hub/knowledge" },
-  { key: "deals", label: "Deal Wins Wall", icon: Trophy, path: "/hub/deals" },
   { key: "news", label: "News & Announcements", icon: Newspaper, path: "/hub/news" },
   { key: "admin", label: "Admin", icon: Shield, path: "/hub/admin", ownerOnly: true },
 ];

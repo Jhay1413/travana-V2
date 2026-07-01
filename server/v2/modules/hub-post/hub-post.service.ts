@@ -19,6 +19,12 @@ export const hubPostService = {
     await hubPostRepository.remove(id);
   },
 
+  async hide(postId: string, userId: string) {
+    const post = await hubPostRepository.findById(postId);
+    if (!post) throw new AppError('Post not found', 404);
+    await hubPostRepository.hide(postId, userId);
+  },
+
   async toggleLike(postId: string, userId: string) {
     return hubPostRepository.toggleLike(postId, userId);
   },

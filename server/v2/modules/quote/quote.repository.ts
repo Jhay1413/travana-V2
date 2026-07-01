@@ -421,6 +421,12 @@ export const newQuoteRepository = {
           WHERE l.id = ${quote.lodge_id}
           LIMIT 1
         )`,
+        lodge_code: sql<string | null>`(
+          SELECT l.lodge_code
+          FROM lodges_table l
+          WHERE l.id = ${quote.lodge_id}
+          LIMIT 1
+        )`,
       })
       .from(quote)
       .where(inArray(quote.id, ids))
@@ -483,6 +489,8 @@ export const newQuoteRepository = {
           lodge_name: row.lodge_name ?? null,
           park_name: row.park_name ?? null,
           park_location: row.park_location ?? null,
+          lodge_code: row.lodge_code ?? null,
+          cruises: [],
           flights: [],
           accommodations: row.accommodation_id ? [{
             id: row.accommodation_id,
@@ -535,6 +543,14 @@ export const newQuoteRepository = {
           });
         }
       }
+    }
+
+    // Attach cruise data so cruise quotes render their cruise-specific fields
+    // (cruise line, ship, cabin type, departure date, embarkation) on the cards.
+    const cruiseRows = await db.select().from(quote_cruise).where(inArray(quote_cruise.quote_id, ids));
+    for (const c of cruiseRows) {
+      const q = c.quote_id ? quoteMap.get(c.quote_id) : undefined;
+      if (q) q.cruises.push(c);
     }
 
     // Return quotes in the original order

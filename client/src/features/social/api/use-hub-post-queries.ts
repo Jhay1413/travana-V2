@@ -34,6 +34,14 @@ export function useDeleteHubPost() {
   });
 }
 
+export function useHideHubPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => hubPostApi.hide(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: hubPostKeys.all }),
+  });
+}
+
 export function useToggleHubPostLike() {
   const qc = useQueryClient();
   return useMutation({

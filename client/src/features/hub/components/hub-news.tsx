@@ -9,6 +9,9 @@ import {
   Heart,
   Share2,
   ImagePlus,
+  Users,
+  EyeOff,
+  MoreHorizontal,
   X,
   ZoomIn,
   ZoomOut,
@@ -19,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { MentionEditor } from "@/components/shared/mention-editor";
@@ -38,14 +42,18 @@ import type { HubAnnouncement } from "@shared/schema";
 import type { HubRole } from "@/data/hub-mock";
 
 const CATEGORY_COLORS: Record<string, "blue" | "green" | "amber" | "red"> = {
-  supplier: "blue",
-  target: "red",
-  incentive: "green",
-  training: "amber",
-  general: "blue",
+  latest_news: "blue",
+  supplier_codes: "green",
+  club_travana: "amber",
 };
 
-const CATEGORIES = ["general", "supplier", "target", "incentive", "training"];
+const CATEGORY_LABELS: Record<string, string> = {
+  latest_news: "Latest News",
+  supplier_codes: "Supplier Codes",
+  club_travana: "Club Travana",
+};
+
+const CATEGORIES = ["latest_news", "supplier_codes", "club_travana"];
 
 function formatTimeAgo(dateStr: string | Date | null | undefined): string {
   if (!dateStr) return "";
@@ -75,7 +83,7 @@ export default function HubNews({ role: hubRole = "Senior Agent" }: { role?: Hub
 
   const filtered = activeFilter === "All"
     ? announcements || []
-    : (announcements || []).filter((p) => p.category.toLowerCase() === activeFilter.toLowerCase());
+    : (announcements || []).filter((p) => p.category === activeFilter);
 
   const sortedPosts = [...filtered].sort((a, b) => {
     if (a.pinned && !b.pinned) return -1;
@@ -102,19 +110,19 @@ export default function HubNews({ role: hubRole = "Senior Agent" }: { role?: Hub
       />
 
       <div className="mb-6 flex flex-wrap gap-2">
-        {["All", "General", "Supplier", "Target", "Incentive", "Training"].map((cat) => (
+        {[{ key: "All", label: "All" }, ...CATEGORIES.map((key) => ({ key, label: CATEGORY_LABELS[key] }))].map((cat) => (
           <button
-            key={cat}
-            onClick={() => setActiveFilter(cat)}
+            key={cat.key}
+            onClick={() => setActiveFilter(cat.key)}
             className={cn(
               "rounded-lg px-3 py-2 text-sm font-medium transition-all",
-              activeFilter === cat
+              activeFilter === cat.key
                 ? "bg-blue-600 text-white shadow-sm"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
             )}
-            data-testid={`button-filter-${cat.toLowerCase()}`}
+            data-testid={`button-filter-${cat.key.toLowerCase()}`}
           >
-            {cat}
+            {cat.label}
           </button>
         ))}
       </div>
@@ -177,12 +185,14 @@ export function AnnouncementCard({
   canManage,
   onEdit,
   likeData,
+  onHide,
 }: {
   post: HubAnnouncement;
   index: number;
   canManage: boolean;
   onEdit: (p: HubAnnouncement) => void;
   likeData?: { count: number; userLiked: boolean };
+  onHide?: (id: string) => void;
 }) {
   const { toast } = useToast();
   const togglePin = useToggleAnnouncementPin();
@@ -228,7 +238,7 @@ export function AnnouncementCard({
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-slate-900 dark:text-white">{post.authorName || "Unknown"}</span>
             <HubBadge variant={CATEGORY_COLORS[post.category] || "blue"}>
-              {post.category.charAt(0).toUpperCase() + post.category.slice(1)}
+              {CATEGORY_LABELS[post.category] || post.category}
             </HubBadge>
             {post.pinned && (
               <Pin className="h-3 w-3 text-blue-500" />
@@ -237,42 +247,65 @@ export function AnnouncementCard({
           <p className="text-xs text-slate-400">{formatTimeAgo(post.createdAt)}</p>
         </div>
 
-        {canManage && (
+        {(canManage || onHide) && (
           <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => togglePin.mutate(post.id, {
-                onSuccess: () => toast({ title: post.pinned ? "Unpinned" : "Pinned" }),
-                onError: () => toast({ title: "Failed to update pin", variant: "destructive" }),
-              })}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800"
-              title={post.pinned ? "Unpin" : "Pin"}
-              data-testid={`button-toggle-pin-${post.id}`}
-            >
-              {post.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-            </button>
-            <button
-              onClick={() => onEdit(post)}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-slate-800"
-              title="Edit"
-              data-testid={`button-edit-news-${post.id}`}
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => {
-                if (window.confirm("Delete this announcement?")) {
-                  deleteAnnouncement.mutate(post.id, {
-                    onSuccess: () => toast({ title: "Announcement deleted" }),
-                    onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
-                  });
-                }
-              }}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
-              title="Delete"
-              data-testid={`button-delete-news-${post.id}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            {canManage && (
+              <>
+                <button
+                  onClick={() => togglePin.mutate(post.id, {
+                    onSuccess: () => toast({ title: post.pinned ? "Unpinned" : "Pinned" }),
+                    onError: () => toast({ title: "Failed to update pin", variant: "destructive" }),
+                  })}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800"
+                  title={post.pinned ? "Unpin" : "Pin"}
+                  data-testid={`button-toggle-pin-${post.id}`}
+                >
+                  {post.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+                </button>
+                <button
+                  onClick={() => onEdit(post)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-amber-600 dark:hover:bg-slate-800"
+                  title="Edit"
+                  data-testid={`button-edit-news-${post.id}`}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm("Delete this announcement?")) {
+                      deleteAnnouncement.mutate(post.id, {
+                        onSuccess: () => toast({ title: "Announcement deleted" }),
+                        onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
+                      });
+                    }
+                  }}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-slate-800"
+                  title="Delete"
+                  data-testid={`button-delete-news-${post.id}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            {onHide && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+                    title="More"
+                    data-testid={`button-news-menu-${post.id}`}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <DropdownMenuItem onClick={() => onHide(post.id)} data-testid={`button-hide-news-${post.id}`}>
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Hide from my wall
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         )}
       </div>
@@ -409,8 +442,9 @@ function AnnouncementDialog({
 }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [category, setCategory] = useState("general");
+  const [category, setCategory] = useState("latest_news");
   const [pinned, setPinned] = useState(false);
+  const [postToAll, setPostToAll] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageScale, setImageScale] = useState(1);
@@ -436,14 +470,16 @@ function AnnouncementDialog({
       setContent(post.content);
       setCategory(post.category);
       setPinned(post.pinned);
+      setPostToAll(post.postToAll);
       setImageUrl(post.imageUrl || null);
       setImageFile(null);
       setImageScale(1);
     } else if (isOpen && mode === "create") {
       setTitle("");
       setContent("");
-      setCategory("general");
+      setCategory("latest_news");
       setPinned(false);
+      setPostToAll(false);
       setImageUrl(null);
       setImageFile(null);
       setImageScale(1);
@@ -489,7 +525,7 @@ function AnnouncementDialog({
 
     if (mode === "create") {
       createMutation.mutate(
-        { title: title.trim() || undefined, content, category, pinned, imageUrl: finalImageUrl || undefined },
+        { title: title.trim() || undefined, content, category, pinned, postToAll, imageUrl: finalImageUrl || undefined },
         {
           onSuccess: () => { toast({ title: "Announcement posted" }); handleOpen(false); },
           onError: () => toast({ title: "Failed to post", variant: "destructive" }),
@@ -497,7 +533,7 @@ function AnnouncementDialog({
       );
     } else if (post) {
       updateMutation.mutate(
-        { id: post.id, title: title.trim() || undefined, content, category, pinned, imageUrl: finalImageUrl || undefined },
+        { id: post.id, title: title.trim() || undefined, content, category, pinned, postToAll, imageUrl: finalImageUrl || undefined },
         {
           onSuccess: () => { toast({ title: "Announcement updated" }); handleOpen(false); },
           onError: () => toast({ title: "Failed to update", variant: "destructive" }),
@@ -535,13 +571,13 @@ function AnnouncementDialog({
                 <SelectContent>
                   {CATEGORIES.map((c) => (
                     <SelectItem key={c} value={c}>
-                      {c.charAt(0).toUpperCase() + c.slice(1)}
+                      {CATEGORY_LABELS[c] || c}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-end">
+            <div className="flex items-end gap-2">
               <Button
                 type="button"
                 variant={pinned ? "default" : "outline"}
@@ -552,6 +588,18 @@ function AnnouncementDialog({
               >
                 <Pin className="mr-1.5 h-4 w-4" />
                 {pinned ? "Pinned" : "Pin"}
+              </Button>
+              <Button
+                type="button"
+                variant={postToAll ? "default" : "outline"}
+                size="sm"
+                className={cn("h-10", postToAll && "bg-blue-600 text-white")}
+                onClick={() => setPostToAll(!postToAll)}
+                title="Show this announcement on every user's profile wall"
+                data-testid="button-toggle-post-to-all"
+              >
+                <Users className="mr-1.5 h-4 w-4" />
+                {postToAll ? "Posted to all" : "Post to all"}
               </Button>
             </div>
           </div>

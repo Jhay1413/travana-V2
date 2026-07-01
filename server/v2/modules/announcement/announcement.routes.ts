@@ -10,6 +10,7 @@ const router = Router();
 router.get('/', announcementController.getAll);
 router.get('/mentionable-users', announcementController.getMentionableUsers);
 router.get('/likes/bulk', announcementController.getBulkLikes);
+router.get('/hidden', announcementController.getHidden);
 router.get('/:id/likes', announcementController.getLikes);
 
 router.post('/', requireOrgRole(['org_admin', 'platform_admin']), announcementController.create);
@@ -18,8 +19,9 @@ router.patch('/:id', requireOrgRole(['org_admin', 'platform_admin']), announceme
 router.patch('/:id/pin', requireOrgRole(['org_admin', 'platform_admin']), announcementController.togglePin);
 router.delete('/:id', requireOrgRole(['org_admin', 'platform_admin']), announcementController.remove);
 
-// Like + share are user-level interactions, kept open to all authenticated users.
+// Like + share + hide are user-level interactions, kept open to all authenticated users.
 router.post('/:id/like', announcementController.like);
 router.post('/:id/share', announcementController.share);
+router.post('/:id/hide', announcementController.hide);
 
 export default router;

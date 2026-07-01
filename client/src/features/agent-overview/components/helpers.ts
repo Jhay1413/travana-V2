@@ -73,6 +73,28 @@ export function spGetSubtitle(q: EnrichedQuote): string {
   return parts.join(" · ") || "—";
 }
 
+export function spGetCruise(q: EnrichedQuote) {
+  return q.cruises && q.cruises.length > 0 ? q.cruises[0] : undefined;
+}
+
+export function spIsCruiseQuote(q: EnrichedQuote): boolean {
+  return (q.cruises?.length ?? 0) > 0
+    || (q.quote_type || "").toLowerCase().includes("cruise")
+    || (q.holiday_type_name || "").toLowerCase().includes("cruise");
+}
+
+export function spIsLodgeQuote(q: EnrichedQuote): boolean {
+  return q.quote_type === "hot_tub_break"
+    || !!q.lodge_id
+    || !!q.park_id
+    || (q.quote_type || "").toLowerCase().includes("lodge")
+    || (q.holiday_type_name || "").toLowerCase().includes("lodge");
+}
+
+export function spGetGuests(q: EnrichedQuote): number {
+  return (q.adult ?? 0) + (q.child ?? 0);
+}
+
 export function getQuoteProfit(q: any): number {
   return parseFloat(q.package_commission) || 0;
 }

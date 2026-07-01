@@ -101,7 +101,7 @@ export default function AgentOverviewPage() {
                   Social Posts
                 </TabsTrigger>
                 <TabsTrigger value="news" className="rounded-xl" data-testid="tab-overview-news">
-                  News
+                  Latest News
                 </TabsTrigger>
                 <TabsTrigger value="daily-goals" className="rounded-xl" data-testid="tab-overview-daily-goals">
                   Notes

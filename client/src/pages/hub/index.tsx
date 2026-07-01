@@ -6,7 +6,6 @@ import HubDashboard from "@/features/hub/components/hub-dashboard";
 import HubTraining from "@/features/hub/components/hub-training";
 import HubAiIntel from "@/features/hub/components/hub-ai-intel";
 import HubKnowledge from "@/features/hub/components/hub-knowledge";
-import HubDeals from "@/features/hub/components/hub-deals";
 import HubNews from "@/features/hub/components/hub-news";
 import HubProfiles from "@/features/hub/components/hub-profiles";
 import HubAdmin from "@/features/hub/components/hub-admin";
@@ -23,7 +22,6 @@ export default function HubPage() {
         <Route path="/hub/training" component={HubTraining} />
         <Route path="/hub/ai-intel" component={HubAiIntel} />
         <Route path="/hub/knowledge" component={HubKnowledge} />
-        <Route path="/hub/deals" component={HubDeals} />
         <Route path="/hub/news">
           <HubNews role={role} />
         </Route>

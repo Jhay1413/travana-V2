@@ -108,6 +108,7 @@ function LoadingScreen() {
 
 function AuthenticatedRouter() {
   const { orgRole } = useRole();
+  const [location] = useLocation();
   const homePath =
     orgRole === "referral_agent"
       ? "/referral-hub"
@@ -118,6 +119,14 @@ function AuthenticatedRouter() {
           : orgRole === "branch_manager"
             ? "/branch-overview"
             : "/agent-overview";
+
+  // TheHUB ships its own full-page shell (HubShell) and must NOT inherit the CRM
+  // AppLayout chrome. Render it standalone — still auth-gated (we're inside
+  // AuthenticatedRouter) and role-gated to staff, mirroring the /portal and
+  // /travana early-returns above.
+  if (location === "/hub" || location.startsWith("/hub/")) {
+    return STAFF_ROLES.includes(orgRole) ? <HubPage /> : <ForbiddenPage />;
+  }
 
   return (
     <AppLayout>
@@ -173,8 +182,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/social-wall" allow={STAFF_ROLES} component={SocialWallPage} />
         <RoleRoute path="/tickets" allow={STAFF_ROLES} component={TicketsPage} />
         <RoleRoute path="/tickets/:ticketId" allow={STAFF_ROLES} component={TicketsPage} />
-        <RoleRoute path="/hub/:rest*" allow={STAFF_ROLES} component={HubPage} />
-        <RoleRoute path="/hub" allow={STAFF_ROLES} component={HubPage} />
+        {/* /hub is handled standalone (outside AppLayout) above — TheHUB has its own shell. */}
         <RoleRoute path="/feedback" allow={ALL_ROLES} component={FeedbackPage} />
 
         <Route component={NotFound} />
