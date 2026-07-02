@@ -60,6 +60,7 @@ import userOrgRolesRoutes from '../modules/user-org-roles/user-org-roles.routes'
 import lookupRoutes from '../lookup/lookup.routes';
 import settingsRoutes from '../settings';
 import fileRoutes from '../modules/files/file.routes';
+import trainingRoutes from '../modules/training/training.routes';
 
 const router = Router();
 const auth = [isAuthenticated, orgBranchScope] as const;
@@ -121,6 +122,7 @@ router.use('/platform-admin',     isAuthenticated, platformAdminRoutes);
 router.use('/user-org-roles',     ...auth, userOrgRolesRoutes);
 router.use('/lookup',             lookupRoutes);
 router.use('/settings',           isAuthenticated, settingsRoutes);
+router.use('/training',           ...auth, trainingRoutes);
 
 // v2 error handler — must be LAST so it catches errors from every v2 route above.
 // Without this, v2 errors bubble to the global v1 errorHandler, whose `instanceof

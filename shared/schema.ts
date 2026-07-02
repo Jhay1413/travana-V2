@@ -17,6 +17,13 @@ export const withdrawal_method_enum = pgEnum('withdrawal_method_enum', ['bank_tr
 export const referral_payout_status_enum = pgEnum('referral_payout_status_enum', ['requested', 'approved', 'rejected']);
 export const referral_withdrawal_status_enum = pgEnum('referral_withdrawal_status_enum', ['pending', 'processed', 'rejected']);
 
+// ─── Training / LMS ───────────────────────────────────────────────────────────
+export const course_status_enum = pgEnum('course_status_enum', ['draft', 'published', 'archived']);
+export const course_visibility_enum = pgEnum('course_visibility_enum', ['global', 'org']);
+export const lesson_type_enum = pgEnum('lesson_type_enum', ['video', 'graphics']);
+export const question_type_enum = pgEnum('question_type_enum', ['single', 'multiple']);
+export const enrollment_status_enum = pgEnum('enrollment_status_enum', ['in_progress', 'completed']);
+
 // ─── Multi-tenancy: Organizations & Branches ─────────────────────────────────
 
 export const organization = pgTable("organization", {
@@ -1699,6 +1706,164 @@ export const tasks = pgTable("tasks", {
 export const insertTasksSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
 export type TaskNew = typeof tasks.$inferSelect;
 export type InsertTaskNew = z.infer<typeof insertTasksSchema>;
+
+// ============================================================
+// === Training / LMS ===
+// Udemy-style courses: lessons (video/graphics) + a quiz with a passing
+// score. `org_id IS NULL` on training_course means the course is global
+// (visible to every tenant); see docs/training-lms-plan.md.
+// ============================================================
+
+export const training_course = pgTable('training_course', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  branch_id: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  visibility: course_visibility_enum("visibility").notNull().default('global'),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  thumbnail_url: text("thumbnail_url"),
+  status: course_status_enum("status").notNull().default('draft'),
+  passing_score: integer("passing_score").notNull().default(80),
+  require_content_before_quiz: boolean("require_content_before_quiz").notNull().default(true),
+  created_by: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+  updated_at: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertTrainingCourseSchema = createInsertSchema(training_course).omit({ id: true, created_at: true, updated_at: true });
+export type TrainingCourse = typeof training_course.$inferSelect;
+export type InsertTrainingCourse = z.infer<typeof insertTrainingCourseSchema>;
+
+export const training_lesson = pgTable('training_lesson', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  course_id: uuid("course_id").notNull().references(() => training_course.id, { onDelete: "cascade" }),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  type: lesson_type_enum("type").notNull(),
+  position: integer("position").notNull().default(0),
+  is_required: boolean("is_required").notNull().default(true),
+  video_url: text("video_url"),
+  video_duration_sec: integer("video_duration_sec"),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+  updated_at: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertTrainingLessonSchema = createInsertSchema(training_lesson).omit({ id: true, created_at: true, updated_at: true });
+export type TrainingLesson = typeof training_lesson.$inferSelect;
+export type InsertTrainingLesson = z.infer<typeof insertTrainingLessonSchema>;
+
+export const training_lesson_asset = pgTable('training_lesson_asset', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  lesson_id: uuid("lesson_id").notNull().references(() => training_lesson.id, { onDelete: "cascade" }),
+  asset_url: text("asset_url").notNull(),
+  caption: text("caption"),
+  position: integer("position").notNull().default(0),
+});
+
+export const insertTrainingLessonAssetSchema = createInsertSchema(training_lesson_asset).omit({ id: true });
+export type TrainingLessonAsset = typeof training_lesson_asset.$inferSelect;
+export type InsertTrainingLessonAsset = z.infer<typeof insertTrainingLessonAssetSchema>;
+
+export const training_quiz = pgTable('training_quiz', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  course_id: uuid("course_id").notNull().unique().references(() => training_course.id, { onDelete: "cascade" }),
+  title: varchar("title"),
+  shuffle_questions: boolean("shuffle_questions").notNull().default(false),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+  updated_at: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertTrainingQuizSchema = createInsertSchema(training_quiz).omit({ id: true, created_at: true, updated_at: true });
+export type TrainingQuiz = typeof training_quiz.$inferSelect;
+export type InsertTrainingQuiz = z.infer<typeof insertTrainingQuizSchema>;
+
+export const training_question = pgTable('training_question', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  quiz_id: uuid("quiz_id").notNull().references(() => training_quiz.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  type: question_type_enum("type").notNull().default('single'),
+  position: integer("position").notNull().default(0),
+  points: integer("points").notNull().default(1),
+});
+
+export const insertTrainingQuestionSchema = createInsertSchema(training_question).omit({ id: true });
+export type TrainingQuestion = typeof training_question.$inferSelect;
+export type InsertTrainingQuestion = z.infer<typeof insertTrainingQuestionSchema>;
+
+export const training_choice = pgTable('training_choice', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  question_id: uuid("question_id").notNull().references(() => training_question.id, { onDelete: "cascade" }),
+  text: text("text").notNull(),
+  is_correct: boolean("is_correct").notNull().default(false),
+  position: integer("position").notNull().default(0),
+});
+
+export const insertTrainingChoiceSchema = createInsertSchema(training_choice).omit({ id: true });
+export type TrainingChoice = typeof training_choice.$inferSelect;
+export type InsertTrainingChoice = z.infer<typeof insertTrainingChoiceSchema>;
+
+export const training_enrollment = pgTable('training_enrollment', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  course_id: uuid("course_id").notNull().references(() => training_course.id, { onDelete: "cascade" }),
+  user_id: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  status: enrollment_status_enum("status").notNull().default('in_progress'),
+  enrolled_at: timestamp("enrolled_at").notNull().defaultNow(),
+  completed_at: timestamp("completed_at"),
+}, (table) => ({
+  unique_course_user: unique().on(table.course_id, table.user_id),
+}));
+
+export const insertTrainingEnrollmentSchema = createInsertSchema(training_enrollment).omit({ id: true, enrolled_at: true });
+export type TrainingEnrollment = typeof training_enrollment.$inferSelect;
+export type InsertTrainingEnrollment = z.infer<typeof insertTrainingEnrollmentSchema>;
+
+export const training_lesson_progress = pgTable('training_lesson_progress', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  enrollment_id: uuid("enrollment_id").notNull().references(() => training_enrollment.id, { onDelete: "cascade" }),
+  lesson_id: uuid("lesson_id").notNull().references(() => training_lesson.id, { onDelete: "cascade" }),
+  completed: boolean("completed").notNull().default(false),
+  progress_pct: integer("progress_pct").notNull().default(0),
+  last_viewed_at: timestamp("last_viewed_at"),
+}, (table) => ({
+  unique_enrollment_lesson: unique().on(table.enrollment_id, table.lesson_id),
+}));
+
+export const insertTrainingLessonProgressSchema = createInsertSchema(training_lesson_progress).omit({ id: true });
+export type TrainingLessonProgress = typeof training_lesson_progress.$inferSelect;
+export type InsertTrainingLessonProgress = z.infer<typeof insertTrainingLessonProgressSchema>;
+
+export const training_quiz_attempt = pgTable('training_quiz_attempt', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  enrollment_id: uuid("enrollment_id").notNull().references(() => training_enrollment.id, { onDelete: "cascade" }),
+  quiz_id: uuid("quiz_id").notNull().references(() => training_quiz.id, { onDelete: "cascade" }),
+  user_id: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  attempt_number: integer("attempt_number").notNull().default(1),
+  score_pct: integer("score_pct"),
+  passed: boolean("passed"),
+  answers_snapshot: jsonb("answers_snapshot"),
+  started_at: timestamp("started_at").notNull().defaultNow(),
+  submitted_at: timestamp("submitted_at"),
+});
+
+export const insertTrainingQuizAttemptSchema = createInsertSchema(training_quiz_attempt).omit({ id: true, started_at: true });
+export type TrainingQuizAttempt = typeof training_quiz_attempt.$inferSelect;
+export type InsertTrainingQuizAttempt = z.infer<typeof insertTrainingQuizAttemptSchema>;
+
+export const training_certificate = pgTable('training_certificate', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  enrollment_id: uuid("enrollment_id").notNull().unique().references(() => training_enrollment.id, { onDelete: "cascade" }),
+  user_id: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  course_id: uuid("course_id").notNull().references(() => training_course.id, { onDelete: "cascade" }),
+  org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  score_pct: integer("score_pct"),
+  issued_at: timestamp("issued_at").notNull().defaultNow(),
+  certificate_no: varchar("certificate_no"),
+});
+
+export const insertTrainingCertificateSchema = createInsertSchema(training_certificate).omit({ id: true, issued_at: true });
+export type TrainingCertificate = typeof training_certificate.$inferSelect;
+export type InsertTrainingCertificate = z.infer<typeof insertTrainingCertificateSchema>;
 
 export const chatConversations = pgTable("chat_conversations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
