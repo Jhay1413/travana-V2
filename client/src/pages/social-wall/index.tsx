@@ -1,21 +1,18 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   CalendarClock,
   CheckCircle2,
   Facebook,
   Instagram,
-  Layers,
-  Mail,
   MessageCircle,
-  Music2,
+  MessagesSquare,
   Newspaper,
-  Twitter,
   type LucideIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type ChannelKey = "facebook" | "instagram" | "twitter" | "tiktok" | "whatsapp" | "email";
+type ChannelKey = "messenger" | "facebook" | "whatsapp" | "instagram";
 type PostStatus = "posted" | "scheduled";
 
 interface ChannelMeta {
@@ -26,29 +23,17 @@ interface ChannelMeta {
 }
 
 const CHANNELS: Record<ChannelKey, ChannelMeta> = {
-  facebook: {
-    key: "facebook",
-    label: "Facebook",
-    icon: Facebook,
+  messenger: {
+    key: "messenger",
+    label: "Facebook Messenger",
+    icon: MessagesSquare,
     badgeClass: "border-blue-500/25 bg-blue-500/10 text-blue-600",
   },
-  instagram: {
-    key: "instagram",
-    label: "Instagram",
-    icon: Instagram,
-    badgeClass: "border-pink-500/25 bg-pink-500/10 text-pink-600",
-  },
-  twitter: {
-    key: "twitter",
-    label: "X / Twitter",
-    icon: Twitter,
-    badgeClass: "border-sky-500/25 bg-sky-500/10 text-sky-600",
-  },
-  tiktok: {
-    key: "tiktok",
-    label: "TikTok",
-    icon: Music2,
-    badgeClass: "border-black/20 bg-black/[0.06] text-black/80",
+  facebook: {
+    key: "facebook",
+    label: "Facebook Posts",
+    icon: Facebook,
+    badgeClass: "border-blue-500/25 bg-blue-500/10 text-blue-600",
   },
   whatsapp: {
     key: "whatsapp",
@@ -56,22 +41,15 @@ const CHANNELS: Record<ChannelKey, ChannelMeta> = {
     icon: MessageCircle,
     badgeClass: "border-green-500/25 bg-green-500/10 text-green-600",
   },
-  email: {
-    key: "email",
-    label: "Email",
-    icon: Mail,
-    badgeClass: "border-indigo-500/25 bg-indigo-500/10 text-indigo-600",
+  instagram: {
+    key: "instagram",
+    label: "Instagram Posts",
+    icon: Instagram,
+    badgeClass: "border-pink-500/25 bg-pink-500/10 text-pink-600",
   },
 };
 
-const CHANNEL_ORDER: ChannelKey[] = [
-  "facebook",
-  "instagram",
-  "twitter",
-  "tiktok",
-  "whatsapp",
-  "email",
-];
+const COLUMN_ORDER: ChannelKey[] = ["messenger", "facebook", "whatsapp", "instagram"];
 
 interface SocialItem {
   id: string;
@@ -86,20 +64,40 @@ interface SocialItem {
 
 // Illustrative placeholder data only — no backend, no API calls.
 const SAMPLE_ITEMS: SocialItem[] = [
+  // Facebook Messenger
   {
-    id: "1",
-    channel: "instagram",
-    author: "Tina's Travel",
-    handle: "@tinastravel",
+    id: "m1",
+    channel: "messenger",
+    author: "Sarah Jenkins",
+    handle: "via Messenger",
     content:
-      "☀️ Last-minute Maldives escape! 7 nights overwater villa, half board, from £1,899pp. Limited cabins left — DM us to book. #Maldives #LuxuryTravel",
-    image:
-      "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=400&q=70&auto=format&fit=crop",
+      "Hi! Is the Maldives overwater villa deal still available for October? We're a family of four.",
     status: "posted",
     timestamp: "2026-06-12T09:30:00Z",
   },
   {
-    id: "2",
+    id: "m2",
+    channel: "messenger",
+    author: "Tina's Travel",
+    handle: "Auto-reply",
+    content:
+      "Thanks for messaging Tina's Travel! 👋 One of our agents will reply within the hour. Meanwhile, browse our latest deals on the website.",
+    status: "scheduled",
+    timestamp: "2026-06-20T08:00:00Z",
+  },
+  {
+    id: "m3",
+    channel: "messenger",
+    author: "Mark Doyle",
+    handle: "via Messenger",
+    content:
+      "Can you send over the Tenerife quote again? I think it expired. Ready to book this week.",
+    status: "posted",
+    timestamp: "2026-06-11T14:10:00Z",
+  },
+  // Facebook Posts
+  {
+    id: "f1",
     channel: "facebook",
     author: "Tina's Travel",
     handle: "Tina's Travel Agency",
@@ -111,61 +109,7 @@ const SAMPLE_ITEMS: SocialItem[] = [
     timestamp: "2026-06-20T08:00:00Z",
   },
   {
-    id: "3",
-    channel: "tiktok",
-    author: "Tina's Travel",
-    handle: "@tinastravel",
-    content:
-      "POV: you just booked a Mediterranean cruise 🛳️ 8 ports, 7 nights, balcony cabin. Tap the link in bio for the full itinerary!",
-    image:
-      "https://images.unsplash.com/photo-1548574505-5e239809ee19?w=400&q=70&auto=format&fit=crop",
-    status: "scheduled",
-    timestamp: "2026-06-15T17:45:00Z",
-  },
-  {
-    id: "4",
-    channel: "twitter",
-    author: "Tina's Travel",
-    handle: "@tinastravel",
-    content:
-      "Flash deal ✈️ Return flights to Dubai from £319 this October. Quote DUBAI319 when you enquire. Ends Friday!",
-    status: "posted",
-    timestamp: "2026-06-11T14:10:00Z",
-  },
-  {
-    id: "5",
-    channel: "email",
-    author: "Tina's Travel",
-    handle: "newsletter@tinastravel.co.uk",
-    content:
-      "June Newsletter: 10 sun-soaked summer escapes still available, plus our top tips for travelling with little ones. Open to see this month's picks.",
-    status: "posted",
-    timestamp: "2026-06-10T07:00:00Z",
-  },
-  {
-    id: "6",
-    channel: "whatsapp",
-    author: "Tina's Travel",
-    handle: "Broadcast list",
-    content:
-      "Hi! 👋 Your Tenerife quote expires tomorrow. Reply YES to lock in the price before it goes up. — Team Tina's Travel",
-    status: "scheduled",
-    timestamp: "2026-06-14T10:00:00Z",
-  },
-  {
-    id: "7",
-    channel: "instagram",
-    author: "Tina's Travel",
-    handle: "@tinastravel",
-    content:
-      "Reel: 60 seconds in Santorini 🇬🇷 Sunsets, blue domes & the best little taverna we found. Save this for your 2027 trip!",
-    image:
-      "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=400&q=70&auto=format&fit=crop",
-    status: "posted",
-    timestamp: "2026-06-09T18:20:00Z",
-  },
-  {
-    id: "8",
+    id: "f2",
     channel: "facebook",
     author: "Tina's Travel",
     handle: "Tina's Travel Agency",
@@ -177,24 +121,82 @@ const SAMPLE_ITEMS: SocialItem[] = [
     timestamp: "2026-06-08T12:00:00Z",
   },
   {
-    id: "9",
-    channel: "twitter",
+    id: "f3",
+    channel: "facebook",
     author: "Tina's Travel",
-    handle: "@tinastravel",
+    handle: "Tina's Travel Agency",
     content:
-      "Top tip 🧳 Always check passport validity — many countries need 6 months left from your return date. We'll remind you when you book with us.",
+      "Flash deal ✈️ Return flights to Dubai from £319 this October. Comment DUBAI319 to enquire. Ends Friday!",
+    status: "posted",
+    timestamp: "2026-06-11T14:10:00Z",
+  },
+  // WhatsApp
+  {
+    id: "w1",
+    channel: "whatsapp",
+    author: "Tina's Travel",
+    handle: "Broadcast list",
+    content:
+      "Hi! 👋 Your Tenerife quote expires tomorrow. Reply YES to lock in the price before it goes up. — Team Tina's Travel",
+    status: "scheduled",
+    timestamp: "2026-06-14T10:00:00Z",
+  },
+  {
+    id: "w2",
+    channel: "whatsapp",
+    author: "Tina's Travel",
+    handle: "Broadcast list",
+    content:
+      "New summer deals just dropped ☀️ 7 nights all-inclusive in Turkey from £549pp. Reply INFO for the full list.",
+    status: "posted",
+    timestamp: "2026-06-10T07:00:00Z",
+  },
+  {
+    id: "w3",
+    channel: "whatsapp",
+    author: "Tina's Travel",
+    handle: "Broadcast list",
+    content:
+      "Reminder: check-in for the Peterson party opens in 48 hours ✈️ We'll send your boarding passes shortly.",
     status: "scheduled",
     timestamp: "2026-06-18T09:00:00Z",
   },
+  // Instagram Posts
   {
-    id: "10",
-    channel: "tiktok",
+    id: "i1",
+    channel: "instagram",
     author: "Tina's Travel",
     handle: "@tinastravel",
     content:
-      "3 underrated European city breaks under £250 🏰 Which one are you adding to your list? #CityBreak #TravelTok",
+      "☀️ Last-minute Maldives escape! 7 nights overwater villa, half board, from £1,899pp. Limited cabins left — DM us to book. #Maldives #LuxuryTravel",
+    image:
+      "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=400&q=70&auto=format&fit=crop",
     status: "posted",
-    timestamp: "2026-06-07T16:30:00Z",
+    timestamp: "2026-06-12T09:30:00Z",
+  },
+  {
+    id: "i2",
+    channel: "instagram",
+    author: "Tina's Travel",
+    handle: "@tinastravel",
+    content:
+      "Reel: 60 seconds in Santorini 🇬🇷 Sunsets, blue domes & the best little taverna we found. Save this for your 2027 trip!",
+    image:
+      "https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=400&q=70&auto=format&fit=crop",
+    status: "posted",
+    timestamp: "2026-06-09T18:20:00Z",
+  },
+  {
+    id: "i3",
+    channel: "instagram",
+    author: "Tina's Travel",
+    handle: "@tinastravel",
+    content:
+      "POV: you just booked a Mediterranean cruise 🛳️ 8 ports, 7 nights, balcony cabin. Tap the link in bio for the full itinerary!",
+    image:
+      "https://images.unsplash.com/photo-1548574505-5e239809ee19?w=400&q=70&auto=format&fit=crop",
+    status: "scheduled",
+    timestamp: "2026-06-15T17:45:00Z",
   },
 ];
 
@@ -209,29 +211,12 @@ function formatTimestamp(iso: string): string {
   });
 }
 
-function ChannelBadge({ channel }: { channel: ChannelKey }) {
-  const meta = CHANNELS[channel];
-  const Icon = meta.icon;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-        meta.badgeClass
-      )}
-      data-testid={`badge-channel-${channel}`}
-    >
-      <Icon className="h-3 w-3" />
-      {meta.label}
-    </span>
-  );
-}
-
-function StatusPill({ status, timestamp }: { status: PostStatus; timestamp: string }) {
+function StatusPill({ id, status, timestamp }: { id: string; status: PostStatus; timestamp: string }) {
   if (status === "scheduled") {
     return (
       <span
         className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-700"
-        data-testid="pill-status-scheduled"
+        data-testid={`pill-status-scheduled-${id}`}
       >
         <CalendarClock className="h-3 w-3" />
         Scheduled · {formatTimestamp(timestamp)}
@@ -241,7 +226,7 @@ function StatusPill({ status, timestamp }: { status: PostStatus; timestamp: stri
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full border border-green-500/25 bg-green-500/10 px-2 py-0.5 text-[11px] font-semibold text-green-700"
-      data-testid="pill-status-posted"
+      data-testid={`pill-status-posted-${id}`}
     >
       <CheckCircle2 className="h-3 w-3" />
       Posted
@@ -265,12 +250,9 @@ function PostItemCard({ item }: { item: SocialItem }) {
         />
       )}
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <ChannelBadge channel={item.channel} />
-          <StatusPill status={item.status} timestamp={item.timestamp} />
-        </div>
+        <StatusPill id={item.id} status={item.status} timestamp={item.timestamp} />
         <p
-          className="mt-2 line-clamp-3 text-sm text-black/80"
+          className="mt-2 line-clamp-4 text-sm text-black/80"
           data-testid={`text-social-content-${item.id}`}
         >
           {item.content}
@@ -288,153 +270,79 @@ function PostItemCard({ item }: { item: SocialItem }) {
   );
 }
 
-function SectionTitle({ icon: Icon, title, count }: { icon: LucideIcon; title: string; count: number }) {
+function ChannelColumn({ channel, items }: { channel: ChannelKey; items: SocialItem[] }) {
+  const meta = CHANNELS[channel];
+  const Icon = meta.icon;
+  const sorted = useMemo(
+    () => items.slice().sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp)),
+    [items]
+  );
+
   return (
-    <div className="mb-3 flex items-center gap-2">
-      <Icon className="h-4 w-4 text-black/70" />
-      <h2 className="text-sm font-semibold text-black">{title}</h2>
-      <span className="rounded-full border border-black/10 bg-black/5 px-2 py-0.5 text-[11px] font-semibold text-black/55">
-        {count}
-      </span>
-    </div>
+    <Card
+      className="glass ringed grain flex flex-col rounded-3xl border-black/10 bg-white/70 p-4"
+      data-testid={`card-column-${channel}`}
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+            meta.badgeClass
+          )}
+        >
+          <Icon className="h-3 w-3" />
+        </span>
+        <h2 className="text-sm font-semibold text-black" data-testid={`title-column-${channel}`}>
+          {meta.label}
+        </h2>
+        <span className="ml-auto rounded-full border border-black/10 bg-black/5 px-2 py-0.5 text-[11px] font-semibold text-black/55">
+          {sorted.length}
+        </span>
+      </div>
+
+      <div className="space-y-2" data-testid={`list-column-${channel}`}>
+        {sorted.length === 0 ? (
+          <p className="text-xs text-black/45" data-testid={`empty-column-${channel}`}>
+            Nothing here yet.
+          </p>
+        ) : (
+          sorted.map((item) => <PostItemCard key={item.id} item={item} />)
+        )}
+      </div>
+    </Card>
   );
 }
 
 export default function SocialWallPage() {
-  const [activeChannel, setActiveChannel] = useState<ChannelKey | "all">("all");
-
-  const filtered = useMemo(() => {
-    if (activeChannel === "all") return SAMPLE_ITEMS;
-    return SAMPLE_ITEMS.filter((i) => i.channel === activeChannel);
-  }, [activeChannel]);
-
-  const scheduled = useMemo(
-    () =>
-      filtered
-        .filter((i) => i.status === "scheduled")
-        .sort((a, b) => +new Date(a.timestamp) - +new Date(b.timestamp)),
-    [filtered]
-  );
-
-  const posted = useMemo(
-    () =>
-      filtered
-        .filter((i) => i.status === "posted")
-        .sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp)),
-    [filtered]
-  );
-
-  const combined = useMemo(
-    () => filtered.slice().sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp)),
-    [filtered]
-  );
+  const byChannel = useMemo(() => {
+    const map: Record<ChannelKey, SocialItem[]> = {
+      messenger: [],
+      facebook: [],
+      whatsapp: [],
+      instagram: [],
+    };
+    for (const item of SAMPLE_ITEMS) map[item.channel].push(item);
+    return map;
+  }, []);
 
   return (
     <div className="px-5 pb-8 pt-5" data-testid="page-social-wall">
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2">
-          <Newspaper className="h-5 w-5 text-black/70" />
-          <div>
-            <h1 className="text-lg font-semibold text-black" data-testid="text-page-title">
-              Social Wall
-            </h1>
-            <p className="text-xs text-black/55" data-testid="text-page-subtitle">
-              All your channels and email in one place.
-            </p>
-          </div>
-        </div>
-
-        {/* Channel filter chips */}
-        <div className="flex flex-wrap gap-1.5" data-testid="filter-channels">
-          <button
-            type="button"
-            onClick={() => setActiveChannel("all")}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition",
-              activeChannel === "all"
-                ? "border-black/20 bg-black/[0.06] text-black"
-                : "border-black/10 bg-white/70 text-black/60 hover:bg-black/[0.03]"
-            )}
-            data-testid="chip-channel-all"
-          >
-            All
-          </button>
-          {CHANNEL_ORDER.map((key) => {
-            const meta = CHANNELS[key];
-            const Icon = meta.icon;
-            const active = activeChannel === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveChannel(key)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition",
-                  active
-                    ? "border-black/20 bg-black/[0.06] text-black"
-                    : "border-black/10 bg-white/70 text-black/60 hover:bg-black/[0.03]"
-                )}
-                data-testid={`chip-channel-${key}`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {meta.label}
-              </button>
-            );
-          })}
+      <div className="mb-4 flex items-center gap-2">
+        <Newspaper className="h-5 w-5 text-black/70" />
+        <div>
+          <h1 className="text-lg font-semibold text-black" data-testid="text-page-title">
+            Social Wall
+          </h1>
+          <p className="text-xs text-black/55" data-testid="text-page-subtitle">
+            Messenger, Facebook, WhatsApp and Instagram — all in one view.
+          </p>
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        {/* Posted / Scheduled */}
-        <Card
-          className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4"
-          data-testid="card-posted-scheduled"
-        >
-          <SectionTitle icon={CalendarClock} title="Posted & Scheduled" count={scheduled.length + posted.length} />
-
-          <div className="space-y-4">
-            <div>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-black/45" data-testid="label-scheduled">
-                Scheduled
-              </div>
-              <div className="space-y-2" data-testid="list-scheduled">
-                {scheduled.length === 0 ? (
-                  <p className="text-xs text-black/45" data-testid="empty-scheduled">No scheduled posts.</p>
-                ) : (
-                  scheduled.map((item) => <PostItemCard key={item.id} item={item} />)
-                )}
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-black/45" data-testid="label-posted">
-                Posted
-              </div>
-              <div className="space-y-2" data-testid="list-posted">
-                {posted.length === 0 ? (
-                  <p className="text-xs text-black/45" data-testid="empty-posted">No posted items.</p>
-                ) : (
-                  posted.map((item) => <PostItemCard key={item.id} item={item} />)
-                )}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Combined feed */}
-        <Card
-          className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4"
-          data-testid="card-combined-feed"
-        >
-          <SectionTitle icon={Layers} title="Combined Feed" count={combined.length} />
-          <div className="space-y-2" data-testid="list-combined">
-            {combined.length === 0 ? (
-              <p className="text-xs text-black/45" data-testid="empty-combined">No items for this channel.</p>
-            ) : (
-              combined.map((item) => <PostItemCard key={item.id} item={item} />)
-            )}
-          </div>
-        </Card>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4" data-testid="grid-social-columns">
+        {COLUMN_ORDER.map((channel) => (
+          <ChannelColumn key={channel} channel={channel} items={byChannel[channel]} />
+        ))}
       </div>
     </div>
   );
