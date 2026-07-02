@@ -137,7 +137,7 @@ training_certificate                -- optional
 The current path (multer `memoryStorage` + 5 MB cap + buffer → `uploadImageToS3`) is fine for graphics but **wrong for video** (large files blow memory + the cap). Two lanes:
 
 - **Graphics / thumbnails / slides (small):** reuse existing multer → S3 (`uploadImageToS3(file, "training-assets")`). No new infra.
-- **Video (large): presigned direct-to-S3.**
+- **Video (large): presigned direct-to-S3 (single PUT — Option A).**
   1. `POST /training/uploads/presign` returns a presigned `PUT` URL (`@aws-sdk/s3-request-presigner`, prefix `training-videos/`).
   2. Browser `PUT`s the file directly to S3.
   3. Client sends the returned key to the lesson API.
@@ -145,6 +145,43 @@ The current path (multer `memoryStorage` + 5 MB cap + buffer → `uploadImageToS
 - **Future (out of scope v1):** MediaConvert transcoding for adaptive bitrate.
 
 New S3 util additions: `getPresignedPutUrl(key, contentType)`, `getPresignedGetUrl(key)`.
+
+### Upload progress tracking
+
+The direct-to-S3 `PUT` goes to the S3 URL, so it does **not** use the app's `axios-client` instance (no session cookies to S3). Use a bare axios `PUT` with `onUploadProgress` — this reflects real bytes-sent-to-S3 and reaches 100% exactly when S3 has the object.
+
+```ts
+await axios.put(presignedUrl, file, {
+  headers: { "Content-Type": file.type },
+  onUploadProgress: (e) => {
+    if (e.total) setPercent(Math.round((e.loaded / e.total) * 100));
+  },
+});
+```
+
+> Use axios/`XMLHttpRequest`, **not** `fetch()` — `fetch` does not expose upload progress reliably.
+
+**S3 CORS requirement (must-have):** the bucket needs a CORS rule allowing `PUT` from the frontend origin, e.g.:
+
+```json
+[{ "AllowedOrigins": ["https://<app-origin>"], "AllowedMethods": ["PUT"],
+   "AllowedHeaders": ["*"], "ExposeHeaders": ["ETag"] }]
+```
+
+Without it the browser blocks the direct upload — the #1 gotcha with presigned browser uploads.
+
+### Refresh / resume behavior (Option A tradeoff — accepted for v1)
+
+A single presigned PUT is **not resumable**. If the admin refreshes, closes the tab, or navigates away mid-upload:
+- the in-flight `PUT` is aborted and the progress state (React) is lost, and
+- S3 **discards** the incomplete PUT (no object is created) → the upload must **start over from 0%**.
+
+v1 accepts this and mitigates it on the client:
+- show a `beforeunload` warning ("Upload in progress — leave anyway?") while a `PUT` is active,
+- keep the upload on the authoring screen (don't navigate away mid-upload),
+- attach the video to the lesson **only after** the `PUT` resolves.
+
+**Future upgrade (Option B, out of scope v1):** true resumable uploads that survive a refresh/crash via S3 **Multipart Upload** + persisting `uploadId` and completed part ETags to IndexedDB/localStorage — most cheaply via **Uppy** (`@uppy/aws-s3` multipart + **Golden Retriever** plugin). Adopt only if admins start uploading very large files over flaky connections and losing progress.
 
 ---
 
@@ -224,10 +261,53 @@ features/hub/
 
 ## 8. Phasing
 
-1. **Foundation** — schema + migration; training module skeleton (all layers); course CRUD + publish; visibility scoping. Learner list wired to real API (no player yet).
-2. **Content & upload** — presigned video upload + graphics upload; lesson authoring; video player + graphics viewer; lesson progress tracking.
-3. **Quiz** — quiz builder (admin); quiz runner (learner); server-side grading; attempts, passing score; completion + certificate.
-4. **Analytics & polish** — pass-rate/completion dashboard (sliceable per tenant for global courses); certificates UI; completion notifications; optional shuffle/weighting, CDN playback, transcoding.
+1. ✅ **Foundation — DONE** — schema + migration; training module skeleton (all layers); course CRUD + publish; visibility scoping. Learner list wired to real API (no player yet).
+2. ✅ **Content & upload — DONE** — presigned video upload + graphics upload; lesson authoring; video player + graphics viewer; lesson progress tracking.
+3. ✅ **Quiz — DONE** — quiz builder (admin); quiz runner (learner); server-side grading; attempts (unlimited retakes), passing score; completion + certificate.
+4. ⬜ **Analytics & polish — NOT STARTED** — pass-rate/completion dashboard (sliceable per tenant for global courses); certificates UI; completion notifications; optional shuffle/weighting, CDN playback, transcoding.
+
+### Current status (last stop)
+
+**Completed: Phase 1 + Phase 2 + Phase 3.** Typecheck clean (no new errors in `client/**` or `server/v2/**`). All changes in working tree, **uncommitted**.
+
+#### Phase 3 (Quiz)
+Backend (`server/v2/modules/training/training-quiz.*`, reused Phase-1 tables — **no schema change**):
+- `PUT /courses/:id/quiz` (platform_admin) — transactional full replace-upsert of quiz+questions+choices; validates ≥1 question, ≥2 choices, single=exactly 1 correct, multiple≥1.
+- `GET /courses/:id/quiz` — role-aware: admin gets `isCorrect`, learners get it stripped (published+visible only).
+- `POST /courses/:id/quiz/attempts` — **server-side grading** (points-weighted, exact-set match), unlimited retakes, `answers_snapshot` jsonb; on pass + contentComplete → enrollment `completed` + idempotent certificate (`CERT-YYYY-xxxxxxxx`). Returns per-question `results` for review.
+- `GET /courses/:id/my-status` extended with `hasQuiz/quizPassed/bestScorePct/attemptCount/courseCompleted/certificate`.
+
+Frontend (`client/src/features/hub/`):
+- Admin: `components/admin/training-quiz-builder.tsx` (question cards, single/multiple, points, radio/checkbox correct-marking, client validation mirroring server) — mounted in the course editor, edit mode only.
+- Learner: `components/training-quiz.tsx` (locked/take/retake/passed states + runner dialog with pass/fail result, per-question review, certificate) — replaces the old disabled CTA in `training-course-view.tsx`.
+- api/hooks: `getQuiz`/`upsertQuiz`/`submitQuizAttempt`; `useQuiz`, `useUpsertQuiz`, `useSubmitQuizAttempt`.
+
+#### Phase 1 (Foundation) — backend course module + schema + learner list
+- `shared/schema.ts` — 5 enums + all 10 `training_*` tables (`=== Training / LMS ===`) with insert schemas + `$inferSelect` types.
+- `migrations/0019_training_lms_foundation.sql` — **GENERATED, NOT YET APPLIED to any DB** (blocker: endpoints 500 until applied). No further migration was needed for Phase 2.
+- `server/v2/modules/training/` course module; visibility via `buildTrainingVisibilityConds` + `courseVisibleTo`; authoring gated `platform_admin`; mounted at `/api/v2/training`.
+- Client: `features/hub/api/training.api.ts`, `use-training-queries.ts`, `types/training.types.ts`; `hub-training.tsx` list wired to live API.
+
+#### Phase 2 (Content & upload)
+Backend (`server/v2/modules/training/`, reused Phase-1 tables — **no schema change**):
+- Presigned direct-to-S3 video upload (`POST /uploads/presign`); graphics upload via multer→S3 (`POST /lessons/:id/assets/upload`).
+- Lessons + assets CRUD + reorder; `GET /courses/:id` now returns course **with ordered lessons + assets**.
+- Enrollment (idempotent) + lesson progress (`POST /courses/:id/enroll`, `PATCH /lessons/:id/progress`, `GET /courses/:id/my-status` with `contentComplete`).
+- Playback reuses the generic `GET /api/v2/files/img?key=` proxy (302 → presigned GET; native Range seeking). S3 utils gained `getPresignedPutUrl` / `getPresignedGetUrl`.
+
+Frontend (`client/src/features/hub/`):
+- Learner: `training-video-player.tsx` (`react-player` v2, debounced progress), `training-graphics-viewer.tsx` (carousel), `training-course-view.tsx` (auto-enroll, lesson nav w/ checkmarks, progress bar, disabled "Quiz — coming soon" when content complete). `hub-training.tsx` detail now opens the real course view.
+- Admin (`components/admin/`, gated to `platform_admin` via `useRole()`): `training-admin.tsx` (course list + publish/archive), `training-course-editor.tsx`, `training-lesson-editor.tsx` (reorder + add/edit/delete), `training-video-upload.tsx` (progress bar + `beforeunload` guard + "not resumable" note). Routes `/hub/training/admin` + `/hub/training/admin/:courseId` in `pages/hub/index.tsx`. "Manage training" button shown only to platform_admin.
+- api/hooks: admin methods added to `training.api.ts` incl. `uploadVideoToS3(file,onProgress)` (bare axios PUT to S3); `use-training-mutations.ts` (learner) + `use-training-admin-mutations.ts` (admin).
+
+**Not built yet:** quiz builder/runner/grading (Phase 3), analytics/certificates (Phase 4).
+
+**Known follow-ups / blockers:**
+1. **Apply migration `0019`** via the project's drizzle migrate script (owner runs this) — nothing works until the tables exist.
+2. **Sync lockfile for `react-player`** — added to `package.json` but the sandbox install bypassed `package-lock.json`; run a normal `npm install` locally before CI/fresh installs.
+3. **S3 CORS** must allow `PUT` from the app origin for the direct video upload (see §5).
+
+**Next:** Phase 3 (Quiz) — builder, runner, server-side grading, passing score, completion + certificate.
 
 ---
 

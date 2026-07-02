@@ -16,6 +16,7 @@ import { s3Client, S3_BUCKET } from "../config/s3";
 
 const PROXY_PREFIX = "/api/v2/files/img?key=";
 const PRESIGNED_URL_EXPIRES_IN = 60 * 60; // 1 hour
+const PRESIGNED_PUT_EXPIRES_IN = 15 * 60; // 15 minutes
 
 const MIME_EXT: Record<string, string> = {
   "image/jpeg": ".jpg",
@@ -61,6 +62,28 @@ export async function presignImageKey(key: string): Promise<string> {
     s3Client,
     new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }),
     { expiresIn: PRESIGNED_URL_EXPIRES_IN },
+  );
+}
+
+/**
+ * Presigned GET for playback (training videos, etc). This is the exact same
+ * presigner as `presignImageKey` (name kept for that call site's history) —
+ * exported under this name too so non-image callers (e.g. training video
+ * playback) don't have to import an "image" helper. Do not duplicate the
+ * signing logic; keep both names pointed at one implementation.
+ */
+export const getPresignedGetUrl = presignImageKey;
+
+/**
+ * Generate a short-lived presigned PUT URL so a browser can upload a large
+ * file (e.g. training video) directly to S3 without the file ever passing
+ * through this server. Short expiry since it's only used to start one upload.
+ */
+export async function getPresignedPutUrl(key: string, contentType: string): Promise<string> {
+  return getSignedUrl(
+    s3Client,
+    new PutObjectCommand({ Bucket: S3_BUCKET, Key: key, ContentType: contentType }),
+    { expiresIn: PRESIGNED_PUT_EXPIRES_IN },
   );
 }
 

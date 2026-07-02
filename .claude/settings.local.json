@@ -110,7 +110,17 @@
       "Bash(xargs grep -l \"totalBookingCommissionExpr\")",
       "Bash(grep -A 50 \"getAgentsPerformance\" C:\\\\\\\\Users\\\\\\\\Christian\\\\\\\\Desktop\\\\\\\\travana-v2\\\\\\\\travana-V2\\\\\\\\server\\\\\\\\v2\\\\\\\\modules\\\\\\\\organization-overview\\\\\\\\organization-overview.repository.ts)",
       "Bash(xargs grep -l \"POST.*quotes\\\\|/api/v2/quotes\\\\|createQuote\")",
-      "Bash(xargs grep -l \"useOrganizationOverviewStats\\\\|useBranchOverviewStats\")"
+      "Bash(xargs grep -l \"useOrganizationOverviewStats\\\\|useBranchOverviewStats\")",
+      "Bash(npx drizzle-kit *)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(npm ls *)",
+      "Bash(npm config *)",
+      "Read(//c/Users/Christian/**)",
+      "Bash(env)",
+      "Bash(printenv)",
+      "Bash(nslookup package-firewall.replit.local)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://registry.npmjs.org/react-player)",
+      "Bash(npm view *)"
     ],
     "additionalDirectories": [
       "/tmp"

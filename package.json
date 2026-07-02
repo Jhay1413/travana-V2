@@ -25,7 +25,8 @@
     "db:seed-plans": "tsx scripts/seed-plans.ts",
     "db:seed-org": "tsx scripts/seed-org.ts",
     "db:seed-roles": "tsx scripts/seed-user-org-roles.ts",
-    "db:seed-commission": "tsx scripts/seed-tour-operator-commission.ts"
+    "db:seed-commission": "tsx scripts/seed-tour-operator-commission.ts",
+    "db:seed-training": "tsx --env-file-if-exists=.env scripts/seed-training.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1019.0",
