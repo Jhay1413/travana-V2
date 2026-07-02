@@ -254,7 +254,10 @@ export const uploadMediaFromUrl = async (
     };
     const ext = extMap[contentType] || ".jpg";
     const urlPath = new URL(imageUrl).pathname;
-    const fileName = path.basename(urlPath) || `image${ext}`;
+    let fileName = path.basename(urlPath) || `image${ext}`;
+    if (!/\.(jpe?g|png|gif|webp)$/i.test(fileName)) {
+      fileName += ext;
+    }
 
     const formData = new FormData();
     formData.append("file", buffer, {

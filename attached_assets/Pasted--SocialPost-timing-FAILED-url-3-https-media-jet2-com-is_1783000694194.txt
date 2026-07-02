@@ -1,0 +1,39 @@
+[SocialPost][timing]   FAILED url#3 (https://media.jet2.com/is/image/jet2/PMI_69414_Cala_Ferrera_1218_08-1) after 1991ms: AppError: Failed to upload media from URL to OnlySocials: {"message":"Server Error"}
+    at uploadMediaFromUrl (/home/runner/workspace/server/v2/utils/only-socials.ts:281:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:90:22)
+    at async worker (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:42:20)
+    at async Promise.all (index 3)
+    at async mapWithConcurrency (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:46:3)
+    at async resolveMediaIds (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:81:20)
+    at async Object.schedulePost (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:396:25)
+    at async <anonymous> (/home/runner/workspace/server/v2/modules/social-post/social-post.controller.ts:38:18) {
+  statusCode: 500,
+  isOperational: true
+}
+[SocialPost][timing]   FAILED url#0 (https://media.jet2.com/is/image/jet2/PMI_69414_Cala_Ferrera_Hotel_1116_01-1) after 2360ms: AppError: Failed to upload media from URL to OnlySocials: {"message":"Server Error"}
+    at uploadMediaFromUrl (/home/runner/workspace/server/v2/utils/only-socials.ts:281:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:90:22)
+    at async worker (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:42:20)
+    at async Promise.all (index 0)
+    at async mapWithConcurrency (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:46:3)
+    at async resolveMediaIds (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:81:20)
+    at async Object.schedulePost (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:396:25)
+    at async <anonymous> (/home/runner/workspace/server/v2/modules/social-post/social-post.controller.ts:38:18) {
+  statusCode: 500,
+  isOperational: true
+}
+[SocialPost][timing]   FAILED url#2 (https://media.jet2.com/is/image/jet2/PMI_69414_Cala_Ferrera_1218_06-1) after 2356ms: AppError: Failed to upload media from URL to OnlySocials: {"message":"Server Error"}
+    at uploadMediaFromUrl (/home/runner/workspace/server/v2/utils/only-socials.ts:281:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async <anonymous> (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:90:22)
+    at async worker (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:42:20)
+    at async Promise.all (index 2)
+    at async mapWithConcurrency (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:46:3)
+    at async resolveMediaIds (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:81:20)
+    at async Object.schedulePost (/home/runner/workspace/server/v2/modules/social-post/social-post.service.ts:396:25)
+    at async <anonymous> (/home/runner/workspace/server/v2/modules/social-post/social-post.controller.ts:38:18) {
+  statusCode: 500,
+  isOperational: true
+}
