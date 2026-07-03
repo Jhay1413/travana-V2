@@ -24,6 +24,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCountries, useDestinations, useResorts } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
 import axios from "@/api/client/axios-client";
+import { AddDestinationModal } from "@/features/lookups/components/lookups/add-destination-modal";
+import { AddResortModal } from "@/features/lookups/components/lookups/add-resort-modal";
 
 const addAccommodationSchema = z.object({
   country_id: z.string().optional(),
@@ -78,6 +80,19 @@ export function AddAccommodationModal({
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Nested "add new destination / resort" modals (mirrors the main quote form)
+  const [showAddDestModal, setShowAddDestModal] = useState(false);
+  const [showAddResortModal, setShowAddResortModal] = useState(false);
+  const [destSearch, setDestSearch] = useState("");
+  const [resortSearch, setResortSearch] = useState("");
+  // Newly-created items so the Select can display them before the async list refreshes
+  const [createdDestination, setCreatedDestination] = useState<
+    { id: string; name: string; type: string | null; country_id: string | null } | null
+  >(null);
+  const [createdResort, setCreatedResort] = useState<
+    { id: string; name: string; destination_id: string | null; destination_name: string | null; country_id: string | null } | null
+  >(null);
+
   const form = useForm<AddAccommodationValues>({
     resolver: zodResolver(addAccommodationSchema),
     defaultValues: {
@@ -100,6 +115,10 @@ export function AddAccommodationModal({
         resorts_id: initialResortId,
         name: initialName,
       });
+      setCreatedDestination(null);
+      setCreatedResort(null);
+      setDestSearch("");
+      setResortSearch("");
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -110,28 +129,37 @@ export function AddAccommodationModal({
 
   // Merge pre-selected item into the options list so the Select can display it
   // even before the async data has loaded
-  const destinationOptions = destinations || [];
-  const destinationOptionsWithFallback =
-    initialDestinationId && initialDestinationName && !destinationOptions.find((d) => d.id === initialDestinationId)
-      ? [{ id: initialDestinationId, name: initialDestinationName, type: null, country_id: null }, ...destinationOptions]
-      : destinationOptions;
+  let destinationOptionsWithFallback: { id: string; name: string; type: string | null; country_id: string | null }[] =
+    destinations || [];
+  if (initialDestinationId && initialDestinationName && !destinationOptionsWithFallback.find((d) => d.id === initialDestinationId)) {
+    destinationOptionsWithFallback = [{ id: initialDestinationId, name: initialDestinationName, type: null, country_id: null }, ...destinationOptionsWithFallback];
+  }
+  if (createdDestination && !destinationOptionsWithFallback.find((d) => d.id === createdDestination.id)) {
+    destinationOptionsWithFallback = [createdDestination, ...destinationOptionsWithFallback];
+  }
 
-  const resortOptions = resorts || [];
-  const resortOptionsWithFallback =
-    initialResortId && initialResortName && !resortOptions.find((r) => r.id === initialResortId)
-      ? [{ id: initialResortId, name: initialResortName, destination_id: null, destination_name: null, country_id: null }, ...resortOptions]
-      : resortOptions;
+  let resortOptionsWithFallback: { id: string; name: string; destination_id: string | null; destination_name: string | null; country_id: string | null }[] =
+    resorts || [];
+  if (initialResortId && initialResortName && !resortOptionsWithFallback.find((r) => r.id === initialResortId)) {
+    resortOptionsWithFallback = [{ id: initialResortId, name: initialResortName, destination_id: null, destination_name: null, country_id: null }, ...resortOptionsWithFallback];
+  }
+  if (createdResort && !resortOptionsWithFallback.find((r) => r.id === createdResort.id)) {
+    resortOptionsWithFallback = [createdResort, ...resortOptionsWithFallback];
+  }
 
   // Reset downstream fields when upstream changes
   const handleCountryChange = (val: string, onChange: (v: string) => void) => {
     onChange(val);
     form.setValue("destination_id", "");
     form.setValue("resorts_id", "");
+    setCreatedDestination(null);
+    setCreatedResort(null);
   };
 
   const handleDestinationChange = (val: string, onChange: (v: string) => void) => {
     onChange(val);
     form.setValue("resorts_id", "");
+    setCreatedResort(null);
   };
 
   const handleSubmit = async (values: AddAccommodationValues) => {
@@ -142,9 +170,10 @@ export function AddAccommodationModal({
 
       const { data } = await axios.post<AddedAccommodation>("/api/v2/settings/accommodations", payload);
 
-      // Determine display labels from the selected options
-      const selectedResort = (resorts || []).find((r) => r.id === values.resorts_id);
-      const selectedDestination = (destinations || []).find((d) => d.id === values.destination_id);
+      // Determine display labels from the selected options (fallback lists
+      // include any destination/resort that was just created inline)
+      const selectedResort = resortOptionsWithFallback.find((r) => r.id === values.resorts_id);
+      const selectedDestination = destinationOptionsWithFallback.find((d) => d.id === values.destination_id);
       const selectedCountry = (countries || []).find((c) => c.id === values.country_id);
 
       const enriched: AddedAccommodation = {
@@ -228,6 +257,9 @@ export function AddAccommodationModal({
                       emptyMessage="No destinations found."
                       isLoading={destinationsLoading}
                       disabled={(!countryId && !field.value) || destinationsLoading}
+                      onSearchCapture={setDestSearch}
+                      onAddNew={() => setShowAddDestModal(true)}
+                      addNewLabel="Add Destination"
                       data-testid="select-accom-destination"
                     />
                   </FormControl>
@@ -259,6 +291,9 @@ export function AddAccommodationModal({
                       emptyMessage="No resorts found."
                       isLoading={resortsLoading}
                       disabled={(!destinationId && !countryId && !field.value) || resortsLoading}
+                      onSearchCapture={setResortSearch}
+                      onAddNew={() => setShowAddResortModal(true)}
+                      addNewLabel="Add Resort"
                       data-testid="select-accom-resort"
                     />
                   </FormControl>
@@ -303,6 +338,55 @@ export function AddAccommodationModal({
             </DialogFooter>
           </form>
         </Form>
+
+        {/* Add a new destination inline (mirrors the main quote form) */}
+        <AddDestinationModal
+          open={showAddDestModal}
+          onOpenChange={setShowAddDestModal}
+          initialName={destSearch}
+          initialCountryId={countryId || ""}
+          onSuccess={(dest) => {
+            setCreatedDestination({ id: dest.id, name: dest.name, type: dest.type ?? null, country_id: dest.country_id ?? null });
+            setCreatedResort(null);
+            if (dest.country_id) form.setValue("country_id", dest.country_id);
+            form.setValue("destination_id", dest.id);
+            form.setValue("resorts_id", "");
+            setDestSearch("");
+          }}
+        />
+
+        {/* Add a new resort inline (mirrors the main quote form) */}
+        <AddResortModal
+          open={showAddResortModal}
+          onOpenChange={setShowAddResortModal}
+          initialName={resortSearch}
+          initialCountryId={countryId || ""}
+          initialDestinationId={destinationId || ""}
+          initialDestinationName={
+            destinationOptionsWithFallback.find((d) => d.id === destinationId)?.name || ""
+          }
+          onSuccess={(res) => {
+            setCreatedResort({
+              id: res.id,
+              name: res.name,
+              destination_id: res.destination_id ?? null,
+              destination_name: res.destination_name ?? null,
+              country_id: res.country_id ?? null,
+            });
+            if (res.destination_id) {
+              setCreatedDestination({
+                id: res.destination_id,
+                name: res.destination_name ?? "",
+                type: null,
+                country_id: res.country_id ?? null,
+              });
+              form.setValue("destination_id", res.destination_id);
+            }
+            if (res.country_id) form.setValue("country_id", res.country_id);
+            form.setValue("resorts_id", res.id);
+            setResortSearch("");
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
