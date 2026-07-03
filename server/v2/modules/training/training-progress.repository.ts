@@ -1,5 +1,5 @@
 import { db } from '../../config/database';
-import { training_enrollment, training_lesson_progress } from '@shared/schema';
+import { training_enrollment, training_lesson, training_lesson_progress } from '@shared/schema';
 import type {
   TrainingEnrollment,
   InsertTrainingEnrollment,
@@ -41,13 +41,44 @@ export const trainingProgressRepository = {
     return db.select().from(training_lesson_progress).where(eq(training_lesson_progress.enrollment_id, enrollmentId));
   },
 
-  /** Every course the user is enrolled in, with its enrollment status — powers the "My Courses" filter. */
-  async listEnrollmentsByUser(userId: string): Promise<{ courseId: string; status: TrainingEnrollment['status'] }[]> {
+  /**
+   * Every course the user is enrolled in, with its enrollment status and a
+   * content-progress percentage — powers the "My Courses" filter and the
+   * per-card progress bar on the catalog. `progressPct` = completed required
+   * lessons / total required lessons (mirrors the course-view progress bar),
+   * forced to 100 once the enrollment itself is `completed`. Courses with no
+   * required lessons report 0 (or 100 when completed).
+   */
+  async listEnrollmentsByUser(
+    userId: string,
+  ): Promise<{ courseId: string; status: TrainingEnrollment['status']; progressPct: number }[]> {
     const rows = await db
-      .select({ courseId: training_enrollment.course_id, status: training_enrollment.status })
+      .select({
+        courseId: training_enrollment.course_id,
+        status: training_enrollment.status,
+        requiredTotal: sql<number>`count(${training_lesson.id}) filter (where ${training_lesson.is_required})`,
+        requiredCompleted: sql<number>`count(${training_lesson.id}) filter (where ${training_lesson.is_required} and ${training_lesson_progress.completed})`,
+      })
       .from(training_enrollment)
-      .where(eq(training_enrollment.user_id, userId));
-    return rows;
+      .leftJoin(training_lesson, eq(training_lesson.course_id, training_enrollment.course_id))
+      .leftJoin(
+        training_lesson_progress,
+        and(
+          eq(training_lesson_progress.lesson_id, training_lesson.id),
+          eq(training_lesson_progress.enrollment_id, training_enrollment.id),
+        ),
+      )
+      .where(eq(training_enrollment.user_id, userId))
+      .groupBy(training_enrollment.id, training_enrollment.course_id, training_enrollment.status);
+
+    return rows.map((row) => {
+      // Postgres count() comes back as a string (bigint) — coerce before math.
+      const total = Number(row.requiredTotal);
+      const completed = Number(row.requiredCompleted);
+      const progressPct =
+        row.status === 'completed' ? 100 : total > 0 ? Math.round((completed / total) * 100) : 0;
+      return { courseId: row.courseId, status: row.status, progressPct };
+    });
   },
 
   /** Flip an enrollment to `completed` once content is done and the quiz is passed. */

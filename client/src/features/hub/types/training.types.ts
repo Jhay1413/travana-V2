@@ -182,10 +182,13 @@ export interface UpdateLessonProgressInput {
   completed?: boolean;
 }
 
-/** One row of the current user's enrollments — drives the "My Courses" filter. */
+/** One row of the current user's enrollments — drives the "My Courses" filter
+ *  and the per-card progress bar. `progressPct` is content completion
+ *  (completed required lessons / total required lessons), 100 once completed. */
 export interface MyEnrollment {
   courseId: string;
   status: "in_progress" | "completed";
+  progressPct: number;
 }
 
 /**

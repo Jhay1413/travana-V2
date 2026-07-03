@@ -74,8 +74,13 @@ export const trainingProgressService = {
     return trainingProgressRepository.upsertProgress(enrollment.id, lessonId, patch);
   },
 
-  /** The current user's enrollments (course id + status) — for the "My Courses" filter. */
-  async getMyEnrollments(scope: Scope): Promise<{ courseId: string; status: 'in_progress' | 'completed' }[]> {
+  /**
+   * The current user's enrollments (course id + status + content-progress %) —
+   * for the "My Courses" filter and the per-card progress bar on the catalog.
+   */
+  async getMyEnrollments(
+    scope: Scope,
+  ): Promise<{ courseId: string; status: 'in_progress' | 'completed'; progressPct: number }[]> {
     if (!scope.userId) throw new AppError('User not found in scope', 401);
     return trainingProgressRepository.listEnrollmentsByUser(scope.userId);
   },

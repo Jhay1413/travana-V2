@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, BookOpen, Settings, Target } from "lucide-react";
-import { HubSectionHeader, HubBadge, HubEmptyState } from "@/features/hub/components/hub-components";
+import { ArrowLeft, ArrowRight, BookOpen, Check, Settings, Target } from "lucide-react";
+import { HubSectionHeader, HubBadge, HubEmptyState, HubProgressBar } from "@/features/hub/components/hub-components";
 import { useTrainingCourses, useMyEnrollments } from "@/features/hub/api/use-training-queries";
 import { TrainingCourseView } from "@/features/hub/components/training-course-view";
-import { COURSE_CATEGORIES, type TrainingCourse } from "@/features/hub/types/training.types";
+import { COURSE_CATEGORIES, type TrainingCourse, type MyEnrollment } from "@/features/hub/types/training.types";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/hooks/use-role";
 import { cn } from "@/lib/utils";
@@ -58,11 +58,16 @@ function TrainingCourseCard({
   course,
   index,
   onSelect,
+  enrollment,
 }: {
   course: TrainingCourse;
   index: number;
   onSelect: () => void;
+  /** The current user's enrollment for this course, if they've taken it. */
+  enrollment?: MyEnrollment;
 }) {
+  const isCompleted = enrollment?.status === "completed";
+  const buttonLabel = !enrollment ? "Start course" : isCompleted ? "Completed" : "Continue";
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -116,13 +121,32 @@ function TrainingCourseCard({
 
         <div className="mt-4 flex-1" />
 
+        {enrollment ? (
+          <div className="mb-3" data-testid={`progress-training-${course.id}`}>
+            <div className="mb-1 flex items-center justify-between text-[11px] font-medium">
+              <span className={cn(isCompleted ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400")}>
+                {isCompleted ? "Completed" : "In progress"}
+              </span>
+              <span className="text-slate-500 dark:text-slate-400">{enrollment.progressPct}%</span>
+            </div>
+            <HubProgressBar value={enrollment.progressPct} size="sm" />
+          </div>
+        ) : null}
+
         <Button
           size="sm"
-          className="w-full bg-blue-600 text-xs text-white transition-colors hover:bg-blue-700"
+          className={cn(
+            "w-full text-xs text-white transition-colors",
+            isCompleted ? "bg-emerald-600 hover:bg-emerald-700" : "bg-blue-600 hover:bg-blue-700"
+          )}
           data-testid={`button-start-${course.id}`}
         >
-          Start course
-          <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          {buttonLabel}
+          {isCompleted ? (
+            <Check className="ml-1.5 h-3.5 w-3.5" />
+          ) : (
+            <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          )}
         </Button>
       </div>
     </motion.div>
@@ -140,6 +164,12 @@ export default function HubTraining() {
 
   const enrolledCourseIds = useMemo(
     () => new Set(myEnrollments.map((e) => e.courseId)),
+    [myEnrollments],
+  );
+
+  // Course id → the current user's enrollment, for per-card progress + button label.
+  const enrollmentByCourseId = useMemo(
+    () => new Map(myEnrollments.map((e) => [e.courseId, e])),
     [myEnrollments],
   );
 
@@ -235,6 +265,7 @@ export default function HubTraining() {
               course={course}
               index={i}
               onSelect={() => setSelectedCourseId(course.id)}
+              enrollment={enrollmentByCourseId.get(course.id)}
             />
           ))}
         </div>
