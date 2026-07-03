@@ -1,6 +1,7 @@
 import { db } from "../../config/database";
 import { booking, transaction, clientTable, user, forwardsReport, booking_upsell } from "@shared/schema";
-import { sql, eq, and, gte, lte, isNotNull } from "drizzle-orm";
+import { sql, eq, and, gte, lte, isNotNull, notInArray } from "drizzle-orm";
+import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 import { totalBookingCommissionExpr } from "../../utils/commission-sql";
 
 export const revenueRepository = {
@@ -299,6 +300,12 @@ export const revenueRepository = {
       lte(booking.travel_date, oneYearFromNow.toISOString().split('T')[0]),
     ];
     if (orgId) conditions.push(eq(clientTable.orgId, orgId));
+
+    // Suspended users are excluded from every report/leaderboard.
+    if (orgId) {
+      const suspendedIds = await userOrgRolesRepository.findSuspendedUserIds({ orgId });
+      if (suspendedIds.size > 0) conditions.push(notInArray(user.id, Array.from(suspendedIds)));
+    }
 
     const baseQuery = db
       .select({

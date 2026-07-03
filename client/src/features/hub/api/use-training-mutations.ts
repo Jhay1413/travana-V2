@@ -16,6 +16,8 @@ export function useEnroll() {
     mutationFn: (courseId: string) => trainingApi.enroll(courseId),
     onSuccess: (_data, courseId) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.myStatus(courseId) });
+      // A new enrollment must show up under the "My Courses" filter.
+      queryClient.invalidateQueries({ queryKey: trainingKeys.myEnrollments() });
     },
   });
 }
@@ -62,10 +64,12 @@ export function useUpdateLessonProgress() {
       const touchesCompleted = completed !== undefined || progressPct !== undefined;
       const nextCompleted = completed === true || (progressPct !== undefined && progressPct >= 90);
 
+      // Monotonic, mirroring the server upsert (GREATEST pct, never un-complete):
+      // a replay starting at 0 must not visibly drop the bar/checkmark.
       const patchEntry = (p: LessonProgress): LessonProgress => ({
         ...p,
-        progressPct: progressPct ?? p.progressPct,
-        completed: touchesCompleted ? nextCompleted : p.completed,
+        progressPct: progressPct !== undefined ? Math.max(p.progressPct, progressPct) : p.progressPct,
+        completed: touchesCompleted ? p.completed || nextCompleted : p.completed,
       });
 
       const exists = previous.lessonProgress.some((p) => p.lessonId === lessonId);

@@ -48,6 +48,10 @@ router.get('/courses', trainingController.listCourses);
 router.get('/courses/admin', requireOrgRole(['platform_admin']), trainingController.listCoursesAdmin);
 router.get('/courses/:id', validate(courseIdValidator), trainingController.getCourseById);
 
+// The current user's enrollments (course id + status) for the "My Courses"
+// filter. Distinct top-level path — never collides with `GET /courses/:id`.
+router.get('/my-courses', trainingProgressController.getMyEnrollments);
+
 router.post('/courses/:id/enroll', validate(enrollValidator), trainingProgressController.enroll);
 router.get('/courses/:id/my-status', validate(myStatusValidator), trainingProgressController.getMyStatus);
 router.patch('/lessons/:id/progress', validate(progressUpdateValidator), trainingProgressController.updateProgress);

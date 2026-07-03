@@ -624,15 +624,19 @@ export const branchOverviewRepository = {
 
     // Leaderboards only rank sales agents. A branch manager who also sells
     // holds the `agent` role, so they stay; pure managers/admins drop out.
-    const agentIds = await userOrgRolesRepository.findSalesAgentUserIds({
-      orgId: scope.orgId,
-      branchId: scope.branchId,
-    });
+    const [agentIds, suspendedIds] = await Promise.all([
+      userOrgRolesRepository.findSalesAgentUserIds({
+        orgId: scope.orgId,
+        branchId: scope.branchId,
+      }),
+      userOrgRolesRepository.findSuspendedUserIds({ orgId: scope.orgId }),
+    ]);
     const agentSet = new Set(agentIds);
 
     const map = new Map<string, BranchOverviewTeamRow>();
     for (const u of teamUsers) {
       if (!agentSet.has(u.id)) continue;
+      if (suspendedIds.has(u.id)) continue; // suspended users excluded from reports
       map.set(u.id, {
         id: u.id,
         name: u.firstName || u.name || u.email || "Agent",
@@ -947,11 +951,14 @@ export const branchOverviewRepository = {
     const aggByUser = new Map(aggRows.map((r) => [r.agentId, r] as const));
 
     // Pure social media managers aren't sales agents — exclude from the stats.
-    const socialOnly = new Set(
-      await userOrgRolesRepository.findSocialOnlyUserIds({ orgId: scope.orgId, branchId: scope.branchId }),
-    );
+    // Suspended users are excluded from every report too.
+    const [socialOnlyIds, suspendedIds] = await Promise.all([
+      userOrgRolesRepository.findSocialOnlyUserIds({ orgId: scope.orgId, branchId: scope.branchId }),
+      userOrgRolesRepository.findSuspendedUserIds({ orgId: scope.orgId }),
+    ]);
+    const socialOnly = new Set(socialOnlyIds);
 
-    const rows: AgentPerformanceRow[] = teamUsers.filter((u) => !socialOnly.has(u.id)).map((u) => {
+    const rows: AgentPerformanceRow[] = teamUsers.filter((u) => !socialOnly.has(u.id) && !suspendedIds.has(u.id)).map((u) => {
       const a = aggByUser.get(u.id);
       const today = Number(a?.today ?? 0);
       const week = Number(a?.week ?? 0);

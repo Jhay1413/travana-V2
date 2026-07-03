@@ -2,6 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const PORTAL_TOKEN_KEY = "portal_token";
 
+/** Per-login flag: whether the user dismissed/handled the "get notified" banner.
+ *  Stored in sessionStorage so it survives tab navigation but resets on a new login. */
+export const PORTAL_PUSH_BANNER_DISMISSED_KEY = "portal_push_banner_dismissed";
+
 export function getPortalToken(): string | null {
   return localStorage.getItem(PORTAL_TOKEN_KEY);
 }
@@ -15,6 +19,8 @@ export function clearPortalToken() {
   localStorage.removeItem("portal_client_id");
   localStorage.removeItem("portal_email");
   localStorage.removeItem("portal_credential_id");
+  // Reset the notification banner so it shows again on the next login.
+  sessionStorage.removeItem(PORTAL_PUSH_BANNER_DISMISSED_KEY);
 }
 
 async function portalFetch(url: string, options: RequestInit = {}) {
@@ -242,6 +248,8 @@ export function usePortalForYouDeals() {
     queryFn: () => portalFetch("/api/portal/deals/for-you"),
     retry: false,
     enabled: !!getPortalToken(),
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
     staleTime: 0,
   });
 }
@@ -378,8 +386,14 @@ export function useSavePortalTags() {
     mutationFn: (tagIds: string[]) =>
       portalFetch("/api/portal/my-tags", { method: "POST", body: JSON.stringify({ tagIds }) }),
     onSuccess: () => {
+      // Write the fresh value synchronously so PortalLayout's hasTags redirect
+      // effect doesn't bounce back to /portal/tags on the stale cached `false`.
+      queryClient.setQueryData(portalKeys.hasTags, { hasTags: true });
       queryClient.invalidateQueries({ queryKey: portalKeys.myTags });
       queryClient.invalidateQueries({ queryKey: portalKeys.hasTags });
+      // Interests changed → "For You" (personalized) and "Latest Deals" must refresh.
+      queryClient.invalidateQueries({ queryKey: portalKeys.forYouDeals });
+      queryClient.invalidateQueries({ queryKey: ["portal", "deals"] });
     },
   });
 }

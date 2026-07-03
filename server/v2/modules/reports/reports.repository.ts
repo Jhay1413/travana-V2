@@ -278,13 +278,17 @@ export const reportsRepository = {
           : [];
 
     // Pure social media managers aren't sales agents — keep them out of the report.
-    const socialOnly = new Set(
-      await userOrgRolesRepository.findSocialOnlyUserIds({ orgId: scope.orgId, branchId: scope.branchId }),
-    );
+    // Suspended users are excluded from every report too.
+    const [socialOnlyIds, suspendedIds] = await Promise.all([
+      userOrgRolesRepository.findSocialOnlyUserIds({ orgId: scope.orgId, branchId: scope.branchId }),
+      userOrgRolesRepository.findSuspendedUserIds({ orgId: scope.orgId }),
+    ]);
+    const socialOnly = new Set(socialOnlyIds);
 
     const map = new Map<string, AgentPerformanceRow>();
     for (const u of seedUsers) {
       if (socialOnly.has(u.id)) continue;
+      if (suspendedIds.has(u.id)) continue;
       map.set(u.id, {
         id: u.id,
         name: u.firstName || u.name || u.email || "Agent",

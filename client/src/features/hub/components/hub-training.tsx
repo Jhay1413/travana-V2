@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, BookOpen, Settings, Target } from "lucide-react";
 import { HubSectionHeader, HubBadge, HubEmptyState } from "@/features/hub/components/hub-components";
-import { useTrainingCourses } from "@/features/hub/api/use-training-queries";
+import { useTrainingCourses, useMyEnrollments } from "@/features/hub/api/use-training-queries";
 import { TrainingCourseView } from "@/features/hub/components/training-course-view";
-import type { TrainingCourse } from "@/features/hub/types/training.types";
+import { COURSE_CATEGORIES, type TrainingCourse } from "@/features/hub/types/training.types";
 import { Button } from "@/components/ui/button";
 import { useRole } from "@/hooks/use-role";
 import { cn } from "@/lib/utils";
+
+/** Special filter tab: courses the current user is enrolled in. */
+const MY_COURSES_TAB = "My Courses";
 
 /** Cover placeholder shown when a course has no `thumbnail_url`. */
 function CourseCoverPlaceholder({ title }: { title: string }) {
@@ -95,6 +98,7 @@ function TrainingCourseCard({
 
       <div className="flex flex-1 flex-col p-5">
         <div className="flex flex-wrap items-center gap-1.5">
+          {course.category ? <HubBadge variant="green">{course.category}</HubBadge> : null}
           <HubBadge variant="blue">{course.visibility === "global" ? "Global" : "Org"}</HubBadge>
           <HubBadge variant="amber">
             <Target className="mr-1 h-3 w-3" /> Pass {course.passing_score}%
@@ -127,10 +131,34 @@ function TrainingCourseCard({
 
 export default function HubTraining() {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string>("All");
   const [, navigate] = useLocation();
   const { orgRole } = useRole();
   const isPlatformAdmin = orgRole === "platform_admin";
   const { data: courses = [], isLoading, isError } = useTrainingCourses();
+  const { data: myEnrollments = [] } = useMyEnrollments();
+
+  const enrolledCourseIds = useMemo(
+    () => new Set(myEnrollments.map((e) => e.courseId)),
+    [myEnrollments],
+  );
+
+  // Tabs = "All", then "My Courses" (only if the learner has any enrollment),
+  // then the categories actually present — known ones first (in their canonical
+  // order), then any custom categories. Category is free text server-side.
+  const categoryTabs = useMemo(() => {
+    const present = new Set(courses.map((c) => c.category).filter(Boolean));
+    const known = COURSE_CATEGORIES.filter((c) => present.has(c));
+    const extras = [...present].filter((c) => !COURSE_CATEGORIES.includes(c as (typeof COURSE_CATEGORIES)[number])).sort();
+    const mine = enrolledCourseIds.size > 0 ? [MY_COURSES_TAB] : [];
+    return ["All", ...mine, ...known, ...extras];
+  }, [courses, enrolledCourseIds]);
+
+  const visibleCourses = useMemo(() => {
+    if (activeCategory === "All") return courses;
+    if (activeCategory === MY_COURSES_TAB) return courses.filter((c) => enrolledCourseIds.has(c.id));
+    return courses.filter((c) => c.category === activeCategory);
+  }, [courses, activeCategory, enrolledCourseIds]);
 
   if (selectedCourseId) {
     return (
@@ -167,6 +195,26 @@ export default function HubTraining() {
         }
       />
 
+      {!isLoading && !isError && courses.length > 0 && categoryTabs.length > 1 && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {categoryTabs.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveCategory(tab)}
+              className={cn(
+                "rounded-lg px-3 py-2 text-sm font-medium transition-all",
+                activeCategory === tab
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+              )}
+              data-testid={`button-training-tab-${tab.toLowerCase().replace(/\s+/g, "-")}`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="training-loading">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -177,9 +225,11 @@ export default function HubTraining() {
         <HubEmptyState title="Couldn't load training" description="Please refresh the page to try again." />
       ) : courses.length === 0 ? (
         <HubEmptyState title="No training available yet" description="Check back soon for new courses." />
+      ) : visibleCourses.length === 0 ? (
+        <HubEmptyState title="No courses in this category" description="Try another category tab." />
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {courses.map((course, i) => (
+          {visibleCourses.map((course, i) => (
             <TrainingCourseCard
               key={course.id}
               course={course}

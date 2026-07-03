@@ -39,6 +39,7 @@ export const trainingService = {
 
     const data: InsertTrainingCourse = {
       title: input.title,
+      category: input.category,
       description: input.description ?? null,
       thumbnail_url: input.thumbnailUrl ?? null,
       visibility: input.visibility,
@@ -60,6 +61,7 @@ export const trainingService = {
 
     const patch: Partial<InsertTrainingCourse> = {};
     if (input.title !== undefined) patch.title = input.title;
+    if (input.category !== undefined) patch.category = input.category;
     if (input.description !== undefined) patch.description = input.description ?? null;
     if (input.thumbnailUrl !== undefined) patch.thumbnail_url = input.thumbnailUrl ?? null;
     if (input.passingScore !== undefined) patch.passing_score = input.passingScore;

@@ -947,10 +947,14 @@ export const organizationOverviewRepository = {
 
     // Only rank sales agents. Branch managers who also sell hold the `agent`
     // role and stay; non-selling roles (pure managers/admins) are excluded.
-    const agentIds = await userOrgRolesRepository.findSalesAgentUserIds({ orgId });
+    const [agentIds, suspendedIds] = await Promise.all([
+      userOrgRolesRepository.findSalesAgentUserIds({ orgId }),
+      userOrgRolesRepository.findSuspendedUserIds({ orgId }),
+    ]);
     const agentSet = new Set(agentIds);
 
-    const rows: AgentPerformanceRow[] = teamUsers.filter((u) => agentSet.has(u.id)).map((u) => {
+    // Suspended users are excluded from every report/leaderboard.
+    const rows: AgentPerformanceRow[] = teamUsers.filter((u) => agentSet.has(u.id) && !suspendedIds.has(u.id)).map((u) => {
       const a = aggByUser.get(u.id);
       const us = upsellsByUser.get(u.id);
       const today = Number(a?.today ?? 0) + Number(us?.todayUpsell ?? 0);

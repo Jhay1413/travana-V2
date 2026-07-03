@@ -5,7 +5,7 @@ import type {
   InsertTrainingEnrollment,
   TrainingLessonProgress,
 } from '@shared/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 export const trainingProgressRepository = {
   async findEnrollment(courseId: string, userId: string): Promise<TrainingEnrollment | undefined> {
@@ -41,6 +41,15 @@ export const trainingProgressRepository = {
     return db.select().from(training_lesson_progress).where(eq(training_lesson_progress.enrollment_id, enrollmentId));
   },
 
+  /** Every course the user is enrolled in, with its enrollment status — powers the "My Courses" filter. */
+  async listEnrollmentsByUser(userId: string): Promise<{ courseId: string; status: TrainingEnrollment['status'] }[]> {
+    const rows = await db
+      .select({ courseId: training_enrollment.course_id, status: training_enrollment.status })
+      .from(training_enrollment)
+      .where(eq(training_enrollment.user_id, userId));
+    return rows;
+  },
+
   /** Flip an enrollment to `completed` once content is done and the quiz is passed. */
   async markCompleted(enrollmentId: string): Promise<TrainingEnrollment | undefined> {
     const [row] = await db
@@ -52,9 +61,12 @@ export const trainingProgressRepository = {
   },
 
   /**
-   * Upsert keyed on `unique(enrollment_id, lesson_id)`. Only fields present in
-   * `patch` are overwritten on conflict, so a partial update (e.g. only
-   * `completed`) doesn't clobber a previously recorded `progress_pct`.
+   * Upsert keyed on `unique(enrollment_id, lesson_id)`. Progress is MONOTONIC:
+   * on conflict we keep `GREATEST(existing, incoming)` for `progress_pct` and
+   * never revert `completed` from true → false. This is the source-of-truth
+   * guard against a replay starting at position 0 (which emits a near-zero pct)
+   * clobbering the learner's real furthest progress. Only fields present in
+   * `patch` are touched, so a partial update doesn't affect the other column.
    */
   async upsertProgress(
     enrollmentId: string,
@@ -74,8 +86,13 @@ export const trainingProgressRepository = {
       .onConflictDoUpdate({
         target: [training_lesson_progress.enrollment_id, training_lesson_progress.lesson_id],
         set: {
-          ...(patch.progress_pct !== undefined ? { progress_pct: patch.progress_pct } : {}),
-          ...(patch.completed !== undefined ? { completed: patch.completed } : {}),
+          // Never lower a recorded pct; never un-complete a completed lesson.
+          ...(patch.progress_pct !== undefined
+            ? { progress_pct: sql`GREATEST(${training_lesson_progress.progress_pct}, ${patch.progress_pct})` }
+            : {}),
+          ...(patch.completed !== undefined
+            ? { completed: sql`${training_lesson_progress.completed} OR ${patch.completed}` }
+            : {}),
           last_viewed_at: now,
         },
       })

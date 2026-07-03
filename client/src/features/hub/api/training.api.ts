@@ -7,6 +7,7 @@ import type {
   TrainingEnrollment,
   TrainingLessonProgress,
   MyCourseStatus,
+  MyEnrollment,
   UpdateLessonProgressInput,
   TrainingLesson,
   TrainingLessonAsset,
@@ -58,6 +59,12 @@ export const trainingApi = {
   async getMyStatus(courseId: string): Promise<MyCourseStatus> {
     const { data } = await axios.get<MyCourseStatus>(`${BASE}/${courseId}/my-status`);
     return data;
+  },
+
+  /** The current user's enrollments (course id + status) for the "My Courses" filter. */
+  async listMyEnrollments(): Promise<MyEnrollment[]> {
+    const { data } = await axios.get<MyEnrollment[]>(`${API_V2}/training/my-courses`);
+    return data ?? [];
   },
 
   async updateLessonProgress(

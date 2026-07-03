@@ -97,6 +97,7 @@ export function TrainingCourseView({ courseId }: TrainingCourseViewProps) {
               <TrainingVideoPlayer
                 key={selectedLesson.id}
                 url={selectedLesson.video_url}
+                initialProgressPct={progressByLessonId.get(selectedLesson.id)?.progressPct ?? 0}
                 onProgressPct={handleVideoProgressPct(selectedLesson.id)}
                 onEnded={() => markLessonComplete(selectedLesson.id)}
               />

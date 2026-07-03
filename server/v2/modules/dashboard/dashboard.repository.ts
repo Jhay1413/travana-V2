@@ -1,5 +1,6 @@
 import { db } from "../../config/database";
 import { clientTable, transaction, quote, booking, booking_upsell, user as userTable } from "@shared/schema";
+import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 import { sql, eq, and, gte, lt, isNull } from "drizzle-orm";
 import { quoteStatsConds } from "../../utils/quote-conditions";
 import { totalBookingCommissionExpr } from "../../utils/commission-sql";
@@ -266,8 +267,12 @@ export const dashboardRepository = {
       bookingProfitScoped, upsellProfitScoped, bookingMonthScoped, openQuoteScoped, agentBookingScoped, agentUpsellScoped, agentQuoteScoped, allUsersQuery,
     ]);
 
+    // Suspended users are excluded from every report/leaderboard.
+    const suspendedIds = await userOrgRolesRepository.findSuspendedUserIds({ orgId });
+
     const agentMap = new Map<string, { id: string; name: string; revenue: number; commission: number; bookings: number; quotes: number }>();
     for (const u of allUsers) {
+      if (suspendedIds.has(u.id)) continue;
       agentMap.set(u.id, {
         id: u.id,
         name: u.firstName || u.name || u.email || "Agent",

@@ -2,6 +2,8 @@ import { useCallback, useRef } from "react";
 
 interface TrainingVideoPlayerProps {
   url: string;
+  /** Saved played-percent (0-100) to resume from on mount. */
+  initialProgressPct?: number;
   /** Fired at most every ~5s (or on a ~5% change), with the played percent (0-100). */
   onProgressPct?: (pct: number) => void;
   onEnded?: () => void;
@@ -18,8 +20,25 @@ const MIN_PCT_DELTA = 5;
  * HTTP Range seeking. Progress is debounced so we don't spam the lesson-progress
  * API on every `timeupdate` tick.
  */
-export function TrainingVideoPlayer({ url, onProgressPct, onEnded }: TrainingVideoPlayerProps) {
+export function TrainingVideoPlayer({ url, initialProgressPct, onProgressPct, onEnded }: TrainingVideoPlayerProps) {
   const lastEmitRef = useRef<{ pct: number; at: number }>({ pct: -1, at: 0 });
+  const hasSeededRef = useRef(false);
+
+  // Resume from the saved position once metadata (and thus duration) is known.
+  // Guarded to run a single time per mount; skipped for ~finished lessons so we
+  // don't drop the learner at the very end.
+  const handleLoadedMetadata = useCallback(
+    (e: React.SyntheticEvent<HTMLVideoElement>) => {
+      if (hasSeededRef.current) return;
+      hasSeededRef.current = true;
+      const el = e.currentTarget;
+      const pct = initialProgressPct ?? 0;
+      if (pct > 0 && pct < 98 && el.duration && !Number.isNaN(el.duration)) {
+        el.currentTime = (pct / 100) * el.duration;
+      }
+    },
+    [initialProgressPct],
+  );
 
   const handleTimeUpdate = useCallback(
     (e: React.SyntheticEvent<HTMLVideoElement>) => {
@@ -48,6 +67,7 @@ export function TrainingVideoPlayer({ url, onProgressPct, onEnded }: TrainingVid
         controls
         playsInline
         className="h-full w-full"
+        onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
         onEnded={onEnded}
       />

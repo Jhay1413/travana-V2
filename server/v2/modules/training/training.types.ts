@@ -22,6 +22,7 @@ import type { TrainingLesson, TrainingLessonAsset, TrainingCourse } from '@share
 
 export interface CreateCourseInput {
   title: string;
+  category: string;
   description?: string | null;
   thumbnailUrl?: string | null;
   visibility: 'global' | 'org';

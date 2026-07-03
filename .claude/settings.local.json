@@ -120,7 +120,8 @@
       "Bash(printenv)",
       "Bash(nslookup package-firewall.replit.local)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://registry.npmjs.org/react-player)",
-      "Bash(npm view *)"
+      "Bash(npm view *)",
+      "Bash(DATABASE_URL=\"postgres://user:pass@localhost:5432/placeholder\" npx drizzle-kit generate --name add_course_category)"
     ],
     "additionalDirectories": [
       "/tmp"

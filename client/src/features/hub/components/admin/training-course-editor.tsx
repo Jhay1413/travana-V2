@@ -25,11 +25,12 @@ import { TrainingLessonEditor } from "./training-lesson-editor";
 import { TrainingQuizBuilder } from "./training-quiz-builder";
 import { LessonRow } from "./training-lesson-row";
 import { LessonFormDialog, EMPTY_LESSON_FORM_VALUES, type LessonFormValues } from "./training-lesson-form-dialog";
-import type { CourseVisibility } from "@/features/hub/types/training.types";
+import { COURSE_CATEGORIES, type CourseVisibility } from "@/features/hub/types/training.types";
 import type { DraftLesson } from "@/features/hub/types/training-admin.types";
 
 const courseFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
+  category: z.string().min(1, "Category is required"),
   description: z.string().optional(),
   thumbnailUrl: z.string().optional(),
   visibility: z.enum(["global", "org"]),
@@ -41,6 +42,7 @@ type CourseFormValues = z.infer<typeof courseFormSchema>;
 
 const EMPTY_COURSE: CourseFormValues = {
   title: "",
+  category: "Sales",
   description: "",
   thumbnailUrl: "",
   visibility: "global",
@@ -97,6 +99,7 @@ export default function TrainingCourseEditor() {
     if (course) {
       form.reset({
         title: course.title,
+        category: course.category,
         description: course.description ?? "",
         thumbnailUrl: course.thumbnail_url ?? "",
         visibility: course.visibility,
@@ -170,6 +173,7 @@ export default function TrainingCourseEditor() {
   const handleSubmit = async (values: CourseFormValues) => {
     const payload = {
       title: values.title,
+      category: values.category,
       description: values.description || undefined,
       thumbnailUrl: values.thumbnailUrl || undefined,
       visibility: values.visibility as CourseVisibility,
@@ -373,6 +377,29 @@ export default function TrainingCourseEditor() {
                     <FormControl>
                       <Input {...field} placeholder="https://..." data-testid="input-course-thumbnail" />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Category</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-course-category">
+                          <SelectValue placeholder="Select a category" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {COURSE_CATEGORIES.map((cat) => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

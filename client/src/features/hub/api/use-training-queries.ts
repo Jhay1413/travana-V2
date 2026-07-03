@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { trainingApi } from "./training.api";
-import type { TrainingCourse, CourseWithContent, MyCourseStatus, QuizView } from "../types/training.types";
+import type { TrainingCourse, CourseWithContent, MyCourseStatus, MyEnrollment, QuizView } from "../types/training.types";
 
 export const trainingKeys = {
   all: ["training-courses"] as const,
@@ -10,6 +10,7 @@ export const trainingKeys = {
   detail: (id: string) => [...trainingKeys.details(), id] as const,
   myStatuses: () => [...trainingKeys.all, "my-status"] as const,
   myStatus: (courseId: string) => [...trainingKeys.myStatuses(), courseId] as const,
+  myEnrollments: () => [...trainingKeys.all, "my-enrollments"] as const,
   // Admin (authoring) list — every status, separate cache slot from the
   // learner `list()` (published-only) so publish/archive can invalidate
   // both independently.
@@ -40,6 +41,14 @@ export function useCourseContent(id: string) {
     queryKey: trainingKeys.detail(id),
     queryFn: () => trainingApi.getCourseWithContent(id),
     enabled: !!id,
+  });
+}
+
+/** The current user's enrollments (course id + status) — for the "My Courses" filter. */
+export function useMyEnrollments() {
+  return useQuery<MyEnrollment[]>({
+    queryKey: trainingKeys.myEnrollments(),
+    queryFn: trainingApi.listMyEnrollments,
   });
 }
 

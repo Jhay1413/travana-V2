@@ -1,0 +1,1 @@
+ALTER TABLE "training_course" ADD COLUMN "category" text DEFAULT 'Sales' NOT NULL;

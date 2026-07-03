@@ -74,6 +74,12 @@ export const trainingProgressService = {
     return trainingProgressRepository.upsertProgress(enrollment.id, lessonId, patch);
   },
 
+  /** The current user's enrollments (course id + status) — for the "My Courses" filter. */
+  async getMyEnrollments(scope: Scope): Promise<{ courseId: string; status: 'in_progress' | 'completed' }[]> {
+    if (!scope.userId) throw new AppError('User not found in scope', 401);
+    return trainingProgressRepository.listEnrollmentsByUser(scope.userId);
+  },
+
   /**
    * `contentComplete` = every required lesson in the course has `completed = true`.
    * Also reports quiz state (Phase 3): whether the course has a quiz, the

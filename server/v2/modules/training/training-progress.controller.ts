@@ -24,6 +24,12 @@ export const trainingProgressController = {
     return successResponse(res, progress, 'Progress updated successfully');
   }),
 
+  getMyEnrollments: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const enrollments = await trainingProgressService.getMyEnrollments(scope);
+    return successResponse(res, enrollments, 'Enrollments retrieved successfully');
+  }),
+
   getMyStatus: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const courseId = req.params.id as string;

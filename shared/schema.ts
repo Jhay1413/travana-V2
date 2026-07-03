@@ -1719,6 +1719,9 @@ export const training_course = pgTable('training_course', {
   org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   branch_id: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
   visibility: course_visibility_enum("visibility").notNull().default('global'),
+  // Free-text so new categories can be added without a migration. Seeded set:
+  // Sales, Supplier, Resort, Platform (the client offers these as a dropdown).
+  category: text("category").notNull().default('Sales'),
   title: varchar("title").notNull(),
   description: text("description"),
   thumbnail_url: text("thumbnail_url"),

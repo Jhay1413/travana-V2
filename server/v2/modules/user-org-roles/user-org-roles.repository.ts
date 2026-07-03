@@ -86,6 +86,33 @@ export const userOrgRolesRepository = {
     return result;
   },
 
+  /**
+   * User IDs who are SUSPENDED in the org — they have branch memberships but
+   * none that are active. Suspending a member flips every one of their
+   * `branch_members.is_active` rows to false (see branchMemberRepository
+   * .setActiveForUser), so "has memberships, none active" == suspended.
+   * Suspended users must be excluded from all reports/leaderboards.
+   *
+   * Returns an empty set when `orgId` is null (platform-admin cross-org
+   * context) — suspension is an org-scoped concept.
+   */
+  async findSuspendedUserIds(opts?: { orgId?: string | null }): Promise<Set<string>> {
+    const orgId = opts?.orgId ?? null;
+    if (!orgId) return new Set();
+
+    const [inactiveRows, activeRows] = await Promise.all([
+      db.select({ userId: branchMembers.userId }).from(branchMembers)
+        .where(and(eq(branchMembers.orgId, orgId), eq(branchMembers.isActive, false))),
+      db.select({ userId: branchMembers.userId }).from(branchMembers)
+        .where(and(eq(branchMembers.orgId, orgId), eq(branchMembers.isActive, true))),
+    ]);
+
+    const active = new Set(activeRows.map((r) => r.userId));
+    const suspended = new Set<string>();
+    for (const r of inactiveRows) if (!active.has(r.userId)) suspended.add(r.userId);
+    return suspended;
+  },
+
   /** Returns the full junction rows for a (user, org). */
   async findByUserAndOrg(userId: string, orgId: string): Promise<UserOrgRole[]> {
     return db

@@ -7,11 +7,17 @@
 export type CourseStatus = "draft" | "published" | "archived";
 export type CourseVisibility = "global" | "org";
 
+/** Seeded category options shown in the create/edit dropdown. Stored as free
+ *  text on the server, so this list can grow without a schema change. */
+export const COURSE_CATEGORIES = ["Sales", "Supplier", "Resort", "Platform"] as const;
+export type CourseCategory = (typeof COURSE_CATEGORIES)[number];
+
 export interface TrainingCourse {
   id: string;
   org_id: string | null;
   branch_id: string | null;
   visibility: CourseVisibility;
+  category: string;
   title: string;
   description: string | null;
   thumbnail_url: string | null;
@@ -176,6 +182,12 @@ export interface UpdateLessonProgressInput {
   completed?: boolean;
 }
 
+/** One row of the current user's enrollments — drives the "My Courses" filter. */
+export interface MyEnrollment {
+  courseId: string;
+  status: "in_progress" | "completed";
+}
+
 /**
  * === Admin (authoring, platform_admin only) ===
  * Input payload shapes mirror `server/v2/modules/training/*.validator.ts`
@@ -184,6 +196,7 @@ export interface UpdateLessonProgressInput {
  */
 export interface CreateCourseInput {
   title: string;
+  category: string;
   description?: string | null;
   thumbnailUrl?: string | null;
   visibility: CourseVisibility;
