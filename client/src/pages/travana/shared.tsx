@@ -393,7 +393,7 @@ export function PageHero({
   );
 }
 
-import travanaLogo from "@assets/ChatGPT_Image_May_6,_2026,_03_08_35_PM_(2)_1778078778188.png";
+import travanaLogo from "@assets/Travana-Full-Icon-No-Sq-Trans-White1_1783000725379.png";
 
 export { travanaLogo };
 
