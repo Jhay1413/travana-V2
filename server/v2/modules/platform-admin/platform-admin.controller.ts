@@ -30,8 +30,9 @@ function buildActor(req: Request): AdminActor {
 }
 
 export const platformAdminController = {
-  listOrgs: asyncHandler(async (_req: Request, res: Response) => {
-    const data = await platformAdminService.listOrganizations();
+  listOrgs: asyncHandler(async (req: Request, res: Response) => {
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const data = await platformAdminService.listOrganizations(search);
     successResponse(res, data);
   }),
 

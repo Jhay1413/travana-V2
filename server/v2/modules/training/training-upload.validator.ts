@@ -4,7 +4,7 @@ export const presignUploadValidator = z.object({
   body: z.object({
     fileName: z.string().min(1, 'fileName is required'),
     contentType: z.string().min(1, 'contentType is required'),
-    kind: z.literal('video'),
+    kind: z.enum(['video', 'image']),
   }),
 });
 

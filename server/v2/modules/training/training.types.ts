@@ -78,7 +78,7 @@ export interface CourseWithContent extends TrainingCourse {
 export interface PresignUploadInput {
   fileName: string;
   contentType: string;
-  kind: 'video';
+  kind: 'video' | 'image';
 }
 
 export interface PresignUploadResult {

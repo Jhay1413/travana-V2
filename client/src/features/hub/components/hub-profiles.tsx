@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import defaultCoverImage from "@assets/Whats-App-Travel-Deals_1772061964595.jpg";
@@ -50,6 +51,8 @@ import { useMyHrRecord } from "@/hooks/queries";
 import { useRequestMyLeave } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { HubSectionHeader, HubAvatar, HubBadge, HubProgressBar } from "@/features/hub/components/hub-components";
+import { useMyEnrollments, useTrainingCourses } from "@/features/hub/api/use-training-queries";
+import type { MyEnrollment, TrainingCourse } from "@/features/hub/types/training.types";
 import { agentProfiles } from "@/data/hub-mock";
 import { userProfileApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
@@ -198,14 +201,94 @@ const MOCK_KNOWLEDGE = [
   { id: "k6", title: "Lanzarote Family Resort Comparison", type: "review", views: 145, saves: 23, date: "1 month ago", destination: "Canaries" },
 ];
 
-const MOCK_TRAINING = [
-  { id: "t1", title: "Advanced Cruise Selling", progress: 100, score: 92, duration: "2h 15m", mandatory: false },
-  { id: "t2", title: "Closing on First Call", progress: 100, score: 88, duration: "1h 30m", mandatory: true },
-  { id: "t3", title: "Turkey Destination Deep Dive", progress: 100, score: 95, duration: "3h 00m", mandatory: false },
-  { id: "t4", title: "Luxury Resort Positioning", progress: 65, score: null, duration: "2h 45m", mandatory: false },
-  { id: "t5", title: "Digital Marketing for Agents", progress: 30, score: null, duration: "1h 45m", mandatory: true },
-  { id: "t6", title: "Customer Complaint Handling", progress: 0, score: null, duration: "1h 00m", mandatory: true },
-];
+/** An enrollment joined with its course row — the current user's real training. */
+type MyCourse = { course: TrainingCourse; enrollment: MyEnrollment };
+
+/** Up-to-two-letter initials for the thumbnail placeholder. */
+function courseInitials(title: string) {
+  return title
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+}
+
+/** Real enrolled-course card (profile Training tab) — vertical, 4-per-row grid. */
+function ProfileTrainingCard({
+  item,
+  index,
+  onOpen,
+}: {
+  item: MyCourse;
+  index: number;
+  onOpen: () => void;
+}) {
+  const { course, enrollment } = item;
+  const isCompleted = enrollment.status === "completed";
+  const pct = Math.min(100, Math.max(0, enrollment.progressPct));
+
+  return (
+    <motion.button
+      type="button"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.04 }}
+      onClick={onOpen}
+      className="group flex h-full flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
+      data-testid={`profile-course-${course.id}`}
+    >
+      <div className="relative aspect-video w-full overflow-hidden">
+        {course.thumbnail_url ? (
+          <img
+            src={course.thumbnail_url}
+            alt=""
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600">
+            {courseInitials(course.title) ? (
+              <span className="text-xl font-bold tracking-wide text-white/90">{courseInitials(course.title)}</span>
+            ) : (
+              <GraduationCap className="h-7 w-7 text-white/90" />
+            )}
+          </div>
+        )}
+        <span
+          className={cn(
+            "absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold backdrop-blur-sm",
+            isCompleted ? "bg-emerald-500/85 text-white" : "bg-amber-500/85 text-white",
+          )}
+        >
+          {isCompleted ? <CheckCircle2 className="h-2.5 w-2.5" /> : <Clock className="h-2.5 w-2.5" />}
+          {isCompleted ? "Completed" : "In progress"}
+        </span>
+      </div>
+
+      <div className="flex flex-1 flex-col p-4">
+        {course.category ? (
+          <span className="inline-flex w-fit items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
+            {course.category}
+          </span>
+        ) : null}
+
+        <h4 className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug text-slate-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
+          {course.title}
+        </h4>
+
+        <div className="mt-auto pt-3">
+          <div className="mb-1 flex items-center justify-between text-[11px] font-medium">
+            <span className={cn(isCompleted ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-slate-400")}>
+              {isCompleted ? "Done" : "Progress"}
+            </span>
+            <span className="text-slate-500 tabular-nums dark:text-slate-400">{pct}%</span>
+          </div>
+          <HubProgressBar value={pct} size="sm" />
+        </div>
+      </div>
+    </motion.button>
+  );
+}
 
 const MOCK_ACHIEVEMENTS = [
   { id: "a1", title: "Top Seller", description: "Highest revenue in a single month", icon: Trophy, color: "from-amber-500 to-orange-500", earned: true, date: "Jan 2026" },
@@ -730,6 +813,44 @@ export default function HubProfiles() {
     },
   });
 
+  // === Real training data (replaces the old MOCK_TRAINING) ===
+  const [, navigate] = useLocation();
+  const { data: myEnrollments = [] } = useMyEnrollments();
+  const { data: trainingCourses = [] } = useTrainingCourses();
+  const openCourse = (courseId: string) => navigate(`/hub/training?course=${courseId}`);
+
+  // Join enrollments → their course rows (dropping any whose course is no longer
+  // published), then surface the least-finished in-progress course first.
+  const myCourses = useMemo<MyCourse[]>(() => {
+    const byId = new Map(trainingCourses.map((c) => [c.id, c]));
+    return myEnrollments
+      .map((enrollment) => {
+        const course = byId.get(enrollment.courseId);
+        return course ? { course, enrollment } : null;
+      })
+      .filter((x): x is MyCourse => x !== null)
+      .sort((a, b) => {
+        const aDone = a.enrollment.status === "completed" ? 1 : 0;
+        const bDone = b.enrollment.status === "completed" ? 1 : 0;
+        if (aDone !== bDone) return aDone - bDone;
+        return a.enrollment.progressPct - b.enrollment.progressPct;
+      });
+  }, [myEnrollments, trainingCourses]);
+
+  const trainingSummary = useMemo(() => {
+    const total = myCourses.length;
+    const completed = myCourses.filter((c) => c.enrollment.status === "completed").length;
+    const inProgress = myCourses.filter(
+      (c) => c.enrollment.status !== "completed" && c.enrollment.progressPct > 0,
+    ).length;
+    const notStarted = myCourses.filter(
+      (c) => c.enrollment.status !== "completed" && c.enrollment.progressPct === 0,
+    ).length;
+    const avgProgress =
+      total === 0 ? 0 : Math.round(myCourses.reduce((s, c) => s + c.enrollment.progressPct, 0) / total);
+    return { total, completed, inProgress, notStarted, avgProgress };
+  }, [myCourses]);
+
   const defaultBio = agentProfiles[0].bio;
   const defaultExtendedBio = `${defaultBio} Passionate about creating unforgettable holiday experiences and helping clients find their perfect getaway. Completed over 200 site inspections across Europe and beyond. Known for exceptional first-call close rates and deep destination knowledge.`;
 
@@ -1114,7 +1235,7 @@ export default function HubProfiles() {
                   </div>
                   <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
                   <div className="text-center">
-                    <p className="text-lg font-bold text-slate-900 dark:text-white">{profile.trainingProgress}%</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{trainingSummary.avgProgress}%</p>
                     <p className="text-[10px] text-slate-500 uppercase tracking-wider">Training</p>
                   </div>
                   <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
@@ -1341,16 +1462,19 @@ export default function HubProfiles() {
                   <div className="mt-3">
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-slate-500">Overall Completion</span>
-                      <span className="font-bold text-slate-700 dark:text-slate-300">{profile.trainingProgress}%</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{trainingSummary.avgProgress}%</span>
                     </div>
-                    <HubProgressBar value={profile.trainingProgress} />
+                    <HubProgressBar value={trainingSummary.avgProgress} />
                     <div className="mt-3 space-y-1.5">
-                      {MOCK_TRAINING.filter((t) => t.progress < 100).slice(0, 3).map((t) => (
-                        <div key={t.id} className="flex items-center justify-between">
-                          <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate max-w-[180px]">{t.title}</span>
-                          <span className="text-[10px] font-medium text-slate-500">{t.progress}%</span>
+                      {myCourses.filter((c) => c.enrollment.status !== "completed").slice(0, 3).map((c) => (
+                        <div key={c.course.id} className="flex items-center justify-between">
+                          <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate max-w-[180px]">{c.course.title}</span>
+                          <span className="text-[10px] font-medium text-slate-500">{c.enrollment.progressPct}%</span>
                         </div>
                       ))}
+                      {myCourses.length === 0 && (
+                        <p className="text-[11px] text-slate-400">No courses enrolled yet.</p>
+                      )}
                     </div>
                   </div>
                   <button
@@ -1439,129 +1563,58 @@ export default function HubProfiles() {
 
           {activeTab === "training" && (
             <motion.div key="training" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-                <div className="space-y-3">
-                  {MOCK_TRAINING.map((t) => (
-                    <motion.div
-                      key={t.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "h-10 w-10 rounded-lg flex items-center justify-center",
-                            t.progress === 100 ? "bg-emerald-50 dark:bg-emerald-500/10" :
-                            t.progress > 0 ? "bg-blue-50 dark:bg-blue-500/10" :
-                            "bg-slate-100 dark:bg-slate-800"
-                          )}>
-                            {t.progress === 100 ? (
-                              <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                            ) : (
-                              <GraduationCap className={cn("h-5 w-5", t.progress > 0 ? "text-blue-500" : "text-slate-400")} />
-                            )}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{t.title}</h4>
-                              {t.mandatory && (
-                                <span className="text-[9px] rounded-full bg-red-50 px-1.5 py-0.5 font-medium text-red-600 dark:bg-red-500/10 dark:text-red-400">
-                                  Mandatory
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 mt-0.5">
-                              <span className="text-xs text-slate-500 flex items-center gap-1">
-                                <Clock className="h-3 w-3" /> {t.duration}
-                              </span>
-                              {t.score !== null && (
-                                <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                                  Score: {t.score}%
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          {t.progress === 100 ? (
-                            <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border-0 text-[10px]">
-                              Completed
-                            </Badge>
-                          ) : t.progress > 0 ? (
-                            <Button size="sm" className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs">
-                              Continue
-                            </Button>
-                          ) : (
-                            <Button size="sm" variant="outline" className="rounded-lg text-xs">
-                              Start
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                      {t.progress > 0 && t.progress < 100 && (
-                        <div className="mt-3">
-                          <div className="flex items-center justify-between text-[10px] mb-1">
-                            <span className="text-slate-500">Progress</span>
-                            <span className="font-medium text-slate-600 dark:text-slate-400">{t.progress}%</span>
-                          </div>
-                          <HubProgressBar value={t.progress} size="sm" />
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
+              {myCourses.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white py-16 text-center dark:border-slate-800 dark:bg-slate-900">
+                  <div className="grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                    <GraduationCap className="h-7 w-7" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">No courses enrolled yet</h3>
+                  <p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+                    Browse the Training Centre and enroll in a course to track your progress here.
+                  </p>
+                  <Button
+                    onClick={() => navigate("/hub/training")}
+                    className="mt-4 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                    data-testid="button-profile-browse-training"
+                  >
+                    Browse Training Centre
+                  </Button>
                 </div>
-
-                {/* Training Sidebar */}
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Training Summary</h3>
-                    <div className="space-y-3">
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-slate-500">Overall</span>
-                          <span className="font-bold">{profile.trainingProgress}%</span>
-                        </div>
-                        <HubProgressBar value={profile.trainingProgress} />
-                      </div>
-                      <Separator />
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="text-center p-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10">
-                          <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                            {MOCK_TRAINING.filter((t) => t.progress === 100).length}
-                          </p>
-                          <p className="text-[10px] text-slate-500">Completed</p>
-                        </div>
-                        <div className="text-center p-2 rounded-lg bg-blue-50 dark:bg-blue-500/10">
-                          <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                            {MOCK_TRAINING.filter((t) => t.progress > 0 && t.progress < 100).length}
-                          </p>
-                          <p className="text-[10px] text-slate-500">In Progress</p>
-                        </div>
-                        <div className="text-center p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10">
-                          <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                            {MOCK_TRAINING.filter((t) => t.mandatory && t.progress < 100).length}
-                          </p>
-                          <p className="text-[10px] text-slate-500">Required</p>
-                        </div>
-                        <div className="text-center p-2 rounded-lg bg-slate-100 dark:bg-slate-800">
-                          <p className="text-lg font-bold text-slate-600 dark:text-slate-400">
-                            {MOCK_TRAINING.filter((t) => t.progress === 0).length}
-                          </p>
-                          <p className="text-[10px] text-slate-500">Not Started</p>
-                        </div>
-                      </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Summary stat row */}
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                      <p className="text-2xl font-bold text-slate-900 dark:text-white">{trainingSummary.total}</p>
+                      <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">Enrolled</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                      <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{trainingSummary.inProgress}</p>
+                      <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">In Progress</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                      <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{trainingSummary.completed}</p>
+                      <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">Completed</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                      <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{trainingSummary.avgProgress}%</p>
+                      <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-500">Avg Progress</p>
                     </div>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-2">Avg. Score</h3>
-                    <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                      {Math.round(MOCK_TRAINING.filter((t) => t.score !== null).reduce((sum, t) => sum + (t.score || 0), 0) / MOCK_TRAINING.filter((t) => t.score !== null).length)}%
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">Across {MOCK_TRAINING.filter((t) => t.score !== null).length} completed modules</p>
+
+                  {/* Enrolled courses — 4 cards per row */}
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {myCourses.map((item, i) => (
+                      <ProfileTrainingCard
+                        key={item.course.id}
+                        item={item}
+                        index={i}
+                        onOpen={() => openCourse(item.course.id)}
+                      />
+                    ))}
                   </div>
                 </div>
-              </div>
+              )}
             </motion.div>
           )}
 

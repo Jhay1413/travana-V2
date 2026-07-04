@@ -131,9 +131,11 @@ export interface ChargesFilters {
 const BASE = "/api/v2/platform-admin";
 
 export const platformAdminApi = {
-  // Organizations
-  listOrgs: async (): Promise<OrgSummary[]> => {
-    const { data } = await axiosClient.get<OrgSummary[]>(`${BASE}/organizations`);
+  // Organizations. Optional `search` filters server-side by name/slug (capped
+  // to 50 results) for a searchable org picker; omitted → the full list.
+  listOrgs: async (search?: string): Promise<OrgSummary[]> => {
+    const qs = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : "";
+    const { data } = await axiosClient.get<OrgSummary[]>(`${BASE}/organizations${qs}`);
     return data ?? [];
   },
   getOrg: async (id: string): Promise<OrgSummary> => {

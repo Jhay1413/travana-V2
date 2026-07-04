@@ -313,16 +313,17 @@ export default function SocialPostsBoard() {
     if (r) { rangeStart = r.rangeStart; rangeEnd = r.rangeEnd; }
   }
 
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, rangeStart, rangeEnd, viewMode === "unscheduled");
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, rangeStart, rangeEnd, viewMode === "unscheduled", viewMode === "portal");
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
+  // Portal filtering is now server-side (showOnPortal param) so it covers the
+  // full dataset across pages, not just the loaded ones — just flatten here.
   const filteredPosts = useMemo<SocialPost[]>(() => {
     if (!data?.pages) return [];
     const allQuotes: SocialPost[] = [];
     data.pages.forEach((page) => { page.quotes.forEach((quote) => { allQuotes.push({ quote: quote as EnrichedQuote, clientId: quote.client_id || "" }); }); });
-    if (viewMode === "portal") return allQuotes.filter((p) => p.quote.show_on_portal);
     return allQuotes;
-  }, [data, viewMode]);
+  }, [data]);
 
   useEffect(() => {
     if (!loadMoreRef.current || !hasNextPage || isFetchingNextPage) return;
@@ -436,11 +437,11 @@ export default function SocialPostsBoard() {
     <div className="space-y-4">
       <div className="glass ringed grain rounded-2xl p-4">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="relative flex-1">
+          <div className="relative w-full sm:w-64 sm:shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-black/40 dark:text-white/40" />
-            <Input placeholder="Search by title, hotel, airport, destination..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10" data-testid="input-search-social-posts" />
+            <Input placeholder="Search title, hotel, destination..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10" data-testid="input-search-social-posts" />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <Button
               size="sm"
               variant={viewMode === "scheduled" ? "default" : "outline"}

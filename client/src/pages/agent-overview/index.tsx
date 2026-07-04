@@ -16,13 +16,14 @@ import { PipelineTab } from "@/features/agent-overview/components/pipeline-tab";
 import { SocialPostsTab, type SocialFilter } from "@/features/agent-overview/components/social-posts-tab";
 import { NewsTab } from "@/features/agent-overview/components/news-tab";
 import { NotesTab } from "@/features/agent-overview/components/notes-tab";
+import { MyCoursesTab } from "@/features/agent-overview/components/my-courses-tab";
 import { PinnedSection } from "@/features/agent-overview/components/pinned-section";
 import { EngagementSection } from "@/features/agent-overview/components/engagement-section";
 import { ExpiringQuotesSection } from "@/features/agent-overview/components/expiring-quotes-section";
 
 export default function AgentOverviewPage() {
   const [tab, setTab] = useState<
-    "whats-on" | "pipeline" | "calendar" | "news" | "daily-goals"
+    "whats-on" | "pipeline" | "calendar" | "news" | "daily-goals" | "my-courses"
   >("whats-on");
   const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("today");
   const [whatsOnDate, setWhatsOnDate] = useState<string>(
@@ -106,6 +107,9 @@ export default function AgentOverviewPage() {
                 <TabsTrigger value="daily-goals" className="rounded-xl" data-testid="tab-overview-daily-goals">
                   Notes
                 </TabsTrigger>
+                <TabsTrigger value="my-courses" className="rounded-xl" data-testid="tab-overview-my-courses">
+                  My Courses
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -145,6 +149,10 @@ export default function AgentOverviewPage() {
 
             <TabsContent value="daily-goals" className="mt-0">
               <NotesTab />
+            </TabsContent>
+
+            <TabsContent value="my-courses" className="mt-0">
+              <MyCoursesTab />
             </TabsContent>
           </Tabs>
         </Card>

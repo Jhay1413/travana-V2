@@ -41,6 +41,7 @@ export { useOpportunityEnquiries, useOpportunityQuotes, useOpportunityBookings, 
 export { useSmsTemplates, smsKeys } from "@/features/sms/api/use-sms-queries";
 export {
   useAdminOrgs,
+  useAdminOrgSearch,
   useAdminOrg,
   useAdminUsers,
   useAdminUser,

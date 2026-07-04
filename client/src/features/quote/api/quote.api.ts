@@ -18,13 +18,14 @@ export const quoteApi = {
     return data;
   },
 
-  getFreeQuotes: async (page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", unscheduledOnly = false): Promise<FreeQuotesResponse> => {
+  getFreeQuotes: async (page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", unscheduledOnly = false, showOnPortal = false): Promise<FreeQuotesResponse> => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (scheduledOnly) params.set("scheduledOnly", "true");
     if (scheduledOnly && scheduleFilter !== "none") params.set("scheduleFilter", scheduleFilter);
     if (scheduledOnly && rangeStart) params.set("rangeStart", rangeStart);
     if (scheduledOnly && rangeEnd) params.set("rangeEnd", rangeEnd);
     if (unscheduledOnly) params.set("unscheduledOnly", "true");
+    if (showOnPortal) params.set("showOnPortal", "true");
     if (search) params.set("search", search);
     const { data } = await axiosClient.get<FreeQuotesResponse>(`/api/v2/quotes/free?${params}`);
     return data;

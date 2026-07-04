@@ -54,4 +54,11 @@ export const trainingController = {
     const course = await trainingService.archiveCourse(id, scope);
     return successResponse(res, course, 'Course archived successfully');
   }),
+
+  deleteCourse: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const id = req.params.id as string;
+    await trainingService.deleteCourse(id, scope);
+    return successResponse(res, null, 'Course deleted successfully');
+  }),
 };

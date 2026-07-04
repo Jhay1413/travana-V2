@@ -12,6 +12,8 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HubSectionHeader, HubBadge, HubEmptyState } from "@/features/hub/components/hub-components";
 import { useCourseContent } from "@/features/hub/api/use-training-queries";
+import { useAdminOrgSearch, useAdminOrg } from "@/hooks/queries";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   useCreateCourse,
   useUpdateCourse,
@@ -25,18 +27,32 @@ import { TrainingLessonEditor } from "./training-lesson-editor";
 import { TrainingQuizBuilder } from "./training-quiz-builder";
 import { LessonRow } from "./training-lesson-row";
 import { LessonFormDialog, EMPTY_LESSON_FORM_VALUES, type LessonFormValues } from "./training-lesson-form-dialog";
+import { TrainingThumbnailUpload } from "./training-thumbnail-upload";
 import { COURSE_CATEGORIES, type CourseVisibility } from "@/features/hub/types/training.types";
 import type { DraftLesson } from "@/features/hub/types/training-admin.types";
 
-const courseFormSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  category: z.string().min(1, "Category is required"),
-  description: z.string().optional(),
-  thumbnailUrl: z.string().optional(),
-  visibility: z.enum(["global", "org"]),
-  passingScore: z.coerce.number().int().min(0).max(100),
-  requireContentBeforeQuiz: z.boolean(),
-});
+const courseFormSchema = z
+  .object({
+    title: z.string().min(1, "Title is required"),
+    category: z.string().min(1, "Category is required"),
+    description: z.string().optional(),
+    thumbnailUrl: z.string().optional(),
+    visibility: z.enum(["global", "org"]),
+    // Which organization the course belongs to — required only for org-scoped
+    // courses (global courses are visible to every tenant, so no org).
+    orgId: z.string().optional(),
+    passingScore: z.coerce.number().int().min(0).max(100),
+    requireContentBeforeQuiz: z.boolean(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.visibility === "org" && !val.orgId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["orgId"],
+        message: "Select an organization",
+      });
+    }
+  });
 
 type CourseFormValues = z.infer<typeof courseFormSchema>;
 
@@ -46,6 +62,7 @@ const EMPTY_COURSE: CourseFormValues = {
   description: "",
   thumbnailUrl: "",
   visibility: "global",
+  orgId: "",
   passingScore: 80,
   requireContentBeforeQuiz: true,
 };
@@ -95,6 +112,20 @@ export default function TrainingCourseEditor() {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [savingProgress, setSavingProgress] = useState<{ done: number; total: number } | null>(null);
 
+  // Org picker (server-side searchable select) for org-scoped courses. The typed
+  // term is debounced before hitting the platform-admin org search endpoint.
+  const [orgSearch, setOrgSearch] = useState("");
+  const [debouncedOrgSearch, setDebouncedOrgSearch] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedOrgSearch(orgSearch), 250);
+    return () => clearTimeout(t);
+  }, [orgSearch]);
+  const { data: orgResults = [], isFetching: orgsSearching } = useAdminOrgSearch(debouncedOrgSearch);
+  const selectedOrgId = form.watch("orgId");
+  // Resolve the chosen org's name directly by id so it displays even when it
+  // isn't in the current (filtered) search results — e.g. editing an existing course.
+  const { data: selectedOrg } = useAdminOrg(selectedOrgId || undefined);
+
   useEffect(() => {
     if (course) {
       form.reset({
@@ -103,6 +134,7 @@ export default function TrainingCourseEditor() {
         description: course.description ?? "",
         thumbnailUrl: course.thumbnail_url ?? "",
         visibility: course.visibility,
+        orgId: course.org_id ?? "",
         passingScore: course.passing_score,
         requireContentBeforeQuiz: course.require_content_before_quiz,
       });
@@ -177,6 +209,9 @@ export default function TrainingCourseEditor() {
       description: values.description || undefined,
       thumbnailUrl: values.thumbnailUrl || undefined,
       visibility: values.visibility as CourseVisibility,
+      // Only org-scoped courses carry an orgId; global courses clear it so the
+      // server stores org_id = NULL.
+      orgId: values.visibility === "org" ? values.orgId : null,
       passingScore: values.passingScore,
       requireContentBeforeQuiz: values.requireContentBeforeQuiz,
     };
@@ -373,9 +408,13 @@ export default function TrainingCourseEditor() {
                 name="thumbnailUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Thumbnail URL</FormLabel>
+                    <FormLabel>Thumbnail</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="https://..." data-testid="input-course-thumbnail" />
+                      <TrainingThumbnailUpload
+                        thumbnailUrl={field.value || null}
+                        onUploaded={(url) => field.onChange(url)}
+                        onRemove={() => field.onChange("")}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -412,7 +451,14 @@ export default function TrainingCourseEditor() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Visibility</FormLabel>
-                      <Select value={field.value} onValueChange={(v) => field.onChange(v as CourseVisibility)}>
+                      <Select
+                        value={field.value}
+                        onValueChange={(v) => {
+                          field.onChange(v as CourseVisibility);
+                          // Global courses have no org — clear any stale selection.
+                          if (v === "global") form.setValue("orgId", "");
+                        }}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-course-visibility">
                             <SelectValue />
@@ -420,7 +466,7 @@ export default function TrainingCourseEditor() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="global">Global (all tenants)</SelectItem>
-                          <SelectItem value="org">This organization only</SelectItem>
+                          <SelectItem value="org">Specific organization</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -448,6 +494,31 @@ export default function TrainingCourseEditor() {
                   )}
                 />
               </div>
+
+              {form.watch("visibility") === "org" && (
+                <FormField
+                  control={form.control}
+                  name="orgId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Organization</FormLabel>
+                      <SearchableSelect
+                        value={field.value || ""}
+                        onValueChange={field.onChange}
+                        options={orgResults.map((o) => ({ value: o.id, label: o.name }))}
+                        onSearch={setOrgSearch}
+                        isLoading={orgsSearching}
+                        selectedLabel={selectedOrg?.name}
+                        placeholder="Select an organization"
+                        searchPlaceholder="Search organizations…"
+                        emptyMessage="No organizations found"
+                        data-testid="select-course-org"
+                      />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}

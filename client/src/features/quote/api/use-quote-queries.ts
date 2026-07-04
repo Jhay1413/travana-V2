@@ -38,11 +38,12 @@ export function useFreeQuotesInfinite(
   rangeStart = "",
   rangeEnd = "",
   unscheduledOnly = false,
+  showOnPortal = false,
   options?: { enabled?: boolean },
 ) {
   return useInfiniteQuery({
-    queryKey: [...quoteKeys.freeQuotes(), scheduledOnly ? "scheduled" : "all", scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly],
-    queryFn: ({ pageParam = 0 }) => quoteApi.getFreeQuotes(pageParam, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly),
+    queryKey: [...quoteKeys.freeQuotes(), scheduledOnly ? "scheduled" : "all", scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal],
+    queryFn: ({ pageParam = 0 }) => quoteApi.getFreeQuotes(pageParam, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal),
     getNextPageParam: (lastPage) => {
       return lastPage.hasMore ? lastPage.page + 1 : undefined;
     },

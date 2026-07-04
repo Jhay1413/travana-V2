@@ -121,11 +121,25 @@ export const trainingApi = {
     return data;
   },
 
+  /** Permanently delete a course (platform_admin). Cascades to lessons, quiz, enrollments, certificates. */
+  async deleteCourse(id: string): Promise<void> {
+    await axios.delete(`${BASE}/${id}`);
+  },
+
   /** Presign a direct-to-S3 PUT for a video lesson (Option A, single PUT — see plan §5). */
   async presignVideo(input: PresignVideoInput): Promise<PresignVideoResult> {
     const { data } = await axios.post<PresignVideoResult>(`${UPLOADS_BASE}/presign`, {
       ...input,
       kind: "video" as const,
+    });
+    return data;
+  },
+
+  /** Presign a direct-to-S3 PUT for a course thumbnail image (same flow as video). */
+  async presignImage(input: PresignVideoInput): Promise<PresignVideoResult> {
+    const { data } = await axios.post<PresignVideoResult>(`${UPLOADS_BASE}/presign`, {
+      ...input,
+      kind: "image" as const,
     });
     return data;
   },
@@ -185,6 +199,30 @@ export async function uploadVideoToS3(
   onProgress: (pct: number) => void,
 ): Promise<{ playbackUrl: string; key: string }> {
   const { uploadUrl, key, playbackUrl } = await trainingApi.presignVideo({
+    fileName: file.name,
+    contentType: file.type,
+  });
+
+  await rawAxios.put(uploadUrl, file, {
+    headers: { "Content-Type": file.type },
+    onUploadProgress: (e) => {
+      if (e.total) onProgress(Math.round((e.loaded / e.total) * 100));
+    },
+  });
+
+  return { playbackUrl, key };
+}
+
+/**
+ * Direct-to-S3 course thumbnail image upload — same single presigned PUT flow
+ * as {@link uploadVideoToS3}, using a bare axios instance so no app session
+ * cookies are sent to S3. Returns the stored proxy URL to save as `thumbnailUrl`.
+ */
+export async function uploadImageToS3(
+  file: File,
+  onProgress: (pct: number) => void,
+): Promise<{ playbackUrl: string; key: string }> {
+  const { uploadUrl, key, playbackUrl } = await trainingApi.presignImage({
     fileName: file.name,
     contentType: file.type,
   });

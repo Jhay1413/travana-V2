@@ -163,6 +163,18 @@ export const trainingService = {
     return updated;
   },
 
+  /**
+   * Permanently delete a course. `getCourse` enforces the same visibility gate
+   * as every other authoring op (404-as-permission), so a caller can only
+   * delete a course they can see. The FK cascade on `course_id` removes the
+   * course's lessons, assets, quiz, questions, choices, enrollments, progress,
+   * attempts and certificates in one shot — this is irreversible.
+   */
+  async deleteCourse(id: string, scope: ScopeOrTrusted): Promise<void> {
+    await this.getCourse(id, scope);
+    await trainingRepository.deleteCourse(id);
+  },
+
   /** Admin: every course in scope, any status. */
   async listCourses(scope: ScopeOrTrusted): Promise<TrainingCourse[]> {
     return trainingRepository.listCoursesForAdmin(scope);

@@ -17,6 +17,7 @@ import {
 export const platformAdminKeys = {
   all:        ["platform-admin"] as const,
   orgs:       () => [...platformAdminKeys.all, "orgs"] as const,
+  orgSearch:  (search: string) => [...platformAdminKeys.all, "orgs", "search", search] as const,
   org:        (id: string) => [...platformAdminKeys.all, "org", id] as const,
   users:      (filters: UsersListFilters) => [...platformAdminKeys.all, "users", filters] as const,
   user:       (id: string) => [...platformAdminKeys.all, "user", id] as const,
@@ -32,7 +33,22 @@ export const platformAdminKeys = {
 export function useAdminOrgs() {
   return useQuery<OrgSummary[]>({
     queryKey: platformAdminKeys.orgs(),
-    queryFn:  platformAdminApi.listOrgs,
+    // Explicit arrow: listOrgs now takes an optional `search`, so we must not
+    // pass it directly as queryFn (react-query would hand it its context object).
+    queryFn:  () => platformAdminApi.listOrgs(),
+  });
+}
+
+/**
+ * Searchable org lookup — server-side filtered by name/slug (capped to 50).
+ * Pass the (debounced) search term; an empty term returns the newest orgs.
+ * Distinct cache slot from {@link useAdminOrgs} so the two never collide.
+ */
+export function useAdminOrgSearch(search: string) {
+  return useQuery<OrgSummary[]>({
+    queryKey: platformAdminKeys.orgSearch(search),
+    queryFn:  () => platformAdminApi.listOrgs(search),
+    placeholderData: (prev) => prev,
   });
 }
 

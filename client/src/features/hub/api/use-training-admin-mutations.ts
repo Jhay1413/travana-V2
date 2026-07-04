@@ -66,6 +66,22 @@ export function useArchiveCourse() {
   });
 }
 
+/** Permanently delete a course (platform_admin). Irreversible — cascades to all its content, enrollments and certificates. */
+export function useDeleteCourse() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => trainingApi.deleteCourse(id),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.adminList() });
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(id) });
+      // A deleted course must also disappear from the learner's published list
+      // and their enrollments.
+      queryClient.invalidateQueries({ queryKey: trainingKeys.list() });
+      queryClient.invalidateQueries({ queryKey: trainingKeys.myEnrollments() });
+    },
+  });
+}
+
 export function useCreateLesson() {
   const queryClient = useQueryClient();
   return useMutation({

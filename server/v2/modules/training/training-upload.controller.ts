@@ -5,7 +5,7 @@ import { successResponse } from '../../utils/response';
 
 export const trainingUploadController = {
   presign: asyncHandler(async (req: Request, res: Response) => {
-    const result = await trainingUploadService.presignVideoUpload(req.body);
+    const result = await trainingUploadService.presignUpload(req.body);
     return successResponse(res, result, 'Upload URL generated successfully');
   }),
 };

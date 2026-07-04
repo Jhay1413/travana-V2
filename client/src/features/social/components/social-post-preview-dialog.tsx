@@ -284,6 +284,41 @@ export function SocialPostPreviewDialog({
 
   const selectedUrlCount = urlImages.filter(img => img.selected).length;
 
+  // Tokenize once per hashtags change instead of re-splitting the string
+  // several times on every render (the live preview read it 3-4×).
+  const hashtagTokens = useMemo(() => hashtags.split(/\s+/).filter(Boolean), [hashtags]);
+
+  /**
+   * Force plain-text paste into the Post Content editor.
+   *
+   * Without this, the browser's default paste injects the clipboard's full
+   * rich-HTML payload (inline styles, images, tables from a webpage/Word)
+   * verbatim into the contentEditable. Laying out that huge DOM subtree is
+   * synchronous and freezes the whole page. We insert only the plain text,
+   * which is what the post ultimately needs anyway.
+   */
+  const handlePostPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    if (!text) return;
+    // execCommand keeps the native caret position + undo stack and converts
+    // newlines into the editor's block/<br> markup. Fall back to a manual
+    // range insert where it isn't available.
+    const inserted = document.execCommand("insertText", false, text);
+    if (!inserted) {
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      const node = document.createTextNode(text);
+      range.insertNode(node);
+      range.setStartAfter(node);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
+
   const handleSaveAndSchedule = async () => {
     if (!travelDeal) return;
     if (!scheduleDate) {
@@ -315,7 +350,7 @@ export function SocialPostPreviewDialog({
         data: {
           post: currentHtml,
           subtitle,
-          hashtags: hashtags.split(/\s+/).filter((h) => h.startsWith("#")),
+          hashtags: hashtagTokens.filter((h) => h.startsWith("#")),
         },
       });
     } catch (err) {
@@ -453,18 +488,14 @@ export function SocialPostPreviewDialog({
                       <p className="text-[11px] text-black/55 dark:text-white/55 italic">{subtitle}</p>
                     )}
                     <div className="flex flex-wrap gap-1 pt-1">
-                      {hashtags
-                        .split(/\s+/)
-                        .filter(Boolean)
-                        .slice(0, 6)
-                        .map((tag, i) => (
-                          <span key={i} className="text-[10px] text-blue-500 dark:text-blue-400 font-medium">
-                            {tag}
-                          </span>
-                        ))}
-                      {hashtags.split(/\s+/).filter(Boolean).length > 6 && (
+                      {hashtagTokens.slice(0, 6).map((tag, i) => (
+                        <span key={i} className="text-[10px] text-blue-500 dark:text-blue-400 font-medium">
+                          {tag}
+                        </span>
+                      ))}
+                      {hashtagTokens.length > 6 && (
                         <span className="text-[10px] text-black/30 dark:text-white/30">
-                          +{hashtags.split(/\s+/).filter(Boolean).length - 6} more
+                          +{hashtagTokens.length - 6} more
                         </span>
                       )}
                     </div>
@@ -500,6 +531,7 @@ export function SocialPostPreviewDialog({
                     ref={postRef}
                     contentEditable
                     suppressContentEditableWarning
+                    onPaste={handlePostPaste}
                     className="min-h-[240px] max-h-[380px] overflow-y-auto rounded-xl px-4 py-3 text-[13px] leading-[1.7] bg-white dark:bg-slate-800 border border-black/8 dark:border-white/8 shadow-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-shadow"
                     data-testid="editor-post-content"
                   />

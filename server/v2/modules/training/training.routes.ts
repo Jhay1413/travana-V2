@@ -68,6 +68,7 @@ router.post('/courses', requireOrgRole(['platform_admin']), validate(createCours
 router.patch('/courses/:id', requireOrgRole(['platform_admin']), validate(updateCourseValidator), trainingController.updateCourse);
 router.post('/courses/:id/publish', requireOrgRole(['platform_admin']), validate(courseIdValidator), trainingController.publishCourse);
 router.post('/courses/:id/archive', requireOrgRole(['platform_admin']), validate(courseIdValidator), trainingController.archiveCourse);
+router.delete('/courses/:id', requireOrgRole(['platform_admin']), validate(courseIdValidator), trainingController.deleteCourse);
 router.put('/courses/:id/quiz', requireOrgRole(['platform_admin']), validate(upsertQuizValidator), trainingQuizController.upsertQuiz);
 
 // Video: presigned direct-to-S3 PUT — server never buffers the file (see

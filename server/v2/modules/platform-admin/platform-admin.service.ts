@@ -39,8 +39,8 @@ async function recordAudit(params: {
 }
 
 export const platformAdminService = {
-  async listOrganizations() {
-    return platformAdminRepository.findAllOrgsWithCounts();
+  async listOrganizations(search?: string) {
+    return platformAdminRepository.findAllOrgsWithCounts(search);
   },
 
   async getOrganization(id: string) {

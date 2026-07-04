@@ -332,7 +332,7 @@ export function WhatsOnTab({
                       <span
                         role="button"
                         tabIndex={0}
-                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-black/35 opacity-0 transition hover:bg-black/[0.06] hover:text-black/70 group-hover:opacity-100 dark:text-white/40 dark:hover:bg-white/10"
+                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-black/35 transition hover:bg-black/[0.06] hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10"
                         data-testid={`button-edit-whats-on-task-${task.id}`}
                         onClick={(e) => {
                           e.stopPropagation();

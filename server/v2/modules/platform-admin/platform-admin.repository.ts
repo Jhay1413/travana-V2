@@ -13,8 +13,8 @@ export interface ListUsersFilters {
 // Cross-tenant queries — only ever called from inside the platform-admin module.
 // New methods MUST be suffixed *AcrossOrgs (reads) or scoped to a single :id (writes).
 export const platformAdminRepository = {
-  async findAllOrgsWithCounts(): Promise<OrgSummary[]> {
-    return db
+  async findAllOrgsWithCounts(search?: string): Promise<OrgSummary[]> {
+    const base = db
       .select({
         id:          organization.id,
         name:        organization.name,
@@ -26,8 +26,19 @@ export const platformAdminRepository = {
         userCount:   sql<number>`(SELECT COUNT(*)::int FROM "user" WHERE "user"."org_id" = "organization"."id")`,
         branchCount: sql<number>`(SELECT COUNT(*)::int FROM "branches" WHERE "branches"."organization_id" = "organization"."id")`,
       })
-      .from(organization)
-      .orderBy(desc(organization.createdAt));
+      .from(organization);
+
+    // When a search term is supplied (e.g. a searchable org picker), filter by
+    // name/slug and cap the result set — ordered alphabetically for the picker.
+    // No term keeps the original full list (newest first) for the admin table.
+    const term = search?.trim();
+    if (term) {
+      return base
+        .where(or(ilike(organization.name, `%${term}%`), ilike(organization.slug, `%${term}%`)))
+        .orderBy(asc(organization.name))
+        .limit(50);
+    }
+    return base.orderBy(desc(organization.createdAt));
   },
 
   async findOrgByIdWithCounts(id: string): Promise<OrgSummary | null> {

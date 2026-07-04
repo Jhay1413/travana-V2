@@ -1,8 +1,8 @@
 import { useLocation } from "wouter";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { HubSectionHeader, HubBadge, HubEmptyState } from "@/features/hub/components/hub-components";
 import { Button } from "@/components/ui/button";
-import { useAdminCourses, usePublishCourse, useArchiveCourse } from "@/features/hub/api/use-training-admin-mutations";
+import { useAdminCourses, usePublishCourse, useArchiveCourse, useDeleteCourse } from "@/features/hub/api/use-training-admin-mutations";
 import { useToast } from "@/hooks/use-toast";
 import type { CourseStatus } from "@/features/hub/types/training.types";
 
@@ -19,6 +19,7 @@ export default function TrainingAdmin() {
   const { data: courses = [], isLoading, isError } = useAdminCourses();
   const publishCourse = usePublishCourse();
   const archiveCourse = useArchiveCourse();
+  const deleteCourse = useDeleteCourse();
 
   const handlePublish = (id: string) => {
     publishCourse.mutate(id, {
@@ -32,6 +33,19 @@ export default function TrainingAdmin() {
     archiveCourse.mutate(id, {
       onSuccess: () => toast({ title: "Course archived" }),
       onError: () => toast({ title: "Failed to archive course", variant: "destructive" }),
+    });
+  };
+
+  const handleDelete = (id: string, title: string) => {
+    if (
+      !window.confirm(
+        `Permanently delete “${title}”?\n\nThis cannot be undone. It removes the course and all its lessons, quiz, and every learner's enrollment, progress and certificate.`,
+      )
+    )
+      return;
+    deleteCourse.mutate(id, {
+      onSuccess: () => toast({ title: "Course deleted" }),
+      onError: () => toast({ title: "Failed to delete course", variant: "destructive" }),
     });
   };
 
@@ -114,6 +128,16 @@ export default function TrainingAdmin() {
                           Archive
                         </Button>
                       )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDelete(course.id, course.title)}
+                        disabled={deleteCourse.isPending}
+                        className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
+                        data-testid={`button-delete-course-${course.id}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </td>
                 </tr>

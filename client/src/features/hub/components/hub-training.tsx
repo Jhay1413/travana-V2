@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, BookOpen, Check, Settings, Target } from "lucide-react";
 import { HubSectionHeader, HubBadge, HubEmptyState, HubProgressBar } from "@/features/hub/components/hub-components";
@@ -154,7 +154,13 @@ function TrainingCourseCard({
 }
 
 export default function HubTraining() {
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  // Deep link: arriving from the agent dashboard's "My Courses" tab (or any
+  // link) with `?course=<id>` opens that course directly. Read once on mount
+  // so tapping "Back" returns to the catalog without the param re-opening it.
+  const search = useSearch();
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(
+    () => new URLSearchParams(search).get("course"),
+  );
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [, navigate] = useLocation();
   const { orgRole } = useRole();
