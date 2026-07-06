@@ -71,8 +71,11 @@ export interface PortalQuote {
 
 export interface PortalBooking {
   id: string;
+  title: string;
   destination: string;
   hotel: string;
+  price: number;
+  price_per_person: number;
   travel_date: string;
   return_date: string;
   booking_reference: string;
@@ -94,6 +97,9 @@ export interface PortalDeal {
   image_url: string;
   quote_url: string | null;
   tags: string[];
+  /** When the deal was added to the portal (ISO). Present on "Latest Deals"; drives
+   *  the "Expiring soon" banner as it nears the 6-day recency cutoff. */
+  portal_added_at?: string | null;
 }
 
 export interface PortalMessage {
@@ -168,6 +174,7 @@ export const portalKeys = {
   quotes: ["portal", "quotes"] as const,
   bookings: ["portal", "bookings"] as const,
   deals: (country?: string, tag?: string) => ["portal", "deals", country ?? "", tag ?? ""] as const,
+  latestDeals: ["portal", "latestDeals"] as const,
   forYouDeals: ["portal", "forYouDeals"] as const,
   dealFilters: ["portal", "dealFilters"] as const,
   messages: ["portal", "messages"] as const,
@@ -219,8 +226,11 @@ export function usePortalQuotes() {
 
 export function usePortalBookings() {
   return useQuery<PortalBooking[]>({
+    // v2 route: resolves price, destination (via the booking's own primary
+    // accommodation) and imagery the same way the admin booking-details read does.
+    // The legacy v1 /api/portal/bookings returns no price, empty images and "TBC".
+    queryFn: () => portalFetch("/api/v2/portal/bookings"),
     queryKey: portalKeys.bookings,
-    queryFn: () => portalFetch("/api/portal/bookings"),
     retry: false,
     enabled: !!getPortalToken(),
   });
@@ -234,6 +244,20 @@ export function usePortalDeals(country?: string, tag?: string) {
   return useQuery<PortalDeal[]>({
     queryKey: portalKeys.deals(country, tag),
     queryFn: () => portalFetch(`/api/portal/deals${qs ? `?${qs}` : ""}`),
+    retry: false,
+    enabled: !!getPortalToken(),
+    refetchOnWindowFocus: true,
+    refetchOnMount: "always",
+    staleTime: 0,
+  });
+}
+
+/** Home "Latest Deals" — v2 route, limited to deals added to the portal in the last
+ *  6 days. Distinct from usePortalDeals (browse page), which shows all portal deals. */
+export function usePortalLatestDeals() {
+  return useQuery<PortalDeal[]>({
+    queryKey: portalKeys.latestDeals,
+    queryFn: () => portalFetch("/api/v2/portal/deals?recent=1"),
     retry: false,
     enabled: !!getPortalToken(),
     refetchOnWindowFocus: true,

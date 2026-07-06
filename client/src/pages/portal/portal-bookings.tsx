@@ -16,6 +16,10 @@ function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse bg-white/[0.08] rounded-2xl ${className}`} />;
 }
 
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(value);
+}
+
 function formatDate(dateStr: string): string {
   try {
     return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -87,33 +91,55 @@ export default function PortalBookingsPage() {
                 transition={{ delay: idx * 0.1 }}
               >
                 <GlassCard className="overflow-hidden" data-testid={`card-booking-${booking.id}`}>
-                  <div className="relative h-36">
-                    <img
-                      src={booking.image_url}
-                      alt={booking.destination}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      data-testid={`img-booking-${booking.id}`}
-                    />
+                  <div className="relative h-40">
+                    {booking.image_url ? (
+                      <img
+                        src={booking.image_url}
+                        alt={booking.destination}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        data-testid={`img-booking-${booking.id}`}
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full bg-gradient-to-br from-blue-500/30 via-cyan-500/20 to-indigo-500/30 flex items-center justify-center"
+                        data-testid={`img-booking-${booking.id}`}
+                      >
+                        <Briefcase className="w-8 h-8 text-white/30" />
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                    <div className="absolute bottom-3 left-4">
-                      <p className="text-white font-semibold text-lg" data-testid={`text-booking-destination-${booking.id}`}>{booking.destination}</p>
-                      <p className="text-white/60 text-xs flex items-center gap-1">
-                        <MapPin className="w-3 h-3" /> {booking.hotel}
-                      </p>
+                    <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
+                      <div>
+                        <p className="text-white font-semibold text-lg leading-tight" data-testid={`text-booking-title-${booking.id}`}>{booking.title}</p>
+                        <p className="text-white/60 text-xs flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3" /> {booking.destination}
+                        </p>
+                      </div>
+                      {booking.price > 0 && (
+                        <div className="text-right" data-testid={`text-booking-price-${booking.id}`}>
+                          <div className="text-white font-bold text-lg leading-tight">{formatCurrency(booking.price)}</div>
+                          {booking.price_per_person > 0 && (
+                            <div className="text-white/70 text-xs">{formatCurrency(booking.price_per_person)} pp</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="p-4">
-                    <div className="flex items-center gap-3 mb-3 flex-wrap">
+                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                       <span className="flex items-center gap-1 text-white/50 text-xs">
                         <Calendar className="w-3 h-3" />
                         {formatDate(booking.travel_date)} — {formatDate(booking.return_date)}
                       </span>
-                      <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-400 text-xs font-medium" data-testid={`text-booking-ref-${booking.id}`}>
-                        <Hash className="w-3 h-3" />
-                        {booking.booking_reference}
-                      </span>
+                      {booking.booking_reference && (
+                        <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-400 text-xs font-medium" data-testid={`text-booking-ref-${booking.id}`}>
+                          <Hash className="w-3 h-3" />
+                          {booking.booking_reference}
+                        </span>
+                      )}
                     </div>
+                    {booking.hotel && <p className="text-white/50 text-xs mb-3">{booking.hotel}</p>}
                     <a
                       href={booking.documents_url}
                       target="_blank"

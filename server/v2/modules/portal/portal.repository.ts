@@ -17,6 +17,10 @@ import {
   quoteImages,
   accommodation_images,
   booking,
+  booking_accomodation,
+  bookingImages,
+  deal_images,
+  lodge_images,
   quoteTags,
   tags,
   clientTags,
@@ -41,6 +45,7 @@ export interface PortalDealRow {
   accommodationName: string | null;
   destinationName: string | null;
   countryName: string | null;
+  portalAddedAt?: Date | string | null;
 }
 
 export interface PortalQuoteRow {
@@ -63,10 +68,16 @@ export interface PortalQuoteRow {
 
 export interface PortalBookingRow {
   bookingId: string;
+  quoteId: string | null;
+  lodgeId: string | null;
   title: string | null;
   haysRef: string | null;
   supplierRef: string | null;
   salesPrice: string | null;
+  discounts: string | null;
+  serviceCharge: string | null;
+  adult: number | null;
+  child: number | null;
   travelDate: string | Date;
   numNights: number | null;
   accommodationName: string | null;
@@ -402,13 +413,20 @@ export const portalRepository = {
       .limit(limit);
   },
 
-  async findDeals(opts: { country?: string; tag?: string; limit: number }): Promise<PortalDealRow[]> {
+  async findDeals(opts: { country?: string; tag?: string; limit: number; recentDays?: number }): Promise<PortalDealRow[]> {
     const conds: SQL[] = [
       eq(quote.is_active, true),
       isNotNull(quote.quote_token),
       eq(quote.show_on_portal, true),
       eq(quote.isFreeQuote, true),
     ];
+    // "Latest Deals" recency window: only deals added to the portal within the last
+    // N days (portal_added_at). Deals age out of this list once they pass the window.
+    if (opts.recentDays && opts.recentDays > 0) {
+      conds.push(
+        sql`${quote.portal_added_at} IS NOT NULL AND ${quote.portal_added_at} >= now() - make_interval(days => ${opts.recentDays})`,
+      );
+    }
     if (opts.country) conds.push(ilike(country.country_name, opts.country));
     if (opts.tag) {
       conds.push(
@@ -432,6 +450,7 @@ export const portalRepository = {
         accommodationName: accomodation_list.name,
         destinationName: destination.name,
         countryName: country.country_name,
+        portalAddedAt: quote.portal_added_at,
       })
       .from(quote)
       .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
@@ -440,7 +459,7 @@ export const portalRepository = {
       .leftJoin(destination, eq(resorts.destination_id, destination.id))
       .leftJoin(country, eq(destination.country_id, country.id))
       .where(and(...conds))
-      .orderBy(desc(quote.date_created))
+      .orderBy(opts.recentDays ? desc(quote.portal_added_at) : desc(quote.date_created))
       .limit(opts.limit);
   },
 
@@ -505,13 +524,23 @@ export const portalRepository = {
   },
 
   async findClientBookings(clientId: string): Promise<PortalBookingRow[]> {
+    // Resolve accommodation/destination from the booking's OWN primary accommodation
+    // (booking_accomodation), mirroring the canonical booking read. The previous
+    // implementation joined the transaction's latest quote accommodation, which left
+    // most bookings showing "TBC" whenever that quote link didn't line up.
     return db
       .select({
         bookingId: booking.id,
+        quoteId: booking.quote_id,
+        lodgeId: booking.lodge_id,
         title: booking.title,
         haysRef: booking.hays_ref,
         supplierRef: booking.supplier_ref,
         salesPrice: booking.sales_price,
+        discounts: booking.discounts,
+        serviceCharge: booking.service_charge,
+        adult: booking.adult,
+        child: booking.child,
         travelDate: booking.travel_date,
         numNights: booking.num_of_nights,
         accommodationName: accomodation_list.name,
@@ -521,20 +550,86 @@ export const portalRepository = {
       .from(transaction)
       .innerJoin(booking, eq(booking.transaction_id, transaction.id))
       .leftJoin(
-        quote_accomodation,
-        sql`${quote_accomodation.quote_id} = (
-          SELECT q.id FROM quote_table q
-          WHERE q.transaction_id = ${transaction.id}
-          AND q.is_active = true
-          ORDER BY q.date_created DESC LIMIT 1
-        ) AND ${quote_accomodation.is_primary} = true`,
+        booking_accomodation,
+        and(eq(booking_accomodation.booking_id, booking.id), eq(booking_accomodation.is_primary, true)),
       )
-      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+      .leftJoin(accomodation_list, eq(booking_accomodation.accomodation_id, accomodation_list.id))
       .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
       .leftJoin(destination, eq(resorts.destination_id, destination.id))
       .leftJoin(country, eq(destination.country_id, country.id))
       .where(and(eq(transaction.client_id, clientId), eq(booking.is_active, true)))
       .orderBy(desc(booking.travel_date));
+  },
+
+  async findImagesForBookings(
+    bookingIds: string[],
+  ): Promise<Array<{ bookingId: string | null; url: string; isPrimary: boolean | null }>> {
+    if (bookingIds.length === 0) return [];
+    const rows = await db
+      .select({ bookingId: bookingImages.bookingId, url: bookingImages.url, isPrimary: bookingImages.isPrimary })
+      .from(bookingImages)
+      .where(inArray(bookingImages.bookingId, bookingIds));
+    return rows.filter(
+      (r): r is { bookingId: string | null; url: string; isPrimary: boolean | null } => !!r.url,
+    );
+  },
+
+  async findAccommodationImagesForBookings(
+    bookingIds: string[],
+  ): Promise<Array<{ bookingId: string | null; url: string; isPrimary: boolean | null }>> {
+    if (bookingIds.length === 0) return [];
+    const rows = await db
+      .select({
+        bookingId: booking_accomodation.booking_id,
+        url: accommodation_images.image_url,
+        isPrimary: accommodation_images.isPrimary,
+      })
+      .from(booking_accomodation)
+      .innerJoin(
+        accommodation_images,
+        eq(accommodation_images.accommodation_id, booking_accomodation.accomodation_id),
+      )
+      .where(inArray(booking_accomodation.booking_id, bookingIds));
+    return rows.filter(
+      (r): r is { bookingId: string | null; url: string; isPrimary: boolean | null } => !!r.url,
+    );
+  },
+
+  /** Legacy deal_images keyed by booking id (owner_id === booking.id), mirroring the
+   *  canonical booking-details read's fallback source. */
+  async findDealImagesForBookings(
+    bookingIds: string[],
+  ): Promise<Array<{ bookingId: string; url: string; isPrimary: boolean | null }>> {
+    if (bookingIds.length === 0) return [];
+    const rows = await db
+      .select({
+        bookingId: deal_images.owner_id,
+        url: deal_images.image_url,
+        isPrimary: deal_images.isPrimary,
+      })
+      .from(deal_images)
+      .where(inArray(deal_images.owner_id, bookingIds));
+    return rows.filter(
+      (r): r is { bookingId: string; url: string; isPrimary: boolean | null } => !!r.url,
+    );
+  },
+
+  /** Lodge imagery keyed by lodge id, for lodge-based bookings without other imagery. */
+  async findLodgeImagesForBookings(
+    lodgeIds: string[],
+  ): Promise<Array<{ lodgeId: string; url: string; isPrimary: boolean | null }>> {
+    if (lodgeIds.length === 0) return [];
+    const rows = await db
+      .select({
+        lodgeId: lodge_images.lodge_id,
+        url: lodge_images.image_url,
+        isPrimary: lodge_images.isPrimary,
+      })
+      .from(lodge_images)
+      .where(inArray(lodge_images.lodge_id, lodgeIds));
+    return rows.filter(
+      (r): r is { lodgeId: string; url: string; isPrimary: boolean | null } => !!r.url,
+    );
   },
 
   // ── Portal messages (client-side writes / reads) ────────────────────────

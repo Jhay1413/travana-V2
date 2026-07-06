@@ -121,7 +121,10 @@
       "Bash(nslookup package-firewall.replit.local)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" https://registry.npmjs.org/react-player)",
       "Bash(npm view *)",
-      "Bash(DATABASE_URL=\"postgres://user:pass@localhost:5432/placeholder\" npx drizzle-kit generate --name add_course_category)"
+      "Bash(DATABASE_URL=\"postgres://user:pass@localhost:5432/placeholder\" npx drizzle-kit generate --name add_course_category)",
+      "Bash(cat)",
+      "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_MwKDhW0ZcLO5@ep-odd-math-abvmy8d3-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require\" node /tmp/q.mjs)",
+      "Bash(grep -iE '^\\(pg|postgres\\)$|neondatabase')"
     ],
     "additionalDirectories": [
       "/tmp"

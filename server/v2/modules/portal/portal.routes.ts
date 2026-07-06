@@ -247,6 +247,7 @@ async function enrichDealRows(
     accommodationName: string | null;
     destinationName: string | null;
     countryName: string | null;
+    portalAddedAt?: Date | string | null;
   }>,
 ) {
   const quoteIds = results.map((r) => r.id);
@@ -279,6 +280,9 @@ async function enrichDealRows(
     image_url: imageMap[r.id] || '',
     quote_url: r.token ? `/portal/quote/${r.token}` : null,
     tags: tagMap[r.id] ?? [],
+    portal_added_at: r.portalAddedAt
+      ? (r.portalAddedAt instanceof Date ? r.portalAddedAt.toISOString() : r.portalAddedAt)
+      : null,
   }));
 }
 
@@ -300,11 +304,15 @@ portalRouter.get('/deals', async (req: Request, res: Response) => {
   try {
     const filterCountry = ((req.query.country as string) || '').trim();
     const filterTag = ((req.query.tag as string) || '').trim();
+    // "Latest Deals" passes ?recent=1 to limit results to deals added to the portal
+    // within the last 6 days; the browse Deals page omits it and sees all deals.
+    const recentOnly = ((req.query.recent as string) || '') === '1';
 
     const results = await portalRepository.findDeals({
       country: filterCountry || undefined,
       tag: filterTag || undefined,
       limit: 50,
+      recentDays: recentOnly ? 6 : undefined,
     });
     res.json(await enrichDealRows(results));
   } catch (err: any) {
@@ -389,6 +397,60 @@ portalRouter.get('/bookings', portalAuth, async (req: Request, res: Response) =>
     const { clientId } = (req as any).portalClient;
     const results = await portalRepository.findClientBookings(clientId);
 
+    const bookingIds = results.map((r) => r.bookingId);
+    const lodgeIds = results.map((r) => r.lodgeId).filter((id): id is string => !!id);
+    // Resolve imagery to match the canonical booking-details read: the source quote's
+    // images (quote_images) via booking.quote_id first (mirroring /quotes), then the
+    // booking's own images, then legacy deal_images, then its accommodation's images,
+    // then lodge images for lodge-based bookings.
+    const quoteIds = results.map((r) => r.quoteId).filter((id): id is string => !!id);
+    const [quoteImgs, ownImages, dealImages, accomImages, lodgeImages] = await Promise.all([
+      portalRepository.findImagesForQuotes(quoteIds),
+      portalRepository.findImagesForBookings(bookingIds),
+      portalRepository.findDealImagesForBookings(bookingIds),
+      portalRepository.findAccommodationImagesForBookings(bookingIds),
+      portalRepository.findLodgeImagesForBookings(lodgeIds),
+    ]);
+
+    // Prefer quote imagery (primary first, mirroring /quotes).
+    const quoteImageMap: Record<string, string> = {};
+    for (const img of quoteImgs) {
+      if (img.quoteId && (!quoteImageMap[img.quoteId] || img.isPrimary)) {
+        quoteImageMap[img.quoteId] = img.url;
+      }
+    }
+
+    // Per-booking fallbacks in the same precedence the booking-details read uses:
+    // own booking images → deal_images → accommodation images. Each source only fills
+    // a booking that no earlier source resolved (primary image wins within a source).
+    const imageMap: Record<string, string> = {};
+    const fillFrom = (
+      imgs: Array<{ bookingId: string | null; url: string; isPrimary: boolean | null }>,
+    ) => {
+      const resolvedHere = new Set<string>();
+      for (const img of imgs) {
+        if (!img.bookingId || imageMap[img.bookingId]) continue;
+        if (!resolvedHere.has(img.bookingId) || img.isPrimary) {
+          imageMap[img.bookingId] = img.url;
+          resolvedHere.add(img.bookingId);
+        }
+      }
+    };
+    fillFrom(ownImages);
+    fillFrom(dealImages);
+    fillFrom(accomImages);
+
+    // Lodge images are keyed by lodge id — map them onto their bookings as a last resort.
+    const lodgeImageMap: Record<string, string> = {};
+    for (const img of lodgeImages) {
+      if (!lodgeImageMap[img.lodgeId] || img.isPrimary) lodgeImageMap[img.lodgeId] = img.url;
+    }
+    for (const r of results) {
+      if (!imageMap[r.bookingId] && r.lodgeId && lodgeImageMap[r.lodgeId]) {
+        imageMap[r.bookingId] = lodgeImageMap[r.lodgeId];
+      }
+    }
+
     res.json(results.map((r) => {
       const dest = r.destinationName && r.countryName
         ? `${r.destinationName}, ${r.countryName}`
@@ -397,14 +459,23 @@ portalRouter.get('/bookings', portalAuth, async (req: Request, res: Response) =>
       const travelMs = new Date(r.travelDate).getTime();
       const returnDate = new Date(travelMs + nights * 86400000).toISOString().split('T')[0];
 
+      // Customer-facing total = sales price − discount + service charge; per person splits that total.
+      const totalPrice = (parseFloat(r.salesPrice || '0') || 0)
+        - (parseFloat(r.discounts || '0') || 0)
+        + (parseFloat(r.serviceCharge || '0') || 0);
+      const pax = (r.adult || 0) + (r.child || 0);
+
       return {
         id: r.bookingId,
+        title: r.title || `${dest} Getaway`,
         destination: dest,
         hotel: r.accommodationName || r.title || '',
+        price: totalPrice,
+        price_per_person: pax > 0 ? parseFloat((totalPrice / pax).toFixed(2)) : 0,
         travel_date: r.travelDate,
         return_date: returnDate,
         booking_reference: r.haysRef || r.supplierRef || '',
-        image_url: '',
+        image_url: (r.quoteId && quoteImageMap[r.quoteId]) || imageMap[r.bookingId] || '',
         documents_url: '#',
       };
     }));

@@ -590,6 +590,9 @@ export const newQuoteRepository = {
   async setPortalVisibility(id: string, showOnPortal: boolean, token?: string): Promise<void> {
     const updates: Record<string, any> = { show_on_portal: showOnPortal };
     if (token) updates.quote_token = token;
+    // Stamp when the deal was added to the portal — drives the "Latest Deals"
+    // 6-day recency window. Re-adding a deal refreshes the window.
+    if (showOnPortal) updates.portal_added_at = sql`now()`;
     await db.update(quote).set(updates).where(eq(quote.id, id));
   },
 

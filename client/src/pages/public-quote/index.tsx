@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plane,
@@ -45,7 +45,7 @@ import {
   useShareQuote,
   type PublicQuoteData,
 } from "@/features/quote/api/use-quote-public-queries";
-import { getPortalToken } from "@/hooks/use-portal-api";
+import { getPortalToken, usePortalQuoteOwnership } from "@/hooks/use-portal-api";
 import defaultHeroBg from "@assets/Maldives_1773092726855.png";
 import tinasLogo from "@assets/Tinas-Travel-Logo-Red-Orange-Final-2_1773285329238.png";
 
@@ -1217,16 +1217,50 @@ function tryParseJson(str: string): any {
 export default function PublicQuotePage() {
   const [, params] = useRoute("/view-quote/:token");
   const token = params?.token || "";
-  const { data: quote, isLoading, error } = usePublicQuote(token);
+  const [, setLocation] = useLocation();
+  const isPortalAuthed = getPortalToken() !== null;
+
+  // When the viewer is signed in to the client portal AND this quote belongs to
+  // them, send them to the authenticated portal view (which additionally lets
+  // them accept / request changes). Everyone else — logged-out visitors, and
+  // portal users opening a quote shared by someone else — stays on the public
+  // view, so shared "friends & family" links keep working.
+  const ownershipQ = usePortalQuoteOwnership(isPortalAuthed ? token : "");
+  const ownsQuote =
+    isPortalAuthed && ownershipQ.data?.found === true && ownershipQ.data.owns === true;
+  const ownershipPending = isPortalAuthed && ownershipQ.isLoading;
+  const shouldRenderPublic = !ownsQuote && !ownershipPending;
+
+  useEffect(() => {
+    if (ownsQuote) {
+      setLocation(`/portal/quote/${token}`);
+    }
+  }, [ownsQuote, token, setLocation]);
+
+  // The public quote is only fetched (and its view logged) once we've decided the
+  // viewer stays on the public page — owners are redirected before this runs.
+  const { data: quote, isLoading, error } = usePublicQuote(shouldRenderPublic ? token : "");
   const logView = useLogQuoteView();
   const viewLogged = useRef(false);
 
   useEffect(() => {
-    if (token && !viewLogged.current) {
+    if (shouldRenderPublic && token && !viewLogged.current) {
       viewLogged.current = true;
       logView.mutate({ token });
     }
-  }, [token]);
+  }, [shouldRenderPublic, token]);
+
+  // Verifying portal ownership, or redirecting an owner to the portal view.
+  if (ownershipPending || ownsQuote) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center" data-testid="loading-public-quote">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 text-white/40 animate-spin mx-auto mb-4" />
+          <p className="text-white/30 text-sm">Loading your quote...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

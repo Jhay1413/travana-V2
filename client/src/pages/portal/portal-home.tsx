@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation } from "wouter";
+import PortalLayout from "./portal-layout";
 import {
   FileText, Briefcase, Tag, MessageCircle, Plus,
   Plane, Calendar, Users, MapPin, X, Send, Loader2,
-  Heart, ArrowRight, Sparkles, ChevronRight, ChevronLeft, Eye, Bell, RefreshCw,
+  Heart, ArrowRight, Sparkles, ChevronRight, ChevronLeft, Eye, Bell, RefreshCw, Clock,
 } from "lucide-react";
-import PortalLayout from "./portal-layout";
 import PortalSetupWizard from "./portal-setup-wizard";
 import defaultHeroBg from "@assets/Maldives_1773092726855.png";
 import {
@@ -14,7 +14,7 @@ import {
   usePortalQuotes,
   usePortalBookings,
   usePortalMessages,
-  usePortalDeals,
+  usePortalLatestDeals,
   usePortalForYouDeals,
   usePortalMyTags,
   useSubmitQuoteRequest,
@@ -48,6 +48,18 @@ const fallbackQuotes: PortalQuote[] = [];
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return "";
   return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Latest Deals age out of the portal after 6 days; flag those already ≥5 days old
+ *  (i.e. within ~a day of dropping off) so the card can show an "Expiring soon" banner. */
+const LATEST_DEAL_WINDOW_DAYS = 6;
+const EXPIRING_SOON_AFTER_DAYS = 5;
+function isDealExpiringSoon(portalAddedAt: string | null | undefined): boolean {
+  if (!portalAddedAt) return false;
+  const added = new Date(portalAddedAt).getTime();
+  if (Number.isNaN(added)) return false;
+  const ageDays = (Date.now() - added) / 86400000;
+  return ageDays >= EXPIRING_SOON_AFTER_DAYS && ageDays < LATEST_DEAL_WINDOW_DAYS;
 }
 
 function DealsCarousel({ deals }: { deals: PortalDeal[] }) {
@@ -529,7 +541,7 @@ export default function PortalHomePage() {
   const { data: quotes, isLoading: quotesLoading, isError: quotesError } = usePortalQuotes();
   const { data: bookings, isLoading: bookingsLoading } = usePortalBookings();
   const { data: messages, isLoading: messagesLoading } = usePortalMessages();
-  const { data: apiDeals, isLoading: dealsLoading, isError: dealsError, refetch: refetchDeals } = usePortalDeals();
+  const { data: apiDeals, isLoading: dealsLoading, isError: dealsError, refetch: refetchDeals } = usePortalLatestDeals();
   const { data: forYouDeals = [] } = usePortalForYouDeals();
   const { data: myTags = [] } = usePortalMyTags();
   const quoteRequestMutation = useSubmitQuoteRequest();
@@ -801,6 +813,14 @@ export default function PortalHomePage() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
+                        {isDealExpiringSoon(deal.portal_added_at) && (
+                          <span
+                            className="inline-flex items-center gap-1 mb-1 px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 text-[10px] font-semibold"
+                            data-testid={`home-deal-expiring-${deal.id}`}
+                          >
+                            <Clock className="w-2.5 h-2.5" /> Expiring soon
+                          </span>
+                        )}
                         <p className="text-white font-medium text-sm truncate">{deal.title}</p>
                         <p className="text-white/40 text-xs flex items-center gap-1 mt-0.5">
                           <MapPin className="w-2.5 h-2.5" /> {deal.destination}

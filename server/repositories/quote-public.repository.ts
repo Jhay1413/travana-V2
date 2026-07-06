@@ -427,6 +427,10 @@ export const quotePublicRepository = {
     const updates: Record<string, unknown> = { show_on_portal: showOnPortal };
 
     if (showOnPortal) {
+      // Stamp when the deal was added to the portal — drives the "Latest Deals"
+      // 6-day recency window. Re-adding a deal refreshes the window.
+      updates.portal_added_at = sql`now()`;
+
       const [existing] = await db
         .select({ token: quote.quote_token })
         .from(quote)

@@ -773,6 +773,9 @@ export const quote = pgTable('quote_table', {
   quote_sent_at: timestamp('quote_sent_at', { precision: 0, withTimezone: true }),
   quote_sent_via: varchar('quote_sent_via'),
   show_on_portal: boolean('show_on_portal').default(false),
+  // Timestamp of when the quote was (last) added to the portal as a deal — set when
+  // show_on_portal flips to true. Drives the "Latest Deals" 6-day recency window.
+  portal_added_at: timestamp('portal_added_at', { precision: 0, withTimezone: true }),
   is_featured: boolean('is_featured').default(false),
   not_for_social: boolean('not_for_social').default(false),
 }, (table) => [
