@@ -51,6 +51,7 @@ const TasksPage = lazy(() => import("@/pages/tasks"));
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const PipelinePage = lazy(() => import("@/pages/pipeline"));
 const ChatPage = lazy(() => import("@/pages/chat"));
+const ConversationsPage = lazy(() => import("@/pages/conversations"));
 const HubPage = lazy(() => import("@/pages/hub"));
 const SocialPostsPage = lazy(() => import("@/pages/social-posts"));
 const SocialQuotePage = lazy(() => import("@/pages/social-quote"));
@@ -174,6 +175,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/opportunities" allow={STAFF_ROLES} component={OpportunitiesPage} />
         <RoleRoute path="/my-profile" allow={STAFF_ROLES} component={MyProfilePage} />
         <RoleRoute path="/chat" allow={STAFF_ROLES} component={ChatPage} />
+        <RoleRoute path="/conversations" allow={STAFF_ROLES} component={ConversationsPage} />
         <RoleRoute path="/email" allow={STAFF_ROLES} component={EmailInbox} />
         <RoleRoute path="/destination-guru" allow={STAFF_ROLES} component={DestinationGuruPage} />
         <RoleRoute path="/sms-center" allow={STAFF_ROLES} component={SmsCenterPage} />

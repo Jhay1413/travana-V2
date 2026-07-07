@@ -15,22 +15,22 @@
 
 <!-- AUTO:START -->
 <!-- Run `npm run docs:arch` to regenerate this block from the live codebase. -->
-**Last refreshed:** 2026-06-19 (auto-generated — do not edit by hand)
+**Last refreshed:** 2026-07-07 (auto-generated — do not edit by hand)
 
 | Fact | Value |
 |------|-------|
-| Backend modules (`server/v2/modules/`) | **51** |
-| Tables defined (`pgTable`) in schema.ts | 129 |
-| Enums (`pgEnum`) in schema.ts | 22 |
-| `orgId`/`org_id` references in schema.ts | 47 |
-| Migrations (`migrations/*.sql`) | 12 (latest: `0011_flawless_raza.sql`) |
-| Client pages (`client/src/pages`) | ~47 |
+| Backend modules (`server/v2/modules/`) | **56** |
+| Tables defined (`pgTable`) in schema.ts | 142 |
+| Enums (`pgEnum`) in schema.ts | 27 |
+| `orgId`/`org_id` references in schema.ts | 56 |
+| Migrations (`migrations/*.sql`) | 23 (latest: `0022_loud_rictor.sql`) |
+| Client pages (`client/src/pages`) | ~48 |
 | Automated test runner | ✅ present |
 | Legacy v1 backend (`server/`) present | ⚠️ yes (alongside v2) |
 
 **Key versions:** React 19.2.0 · TypeScript 5.6.3 · Vite 7.1.9 · Express 5.0.1 · Drizzle ORM 0.39.3 · Zod 3.25.76 · React Query 5.60.5
 
-**Backend modules:** admin-import, ai-ask, airport, announcement, audit, booking, branch, branch-member, branch-overview, chat, client, dashboard, destination-guru, email, enquiry, facebook, favorite, feedback, files, hr, hub-post, invite, json-mapper, neon-client, note, notification, onboarding, opportunities, organization, organization-overview, plan, platform-admin, portal, quote, quote-share, referral, reports, revenue, search, sms, social-post, tag, targets, task, ticket, tour-operator, transaction, user, user-org-roles, wallet, website-public
+**Backend modules:** admin-import, ai-ask, airport, announcement, audit, booking, branch, branch-member, branch-overview, channels, chat, client, conversation-integration, conversations, dashboard, destination-guru, email, enquiry, facebook, favorite, feedback, files, hr, hub-post, invite, json-mapper, messages, neon-client, note, notification, onboarding, opportunities, organization, organization-overview, plan, platform-admin, portal, quote, quote-share, referral, reports, revenue, search, sms, social-post, tag, targets, task, ticket, tour-operator, training, transaction, user, user-org-roles, wallet, website-public
 <!-- AUTO:END -->
 
 ---

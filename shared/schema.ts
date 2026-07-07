@@ -1935,6 +1935,25 @@ export const emailAccounts = pgTable("email_accounts", {
 export type EmailAccount = typeof emailAccounts.$inferSelect;
 export type InsertEmailAccount = Omit<typeof emailAccounts.$inferInsert, "id" | "createdAt" | "updatedAt">;
 
+// ─── SendSeven (Conversations) Integration ────────────────────────────────────
+// One SendSeven workspace token per org, so each tenant's inbox is isolated.
+// The token is encrypted at rest (see server/v2/utils/encryption.ts).
+export const sendsevenIntegrations = pgTable("sendseven_integrations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgId: uuid("org_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" })
+    .unique(),
+  encryptedToken: text("encrypted_token").notNull(),
+  baseUrl: text("base_url"), // optional per-org override of CONVERSATIONS_API_URL
+  isActive: boolean("is_active").notNull().default(true),
+  createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type SendsevenIntegration = typeof sendsevenIntegrations.$inferSelect;
+
 // ─── Facebook Integration ─────────────────────────────────────────────────────
 
 export const facebookPages = pgTable("facebook_pages", {

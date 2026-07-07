@@ -12,6 +12,7 @@ import {
   GitBranch,
   Activity,
   MessageSquare,
+  Plug,
 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import {
@@ -32,6 +33,7 @@ import { SuspendOrgDialog } from "@/features/platform-admin/components/platform-
 import { ChangePlanDialog } from "@/features/platform-admin/components/platform-admin/change-plan-dialog";
 import { CreditsTab } from "@/features/platform-admin/components/platform-admin/credits-tab";
 import { RoleChipEditor } from "@/features/platform-admin/components/platform-admin/role-chip-editor";
+import { SendSevenIntegrationCard } from "@/features/conversations";
 import type { AdminUserRow } from "@/features/platform-admin/api/platform-admin.api";
 
 const formatDate = (iso: string | null | undefined) => (iso ? new Date(iso).toISOString().slice(0, 10) : "");
@@ -167,6 +169,9 @@ export default function PlatformAdminOrgPage() {
           <TabsTrigger value="audit" data-testid="tab-audit">
             <Activity className="mr-1 h-3.5 w-3.5" /> Audit
           </TabsTrigger>
+          <TabsTrigger value="integrations" data-testid="tab-integrations">
+            <Plug className="mr-1 h-3.5 w-3.5" /> Integrations
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="users" className="mt-4">
           <UsersTab orgId={org.id} />
@@ -179,6 +184,9 @@ export default function PlatformAdminOrgPage() {
         </TabsContent>
         <TabsContent value="audit" className="mt-4">
           <AuditTab orgId={org.id} />
+        </TabsContent>
+        <TabsContent value="integrations" className="mt-4">
+          <SendSevenIntegrationCard orgId={org.id} />
         </TabsContent>
       </Tabs>
 

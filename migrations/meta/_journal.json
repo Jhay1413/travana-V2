@@ -155,6 +155,13 @@
       "when": 1783317479867,
       "tag": "0021_add_portal_added_at",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783400668845,
+      "tag": "0022_loud_rictor",
+      "breakpoints": true
     }
   ]
 }
