@@ -30,10 +30,19 @@ import {
   Loader2,
   AlertCircle,
   RadioTower,
+  Check,
+  Mailbox,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
 import { ChannelsDialog } from "./channels-dialog";
@@ -42,6 +51,8 @@ import { toUiConversation, toUiMessage } from "../map";
 import { useConversations, useConversationBadgeCounts } from "../api/use-conversations-queries";
 import { useCloseConversation, useReopenConversation } from "../api/use-conversations-mutations";
 import { useMessages, useSendMessage, useCreateInternalNote } from "../api/use-messages";
+import { useInboxes } from "../api/use-inboxes";
+import type { SsInbox } from "../api/inboxes.api";
 import type { Conversation, ConversationMessage, ConversationStatus, ConversationTag } from "../types";
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
@@ -442,6 +453,16 @@ function HeaderAction({ icon: Icon, label, onClick }: { icon: typeof User; label
   );
 }
 
+// Inbox icon: the inbox's emoji if it has one, else a dot in its colour;
+// null = "All Messages".
+function InboxDot({ inbox }: { inbox: SsInbox | null }) {
+  if (!inbox) return <Mailbox className="h-4 w-4 text-black/50 dark:text-white/50" />;
+  if (inbox.icon && /\p{Extended_Pictographic}/u.test(inbox.icon)) {
+    return <span className="text-sm leading-none">{inbox.icon}</span>;
+  }
+  return <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: inbox.color || "#94a3b8" }} />;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 25;
@@ -458,14 +479,26 @@ export default function ConversationsInbox() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>({});
   const [channelsOpen, setChannelsOpen] = useState(false);
+  const [inboxId, setInboxId] = useState<string | null>(null); // null = All Messages
 
   const { orgRole } = useRole();
   const canManageChannels = orgRole === "org_admin" || orgRole === "branch_manager" || orgRole === "platform_admin";
+
+  // Custom inboxes (saved views) from SendSeven — drive the inbox switcher.
+  const { data: inboxesData } = useInboxes();
+  const inboxList = useMemo(
+    () =>
+      (inboxesData?.items ?? [])
+        .filter((i) => i.is_active !== false)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
+    [inboxesData],
+  );
 
   const { data, isLoading, isFetching, isError, refetch } = useConversations({
     status: tab,
     page,
     pageSize: PAGE_SIZE,
+    inboxId: inboxId ?? undefined,
   });
   const { data: badges } = useConversationBadgeCounts();
   const closeMutation = useCloseConversation();
@@ -473,10 +506,10 @@ export default function ConversationsInbox() {
 
   const pagination = data?.pagination;
 
-  // Reset to the first page whenever the tab changes.
+  // Reset to the first page whenever the tab or selected inbox changes.
   useEffect(() => {
     setPage(1);
-  }, [tab]);
+  }, [tab, inboxId]);
 
   // Server items → UI model, then merge the local overlay.
   const conversations = useMemo(() => {
@@ -496,6 +529,8 @@ export default function ConversationsInbox() {
     });
   }, [data, overlay]);
 
+  // Conversations are filtered server-side by inbox_id (see useConversations);
+  // here we only apply the local search + status.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return conversations
@@ -503,6 +538,8 @@ export default function ConversationsInbox() {
       .filter((c) => !q || c.contact.displayName.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q))
       .sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
   }, [conversations, tab, search]);
+
+  const activeInbox = inboxId ? (inboxList.find((i) => i.id === inboxId) ?? null) : null;
 
   // Keep a valid selection: if the current pick fell out of the list, select the first.
   useEffect(() => {
@@ -633,6 +670,51 @@ export default function ConversationsInbox() {
           <button className="grid h-8 w-8 place-items-center rounded-full bg-black text-white hover:bg-black/85 dark:bg-white dark:text-black">
             <Plus className="h-4 w-4" />
           </button>
+        </div>
+
+        {/* Inbox switcher: All Messages + custom inboxes from SendSeven */}
+        <div className="px-3 pt-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex w-full items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-sm font-semibold transition hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
+                data-testid="conversation-inbox-switcher"
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <InboxDot inbox={activeInbox} />
+                  <span className="truncate">{activeInbox?.name ?? "All Messages"}</span>
+                </span>
+                <ChevronDown className="h-4 w-4 flex-shrink-0 text-black/40 dark:text-white/40" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="max-h-[60vh] w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto rounded-xl">
+              <DropdownMenuItem
+                onClick={() => setInboxId(null)}
+                className="flex items-center justify-between gap-2 rounded-lg text-sm"
+                data-testid="inbox-option-all"
+              >
+                <span className="flex items-center gap-2">
+                  <Mailbox className="h-4 w-4 text-black/50 dark:text-white/50" /> All Messages
+                </span>
+                {inboxId === null && <Check className="h-3.5 w-3.5" />}
+              </DropdownMenuItem>
+              {inboxList.length > 0 && <DropdownMenuSeparator />}
+              {inboxList.map((ib) => (
+                <DropdownMenuItem
+                  key={ib.id}
+                  onClick={() => setInboxId(ib.id)}
+                  className="flex items-center justify-between gap-2 rounded-lg text-sm"
+                  data-testid={`inbox-option-${ib.id}`}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <InboxDot inbox={ib} />
+                    <span className="truncate">{ib.name}</span>
+                  </span>
+                  {inboxId === ib.id && <Check className="h-3.5 w-3.5 flex-shrink-0" />}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="px-3 pt-2">
