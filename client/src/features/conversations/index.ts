@@ -10,6 +10,9 @@ export {
   useCreateConnectToken,
   useDeleteChannel,
 } from "./api/use-channels";
+export { inboxesApi } from "./api/inboxes.api";
+export { inboxesKeys, useInboxes } from "./api/use-inboxes";
+export type { SsInbox } from "./api/inboxes.api";
 export { conversationIntegrationApi } from "./api/conversation-integration.api";
 export {
   integrationKeys,

@@ -32,6 +32,7 @@ import messagesRoutes from '../modules/messages/messages.routes';
 import conversationIntegrationRoutes from '../modules/conversation-integration/conversation-integration.routes';
 import { sendSevenContext } from '../modules/conversation-integration/conversation-integration.middleware';
 import channelsRoutes from '../modules/channels/channels.routes';
+import inboxesRoutes from '../modules/inboxes/inboxes.routes';
 import socialPostRoutes from '../modules/social-post/social-post.routes';
 import emailRoutes from '../modules/email/email.routes';
 import facebookRoutes from '../modules/facebook/facebook.routes';
@@ -103,6 +104,7 @@ router.use('/conversation-integration', isAuthenticated, requirePlatformAdmin, c
 router.use('/conversations',      ...auth, sendSevenContext, conversationsRoutes);
 router.use('/messages',           ...auth, sendSevenContext, messagesRoutes);
 router.use('/channels',           ...auth, sendSevenContext, channelsRoutes);
+router.use('/inboxes',            ...auth, sendSevenContext, inboxesRoutes);
 router.use('/social-posts',       ...auth, socialPostRoutes);
 router.use('/emails',             isAuthenticated, emailRoutes);
 router.use('/facebook',           isAuthenticated, facebookRoutes);
