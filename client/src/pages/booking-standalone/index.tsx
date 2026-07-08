@@ -146,92 +146,6 @@ export default function BookingPage() {
               Bookings
             </Button>
           </div>
-
-          <div className="flex items-center gap-2">
-            <UserReassignSelect
-              value={(bookingData as any)?.user_id || currentUser?.id || ""}
-              onValueChange={(userId) => {
-                updateTransactionMutation.mutate(
-                  { id: booking.transaction_id, data: { user_id: userId } },
-                  {
-                    onSuccess: () => {
-                      toast({ title: "Transaction reassigned successfully" });
-                      queryClient.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
-                    },
-                    onError: () => {
-                      toast({ title: "Failed to reassign transaction", variant: "destructive" });
-                    },
-                  }
-                );
-              }}
-              data-testid="select-itinerary-owner"
-            />
-
-            <div className="relative" ref={ellipsisRef}>
-              <button
-                type="button"
-                onClick={() => setShowEllipsisMenu((v) => !v)}
-                className="grid h-9 w-9 place-items-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
-                data-testid="button-booking-ellipsis"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-              {showEllipsisMenu && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-booking-ellipsis">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
-                    data-testid="button-booking-pin"
-                    onClick={() => {
-                      setShowEllipsisMenu(false);
-                      togglePin();
-                    }}
-                  >
-                    {isFavorited ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                    {isFavorited ? "Unpin" : "Pin"}
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
-                    data-testid="button-booking-edit"
-                    onClick={() => {
-                      setShowEllipsisMenu(false);
-                      setShowEditDialog(true);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit Booking
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
-                    data-testid="button-booking-upsells"
-                    onClick={() => {
-                      setShowEllipsisMenu(false);
-                      setShowUpsellsDialog(true);
-                    }}
-                  >
-                    <PackagePlus className="h-3.5 w-3.5" />
-                    Manage Upsells
-                  </button>
-                  {role === "Admin" && (
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-red-600 transition hover:bg-red-50"
-                      data-testid="button-booking-admin-delete"
-                      onClick={() => {
-                        setShowEllipsisMenu(false);
-                        openDeleteDialog();
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete Booking
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         <div className="mt-4" data-testid="layout-booking-body">
@@ -269,7 +183,7 @@ export default function BookingPage() {
                 <div className="min-w-0" data-testid="section-itinerary-summary">
                   <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between" data-testid="row-itinerary-top">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3" data-testid="row-itinerary-title">
+                      <div className="flex items-start justify-between gap-3" data-testid="row-itinerary-title">
                         <div className="min-w-0" data-testid="col-itinerary-title-left">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
@@ -305,6 +219,93 @@ export default function BookingPage() {
                                 View Booking Link
                               </a>
                             )}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-2" data-testid="col-itinerary-status">
+                          <div className="flex flex-nowrap items-center gap-2">
+                            <UserReassignSelect
+                              value={(bookingData as any)?.user_id || currentUser?.id || ""}
+                              onValueChange={(userId) => {
+                                updateTransactionMutation.mutate(
+                                  { id: booking.transaction_id, data: { user_id: userId } },
+                                  {
+                                    onSuccess: () => {
+                                      toast({ title: "Transaction reassigned successfully" });
+                                      queryClient.invalidateQueries({ queryKey: bookingKeys.detail(bookingId) });
+                                    },
+                                    onError: () => {
+                                      toast({ title: "Failed to reassign transaction", variant: "destructive" });
+                                    },
+                                  }
+                                );
+                              }}
+                              data-testid="select-itinerary-owner"
+                            />
+
+                            <div className="relative" ref={ellipsisRef}>
+                              <button
+                                type="button"
+                                onClick={() => setShowEllipsisMenu((v) => !v)}
+                                className="grid h-9 w-9 place-items-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
+                                data-testid="button-booking-ellipsis"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                              {showEllipsisMenu && (
+                                <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-booking-ellipsis">
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                    data-testid="button-booking-pin"
+                                    onClick={() => {
+                                      setShowEllipsisMenu(false);
+                                      togglePin();
+                                    }}
+                                  >
+                                    {isFavorited ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                                    {isFavorited ? "Unpin" : "Pin"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                    data-testid="button-booking-edit"
+                                    onClick={() => {
+                                      setShowEllipsisMenu(false);
+                                      setShowEditDialog(true);
+                                    }}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    Edit Booking
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                    data-testid="button-booking-upsells"
+                                    onClick={() => {
+                                      setShowEllipsisMenu(false);
+                                      setShowUpsellsDialog(true);
+                                    }}
+                                  >
+                                    <PackagePlus className="h-3.5 w-3.5" />
+                                    Manage Upsells
+                                  </button>
+                                  {role === "Admin" && (
+                                    <button
+                                      type="button"
+                                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-red-600 transition hover:bg-red-50"
+                                      data-testid="button-booking-admin-delete"
+                                      onClick={() => {
+                                        setShowEllipsisMenu(false);
+                                        openDeleteDialog();
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      Delete Booking
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>

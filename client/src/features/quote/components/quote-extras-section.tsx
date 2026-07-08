@@ -490,7 +490,7 @@ function AirportParkingExtra({ control, index, tourOperatorOptions, airportOptio
 
 // ─── Extra Accommodation ──────────────────────────────────────────────────────
 
-function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOptions, boardBasisOptions, roomTypeOptions, mainTourOperatorId, setValue, onRemove }: {
+function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOptions, boardBasisOptions, roomTypeOptions, mainTourOperatorId, setValue, onRemove, quoteCountryId, quoteDestinationId, quoteResortId }: {
   control: Control<ExtrasFormValues>;
   index: number;
   initialLabel?: string;
@@ -500,6 +500,10 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
   mainTourOperatorId: string;
   setValue: (name: any, value: any) => void;
   onRemove: () => void;
+  // Pre-fill the Add-Accommodation modal from the quote's own destination.
+  quoteCountryId?: string;
+  quoteDestinationId?: string;
+  quoteResortId?: string;
 }) {
   const p = `extraAccommodations.${index}`;
   const [accomSearch, setAccomSearch] = useState("");
@@ -532,6 +536,9 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
         open={showAddAccomModal}
         onOpenChange={setShowAddAccomModal}
         initialName={accomSearch}
+        initialCountryId={quoteCountryId}
+        initialDestinationId={quoteDestinationId}
+        initialResortId={quoteResortId}
         onSuccess={(acc) => {
           setValue(`${p}.accommodationId`, acc.id);
           setAccomLabel(acc.name);
@@ -631,13 +638,24 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
 // ─── Main Extras Section ──────────────────────────────────────────────────────
 
 export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourOperatorId = "", isCruise = false }: { control: Control<ExtrasFormValues>; initialAccomLabels?: string[]; mainTourOperatorId?: string; isCruise?: boolean }) {
-  const { setValue } = useFormContext();
+  const formMethods = useFormContext();
+  const { setValue } = formMethods;
+  // The quote's selected destination lives on the same form — use it to
+  // pre-fill the Add-Accommodation modal so agents don't re-enter it.
+  const quoteCountryId = formMethods.watch("country") as string | undefined;
+  const quoteDestinationId = formMethods.watch("destination") as string | undefined;
+  const quoteResortId = formMethods.watch("resort") as string | undefined;
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
   const { data: boardBasisData } = useBoardBasis();
   const { data: roomTypesData } = useRoomTypes();
 
-  const airportOptions = (airportsData || []).map((a: any) => ({ value: a.id, label: a.airport_name || a.id }));
+  // Include the IATA code in the label so the client-side search matches codes
+  // like "NCL" (Newcastle) as well as the airport name.
+  const airportOptions = (airportsData || []).map((a: any) => ({
+    value: a.id,
+    label: a.airport_code ? `${a.airport_name || a.id} (${a.airport_code})` : a.airport_name || a.id,
+  }));
   const tourOperatorOptions = (tourOperatorsData || []).map((op: any) => ({ value: op.id, label: op.name || op.id }));
   const boardBasisOptions = (boardBasisData || []).map((b: any) => ({ value: b.id, label: b.type || b.id }));
   const roomTypeOptions = (roomTypesData || []).map((r: any) => ({ value: r.id, label: r.name || r.type || r.id }));
@@ -720,7 +738,7 @@ export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourO
             <AirportParkingExtra key={field.id} control={control} index={idx} tourOperatorOptions={tourOperatorOptions} airportOptions={airportOptions} mainTourOperatorId={mainTourOperatorId} setValue={setValue} onRemove={() => removeAirportParking(idx)} />
           ))}
           {extraAccommodations.map((field, idx) => (
-            <ExtraAccommodationExtra key={field.id} control={control} index={idx} initialLabel={initialAccomLabels[idx]} tourOperatorOptions={tourOperatorOptions} boardBasisOptions={boardBasisOptions} roomTypeOptions={roomTypeOptions} mainTourOperatorId={mainTourOperatorId} setValue={setValue} onRemove={() => removeExtraAccommodation(idx)} />
+            <ExtraAccommodationExtra key={field.id} control={control} index={idx} initialLabel={initialAccomLabels[idx]} tourOperatorOptions={tourOperatorOptions} boardBasisOptions={boardBasisOptions} roomTypeOptions={roomTypeOptions} mainTourOperatorId={mainTourOperatorId} setValue={setValue} quoteCountryId={quoteCountryId} quoteDestinationId={quoteDestinationId} quoteResortId={quoteResortId} onRemove={() => removeExtraAccommodation(idx)} />
           ))}
         </div>
       )}

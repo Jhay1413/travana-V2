@@ -125,7 +125,8 @@
       "Bash(cat)",
       "Bash(DATABASE_URL=\"postgresql://neondb_owner:npg_MwKDhW0ZcLO5@ep-odd-math-abvmy8d3-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require\" node /tmp/q.mjs)",
       "Bash(grep -iE '^\\(pg|postgres\\)$|neondatabase')",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(grep -rn \"name=\\\\\"country\\\\\"\\\\|name=\\\\\"destination\\\\\"\\\\|name=\\\\\"resort\\\\\"\\\\|name: \\\\\"country\\\\\"\\\\|useWatch\\({ control, name: \\\\\"country\\\\\"\" client/src/features/quote/components/sections/QuoteDestinationAccomSection.tsx)"
     ],
     "additionalDirectories": [
       "/tmp"

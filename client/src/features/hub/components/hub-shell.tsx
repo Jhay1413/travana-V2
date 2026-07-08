@@ -100,6 +100,17 @@ export function HubShell({
             </select>
           </div>
 
+          <div className="mt-2 px-2">
+            <Link
+              href="/"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              data-testid="nav-hub-back-crm"
+            >
+              <LogOut className="h-[18px] w-[18px] text-slate-400" />
+              <span>Back to CRM</span>
+            </Link>
+          </div>
+
           <nav className="mt-2 flex flex-1 flex-col gap-1">
             {filteredNav.map((item) => {
               const isActive = activeKey === item.key;
@@ -129,17 +140,6 @@ export function HubShell({
               );
             })}
           </nav>
-
-          <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
-            <Link
-              href="/"
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
-              data-testid="nav-hub-back-crm"
-            >
-              <LogOut className="h-[18px] w-[18px] text-slate-400" />
-              <span>Back to CRM</span>
-            </Link>
-          </div>
         </div>
       </div>
 

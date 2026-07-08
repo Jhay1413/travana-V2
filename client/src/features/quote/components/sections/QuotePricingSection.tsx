@@ -1,5 +1,5 @@
 import { useFormContext, useWatch } from "react-hook-form";
-import { DollarSign } from "lucide-react";
+import { PoundSterling } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useTourOperators } from "@/hooks/queries";
@@ -35,7 +35,7 @@ export function QuotePricingSection() {
 
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-      <SectionHeader icon={DollarSign} title="Pricing" />
+      <SectionHeader icon={PoundSterling} title="Pricing" />
       <div className="grid gap-3 md:grid-cols-3">
         {FIELDS.map(({ name, label }) => (
           <FormField

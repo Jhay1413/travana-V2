@@ -792,83 +792,6 @@ export default function EnquiryPage() {
               Enquiries
             </Button>
           </div>
-
-          <div className="flex items-center gap-2" data-testid="row-enquiry-actions">
-            <UserReassignSelect
-              value={enquiry?.user_id || currentUser?.id || ""}
-              onValueChange={(userId) => {
-                updateTransactionMutation.mutate(
-                  { id: enquiry.transaction_id, data: { user_id: userId } },
-                  {
-                    onSuccess: () => {
-                      toast({ title: "Enquiry reassigned successfully" });
-                      queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
-                    },
-                    onError: () => {
-                      toast({ title: "Failed to reassign enquiry", variant: "destructive" });
-                    },
-                  }
-                );
-              }}
-              data-testid="select-enquiry-itinerary-owner"
-            />
-
-            <div className="relative" ref={ellipsisRef}>
-              <button
-                type="button"
-                onClick={() => setShowEllipsisMenu((v) => !v)}
-                className="grid h-9 w-9 place-items-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
-                data-testid="button-enquiry-ellipsis"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-              {showEllipsisMenu && (
-                <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-enquiry-ellipsis">
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
-                    data-testid="button-pin-enquiry"
-                    onClick={() => {
-                      setShowEllipsisMenu(false);
-                      toggleFavoriteMutation.mutate(
-                        { itemType: "enquiry", itemId: enquiryId, label: enquiry.title || "Enquiry", subtitle: `${clientData?.name || ""}${destinationNames ? " · " + destinationNames : enquiry.holiday_type_id ? " · " + (enquiry as any).holiday_type_name || "—" : ""}` },
-                        { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
-                      );
-                    }}
-                  >
-                    {isEnquiryPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-                    {isEnquiryPinned ? "Unpin" : "Pin"}
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
-                    data-testid="button-enquiry-edit"
-                    onClick={() => {
-                      setShowEllipsisMenu(false);
-                      setShowEditWizard(true);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit Enquiry
-                  </button>
-                  {enquiry.status !== "Converted" && (
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
-                      data-testid="button-enquiry-convert"
-                      onClick={() => {
-                        setShowEllipsisMenu(false);
-                        handleConvertToQuote();
-                      }}
-                    >
-                      <ArrowRight className="h-3.5 w-3.5" />
-                      Convert to Quote
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         <div className="mt-4" data-testid="layout-enquiry-body">
@@ -889,7 +812,7 @@ export default function EnquiryPage() {
                 <div className="min-w-0" data-testid="section-enquiry-summary">
                   <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between" data-testid="row-enquiry-itinerary-top">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-3" data-testid="row-enquiry-itinerary-title">
+                      <div className="flex items-start justify-between gap-3" data-testid="row-enquiry-itinerary-title">
                         <div className="min-w-0" data-testid="col-enquiry-itinerary-title-left">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
@@ -922,6 +845,84 @@ export default function EnquiryPage() {
                                 </>
                               )}
                               <span data-testid="text-enquiry-meta-created">Created {formatUKDate(enquiry.date_created)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-col items-end gap-2" data-testid="col-enquiry-itinerary-status">
+                          <div className="flex flex-nowrap items-center gap-2">
+                            <UserReassignSelect
+                              value={enquiry?.user_id || currentUser?.id || ""}
+                              onValueChange={(userId) => {
+                                updateTransactionMutation.mutate(
+                                  { id: enquiry.transaction_id, data: { user_id: userId } },
+                                  {
+                                    onSuccess: () => {
+                                      toast({ title: "Enquiry reassigned successfully" });
+                                      queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
+                                    },
+                                    onError: () => {
+                                      toast({ title: "Failed to reassign enquiry", variant: "destructive" });
+                                    },
+                                  }
+                                );
+                              }}
+                              data-testid="select-enquiry-itinerary-owner"
+                            />
+
+                            <div className="relative" ref={ellipsisRef}>
+                              <button
+                                type="button"
+                                onClick={() => setShowEllipsisMenu((v) => !v)}
+                                className="grid h-9 w-9 place-items-center rounded-2xl border border-black/10 bg-white/70 text-black/60 transition hover:bg-black/[0.05]"
+                                data-testid="button-enquiry-ellipsis"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                              {showEllipsisMenu && (
+                                <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-2xl border border-black/10 bg-white/95 p-1 shadow-lg backdrop-blur-xl" data-testid="menu-enquiry-ellipsis">
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                    data-testid="button-pin-enquiry"
+                                    onClick={() => {
+                                      setShowEllipsisMenu(false);
+                                      toggleFavoriteMutation.mutate(
+                                        { itemType: "enquiry", itemId: enquiryId, label: enquiry.title || "Enquiry", subtitle: `${clientData?.name || ""}${destinationNames ? " · " + destinationNames : enquiry.holiday_type_id ? " · " + (enquiry as any).holiday_type_name || "—" : ""}` },
+                                        { onSuccess: (data: any) => { toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }); } }
+                                      );
+                                    }}
+                                  >
+                                    {isEnquiryPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                                    {isEnquiryPinned ? "Unpin" : "Pin"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                    data-testid="button-enquiry-edit"
+                                    onClick={() => {
+                                      setShowEllipsisMenu(false);
+                                      setShowEditWizard(true);
+                                    }}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    Edit Enquiry
+                                  </button>
+                                  {enquiry.status !== "Converted" && (
+                                    <button
+                                      type="button"
+                                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-black/75 transition hover:bg-black/[0.05]"
+                                      data-testid="button-enquiry-convert"
+                                      onClick={() => {
+                                        setShowEllipsisMenu(false);
+                                        handleConvertToQuote();
+                                      }}
+                                    >
+                                      <ArrowRight className="h-3.5 w-3.5" />
+                                      Convert to Quote
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
