@@ -1944,7 +1944,11 @@ export const sendsevenIntegrations = pgTable("sendseven_integrations", {
     .notNull()
     .references(() => organization.id, { onDelete: "cascade" })
     .unique(),
-  encryptedToken: text("encrypted_token").notNull(),
+  // The SendSeven tenant this org maps to (set when auto-provisioned on onboarding).
+  tenantId: text("tenant_id"),
+  // Nullable: a row may exist with only the tenant linked, before an API key is
+  // minted/entered.
+  encryptedToken: text("encrypted_token"),
   baseUrl: text("base_url"), // optional per-org override of CONVERSATIONS_API_URL
   isActive: boolean("is_active").notNull().default(true),
   createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
@@ -1953,6 +1957,30 @@ export const sendsevenIntegrations = pgTable("sendseven_integrations", {
 });
 
 export type SendsevenIntegration = typeof sendsevenIntegrations.$inferSelect;
+
+// Manual link between a SendSeven contact (from the unified inbox) and a client
+// in this CRM's client_table. One-to-one per org: a contact maps to one client
+// and vice-versa. Kept in its own table so the SendSeven concern stays isolated
+// from the core client record and the link is auditable/reversible.
+export const sendsevenContactLinks = pgTable(
+  "sendseven_contact_links",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+    // SendSeven contact UUID (tenant-scoped on their side).
+    sendsevenContactId: text("sendseven_contact_id").notNull(),
+    clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+    linkedBy: text("linked_by").references(() => user.id, { onDelete: "set null" }),
+    linkedAt: timestamp("linked_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    // At most one link per contact per org, and per client per org.
+    contactUnique: unique("sendseven_contact_links_org_contact_unique").on(t.orgId, t.sendsevenContactId),
+    clientUnique: unique("sendseven_contact_links_org_client_unique").on(t.orgId, t.clientId),
+  }),
+);
+
+export type SendsevenContactLink = typeof sendsevenContactLinks.$inferSelect;
 
 // ─── Facebook Integration ─────────────────────────────────────────────────────
 

@@ -63,4 +63,15 @@ export const messagesController = {
   translate: asyncHandler(async (req: Request, res: Response) => {
     return successResponse(res, await messagesService.translate(requireParam(req, "message_id"), req.body), "Message translated");
   }),
+
+  // GET /api/v2/messages/attachments/:attachment_id/download — streams the raw
+  // bytes so the browser can render inline images without the workspace token.
+  downloadAttachment: asyncHandler(async (req: Request, res: Response) => {
+    const { buffer, contentType, cacheControl } = await messagesService.downloadAttachment(
+      requireParam(req, "attachment_id"),
+    );
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", cacheControl ?? "private, max-age=300");
+    res.send(buffer);
+  }),
 };

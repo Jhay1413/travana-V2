@@ -140,4 +140,13 @@ export const messagesApi = {
     const { data } = await axiosClient.post<Record<string, unknown>>(`${BASE}/${id}/translate`, body);
     return data;
   },
+  // Streams an attachment's bytes through our server proxy (auth via the shared
+  // axios client / session cookie) so images render without exposing the
+  // SendSeven token or depending on the page's origin resolving the raw path.
+  attachmentBlob: async (attachmentId: string): Promise<Blob> => {
+    const { data } = await axiosClient.get<Blob>(`${BASE}/attachments/${attachmentId}/download`, {
+      responseType: "blob",
+    });
+    return data;
+  },
 };

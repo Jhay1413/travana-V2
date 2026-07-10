@@ -8,11 +8,26 @@ const base = (orgId: string) => `/api/v2/conversation-integration/${orgId}`;
 
 export interface IntegrationStatus {
   configured: boolean;
-  source: "org" | "env" | "none";
+  /**
+   * "org"    → standalone token pasted for this org (manual override)
+   * "tenant" → managed SendSeven sub-account reached via the parent token + X-Tenant-ID
+   * "env"    → platform-wide fallback token
+   * "none"   → nothing configured
+   */
+  source: "org" | "tenant" | "env" | "none";
   isActive: boolean;
   baseUrl: string | null;
   tokenMasked: string | null;
   updatedAt: string | null;
+  /** SendSeven sub-account auto-provisioned for this org on onboarding, if any. */
+  tenantId: string | null;
+}
+
+export interface IntegrationSummary {
+  orgId: string;
+  tenantId: string | null;
+  hasToken: boolean;
+  isActive: boolean;
 }
 
 export interface SetIntegrationInput {
@@ -26,6 +41,10 @@ export interface TestResult {
 }
 
 export const conversationIntegrationApi = {
+  listStatuses: async (): Promise<IntegrationSummary[]> => {
+    const { data } = await axiosClient.get<IntegrationSummary[]>("/api/v2/conversation-integration");
+    return data;
+  },
   getStatus: async (orgId: string): Promise<IntegrationStatus> => {
     const { data } = await axiosClient.get<IntegrationStatus>(base(orgId));
     return data;

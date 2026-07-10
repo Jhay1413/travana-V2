@@ -8,6 +8,7 @@ router.get("/", m.list);
 router.post("/", m.send);
 router.post("/internal-notes", m.createInternalNote);
 router.get("/mention-users", m.mentionUsers);
+router.get("/attachments/:attachment_id/download", m.downloadAttachment);
 
 router.get("/:message_id", m.getById);
 router.post("/:message_id/react", m.react);

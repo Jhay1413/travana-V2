@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -16,7 +16,6 @@ import {
   Pen,
   Send,
   Bot,
-  Sparkles,
   Languages,
   ChevronDown,
   ChevronLeft,
@@ -32,6 +31,10 @@ import {
   RadioTower,
   Check,
   Mailbox,
+  Phone,
+  Mail,
+  MapPin,
+  CalendarDays,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,14 +49,18 @@ import {
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
 import { ChannelsDialog } from "./channels-dialog";
+import { ClientLinkSection, contactLinkMatch, formatClientDate, composeClientAddress } from "./client-link-section";
+import { GenerateEnquiryButton } from "./generate-enquiry-button";
+import { useContactLink } from "../api/use-contact-link";
 import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
 import { useConversations, useConversationBadgeCounts } from "../api/use-conversations-queries";
 import { useCloseConversation, useReopenConversation } from "../api/use-conversations-mutations";
 import { useMessages, useSendMessage, useCreateInternalNote } from "../api/use-messages";
 import { useInboxes } from "../api/use-inboxes";
+import { messagesApi } from "../api/messages.api";
 import type { SsInbox } from "../api/inboxes.api";
-import type { Conversation, ConversationMessage, ConversationStatus, ConversationTag } from "../types";
+import type { Conversation, ConversationMessage, ConversationStatus, ConversationTag, MessageAttachment } from "../types";
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
@@ -205,6 +212,95 @@ function ConversationRow({
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
+// Renders one attachment. Images are fetched as a blob through the shared axios
+// client (so auth + the app's configured base URL apply) and shown via an object
+// URL — a raw <img src="/api/…"> would bypass that and break off-origin. The blob
+// fetch is deferred until the image scrolls near the viewport (IntersectionObserver)
+// so opening a long thread renders instantly instead of firing every image request
+// at once. Non-image files fetch on click and open in a new tab.
+function AttachmentView({ attachment }: { attachment: MessageAttachment }) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [inView, setInView] = useState(false);
+  const placeholderRef = useRef<HTMLDivElement | null>(null);
+
+  // Start loading only when the placeholder is about to enter the viewport.
+  useEffect(() => {
+    if (!attachment.isImage || inView) return;
+    const el = placeholderRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px" }, // prefetch just before it's visible
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [attachment.isImage, inView]);
+
+  useEffect(() => {
+    if (!attachment.isImage || !inView) return;
+    let active = true;
+    let created: string | null = null;
+    messagesApi
+      .attachmentBlob(attachment.id)
+      .then((blob) => {
+        if (!active) return;
+        created = URL.createObjectURL(blob);
+        setObjectUrl(created);
+      })
+      .catch(() => active && setFailed(true));
+    return () => {
+      active = false;
+      if (created) URL.revokeObjectURL(created);
+    };
+  }, [attachment.id, attachment.isImage, inView]);
+
+  if (attachment.isImage) {
+    if (failed) {
+      return (
+        <div className="rounded-lg bg-black/5 px-2.5 py-1.5 text-xs text-black/50 dark:bg-white/10 dark:text-white/50">
+          Couldn't load image
+        </div>
+      );
+    }
+    if (!objectUrl) {
+      // Reserved box keeps layout stable and is the IntersectionObserver target.
+      return <div ref={placeholderRef} className="h-40 w-40 animate-pulse rounded-lg bg-black/10 dark:bg-white/10" />;
+    }
+    return (
+      <a href={objectUrl} target="_blank" rel="noopener noreferrer" className="block">
+        <img src={objectUrl} alt={attachment.filename} className="max-h-64 max-w-full rounded-lg object-cover" />
+      </a>
+    );
+  }
+
+  const openFile = async () => {
+    try {
+      const blob = await messagesApi.attachmentBlob(attachment.id);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch {
+      /* ignore — the button simply does nothing on failure */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={openFile}
+      className="flex items-center gap-2 rounded-lg bg-black/5 px-2.5 py-1.5 text-xs font-medium hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15"
+    >
+      <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
+      <span className="truncate">{attachment.filename}</span>
+    </button>
+  );
+}
+
 function MessageBubble({ message, conversation }: { message: ConversationMessage; conversation: Conversation }) {
   const outbound = message.direction === "outbound";
   const meta = CHANNELS[conversation.channel];
@@ -240,7 +336,14 @@ function MessageBubble({ message, conversation }: { message: ConversationMessage
               : "rounded-bl-md bg-white text-black/85 ring-1 ring-black/5 dark:bg-white/[0.08] dark:text-white/90 dark:ring-white/10",
           )}
         >
-          <p className="whitespace-pre-wrap">{message.body}</p>
+          {message.body && <p className="whitespace-pre-wrap">{message.body}</p>}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className={cn("flex flex-col gap-1.5", message.body && "mt-2")}>
+              {message.attachments.map((a) => (
+                <AttachmentView key={a.id} attachment={a} />
+              ))}
+            </div>
+          )}
           {message.cta && (
             <>
               <div className="my-2 h-px bg-black/10" />
@@ -277,6 +380,13 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   const { contact } = conversation;
   const meta = CHANNELS[conversation.channel];
   const ChannelIcon = meta.icon;
+
+  // Shares the cached contact-link query with ClientLinkSection (keyed by contact
+  // id). When linked, Master Data shows the CRM client's record instead of the
+  // raw SendSeven contact fields.
+  const { data: link } = useContactLink(conversation.contact.id, contactLinkMatch(conversation));
+  const client = link?.linkedClient ?? null;
+
   return (
     <Card className="glass ringed grain flex flex-col overflow-hidden rounded-3xl p-0">
       <div className="flex items-center justify-between border-b border-black/8 px-4 py-3 dark:border-white/8">
@@ -293,17 +403,42 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
       </div>
 
       <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-black/35 dark:text-white/35">Master Data</div>
-        <DetailField label="Display name" value={contact.displayName} icon={User} />
-        <DetailField label="First name" value={contact.firstName} icon={User} />
-        <DetailField label="Last name" value={contact.lastName} icon={User} />
-        <DetailField label="Languages" value={contact.languages.join(", ")} icon={Globe} />
-        {contact.birthday && (
-          <DetailField
-            label="Birthday"
-            value={new Date(contact.birthday).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-            icon={Cake}
-          />
+        <ClientLinkSection conversation={conversation} />
+
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-black/35 dark:text-white/35">
+          Master Data
+          {client && <span className="font-semibold normal-case text-green-600 dark:text-green-400">· from your CRM</span>}
+        </div>
+        {client ? (
+          <>
+            <DetailField
+              label="Name"
+              value={[client.title, client.firstName, client.surename].filter(Boolean).join(" ")}
+              icon={User}
+            />
+            {client.phoneNumber && <DetailField label="Phone" value={client.phoneNumber} icon={Phone} />}
+            {client.email && <DetailField label="Email" value={client.email} icon={Mail} />}
+            {formatClientDate(client.DOB) && <DetailField label="Date of birth" value={formatClientDate(client.DOB)!} icon={Cake} />}
+            {composeClientAddress(client) && <DetailField label="Address" value={composeClientAddress(client)!} icon={MapPin} />}
+            {client.badge && <DetailField label="Badge" value={client.badge} icon={Star} />}
+            {formatClientDate(client.createdAt) && (
+              <DetailField label="Client since" value={formatClientDate(client.createdAt)!} icon={CalendarDays} />
+            )}
+          </>
+        ) : (
+          <>
+            <DetailField label="Display name" value={contact.displayName} icon={User} />
+            <DetailField label="First name" value={contact.firstName} icon={User} />
+            <DetailField label="Last name" value={contact.lastName} icon={User} />
+            <DetailField label="Languages" value={contact.languages.join(", ")} icon={Globe} />
+            {contact.birthday && (
+              <DetailField
+                label="Birthday"
+                value={new Date(contact.birthday).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                icon={Cake}
+              />
+            )}
+          </>
         )}
 
         <div className="pt-1 text-[10px] font-bold uppercase tracking-wider text-black/35 dark:text-white/35">
@@ -351,7 +486,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
 
 // ─── Composer ─────────────────────────────────────────────────────────────────
 
-function Composer({ onSend, sending }: { onSend: (body: string, mode: "reply" | "note") => void; sending?: boolean }) {
+function Composer({ onSend, sending, conversation }: { onSend: (body: string, mode: "reply" | "note") => void; sending?: boolean; conversation: Conversation }) {
   const [mode, setMode] = useState<"reply" | "note">("reply");
   const [text, setText] = useState("");
 
@@ -368,9 +503,7 @@ function Composer({ onSend, sending }: { onSend: (body: string, mode: "reply" | 
         <button className="flex items-center gap-1.5 rounded-full bg-[#dcf37a] px-3 py-1.5 text-xs font-semibold text-black">
           <Bot className="h-3.5 w-3.5" /> Router-Bot <ChevronDown className="h-3 w-3" />
         </button>
-        <button className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/5">
-          <Sparkles className="h-3.5 w-3.5" /> AI Suggestions
-        </button>
+        <GenerateEnquiryButton conversation={conversation} />
         <button className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/5">
           <Languages className="h-3.5 w-3.5" /> Translate
         </button>
@@ -866,7 +999,7 @@ export default function ConversationsInbox() {
               )}
             </div>
 
-            <Composer onSend={handleSend} sending={sendMessage.isPending || createNote.isPending} />
+            <Composer onSend={handleSend} sending={sendMessage.isPending || createNote.isPending} conversation={selected} />
           </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-black/30 dark:text-white/30">

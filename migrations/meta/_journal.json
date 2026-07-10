@@ -162,6 +162,20 @@
       "when": 1783400668845,
       "tag": "0022_loud_rictor",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1783521127147,
+      "tag": "0023_dazzling_stepford_cuckoos",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1783598536885,
+      "tag": "0024_chubby_ender_wiggin",
+      "breakpoints": true
     }
   ]
 }

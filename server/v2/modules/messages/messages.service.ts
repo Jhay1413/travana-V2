@@ -12,4 +12,5 @@ export const messagesService = {
   react: (id: string, body: unknown) => messagesRepository.react(id, body),
   removeReaction: (id: string, body: unknown) => messagesRepository.removeReaction(id, body),
   translate: (id: string, body: unknown) => messagesRepository.translate(id, body),
+  downloadAttachment: (attachmentId: string) => messagesRepository.downloadAttachment(attachmentId),
 };

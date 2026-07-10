@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/features/enquiry/types";
 import type { EnquiryTable } from "@/features/quote/types";
+import type { EnquiryIntent } from "@/features/conversations/api/ai-enquiry.api";
 import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useBoardBasis, useAirports, useAccommodationTypes } from "@/hooks/queries";
 import { useEnquiry } from "@/features/enquiry/api/use-enquiry-queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -176,6 +177,116 @@ const defaultForm: EnquiryForm = {
   is_test: false,
 };
 
+// Lookup lists (loaded by the wizard) used to resolve the AI's free-text intent
+// into the lookup IDs the form stores. Typed loosely to match the wizard's other
+// lookup usages.
+type LookupSets = {
+  packageTypes: any[];
+  countries: any[];
+  destinations: any[];
+  boardBasis: any[];
+  airports: any[];
+};
+
+const normLower = (s: string | null | undefined) => (s || "").trim().toLowerCase();
+
+// Maps an AI-extracted enquiry intent onto the wizard form: resolves country /
+// destination / board-basis / airport / holiday-type names to IDs, keeps scalars,
+// and drops anything unresolved (incl. resorts) into notes so it's never lost.
+function resolveIntentToForm(intent: EnquiryIntent, lk: LookupSets): EnquiryForm {
+  const labels: Record<string, string> = {};
+  const countryOf: Record<string, string> = {};
+  const unmapped: string[] = [];
+
+  let holidayType = "";
+  if (intent.holidayType) {
+    const q = normLower(intent.holidayType);
+    const pt = lk.packageTypes.find((p) => normLower(p.name) === q) || lk.packageTypes.find((p) => normLower(p.name).includes(q));
+    if (pt) holidayType = pt.id;
+  }
+
+  const countries: string[] = [];
+  for (const name of intent.countries) {
+    const q = normLower(name);
+    const c = lk.countries.find((x) => normLower(x.country_name) === q) || lk.countries.find((x) => normLower(x.country_name).includes(q));
+    if (c) {
+      if (!countries.includes(c.id)) countries.push(c.id);
+      labels[c.id] = c.country_name;
+    } else unmapped.push(`Country: ${name}`);
+  }
+
+  const destinations: string[] = [];
+  for (const name of intent.destinations) {
+    const q = normLower(name);
+    const d =
+      lk.destinations.find((x) => normLower(x.name) === q) ||
+      lk.destinations.find((x) => normLower(x.name).includes(q) || q.includes(normLower(x.name)));
+    if (d) {
+      if (!destinations.includes(d.id)) destinations.push(d.id);
+      labels[d.id] = d.name;
+      if (d.country_id) {
+        countryOf[d.id] = d.country_id;
+        if (!countries.includes(d.country_id)) countries.push(d.country_id);
+      }
+    } else unmapped.push(`Destination: ${name}`);
+  }
+
+  const boardBases: string[] = [];
+  for (const name of intent.boardBasis) {
+    const q = normLower(name);
+    const b = lk.boardBasis.find((x) => normLower(x.type) === q) || lk.boardBasis.find((x) => normLower(x.type).includes(q));
+    if (b) boardBases.push(b.id);
+    else unmapped.push(`Board basis: ${name}`);
+  }
+
+  const departureAirports: string[] = [];
+  for (const name of intent.departureAirports) {
+    const q = normLower(name);
+    const a =
+      lk.airports.find((x) => normLower(x.airport_name) === q || normLower(x.airport_code) === q) ||
+      lk.airports.find((x) => normLower(x.airport_name).includes(q));
+    if (a) {
+      departureAirports.push(a.id);
+      labels[a.id] = `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`;
+    } else unmapped.push(`Departure airport: ${name}`);
+  }
+
+  const starRating = STAR_RATINGS.find((r) => normLower(r) === normLower(intent.starRating)) || "";
+  const flexibility = FLEXIBILITY_OPTIONS.find((f) => normLower(f) === normLower(intent.flexibility)) || "";
+
+  for (const r of intent.resorts) unmapped.push(`Resort: ${r}`);
+
+  const nights = typeof intent.nights === "number" && intent.nights > 0 ? intent.nights : undefined;
+
+  const noteParts: string[] = [];
+  if (intent.notes?.trim()) noteParts.push(intent.notes.trim());
+  if (unmapped.length) noteParts.push(`To confirm manually: ${unmapped.join("; ")}`);
+
+  return {
+    ...defaultForm,
+    enquiryTitle: intent.enquiryTitle || "",
+    holidayType,
+    countries,
+    destinations,
+    boardBases,
+    departureAirports,
+    starRating,
+    flexibility,
+    travelDate: intent.travelDate || "",
+    nights: nights ?? defaultForm.nights,
+    flexibleNights: nights ? [String(nights)] : defaultForm.flexibleNights,
+    passengersAdults: typeof intent.adults === "number" && intent.adults > 0 ? intent.adults : 2,
+    passengersChildren: typeof intent.children === "number" && intent.children > 0 ? intent.children : 0,
+    passengersInfants: typeof intent.infants === "number" && intent.infants > 0 ? intent.infants : 0,
+    childAges: Array.isArray(intent.childAges) ? intent.childAges : [],
+    budget: intent.budget || "",
+    budgetType: intent.budgetType || "Per Person",
+    notes: noteParts.join("\n\n"),
+    labels,
+    countryOf,
+  };
+}
+
 function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
   const destRecords = ((enquiry.destinations as any[]) || []);
   const resortRecords = ((enquiry.resorts as any[]) || []);
@@ -272,6 +383,8 @@ interface EnquiryWizardProps {
   enquiry?: Enquiry | null;
   onSubmit: (data: Partial<EnquiryTable>) => void;
   isSaving: boolean;
+  /** AI-drafted intent to pre-fill a NEW enquiry (resolved to lookup IDs on open). */
+  aiPrefill?: EnquiryIntent | null;
 }
 
 type StepDef = { title: string; description: string };
@@ -300,7 +413,7 @@ function getSteps(holidayType: string): StepDef[] {
   return PACKAGE_STEPS;
 }
 
-export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving }: EnquiryWizardProps) {
+export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving, aiPrefill }: EnquiryWizardProps) {
   const isEdit = !!enquiry;
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<EnquiryForm>(defaultForm);
@@ -387,6 +500,23 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving 
       return { ...prev, childAges: next };
     });
   }, [form.passengersChildren]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // AI pre-fill: once the lookup lists are loaded, resolve the drafted intent into
+  // the form. Runs after the reset/default effects so it wins for a new enquiry.
+  useEffect(() => {
+    if (!open || !aiPrefill) return;
+    if (!packageTypesData || !countriesData || !allDestinationsData || !boardBasisData || !airportsData) return;
+    setForm(
+      resolveIntentToForm(aiPrefill, {
+        packageTypes: packageTypesData,
+        countries: countriesData,
+        destinations: allDestinationsData,
+        boardBasis: boardBasisData,
+        airports: airportsData,
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, aiPrefill, packageTypesData, countriesData, allDestinationsData, boardBasisData, airportsData]);
 
   // ----- Multi-select handlers (Country / Destination / Resort) -----
 

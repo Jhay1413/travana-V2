@@ -17,11 +17,12 @@ export { conversationIntegrationApi } from "./api/conversation-integration.api";
 export {
   integrationKeys,
   useConversationIntegration,
+  useIntegrationStatuses,
   useSetConversationIntegration,
   useRemoveConversationIntegration,
   useTestConversationIntegration,
 } from "./api/use-conversation-integration";
-export type { IntegrationStatus } from "./api/conversation-integration.api";
+export type { IntegrationStatus, IntegrationSummary } from "./api/conversation-integration.api";
 export { toUiConversation, toUiChannel, toUiMessage } from "./map";
 export { conversationsApi } from "./api/conversations.api";
 export { messagesApi } from "./api/messages.api";

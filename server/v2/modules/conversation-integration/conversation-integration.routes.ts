@@ -5,6 +5,7 @@ import { conversationIntegrationController as c } from "./conversation-integrati
 // specific tenant via :orgId.
 const router = Router();
 
+router.get("/", c.listStatuses);
 router.get("/:orgId", c.getStatus);
 router.put("/:orgId", c.setToken);
 router.delete("/:orgId", c.remove);

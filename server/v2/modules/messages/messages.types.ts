@@ -56,3 +56,10 @@ export interface ListMessagesParams {
   pageSize?: number;
   cursor?: string;
 }
+
+// Raw bytes of an attachment proxied from SendSeven, ready to stream to the client.
+export interface AttachmentDownload {
+  buffer: Buffer;
+  contentType: string;
+  cacheControl: string | null;
+}

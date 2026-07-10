@@ -6,6 +6,7 @@ import { getEmailProvider } from "../../../services/email-provider";
 import { onboardingRepository } from "./onboarding.repository";
 import { organizationRepository } from "../organization/organization.repository";
 import { userRepository } from "../user/user.repository";
+import { sendsevenProvisioningService } from "../conversation-integration/sendseven-provisioning.service";
 import type { SignupPayload, SignupResult } from "./onboarding.types";
 
 const ORG_ROLE_ADMIN = "org_admin";
@@ -118,7 +119,7 @@ export const onboardingService = {
         logoUrl: payload.logoUrl ?? null,
         homeworkerCommission: payload.hasHomeworkers ? payload.homeworkerCommission ?? null : null,
         trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
-      } as any,
+      },
       branchInputs,
       ownerUser: {
         id: crypto.randomUUID(),
@@ -133,7 +134,7 @@ export const onboardingService = {
         emailVerified: false,
         verificationToken,
         verificationTokenExpiry,
-      } as any,
+      },
       ownerBranchMemberRoleAndActive: { orgRole: ORG_ROLE_ADMIN, isActive: true },
       agents: payload.agents.map((agent) => {
         const agentNameParts = agent.name.trim().split(/\s+/);
@@ -154,7 +155,7 @@ export const onboardingService = {
             role: "Agent",
             orgRole,
             emailVerified: false,
-          } as any,
+          },
           branchIndex: agent.branchIndex,
           branchMemberRoleAndActive: { orgRole, isActive: agent.active },
           profile: {
@@ -203,7 +204,7 @@ export const onboardingService = {
     const verificationToken = crypto.randomBytes(32).toString("hex");
     const verificationTokenExpiry = new Date(Date.now() + VERIFICATION_TTL_MS);
 
-    await userRepository.update(found.id, { verificationToken, verificationTokenExpiry } as any);
+    await userRepository.update(found.id, { verificationToken, verificationTokenExpiry });
 
     try {
       const provider = getEmailProvider();
@@ -228,6 +229,12 @@ export const onboardingService = {
       emailVerified: true,
       verificationToken: null,
       verificationTokenExpiry: null,
-    } as any);
+    });
+
+    // Auto-provision the org's SendSeven workspace once its owner is verified.
+    // Fire-and-forget + idempotent — a failure here must never block verification.
+    if (found.orgId) {
+      sendsevenProvisioningService.provisionForOrgSafe(found.orgId, { companyEmail: found.email });
+    }
   },
 };

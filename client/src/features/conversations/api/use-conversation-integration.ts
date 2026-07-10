@@ -4,7 +4,18 @@ import { conversationIntegrationApi, type SetIntegrationInput } from "./conversa
 export const integrationKeys = {
   all: ["conversation-integration"] as const,
   status: (orgId: string) => [...integrationKeys.all, "status", orgId] as const,
+  statuses: () => [...integrationKeys.all, "statuses"] as const,
 };
+
+// All-org integration summary (platform-admin org list).
+export function useIntegrationStatuses(enabled = true) {
+  return useQuery({
+    queryKey: integrationKeys.statuses(),
+    queryFn: () => conversationIntegrationApi.listStatuses(),
+    enabled,
+    staleTime: 60_000,
+  });
+}
 
 export function useConversationIntegration(orgId: string | undefined) {
   return useQuery({
@@ -15,10 +26,11 @@ export function useConversationIntegration(orgId: string | undefined) {
   });
 }
 
-function useAfterChange(orgId: string | undefined) {
+function useAfterChange(_orgId: string | undefined) {
   const qc = useQueryClient();
   return () => {
-    if (orgId) qc.invalidateQueries({ queryKey: integrationKeys.status(orgId) });
+    // Refresh both the per-org status and the all-org list (needs-key badge).
+    qc.invalidateQueries({ queryKey: integrationKeys.all });
   };
 }
 

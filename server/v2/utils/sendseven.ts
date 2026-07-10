@@ -18,6 +18,10 @@ import { AppError } from "./error-handler";
 export interface SendSevenConfig {
   baseUrl: string;
   token: string;
+  // When set, the request targets a sub-account via the parent (platform) token
+  // by sending `X-Tenant-ID`. Omitted for standalone per-org tokens, which are
+  // already scoped to their own tenant. See SendSeven cross-tenant API docs.
+  tenantId?: string | null;
 }
 
 type QueryValue = string | number | boolean | undefined | null;
@@ -44,6 +48,33 @@ function config(): SendSevenConfig | null {
 }
 
 export const isSendSevenConfigured = (): boolean => config() !== null;
+
+// ── Platform-level credential (provisioning) ──────────────────────────────────
+// A single account-wide token used ONLY for platform operations like creating
+// tenants — NOT for per-tenant data access. Kept separate so tenant isolation is
+// never at risk from this credential.
+export function platformConfig(): SendSevenConfig | null {
+  const baseUrl = process.env.CONVERSATIONS_API_URL;
+  const token = process.env.SENDSEVEN_PLATFORM_TOKEN;
+  if (!baseUrl || !token) return null;
+  return { baseUrl: baseUrl.replace(/\/$/, ""), token };
+}
+
+export const isPlatformConfigured = (): boolean => platformConfig() !== null;
+
+// Runs a SendSeven request with the platform credential regardless of any
+// per-tenant context.
+export function platformRequest<T>(
+  method: string,
+  path: string,
+  opts: { query?: SsQuery; body?: unknown } = {},
+): Promise<T> {
+  const cfg = platformConfig();
+  if (!cfg) {
+    throw new AppError("SendSeven platform token not configured (set SENDSEVEN_PLATFORM_TOKEN)", 503);
+  }
+  return tenantContext.run({ config: cfg }, () => sendSevenRequest<T>(method, path, opts));
+}
 
 // Serve fixture data only when nothing is configured AND fixtures aren't disabled.
 export const useSampleData = (): boolean =>
@@ -81,6 +112,7 @@ export async function sendSevenRequest<T>(
       headers: {
         Authorization: `Bearer ${cfg.token}`,
         Accept: "application/json",
+        ...(cfg.tenantId ? { "X-Tenant-ID": cfg.tenantId } : {}),
         ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
@@ -116,4 +148,36 @@ export async function sendSevenRequest<T>(
 
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+// Low-level variant that returns the raw Response, for binary/streaming proxies
+// (e.g. attachment/image downloads) where we don't want JSON parsing. Applies the
+// same auth + X-Tenant-ID + query rules; the caller inspects status/headers/body.
+export async function sendSevenRaw(
+  method: string,
+  path: string,
+  opts: { query?: SsQuery } = {},
+): Promise<globalThis.Response> {
+  const cfg = config();
+  if (!cfg) {
+    warnSendSevenOnce();
+    throw new AppError("SendSeven API is not configured (set CONVERSATIONS_API_URL and CONVERSATIONS_API_TOKEN)", 503);
+  }
+
+  const url = new URL(`${cfg.baseUrl}${path}`);
+  for (const [key, value] of Object.entries(opts.query ?? {})) {
+    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
+  }
+
+  try {
+    return await fetch(url.toString(), {
+      method,
+      headers: {
+        Authorization: `Bearer ${cfg.token}`,
+        ...(cfg.tenantId ? { "X-Tenant-ID": cfg.tenantId } : {}),
+      },
+    });
+  } catch {
+    throw new AppError("Failed to reach the SendSeven service", 502);
+  }
 }

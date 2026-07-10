@@ -26,6 +26,16 @@ export interface ConversationContact {
   customFields: { label: string; value: string }[];
 }
 
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  contentType: string;
+  /** Same-origin proxy URL that streams the file through our server. */
+  url: string;
+  /** True when the content type is an image, so the bubble renders it inline. */
+  isImage: boolean;
+}
+
 export interface ConversationMessage {
   id: string;
   direction: MessageDirection;
@@ -40,6 +50,8 @@ export interface ConversationMessage {
   isNote?: boolean;
   /** Optional rich call-to-action rendered as a button inside the bubble. */
   cta?: { label: string };
+  /** Media/files on the message (images render inline, others as chips). */
+  attachments?: MessageAttachment[];
 }
 
 export interface ConversationTag {

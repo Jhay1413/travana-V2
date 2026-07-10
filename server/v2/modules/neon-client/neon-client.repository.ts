@@ -136,6 +136,27 @@ export const neonClientRepository = {
     return { clients, total: totalResult[0]?.total ?? 0 };
   },
 
+  // Finds active clients whose email or phone matches the given values — used to
+  // suggest a client to link a SendSeven contact to. Phone comparison is done on
+  // digits only so "+44 175…" matches "0175…" etc. Returns a small candidate set.
+  async findMatches(opts: { phone?: string | null; email?: string | null }, scope?: Scope): Promise<NeonClient[]> {
+    const matchers: SQL[] = [];
+
+    const email = opts.email?.trim();
+    if (email) matchers.push(ilike(clientTable.email, email));
+
+    const phoneDigits = (opts.phone ?? "").replace(/\D/g, "");
+    if (phoneDigits.length >= 7) {
+      const tail = phoneDigits.slice(-8);
+      matchers.push(sql`regexp_replace(${clientTable.phoneNumber}, '[^0-9]', '', 'g') LIKE ${`%${tail}`}`);
+    }
+
+    if (matchers.length === 0) return [];
+
+    const conds: SQL[] = [...buildClientScopeConds(scope), activeOnly, or(...matchers) as SQL];
+    return db.select().from(clientTable).where(and(...conds)).orderBy(desc(clientTable.createdAt)).limit(5);
+  },
+
   async create(client: InsertClientTable, scope?: Scope): Promise<NeonClient> {
     const values: InsertClientTable = scope
       ? ({

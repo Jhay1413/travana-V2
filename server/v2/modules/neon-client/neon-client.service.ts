@@ -30,6 +30,11 @@ export const neonClientService = {
     return neonClientRepository.create(data, scope);
   },
 
+  /** Candidate clients matching a contact's phone/email, for link suggestions. */
+  async findMatches(opts: { phone?: string | null; email?: string | null }, scope: Scope): Promise<NeonClient[]> {
+    return neonClientRepository.findMatches(opts, scope);
+  },
+
   async updateNeonClient(id: string, data: Partial<InsertClientTable>, scope: Scope): Promise<NeonClient> {
     const client = await neonClientRepository.update(id, data, scope);
     if (!client) throw new AppError('Neon client not found', 404);

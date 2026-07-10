@@ -3,8 +3,9 @@ import { useLocation } from "wouter";
 import { useRole } from "@/hooks/use-role";
 import { useAdminOrgs } from "@/hooks/queries";
 import { useActivateOrg, useStartImpersonation } from "@/hooks/mutations";
+import { useIntegrationStatuses } from "@/features/conversations";
 import type { OrgSummary } from "@/features/platform-admin/api/platform-admin.api";
-import { AlertCircle, Building2, Search, Download, Loader2, ShieldOff, ShieldCheck, Pencil, Eye, ExternalLink } from "lucide-react";
+import { AlertCircle, Building2, Search, Download, Loader2, ShieldOff, ShieldCheck, Pencil, Eye, ExternalLink, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SuspendOrgDialog } from "@/features/platform-admin/components/platform-admin/suspend-org-dialog";
@@ -26,6 +27,12 @@ export default function PlatformAdminPage() {
   const allowed = role === "PlatformAdmin";
 
   const { data: orgs = [], isLoading, isError, error } = useAdminOrgs();
+  const { data: integrationStatuses = [] } = useIntegrationStatuses(allowed);
+  // Orgs whose SendSeven tenant is provisioned but still awaiting an API key.
+  const needsKeyOrgIds = useMemo(
+    () => new Set(integrationStatuses.filter((s) => s.tenantId && !s.hasToken).map((s) => s.orgId)),
+    [integrationStatuses],
+  );
   const activate    = useActivateOrg();
   const impersonate = useStartImpersonation();
   const [, navigate] = useLocation();
@@ -156,6 +163,7 @@ export default function PlatformAdminPage() {
               <OrgRow
                 key={o.id}
                 org={o}
+                needsKey={needsKeyOrgIds.has(o.id)}
                 onOpen={() => navigate(`/platform-admin/organizations/${o.id}`)}
                 onSuspend={() => setSuspendTarget(o)}
                 onActivate={() => activate.mutate(o.id)}
@@ -196,6 +204,7 @@ export default function PlatformAdminPage() {
 
 function OrgRow({
   org,
+  needsKey,
   onOpen,
   onSuspend,
   onActivate,
@@ -205,6 +214,7 @@ function OrgRow({
   impersonating,
 }: {
   org: OrgSummary;
+  needsKey: boolean;
   onOpen: () => void;
   onSuspend: () => void;
   onActivate: () => void;
@@ -222,7 +232,19 @@ function OrgRow({
             <Building2 className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium">{org.name}</div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{org.name}</span>
+              {needsKey && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-400"
+                  title="SendSeven tenant provisioned — awaiting an API key. Open the org → Integrations to add it."
+                  data-testid={`badge-needs-key-${org.id}`}
+                >
+                  <KeyRound className="h-3 w-3" />
+                  Needs SendSeven key
+                </span>
+              )}
+            </div>
             <div className="text-xs text-black/50 dark:text-white/50">/{org.slug}</div>
           </div>
         </div>

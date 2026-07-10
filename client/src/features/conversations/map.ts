@@ -1,7 +1,41 @@
-import type { SsConversation } from "./api/conversations.api";
-import type { SsMessage } from "./api/messages.api";
+import type { SsConversation, SsLastMessagePreview } from "./api/conversations.api";
+import type { SsMessage, SsMessageAttachment } from "./api/messages.api";
 import { CHANNELS } from "./channels";
-import type { Conversation, ConversationChannel, ConversationMessage, ConversationStatus } from "./types";
+import type { Conversation, ConversationChannel, ConversationMessage, ConversationStatus, MessageAttachment } from "./types";
+
+// Routes attachment bytes through our server proxy so the browser never needs the
+// SendSeven workspace token (see server messages downloadAttachment).
+function toUiAttachment(a: SsMessageAttachment): MessageAttachment {
+  return {
+    id: a.id,
+    filename: a.filename,
+    contentType: a.content_type,
+    url: `/api/v2/messages/attachments/${a.id}/download`,
+    isImage: (a.content_type || "").toLowerCase().startsWith("image/"),
+  };
+}
+
+// A one-line preview for a message that has no text (e.g. a photo/file), so list
+// rows and seeds don't render blank.
+function mediaPreview(messageType: string | null | undefined): string {
+  switch ((messageType || "").toLowerCase()) {
+    case "image":
+      return "📷 Photo";
+    case "video":
+      return "🎥 Video";
+    case "audio":
+      return "🎵 Audio";
+    case "document":
+    case "file":
+      return "📎 Attachment";
+    case "sticker":
+      return "Sticker";
+    case "location":
+      return "📍 Location";
+    default:
+      return "";
+  }
+}
 
 // Maps a SendSeven message onto the UI thread model.
 export function toUiMessage(m: SsMessage): ConversationMessage {
@@ -12,7 +46,13 @@ export function toUiMessage(m: SsMessage): ConversationMessage {
     sentAt: m.sent_at ?? m.created_at,
     read: !!m.read_at,
     isNote: !!m.is_internal,
+    attachments: (m.attachments ?? []).map(toUiAttachment),
   };
+}
+
+// The list row / seed preview: message text, or a media placeholder when empty.
+function lastMessagePreview(last: SsLastMessagePreview | null | undefined): string {
+  return last?.text?.trim() || mediaPreview(last?.message_type);
 }
 
 // Maps a SendSeven channel_type (+ email/live-chat flags) onto the five UI
@@ -82,7 +122,7 @@ export function toUiConversation(item: SsConversation): Conversation {
     status: toUiStatus(item.status),
     assignee,
     unread: !!item.needs_reply,
-    preview: item.last_message?.text ?? "",
+    preview: lastMessagePreview(item.last_message),
     lastActivityAt,
     tags: (item.tags ?? []).map((t) => ({ id: t.id, name: t.name, color: t.color ?? "#94a3b8" })),
     contact: {
@@ -95,12 +135,14 @@ export function toUiConversation(item: SsConversation): Conversation {
       handleLabel,
       customFields: [],
     },
-    messages: item.last_message?.text
+    // Seed the thread with the single last_message so the row isn't blank before
+    // the full history (with attachments) arrives via the messages API.
+    messages: item.last_message
       ? [
           {
             id: `${item.id}-last`,
             direction: item.last_message.direction === "outbound" ? "outbound" : "inbound",
-            body: item.last_message.text,
+            body: lastMessagePreview(item.last_message),
             sentAt: item.last_message.created_at ?? lastActivityAt,
           },
         ]

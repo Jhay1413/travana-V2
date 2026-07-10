@@ -17,6 +17,10 @@ export const conversationIntegrationRepository = {
     return row ?? null;
   },
 
+  async findAll(): Promise<SendsevenIntegration[]> {
+    return db.select().from(sendsevenIntegrations);
+  },
+
   async upsert(data: UpsertIntegrationData): Promise<SendsevenIntegration> {
     const [row] = await db
       .insert(sendsevenIntegrations)
@@ -35,6 +39,20 @@ export const conversationIntegrationRepository = {
           isActive: true,
           updatedAt: new Date(),
         },
+      })
+      .returning();
+    return row;
+  },
+
+  // Links the org to a SendSeven tenant without touching the token (used by
+  // onboarding auto-provisioning). Creates a token-less row if none exists.
+  async setTenantId(orgId: string, tenantId: string): Promise<SendsevenIntegration> {
+    const [row] = await db
+      .insert(sendsevenIntegrations)
+      .values({ orgId, tenantId, isActive: true })
+      .onConflictDoUpdate({
+        target: sendsevenIntegrations.orgId,
+        set: { tenantId, updatedAt: new Date() },
       })
       .returning();
     return row;

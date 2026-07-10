@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, CheckCircle2, XCircle, KeyRound, Plug } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, KeyRound, Plug, Copy } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,7 @@ export function SendSevenIntegrationCard({ orgId }: { orgId: string }) {
   };
 
   const connected = status?.configured && status.source === "org";
+  const managed = status?.source === "tenant";
 
   return (
     <Card className="rounded-2xl border border-black/10 p-5 dark:border-white/10">
@@ -86,6 +87,11 @@ export function SendSevenIntegrationCard({ orgId }: { orgId: string }) {
                   Connected · <span className="font-mono text-xs">{status?.tokenMasked ?? "••••"}</span>
                 </span>
               </>
+            ) : managed ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <span>Connected via managed sub-account — the platform parent token handles this tenant automatically.</span>
+              </>
             ) : status?.source === "env" ? (
               <>
                 <CheckCircle2 className="h-4 w-4 text-amber-500" />
@@ -98,6 +104,29 @@ export function SendSevenIntegrationCard({ orgId }: { orgId: string }) {
               </>
             )}
           </div>
+
+          {status?.tenantId && (
+            <div className="-mt-1 flex items-center gap-1.5 text-[11px] text-black/45 dark:text-white/45">
+              <span>
+                Auto-provisioned SendSeven sub-account: <span className="font-mono">{status.tenantId}</span>
+              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(status.tenantId as string);
+                    toast({ title: "Sub-account id copied", description: "Reached automatically via the platform parent token (X-Tenant-ID)." });
+                  } catch {
+                    toast({ title: "Copy failed", description: "Copy the id manually.", variant: "destructive" });
+                  }
+                }}
+                title="Copy tenant id"
+                className="grid h-5 w-5 place-items-center rounded text-black/40 hover:bg-black/5 hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10"
+              >
+                <Copy className="h-3 w-3" />
+              </button>
+            </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">

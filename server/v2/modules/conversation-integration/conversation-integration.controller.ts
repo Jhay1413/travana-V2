@@ -15,6 +15,11 @@ function requireOrgId(req: Request): string {
 }
 
 export const conversationIntegrationController = {
+  // GET /api/v2/conversation-integration  — summary across all orgs (org list)
+  listStatuses: asyncHandler(async (_req: Request, res: Response) => {
+    return successResponse(res, await conversationIntegrationService.listStatuses(), "Integration statuses");
+  }),
+
   // GET /api/v2/conversation-integration/:orgId
   getStatus: asyncHandler(async (req: Request, res: Response) => {
     return successResponse(res, await conversationIntegrationService.getStatus(requireOrgId(req)), "Integration status");

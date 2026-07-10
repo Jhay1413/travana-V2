@@ -162,7 +162,9 @@ export function ChannelsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5">
+        {/* min-w-0: this is a grid item of DialogContent; without it the long
+            connect URL's intrinsic width stretches the whole dialog (breaks truncate). */}
+        <div className="min-w-0 space-y-5">
           {/* Connected channels */}
           <div>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-black/45 dark:text-white/45">Connected</div>
