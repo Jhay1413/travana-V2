@@ -92,16 +92,18 @@ export async function generateTransitionReply(
   botConfig: OrgBotConfig | null,
   kb: OrgKnowledgeBase[],
   kind: TransitionKind,
+  statedTime?: string,
 ): Promise<string> {
   const fallback =
     kind === "ask_callback_time"
       ? "Thanks — I've logged that for you! What time works best for a quick call so we can go through the details?"
       : "Perfect, that's booked in — one of our advisors will call you then. Speak soon!";
 
+  const time = statedTime?.trim();
   const instruction =
     kind === "ask_callback_time"
       ? "The customer's holiday enquiry has just been logged and is being passed to one of the team to look into. Write ONE short, warm message that (a) reassures them you've noted it and the team will get on it, and (b) asks what time would suit them for a quick call to go through the details. Do NOT ask for any more holiday details. Reply with the message text ONLY."
-      : "The customer has just told you a good time to call them. Write ONE short, warm message confirming that one of the team will give them a call then, with a friendly sign-off. Reply with the message text ONLY.";
+      : `The customer has just told you when they're free for a call${time ? `, in their own words: "${time}"` : ""}. Write ONE short, warm message confirming that one of the team will give them a call then. Reflect their stated time naturally in your own words (e.g. "anytime today" → "we'll give you a call at some point today"; "after 5pm tomorrow" → "we'll call you after 5 tomorrow") — do NOT use the vague robotic phrase "at that time". End with a friendly sign-off. Reply with the message text ONLY.`;
 
   try {
     const parts: string[] = [

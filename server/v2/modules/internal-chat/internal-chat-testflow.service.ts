@@ -180,7 +180,7 @@ export const internalChatTestflowService = {
       }
 
       const rawTime = userText.trim();
-      const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked");
+      const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked", rawTime);
       const enquiryId = session.enquiryId;
       let taskId: string | undefined;
       if (enquiryId && prevContext.enquiryOwnerUserId) {

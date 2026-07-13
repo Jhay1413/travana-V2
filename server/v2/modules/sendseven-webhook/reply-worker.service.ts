@@ -241,7 +241,7 @@ export const replyWorker = {
         }
 
         const rawTime = message.text!.trim();
-        const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked");
+        const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked", rawTime);
         let taskId: string | undefined;
         if (state.enquiryId && prevContext.enquiryOwnerUserId) {
           const dueDate = await parseAvailabilityTime(rawTime);
