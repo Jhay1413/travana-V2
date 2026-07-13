@@ -34,6 +34,10 @@ import { quoteStatsConds } from "../../utils/quote-conditions";
 // deliberately so, since that tool is staff-facing and explicitly allowed to
 // share prices/commission; contact fields remain excluded even there.
 
+// Guards against a non-UUID id (e.g. a value the model invented) reaching a
+// `= uuid` comparison, which Postgres rejects with error 22P02.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export type ClientVisibilityLevel = "own" | "branch" | "org" | "all";
 
 export interface ResolvedClientScope {
@@ -220,9 +224,13 @@ export const internalChatClientsRepository = {
   },
 
   // Same visibility filter, keyed by id. Out-of-scope ids resolve to `null`
-  // (never leak whether the row exists outside the caller's visibility).
+  // (never leak whether the row exists outside the caller's visibility). A
+  // non-UUID id (e.g. a value the model invented instead of using one from
+  // search_clients) also returns null rather than crashing Postgres with a
+  // uuid cast error (22P02).
   async findClientById(resolved: ResolvedClientScope, id: string): Promise<ClientIdentityRow | null> {
-    const conds: SQL[] = [eq(clientTable.id, id), ...buildClientVisibilityConds(resolved)];
+    if (!UUID_RE.test(id.trim())) return null;
+    const conds: SQL[] = [eq(clientTable.id, id.trim()), ...buildClientVisibilityConds(resolved)];
 
     const [row] = await db
       .select(IDENTITY_COLUMNS)

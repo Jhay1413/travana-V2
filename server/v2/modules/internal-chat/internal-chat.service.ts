@@ -140,7 +140,9 @@ const getClientRecordsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
       "Returns a specific client's enquiry, quote, and/or booking DETAILS (destinations, dates, status, refs, " +
       "and full financials incl. prices/values/commission) for a client the caller is permitted to see. Use " +
       "after search_clients/get_client_details when the colleague asks about a client's actual enquiries, " +
-      "quotes, or bookings. Never invent details — always call this.",
+      "quotes, or bookings. Never invent details — always call this. The clientId MUST be a UUID you obtained " +
+      "from search_clients or get_client_details in THIS conversation — NEVER invent, guess, or reuse a number " +
+      "from elsewhere. If you don't already have the client's UUID, call search_clients first.",
     parameters: {
       type: "object",
       properties: {
@@ -208,6 +210,7 @@ async function executePipelineStatsTool(
     const answer = await internalChatAnalyticsService.getPipelineAnswer(scope, args.period, args.from, args.to);
     return { ...answer };
   } catch (err) {
+    console.error("[internal-chat] get_pipeline_stats failed:", err);
     return { error: err instanceof AppError ? err.message : "Failed to compute pipeline stats" };
   }
 }
@@ -268,6 +271,7 @@ async function executeSearchClientsTool(scope: Scope, rawArguments: string): Pro
     if (!result.allowed) return { error: result.reason };
     return { results: result.results };
   } catch (err) {
+    console.error("[internal-chat] search_clients failed:", err);
     return { error: err instanceof AppError ? err.message : "Failed to search clients" };
   }
 }
@@ -286,6 +290,7 @@ async function executeGetClientDetailsTool(scope: Scope, rawArguments: string): 
     if (!result.found) return { error: result.reason };
     return { identity: result.identity, pipeline: result.pipeline };
   } catch (err) {
+    console.error("[internal-chat] get_client_details failed:", err);
     return { error: err instanceof AppError ? err.message : "Failed to get client details" };
   }
 }
@@ -335,6 +340,7 @@ async function executeGetClientRecordsTool(scope: Scope, rawArguments: string): 
       bookings: result.bookings,
     };
   } catch (err) {
+    console.error("[internal-chat] get_client_records failed:", err);
     return { error: err instanceof AppError ? err.message : "Failed to get client records" };
   }
 }
@@ -417,7 +423,10 @@ function buildAssistantSystemPrompt(
       `"${GET_CLIENT_RECORDS_TOOL_NAME}" tool (with the same client id) instead — it returns itemized details ` +
       "including full financials (sales price, package commission, discounts, service charge). You MAY share " +
       "those prices/values/commission figures with the colleague — this is staff-facing financial data, not a " +
-      "customer-facing disclosure. Never guess or invent a client's identity, history, or figures — always look " +
+      "customer-facing disclosure. The client id is a UUID: you MUST obtain it from search_clients (or " +
+      "get_client_details) in THIS conversation before calling get_client_details or get_client_records — on a new " +
+      "question about a client, call search_clients again to get their exact id; NEVER invent an id, guess one, or " +
+      "reuse a number from elsewhere. Never guess or invent a client's identity, history, or figures — always look " +
       "it up via these tools. If a search returns more than one plausible match, ask the colleague which one they " +
       "mean rather than picking one yourself. These tools only return what the caller is permitted to see — if a " +
       "lookup is denied or a client isn't found/visible, relay that plainly rather than working around it. " +
