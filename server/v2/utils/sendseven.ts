@@ -35,6 +35,12 @@ export function runWithSendSevenConfig(config: SendSevenConfig | null, fn: () =>
   tenantContext.run({ config }, fn);
 }
 
+// Async variant: runs `fn` (which may await SendSeven calls) inside the tenant
+// config context and returns its result. Used by the webhook reply worker.
+export function runWithSendSevenConfigAsync<T>(config: SendSevenConfig | null, fn: () => Promise<T>): Promise<T> {
+  return tenantContext.run({ config }, fn);
+}
+
 function envConfig(): SendSevenConfig | null {
   const baseUrl = process.env.CONVERSATIONS_API_URL;
   const token = process.env.CONVERSATIONS_API_TOKEN;
@@ -74,6 +80,23 @@ export function platformRequest<T>(
     throw new AppError("SendSeven platform token not configured (set SENDSEVEN_PLATFORM_TOKEN)", 503);
   }
   return tenantContext.run({ config: cfg }, () => sendSevenRequest<T>(method, path, opts));
+}
+
+// Runs a SendSeven request with the platform (parent) credential targeting a
+// specific sub-account via X-Tenant-ID — for cross-tenant admin ops like
+// registering/deleting a tenant's webhook. Needs the parent token to carry
+// `tenants:manage` + the relevant action scope (e.g. webhooks:create).
+export function platformTenantRequest<T>(
+  tenantId: string,
+  method: string,
+  path: string,
+  opts: { query?: SsQuery; body?: unknown } = {},
+): Promise<T> {
+  const cfg = platformConfig();
+  if (!cfg) {
+    throw new AppError("SendSeven platform token not configured (set SENDSEVEN_PLATFORM_TOKEN)", 503);
+  }
+  return tenantContext.run({ config: { ...cfg, tenantId } }, () => sendSevenRequest<T>(method, path, opts));
 }
 
 // Serve fixture data only when nothing is configured AND fixtures aren't disabled.

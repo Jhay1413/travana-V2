@@ -4,6 +4,7 @@ import { NotificationToast } from "@/features/notifications/components/notificat
 import { AppHeader } from "./app-header";
 import { AppSidenav } from "./app-sidenav";
 import { ImpersonationBanner } from "@/features/platform-admin/components/platform-admin/impersonation-banner";
+import { ChatWidget } from "@/features/ai-chat";
 
 function PageLoader() {
   return (
@@ -27,6 +28,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
       <NotificationToast />
+      <ChatWidget />
     </div>
   );
 }

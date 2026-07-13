@@ -58,6 +58,42 @@ export const conversationIntegrationRepository = {
     return row;
   },
 
+  // Stores the registered webhook (endpoint id + encrypted secret) and turns
+  // auto-reply on. Requires an existing row (the org must be provisioned first).
+  async setWebhook(
+    orgId: string,
+    data: { webhookEndpointId: string; webhookSecret: string; autoReplyMode?: string },
+  ): Promise<SendsevenIntegration> {
+    const [row] = await db
+      .update(sendsevenIntegrations)
+      .set({
+        webhookEndpointId: data.webhookEndpointId,
+        webhookSecret: data.webhookSecret,
+        autoReplyEnabled: true,
+        ...(data.autoReplyMode ? { autoReplyMode: data.autoReplyMode } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(sendsevenIntegrations.orgId, orgId))
+      .returning();
+    return row;
+  },
+
+  // Updates just the auto-reply mode ('draft' | 'send') without re-registering.
+  async setAutoReplyMode(orgId: string, mode: string): Promise<void> {
+    await db
+      .update(sendsevenIntegrations)
+      .set({ autoReplyMode: mode, updatedAt: new Date() })
+      .where(eq(sendsevenIntegrations.orgId, orgId));
+  },
+
+  // Clears the webhook + disables auto-reply (keeps the token/tenant link).
+  async clearWebhook(orgId: string): Promise<void> {
+    await db
+      .update(sendsevenIntegrations)
+      .set({ webhookEndpointId: null, webhookSecret: null, autoReplyEnabled: false, updatedAt: new Date() })
+      .where(eq(sendsevenIntegrations.orgId, orgId));
+  },
+
   async deleteByOrg(orgId: string): Promise<void> {
     await db.delete(sendsevenIntegrations).where(eq(sendsevenIntegrations.orgId, orgId));
   },

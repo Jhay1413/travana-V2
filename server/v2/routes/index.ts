@@ -33,6 +33,9 @@ import conversationIntegrationRoutes from '../modules/conversation-integration/c
 import { sendSevenContext } from '../modules/conversation-integration/conversation-integration.middleware';
 import channelsRoutes from '../modules/channels/channels.routes';
 import contactLinkRoutes from '../modules/contact-link/contact-link.routes';
+import sendsevenWebhookRoutes from '../modules/sendseven-webhook/sendseven-webhook.routes';
+import botConfigRoutes from '../modules/bot-config/bot-config.routes';
+import knowledgeBaseRoutes from '../modules/knowledge-base/knowledge-base.routes';
 import inboxesRoutes from '../modules/inboxes/inboxes.routes';
 import socialPostRoutes from '../modules/social-post/social-post.routes';
 import emailRoutes from '../modules/email/email.routes';
@@ -69,12 +72,15 @@ import lookupRoutes from '../lookup/lookup.routes';
 import settingsRoutes from '../settings';
 import fileRoutes from '../modules/files/file.routes';
 import trainingRoutes from '../modules/training/training.routes';
+import internalChatRoutes from '../modules/internal-chat/internal-chat.routes';
 
 const router = Router();
 const auth = [isAuthenticated, orgBranchScope] as const;
 
 router.use('/files',              fileRoutes);
 router.use('/onboarding',         onboardingRoutes);
+// Public: SendSeven webhook receiver — signature-verified, no session auth.
+router.use('/sendseven-webhook',  sendsevenWebhookRoutes);
 router.use('/users',              ...auth, userRoutes);
 router.use('/branches',           ...auth, branchRoutes);
 router.use('/organizations',      organizationRoutes);
@@ -107,6 +113,8 @@ router.use('/conversations',      ...auth, sendSevenContext, conversationsRoutes
 router.use('/messages',           ...auth, sendSevenContext, messagesRoutes);
 router.use('/channels',           ...auth, sendSevenContext, channelsRoutes);
 router.use('/contact-links',      ...auth, contactLinkRoutes);
+router.use('/bot-config',         ...auth, botConfigRoutes);
+router.use('/knowledge-base',     ...auth, knowledgeBaseRoutes);
 router.use('/inboxes',            ...auth, sendSevenContext, inboxesRoutes);
 router.use('/social-posts',       ...auth, socialPostRoutes);
 router.use('/emails',             isAuthenticated, emailRoutes);
@@ -138,6 +146,7 @@ router.use('/user-org-roles',     ...auth, userOrgRolesRoutes);
 router.use('/lookup',             lookupRoutes);
 router.use('/settings',           isAuthenticated, settingsRoutes);
 router.use('/training',           ...auth, trainingRoutes);
+router.use('/internal-chat',      ...auth, internalChatRoutes);
 
 // v2 error handler — must be LAST so it catches errors from every v2 route above.
 // Without this, v2 errors bubble to the global v1 errorHandler, whose `instanceof

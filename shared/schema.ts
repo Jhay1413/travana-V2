@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, vector, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1952,11 +1952,92 @@ export const sendsevenIntegrations = pgTable("sendseven_integrations", {
   baseUrl: text("base_url"), // optional per-org override of CONVERSATIONS_API_URL
   isActive: boolean("is_active").notNull().default(true),
   createdByUserId: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+  // ── AI auto-reply webhook (see docs/sendseven-ai-auto-reply-plan.md) ──
+  // SendSeven webhook endpoint id (to update/delete) + its signing secret
+  // (encrypted at rest). Set when auto-reply is enabled for the org.
+  webhookEndpointId: text("webhook_endpoint_id"),
+  webhookSecret: text("webhook_secret"),
+  autoReplyEnabled: boolean("auto_reply_enabled").notNull().default(false),
+  autoReplyMode: text("auto_reply_mode").notNull().default("draft"), // 'draft' | 'send'
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export type SendsevenIntegration = typeof sendsevenIntegrations.$inferSelect;
+
+// Idempotency + audit log for inbound SendSeven webhook deliveries. `eventId` is
+// unique so retries of the same delivery are processed at most once.
+export const sendsevenWebhookEvents = pgTable("sendseven_webhook_events", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: text("event_id").notNull().unique(),
+  orgId: uuid("org_id").references(() => organization.id, { onDelete: "cascade" }),
+  messageId: text("message_id"),
+  type: text("type"),
+  status: text("status").notNull().default("received"), // received | skipped | replied | failed
+  error: text("error"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type SendsevenWebhookEvent = typeof sendsevenWebhookEvents.$inferSelect;
+
+// Per-org AI bot identity + behaviour, edited on the org-admin "AI Assistant"
+// page. The live on/off + mode are on sendseven_integrations (auto_reply_*);
+// this holds the persona/instructions used to compose the reply prompt.
+export const orgBotConfig = pgTable("org_bot_config", {
+  orgId: uuid("org_id").primaryKey().references(() => organization.id, { onDelete: "cascade" }),
+  name: text("name"),
+  avatarUrl: text("avatar_url"),
+  persona: text("persona"),
+  preferredResponse: text("preferred_response"),
+  greeting: text("greeting"),
+  signOff: text("sign_off"),
+  language: text("language").notNull().default("en-GB"),
+  handoffInstructions: text("handoff_instructions"),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type OrgBotConfig = typeof orgBotConfig.$inferSelect;
+export const insertOrgBotConfigSchema = createInsertSchema(orgBotConfig).omit({ orgId: true, updatedBy: true, createdAt: true, updatedAt: true });
+
+// Company knowledge the AI is grounded on (one row per entry). RAG-ready.
+export const orgKnowledgeBase = pgTable("org_knowledge_base", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  category: text("category"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type OrgKnowledgeBase = typeof orgKnowledgeBase.$inferSelect;
+export const insertOrgKnowledgeBaseSchema = createInsertSchema(orgKnowledgeBase).omit({ id: true, orgId: true, createdBy: true, createdAt: true, updatedAt: true });
+
+// Our per-thread memory for the AI auto-reply, keyed by the SendSeven
+// conversation id. See docs/sendseven-ai-auto-reply-plan.md §12–14.
+export const sendsevenConversationState = pgTable("sendseven_conversation_state", {
+  conversationId: text("conversation_id").primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  contactId: text("contact_id"),
+  clientId: uuid("client_id").references(() => clientTable.id, { onDelete: "set null" }),
+  intent: text("intent"),
+  enquirySlots: jsonb("enquiry_slots"),
+  enquiryStatus: text("enquiry_status"), // collecting | confirming | created | null
+  enquiryId: text("enquiry_id"),
+  // Set when a human takes over; once true the AI stays silent (§8).
+  needsHuman: boolean("needs_human").notNull().default(false),
+  handledByHumanAt: timestamp("handled_by_human_at"),
+  context: jsonb("context"), // rolling recent messages / running summary (§13)
+  lastAiReplyAt: timestamp("last_ai_reply_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type SendsevenConversationState = typeof sendsevenConversationState.$inferSelect;
 
 // Manual link between a SendSeven contact (from the unified inbox) and a client
 // in this CRM's client_table. One-to-one per org: a contact maps to one client
@@ -1981,6 +2062,70 @@ export const sendsevenContactLinks = pgTable(
 );
 
 export type SendsevenContactLink = typeof sendsevenContactLinks.$inferSelect;
+
+// ─── Internal Chat (in-system AI chatbot for staff) ──────────────────────────
+// A staff-facing chat session — either the org-wide assistant ("assistant")
+// or a driven test of the customer-facing enquiry flow ("test_flow", wired up
+// in a later phase). One row per session; enquiry* mirrors the shape used by
+// sendseven_conversation_state so the same slot-filling machinery can be
+// reused once test_flow is implemented.
+export const internalChatSession = pgTable("internal_chat_session", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+  mode: text("mode").notNull(), // 'assistant' | 'test_flow'
+  clientId: uuid("client_id").references(() => clientTable.id, { onDelete: "set null" }),
+  intent: text("intent"),
+  enquirySlots: jsonb("enquiry_slots"),
+  enquiryStatus: text("enquiry_status"),
+  enquiryId: text("enquiry_id"),
+  // Set when the flow needs a human to step in; the assistant stays silent.
+  needsHuman: boolean("needs_human").notNull().default(false),
+  context: jsonb("context"),
+  isTest: boolean("is_test").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type InternalChatSession = typeof internalChatSession.$inferSelect;
+export type InsertInternalChatSession = typeof internalChatSession.$inferInsert;
+
+// One row per message in an internal_chat_session, in send order.
+export const internalChatMessage = pgTable("internal_chat_message", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => internalChatSession.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // 'user' | 'assistant' | 'system_note'
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("idx_internal_chat_message_session_created").on(t.sessionId, t.createdAt),
+]);
+
+export type InternalChatMessage = typeof internalChatMessage.$inferSelect;
+export type InsertInternalChatMessage = typeof internalChatMessage.$inferInsert;
+
+// ─── AI Embeddings (pgvector) ──────────────────────────────────────────────────
+// Vector store for RAG retrieval over org knowledge base entries and quotes.
+// One row per (org, sourceType, sourceId); content is the human-readable text
+// that was embedded (names, not raw ids) so retrieved rows are directly usable
+// in a prompt.
+export const aiEmbeddings = pgTable("ai_embeddings", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  sourceType: text("source_type").notNull(), // 'knowledge' | 'quote'
+  sourceId: text("source_id").notNull(), // kb entry id or quote.id
+  content: text("content").notNull(), // human-readable embedded text (names, NOT ids)
+  metadata: jsonb("metadata"),
+  embedding: vector("embedding", { dimensions: 1536 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => [
+  unique("ai_embeddings_source_uq").on(t.orgId, t.sourceType, t.sourceId),
+  index("idx_ai_embeddings_org_source").on(t.orgId, t.sourceType),
+]);
+
+export type AiEmbedding = typeof aiEmbeddings.$inferSelect;
+export type InsertAiEmbedding = typeof aiEmbeddings.$inferInsert;
 
 // ─── Facebook Integration ─────────────────────────────────────────────────────
 

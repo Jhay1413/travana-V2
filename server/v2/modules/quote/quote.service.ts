@@ -5,6 +5,8 @@ import { tagService } from "../tag/tag.service";
 import { taskService } from "../task/task.service";
 import { enquiryTableRepository } from "../enquiry/enquiry.repository";
 import { destinationGuruService } from "../destination-guru/destination-guru.service";
+import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
+import { buildQuoteEmbeddingText, buildQuoteEmbeddingMetadata } from "./quote-embedding";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
 import type {
@@ -155,6 +157,40 @@ async function resolveAndGenerateGuru(accommodationId: string, userId?: string) 
   }
 }
 
+// Keep the AI vector store in step with a FREE quote's readable details.
+// Best-effort and non-blocking: `syncSource`/`removeSource` are fired without
+// awaiting completion, and any failure (fetching details or the embedding call
+// itself) is swallowed — a quote create/update/delete must never fail because
+// of this. Callers resolve orgId via the quote's transaction (transactionRepository)
+// before calling in — a free quote's copy transaction may have no org yet, in
+// which case we simply skip (no-op).
+function syncFreeQuoteEmbedding(quoteId: string, orgId: string | null | undefined): void {
+  if (!orgId) return;
+  void (async () => {
+    try {
+      const details = await newQuoteRepository.findWithDetails(quoteId);
+      if (!details || !details.isFreeQuote) return;
+      await aiEmbeddingsService.syncSource({
+        orgId,
+        sourceType: "quote",
+        sourceId: quoteId,
+        content: buildQuoteEmbeddingText(details),
+        metadata: buildQuoteEmbeddingMetadata(details),
+      });
+    } catch (err) {
+      console.warn(`[quote-embedding] sync failed (quote=${quoteId}):`, err instanceof Error ? err.message : err);
+    }
+  })();
+}
+
+// Delete keyed on the quote id alone (globally unique), so an embedding is
+// always cleaned up on delete even when the org can't be resolved (e.g. a free
+// copy whose transaction has no org) — otherwise a deleted quote could linger
+// as an internal AI reference.
+function removeFreeQuoteEmbedding(quoteId: string): void {
+  void aiEmbeddingsService.removeSourceById("quote", quoteId);
+}
+
 export const newQuoteService = {
   async listQuotes(scope: ScopeOrTrusted) {
     return newQuoteRepository.findAll(scope);
@@ -268,6 +304,10 @@ export const newQuoteService = {
       }
     }
 
+    if (quoteFields.isFreeQuote) {
+      syncFreeQuoteEmbedding(q.id, txn.org_id);
+    }
+
     if (!quoteFields.isFreeQuote && !txn.is_test && !quoteFields.not_for_social) {
       try {
         const freeTxn = await transactionRepository.create({ status: 'on_quote', user_id: txn.user_id, is_test: txn.is_test ?? false } as InsertTransaction);
@@ -287,6 +327,9 @@ export const newQuoteService = {
         if (childAges !== undefined) await newQuoteRepository.replaceChildPassengers(freeQ.id, "quote", childAges);
         if (normalizedImages.length > 0) await quoteImageRepository.addImages(freeQ.id, normalizedImages);
         if (data.tags && Array.isArray(data.tags) && data.tags.length > 0) await tagService.addQuoteTags(freeQ.id, data.tags);
+        // Tag the auto-generated free copy with the ORIGINAL transaction's org —
+        // freeTxn itself is created without a scope and so has no org of its own.
+        syncFreeQuoteEmbedding(freeQ.id, txn.org_id);
       } catch (err) {
         console.error('FREE QUOTE (quote.service) - error:', err);
       }
@@ -463,6 +506,11 @@ export const newQuoteService = {
       if (lodgeId) await newQuoteRepository.saveImagesToLodge(lodgeId, normalizedUpdateImages);
     }
 
+    if (q.isFreeQuote) {
+      const txn = await transactionRepository.findById(q.transaction_id);
+      syncFreeQuoteEmbedding(id, txn?.org_id);
+    }
+
     return newQuoteRepository.findWithDetails(id);
   },
 
@@ -471,6 +519,9 @@ export const newQuoteService = {
     const existing = await newQuoteRepository.findById(id);
     if (!existing) throw new AppError("Quote not found", 404);
     await newQuoteRepository.remove(id);
+    if (existing.isFreeQuote) {
+      removeFreeQuoteEmbedding(id);
+    }
     // Deleting a quote: close out its open tasks so they don't linger pointing
     // at a deleted quote. Best-effort — must never block the delete.
     try {

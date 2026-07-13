@@ -20,6 +20,7 @@ import type {
 import { eq, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import type { QuoteEmbeddingDetails } from "./quote-embedding";
 
 function toDateOrNull(value: unknown): Date | null {
   if (value == null) return null;
@@ -556,6 +557,69 @@ export const newQuoteRepository = {
 
     // Return quotes in the original order
     return ids.map(id => quoteMap.get(id)).filter(Boolean);
+  },
+
+  /** Batch, org-agnostic projection of FREE quotes for the embeddings backfill
+   *  script — org id + resolved names only (no raw ids in the name fields).
+   *  Uses the same "free quote" definition as findFreeQuotesPaginated, but
+   *  additionally requires a non-null transaction.org_id since ai_embeddings
+   *  rows must be org-scoped. Ordered by date_created for stable paging. */
+  async findFreeQuoteEmbeddingRows(offset: number, limit: number): Promise<Array<QuoteEmbeddingDetails & { orgId: string }>> {
+    const rows = await db
+      .select({
+        id: quote.id,
+        orgId: transaction.org_id,
+        quote_ref: quote.quote_ref,
+        title: quote.title,
+        quote_status: quote.quote_status,
+        isFreeQuote: quote.isFreeQuote,
+        sales_price: quote.sales_price,
+        price_per_person: quote.price_per_person,
+        num_of_nights: quote.num_of_nights,
+        adult: quote.adult,
+        child: quote.child,
+        infant: quote.infant,
+        travel_date: quote.travel_date,
+        holiday_type_name: package_type.name,
+        main_tour_operator_name: tour_operator.name,
+        board_basis_name: board_basis.type,
+        country_name: country.country_name,
+        destination_name: destination.name,
+        resort_name: resorts.name,
+        departing_airport_name: sql<string | null>`(
+          SELECT airport_table.airport_name
+          FROM quote_flights
+          LEFT JOIN airport_table ON quote_flights.departing_airport_id = airport_table.id
+          WHERE quote_flights.quote_id = quote_table.id
+          ORDER BY quote_flights.departure_date_time ASC
+          LIMIT 1
+        )`,
+      })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .leftJoin(package_type, eq(quote.holiday_type_id, package_type.id))
+      .leftJoin(tour_operator, eq(quote.main_tour_operator_id, tour_operator.id))
+      .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
+      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .leftJoin(destination, eq(resorts.destination_id, destination.id))
+      .leftJoin(country, eq(destination.country_id, country.id))
+      .leftJoin(board_basis, eq(quote_accomodation.board_basis_id, board_basis.id))
+      .where(
+        and(
+          eq(quote.isFreeQuote, true),
+          eq(quote.is_active, true),
+          isNull(quote.deleted_at),
+          eq(transaction.is_test, false),
+          eq(quote.not_for_social, false),
+          isNotNull(transaction.org_id),
+        ),
+      )
+      .orderBy(quote.date_created, quote.id)
+      .limit(limit)
+      .offset(offset);
+
+    return rows.map((r) => ({ ...r, orgId: r.orgId as string }));
   },
 
   async create(data: InsertQuote): Promise<Quote> {

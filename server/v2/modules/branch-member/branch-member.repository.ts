@@ -47,6 +47,24 @@ export const branchMemberRepository = {
     return db.select().from(branchMembers).where(eq(branchMembers.branchId, branchId));
   },
 
+  // Resolves a fallback owner for records an automation creates on an org's
+  // behalf (e.g. an AI-created enquiry) that need a real user_id but have no
+  // human agent assigned yet: prefer an active org_admin, else any active member.
+  async findDefaultOwner(orgId: string): Promise<string | null> {
+    const [admin] = await db
+      .select({ userId: branchMembers.userId })
+      .from(branchMembers)
+      .where(and(eq(branchMembers.orgId, orgId), eq(branchMembers.orgRole, "org_admin"), eq(branchMembers.isActive, true)))
+      .limit(1);
+    if (admin) return admin.userId;
+    const [member] = await db
+      .select({ userId: branchMembers.userId })
+      .from(branchMembers)
+      .where(and(eq(branchMembers.orgId, orgId), eq(branchMembers.isActive, true)))
+      .limit(1);
+    return member?.userId ?? null;
+  },
+
   async create(data: {
     orgId: string;
     branchId: string;

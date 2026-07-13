@@ -2,7 +2,12 @@
 
 **Goal:** When a customer message arrives in a SendSeven inbox, our own AI drafts (and optionally sends) a reply back through SendSeven — per-org, opt-in, with guardrails.
 
-**Status:** Plan / not yet built.
+**Status:**
+- **Phase 1 (webhook infra) built** — schema + migration `0025`, register/disable, signature-verified idempotent receiver (`POST /api/v2/sendseven-webhook/:orgId`, log-only).
+- **Phase 2 (bot admin + knowledge base) built** — migration `0026`; `org_bot_config` + `org_knowledge_base` tables; server modules `bot-config` (`GET/PUT /api/v2/bot-config`, enable/disable/mode) + `knowledge-base` (CRUD), org-admin gated; client "AI Assistant" nav group → **Bot Settings** (`/settings/bot`) + **Knowledge Base** (`/settings/knowledge-base`) pages.
+- **Phase 3 (identity + AI reply) built** — migration `0027` (`sendseven_conversation_state`); webhook receiver now acks-then-processes-async; **identity resolution** (link → phone/email match → auto-create, `identity.service`); **human-takeover detection** (untagged `message.sent` / assigned `conversation.updated` → `needs_human`); **AI reply worker** (`reply-worker.service`) — gpt-4o reply from bot config + active KB + client context, hand-off gate, **draft** (internal note) or **send** (tagged `meta.source=travana-ai`) per org mode. Rolling-context optimization deferred (worker re-fetches recent thread from SendSeven for now).
+- **Phase 4 (enquiry auto-creation) built** — the reply worker now runs the slot-filling state machine: gpt-4o classifies holiday type + intent, collects `enquiry_slots` across turns, summarises + asks the customer to **confirm**, and only on confirmation resolves names→lookup IDs **server-side** (`enquiry-auto-create.service`: holiday type / destinations / board basis; resorts/airports/unmatched → notes) and creates the enquiry via `transactionService.createTransactionWithEnquiry` (client = resolved contact, user = an org admin). Confirmation gate enforced in code (`enquiry_status: collecting → confirming → created`).
+- Migrations `0024`–`0027` not yet applied. Phases 5–6 pending (vector store / quote backfill, auto-send rollout + audit UI).
 **Decisions locked:** Rollout = **per-org opt-in toggle**. Send mode = **draft-first, auto-send later** (recommended; see §7).
 
 ---

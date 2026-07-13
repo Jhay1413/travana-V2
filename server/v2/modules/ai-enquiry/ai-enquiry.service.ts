@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { CHAT_MODEL } from "../../utils/ai-model";
 import { z } from "zod";
 import { AppError } from "../../utils/error-handler";
 import type { EnquiryIntent } from "./ai-enquiry.types";
@@ -67,7 +68,7 @@ export const aiEnquiryService = {
     let raw: string | undefined;
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: CHAT_MODEL,
         response_format: { type: "json_object" },
         temperature: 0.2,
         max_tokens: 900,

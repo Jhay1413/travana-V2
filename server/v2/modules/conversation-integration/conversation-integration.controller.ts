@@ -4,6 +4,7 @@ import { successResponse } from "../../utils/response";
 import { AppError } from "../../utils/error-handler";
 import { getUserId } from "../../utils/get-user-id";
 import { conversationIntegrationService } from "./conversation-integration.service";
+import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
 
 // Managing a tenant's SendSeven token is a PLATFORM-ADMIN action, scoped to a
 // target org via :orgId. The router mounts these behind requirePlatformAdmin.
@@ -42,5 +43,18 @@ export const conversationIntegrationController = {
   // POST /api/v2/conversation-integration/:orgId/test
   test: asyncHandler(async (req: Request, res: Response) => {
     return successResponse(res, await conversationIntegrationService.testConnection(requireOrgId(req)), "Connection test complete");
+  }),
+
+  // POST /api/v2/conversation-integration/:orgId/auto-reply — register the webhook + enable
+  enableAutoReply: asyncHandler(async (req: Request, res: Response) => {
+    const { mode } = (req.body ?? {}) as { mode?: string };
+    const result = await sendsevenWebhookService.enableAutoReply(requireOrgId(req), { mode });
+    return successResponse(res, result, "AI auto-reply enabled");
+  }),
+
+  // DELETE /api/v2/conversation-integration/:orgId/auto-reply — delete the webhook + disable
+  disableAutoReply: asyncHandler(async (req: Request, res: Response) => {
+    await sendsevenWebhookService.disableAutoReply(requireOrgId(req));
+    return successResponse(res, { ok: true }, "AI auto-reply disabled");
   }),
 };

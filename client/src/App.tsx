@@ -17,6 +17,7 @@ import EmailInbox from "@/features/email/components/email-inbox";
 import { PortalPinGate } from "@/pages/portal/portal-pin-gate";
 import { Loader2 } from "lucide-react";
 import type { OrgRole } from "@/types/auth/auth.types";
+import { BotSettingsPage, KnowledgeBasePage } from "@/features/ai-assistant";
 
 // ── Lazy page imports ──────────────────────────────────────────────────────────
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -153,6 +154,8 @@ function AuthenticatedRouter() {
         <RoleRoute path="/agency" allow={ADMIN_ROLES} component={AgencyPage} />
         <RoleRoute path="/admin/import" allow={ADMIN_ROLES} component={AdminImportPage} />
         <RoleRoute path="/admin/lookup/:tableSlug" allow={ADMIN_ROLES} component={AdminLookupPage} />
+        <RoleRoute path="/settings/bot" allow={ADMIN_ROLES} component={BotSettingsPage} />
+        <RoleRoute path="/settings/knowledge-base" allow={ADMIN_ROLES} component={KnowledgeBasePage} />
         <RoleRoute path="/settings/:tableSlug" allow={ADMIN_ROLES} component={SettingsLookupPage} />
         <RoleRoute path="/hr" allow={MANAGER_ROLES} component={HrPage} />
         <RoleRoute path="/hr-v2" allow={MANAGER_ROLES} component={HrV2Page} />
