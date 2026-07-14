@@ -50,6 +50,9 @@ interface ConversationContext {
   // stick a multi-turn admin exchange (e.g. "which quote?" / "the Corfu one")
   // to the admin bot rather than flip-flopping on an ambiguous follow-up.
   domain?: "sales" | "admin";
+  // True once the admin bot has opened a support ticket for this conversation —
+  // stops it opening duplicates on later turns.
+  ticketOpened?: boolean;
 }
 
 // Tag our outbound so the message.sent webhook can tell it from a human agent's
@@ -264,20 +267,40 @@ export const replyWorker = {
           ? "admin"
           : !enquiryInFlight && !knownClient && sawAdminIntent && clientId
             ? "admin"
-            : await classifyConversationRoute({ transcript, latestText, enquiryInFlight });
+            : await classifyConversationRoute({
+                transcript,
+                latestText,
+                enquiryInFlight,
+                priorDomainAdmin: prevContext.domain === "admin",
+              });
 
       // ── Admin bot ──────────────────────────────────────────────────────
       // Fail-closed on clientId (only ever set via a verified link / phone-email
       // match / onboarding). The admin bot answers from the client's OWN records.
       if (route === "admin" && clientId) {
         console.log(`[sendseven-webhook] conv=${conversationId} route=admin known=${knownClient} attachments=${!!attachmentNote} -> admin agent`);
-        const adminReply = await adminAgent.answer(orgId, clientId, botConfig, kb, transcript, clientRecord, attachmentNote, pendingAttachments);
-        if (adminReply) {
-          await sendReply(orgId, conversationId, message.channel_id, adminReply, mode, false);
+        const adminResult = await adminAgent.answer(
+          orgId,
+          clientId,
+          botConfig,
+          kb,
+          transcript,
+          clientRecord,
+          attachmentNote,
+          pendingAttachments,
+          !!prevContext.ticketOpened,
+        );
+        if (adminResult) {
+          await sendReply(orgId, conversationId, message.channel_id, adminResult.reply, mode, false);
           await conversationStateRepository.update(conversationId, {
             intent: "other",
             lastAiReplyAt: new Date(),
-            context: { ...prevContext, lastReply: adminReply, domain: "admin" },
+            context: {
+              ...prevContext,
+              lastReply: adminResult.reply,
+              domain: "admin",
+              ticketOpened: prevContext.ticketOpened || adminResult.ticketOpened,
+            },
           });
           return;
         }

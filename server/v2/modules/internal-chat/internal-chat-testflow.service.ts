@@ -46,6 +46,9 @@ interface ConversationContext {
   // the client's own quotes/enquiries/tickets/files) is detected. Mirrors
   // reply-worker's ConversationContext.
   domain?: "sales" | "admin";
+  // True once the admin bot has opened a support ticket for this conversation —
+  // stops it opening duplicates on later turns.
+  ticketOpened?: boolean;
 }
 
 const HISTORY_LIMIT = 20;
@@ -170,18 +173,38 @@ export const internalChatTestflowService = {
     const route: "sales" | "admin" =
       !enquiryInFlight && !knownClient && sawAdminIntent && clientId
         ? "admin"
-        : await classifyConversationRoute({ transcript, latestText: userText, enquiryInFlight });
+        : await classifyConversationRoute({
+            transcript,
+            latestText: userText,
+            enquiryInFlight,
+            priorDomainAdmin: prevContext.domain === "admin",
+          });
 
     // ── Admin bot ──────────────────────────────────────────────────────────
     // Fail-closed on clientId. Answers from the client's OWN records.
     if (route === "admin" && clientId) {
-      const adminReply = await adminAgent.answer(orgId, clientId, botConfig, kb, transcript, clientRecord);
-      if (adminReply) {
+      const adminResult = await adminAgent.answer(
+        orgId,
+        clientId,
+        botConfig,
+        kb,
+        transcript,
+        clientRecord,
+        undefined,
+        undefined,
+        !!prevContext.ticketOpened,
+      );
+      if (adminResult) {
         await internalChatRepository.updateSession(session.id, orgId, {
           intent: "other",
-          context: { ...prevContext, lastReply: adminReply, domain: "admin" },
+          context: {
+            ...prevContext,
+            lastReply: adminResult.reply,
+            domain: "admin",
+            ticketOpened: prevContext.ticketOpened || adminResult.ticketOpened,
+          },
         });
-        const replyMessage = await persistReply(adminReply);
+        const replyMessage = await persistReply(adminResult.reply);
         return { replyMessage };
       }
       // Admin agent failed hard — hand off cleanly.

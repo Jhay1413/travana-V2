@@ -24,18 +24,25 @@ const ROUTER_SYSTEM_PROMPT = [
 ].join("\n");
 
 // Returns which bot should handle this turn. `enquiryInFlight` short-circuits to
-// sales so an in-progress enquiry is never derailed. Falls back to "sales" (the
-// safe default — it never discloses a customer's records) on any LLM failure.
+// sales so an in-progress enquiry is never derailed. `priorDomainAdmin` marks a
+// conversation already in an admin/support matter (e.g. a complaint) so a terse
+// follow-up ("the room is filthy thats it") stays admin instead of falling back
+// to sales. Falls back to the current domain on any LLM failure.
 export async function classifyConversationRoute(params: {
   transcript: string;
   latestText: string;
   enquiryInFlight: boolean;
+  priorDomainAdmin?: boolean;
 }): Promise<ConversationRoute> {
   if (params.enquiryInFlight) return "sales";
-  // Explicit "my <record>" phrasing → admin, deterministically (beats the LLM).
+  // Explicit admin phrasing (asks about records / supplies an id / complaint) →
+  // admin, deterministically (beats the LLM).
   if (looksLikeAdminAsk(params.latestText)) return "admin";
 
   try {
+    const stickyNote = params.priorDomainAdmin
+      ? "NOTE: this conversation is already an ongoing ADMIN/support matter (e.g. a complaint, document request, or account query). Treat the latest message as ADMIN unless it clearly starts a brand-new holiday search.\n\n"
+      : "";
     const res = await getOpenAI().chat.completions.create({
       model: CHAT_MODEL,
       response_format: { type: "json_object" },
@@ -45,7 +52,7 @@ export async function classifyConversationRoute(params: {
         { role: "system", content: ROUTER_SYSTEM_PROMPT },
         {
           role: "user",
-          content: `Conversation so far:\n${params.transcript}\n\nLatest customer message:\n${params.latestText}\n\nClassify the latest message.`,
+          content: `${stickyNote}Conversation so far:\n${params.transcript}\n\nLatest customer message:\n${params.latestText}\n\nClassify the latest message.`,
         },
       ],
     });
@@ -53,9 +60,11 @@ export async function classifyConversationRoute(params: {
     if (raw) {
       const parsed = JSON.parse(raw) as { route?: unknown };
       if (parsed.route === "admin") return "admin";
+      if (parsed.route === "sales") return "sales";
     }
   } catch (err) {
-    console.error("[conversation-router] classification failed, defaulting to sales:", err);
+    console.error("[conversation-router] classification failed, defaulting to current domain:", err);
   }
-  return "sales";
+  // Unparseable/failed: stay in the current domain rather than snapping to sales.
+  return params.priorDomainAdmin ? "admin" : "sales";
 }

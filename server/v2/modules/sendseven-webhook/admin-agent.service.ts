@@ -23,6 +23,12 @@ const OPEN_TICKET_TOOL_NAME = "open_ticket";
 const TICKET_TYPES = ["Admin", "Build", "Sales"] as const;
 const TICKET_PRIORITIES = ["Low", "Medium", "High", "Urgent"] as const;
 
+// The bot claiming it logged something / promising a colleague will follow up.
+// If it says this but never actually called open_ticket (and none was opened
+// earlier in the conversation), we force one so the promise isn't empty.
+const CLAIMS_ACTION_RE =
+  /\b(?:logged|log(?:ging)?\s+(?:it|this)|raised|raising|(?:created|opened|open)\s+a\s+ticket|passed\s+(?:it|this|them)\s+(?:on|to)|be\s+in\s+touch|follow(?:ed|ing)?\s+up|get\s+back\s+to\s+you|one\s+of\s+(?:the|our)\s+team|colleague|someone\s+will|advisor\s+will)\b/i;
+
 const getMyQuotesTool: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: "function",
   function: {
@@ -230,7 +236,12 @@ async function executeGetMyFileLinkTool(clientId: string, rawArguments: string):
   }
 }
 
-function buildAdminSystemPrompt(botConfig: OrgBotConfig | null, kb: OrgKnowledgeBase[], clientRecord: NeonClient | null): string {
+function buildAdminSystemPrompt(
+  botConfig: OrgBotConfig | null,
+  kb: OrgKnowledgeBase[],
+  clientRecord: NeonClient | null,
+  ticketAlreadyOpen: boolean,
+): string {
   const name = botConfig?.name?.trim() || "the assistant";
   const clientName =
     [clientRecord?.title, clientRecord?.firstName, clientRecord?.surename].filter(Boolean).join(" ").trim() || "the customer";
@@ -246,8 +257,15 @@ function buildAdminSystemPrompt(botConfig: OrgBotConfig | null, kb: OrgKnowledge
       "- Do NOT collect a new holiday enquiry here — if the customer asks about a brand-new holiday/deal, say a colleague will pick that up, and do not attempt to gather enquiry details yourself.\n" +
       "- Only call get_my_file_link once the customer has explicitly asked to be sent/resent a specific document and you've confirmed which one.\n" +
       "- When the customer needs something a person must action that you can't do yourself — they've sent a document (e.g. a passport photo), are PROVIDING personal/verification/booking details you were asked for (an ID/passport/reference/policy/account number, date of birth, etc.), want to amend/cancel a booking, have a problem/complaint, or ask for a callback / to speak to someone / for the team to get in touch — use open_ticket to log it for staff. Put the EXACT details they gave (e.g. the ID/reference number, verbatim) in the ticket description so the colleague has them, and if they gave a preferred callback time (e.g. \"anytime today\", \"after 5pm\") include that too. Any file they sent in this message is attached to that ticket automatically; a colleague reviews it (do NOT claim to have checked or verified the document/details yourself). Don't open a ticket for something you can already answer with the other tools, and don't open duplicates.\n" +
-      "- CRITICAL: NEVER tell the customer that a colleague / the team / an advisor will call, follow up, or be in touch UNLESS you have actually opened a ticket (open_ticket) this turn to make that happen. No empty promises — if follow-up is needed, log it first, then confirm.",
+      "- CRITICAL: NEVER tell the customer that a colleague / the team / an advisor will call, follow up, or be in touch, and NEVER say you've 'logged', 'raised', or 'noted' something for staff, UNLESS you have actually called the open_ticket tool this turn. Do not merely SAY you'll log it — actually call open_ticket. No empty promises: log it first, then confirm.\n" +
+      "- KEEP IT SHORT: every reply must be at most two short sentences and deal with only ONE thing at a time. NEVER stack several questions into one message or reel off a list of details to confirm — answer or ask the single most relevant thing and let the rest come up naturally over the next few messages. Never make a reply read like a form.",
   ];
+
+  if (ticketAlreadyOpen) {
+    parts.push(
+      "NOTE: a support ticket has ALREADY been opened for this matter earlier in this conversation. Do NOT open another ticket (no duplicates) — just help, reassure, or confirm that a colleague will follow up on the ticket that already exists.",
+    );
+  }
 
   if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
   if (botConfig?.greeting?.trim()) parts.push(`Greeting style (do NOT re-greet mid-conversation, but match this voice): ${botConfig.greeting.trim()}`);
@@ -292,11 +310,15 @@ export const adminAgent = {
     // The actual downloaded bytes of those file(s), attached to whatever ticket
     // the bot opens this turn via open_ticket (consumed on first use).
     pendingAttachments?: PendingAttachment[],
-  ): Promise<string | null> {
+    // True if a ticket was already opened earlier in this conversation — the bot
+    // is told not to open a duplicate, and the backstop below is disabled.
+    ticketAlreadyOpen?: boolean,
+  ): Promise<{ reply: string; ticketOpened: boolean } | null> {
     try {
       const openai = getOpenAI();
       let pending = pendingAttachments ?? [];
-      const systemPrompt = buildAdminSystemPrompt(botConfig, kb, clientRecord);
+      let ticketOpened = false;
+      const systemPrompt = buildAdminSystemPrompt(botConfig, kb, clientRecord, !!ticketAlreadyOpen);
       const userContent = attachmentNote
         ? `Conversation so far:\n${transcript}\n\n[System note — not a customer message: ${attachmentNote}]\n\nRespond to the customer's latest message.`
         : `Conversation so far:\n${transcript}\n\nRespond to the customer's latest message.`;
@@ -345,8 +367,12 @@ export const adminAgent = {
                         ? await executeOpenTicketTool(orgId, clientId, toolCall.function.arguments, pending)
                         : { error: "Unknown tool" };
           // Attachments belong to the FIRST ticket opened this turn — don't
-          // re-attach them if the model opens another ticket.
-          if (toolCall.type === "function" && toolCall.function.name === OPEN_TICKET_TOOL_NAME) pending = [];
+          // re-attach them if the model opens another ticket. Track whether a
+          // ticket was actually created (for the backstop + dedupe flag).
+          if (toolCall.type === "function" && toolCall.function.name === OPEN_TICKET_TOOL_NAME) {
+            pending = [];
+            if ((toolResult as { created?: boolean }).created) ticketOpened = true;
+          }
           chatMessages.push({
             role: "tool",
             tool_call_id: toolCall.id,
@@ -366,7 +392,38 @@ export const adminAgent = {
         raw = finalResponse.choices[0]?.message?.content?.trim();
       }
 
-      return raw || null;
+      // Backstop: the model told the customer this has been logged / a colleague
+      // will follow up, but never actually called open_ticket (and none was
+      // opened earlier). Force one so the promise is real — the model authors the
+      // subject/description under a forced tool call.
+      if (raw && !ticketOpened && !ticketAlreadyOpen && CLAIMS_ACTION_RE.test(raw)) {
+        try {
+          chatMessages.push({
+            role: "system",
+            content:
+              "You told the customer this has been logged / a colleague will follow up, but you have NOT created a ticket. Call open_ticket now with a clear subject and a description summarising their request and everything they've told you so far.",
+          });
+          const forced = await openai.chat.completions.create({
+            model: CHAT_MODEL,
+            temperature: 0.2,
+            max_tokens: 300,
+            messages: chatMessages,
+            tools: [openTicketTool],
+            tool_choice: { type: "function", function: { name: OPEN_TICKET_TOOL_NAME } },
+          });
+          const call = forced.choices[0]?.message?.tool_calls?.[0];
+          if (call && call.type === "function" && call.function.name === OPEN_TICKET_TOOL_NAME) {
+            const result = await executeOpenTicketTool(orgId, clientId, call.function.arguments, pending);
+            pending = [];
+            if ((result as { created?: boolean }).created) ticketOpened = true;
+            console.log(`[admin-agent] forced open_ticket backstop created=${(result as { created?: boolean }).created}`);
+          }
+        } catch (err) {
+          console.error("[admin-agent] forced open_ticket backstop failed:", err);
+        }
+      }
+
+      return raw ? { reply: raw, ticketOpened } : null;
     } catch (err) {
       console.error("[admin-agent] answer failed:", err);
       return null;

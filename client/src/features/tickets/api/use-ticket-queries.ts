@@ -16,6 +16,9 @@ export function useTickets() {
   return useQuery<Ticket[]>({
     queryKey: ticketKeys.list(),
     queryFn: ticketApi.getAll,
+    // Always refetch on visit — overrides the global 30s staleTime so the
+    // tickets list is never served stale from cache.
+    staleTime: 0,
   });
 }
 

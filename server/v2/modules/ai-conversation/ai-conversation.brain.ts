@@ -102,9 +102,12 @@ const ADMIN_PROVIDING_RE = new RegExp(
     "|\\bd\\.?o\\.?b\\.?\\b",
   "i",
 );
+// A complaint or refund request — inherently a support (admin) matter for an
+// existing booking, NOT a new sales lead.
+const ADMIN_COMPLAINT_RE = /\b(?:complain\w*|refund)\b/i;
 export function looksLikeAdminAsk(text: string): boolean {
   const t = text || "";
-  return ADMIN_ASK_RE.test(t) || ADMIN_PROVIDING_RE.test(t);
+  return ADMIN_ASK_RE.test(t) || ADMIN_PROVIDING_RE.test(t) || ADMIN_COMPLAINT_RE.test(t);
 }
 
 // The enquiry flow has two code-driven transition points (enquiry just logged →
@@ -175,7 +178,7 @@ export async function generateGroupedAsk(
     if (styleBlock) parts.push(styleBlock);
     if (transcript.trim()) parts.push(`The conversation so far:\n${transcript.trim()}`);
     parts.push(
-      "Ask the customer for only the TWO or THREE most useful details still needed to find them a good deal, in one or two short warm sentences. " +
+      "Ask the customer for only the ONE (at most TWO, and only if they naturally go together) most useful detail still needed to find them a good deal, in one or two short warm sentences. Do NOT stack several separate questions into one message or make it read like a list/form. " +
         "CRUCIAL: read what they have ALREADY told you above and do NOT re-ask anything they've answered or said they have no preference on — e.g. if they said they're open to suggestions or just want 'somewhere hot near the beach', that IS their destination answer, so do NOT ask where they want to go. " +
         "Prioritise, in order: the destination (ONLY if they have not named one AND have not said they're flexible/open to suggestions), travel dates, number of nights, budget, then board basis. " +
         "These are the fields still marked missing (use as a guide, but the conversation above is the source of truth for what they've already said): " +
@@ -296,7 +299,8 @@ export function buildSystemPrompt(
       '- NIGHTS: put the number of nights in `nights` whenever it is stated or clearly implied — e.g. "4 nights" → 4, "a week" → 7, "10 days" → 10, "a fortnight" → 14, "long weekend" → 3. Leave empty if they haven\'t indicated a length.',
       '- BUDGET: put the amount as digits only in `budget` (no "£", commas or words — e.g. "1100"), and set `budgetType` to exactly "Per Person" or "Package". If they give a range (e.g. "1000-2000"), record the TOP of the range.',
       '- DEPARTURE AIRPORT: whenever the customer says they will "fly from", "flying from", "depart(ing) from", "leave from", or simply "from" a place (e.g. "fly from Newcastle", "from Manchester", "out of Gatwick"), record that airport/city in `departureAirports` as an array (e.g. ["Newcastle"]). This is the airport they leave the UK from — do NOT confuse it with their holiday destination.',
-      "- ASKING STYLE: keep every message SHORT and natural — one or two sentences, the way a real agent chats. Do NOT ask for lots of fields at once or reel off a long list. Ask for only the TWO or THREE most useful missing details at a time (prioritise the destination if they haven't given one and aren't open to suggestions, then rough dates, number of nights, and budget), and pick the rest up naturally over the next few messages. Never make it read like a form, and never re-ask a detail they've already given or declined.",
+      "- ASKING STYLE (STRICT — this overrides any urge to be thorough or cover everything in one go): every message must be SHORT — at most two sentences — and ask about only ONE thing at a time (or two ONLY if they naturally belong together, e.g. number of adults and children). NEVER stack several separate questions into one reply: do NOT, for example, ask party size AND children's ages AND dates AND airport AND board basis in the same message — pick the single most useful missing detail and ask just that. Prioritise, in order: destination (only if they haven't given one and aren't open to suggestions), then rough dates, then number of nights, then budget; deliberately leave the rest for later messages and pick them up naturally over the next few replies. Never reel off a list, never make it read like a form, and never re-ask a detail they've already given or declined.",
+      "- Do NOT offer to arrange a call, a callback, or say a colleague/advisor/the team will be in touch while you are still gathering enquiry details — that step happens later and automatically, so leave it out and just ask the next detail.",
       "- For each field: if they give a value, record it in `slots`. If they say no / none / not sure / no preference / any / doesn't matter, treat that field as ANSWERED — leave it empty, do NOT store it, and never ask about it again.",
       "- If it is not a holiday enquiry, set intent=\"other\" and just answer helpfully.",
       '- If the "Current enquiry status" given below is "awaiting_availability", the customer\'s enquiry has ALREADY been logged and they are now being asked what time suits a callback — just acknowledge their answer helpfully, do not re-collect enquiry details or treat it as a new enquiry.',

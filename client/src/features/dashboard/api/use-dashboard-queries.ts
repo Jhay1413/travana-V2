@@ -37,5 +37,8 @@ export function useAgentStats(options?: { enabled?: boolean }) {
     queryKey: dashboardKeys.agentStats(),
     queryFn: dashboardApi.getAgentStats,
     enabled: options?.enabled ?? true,
+    // Always refetch on visit — overrides the global 30s staleTime so the
+    // agent dashboard stats are never served stale from cache.
+    staleTime: 0,
   });
 }
