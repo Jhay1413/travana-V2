@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { Request, Response } from 'express';
 import { ticketAttachmentService } from './ticket-attachment.service';
 import { successResponse } from '../../utils/response';
@@ -18,43 +16,31 @@ export const ticketAttachmentController = {
     const scope = getScope(req);
     const ticketId = req.params.ticketId as string;
     const file = req.file;
-
     if (!file) throw new AppError('No file uploaded', 400);
 
-    try {
-      const attachment = await ticketAttachmentService.createAttachment({
-        ticketId,
-        filename: file.filename,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-        size: file.size,
-      }, scope);
-
-      return successResponse(res, attachment, 'Attachment uploaded successfully', 201);
-    } catch (error) {
-      if (req.file) fs.unlinkSync(req.file.path);
-      throw error;
-    }
+    const attachment = await ticketAttachmentService.uploadAndCreate(
+      ticketId,
+      { buffer: file.buffer, originalName: file.originalname, mimeType: file.mimetype, size: file.size },
+      scope,
+    );
+    return successResponse(res, attachment, 'Attachment uploaded successfully', 201);
   }),
 
   downloadAttachment: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
-    const attachment = await ticketAttachmentService.getAttachmentById(req.params.id as string, scope);
-    const filePath = path.join(process.cwd(), 'uploads', attachment.filename);
+    const inline = req.query.inline === '1' || req.query.disposition === 'inline';
+    const target = await ticketAttachmentService.getDownloadTarget(req.params.id as string, scope, { inline });
 
-    if (!fs.existsSync(filePath)) throw new AppError('File not found on disk', 404);
+    if (target.kind === 's3') return res.redirect(target.url);
 
-    res.setHeader('Content-Type', attachment.mimeType);
-    res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalName}"`);
-    res.sendFile(filePath);
+    const disposition = inline ? 'inline' : 'attachment';
+    res.setHeader('Content-Type', target.mimeType);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${target.originalName}"`);
+    return res.sendFile(target.filePath);
   }),
 
   deleteAttachment: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
-    const attachment = await ticketAttachmentService.getAttachmentById(req.params.id as string, scope);
-    const filePath = path.join(process.cwd(), 'uploads', attachment.filename);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
     await ticketAttachmentService.deleteAttachment(req.params.id as string, scope);
     res.status(204).send();
   }),

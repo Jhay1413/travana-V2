@@ -1,12 +1,5 @@
 {
   "permissions": {
-    "deny": [
-      "Bash(drizzle-kit push:*)",
-      "Bash(npx drizzle-kit push:*)",
-      "Bash(npm run db:push:*)",
-      "Bash(pnpm db:push:*)",
-      "Bash(yarn db:push:*)"
-    ],
     "allow": [
       "Bash(echo \"lib/api broken-import count: $\\(npx tsc --noEmit 2>&1)",
       "Bash(echo \"deletion-related TS2307 count: $\\(npx tsc --noEmit 2>&1)",
@@ -43,7 +36,20 @@
       "Bash(sed -n '58,75p' server/v2/modules/booking/booking.repository.ts)",
       "Bash(sed -n '1,20p' server/v2/modules/booking/booking.repository.ts)",
       "Bash(echo \"=== total errors: $\\(npx tsc --noEmit 2>&1)",
-      "Bash(grep -iE \"\\\\.\\(tsx|ts\\)$\")"
+      "Bash(grep -iE \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(tee /tmp/tsc6.out)",
+      "Read(//tmp/**)",
+      "Bash(tee /tmp/tsc7.out)",
+      "Bash(tee /tmp/tsc8.out)",
+      "Bash(node -e ' *)",
+      "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/0a94c86f-5a16-49b1-99ab-0eeb4367e08d/scratchpad/re-test2.cjs\")"
+    ],
+    "deny": [
+      "Bash(drizzle-kit push:*)",
+      "Bash(npx drizzle-kit push:*)",
+      "Bash(npm run db:push:*)",
+      "Bash(pnpm db:push:*)",
+      "Bash(yarn db:push:*)"
     ],
     "additionalDirectories": [
       "/home/runner/workspace/migrations"

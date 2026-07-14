@@ -354,6 +354,54 @@ function metaCategory(meta: unknown): string | null {
   return null;
 }
 
+// Client identities discovered via the client tools this session. The
+// tool-call turns themselves are NOT persisted (getRecentMessages only replays
+// user/assistant text), so the ids the model found via search_clients are lost
+// on the next turn — a colleague saying "yes, that one" a turn later would
+// leave the model with no UUID to pass to get_client_records (it then guesses,
+// and findClientById rejects the non-UUID as "not found"). We cache the
+// {id,name} pairs on the session context and surface them back into the next
+// turn's prompt so the model reuses the exact id.
+interface KnownClient {
+  id: string;
+  name: string;
+}
+const KNOWN_CLIENTS_LIMIT = 10;
+
+function isKnownClient(v: unknown): v is KnownClient {
+  return (
+    !!v &&
+    typeof v === "object" &&
+    typeof (v as { id?: unknown }).id === "string" &&
+    typeof (v as { name?: unknown }).name === "string"
+  );
+}
+
+function readKnownClients(session: InternalChatSession): KnownClient[] {
+  const list = (session.context as { knownClients?: unknown } | null)?.knownClients;
+  return Array.isArray(list) ? list.filter(isKnownClient) : [];
+}
+
+// Pulls {id,name} pairs a tool result exposed — search_clients `results[]` and
+// get_client_details `identity` both carry them.
+function extractClientsFromToolResult(result: unknown): KnownClient[] {
+  if (!result || typeof result !== "object") return [];
+  const obj = result as Record<string, unknown>;
+  const out: KnownClient[] = [];
+  if (Array.isArray(obj.results)) {
+    for (const r of obj.results) if (isKnownClient(r)) out.push({ id: r.id, name: r.name });
+  }
+  if (isKnownClient(obj.identity)) out.push({ id: obj.identity.id, name: obj.identity.name });
+  return out;
+}
+
+// Newest-first dedupe by id, capped — discovered pairs win over prior.
+function mergeKnownClients(prior: KnownClient[], discovered: KnownClient[]): KnownClient[] {
+  const byId = new Map<string, string>();
+  for (const c of [...discovered, ...prior]) if (!byId.has(c.id)) byId.set(c.id, c.name);
+  return Array.from(byId, ([id, name]) => ({ id, name })).slice(0, KNOWN_CLIENTS_LIMIT);
+}
+
 // Lean staff-facing system prompt: persona + company info (static KB +
 // vector-retrieved KB) + an internal-only reference to similar past quotes.
 // No enquiry slot-filling instructions here — this is a Q&A assistant.
@@ -362,6 +410,7 @@ function buildAssistantSystemPrompt(
   kb: OrgKnowledgeBase[],
   retrievedKb: EmbeddingMatch[],
   retrievedQuotes: EmbeddingMatch[],
+  knownClients: KnownClient[],
 ): string {
   const name = botConfig?.name?.trim() || "the assistant";
   const parts: string[] = [
@@ -435,6 +484,15 @@ function buildAssistantSystemPrompt(
       "share that.",
   );
 
+  if (knownClients.length) {
+    parts.push(
+      "Clients already identified earlier in THIS conversation — when the colleague refers back to one of them " +
+        '("that one", "this client", "him/her", or by name), reuse the EXACT id shown here for get_client_details / ' +
+        "get_client_records rather than guessing or passing a name, and you do NOT need to search again for these:\n" +
+        knownClients.map((c) => `- ${c.name} [id: ${c.id}]`).join("\n"),
+    );
+  }
+
   parts.push(
     "Answer using ONLY the information above plus general travel-industry knowledge to help with day-to-day questions. If you don't have the specific information needed, say so plainly rather than guessing, and suggest who or where to check.",
   );
@@ -503,7 +561,8 @@ export const internalChatService = {
       internalChatRepository.getRecentMessages(session.id, orgId, HISTORY_LIMIT),
     ]);
 
-    const systemPrompt = buildAssistantSystemPrompt(botConfig, kb, kbMatches, quoteMatches);
+    const knownClients = readKnownClients(session);
+    const systemPrompt = buildAssistantSystemPrompt(botConfig, kb, kbMatches, quoteMatches, knownClients);
     const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
       ...history.map((m) => ({
@@ -516,6 +575,9 @@ export const internalChatService = {
     ];
 
     const openai = getOpenAI();
+    // Client {id,name} pairs surfaced by the tools this turn — persisted below
+    // so the ids survive to the next turn (the tool turns themselves are not).
+    const discovered: KnownClient[] = [];
     let raw: string | undefined;
     try {
       for (let iteration = 0; iteration < TOOL_CALL_MAX_ITERATIONS; iteration += 1) {
@@ -555,6 +617,7 @@ export const internalChatService = {
                   : toolCall.type === "function" && toolCall.function.name === GET_CLIENT_RECORDS_TOOL_NAME
                     ? await executeGetClientRecordsTool(scope, toolCall.function.arguments)
                     : { error: "Unknown tool" };
+          discovered.push(...extractClientsFromToolResult(toolResult));
           chatMessages.push({
             role: "tool",
             tool_call_id: toolCall.id,
@@ -583,6 +646,15 @@ export const internalChatService = {
       throw new AppError(err instanceof Error ? err.message : "Failed to reach the AI service", 502);
     }
     if (!raw) throw new AppError("The AI returned an empty response", 502);
+
+    // Persist any client ids surfaced this turn so a follow-up ("that one",
+    // "his latest enquiry") can reuse the exact UUID instead of guessing.
+    if (discovered.length) {
+      const priorCtx = (session.context as Record<string, unknown> | null) ?? {};
+      await internalChatRepository.updateSession(session.id, orgId, {
+        context: { ...priorCtx, knownClients: mergeKnownClients(knownClients, discovered) },
+      });
+    }
 
     return internalChatRepository.createMessage({ sessionId: session.id, role: "assistant", content: raw });
   },

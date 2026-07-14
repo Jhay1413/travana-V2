@@ -80,6 +80,33 @@ export function getOpenAI(): OpenAI {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
+// Deterministic detector for an ADMIN message — an existing customer either (a)
+// asking about their OWN records (enquiry/quote/booking/ticket/document/…) or
+// (b) PROVIDING verification/booking details they were asked for (an ID /
+// passport / reference / policy / account number, or date of birth). Used by the
+// upper-level router (conversation-router.ts) as a zero-cost, high-precision
+// fast path before its LLM call. Kept tight to avoid hijacking genuine sales
+// messages ("book my holiday" does NOT match). \w+ noun stems are typo-tolerant.
+const ADMIN_RECORD_NOUN =
+  "(?:enqu\\w+|inqu\\w+|quot\\w+|bookings?|ticket\\w*|documents?|docs?|invoices?|itinerar\\w+|confirmations?|files?)";
+const ADMIN_ASK_RE = new RegExp(
+  "\\b(?:my|our)\\s+(?:latest|recent|last|current|previous|existing|upcoming)?\\s*" + ADMIN_RECORD_NOUN + "\\b",
+  "i",
+);
+// A customer supplying an identifier — e.g. "id number: 123…", "passport no",
+// "booking reference", "policy number", "date of birth". Unambiguously admin.
+const ADMIN_PROVIDING_RE = new RegExp(
+  "\\b(?:id|passport|reference|ref|policy|booking|customer|account|membership|national\\s+insurance|ni)\\s*(?:number|no\\.?|#)\\b" +
+    "|\\b(?:passport|id)\\s+details\\b" +
+    "|\\bdate\\s+of\\s+birth\\b" +
+    "|\\bd\\.?o\\.?b\\.?\\b",
+  "i",
+);
+export function looksLikeAdminAsk(text: string): boolean {
+  const t = text || "";
+  return ADMIN_ASK_RE.test(t) || ADMIN_PROVIDING_RE.test(t);
+}
+
 // The enquiry flow has two code-driven transition points (enquiry just logged →
 // ask for a callback time; callback time given → confirm it's booked). Rather
 // than send a fixed string, generate the line in the org's house voice (persona

@@ -8,11 +8,13 @@ import {
   generateTurn,
   hasSubstantiveSignal,
   isAcknowledgement,
+  looksLikeAdminAsk,
   mergeSlots,
   missingFieldsFor,
   parseAvailabilityTime,
   similarReply,
 } from "../ai-conversation/ai-conversation.brain";
+import { classifyConversationRoute } from "../ai-conversation/conversation-router";
 import { botConfigRepository } from "../bot-config/bot-config.repository";
 import { conversationIntegrationRepository } from "../conversation-integration/conversation-integration.repository";
 import { conversationIntegrationService } from "../conversation-integration/conversation-integration.service";
@@ -24,6 +26,8 @@ import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
 import { resolveAndCreateEnquiry } from "./enquiry-auto-create.service";
 import { createAndLinkClient, resolveExistingClient, systemScope } from "./identity.service";
 import { taskService } from "../task/task.service";
+import { adminAgent } from "./admin-agent.service";
+import type { PendingAttachment } from "./admin-data.service";
 import type { EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
 import type { SsWebhookEvent } from "./sendseven-webhook.types";
 import type { SendsevenConversationState } from "@shared/schema";
@@ -42,6 +46,10 @@ interface ConversationContext {
   // Guards against double-creating the callback task if the inbound is
   // reprocessed while still in awaiting_availability.
   availabilityTaskId?: string;
+  // Which bot last handled this conversation ("sales" | "admin") — used to
+  // stick a multi-turn admin exchange (e.g. "which quote?" / "the Corfu one")
+  // to the admin bot rather than flip-flopping on an ambiguous follow-up.
+  domain?: "sales" | "admin";
 }
 
 // Tag our outbound so the message.sent webhook can tell it from a human agent's
@@ -50,6 +58,9 @@ const AI_META = { source: "travana-ai" };
 const HISTORY_LIMIT = 20;
 const RESUME_AFTER_MS = 60 * 60 * 1000; // AI re-engages after 1h of no activity
 const FALLBACK_REPLY = "Thanks for your message — one of our advisors will be in touch shortly.";
+// Inbound message_types that carry a file even when there's no text caption — so
+// a bare passport photo isn't dropped by the text-only gate.
+const MEDIA_MESSAGE_TYPES = new Set(["image", "document", "file", "video", "audio", "voice", "sticker"]);
 
 export const replyWorker = {
   // Handles one inbound customer message: identity resolution → AI turn → enquiry
@@ -60,7 +71,13 @@ export const replyWorker = {
     const contact = event.data?.contact as { id?: string; name?: string; phone?: string; email?: string } | undefined;
     const conversationId = message?.conversation_id;
     if (!conversationId || !message) return;
-    if (message.direction !== "inbound" || !message.text?.trim()) return;
+    if (message.direction !== "inbound") return;
+    // Process the message if it has text OR is a media message (which may arrive
+    // with no caption — e.g. a passport photo). Non-media empty messages are
+    // still ignored.
+    const hasText = !!message.text?.trim();
+    const isMediaMessage = MEDIA_MESSAGE_TYPES.has((message.message_type ?? "").toLowerCase());
+    if (!hasText && !isMediaMessage) return;
 
     const contactId = message.contact_id ?? contact?.id ?? null;
 
@@ -133,7 +150,8 @@ export const replyWorker = {
       // 60s buffer guards against clock skew dropping the current message.
       const since = state.createdAt ? new Date(state.createdAt).getTime() - 60_000 : 0;
       const recent = list.items.filter((m) => !m.created_at || new Date(m.created_at).getTime() >= since);
-      const transcript = buildTranscript(recent, message.text!.trim());
+      const latestText = message.text?.trim() ?? "";
+      const transcript = buildTranscript(recent, latestText);
 
       // A conversation can hold several enquiries. Once one is fully wrapped up
       // (scheduled), start the next from a clean slate (empty slots, no status)
@@ -143,6 +161,16 @@ export const replyWorker = {
       const isFreshEnquiry = state.enquiryStatus === "created" || state.enquiryStatus === "scheduled";
       const enquiryStatus = isFreshEnquiry ? null : state.enquiryStatus;
       const priorSlots: EnquirySlots = isFreshEnquiry ? {} : ((state.enquirySlots as EnquirySlots) ?? {});
+
+      // Read once, up here, so both the onboarding gate and the routing decision
+      // below can use/persist it. `domain` records which bot the conversation is
+      // in ("admin" once an admin-type ask has been detected & served).
+      const prevContext = (state.context as ConversationContext | null) ?? {};
+      // Admin intent is often expressed BEFORE the contact is identified (the
+      // customer asks about their enquiry, THEN we collect their phone). Carry it
+      // across the onboarding detour so the just-onboarded completion turn —
+      // whose literal message is only a phone number — still routes to admin.
+      let sawAdminIntent = prevContext.domain === "admin" || looksLikeAdminAsk(latestText);
 
       const doHandoff = async (reply: string) => {
         await conversationStateRepository.setNeedsHuman(conversationId);
@@ -160,16 +188,23 @@ export const replyWorker = {
         const onboard = await generateTurn(botConfig, kb, null, transcript, enquiryStatus, priorSlots, false);
         console.log(
           `[sendseven-webhook] conv=${conversationId} onboarding (unknown contact) mode=${mode} handoff=${onboard.hand_off} ` +
-            `hasName=${!!onboard.client?.fullName} hasPhone=${!!onboard.client?.phone}`,
+            `adminIntent=${sawAdminIntent} hasName=${!!onboard.client?.fullName} hasPhone=${!!onboard.client?.phone}`,
         );
-        if (onboard.hand_off) return doHandoff(onboard.reply);
+        // Don't hand off an admin-type ask during onboarding — we can't serve it
+        // yet (no clientId), so keep collecting details, then the admin bot
+        // answers it once they're identified.
+        if (onboard.hand_off && !sawAdminIntent) return doHandoff(onboard.reply);
 
         const full = onboard.client?.fullName?.trim();
         const phone = onboard.client?.phone?.trim();
         if (!(full && phone && contactId)) {
-          // Still missing details — ask for them and stop here.
+          // Still missing details — ask for them and stop here. Persist the admin
+          // intent so it survives to the completion turn.
           await sendReply(orgId, conversationId, message.channel_id, onboard.reply, mode, false);
-          await conversationStateRepository.update(conversationId, { lastAiReplyAt: new Date() });
+          await conversationStateRepository.update(conversationId, {
+            lastAiReplyAt: new Date(),
+            ...(sawAdminIntent ? { context: { ...prevContext, domain: "admin" as const } } : {}),
+          });
           return;
         }
         clientId = await createAndLinkClient(orgId, contactId, { fullName: full, phone, email: null });
@@ -184,14 +219,77 @@ export const replyWorker = {
           ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null)
           : null;
 
-      // Vector retrieval (Phase 5d) — best-effort context for the system prompt.
+      // ── Attachments (SendSeven only) ───────────────────────────────────
+      // A customer can send a document (e.g. a passport photo) with no caption.
+      // Attachments aren't in the text transcript, so pull them off the current
+      // message and download the bytes. They are NOT saved to the client's files
+      // — instead they're handed to the admin bot, which attaches them to the
+      // ticket it opens (staff can move them to the client record from there).
+      // Best-effort: a failed download never breaks the reply.
+      const currentAttachments = (list.items.find((m) => m.id === message.id)?.attachments ?? []).filter((a) => a?.id);
+      const pendingAttachments: PendingAttachment[] = [];
+      if (currentAttachments.length && clientId) {
+        for (const att of currentAttachments) {
+          try {
+            const dl = await messagesRepository.downloadAttachment(att.id);
+            pendingAttachments.push({ buffer: dl.buffer, filename: att.filename, contentType: att.content_type, size: att.file_size });
+          } catch (err) {
+            console.error(`[sendseven-webhook] conv ${conversationId} failed to download attachment ${att.id}:`, err);
+          }
+        }
+      }
+      const attachmentNote = pendingAttachments.length
+        ? `The customer has just sent the following file(s) in their latest message: ${pendingAttachments.map((a) => a.filename).join(", ")}. ` +
+          "Treat this as a document submission: use open_ticket to log it for a colleague — the file(s) will be attached to that ticket automatically. Then confirm to the customer you've received and logged it. Do NOT claim to have checked or verified the document yourself."
+        : undefined;
+      if (pendingAttachments.length) {
+        console.log(`[sendseven-webhook] conv ${conversationId} downloaded ${pendingAttachments.length} attachment(s) for a ticket`);
+      }
+
+      // Nothing actionable (a media message we couldn't download, or an empty
+      // text) — stay silent rather than replying to nothing.
+      if (!hasText && !attachmentNote) return;
+
+      // ── Upper-level ROUTER ─────────────────────────────────────────────
+      // Decide which bot handles this turn BEFORE running either. The enquiry
+      // bot's large prompt is left untouched — routing lives in its own tiny
+      // classifier (conversation-router.ts). Saved attachments force the admin
+      // bot (a document submission); otherwise an enquiry already in flight stays
+      // sales; admin intent carried across the onboarding detour (sawAdminIntent)
+      // wins for the just-onboarded turn, whose message is only a phone number.
+      const enquiryInFlight =
+        enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || !!prevContext.groupedAskSent;
+      const route: "sales" | "admin" =
+        attachmentNote && clientId
+          ? "admin"
+          : !enquiryInFlight && !knownClient && sawAdminIntent && clientId
+            ? "admin"
+            : await classifyConversationRoute({ transcript, latestText, enquiryInFlight });
+
+      // ── Admin bot ──────────────────────────────────────────────────────
+      // Fail-closed on clientId (only ever set via a verified link / phone-email
+      // match / onboarding). The admin bot answers from the client's OWN records.
+      if (route === "admin" && clientId) {
+        console.log(`[sendseven-webhook] conv=${conversationId} route=admin known=${knownClient} attachments=${!!attachmentNote} -> admin agent`);
+        const adminReply = await adminAgent.answer(orgId, clientId, botConfig, kb, transcript, clientRecord, attachmentNote, pendingAttachments);
+        if (adminReply) {
+          await sendReply(orgId, conversationId, message.channel_id, adminReply, mode, false);
+          await conversationStateRepository.update(conversationId, {
+            intent: "other",
+            lastAiReplyAt: new Date(),
+            context: { ...prevContext, lastReply: adminReply, domain: "admin" },
+          });
+          return;
+        }
+        // Admin agent failed hard — hand off cleanly rather than falling through.
+        return doHandoff("Let me get a colleague to help you with that.");
+      }
+
+      // ── Sales / enquiry bot (UNCHANGED flow) ───────────────────────────
+      // Vector retrieval (Phase 5d) — best-effort context for the enquiry prompt.
       // Never blocks/breaks the reply: aiEmbeddingsService.retrieve() never throws
-      // and resolves to [] on any failure, in which case the prompt renders exactly
-      // as it did before this feature. Quote retrieval is gated to enquiry-ish turns
-      // (an in-flight "collecting"/"awaiting_availability" status, or the customer
-      // has already given some substantive enquiry detail) — otherwise it's skipped
-      // entirely rather than wasting a round-trip on small talk.
-      const latestText = message.text!.trim();
+      // and resolves to [] on any failure. Quote retrieval is gated to enquiry-ish
+      // turns; otherwise it's skipped rather than wasting a round-trip.
       const enquiryish =
         enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || hasSubstantiveSignal(priorSlots);
       const [kbMatches, quoteMatches] = await Promise.all([
@@ -216,7 +314,6 @@ export const replyWorker = {
       if (turn.hand_off) return doHandoff(turn.reply);
 
       const customerAcked = isAcknowledgement(message.text!.trim());
-      const prevContext = (state.context as ConversationContext | null) ?? {};
       const lastReply = prevContext.lastReply ?? "";
       const wouldRepeat = similarReply(turn.reply, lastReply);
 

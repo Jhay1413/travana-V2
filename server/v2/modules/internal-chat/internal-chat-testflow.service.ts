@@ -7,15 +7,18 @@ import {
   generateTurn,
   hasSubstantiveSignal,
   isAcknowledgement,
+  looksLikeAdminAsk,
   mergeSlots,
   missingFieldsFor,
   parseAvailabilityTime,
   similarReply,
 } from "../ai-conversation/ai-conversation.brain";
+import { classifyConversationRoute } from "../ai-conversation/conversation-router";
 import type { EnquirySlots, RetrievedContext, RetrievedMatch, TranscriptMessage } from "../ai-conversation/ai-conversation.types";
 import { botConfigRepository } from "../bot-config/bot-config.repository";
 import { knowledgeBaseRepository } from "../knowledge-base/knowledge-base.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
+import { adminAgent } from "../sendseven-webhook/admin-agent.service";
 import { resolveAndCreateEnquiry } from "../sendseven-webhook/enquiry-auto-create.service";
 import { systemScope } from "../sendseven-webhook/identity.service";
 import { taskService } from "../task/task.service";
@@ -39,6 +42,10 @@ interface ConversationContext {
   groupedAskSent?: boolean;
   enquiryOwnerUserId?: string;
   availabilityTaskId?: string;
+  // Which bot the conversation is in — "admin" once an admin-type ask (about
+  // the client's own quotes/enquiries/tickets/files) is detected. Mirrors
+  // reply-worker's ConversationContext.
+  domain?: "sales" | "admin";
 }
 
 const HISTORY_LIMIT = 20;
@@ -116,13 +123,20 @@ export const internalChatTestflowService = {
     const enquiryStatus = isFreshEnquiry ? null : session.enquiryStatus;
     const priorSlots: EnquirySlots = isFreshEnquiry ? {} : ((session.enquirySlots as EnquirySlots) ?? {});
     const prevContext = (session.context as ConversationContext | null) ?? {};
+    // Carry admin intent across the onboarding detour (see reply-worker) — the
+    // completion turn's literal message is just a phone number, so its own route
+    // classification is unreliable.
+    let sawAdminIntent = prevContext.domain === "admin" || looksLikeAdminAsk(userText);
 
     // Client onboarding gate: for an unknown synthetic contact, collect full
     // name + phone ONLY (no email), then create/reuse the test client and
     // fall through to process the enquiry turn in the same call.
     if (!knownClient) {
       const onboard = await generateTurn(botConfig, kb, null, transcript, enquiryStatus, priorSlots, false);
-      if (onboard.hand_off) {
+      // Don't hand off an admin-type ask during onboarding — we can't serve it
+      // yet (no clientId); keep collecting details so the admin bot can answer
+      // once they're identified.
+      if (onboard.hand_off && !sawAdminIntent) {
         const replyMessage = await doHandoff(prevContext, onboard.reply);
         return { replyMessage };
       }
@@ -130,6 +144,10 @@ export const internalChatTestflowService = {
       const full = onboard.client?.fullName?.trim();
       const phone = onboard.client?.phone?.trim();
       if (!(full && phone)) {
+        // Persist the admin intent so it survives to the completion turn.
+        if (sawAdminIntent) {
+          await internalChatRepository.updateSession(session.id, orgId, { context: { ...prevContext, domain: "admin" } });
+        }
         const replyMessage = await persistReply(onboard.reply);
         return { replyMessage };
       }
@@ -144,8 +162,36 @@ export const internalChatTestflowService = {
         ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null)
         : null;
 
-    // Vector retrieval (best-effort, same gating as reply-worker): KB always,
-    // past quotes only for enquiry-ish turns.
+    // ── Upper-level ROUTER (mirrors reply-worker) ──────────────────────────
+    // Decide which bot handles this turn BEFORE running either. The enquiry
+    // bot's large prompt is untouched — routing lives in conversation-router.ts.
+    const enquiryInFlight =
+      enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || !!prevContext.groupedAskSent;
+    const route: "sales" | "admin" =
+      !enquiryInFlight && !knownClient && sawAdminIntent && clientId
+        ? "admin"
+        : await classifyConversationRoute({ transcript, latestText: userText, enquiryInFlight });
+
+    // ── Admin bot ──────────────────────────────────────────────────────────
+    // Fail-closed on clientId. Answers from the client's OWN records.
+    if (route === "admin" && clientId) {
+      const adminReply = await adminAgent.answer(orgId, clientId, botConfig, kb, transcript, clientRecord);
+      if (adminReply) {
+        await internalChatRepository.updateSession(session.id, orgId, {
+          intent: "other",
+          context: { ...prevContext, lastReply: adminReply, domain: "admin" },
+        });
+        const replyMessage = await persistReply(adminReply);
+        return { replyMessage };
+      }
+      // Admin agent failed hard — hand off cleanly.
+      const replyMessage = await doHandoff(prevContext, "Let me get a colleague to help you with that.");
+      return { replyMessage };
+    }
+
+    // ── Sales / enquiry bot (UNCHANGED flow) ───────────────────────────────
+    // Vector retrieval (best-effort): KB always, past quotes only for
+    // enquiry-ish turns.
     const enquiryish =
       enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || hasSubstantiveSignal(priorSlots);
     const [kbMatches, quoteMatches] = await Promise.all([
@@ -225,10 +271,14 @@ export const internalChatTestflowService = {
 
       const missing = missingFieldsFor(mergedSlots);
       const summary = buildEnquirySummary(mergedSlots);
+      // Test-mode enquiries are now created as REAL records (is_test=false) so
+      // they show up in the assistant/admin-bot lookups. NOTE: this means they
+      // also count in real reports/dashboards — they are indistinguishable from
+      // production enquiries (only the synthetic client's "TEST" badge hints at
+      // their origin).
       const { enquiryId, ownerUserId } = await resolveAndCreateEnquiry(orgId, clientId, mergedSlots, {
         summary,
         missingFields: missing,
-        isTest: true,
       });
 
       if (!enquiryId) {
