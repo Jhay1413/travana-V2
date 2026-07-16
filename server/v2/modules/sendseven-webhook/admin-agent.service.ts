@@ -1,6 +1,13 @@
 import OpenAI from "openai";
 import { CHAT_MODEL } from "../../utils/ai-model";
-import { getOpenAI, buildStyleExamplesBlock, isStyleExampleCategory } from "../ai-conversation/ai-conversation.brain";
+import {
+  getOpenAI,
+  buildStyleExamplesBlock,
+  isStyleExampleCategory,
+  audienceAllows,
+  parseBotRules,
+  buildRulesBlock,
+} from "../ai-conversation/ai-conversation.brain";
 import { adminDataService, type PendingAttachment } from "./admin-data.service";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
 
@@ -272,7 +279,10 @@ function buildAdminSystemPrompt(
   if (botConfig?.signOff?.trim()) parts.push(`Sign-off: ${botConfig.signOff.trim()}`);
   if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
 
-  const activeKb = kb.filter((k) => k.isActive);
+  const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "admin");
+  if (rulesBlock) parts.push(rulesBlock);
+
+  const activeKb = kb.filter((k) => k.isActive && audienceAllows(k.audience, "admin"));
   const factKb = activeKb.filter((k) => !isStyleExampleCategory(k.category));
   if (factKb.length) {
     let company = factKb.map((k) => `- ${k.title}: ${k.content}`).join("\n");

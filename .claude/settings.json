@@ -45,7 +45,9 @@
       "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/0a94c86f-5a16-49b1-99ab-0eeb4367e08d/scratchpad/re-test2.cjs\")",
       "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/0a94c86f-5a16-49b1-99ab-0eeb4367e08d/scratchpad/re-test3.cjs\")",
       "Bash(tee /tmp/tsc9.out)",
-      "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/0a94c86f-5a16-49b1-99ab-0eeb4367e08d/scratchpad/re-test4.cjs\")"
+      "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/0a94c86f-5a16-49b1-99ab-0eeb4367e08d/scratchpad/re-test4.cjs\")",
+      "Bash(findstr /i \"type-check tsc build\")",
+      "Bash(echo \"exists: $?\")"
     ],
     "deny": [
       "Bash(drizzle-kit push:*)",

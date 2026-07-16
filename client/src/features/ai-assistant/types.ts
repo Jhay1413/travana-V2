@@ -1,5 +1,13 @@
 export type BotMode = "draft" | "send";
 
+export type BotAudience = "general" | "sales" | "admin";
+
+export interface BotRule {
+  text: string;
+  audience: BotAudience;
+  isActive?: boolean;
+}
+
 export interface BotConfig {
   id: string;
   orgId: string;
@@ -11,6 +19,7 @@ export interface BotConfig {
   signOff: string | null;
   language: string;
   handoffInstructions: string | null;
+  rules?: BotRule[];
   createdAt: string;
   updatedAt: string;
 }
@@ -29,7 +38,15 @@ export interface BotConfigResponse {
 export type BotConfigUpdatePayload = Partial<
   Pick<
     BotConfig,
-    "name" | "avatarUrl" | "persona" | "preferredResponse" | "greeting" | "signOff" | "language" | "handoffInstructions"
+    | "name"
+    | "avatarUrl"
+    | "persona"
+    | "preferredResponse"
+    | "greeting"
+    | "signOff"
+    | "language"
+    | "handoffInstructions"
+    | "rules"
   >
 >;
 
@@ -39,6 +56,7 @@ export interface KbEntry {
   title: string;
   content: string;
   category: string | null;
+  audience: BotAudience;
   isActive: boolean;
   createdBy: string;
   createdAt: string;
@@ -49,6 +67,7 @@ export interface KbEntryCreatePayload {
   title: string;
   content: string;
   category?: string | null;
+  audience?: BotAudience;
   isActive?: boolean;
 }
 

@@ -18,7 +18,7 @@ function syncEmbedding(row: OrgKnowledgeBase): void {
     sourceType: "knowledge",
     sourceId: row.id,
     content: `${row.title}\n${row.content}`,
-    metadata: { category: row.category, isActive: row.isActive },
+    metadata: { category: row.category, audience: row.audience, isActive: row.isActive },
   });
 }
 

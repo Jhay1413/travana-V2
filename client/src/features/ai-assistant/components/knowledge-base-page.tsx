@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -30,16 +31,23 @@ import {
   useKnowledgeBase,
   useUpdateKbEntry,
 } from "../api/use-knowledge-base";
-import type { KbEntry } from "../types";
+import type { BotAudience, KbEntry } from "../types";
 
 type FormState = {
   title: string;
   content: string;
   category: string;
+  audience: BotAudience;
   isActive: boolean;
 };
 
-const EMPTY_FORM: FormState = { title: "", content: "", category: "", isActive: true };
+const EMPTY_FORM: FormState = { title: "", content: "", category: "", audience: "general", isActive: true };
+
+const AUDIENCE_LABELS: Record<BotAudience, string> = {
+  general: "General",
+  sales: "Sales",
+  admin: "Admin",
+};
 
 function toFormState(entry: KbEntry | null): FormState {
   if (!entry) return EMPTY_FORM;
@@ -47,6 +55,7 @@ function toFormState(entry: KbEntry | null): FormState {
     title: entry.title,
     content: entry.content,
     category: entry.category ?? "",
+    audience: entry.audience ?? "general",
     isActive: entry.isActive,
   };
 }
@@ -90,6 +99,7 @@ export function KnowledgeBasePage() {
       title,
       content,
       category: form.category.trim() || null,
+      audience: form.audience,
       isActive: form.isActive,
     };
 
@@ -172,11 +182,18 @@ export function KnowledgeBasePage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold">{entry.title}</div>
-                    {entry.category && (
-                      <span className="mt-1 inline-block rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-black/60 dark:bg-white/10 dark:text-white/60">
-                        {entry.category}
-                      </span>
-                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {entry.category && (
+                        <span className="inline-block rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-black/60 dark:bg-white/10 dark:text-white/60">
+                          {entry.category}
+                        </span>
+                      )}
+                      {entry.audience !== "general" && (
+                        <span className="inline-block rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-600 dark:bg-blue-400/10 dark:text-blue-400">
+                          {AUDIENCE_LABELS[entry.audience]} only
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <span
                     className={
@@ -222,28 +239,46 @@ export function KnowledgeBasePage() {
               <Label htmlFor="kb-title">Title</Label>
               <Input id="kb-title" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="kb-category">Category</Label>
-              <Input
-                id="kb-category"
-                list="kb-category-options"
-                value={form.category}
-                onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
-                placeholder="Optional — e.g. Conversation Example, Policy, FAQ"
-              />
-              <datalist id="kb-category-options">
-                <option value="Conversation Example" />
-                <option value="Policy" />
-                <option value="FAQ" />
-                <option value="ATOL / ABTA" />
-                <option value="Specialisms" />
-                <option value="Opening Hours" />
-              </datalist>
-              <p className="text-xs text-muted-foreground">
-                Tip: use <span className="font-medium">&ldquo;Conversation Example&rdquo;</span> for pasted chats &mdash; the AI learns your
-                reply tone from these (they&rsquo;re treated as style, not facts).
-              </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="kb-category">Category</Label>
+                <Input
+                  id="kb-category"
+                  list="kb-category-options"
+                  value={form.category}
+                  onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+                  placeholder="Optional — e.g. Conversation Example, Policy, FAQ"
+                />
+                <datalist id="kb-category-options">
+                  <option value="Conversation Example" />
+                  <option value="Policy" />
+                  <option value="FAQ" />
+                  <option value="ATOL / ABTA" />
+                  <option value="Specialisms" />
+                  <option value="Opening Hours" />
+                </datalist>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="kb-audience">Used by</Label>
+                <Select
+                  value={form.audience}
+                  onValueChange={(v) => setForm((p) => ({ ...p, audience: v as BotAudience }))}
+                >
+                  <SelectTrigger id="kb-audience">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general">General</SelectItem>
+                    <SelectItem value="sales">Sales</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Tip: use <span className="font-medium">&ldquo;Conversation Example&rdquo;</span> for pasted chats &mdash; the AI learns your
+              reply tone from these (they&rsquo;re treated as style, not facts).
+            </p>
             <div className="space-y-1.5">
               <Label htmlFor="kb-content">Content</Label>
               <Textarea

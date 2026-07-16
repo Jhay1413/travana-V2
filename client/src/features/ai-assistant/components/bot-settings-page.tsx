@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { Bot, Loader2 } from "lucide-react";
+import { Bot, Loader2, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useBotConfig, useDisableBot, useEnableBot, useSetBotMode, useUpdateBotConfig } from "../api/use-bot-config";
-import type { BotConfigUpdatePayload, BotMode } from "../types";
+import type { BotAudience, BotConfig, BotConfigUpdatePayload, BotMode, BotRule } from "../types";
 
 type FormState = {
   name: string;
@@ -19,6 +20,7 @@ type FormState = {
   signOff: string;
   language: string;
   handoffInstructions: string;
+  rules: BotRule[];
 };
 
 const EMPTY_FORM: FormState = {
@@ -29,11 +31,10 @@ const EMPTY_FORM: FormState = {
   signOff: "",
   language: "en-GB",
   handoffInstructions: "",
+  rules: [],
 };
 
-function toFormState(
-  config: { name: string | null; persona: string | null; preferredResponse: string | null; greeting: string | null; signOff: string | null; language: string; handoffInstructions: string | null } | null | undefined,
-): FormState {
+function toFormState(config: BotConfig | null | undefined): FormState {
   if (!config) return EMPTY_FORM;
   return {
     name: config.name ?? "",
@@ -43,6 +44,7 @@ function toFormState(
     signOff: config.signOff ?? "",
     language: config.language || "en-GB",
     handoffInstructions: config.handoffInstructions ?? "",
+    rules: config.rules ?? [],
   };
 }
 
@@ -73,11 +75,27 @@ export function BotSettingsPage() {
       signOff: form.signOff.trim() || null,
       language: form.language.trim() || "en-GB",
       handoffInstructions: form.handoffInstructions.trim() || null,
+      rules: form.rules.filter((rule) => rule.text.trim().length > 0).map((rule) => ({ ...rule, text: rule.text.trim() })),
     };
     updateConfig.mutate(payload, {
       onSuccess: () => toast({ title: "Bot settings saved" }),
       onError: (err) => toast({ title: "Couldn't save settings", description: (err as Error).message, variant: "destructive" }),
     });
+  };
+
+  const addRule = () => {
+    setForm((prev) => ({ ...prev, rules: [...prev.rules, { text: "", audience: "general", isActive: true }] }));
+  };
+
+  const updateRule = (index: number, patch: Partial<BotRule>) => {
+    setForm((prev) => ({
+      ...prev,
+      rules: prev.rules.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)),
+    }));
+  };
+
+  const removeRule = (index: number) => {
+    setForm((prev) => ({ ...prev, rules: prev.rules.filter((_, i) => i !== index) }));
   };
 
   const autoReply = data?.autoReply;
@@ -218,15 +236,76 @@ export function BotSettingsPage() {
               rows={3}
             />
           </div>
-
-          <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={updateConfig.isPending}>
-              {updateConfig.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
-              Save
-            </Button>
-          </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Rules</CardTitle>
+          <CardDescription>
+            Rules are extra instructions the AI must follow. &ldquo;Used by&rdquo; controls which bot: General = both, Sales = sales
+            bot only, Admin = admin bot only.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {form.rules.length === 0 ? (
+            <p className="text-sm text-black/50 dark:text-white/50">No rules yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {form.rules.map((rule, index) => (
+                <div key={index} className="flex flex-col gap-2 rounded-lg border border-black/10 p-3 sm:flex-row sm:items-center dark:border-white/10">
+                  <Input
+                    className="flex-1"
+                    value={rule.text}
+                    onChange={(e) => updateRule(index, { text: e.target.value })}
+                    placeholder="e.g. Always confirm the booking reference before discussing a booking"
+                  />
+                  <div className="flex items-center gap-2">
+                    <Select value={rule.audience} onValueChange={(v) => updateRule(index, { audience: v as BotAudience })}>
+                      <SelectTrigger className="w-32.5">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="general">General</SelectItem>
+                        <SelectItem value="sales">Sales</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-center gap-1.5">
+                      <Checkbox
+                        id={`rule-active-${index}`}
+                        checked={rule.isActive !== false}
+                        onCheckedChange={(v) => updateRule(index, { isActive: v === true })}
+                      />
+                      <Label htmlFor={`rule-active-${index}`} className="text-xs text-black/60 dark:text-white/60">
+                        Active
+                      </Label>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600 hover:bg-red-500/10"
+                      onClick={() => removeRule(index)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button variant="outline" onClick={addRule}>
+            <Plus className="mr-1 h-3.5 w-3.5" /> Add rule
+          </Button>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={updateConfig.isPending}>
+          {updateConfig.isPending && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+          Save
+        </Button>
+      </div>
     </div>
   );
 }

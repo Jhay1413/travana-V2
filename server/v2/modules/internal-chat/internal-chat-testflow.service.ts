@@ -2,6 +2,7 @@ import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import {
   buildEnquirySummary,
   buildTranscript,
+  generateGeneralReply,
   generateGroupedAsk,
   generateTransitionReply,
   generateTurn,
@@ -131,6 +132,39 @@ export const internalChatTestflowService = {
     // classification is unreliable.
     let sawAdminIntent = prevContext.domain === "admin" || looksLikeAdminAsk(userText);
 
+    // ── Upper-level ROUTER (mirrors reply-worker) ──────────────────────────
+    // Decide which bot handles this turn BEFORE running any of them — computed
+    // up here, BEFORE the onboarding gate, so a bare greeting or general
+    // question goes straight to the general route instead of being forced
+    // through name+phone collection. The enquiry bot's large prompt is
+    // untouched — routing lives in conversation-router.ts.
+    const enquiryInFlight =
+      enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || !!prevContext.groupedAskSent;
+    const route: "sales" | "admin" | "general" = enquiryInFlight
+      ? "sales"
+      : sawAdminIntent
+        ? "admin"
+        : await classifyConversationRoute({
+            transcript,
+            latestText: userText,
+            enquiryInFlight,
+            priorDomainAdmin: prevContext.domain === "admin",
+          });
+
+    // ── General route ────────────────────────────────────────────────────
+    // No booking or admin intent — just converse normally. No identity is
+    // needed, so this skips both the onboarding gate and the enquiry bot's
+    // slot-filling entirely.
+    if (route === "general") {
+      const reply = await generateGeneralReply(botConfig, kb, transcript, existingClient);
+      await internalChatRepository.updateSession(session.id, orgId, {
+        intent: "other",
+        context: { ...prevContext, lastReply: reply },
+      });
+      const replyMessage = await persistReply(reply);
+      return { replyMessage };
+    }
+
     // Client onboarding gate: for an unknown synthetic contact, collect full
     // name + phone ONLY (no email), then create/reuse the test client and
     // fall through to process the enquiry turn in the same call.
@@ -165,20 +199,7 @@ export const internalChatTestflowService = {
         ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null)
         : null;
 
-    // ── Upper-level ROUTER (mirrors reply-worker) ──────────────────────────
-    // Decide which bot handles this turn BEFORE running either. The enquiry
-    // bot's large prompt is untouched — routing lives in conversation-router.ts.
-    const enquiryInFlight =
-      enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || !!prevContext.groupedAskSent;
-    const route: "sales" | "admin" =
-      !enquiryInFlight && !knownClient && sawAdminIntent && clientId
-        ? "admin"
-        : await classifyConversationRoute({
-            transcript,
-            latestText: userText,
-            enquiryInFlight,
-            priorDomainAdmin: prevContext.domain === "admin",
-          });
+    // `route` was already decided above (before onboarding).
 
     // ── Admin bot ──────────────────────────────────────────────────────────
     // Fail-closed on clientId. Answers from the client's OWN records.

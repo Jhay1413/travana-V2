@@ -44,6 +44,62 @@ function retrievedMatchCategory(m: RetrievedMatch): string | null {
   return null;
 }
 
+// Audience carried in a vector-retrieved match's metadata (best-effort parse).
+export function retrievedMatchAudience(m: RetrievedMatch): string | null {
+  const meta = m.metadata;
+  if (meta && typeof meta === "object" && "audience" in meta) {
+    const a = (meta as Record<string, unknown>).audience;
+    return typeof a === "string" ? a : null;
+  }
+  return null;
+}
+
+// Which bot a piece of audience-tagged content (KB entry or rule) is visible
+// to. "sales"/"admin" are the two customer-facing bots; "internal" is the
+// staff assistant (kept general-only for now — see plan notes).
+export type BotAudience = "sales" | "admin" | "internal";
+
+export function audienceAllows(entryAudience: string | null | undefined, bot: BotAudience): boolean {
+  const normalized = (entryAudience || "general").toLowerCase();
+  if (normalized === "general") return true;
+  if (bot === "internal") return false;
+  return normalized === bot;
+}
+
+export interface BotRule {
+  text: string;
+  audience: "general" | "sales" | "admin";
+  isActive?: boolean;
+}
+
+const RULE_AUDIENCES = new Set(["general", "sales", "admin"]);
+
+// Safe parse of the org_bot_config.rules jsonb column — never throws, drops
+// malformed entries rather than failing the whole prompt build.
+export function parseBotRules(raw: unknown): BotRule[] {
+  if (!Array.isArray(raw)) return [];
+  const rules: BotRule[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const text = (item as Record<string, unknown>).text;
+    if (typeof text !== "string" || !text.trim()) continue;
+    const audienceRaw = (item as Record<string, unknown>).audience;
+    const audience = typeof audienceRaw === "string" && RULE_AUDIENCES.has(audienceRaw) ? (audienceRaw as BotRule["audience"]) : "general";
+    const isActiveRaw = (item as Record<string, unknown>).isActive;
+    const rule: BotRule = { text: text.trim(), audience };
+    if (typeof isActiveRaw === "boolean") rule.isActive = isActiveRaw;
+    rules.push(rule);
+  }
+  return rules;
+}
+
+// Renders the audience-scoped subset of bot rules into a system-prompt block.
+export function buildRulesBlock(rules: BotRule[], bot: BotAudience): string | null {
+  const filtered = rules.filter((r) => audienceAllows(r.audience, bot) && r.isActive !== false);
+  if (!filtered.length) return null;
+  return "Additional rules you MUST follow (set by the agency):\n" + filtered.map((r) => `- ${r.text}`).join("\n");
+}
+
 // Renders style-example KB entries into a capped block. Framing differs by
 // caller (customer bot vs internal assistant), so the header is passed in.
 export function buildStyleExamplesBlock(entries: OrgKnowledgeBase[], header: string): string | null {
@@ -195,6 +251,68 @@ export async function generateGroupedAsk(
   }
 }
 
+// The "general" route (see conversation-router.ts): the customer is just
+// greeting/chatting/asking a general question — no booking intent, no admin
+// intent. A lean conversational reply, deliberately kept separate from the
+// enquiry bot's onboarding gate and slot-filling machinery: it must NOT ask
+// for name/phone or try to collect a holiday enquiry. Falls back to a safe
+// fixed line on any failure.
+export async function generateGeneralReply(
+  botConfig: OrgBotConfig | null,
+  kb: OrgKnowledgeBase[],
+  transcript: string,
+  clientRecord: NeonClient | null,
+): Promise<string> {
+  const fallback = "Hi! How can I help you today?";
+  try {
+    const parts: string[] = [
+      `You are ${botConfig?.name?.trim() || "a friendly assistant"}, chatting with a customer of a UK travel agency.`,
+    ];
+    if (clientRecord) {
+      const clientName = [clientRecord.title, clientRecord.firstName, clientRecord.surename].filter(Boolean).join(" ").trim();
+      if (clientName) parts.push(`You are speaking with ${clientName}.`);
+    }
+    parts.push(
+      "Use UK English. Warm, natural, friendly UK high-street travel agent voice — never robotic or corporate. Continue naturally; if the conversation has already started, do NOT re-greet.",
+    );
+    parts.push(
+      "The customer is just chatting, greeting you, or asking a general question — they have NOT asked to book a holiday and are NOT asking about an existing booking. So: do NOT ask for their name, phone, destination, dates, budget, or who's travelling; do NOT try to collect a holiday enquiry; do NOT assume they want to book. Just reply warmly and helpfully, answer any general question from the company info below, and (if it fits) ask ONE open question like 'what can I help you with today?'. Keep it short — one or two sentences.",
+    );
+    if (botConfig?.persona?.trim()) parts.push(`Persona: ${botConfig.persona.trim()}`);
+    if (botConfig?.greeting?.trim()) parts.push(`Greeting style: ${botConfig.greeting.trim()}`);
+    if (botConfig?.signOff?.trim()) parts.push(`Sign-off: ${botConfig.signOff.trim()}`);
+    if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
+
+    // GENERAL-only KB entries: audienceAllows(x, "internal") is true only for
+    // general-audience entries, which is exactly the scope wanted here.
+    const activeGeneralKb = kb.filter((k) => k.isActive && audienceAllows(k.audience, "internal"));
+    const factKb = activeGeneralKb.filter((k) => !isStyleExampleCategory(k.category));
+    if (factKb.length) {
+      let company = factKb.map((k) => `- ${k.title}: ${k.content}`).join("\n");
+      if (company.length > KB_CHAR_BUDGET) company = company.slice(0, KB_CHAR_BUDGET) + "…";
+      parts.push(`Company information (use to answer accurately):\n${company}`);
+    }
+
+    const styleBlock = buildStyleExamplesBlock(activeGeneralKb, "Match the tone/warmth of these example conversations:");
+    if (styleBlock) parts.push(styleBlock);
+
+    const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "internal");
+    if (rulesBlock) parts.push(rulesBlock);
+
+    const res = await getOpenAI().chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.6,
+      messages: [
+        { role: "system", content: parts.join("\n\n") },
+        { role: "user", content: `Conversation so far:\n${transcript}\n\nReply to the customer's latest message.` },
+      ],
+    });
+    return res.choices[0]?.message?.content?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function buildSystemPrompt(
   botConfig: OrgBotConfig | null,
   kb: OrgKnowledgeBase[],
@@ -207,6 +325,7 @@ export function buildSystemPrompt(
     `You are ${name}, an AI assistant replying to customers on behalf of a UK travel agency.`,
     `Today's date is ${new Date().toISOString().slice(0, 10)}. Any travel dates must be in the future.`,
     "Use UK English and GBP. Write in the warm, natural, conversational voice of a friendly UK high-street travel agent — relaxed and human, never robotic, corporate, stiff, or formulaic. Vary your wording; do not open messages with the same canned phrase each time.",
+    "MOST IMPORTANT RULE: NEVER assume the customer wants to book a holiday. If everything they've said so far is just a greeting (e.g. \"hi\", \"hi ai\"), small talk, or their name/phone — with NO mention of a trip, destination, dates, or wanting to travel — then do NOT ask about destinations, dates, nights, budget or who's travelling, do NOT start an enquiry, and set intent to \"other\". Simply greet them warmly and ask ONE open question like \"what can I help you with today?\". Only begin helping with a holiday once THEY have actually said they want one.",
   ];
 
   // Client onboarding gate: collect details before anything else for unknown contacts.
@@ -219,7 +338,7 @@ export function buildSystemPrompt(
         "  2. Then ask for their FULL NAME and PHONE NUMBER so you can check them on the system — phrase it naturally and casually in the message, e.g. \"can you pop me your full name and phone number so I can check you're on the system?\". Do NOT ask for an email address, and do NOT use stiff phrasing like \"set up your file\".",
         "- On every reply after that, look at what they have already given and ask ONLY for what is still missing — e.g. if they gave just their name, ask for their phone number only. NEVER re-ask for a detail they have already provided.",
         "- Put whatever they provide into `client`: { fullName, phone } — leave a field as an empty string until they actually give it.",
-        "Only once you have BOTH their full name and phone, give a brief confirmation that you can see them on the system (e.g. \"That's great, I can see you on the system\") and then move on to the holiday details. Do not start collecting holiday enquiry details until you have their full name and phone.",
+        "Only once you have BOTH their full name and phone, give a brief confirmation that you can see them on the system (e.g. \"That's great, I can see you on the system\"), then respond to WHAT THEY ACTUALLY ASKED FOR: if they've already shown they want a holiday, carry on helping with that; if they only greeted you or haven't said what they need, ask an OPEN, friendly question about how you can help (e.g. \"what can I help you with today?\") — do NOT assume they want to book, and do NOT start asking for destination, dates, or who's travelling. Do not start collecting holiday enquiry details until you have their full name and phone AND they've actually expressed interest in a holiday.",
       ].join("\n"),
     );
   }
@@ -228,6 +347,9 @@ export function buildSystemPrompt(
   if (botConfig?.greeting?.trim()) parts.push(`Greeting style: ${botConfig.greeting.trim()}`);
   if (botConfig?.signOff?.trim()) parts.push(`Sign-off: ${botConfig.signOff.trim()}`);
   if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
+
+  const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "sales");
+  if (rulesBlock) parts.push(rulesBlock);
 
   parts.push(
     "Never quote firm prices, availability, or confirm bookings you cannot verify — instead gather the enquiry and let a human advisor follow up.",
@@ -244,9 +366,11 @@ export function buildSystemPrompt(
 
   // Company info: static KB rows plus any vector-retrieved KB matches (Phase 5d),
   // folded into the same block and capped together at KB_CHAR_BUDGET.
-  const activeKb = kb.filter((k) => k.isActive);
+  const activeKb = kb.filter((k) => k.isActive && audienceAllows(k.audience, "sales"));
   const factKb = activeKb.filter((k) => !isStyleExampleCategory(k.category));
-  const retrievedKb = (retrieved?.kb ?? []).filter((m) => !isStyleExampleCategory(retrievedMatchCategory(m)));
+  const retrievedKb = (retrieved?.kb ?? []).filter(
+    (m) => !isStyleExampleCategory(retrievedMatchCategory(m)) && audienceAllows(retrievedMatchAudience(m), "sales"),
+  );
   const kbLines = [...factKb.map((k) => `- ${k.title}: ${k.content}`), ...retrievedKb.map((m) => `- ${m.content}`)];
   if (kbLines.length) {
     let company = kbLines.join("\n");
@@ -285,6 +409,7 @@ export function buildSystemPrompt(
   parts.push(
     [
       "If the customer is enquiring about a holiday, capture it conversationally — do NOT wait for the customer to confirm before it can be logged, and do NOT insist on collecting every field before you can help further.",
+      "- DO NOT ASSUME THE CUSTOMER WANTS TO BOOK. If they have only greeted you (e.g. \"hi\", \"hi ai\"), made small talk, or not yet said what they want, do NOT ask for destination, dates, nights, budget, or who's travelling — greet them warmly and ask ONE open question about how you can help. Only start collecting holiday details ONCE they've actually expressed interest in a trip/holiday; until then set intent=\"other\".",
       "- CRITICAL: Only record details the customer has ACTUALLY stated in this conversation. Never invent, guess, infer or pad out destinations, board basis, star ratings, budgets or any other value they did not say. Do not repeat a value multiple times. If unsure, leave it empty.",
       "- The 'Current enquiry status' and 'Known enquiry details' provided below are the AUTHORITATIVE source of what's already captured. Earlier messages in the transcript may show a PREVIOUS enquiry that was already logged — do NOT say things like 'we already have your enquiry' or refuse to help based on them. If the current status is none/collecting and the customer shows holiday interest, treat it as a brand-new enquiry and collect it from scratch.",
       '- Classify the holiday type into one of: "Package Holiday" (default), "Cruise Package", "Hot Tub Break".',

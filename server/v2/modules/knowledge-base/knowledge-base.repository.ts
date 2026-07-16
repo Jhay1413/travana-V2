@@ -8,6 +8,9 @@ export interface KbCreateInput {
   title: string;
   content: string;
   category?: string | null;
+  // orgKnowledgeBase.audience is NOT NULL (default "general") — unlike category,
+  // it never accepts null.
+  audience?: string;
   isActive?: boolean;
 }
 export type KbUpdateInput = Partial<KbCreateInput>;
@@ -40,6 +43,7 @@ export const knowledgeBaseRepository = {
         title: data.title,
         content: data.content,
         category: data.category ?? null,
+        audience: data.audience ?? "general",
         isActive: data.isActive ?? true,
         createdBy: userId,
       })

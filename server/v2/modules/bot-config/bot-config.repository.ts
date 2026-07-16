@@ -5,7 +5,10 @@ import { orgBotConfig, type OrgBotConfig } from "@shared/schema";
 // Repository: one bot-config row per org (org_bot_config).
 
 export type BotConfigInput = Partial<
-  Pick<OrgBotConfig, "name" | "avatarUrl" | "persona" | "preferredResponse" | "greeting" | "signOff" | "language" | "handoffInstructions">
+  Pick<
+    OrgBotConfig,
+    "name" | "avatarUrl" | "persona" | "preferredResponse" | "greeting" | "signOff" | "language" | "handoffInstructions" | "rules"
+  >
 >;
 
 export const botConfigRepository = {

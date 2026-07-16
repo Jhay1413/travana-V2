@@ -4,7 +4,13 @@ import { CHAT_MODEL } from "../../utils/ai-model";
 import { hasAnyRole, type Scope } from "../../utils/scope";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import type { EmbeddingMatch } from "../ai-embeddings/ai-embeddings.repository";
-import { isStyleExampleCategory, buildStyleExamplesBlock } from "../ai-conversation/ai-conversation.brain";
+import {
+  isStyleExampleCategory,
+  buildStyleExamplesBlock,
+  audienceAllows,
+  parseBotRules,
+  buildRulesBlock,
+} from "../ai-conversation/ai-conversation.brain";
 import { botConfigRepository } from "../bot-config/bot-config.repository";
 import { knowledgeBaseRepository } from "../knowledge-base/knowledge-base.repository";
 import { internalChatRepository } from "./internal-chat.repository";
@@ -354,6 +360,15 @@ function metaCategory(meta: unknown): string | null {
   return null;
 }
 
+// Best-effort read of a retrieved match's `audience` from its metadata jsonb.
+function metaAudience(meta: unknown): string | null {
+  if (meta && typeof meta === "object" && "audience" in meta) {
+    const a = (meta as Record<string, unknown>).audience;
+    return typeof a === "string" ? a : null;
+  }
+  return null;
+}
+
 // Client identities discovered via the client tools this session. The
 // tool-call turns themselves are NOT persisted (getRecentMessages only replays
 // user/assistant text), so the ids the model found via search_clients are lost
@@ -429,9 +444,14 @@ function buildAssistantSystemPrompt(
     );
   if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
 
-  const activeKb = kb.filter((k) => k.isActive);
+  const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "internal");
+  if (rulesBlock) parts.push(rulesBlock);
+
+  const activeKb = kb.filter((k) => k.isActive && audienceAllows(k.audience, "internal"));
   const factKb = activeKb.filter((k) => !isStyleExampleCategory(k.category));
-  const factRetrievedKb = retrievedKb.filter((m) => !isStyleExampleCategory(metaCategory(m.metadata)));
+  const factRetrievedKb = retrievedKb.filter(
+    (m) => !isStyleExampleCategory(metaCategory(m.metadata)) && audienceAllows(metaAudience(m.metadata), "internal"),
+  );
   const kbLines = [...factKb.map((k) => `- ${k.title}: ${k.content}`), ...factRetrievedKb.map((m) => `- ${m.content}`)];
   if (kbLines.length) {
     let company = kbLines.join("\n");

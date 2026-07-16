@@ -204,6 +204,13 @@
       "when": 1783879706697,
       "tag": "0028_ai_and_internal_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1784105652285,
+      "tag": "0029_equal_madrox",
+      "breakpoints": true
     }
   ]
 }

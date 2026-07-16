@@ -3,6 +3,7 @@ import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import {
   buildEnquirySummary,
   buildTranscript,
+  generateGeneralReply,
   generateGroupedAsk,
   generateTransitionReply,
   generateTurn,
@@ -184,6 +185,43 @@ export const replyWorker = {
         await sendReply(orgId, conversationId, message.channel_id, reply, mode, true);
       };
 
+      // ── Upper-level ROUTER ─────────────────────────────────────────────
+      // Decide which bot handles this turn BEFORE running any of them —
+      // computed up here, BEFORE the onboarding gate, so a bare greeting or
+      // general question from a brand-new contact goes straight to the general
+      // route instead of being forced through name+phone collection. An
+      // enquiry already in flight stays sales; an attachment on this message
+      // (a document being submitted) or carried-over admin intent forces admin.
+      const enquiryInFlight =
+        enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || !!prevContext.groupedAskSent;
+      const hasAttachments = (list.items.find((m) => m.id === message.id)?.attachments ?? []).some((a) => a?.id);
+      const route: "sales" | "admin" | "general" = enquiryInFlight
+        ? "sales"
+        : hasAttachments || sawAdminIntent
+          ? "admin"
+          : await classifyConversationRoute({
+              transcript,
+              latestText,
+              enquiryInFlight,
+              priorDomainAdmin: prevContext.domain === "admin",
+            });
+
+      // ── General route ────────────────────────────────────────────────
+      // No booking or admin intent — just converse normally. No identity is
+      // needed, so this skips both the onboarding gate and the enquiry bot's
+      // slot-filling entirely.
+      if (route === "general") {
+        if (!hasText) return; // nothing to reply to
+        const reply = await generateGeneralReply(botConfig, kb, transcript, client);
+        await sendReply(orgId, conversationId, message.channel_id, reply, mode, false);
+        await conversationStateRepository.update(conversationId, {
+          intent: "other",
+          lastAiReplyAt: new Date(),
+          context: { ...prevContext, lastReply: reply },
+        });
+        return;
+      }
+
       // Client onboarding gate: for an unknown contact, collect full name + phone
       // ONLY (no email). If both arrive (even in the same message), create + link
       // and FALL THROUGH to process the enquiry in the same turn.
@@ -253,26 +291,9 @@ export const replyWorker = {
       // text) — stay silent rather than replying to nothing.
       if (!hasText && !attachmentNote) return;
 
-      // ── Upper-level ROUTER ─────────────────────────────────────────────
-      // Decide which bot handles this turn BEFORE running either. The enquiry
-      // bot's large prompt is left untouched — routing lives in its own tiny
-      // classifier (conversation-router.ts). Saved attachments force the admin
-      // bot (a document submission); otherwise an enquiry already in flight stays
-      // sales; admin intent carried across the onboarding detour (sawAdminIntent)
-      // wins for the just-onboarded turn, whose message is only a phone number.
-      const enquiryInFlight =
-        enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || !!prevContext.groupedAskSent;
-      const route: "sales" | "admin" =
-        attachmentNote && clientId
-          ? "admin"
-          : !enquiryInFlight && !knownClient && sawAdminIntent && clientId
-            ? "admin"
-            : await classifyConversationRoute({
-                transcript,
-                latestText,
-                enquiryInFlight,
-                priorDomainAdmin: prevContext.domain === "admin",
-              });
+      // `route` was already decided above (before onboarding). Saved
+      // attachments and admin intent carried across the onboarding detour
+      // (sawAdminIntent) already fed into that decision.
 
       // ── Admin bot ──────────────────────────────────────────────────────
       // Fail-closed on clientId (only ever set via a verified link / phone-email
