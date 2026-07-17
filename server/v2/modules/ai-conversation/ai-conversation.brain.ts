@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { CHAT_MODEL } from "../../utils/ai-model";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
-import type { AiTurn, EnquirySlots, RetrievedContext, RetrievedMatch, TranscriptMessage } from "./ai-conversation.types";
+import type { AiTurn, EnquiryBeneficiary, EnquirySlots, RetrievedContext, RetrievedMatch, TranscriptMessage } from "./ai-conversation.types";
 
 // Pure, stateless "brain" functions for AI-driven conversational drivers:
 // prompt building, the LLM turn, slot/field bookkeeping, and small reply
@@ -329,16 +329,17 @@ export function buildSystemPrompt(
   ];
 
   // Client onboarding gate: collect details before anything else for unknown contacts.
-  // Only a full name and phone number are required — we do NOT ask for email.
+  // Only a name and phone number are required — we do NOT ask for email.
   if (!knownClient) {
     parts.push(
       [
         "IMPORTANT — this customer is NOT on our system yet. Your FIRST reply must do TWO things in one short, friendly message:",
         "  1. Briefly acknowledge their message in a natural, friendly way so they know you've understood what they asked — the way a warm UK travel agent would reassure them you can help. VARY your wording naturally to fit their message; do NOT open with a canned phrase like \"Of course\". Keep it to a line, and do NOT start answering the enquiry or asking holiday details yet.",
-        "  2. Then ask for their FULL NAME and PHONE NUMBER so you can check them on the system — phrase it naturally and casually in the message, e.g. \"can you pop me your full name and phone number so I can check you're on the system?\". Do NOT ask for an email address, and do NOT use stiff phrasing like \"set up your file\".",
+        "  2. Then ask for their NAME and PHONE NUMBER so you can check them on the system — phrase it naturally and casually in the message, e.g. \"can you pop me your name and phone number so I can check you're on the system?\". Do NOT ask for an email address, and do NOT use stiff phrasing like \"set up your file\".",
+        "  EXCEPTION: if they are enquiring on behalf of ANOTHER named person and are not travelling themselves (see the 'ENQUIRING ON BEHALF OF SOMEONE ELSE' rules below), do NOT ask the sender for their own name/phone — follow those rules and ask for the TRAVELLER's phone instead.",
         "- On every reply after that, look at what they have already given and ask ONLY for what is still missing — e.g. if they gave just their name, ask for their phone number only. NEVER re-ask for a detail they have already provided.",
         "- Put whatever they provide into `client`: { fullName, phone } — leave a field as an empty string until they actually give it.",
-        "Only once you have BOTH their full name and phone, give a brief confirmation that you can see them on the system (e.g. \"That's great, I can see you on the system\"), then respond to WHAT THEY ACTUALLY ASKED FOR: if they've already shown they want a holiday, carry on helping with that; if they only greeted you or haven't said what they need, ask an OPEN, friendly question about how you can help (e.g. \"what can I help you with today?\") — do NOT assume they want to book, and do NOT start asking for destination, dates, or who's travelling. Do not start collecting holiday enquiry details until you have their full name and phone AND they've actually expressed interest in a holiday.",
+        "Only once you have BOTH their name and phone, give a brief confirmation that you can see them on the system (e.g. \"That's great, I can see you on the system\"), then respond to WHAT THEY ACTUALLY ASKED FOR: if they've already shown they want a holiday, carry on helping with that; if they only greeted you or haven't said what they need, ask an OPEN, friendly question about how you can help (e.g. \"what can I help you with today?\") — do NOT assume they want to book, and do NOT start asking for destination, dates, or who's travelling. Do not start collecting holiday enquiry details until you have their name and phone AND they've actually expressed interest in a holiday.",
       ].join("\n"),
     );
   }
@@ -433,7 +434,19 @@ export function buildSystemPrompt(
   );
 
   parts.push(
-    'Respond ONLY with JSON: {"hand_off": boolean, "intent": "enquiry"|"other", "slots": object, "client": {"fullName": string, "phone": string}, "reply": string}. `reply` is the message to send the customer; `client` holds any personal details they have given (empty strings if unknown).',
+    [
+      "ENQUIRING ON BEHALF OF SOMEONE ELSE: If the customer makes clear the holiday is for ANOTHER named person and they themselves are NOT one of the travellers — e.g. \"my friend James wants to book Benidorm\", \"I'm enquiring for my mum Susan\", \"can you sort a trip for my colleague Dave\" — then:",
+      "  • set beneficiary.onBehalf=true and put that traveller's name in beneficiary.fullName. You ALREADY have their name from the message, so do NOT ask for their name again.",
+      "  • ask ONLY for that traveller's PHONE NUMBER, naming them — e.g. \"Lovely! Can I grab James's phone number so I can get this set up for him?\". Do NOT ask the sender for their own name or number.",
+      "  • once they give it, put the traveller's phone in beneficiary.phone.",
+      "  • keep capturing all the holiday details they mention into `slots` exactly as normal — the enquiry is for the traveller.",
+      "  • carry beneficiary.onBehalf=true and beneficiary.fullName on EVERY following turn of this same enquiry, even after you have the phone.",
+      "If the sender IS one of the travellers (e.g. \"me and James want to go\", \"a trip for me and my wife\", \"we'd like to book\"), this is NOT enquiring on someone's behalf — leave beneficiary.onBehalf=false and handle it as their own enquiry.",
+    ].join("\n"),
+  );
+
+  parts.push(
+    'Respond ONLY with JSON: {"hand_off": boolean, "intent": "enquiry"|"other", "slots": object, "client": {"fullName": string, "phone": string}, "beneficiary": {"onBehalf": boolean, "fullName": string, "phone": string}, "reply": string}. `reply` is the message to send the customer; `client` holds any personal details the SENDER has given (empty strings if unknown); `beneficiary` is only for when they are enquiring on another named person\'s behalf (onBehalf=false otherwise).',
   );
   return parts.join("\n\n");
 }
@@ -489,6 +502,7 @@ export async function generateTurn(
       intent: p.intent === "enquiry" ? "enquiry" : "other",
       slots: (p.slots as EnquirySlots) ?? {},
       client: (p.client as AiTurn["client"]) ?? {},
+      beneficiary: (p.beneficiary as EnquiryBeneficiary) ?? {},
       reply: (p.reply ?? "").trim() || FALLBACK_REPLY,
     };
   } catch {
@@ -607,6 +621,24 @@ export function hasSubstantiveSignal(slots: EnquirySlots): boolean {
     slots.postCruiseStay ||
     (slots.holidayType && slots.holidayType.trim().toLowerCase() !== "package holiday")
   );
+}
+
+// Onboarding phone-number clash: the number the customer gave is already on file
+// under one or more OTHER clients whose names don't match the one they gave. Ask
+// them to confirm the number (or send the right one) rather than silently
+// attaching them to someone else's record. `subjectName` names the person the
+// number is meant to be for — omitted for the sender themselves, or e.g. "James"
+// when they're enquiring on someone else's behalf.
+export function buildPhoneConflictReply(existingNames: string[], subjectName?: string): string {
+  const names = existingNames.filter(Boolean);
+  const who =
+    names.length <= 1
+      ? names[0] || "another client"
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const subject = subjectName?.trim();
+  const forWhom = subject ? `for ${subject}` : "for you";
+  const findWhom = subject ? "them" : "you";
+  return `Thanks! Just to double-check — that number is already saved on our system under ${who}. Could you confirm it's the right number ${forWhom}, or pop me the correct one so I can find ${findWhom}?`;
 }
 
 export function buildGroupedAskReply(missing: string[]): string {

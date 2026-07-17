@@ -2,6 +2,7 @@ import { runWithSendSevenConfigAsync } from "../../utils/sendseven";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import {
   buildEnquirySummary,
+  buildPhoneConflictReply,
   buildTranscript,
   generateGeneralReply,
   generateGroupedAsk,
@@ -25,7 +26,15 @@ import { neonClientService } from "../neon-client/neon-client.service";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
 import { resolveAndCreateEnquiry } from "./enquiry-auto-create.service";
-import { createAndLinkClient, resolveExistingClient, systemScope } from "./identity.service";
+import {
+  createNewClientAndLink,
+  insertClient,
+  resolveClientForOnboarding,
+  resolveExistingClient,
+  resolveOrCreateByDetails,
+  samePhoneNumber,
+  systemScope,
+} from "./identity.service";
 import { taskService } from "../task/task.service";
 import { adminAgent } from "./admin-agent.service";
 import type { PendingAttachment } from "./admin-data.service";
@@ -54,6 +63,22 @@ interface ConversationContext {
   // True once the admin bot has opened a support ticket for this conversation —
   // stops it opening duplicates on later turns.
   ticketOpened?: boolean;
+  // Set during onboarding when the phone number the customer gave is already on
+  // file under a DIFFERENT client's name — we've asked them to confirm it. Holds
+  // the number in question so the next turn can tell a correction (new number)
+  // from a confirmation (same number again).
+  phoneConflictPhone?: string;
+  // Set when the customer is enquiring on behalf of a named third party — the
+  // enquiry is filed under this traveller, not the sender. Persisted across turns
+  // so we keep asking for/resolving the traveller (and don't re-ask their name).
+  beneficiary?: {
+    name: string;
+    phone?: string;
+    // The resolved/created client id for the traveller (once we have their phone).
+    clientId?: string;
+    // Mirrors phoneConflictPhone but for the traveller's number clash.
+    phoneConflictPhone?: string;
+  };
 }
 
 // Tag our outbound so the message.sent webhook can tell it from a human agent's
@@ -229,8 +254,16 @@ export const replyWorker = {
         const onboard = await generateTurn(botConfig, kb, null, transcript, enquiryStatus, priorSlots, false);
         console.log(
           `[sendseven-webhook] conv=${conversationId} onboarding (unknown contact) mode=${mode} handoff=${onboard.hand_off} ` +
-            `adminIntent=${sawAdminIntent} hasName=${!!onboard.client?.fullName} hasPhone=${!!onboard.client?.phone}`,
+            `adminIntent=${sawAdminIntent} hasName=${!!onboard.client?.fullName} hasPhone=${!!onboard.client?.phone} ` +
+            `onBehalf=${!!onboard.beneficiary?.onBehalf}`,
         );
+        // Third-party enquiry ("my friend James wants to book…"): the enquiry
+        // belongs to the traveller, not the sender — so do NOT onboard the sender.
+        // Fall through to the sales flow, which collects the traveller's phone and
+        // files the enquiry under them (the beneficiary gate below).
+        const beneficiaryEnquiry =
+          !!prevContext.beneficiary || !!(onboard.beneficiary?.onBehalf && onboard.beneficiary?.fullName?.trim());
+        if (!beneficiaryEnquiry) {
         // Don't hand off an admin-type ask during onboarding — we can't serve it
         // yet (no clientId), so keep collecting details, then the admin bot
         // answers it once they're identified.
@@ -248,9 +281,43 @@ export const replyWorker = {
           });
           return;
         }
-        clientId = await createAndLinkClient(orgId, contactId, { fullName: full, phone, email: null });
-        await conversationStateRepository.update(conversationId, { clientId });
-        console.log(`[sendseven-webhook] Linked client ${clientId} for conv ${conversationId} (collected details)`);
+        // Phone ↔ name allocation. If the number is already on file under a
+        // DIFFERENT client's name we asked the customer to confirm it last turn
+        // (phoneConflictPhone). If they're standing by the SAME number, take that
+        // as confirmation it's genuinely theirs and register them as a NEW client
+        // under the name they gave — never fold them into the other client's
+        // record. A different number means they corrected it → re-resolve below.
+        const pendingConflictPhone = prevContext.phoneConflictPhone;
+        if (pendingConflictPhone && samePhoneNumber(pendingConflictPhone, phone)) {
+          clientId = await createNewClientAndLink(orgId, contactId, { fullName: full, phone, email: null });
+          delete prevContext.phoneConflictPhone;
+          await conversationStateRepository.update(conversationId, { clientId, context: { ...prevContext } });
+          console.log(`[sendseven-webhook] conv ${conversationId} phone confirmed after clash — created new client ${clientId}`);
+        } else {
+          const resolution = await resolveClientForOnboarding(orgId, contactId, { fullName: full, phone, email: null });
+          if (resolution.status === "phone_conflict") {
+            const confirmReply = buildPhoneConflictReply(resolution.existingNames);
+            await sendReply(orgId, conversationId, message.channel_id, confirmReply, mode, false);
+            await conversationStateRepository.update(conversationId, {
+              lastAiReplyAt: new Date(),
+              context: {
+                ...prevContext,
+                ...(sawAdminIntent ? { domain: "admin" as const } : {}),
+                phoneConflictPhone: phone,
+                lastReply: confirmReply,
+              },
+            });
+            console.log(
+              `[sendseven-webhook] conv ${conversationId} phone clash — number belongs to ${resolution.existingNames.join(", ")}; asked to confirm`,
+            );
+            return;
+          }
+          clientId = resolution.clientId;
+          delete prevContext.phoneConflictPhone;
+          await conversationStateRepository.update(conversationId, { clientId, context: { ...prevContext } });
+          console.log(`[sendseven-webhook] Linked client ${clientId} for conv ${conversationId} (collected details)`);
+        }
+        } // end !beneficiaryEnquiry — a third-party enquiry falls through to sales below
       }
 
       // Known client (already, or just onboarded) → the enquiry/reply turn.
@@ -370,6 +437,79 @@ export const replyWorker = {
       // already had persisted, so a terse final reply can't drop earlier fields.
       const mergedSlots = mergeSlots(priorSlots, turn.slots);
 
+      // ── Third-party enquiry ("on behalf of a friend") ──────────────────
+      // "my friend James wants to book Benidorm" — the enquiry belongs to the
+      // named traveller, not the sender. Resolve/collect the traveller (name is
+      // already known, so we only need their phone) and file the enquiry under
+      // them. Defaults to the sender's own client id when not on anyone's behalf.
+      let enquiryClientId = clientId;
+      const benTurn = turn.beneficiary;
+      const benCtx = prevContext.beneficiary;
+      const beneficiaryActive = !!benCtx || !!(benTurn?.onBehalf && benTurn?.fullName?.trim());
+      if (beneficiaryActive && enquiryStatus !== "awaiting_availability") {
+        const name = (benCtx?.name || benTurn?.fullName || "").trim();
+        const phone = (benTurn?.phone || benCtx?.phone || "").trim();
+        let benClientId = benCtx?.clientId;
+
+        if (name && !benClientId) {
+          if (!phone) {
+            // We have the traveller's name but not their number. The AI reply
+            // already asks for it (by name) — send it, keep collecting, and hold
+            // off creating the enquiry until we can resolve the traveller.
+            await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
+            await conversationStateRepository.update(conversationId, {
+              intent: "enquiry",
+              enquiryStatus: "collecting",
+              enquirySlots: mergedSlots,
+              lastAiReplyAt: new Date(),
+              context: { ...prevContext, lastReply: turn.reply, beneficiary: { ...benCtx, name } },
+            });
+            console.log(`[sendseven-webhook] conv ${conversationId} on-behalf enquiry for ${name} — asked for their phone`);
+            return;
+          }
+          // Have name + phone → resolve/create the traveller. NO contact link:
+          // the traveller isn't the one messaging, so we must not repoint the
+          // sender's contact at them.
+          const pendingBenConflict = benCtx?.phoneConflictPhone;
+          if (pendingBenConflict && samePhoneNumber(pendingBenConflict, phone)) {
+            benClientId = await insertClient(orgId, { fullName: name, phone });
+            console.log(`[sendseven-webhook] conv ${conversationId} beneficiary phone confirmed after clash — created client ${benClientId} for ${name}`);
+          } else {
+            const resolution = await resolveOrCreateByDetails(orgId, { fullName: name, phone });
+            if (resolution.status === "phone_conflict") {
+              const confirmReply = buildPhoneConflictReply(resolution.existingNames, name);
+              await sendReply(orgId, conversationId, message.channel_id, confirmReply, mode, false);
+              await conversationStateRepository.update(conversationId, {
+                intent: "enquiry",
+                enquiryStatus: "collecting",
+                enquirySlots: mergedSlots,
+                lastAiReplyAt: new Date(),
+                context: { ...prevContext, lastReply: confirmReply, beneficiary: { name, phone, phoneConflictPhone: phone } },
+              });
+              console.log(
+                `[sendseven-webhook] conv ${conversationId} beneficiary phone clash — belongs to ${resolution.existingNames.join(", ")}; asked to confirm`,
+              );
+              return;
+            }
+            benClientId = resolution.clientId;
+          }
+        }
+
+        if (benClientId) {
+          enquiryClientId = benClientId;
+          // Persist the resolved traveller so later turns skip resolution and
+          // never re-ask their name. Mutating prevContext means every downstream
+          // context spread keeps it (until the enquiry is created, which drops it).
+          prevContext.beneficiary = { name, phone: phone || undefined, clientId: benClientId };
+          update.context = { ...prevContext, lastReply: turn.reply };
+        }
+      }
+
+      // Enquiry-ness for the branches below. A third-party enquiry that already
+      // carries real holiday signal still counts as an enquiry even if a terse
+      // "his number is 07…" reply gets classified as intent="other".
+      const treatAsEnquiry = turn.intent === "enquiry" || (beneficiaryActive && hasSubstantiveSignal(mergedSlots));
+
       // Step: awaiting_availability — the enquiry is already created; this reply
       // is the customer's stated callback time. Parse it, create ONE task, confirm,
       // and hand off. The transition is CLAIMED atomically before the task is
@@ -420,7 +560,7 @@ export const replyWorker = {
       // an atomic claim taken BEFORE the create, so a retried/concurrent inbound
       // that loses the claim does nothing.
       if (prevContext.groupedAskSent && enquiryStatus === "collecting") {
-        if (turn.intent !== "enquiry") {
+        if (!treatAsEnquiry) {
           // Customer declined / went off-topic right after the grouped ask —
           // do not fabricate an enquiry from a non-answer; hand off instead.
           console.log(`[sendseven-webhook] conv ${conversationId} declined/derailed after grouped ask — handing off instead of creating`);
@@ -435,7 +575,8 @@ export const replyWorker = {
 
         const missing = missingFieldsFor(mergedSlots);
         const summary = buildEnquirySummary(mergedSlots);
-        const { enquiryId, ownerUserId } = await resolveAndCreateEnquiry(orgId, clientId, mergedSlots, {
+        // enquiryClientId is the traveller for an on-behalf enquiry, else the sender.
+        const { enquiryId, ownerUserId } = await resolveAndCreateEnquiry(orgId, enquiryClientId, mergedSlots, {
           summary,
           missingFields: missing,
         });
@@ -464,7 +605,7 @@ export const replyWorker = {
       }
 
       // Step: enquiry intent, grouped ask not yet sent.
-      if (turn.intent === "enquiry") {
+      if (treatAsEnquiry) {
         if (!hasSubstantiveSignal(mergedSlots)) {
           // Soft anti-empty threshold not met — keep collecting naturally.
           update.intent = "enquiry";

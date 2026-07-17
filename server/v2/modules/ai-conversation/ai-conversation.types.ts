@@ -43,6 +43,16 @@ export interface ClientDetails {
   email?: string;
 }
 
+// When the customer is enquiring on behalf of SOMEONE ELSE (e.g. "my friend
+// James wants to book Benidorm"), the enquiry belongs to that third party — the
+// traveller — not the person messaging. The AI reports the traveller's details
+// here so the worker can file the enquiry under them and ask only for the phone.
+export interface EnquiryBeneficiary {
+  onBehalf?: boolean;
+  fullName?: string;
+  phone?: string;
+}
+
 // The AI's per-turn decision for the enquiry slot-filling state machine (§14).
 // There is no customer-confirmation gate — the worker creates the enquiry in
 // code once a single grouped follow-up has been asked (see reply-worker).
@@ -53,6 +63,8 @@ export interface AiTurn {
   reply: string;
   // Populated while collecting client details for an unknown contact.
   client: ClientDetails;
+  // Set when the enquiry is being made on behalf of a named third party.
+  beneficiary?: EnquiryBeneficiary;
 }
 
 // Best-effort vector-retrieval matches (Phase 5a's aiEmbeddingsService.retrieve),

@@ -47,7 +47,8 @@
       "Bash(tee /tmp/tsc9.out)",
       "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/0a94c86f-5a16-49b1-99ab-0eeb4367e08d/scratchpad/re-test4.cjs\")",
       "Bash(findstr /i \"type-check tsc build\")",
-      "Bash(echo \"exists: $?\")"
+      "Bash(echo \"exists: $?\")",
+      "Bash(npx vitest *)"
     ],
     "deny": [
       "Bash(drizzle-kit push:*)",
