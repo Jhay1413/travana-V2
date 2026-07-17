@@ -248,6 +248,7 @@ function buildAdminSystemPrompt(
   kb: OrgKnowledgeBase[],
   clientRecord: NeonClient | null,
   ticketAlreadyOpen: boolean,
+  forceTicketNow: boolean,
 ): string {
   const name = botConfig?.name?.trim() || "the assistant";
   const clientName =
@@ -259,6 +260,8 @@ function buildAdminSystemPrompt(
     "Use UK English. Write in the warm, natural, conversational voice of a friendly UK high-street travel agent — relaxed and human, never robotic or corporate. Continue the conversation naturally — do NOT re-greet the customer or open with 'hi'/'hey there'/'thanks for reaching out'.",
     "Hard rules:\n" +
       "- Answer ONLY questions about THIS customer's OWN quotes, enquiries, documents/files, and support tickets, using the tools provided.\n" +
+      "- DO NOT ask the customer for the same information more than once. If earlier in the conversation above you already asked for a booking reference or for details of the problem, do NOT ask again — even if they haven't fully answered.\n" +
+      "- For a COMPLAINT or any request that needs staff action: ask AT MOST ONE short clarifying question. If the customer doesn't give a booking reference or full details, that is fine — open a ticket (open_ticket) straight away with whatever you have, note anything still outstanding (e.g. 'booking reference not provided') in the ticket description, and reassure them a colleague will follow up. NEVER keep interrogating them or repeatedly demand a reference.\n" +
       "- NEVER reveal agency commission, margin, discounts, or internal costs — none of the tools return them anyway. You MAY tell the customer their own quote status, destination, travel dates, and price.\n" +
       "- If the answer isn't in the tool results, say so plainly and offer to have a human colleague follow up — do NOT guess or invent quote/ticket/file details.\n" +
       "- Do NOT collect a new holiday enquiry here — if the customer asks about a brand-new holiday/deal, say a colleague will pick that up, and do not attempt to gather enquiry details yourself.\n" +
@@ -271,6 +274,10 @@ function buildAdminSystemPrompt(
   if (ticketAlreadyOpen) {
     parts.push(
       "NOTE: a support ticket has ALREADY been opened for this matter earlier in this conversation. Do NOT open another ticket (no duplicates) — just help, reassure, or confirm that a colleague will follow up on the ticket that already exists.",
+    );
+  } else if (forceTicketNow) {
+    parts.push(
+      "IMPORTANT: you have ALREADY asked this customer for details on a previous turn. Do NOT ask any further questions now — call open_ticket THIS turn with the information available (put anything still outstanding, e.g. a missing booking reference, in the description), then briefly confirm to the customer that it's logged and a colleague will follow up.",
     );
   }
 
@@ -323,12 +330,16 @@ export const adminAgent = {
     // True if a ticket was already opened earlier in this conversation — the bot
     // is told not to open a duplicate, and the backstop below is disabled.
     ticketAlreadyOpen?: boolean,
+    // True once the bot has already asked the customer for detail on a prior turn
+    // without opening a ticket — forces it to open the ticket now instead of
+    // re-asking (see the driver's adminAsked tracking).
+    forceTicketNow?: boolean,
   ): Promise<{ reply: string; ticketOpened: boolean } | null> {
     try {
       const openai = getOpenAI();
       let pending = pendingAttachments ?? [];
       let ticketOpened = false;
-      const systemPrompt = buildAdminSystemPrompt(botConfig, kb, clientRecord, !!ticketAlreadyOpen);
+      const systemPrompt = buildAdminSystemPrompt(botConfig, kb, clientRecord, !!ticketAlreadyOpen, !!forceTicketNow);
       const userContent = attachmentNote
         ? `Conversation so far:\n${transcript}\n\n[System note — not a customer message: ${attachmentNote}]\n\nRespond to the customer's latest message.`
         : `Conversation so far:\n${transcript}\n\nRespond to the customer's latest message.`;
@@ -402,11 +413,12 @@ export const adminAgent = {
         raw = finalResponse.choices[0]?.message?.content?.trim();
       }
 
-      // Backstop: the model told the customer this has been logged / a colleague
-      // will follow up, but never actually called open_ticket (and none was
-      // opened earlier). Force one so the promise is real — the model authors the
-      // subject/description under a forced tool call.
-      if (raw && !ticketOpened && !ticketAlreadyOpen && CLAIMS_ACTION_RE.test(raw)) {
+      // Backstop: force a ticket when EITHER the model told the customer it's
+      // logged / a colleague will follow up but never called open_ticket, OR the
+      // driver says we've already asked once and must stop re-asking
+      // (forceTicketNow). The model authors the subject/description under a forced
+      // tool call. Skipped if a ticket was already opened earlier.
+      if (!ticketOpened && !ticketAlreadyOpen && (forceTicketNow || (raw && CLAIMS_ACTION_RE.test(raw)))) {
         try {
           chatMessages.push({
             role: "system",
@@ -425,8 +437,17 @@ export const adminAgent = {
           if (call && call.type === "function" && call.function.name === OPEN_TICKET_TOOL_NAME) {
             const result = await executeOpenTicketTool(orgId, clientId, call.function.arguments, pending);
             pending = [];
-            if ((result as { created?: boolean }).created) ticketOpened = true;
-            console.log(`[admin-agent] forced open_ticket backstop created=${(result as { created?: boolean }).created}`);
+            if ((result as { created?: boolean }).created) {
+              ticketOpened = true;
+              // If we forced the ticket because we'd already asked (rather than
+              // because the model claimed it logged something), its `raw` reply may
+              // still be asking for more — replace it with a clean confirmation so
+              // we don't re-ask after having just logged it.
+              if (forceTicketNow) {
+                raw = "Thanks — I've logged this with the team and a colleague will be in touch shortly to get it sorted for you.";
+              }
+            }
+            console.log(`[admin-agent] forced open_ticket backstop created=${(result as { created?: boolean }).created} force=${!!forceTicketNow}`);
           }
         } catch (err) {
           console.error("[admin-agent] forced open_ticket backstop failed:", err);

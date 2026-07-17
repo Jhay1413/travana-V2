@@ -159,11 +159,24 @@ const ADMIN_PROVIDING_RE = new RegExp(
   "i",
 );
 // A complaint or refund request — inherently a support (admin) matter for an
-// existing booking, NOT a new sales lead.
-const ADMIN_COMPLAINT_RE = /\b(?:complain\w*|refund)\b/i;
+// existing booking, NOT a new sales lead. Beyond the explicit "complain/refund",
+// a handful of strong dissatisfaction words that don't plausibly appear in a new
+// holiday enquiry (so they won't hijack a genuine sales lead).
+const ADMIN_COMPLAINT_RE =
+  /\b(?:complain\w*|refund|filth\w*|disgusting|unhygienic|unacceptable|appalling|cockroach\w*|bed\s?bugs?|ripped?\s+off|not\s+(?:happy|satisfied)|so\s+dirty|really\s+dirty|absolutely\s+filthy)\b/i;
 export function looksLikeAdminAsk(text: string): boolean {
   const t = text || "";
   return ADMIN_ASK_RE.test(t) || ADMIN_PROVIDING_RE.test(t) || ADMIN_COMPLAINT_RE.test(t);
+}
+
+// The ACTIONABLE subset of admin intent — a complaint or the customer providing
+// verification/booking details/documents. These need a staff ticket (unlike a
+// read-only "where is my quote?" which the admin bot just answers). Used to gate
+// the "stop re-asking, open the ticket now" backstop so it never fires on a
+// read-only, multi-turn admin Q&A.
+export function looksLikeActionableAdmin(text: string): boolean {
+  const t = text || "";
+  return ADMIN_PROVIDING_RE.test(t) || ADMIN_COMPLAINT_RE.test(t);
 }
 
 // The enquiry flow has two code-driven transition points (enquiry just logged →
@@ -179,17 +192,31 @@ export async function generateTransitionReply(
   kb: OrgKnowledgeBase[],
   kind: TransitionKind,
   statedTime?: string,
+  // When the enquiry was made on behalf of a third party, their name — so the
+  // callback wording refers to the traveller ("a call to run through James's
+  // options") rather than addressing the sender ("go through YOUR details").
+  onBehalfOfName?: string,
 ): Promise<string> {
+  const forFriend = onBehalfOfName?.trim();
   const fallback =
     kind === "ask_callback_time"
-      ? "Thanks — I've logged that for you! What time works best for a quick call so we can go through the details?"
-      : "Perfect, that's booked in — one of our advisors will call you then. Speak soon!";
+      ? forFriend
+        ? `Thanks — I've logged that! When would be a good time for the team to give ${forFriend} a quick call to run through the options?`
+        : "Thanks — I've logged that for you! What time works best for a quick call so we can go through the details?"
+      : forFriend
+        ? `Perfect, that's booked in — one of the team will give ${forFriend} a call then. Speak soon!`
+        : "Perfect, that's booked in — one of our advisors will call you then. Speak soon!";
 
   const time = statedTime?.trim();
+  const onBehalfNote = forFriend
+    ? ` IMPORTANT: this enquiry is on behalf of the sender's friend, ${forFriend} — refer to ${forFriend} (their friend), and do NOT phrase the call as being about "you"/"your trip/details"; it's about ${forFriend}'s holiday.`
+    : "";
   const instruction =
     kind === "ask_callback_time"
-      ? "The customer's holiday enquiry has just been logged and is being passed to one of the team to look into. Write ONE short, warm message that (a) reassures them you've noted it and the team will get on it, and (b) asks what time would suit them for a quick call to go through the details. Do NOT ask for any more holiday details. Reply with the message text ONLY."
-      : `The customer has just told you when they're free for a call${time ? `, in their own words: "${time}"` : ""}. Write ONE short, warm message confirming that one of the team will give them a call then. Reflect their stated time naturally in your own words (e.g. "anytime today" → "we'll give you a call at some point today"; "after 5pm tomorrow" → "we'll call you after 5 tomorrow") — do NOT use the vague robotic phrase "at that time". End with a friendly sign-off. Reply with the message text ONLY.`;
+      ? "The customer's holiday enquiry has just been logged and is being passed to one of the team to look into. Write ONE short, warm message that (a) reassures them you've noted it and the team will get on it, and (b) asks what time would suit for a quick call to go through the details." +
+        onBehalfNote +
+        " Do NOT ask for any more holiday details. Reply with the message text ONLY."
+      : `The customer has just told you when they're free for a call${time ? `, in their own words: "${time}"` : ""}. Write ONE short, warm message confirming that one of the team will give a call then. Reflect their stated time naturally in your own words (e.g. "anytime today" → "we'll give a call at some point today"; "after 5pm tomorrow" → "we'll call after 5 tomorrow") — do NOT use the vague robotic phrase "at that time".${onBehalfNote} End with a friendly sign-off. Reply with the message text ONLY.`;
 
   try {
     const parts: string[] = [
@@ -237,6 +264,7 @@ export async function generateGroupedAsk(
       "Ask the customer for only the ONE (at most TWO, and only if they naturally go together) most useful detail still needed to find them a good deal, in one or two short warm sentences. Do NOT stack several separate questions into one message or make it read like a list/form. " +
         "CRUCIAL: read what they have ALREADY told you above and do NOT re-ask anything they've answered or said they have no preference on — e.g. if they said they're open to suggestions or just want 'somewhere hot near the beach', that IS their destination answer, so do NOT ask where they want to go. " +
         "Prioritise, in order: the destination (ONLY if they have not named one AND have not said they're flexible/open to suggestions), travel dates, number of nights, budget, then board basis. " +
+        "Do NOT say a colleague/advisor/the team will call, be in touch, or get back to them, and do NOT say things like 'I've got everything I need' or 'all sorted' — that step happens automatically later; just warmly ask for the next detail. " +
         "These are the fields still marked missing (use as a guide, but the conversation above is the source of truth for what they've already said): " +
         `${missingFields.join(", ")}. Reply with the message text ONLY.`,
     );
@@ -435,9 +463,9 @@ export function buildSystemPrompt(
 
   parts.push(
     [
-      "ENQUIRING ON BEHALF OF SOMEONE ELSE: If the customer makes clear the holiday is for ANOTHER named person and they themselves are NOT one of the travellers — e.g. \"my friend James wants to book Benidorm\", \"I'm enquiring for my mum Susan\", \"can you sort a trip for my colleague Dave\" — then:",
-      "  • set beneficiary.onBehalf=true and put that traveller's name in beneficiary.fullName. You ALREADY have their name from the message, so do NOT ask for their name again.",
-      "  • ask ONLY for that traveller's PHONE NUMBER, naming them — e.g. \"Lovely! Can I grab James's phone number so I can get this set up for him?\". Do NOT ask the sender for their own name or number.",
+      "ENQUIRING ON BEHALF OF SOMEONE ELSE: If the customer makes clear the holiday is for ANOTHER person and they themselves are NOT one of the travellers — e.g. \"my friend James wants to book Benidorm\", \"I'm enquiring for my mum Susan\", \"my friend saw your Benidorm post\" — then:",
+      "  • set beneficiary.onBehalf=true. Put the traveller's REAL name in beneficiary.fullName ONLY if they've actually told you it. NEVER put a generic word like \"friend\", \"my friend\", \"your friend\", \"mate\", or \"my mum\" in beneficiary.fullName — that is NOT a name. If you don't have their real name yet, leave beneficiary.fullName EMPTY.",
+      "  • if you DO have the traveller's real name, do NOT ask for it again — just ask for their phone (naming them, e.g. \"Can I grab James's phone number?\"). If you do NOT have their real name, ask for their NAME and phone number (e.g. \"Of course! What's your friend's name and number so I can set this up for them?\"). Either way, do NOT ask the sender for their OWN name or number.",
       "  • once they give it, put the traveller's phone in beneficiary.phone.",
       "  • keep capturing all the holiday details they mention into `slots` exactly as normal — the enquiry is for the traveller.",
       "  • carry beneficiary.onBehalf=true and beneficiary.fullName on EVERY following turn of this same enquiry, even after you have the phone.",
@@ -446,7 +474,15 @@ export function buildSystemPrompt(
   );
 
   parts.push(
-    'Respond ONLY with JSON: {"hand_off": boolean, "intent": "enquiry"|"other", "slots": object, "client": {"fullName": string, "phone": string}, "beneficiary": {"onBehalf": boolean, "fullName": string, "phone": string}, "reply": string}. `reply` is the message to send the customer; `client` holds any personal details the SENDER has given (empty strings if unknown); `beneficiary` is only for when they are enquiring on another named person\'s behalf (onBehalf=false otherwise).',
+    [
+      "CRITICAL — HOW THE ENQUIRY GETS LOGGED: the enquiry is created from the `slots` object, NOT from your `reply` text. You MUST copy EVERY holiday detail the customer has stated so far into `slots` on EVERY turn — carry forward everything from earlier messages too, don't just include the newest detail. If the customer has said e.g. \"Benidorm, 2 adults, £500, 1st September\", then `slots` MUST contain destinations:[\"Benidorm\"], adults:2, budget:\"500\", travelDate:\"2025-09-01\" (next future date). Putting details only in `reply` and leaving `slots` empty means the enquiry is LOST and never logged — this is the single most important rule.",
+      "While the customer is giving or refining holiday details, keep intent=\"enquiry\" (do NOT switch to \"other\" just because you're wrapping up a detail).",
+      "Do NOT tell the customer you've \"got everything\", it's \"all sorted\", or that the team/an advisor will call or be in touch — the system handles logging the enquiry and arranging the callback automatically AFTER you. Just keep gathering details or answer their question.",
+    ].join("\n"),
+  );
+
+  parts.push(
+    'Respond ONLY with JSON: {"hand_off": boolean, "intent": "enquiry"|"other", "slots": object, "client": {"fullName": string, "phone": string}, "beneficiary": {"onBehalf": boolean, "fullName": string, "phone": string}, "reply": string}. `reply` is the message to send the customer; `slots` MUST carry every holiday detail stated so far (see the CRITICAL rule above); `client` holds any personal details the SENDER has given (empty strings if unknown); `beneficiary` is only for when they are enquiring on another named person\'s behalf (onBehalf=false otherwise).',
   );
   return parts.join("\n\n");
 }

@@ -44,6 +44,20 @@ export function samePhoneNumber(a: string | null | undefined, b: string | null |
   return da.slice(-8) === db.slice(-8);
 }
 
+// Pulls the first phone-number-looking token out of free text. Used to capture a
+// traveller's number from a plain reply ("his number is 09355152084") without
+// depending on the model to echo it back in a structured field every turn.
+// Requires 10–15 digits so it won't grab a budget ("1000"), a date, or "4 nights".
+export function extractPhoneNumber(text: string): string | null {
+  const candidates = (text || "").match(/[+(]?\d[\d\s().-]{7,}\d/g);
+  if (!candidates) return null;
+  for (const c of candidates) {
+    const digits = c.replace(/\D/g, "");
+    if (digits.length >= 10 && digits.length <= 15) return c.trim();
+  }
+  return null;
+}
+
 function normalizeNameToken(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/[^a-z]/g, "");
 }

@@ -13,7 +13,12 @@ vi.mock("../neon-client/neon-client.service", () => ({
   },
 }));
 
-import { resolveClientForOnboarding, samePhoneNumber } from "./identity.service";
+import {
+  extractPhoneNumber,
+  resolveClientForOnboarding,
+  resolveOrCreateByDetails,
+  samePhoneNumber,
+} from "./identity.service";
 import { contactLinkRepository } from "../contact-link/contact-link.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
 
@@ -90,6 +95,51 @@ describe("resolveClientForOnboarding", () => {
     const res = await resolveClientForOnboarding(ORG, CONTACT, { fullName: "John", phone: "09356162084" });
 
     expect(res).toEqual({ status: "phone_conflict", existingNames: ["James Bouy", "Myra Cruz"] });
+  });
+});
+
+describe("resolveOrCreateByDetails (no contact link)", () => {
+  it("creates a client but never links a contact", async () => {
+    vi.mocked(neonClientService.findMatches).mockResolvedValue([] as never);
+
+    const res = await resolveOrCreateByDetails(ORG, { fullName: "Friend", phone: "09355152084" });
+
+    expect(res).toEqual({ status: "resolved", clientId: "new-client" });
+    expect(neonClientService.createNeonClient).toHaveBeenCalledOnce();
+    expect(contactLinkRepository.link).not.toHaveBeenCalled();
+  });
+
+  it("resolves an existing traveller by name without linking", async () => {
+    vi.mocked(neonClientService.findMatches).mockResolvedValue([client("c-james", "James", "Bond")] as never);
+
+    const res = await resolveOrCreateByDetails(ORG, { fullName: "James", phone: "07123456789" });
+
+    expect(res).toEqual({ status: "resolved", clientId: "c-james" });
+    expect(contactLinkRepository.link).not.toHaveBeenCalled();
+    expect(neonClientService.createNeonClient).not.toHaveBeenCalled();
+  });
+
+  it("reports a phone conflict for the traveller too", async () => {
+    vi.mocked(neonClientService.findMatches).mockResolvedValue([client("c-x", "Someone", "Else")] as never);
+
+    const res = await resolveOrCreateByDetails(ORG, { fullName: "James", phone: "09355152084" });
+
+    expect(res).toEqual({ status: "phone_conflict", existingNames: ["Someone Else"] });
+  });
+});
+
+describe("extractPhoneNumber", () => {
+  it("pulls a phone number out of free text", () => {
+    expect(extractPhoneNumber("09355152084")).toBe("09355152084");
+    expect(extractPhoneNumber("his number is 09355152084 cheers")).toBe("09355152084");
+    expect(extractPhoneNumber("+63 935 616 2084")).toBe("+63 935 616 2084");
+  });
+
+  it("ignores budgets, dates and short numbers", () => {
+    expect(extractPhoneNumber("budget is 1000")).toBeNull();
+    expect(extractPhoneNumber("4 nights from september 1")).toBeNull();
+    expect(extractPhoneNumber("NCL airport")).toBeNull();
+    expect(extractPhoneNumber("")).toBeNull();
   });
 });
 
