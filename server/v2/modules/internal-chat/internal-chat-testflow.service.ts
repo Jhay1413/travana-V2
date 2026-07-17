@@ -31,7 +31,7 @@ import {
   systemScope,
 } from "../sendseven-webhook/identity.service";
 import { taskService } from "../task/task.service";
-import { resolveOrCreateTestClient } from "./internal-chat-identity.service";
+import { createNewTestClient, resolveOrCreateTestClient } from "./internal-chat-identity.service";
 import { internalChatRepository } from "./internal-chat.repository";
 import type { Scope } from "../../utils/scope";
 import type { InternalChatMessage, InternalChatSession } from "@shared/schema";
@@ -64,6 +64,10 @@ interface ConversationContext {
   // Admin loop control — see reply-worker's ConversationContext.
   adminAsked?: boolean;
   adminActionable?: boolean;
+  // The tester's own number that clashed with a differently-named client — we've
+  // asked them to confirm it. Lets the next turn tell a correction (new number)
+  // from a confirmation (same number again). Mirrors reply-worker.
+  phoneConflictPhone?: string;
   // Third-party enquiry ("my friend James wants…") — the enquiry is filed under
   // this traveller, not the sender. Mirrors reply-worker's ConversationContext.
   beneficiary?: {
@@ -268,8 +272,41 @@ export const internalChatTestflowService = {
           return { replyMessage };
         }
 
-        clientId = await resolveOrCreateTestClient(orgId, scope.userId, { fullName: full, phone });
-        await internalChatRepository.updateSession(session.id, orgId, { clientId });
+        // Phone ↔ name allocation (mirrors reply-worker). If the number is already
+        // on file under a DIFFERENT client's name we asked them to confirm it last
+        // turn (phoneConflictPhone). Standing by the SAME number = confirmation
+        // it's genuinely theirs → register a NEW client under the name they gave,
+        // never fold them into the other client's record. A different number means
+        // they corrected it → re-resolve below.
+        const pendingConflictPhone = prevContext.phoneConflictPhone;
+        if (pendingConflictPhone && samePhoneNumber(pendingConflictPhone, phone)) {
+          clientId = await createNewTestClient(orgId, scope.userId, { fullName: full, phone });
+          delete prevContext.phoneConflictPhone;
+          await internalChatRepository.updateSession(session.id, orgId, { clientId, context: { ...prevContext } });
+          console.log(`[internal-chat-testflow] session ${session.id} phone confirmed after clash — created new client ${clientId}`);
+        } else {
+          const resolution = await resolveOrCreateTestClient(orgId, scope.userId, { fullName: full, phone });
+          if (resolution.status === "phone_conflict") {
+            const confirmReply = buildPhoneConflictReply(resolution.existingNames);
+            await internalChatRepository.updateSession(session.id, orgId, {
+              context: {
+                ...prevContext,
+                ...(adminMatter ? { domain: "admin" as const } : {}),
+                lastReply: confirmReply,
+                phoneConflictPhone: phone,
+              },
+            });
+            console.log(
+              `[internal-chat-testflow] session ${session.id} phone clash — number belongs to ${resolution.existingNames.join(", ")}; asked to confirm`,
+            );
+            const replyMessage = await persistReply(confirmReply);
+            return { replyMessage };
+          }
+          clientId = resolution.clientId;
+          delete prevContext.phoneConflictPhone;
+          await internalChatRepository.updateSession(session.id, orgId, { clientId, context: { ...prevContext } });
+          console.log(`[internal-chat-testflow] session ${session.id} linked client ${clientId} (collected details)`);
+        }
       }
     }
 

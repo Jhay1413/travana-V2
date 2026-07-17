@@ -91,9 +91,12 @@ export type OnboardingResolution =
 
 // Creates a brand-new client from the given details, WITHOUT linking a contact or
 // matching an existing record. The building block for the link/no-link variants.
+// `extra` merges in caller-specific columns (e.g. the internal test flow's TEST
+// badge / createdBy) so every driver shares this one creation path.
 export async function insertClient(
   orgId: string,
   details: { fullName: string; phone: string; email?: string | null },
+  extra?: Partial<InsertClientTable>,
 ): Promise<string> {
   const parts = details.fullName.trim().split(/\s+/).filter(Boolean);
   const firstName = parts[0] || details.fullName.trim();
@@ -103,6 +106,7 @@ export async function insertClient(
     surename,
     phoneNumber: details.phone,
     email: details.email?.trim() ? details.email.trim() : null,
+    ...(extra ?? {}),
   } as InsertClientTable;
 
   const client = await neonClientService.createNeonClient(data, systemScope(orgId));
@@ -118,6 +122,7 @@ export async function insertClient(
 export async function resolveOrCreateByDetails(
   orgId: string,
   details: { fullName: string; phone: string; email?: string | null },
+  extra?: Partial<InsertClientTable>,
 ): Promise<OnboardingResolution> {
   const matches = await neonClientService.findMatches({ phone: details.phone, email: details.email }, systemScope(orgId));
 
@@ -128,7 +133,7 @@ export async function resolveOrCreateByDetails(
     return { status: "phone_conflict", existingNames };
   }
 
-  return { status: "resolved", clientId: await insertClient(orgId, details) };
+  return { status: "resolved", clientId: await insertClient(orgId, details, extra) };
 }
 
 // Resolves the client for a just-onboarded contact from the name + phone the AI

@@ -1,12 +1,14 @@
-import { neonClientService } from "../neon-client/neon-client.service";
-import { systemScope } from "../sendseven-webhook/identity.service";
+import { insertClient, resolveOrCreateByDetails, type OnboardingResolution } from "../sendseven-webhook/identity.service";
 import type { InsertClientTable } from "@shared/schema";
 
 // Identity resolution for the internal test-flow driver (Goal B). Unlike the
 // SendSeven worker (identity.service.ts), there is no real contact to link —
 // the "customer" is a SYNTHETIC client the tester types in themselves, so we
-// only need to find-or-create a CRM client and hand back its id. DB access
-// stays inside neonClientService/neonClientRepository — this just orchestrates.
+// only need to find-or-create a CRM client and hand back its id. The actual
+// matching/creation is DELEGATED to identity.service so the test flow gets the
+// same NAME-AWARE allocation (and phone-conflict detection) as the real
+// SendSeven flow — it previously took matches[0] blindly, which silently linked
+// a differently-named tester to an existing client on that number.
 
 // Tags every test-flow-created client so it's obviously synthetic in any
 // client list/search (mirrors how enquiry-auto-create tags the transaction
@@ -18,32 +20,28 @@ export interface TestClientDetails {
   phone: string;
 }
 
-// Finds an existing client by phone (so re-running the test flow with the
-// same phone number exercises the phone-linking path instead of piling up
-// duplicates), else creates a new synthetic client owned by the staff member
-// running the test. Returns the client id.
+function testClientColumns(orgId: string, staffUserId: string | null): Partial<InsertClientTable> {
+  return { badge: TEST_CLIENT_BADGE, createdBy: staffUserId, orgId } as Partial<InsertClientTable>;
+}
+
+// Name-aware find-or-create for the test flow: picks the client on that number
+// whose NAME matches, reports a phone_conflict when the number belongs only to
+// differently-named clients, else creates a new synthetic TEST client owned by
+// the staff member running the test.
 export async function resolveOrCreateTestClient(
   orgId: string,
   staffUserId: string | null,
   details: TestClientDetails,
+): Promise<OnboardingResolution> {
+  return resolveOrCreateByDetails(orgId, details, testClientColumns(orgId, staffUserId));
+}
+
+// Forces a NEW synthetic client even though the number matches someone else —
+// used once the tester confirms the clashing number really is theirs.
+export async function createNewTestClient(
+  orgId: string,
+  staffUserId: string | null,
+  details: TestClientDetails,
 ): Promise<string> {
-  const scope = systemScope(orgId);
-
-  const matches = await neonClientService.findMatches({ phone: details.phone }, scope);
-  if (matches.length > 0) return matches[0]!.id;
-
-  const parts = details.fullName.trim().split(/\s+/).filter(Boolean);
-  const firstName = parts[0] || details.fullName.trim();
-  const surename = parts.slice(1).join(" ") || "—";
-  const data: InsertClientTable = {
-    firstName,
-    surename,
-    phoneNumber: details.phone,
-    badge: TEST_CLIENT_BADGE,
-    createdBy: staffUserId,
-    orgId,
-  } as InsertClientTable;
-
-  const client = await neonClientService.createNeonClient(data, scope);
-  return client.id;
+  return insertClient(orgId, details, testClientColumns(orgId, staffUserId));
 }
