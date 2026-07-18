@@ -141,6 +141,29 @@ describe("extractPhoneNumber", () => {
     expect(extractPhoneNumber("NCL airport")).toBeNull();
     expect(extractPhoneNumber("")).toBeNull();
   });
+
+  it("rejects a bare digit run with no phone shape (e.g. a booking reference)", () => {
+    expect(extractPhoneNumber("the ref is 12345678901")).toBeNull();
+    expect(extractPhoneNumber("booking reference 998877665544")).toBeNull();
+  });
+
+  it("rejects a digit run longer than 15 digits even with a phone-ish prefix", () => {
+    expect(extractPhoneNumber("+123456789012345678")).toBeNull();
+    expect(extractPhoneNumber("0123456789012345678")).toBeNull();
+  });
+
+  it("accepts numbers with a leading '+' or '0', or common separators", () => {
+    expect(extractPhoneNumber("0791 123456")).toBe("0791 123456");
+    expect(extractPhoneNumber("+44 7911 123456")).toBe("+44 7911 123456");
+    expect(extractPhoneNumber("call me on 07911-123456")).toBe("07911-123456");
+    expect(extractPhoneNumber("935-616-2084")).toBe("935-616-2084");
+  });
+
+  it("accepts parenthesised area codes and dot-separated shapes (also common phone separators)", () => {
+    expect(extractPhoneNumber("(020) 7946 0958")).toBe("(020) 7946 0958");
+    expect(extractPhoneNumber("call me at (415) 555-2671 anytime")).toBe("(415) 555-2671");
+    expect(extractPhoneNumber("935.616.2084")).toBe("935.616.2084");
+  });
 });
 
 describe("samePhoneNumber", () => {

@@ -4,18 +4,26 @@ import {
   buildEnquirySummary,
   buildPhoneConflictReply,
   buildTranscript,
+  decideDeterministicRoute,
+  generateBeneficiaryAsk,
   generateGeneralReply,
   generateGroupedAsk,
   generateTransitionReply,
   generateTurn,
   hasSubstantiveSignal,
+  inferHolidayTypeFromText,
   isAcknowledgement,
+  kbExceedsBudget,
   looksLikeActionableAdmin,
   looksLikeAdminAsk,
+  MAX_ENQUIRY_ASKS,
   mergeSlots,
+  missingCoreFieldsFor,
   missingFieldsFor,
   parseAvailabilityTime,
+  shouldForceTicketNow,
   similarReply,
+  type BeneficiaryAskKind,
 } from "../ai-conversation/ai-conversation.brain";
 import { classifyConversationRoute } from "../ai-conversation/conversation-router";
 import { botConfigRepository } from "../bot-config/bot-config.repository";
@@ -52,6 +60,14 @@ interface ConversationContext {
   // Set once we've sent the ONE grouped follow-up asking for whatever enquiry
   // fields are still missing — the customer's next reply creates the enquiry.
   groupedAskSent?: boolean;
+  // Number of collecting-phase questions asked so far this enquiry (the
+  // collecting-thin, collecting-continue and grouped-ask branches). Gates the
+  // required-core-fields wait: once the ask-cap (MAX_ENQUIRY_ASKS) is hit, the
+  // grouped ask fires regardless of what core fields are still missing, so a
+  // customer who declines/gives vague answers is never interrogated forever.
+  // Reset implicitly on enquiry creation — the new context object built there
+  // omits it.
+  askCount?: number;
   // The org user the just-created enquiry is owned by — reused as the
   // assignee of the callback task at the awaiting_availability step.
   enquiryOwnerUserId?: string;
@@ -181,14 +197,18 @@ export const replyWorker = {
     const integration = await conversationIntegrationRepository.findByOrg(orgId);
     const mode = integration?.autoReplyMode ?? "draft";
 
-    const [botConfig, kb, client] = await Promise.all([
-      botConfigRepository.findByOrg(orgId),
-      knowledgeBaseRepository.list(orgId),
-      clientId ? neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : Promise.resolve(null),
-    ]);
-
     await runWithSendSevenConfigAsync(cfg, async () => {
-      const list = await messagesRepository.list({ conversationId, page: 1, pageSize: HISTORY_LIMIT });
+      // messagesRepository.list() needs the SendSeven config bound above, so it
+      // can't join a Promise.all outside runWithSendSevenConfigAsync — but
+      // there's no data dependency between it and botConfig/kb/client, so fold
+      // all four fetches into one parallel batch here instead of resolving the
+      // trio first and then awaiting the message list separately.
+      const [botConfig, kb, client, list] = await Promise.all([
+        botConfigRepository.findByOrg(orgId),
+        knowledgeBaseRepository.list(orgId),
+        clientId ? neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : Promise.resolve(null),
+        messagesRepository.list({ conversationId, page: 1, pageSize: HISTORY_LIMIT }),
+      ]);
       // Only feed the AI messages from THIS session (since our state row began), so
       // old, already-logged enquiries in the SendSeven history don't confuse it.
       // 60s buffer guards against clock skew dropping the current message.
@@ -210,11 +230,14 @@ export const replyWorker = {
       // below can use/persist it. `domain` records which bot the conversation is
       // in ("admin" once an admin-type ask has been detected & served).
       const prevContext = (state.context as ConversationContext | null) ?? {};
+      // Computed once and reused below (deterministic route precedence) instead
+      // of calling looksLikeAdminAsk(latestText) a second time for the same turn.
+      const isAdminAsk = looksLikeAdminAsk(latestText);
       // Admin intent is often expressed BEFORE the contact is identified (the
       // customer asks about their enquiry, THEN we collect their phone). Carry it
       // across the onboarding detour so the just-onboarded completion turn —
       // whose literal message is only a phone number — still routes to admin.
-      let sawAdminIntent = prevContext.domain === "admin" || looksLikeAdminAsk(latestText);
+      const sawAdminIntent = prevContext.domain === "admin" || isAdminAsk;
 
       const doHandoff = async (reply: string) => {
         await conversationStateRepository.setNeedsHuman(conversationId);
@@ -239,23 +262,48 @@ export const replyWorker = {
       // enquiry. Broadened (2026-07-17) because the router mis-classified
       // mid-enquiry replies (a name+phone, a callback time) as admin, opening a
       // ticket instead of logging the enquiry — and admin stuck via context.domain.
+      // Computed once and reused for the (unrelated) sales-bot retrieval gate
+      // below (`enquiryish`) instead of re-running the same check on the same
+      // (immutable) priorSlots later in the turn.
+      const priorSubstantive = hasSubstantiveSignal(priorSlots);
       const enquiryInFlight =
         enquiryStatus === "collecting" ||
         enquiryStatus === "awaiting_availability" ||
         !!prevContext.groupedAskSent ||
         !!prevContext.beneficiary ||
-        hasSubstantiveSignal(priorSlots);
-      const hasAttachments = (list.items.find((m) => m.id === message.id)?.attachments ?? []).some((a) => a?.id);
+        priorSubstantive;
+      // The current message's own record from the batch fetched above — looked
+      // up once and reused below for the attachment-download step instead of a
+      // second list.items.find() over the same (immutable) list.
+      const currentMessage = list.items.find((m) => m.id === message.id);
+      const hasAttachments = (currentMessage?.attachments ?? []).some((a) => a?.id);
+      // (3.2) A deterministic ACTIONABLE admin signal (complaint / verification
+      // details) or a document attachment on THIS turn breaks OUT of
+      // enquiryInFlight stickiness — a customer mid-enquiry who says "my existing
+      // booking is filthy, I want a refund" must reach the admin bot, not be
+      // funneled into holiday slot-filling. A merely admin-ish but NON-actionable
+      // question (looksLikeAdminAsk, e.g. "what's the status of my enquiry?")
+      // does NOT break out — it stays sales-sticky exactly as before. This takes
+      // precedence over enquiryInFlight below; everything else is unchanged.
+      // (3.2) Deterministic route precedence — see decideDeterministicRoute for
+      // the full rationale; shared with internal-chat-testflow so the two
+      // drivers can't drift.
+      const deterministicRoute = decideDeterministicRoute({
+        enquiryInFlight,
+        hasAttachments,
+        actionable: looksLikeActionableAdmin(latestText),
+        adminAsk: isAdminAsk,
+      });
+      const complaintBreaksOutOfEnquiry = enquiryInFlight && deterministicRoute === "admin";
       // Do NOT force admin purely because a PRIOR turn set domain="admin" (sticky).
       // A single router misfire would otherwise trap the whole conversation in
       // admin and open a ticket instead of logging a sales enquiry. An attachment
       // (document submission) or a DETERMINISTIC admin ask forces admin; otherwise
       // the classifier decides, with the prior domain as a sticky HINT so genuine
       // admin follow-ups stay admin but a clear new-holiday message recovers to sales.
-      const route: "sales" | "admin" | "general" = enquiryInFlight
-        ? "sales"
-        : hasAttachments || looksLikeAdminAsk(latestText)
-          ? "admin"
+      const route: "sales" | "admin" | "general" =
+        deterministicRoute !== "classify"
+          ? deterministicRoute
           : await classifyConversationRoute({
               transcript,
               latestText,
@@ -264,8 +312,8 @@ export const replyWorker = {
             });
       console.log(
         `[sendseven-webhook] conv=${conversationId} ROUTE=${route} enquiryInFlight=${enquiryInFlight} ` +
-          `status=${enquiryStatus} groupedAskSent=${!!prevContext.groupedAskSent} beneficiary=${!!prevContext.beneficiary} ` +
-          `sawAdminIntent=${sawAdminIntent} domain=${prevContext.domain ?? "none"} attachments=${hasAttachments}`,
+          `complaintBreakout=${complaintBreaksOutOfEnquiry} status=${enquiryStatus} groupedAskSent=${!!prevContext.groupedAskSent} ` +
+          `beneficiary=${!!prevContext.beneficiary} sawAdminIntent=${sawAdminIntent} domain=${prevContext.domain ?? "none"} attachments=${hasAttachments}`,
       );
 
       // ── General route ────────────────────────────────────────────────
@@ -391,7 +439,7 @@ export const replyWorker = {
       // — instead they're handed to the admin bot, which attaches them to the
       // ticket it opens (staff can move them to the client record from there).
       // Best-effort: a failed download never breaks the reply.
-      const currentAttachments = (list.items.find((m) => m.id === message.id)?.attachments ?? []).filter((a) => a?.id);
+      const currentAttachments = (currentMessage?.attachments ?? []).filter((a) => a?.id);
       const pendingAttachments: PendingAttachment[] = [];
       if (currentAttachments.length && clientId) {
         for (const att of currentAttachments) {
@@ -423,11 +471,42 @@ export const replyWorker = {
       // Fail-closed on clientId (only ever set via a verified link / phone-email
       // match / onboarding). The admin bot answers from the client's OWN records.
       if (route === "admin" && clientId) {
+        // Atomic claim on THIS inbound message before running a turn that may
+        // open a ticket: SendSeven can redeliver the same webhook event (or we
+        // can otherwise process the same message twice), and both deliveries
+        // would otherwise reach adminAgent.answer() before either persists
+        // ticketOpened, opening duplicate tickets. If we lose the claim (or
+        // there's no message id to claim on), skip this turn silently rather
+        // than double-act — the winning caller already handles it. See
+        // sendsevenWebhookRepository.claimAdminTurn.
+        if (message.id) {
+          const claimedAdminTurn = await sendsevenWebhookRepository.claimAdminTurn(message.id, orgId);
+          if (!claimedAdminTurn) {
+            console.log(`[sendseven-webhook] conv ${conversationId} lost the admin-turn claim for message ${message.id} — skipping to avoid a duplicate ticket`);
+            return;
+          }
+        } else {
+          console.warn(`[sendseven-webhook] conv ${conversationId} admin turn has no message id — proceeding WITHOUT a claim`);
+        }
+
         // Actionable = complaint / details / document submission (needs a ticket),
-        // vs a read-only records query. Once we've asked once for an actionable
-        // matter without opening a ticket, force the ticket rather than re-asking.
+        // vs a read-only records query. `shouldForceTicketNow` gates the force on
+        // two things: we already asked a clarifying question without opening a
+        // ticket (adminAsked), AND the CURRENT turn actually carries signal —
+        // either it's itself deterministically actionable (a fresh
+        // complaint/detail/document), or it's a substantive answer to that
+        // clarifying question (not a bare "thanks"/"ok" acknowledgement, which
+        // must never trigger the force). `adminActionable` below is a STICKY
+        // flag persisted in context for logging/observability only — it is NOT
+        // read by the force gate, since once true it never clears and would
+        // otherwise force a ticket on an unrelated later "thanks".
         const adminActionable = !!prevContext.adminActionable || looksLikeActionableAdmin(latestText) || !!attachmentNote;
-        const forceTicketNow = adminActionable && !!prevContext.adminAsked && !prevContext.ticketOpened;
+        const forceTicketNow = shouldForceTicketNow({
+          adminAsked: prevContext.adminAsked,
+          ticketOpened: prevContext.ticketOpened,
+          latestText,
+          hasAttachment: !!attachmentNote,
+        });
         console.log(
           `[sendseven-webhook] conv=${conversationId} route=admin known=${knownClient} attachments=${!!attachmentNote} ` +
             `actionable=${adminActionable} adminAsked=${!!prevContext.adminAsked} forceTicket=${forceTicketNow} -> admin agent`,
@@ -473,9 +552,16 @@ export const replyWorker = {
       // and resolves to [] on any failure. Quote retrieval is gated to enquiry-ish
       // turns; otherwise it's skipped rather than wasting a round-trip.
       const enquiryish =
-        enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || hasSubstantiveSignal(priorSlots);
+        enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
+      // Skip the knowledge retrieval entirely when the static KB (embedded in
+      // full by buildSystemPrompt, capped at KB_CHAR_BUDGET) already fits — the
+      // retrieved matches would just be embeddings of those same rows appended
+      // to a prompt that already has them all, so it's a wasted round-trip.
+      const kbOverflow = kbExceedsBudget(kb);
       const [kbMatches, quoteMatches] = await Promise.all([
-        aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: latestText, limit: 3 }),
+        kbOverflow
+          ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: latestText, limit: 3 })
+          : Promise.resolve([] as RetrievedMatch[]),
         enquiryish
           ? aiEmbeddingsService.retrieve({
               orgId,
@@ -508,6 +594,16 @@ export const replyWorker = {
       // already had persisted, so a terse final reply can't drop earlier fields.
       const mergedSlots = mergeSlots(priorSlots, turn.slots);
 
+      // Deterministic holidayType backstop: the model's slot extraction is
+      // unreliable turn-to-turn (it can return empty slots even when "cruise"
+      // is plainly in the transcript), so if holidayType still hasn't landed,
+      // recover it deterministically from the full transcript rather than
+      // silently falling through to the Package Holiday default at creation.
+      if (!mergedSlots.holidayType) {
+        const inferred = inferHolidayTypeFromText(transcript);
+        if (inferred) mergedSlots.holidayType = inferred;
+      }
+
       // ── Third-party enquiry ("on behalf of a friend") ──────────────────
       // "my friend James wants to book Benidorm" — the enquiry belongs to the
       // named traveller, not the sender. We must resolve/create the traveller
@@ -521,24 +617,32 @@ export const replyWorker = {
       const beneficiaryActive = !!benCtx || !!benTurn?.onBehalf;
       if (beneficiaryActive && enquiryStatus !== "awaiting_availability") {
         const travellerName = cleanTravellerName(benTurn?.fullName) || benCtx?.name;
+        let benClientId = benCtx?.clientId;
         // Robust phone capture: the model's field OR a phone-shaped token in the
         // latest message OR one we remembered — so a bare "09355152084" is caught
-        // even when the model stops echoing it back.
+        // even when the model stops echoing it back. Only TRUST the free-text
+        // extraction while we're actually in the phone-collection step (the
+        // traveller isn't resolved yet) — once benClientId is set, a later,
+        // unrelated large number in the conversation (e.g. a reference) must
+        // never overwrite the phone we already resolved them by.
         const travellerPhone =
-          (benTurn?.phone?.trim() || extractPhoneNumber(latestText) || benCtx?.phone || "").trim() || undefined;
-        let benClientId = benCtx?.clientId;
+          (
+            benTurn?.phone?.trim() ||
+            (!benClientId ? extractPhoneNumber(latestText) : null) ||
+            benCtx?.phone ||
+            ""
+          ).trim() || undefined;
 
         if (!benClientId) {
           if (!travellerName || !travellerPhone) {
             // We still need the traveller's NAME and/or phone before we can log
             // the enquiry under them — ask for exactly what's missing (never
             // invent a placeholder name). Hold the enquiry until we have both.
-            const ask =
-              !travellerName && !travellerPhone
-                ? "Of course! Could you pop me your friend's name and phone number so I can get this set up for them? 😊"
-                : !travellerName
-                  ? "Lovely! And what's your friend's name so I can get this set up for them? 😊"
-                  : `Of course! Could you pop me ${travellerName}'s phone number so I can get this set up for them? 😊`;
+            // (3.3) Generated in the org's voice/language via the brain rather
+            // than a hard-coded English string — one cheap, short-prompt call,
+            // falling back to the fixed English line on any failure.
+            const askKind: BeneficiaryAskKind = !travellerName && !travellerPhone ? "name_and_phone" : !travellerName ? "name" : "phone";
+            const ask = await generateBeneficiaryAsk(botConfig, kb, askKind, travellerName);
             await sendReply(orgId, conversationId, message.channel_id, ask, mode, false);
             await conversationStateRepository.update(conversationId, {
               intent: "enquiry",
@@ -547,38 +651,45 @@ export const replyWorker = {
               lastAiReplyAt: new Date(),
               context: { ...prevContext, lastReply: ask, beneficiary: { name: travellerName, phone: travellerPhone } },
             });
-            console.log(`[sendseven-webhook] conv ${conversationId} on-behalf enquiry — asking for traveller name/phone (name=${travellerName ?? "?"} phone=${travellerPhone ?? "?"})`);
+            console.log(`[sendseven-webhook] conv ${conversationId} on-behalf enquiry — asking for traveller name/phone (name=${travellerName ?? "?"} phone=${redactPhone(travellerPhone)})`);
             return;
           }
 
           // Have a real name + phone → resolve/create the traveller. NO contact
-          // link — the traveller isn't the person messaging.
-          const pendingBenConflict = benCtx?.phoneConflictPhone;
-          if (pendingBenConflict && samePhoneNumber(pendingBenConflict, travellerPhone)) {
-            benClientId = await insertClient(orgId, { fullName: travellerName, phone: travellerPhone });
-            console.log(`[sendseven-webhook] conv ${conversationId} beneficiary phone confirmed after clash — created client ${benClientId} for ${travellerName}`);
-          } else {
-            const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
-            if (resolution.status === "phone_conflict") {
-              const confirmReply = buildPhoneConflictReply(resolution.existingNames, travellerName);
-              await sendReply(orgId, conversationId, message.channel_id, confirmReply, mode, false);
-              await conversationStateRepository.update(conversationId, {
-                intent: "enquiry",
-                enquiryStatus: "collecting",
-                enquirySlots: mergedSlots,
-                lastAiReplyAt: new Date(),
-                context: {
-                  ...prevContext,
-                  lastReply: confirmReply,
-                  beneficiary: { name: travellerName, phone: travellerPhone, phoneConflictPhone: travellerPhone },
-                },
-              });
-              console.log(
-                `[sendseven-webhook] conv ${conversationId} beneficiary phone clash — belongs to ${resolution.existingNames.join(", ")}; asked to confirm`,
-              );
-              return;
+          // link — the traveller isn't the person messaging. A transient DB
+          // failure here must not fall through as a silent no-reply turn — hand
+          // off instead, mirroring the enquiry-create hardening below.
+          try {
+            const pendingBenConflict = benCtx?.phoneConflictPhone;
+            if (pendingBenConflict && samePhoneNumber(pendingBenConflict, travellerPhone)) {
+              benClientId = await insertClient(orgId, { fullName: travellerName, phone: travellerPhone });
+              console.log(`[sendseven-webhook] conv ${conversationId} beneficiary phone confirmed after clash — created client ${benClientId} for ${travellerName}`);
+            } else {
+              const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
+              if (resolution.status === "phone_conflict") {
+                const confirmReply = buildPhoneConflictReply(resolution.existingNames, travellerName);
+                await sendReply(orgId, conversationId, message.channel_id, confirmReply, mode, false);
+                await conversationStateRepository.update(conversationId, {
+                  intent: "enquiry",
+                  enquiryStatus: "collecting",
+                  enquirySlots: mergedSlots,
+                  lastAiReplyAt: new Date(),
+                  context: {
+                    ...prevContext,
+                    lastReply: confirmReply,
+                    beneficiary: { name: travellerName, phone: travellerPhone, phoneConflictPhone: travellerPhone },
+                  },
+                });
+                console.log(
+                  `[sendseven-webhook] conv ${conversationId} beneficiary phone clash — belongs to ${resolution.existingNames.join(", ")}; asked to confirm`,
+                );
+                return;
+              }
+              benClientId = resolution.clientId;
             }
-            benClientId = resolution.clientId;
+          } catch (err) {
+            console.error(`[sendseven-webhook] conv ${conversationId} beneficiary resolve/insert THREW:`, err);
+            return doHandoff("Sorry, I'm having trouble setting that up right now — let me get a colleague to help you.");
           }
           console.log(`[sendseven-webhook] conv ${conversationId} on-behalf enquiry — traveller client ${benClientId} (${travellerName})`);
         }
@@ -592,29 +703,39 @@ export const replyWorker = {
         update.context = { ...prevContext, lastReply: turn.reply };
       }
 
+      // Computed once and reused by both `treatAsEnquiry` below and the create
+      // trigger further down, instead of calling hasSubstantiveSignal(mergedSlots)
+      // twice for the same (immutable) mergedSlots.
+      const substantive = hasSubstantiveSignal(mergedSlots);
+
       // Enquiry-ness for the branches below. Once the customer has given real
       // holiday signal (destination/dates/pax/budget…), treat it as an enquiry
       // even if the model labels the turn intent="other" — it routinely does that
       // when it prematurely closes with "the team will call you", which must NOT
       // drop the enquiry on the floor. `beneficiaryActive` kept for clarity.
-      const treatAsEnquiry = turn.intent === "enquiry" || hasSubstantiveSignal(mergedSlots) || beneficiaryActive;
+      const treatAsEnquiry = turn.intent === "enquiry" || substantive || beneficiaryActive;
 
       // Create trigger, computed up here so we can log the full decision state in
       // one place before branching. Fires once we're mid-collection AND either the
       // grouped follow-up was sent OR nothing's left worth asking.
       const missingBeforeCreate = missingFieldsFor(mergedSlots);
-      const substantive = hasSubstantiveSignal(mergedSlots);
       const readyToCreate =
         enquiryStatus === "collecting" && (!!prevContext.groupedAskSent || missingBeforeCreate.length === 0);
 
       // One structured line capturing every input to the enquiry state machine —
       // so when creation doesn't happen we can see exactly why (which flag/branch).
+      // Logs slot KEYS only (never the raw values — destination/notes/etc. can
+      // carry customer PII) so this stays useful for debugging state transitions
+      // without dumping personal data into the log stream.
+      const coreMissing = missingCoreFieldsFor(mergedSlots);
+      const askCount = prevContext.askCount ?? 0;
       console.log(
         `[sendseven-webhook] conv=${conversationId} ENQUIRY-DECISION route=${route} intent=${turn.intent} ` +
           `status=${enquiryStatus} groupedAskSent=${!!prevContext.groupedAskSent} substantive=${substantive} ` +
           `treatAsEnquiry=${treatAsEnquiry} missing=${missingBeforeCreate.length}[${missingBeforeCreate.join("|")}] ` +
           `readyToCreate=${readyToCreate} beneficiary=${beneficiaryActive} enquiryClientId=${enquiryClientId ?? "null"} ` +
-          `mergedSlots=${JSON.stringify(mergedSlots)} rawTurnSlots=${JSON.stringify(turn.slots)}`,
+          `coreMissing=${coreMissing.length} askCount=${askCount} ` +
+          `mergedSlotKeys=[${Object.keys(mergedSlots).join(",")}] rawTurnSlotKeys=[${Object.keys(turn.slots).join(",")}]`,
       );
 
       // Step: awaiting_availability — the enquiry is already created; this reply
@@ -685,7 +806,7 @@ export const replyWorker = {
         }
 
         console.log(
-          `[sendseven-webhook] conv ${conversationId} CREATING enquiry (clientId=${enquiryClientId ?? "null"}) from slots=${JSON.stringify(mergedSlots)}`,
+          `[sendseven-webhook] conv ${conversationId} CREATING enquiry (clientId=${enquiryClientId ?? "null"}) from slotKeys=[${Object.keys(mergedSlots).join(",")}]`,
         );
         const summary = buildEnquirySummary(mergedSlots);
         // enquiryClientId is the traveller for an on-behalf enquiry, else the sender.
@@ -736,18 +857,36 @@ export const replyWorker = {
           update.intent = "enquiry";
           update.enquiryStatus = "collecting";
           update.enquirySlots = mergedSlots;
+          update.context = { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 };
           await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
           await conversationStateRepository.update(conversationId, update);
           return;
         }
 
-        // Enough signal — send the ONE grouped follow-up for whatever's missing.
+        if (coreMissing.length > 0 && askCount < MAX_ENQUIRY_ASKS) {
+          // Required core still incomplete and under the ask-cap — keep
+          // collecting naturally with the model's own next question rather
+          // than jumping to the grouped ask.
+          console.log(
+            `[sendseven-webhook] conv ${conversationId} BRANCH=collecting-continue coreMissing=[${coreMissing.join("|")}] askCount=${askCount}`,
+          );
+          update.intent = "enquiry";
+          update.enquiryStatus = "collecting";
+          update.enquirySlots = mergedSlots;
+          update.context = { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 };
+          await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
+          await conversationStateRepository.update(conversationId, update);
+          return;
+        }
+
+        // Core complete (or ask-cap reached) — send the ONE grouped follow-up
+        // for whatever's still missing.
         console.log(`[sendseven-webhook] conv ${conversationId} BRANCH=grouped-ask (setting groupedAskSent=true, missing=${missingBeforeCreate.join("|")})`);
         const groupedReply = await generateGroupedAsk(botConfig, kb, missingBeforeCreate, transcript);
         update.intent = "enquiry";
         update.enquiryStatus = "collecting";
         update.enquirySlots = mergedSlots;
-        update.context = { ...prevContext, lastReply: groupedReply, groupedAskSent: true };
+        update.context = { ...prevContext, lastReply: groupedReply, groupedAskSent: true, askCount: askCount + 1 };
         await sendReply(orgId, conversationId, message.channel_id, groupedReply, mode, false);
         await conversationStateRepository.update(conversationId, update);
         return;
@@ -781,12 +920,22 @@ export const replyWorker = {
 // called "friend"/"your friend" — we ask for a real name instead. Catches an
 // optional possessive/article determiner (a/my/your/his/her/their/the) plus a
 // generic person word. Actual names pass through.
-const GENERIC_TRAVELLER_RE =
+export const GENERIC_TRAVELLER_RE =
   /^(?:(?:a|my|your|his|her|their|the)\s+)?(?:friend|mate|buddy|pal|someone|somebody|colleague|co-?worker|client|customer|person|people|guy|lady|companion|partner|other\s+half)$/i;
-function cleanTravellerName(raw?: string): string | undefined {
+export function cleanTravellerName(raw?: string): string | undefined {
   const v = (raw ?? "").trim();
   if (!v || GENERIC_TRAVELLER_RE.test(v)) return undefined;
   return v;
+}
+
+// Masks a phone number for logging — keeps only the last 4 digits so the
+// state-transition logs stay useful for debugging without dumping a
+// customer's raw phone number into the log stream (e.g. "*******1234").
+function redactPhone(phone?: string | null): string {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  if (!digits) return "?";
+  const visible = digits.slice(-4);
+  return `${"*".repeat(Math.max(digits.length - visible.length, 0))}${visible}`;
 }
 
 // Sends the AI reply: live to the customer in `send` mode (tagged as ours), or as

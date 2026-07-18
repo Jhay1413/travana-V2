@@ -94,10 +94,25 @@ export function parseBotRules(raw: unknown): BotRule[] {
 }
 
 // Renders the audience-scoped subset of bot rules into a system-prompt block.
+// These agency rules take PRECEDENCE for TONE, PACING and PHRASING — e.g. an
+// agency rule setting a different number of questions per message WINS over
+// the default "one thing at a time" asking style — but they can NEVER
+// override data-integrity and flow rules: never invent facts/prices/
+// availability, never skip identity/verification steps, never promise
+// callbacks/handoffs early, and never record details the customer didn't
+// state. Used by both the customer-facing bots and the internal assistant
+// ("internal" audience).
 export function buildRulesBlock(rules: BotRule[], bot: BotAudience): string | null {
   const filtered = rules.filter((r) => audienceAllows(r.audience, bot) && r.isActive !== false);
   if (!filtered.length) return null;
-  return "Additional rules you MUST follow (set by the agency):\n" + filtered.map((r) => `- ${r.text}`).join("\n");
+  return (
+    "Additional rules you MUST follow (set by the agency). Where a rule conflicts with the default tone, pacing or " +
+    "phrasing guidance elsewhere in this prompt — including how many questions to ask per message — the AGENCY RULE " +
+    "WINS and takes precedence. Agency rules can NEVER override data-integrity or flow rules, which always win over " +
+    "any agency rule (never invent facts, prices or availability; never skip identity/verification steps; never " +
+    "promise callbacks/hand-offs early; never record details the customer didn't actually state):\n" +
+    filtered.map((r) => `- ${r.text}`).join("\n")
+  );
 }
 
 // Renders style-example KB entries into a capped block. Framing differs by
@@ -179,6 +194,56 @@ export function looksLikeActionableAdmin(text: string): boolean {
   return ADMIN_PROVIDING_RE.test(t) || ADMIN_COMPLAINT_RE.test(t);
 }
 
+// (Phase 3.1) The "stop re-asking, open the ticket now" backstop gate — pulled
+// out of reply-worker/internal-chat-testflow into one pure, unit-testable
+// function so the two drivers can't drift. The FORCE trigger must NOT rely on
+// the STICKY adminActionable flag alone (once true it never clears, so an
+// unrelated "thanks" on a later turn would otherwise force a ticket in reply
+// to a bare acknowledgement). Instead it requires we already asked a
+// clarifying question without opening a ticket (adminAsked) AND the CURRENT
+// turn actually carries signal — either it's itself deterministically
+// actionable (a fresh complaint/detail/document/attachment), or it's a
+// substantive answer to that clarifying question (not a bare "thanks"/"ok"
+// acknowledgement, which must never trigger the force).
+export interface ForceTicketGateInput {
+  adminAsked?: boolean;
+  ticketOpened?: boolean;
+  latestText: string;
+  hasAttachment?: boolean;
+}
+export function shouldForceTicketNow(input: ForceTicketGateInput): boolean {
+  const currentTurnActionable = looksLikeActionableAdmin(input.latestText) || !!input.hasAttachment;
+  const isSubstantiveReply = !!input.latestText && !isAcknowledgement(input.latestText);
+  return !!input.adminAsked && !input.ticketOpened && (currentTurnActionable || isSubstantiveReply);
+}
+
+// (Phase 3.2) Deterministic (non-LLM) route precedence, shared by
+// reply-worker/internal-chat-testflow's upper-level router. An enquiry
+// already "in flight" stays sales UNLESS this turn carries a deterministic
+// ACTIONABLE admin signal (complaint / verification details) or a document
+// attachment — that breaks OUT of the sales stickiness so a customer
+// mid-enquiry who complains about an existing booking reaches the admin bot
+// instead of being funneled into holiday slot-filling. A merely admin-ish but
+// NON-actionable question (looksLikeAdminAsk, e.g. "what's the status of my
+// enquiry?") does NOT break out — it stays sales-sticky. When no enquiry is
+// in flight, an attachment or a deterministic admin ask forces admin;
+// otherwise the caller must fall back to the LLM classifier ("classify").
+export type DeterministicRoute = "sales" | "admin" | "classify";
+export interface RoutePrecedenceInput {
+  enquiryInFlight: boolean;
+  hasAttachments?: boolean;
+  actionable: boolean;
+  adminAsk: boolean;
+}
+export function decideDeterministicRoute(input: RoutePrecedenceInput): DeterministicRoute {
+  const hasAttachments = !!input.hasAttachments;
+  const complaintBreaksOutOfEnquiry = input.enquiryInFlight && (hasAttachments || input.actionable);
+  if (complaintBreaksOutOfEnquiry) return "admin";
+  if (input.enquiryInFlight) return "sales";
+  if (hasAttachments || input.adminAsk) return "admin";
+  return "classify";
+}
+
 // The enquiry flow has two code-driven transition points (enquiry just logged →
 // ask for a callback time; callback time given → confirm it's booked). Rather
 // than send a fixed string, generate the line in the org's house voice (persona
@@ -226,7 +291,99 @@ export async function generateTransitionReply(
     if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
     const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:");
     if (styleBlock) parts.push(styleBlock);
+    const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "sales");
+    if (rulesBlock) parts.push(rulesBlock);
     parts.push(instruction);
+
+    const res = await getOpenAI().chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.7,
+      messages: [{ role: "system", content: parts.join("\n\n") }],
+    });
+    return res.choices[0]?.message?.content?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// (3.3) The three deterministic asks the on-behalf-of-a-friend enquiry flow can
+// need mid-conversation: the traveller's name, phone, or both. WHAT is asked is
+// fixed (driven by the caller, never invented); only the WORDING is generated
+// here in the org's voice/language (botConfig.persona/signOff/language) so a
+// non-English or differently-toned tenant doesn't get a hard-coded English aside
+// mid-thread. Kept as one tiny, cheap, short-prompt call — no full-context
+// generateTurn — and falls back to the previous fixed English line on any
+// failure so the turn is never reply-less. Mirrors generateTransitionReply.
+export type BeneficiaryAskKind = "name_and_phone" | "name" | "phone";
+
+export async function generateBeneficiaryAsk(
+  botConfig: OrgBotConfig | null,
+  kb: OrgKnowledgeBase[],
+  kind: BeneficiaryAskKind,
+  // The traveller's name, when already known (only relevant for kind="phone").
+  travellerName?: string,
+): Promise<string> {
+  const name = travellerName?.trim();
+  const fallback =
+    kind === "name_and_phone"
+      ? "Of course! Could you pop me your friend's name and phone number so I can get this set up for them? 😊"
+      : kind === "name"
+        ? "Lovely! And what's your friend's name so I can get this set up for them? 😊"
+        : `Of course! Could you pop me ${name ?? "your friend"}'s phone number so I can get this set up for them? 😊`;
+
+  const instruction =
+    kind === "name_and_phone"
+      ? "Ask the customer for their friend's (the traveller's) NAME and PHONE NUMBER so you can get the enquiry set up for them."
+      : kind === "name"
+        ? "Ask the customer for their friend's (the traveller's) NAME so you can get the enquiry set up for them."
+        : `Ask the customer for ${name ?? "their friend"}'s PHONE NUMBER so you can get the enquiry set up for them.`;
+
+  try {
+    const parts: string[] = [
+      `You are ${botConfig?.name?.trim() || "a friendly UK travel agent"} continuing an ongoing chat with a customer for a UK travel agency — do NOT greet them again or open with "hi"/"hey there"; just carry on naturally.`,
+      "Use UK English. Write in the warm, natural, conversational voice of a friendly UK high-street travel agent.",
+    ];
+    if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
+    if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
+    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:");
+    if (styleBlock) parts.push(styleBlock);
+    const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "sales");
+    if (rulesBlock) parts.push(rulesBlock);
+    parts.push(`${instruction} ONE short, warm sentence only — do NOT ask about anything else. Reply with the message text ONLY.`);
+
+    const res = await getOpenAI().chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.7,
+      messages: [{ role: "system", content: parts.join("\n\n") }],
+    });
+    return res.choices[0]?.message?.content?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// (3.3) The admin bot's canned "ticket logged" confirmation (Phase 1.3/2.2's
+// forceTicketNow override) was a hard-coded English string, bypassing org
+// voice/language same as the beneficiary asks above. The MEANING must stay
+// deterministic (ticket logged, team will follow up, no further questions) —
+// only the wording is generated, via one cheap short-prompt call, falling back
+// to the fixed English line on any failure so a forced-ticket turn is never
+// reply-less.
+export async function generateTicketConfirmation(botConfig: OrgBotConfig | null, kb: OrgKnowledgeBase[]): Promise<string> {
+  const fallback = "Thanks — I've logged this with the team and a colleague will be in touch shortly to get it sorted for you.";
+  try {
+    const parts: string[] = [
+      `You are ${botConfig?.name?.trim() || "a friendly UK travel agent"} continuing an ongoing chat with an EXISTING customer of a UK travel agency — do NOT greet them again or open with "hi"/"hey there"; just carry on naturally.`,
+      "Use UK English. Write in the warm, natural, conversational voice of a friendly UK high-street travel agent.",
+    ];
+    if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
+    if (botConfig?.signOff?.trim()) parts.push(`Sign-off: ${botConfig.signOff.trim()}`);
+    if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
+    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:");
+    if (styleBlock) parts.push(styleBlock);
+    parts.push(
+      "You have JUST logged a support ticket for this customer's request with the team. Write ONE short, warm confirmation message that (a) confirms it's been logged, and (b) reassures them a colleague will follow up shortly. Do NOT ask any further questions. Reply with the message text ONLY.",
+    );
 
     const res = await getOpenAI().chat.completions.create({
       model: CHAT_MODEL,
@@ -260,8 +417,13 @@ export async function generateGroupedAsk(
     const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:");
     if (styleBlock) parts.push(styleBlock);
     if (transcript.trim()) parts.push(`The conversation so far:\n${transcript.trim()}`);
+    // The agency rules block is pushed immediately before the pacing
+    // instruction below (not earlier) so it sits directly next to the
+    // default it's most likely to override (how many questions to ask).
+    const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "sales");
+    if (rulesBlock) parts.push(rulesBlock);
     parts.push(
-      "Ask the customer for only the ONE (at most TWO, and only if they naturally go together) most useful detail still needed to find them a good deal, in one or two short warm sentences. Do NOT stack several separate questions into one message or make it read like a list/form. " +
+      "DEFAULT PACING (an agency rule above may set a DIFFERENT number of questions per message — if one does, FOLLOW THE AGENCY RULE for pacing, not this default): unless overridden, ask the customer for only the ONE (at most TWO, and only if they naturally go together) most useful detail still needed to find them a good deal, in one or two short warm sentences. Do NOT stack several separate questions into one message or make it read like a list/form. " +
         "CRUCIAL: read what they have ALREADY told you above and do NOT re-ask anything they've answered or said they have no preference on — e.g. if they said they're open to suggestions or just want 'somewhere hot near the beach', that IS their destination answer, so do NOT ask where they want to go. " +
         "Prioritise, in order: the destination (ONLY if they have not named one AND have not said they're flexible/open to suggestions), travel dates, number of nights, budget, then board basis. " +
         "Do NOT say a colleague/advisor/the team will call, be in touch, or get back to them, and do NOT say things like 'I've got everything I need' or 'all sorted' — that step happens automatically later; just warmly ask for the next detail. " +
@@ -341,6 +503,28 @@ export async function generateGeneralReply(
   }
 }
 
+// The sales-audience "fact" KB rows (isActive, audience allows "sales", not a
+// tone/style example) — the exact subset `buildSystemPrompt` embeds as static
+// company info in the sales system prompt. Factored out to ONE place so
+// `kbExceedsBudget` and `buildSystemPrompt` can never drift on what counts as
+// "the static KB".
+function salesFactKb(kb: OrgKnowledgeBase[]): OrgKnowledgeBase[] {
+  return kb.filter((k) => k.isActive && audienceAllows(k.audience, "sales") && !isStyleExampleCategory(k.category));
+}
+
+// Whether the static sales-audience fact KB alone already overflows
+// KB_CHAR_BUDGET once rendered into the system prompt. When it does NOT, the
+// vector-retrieved `sourceType: "knowledge"` matches would just be embeddings
+// of these same rows appended to a prompt that already contains all of
+// them — pure duplication — so callers use this to skip that retrieval call
+// entirely. The static KB is still fetched fresh from the DB every turn
+// either way, so newly added knowledge keeps reaching the prompt immediately.
+export function kbExceedsBudget(kb: OrgKnowledgeBase[]): boolean {
+  const factKb = salesFactKb(kb);
+  const company = factKb.map((k) => `- ${k.title}: ${k.content}`).join("\n");
+  return company.length > KB_CHAR_BUDGET;
+}
+
 export function buildSystemPrompt(
   botConfig: OrgBotConfig | null,
   kb: OrgKnowledgeBase[],
@@ -377,8 +561,10 @@ export function buildSystemPrompt(
   if (botConfig?.signOff?.trim()) parts.push(`Sign-off: ${botConfig.signOff.trim()}`);
   if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
 
+  // The agency rules block is pushed immediately after the ASKING STYLE
+  // instruction below (not here) so it sits right next to the pacing
+  // guidance it's most likely to override — see the push further down.
   const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "sales");
-  if (rulesBlock) parts.push(rulesBlock);
 
   parts.push(
     "Never quote firm prices, availability, or confirm bookings you cannot verify — instead gather the enquiry and let a human advisor follow up.",
@@ -394,13 +580,15 @@ export function buildSystemPrompt(
   parts.push(handoff);
 
   // Company info: static KB rows plus any vector-retrieved KB matches (Phase 5d),
-  // folded into the same block and capped together at KB_CHAR_BUDGET.
+  // folded into the same block and capped together at KB_CHAR_BUDGET. Retrieved
+  // (query-relevant) lines go first so they survive truncation when the static
+  // list alone already exceeds the budget — the static list absorbs the cut.
   const activeKb = kb.filter((k) => k.isActive && audienceAllows(k.audience, "sales"));
-  const factKb = activeKb.filter((k) => !isStyleExampleCategory(k.category));
+  const factKb = salesFactKb(kb);
   const retrievedKb = (retrieved?.kb ?? []).filter(
     (m) => !isStyleExampleCategory(retrievedMatchCategory(m)) && audienceAllows(retrievedMatchAudience(m), "sales"),
   );
-  const kbLines = [...factKb.map((k) => `- ${k.title}: ${k.content}`), ...retrievedKb.map((m) => `- ${m.content}`)];
+  const kbLines = [...retrievedKb.map((m) => `- ${m.content}`), ...factKb.map((k) => `- ${k.title}: ${k.content}`)];
   if (kbLines.length) {
     let company = kbLines.join("\n");
     if (company.length > KB_CHAR_BUDGET) company = company.slice(0, KB_CHAR_BUDGET) + "…";
@@ -446,14 +634,28 @@ export function buildSystemPrompt(
       "- Collect the fields for the detected holiday type (ask for what's offered, never block on any one field):",
       "   • Package Holiday: destination, resort, departure airport, travel date, number of nights, passengers (adults/children/infants + child ages), board basis, minimum star rating, budget.",
       "   • Hot Tub Break: destination, resort, travel date, number of nights, number of guests, weekend lodge (yes/no), pets (how many), budget.",
-      "   • Cruise Package: cruise destination, travel date, number of nights, passengers, cabin type, cruise line, pre-cruise stay nights, post-cruise stay nights, departure airport, budget.",
+      "   • Cruise Package: destination(s) (record in `destinations`), travel date, number of nights, passengers, cabin type, cruise line, pre-cruise stay nights, post-cruise stay nights, departure airport, budget.",
       "- Extract everything mentioned so far into `slots` (merge with the known details you are given): use fields enquiryTitle, holidayType, countries, destinations, resorts, departureAirports, boardBasis, starRating, travelDate, flexibility, nights, adults, children, infants, childAges, budget, budgetType, cabinType, cruiseLine, preCruiseStay, postCruiseStay, guests, pets, weekendLodge, accommodationType, notes. Leave unknown fields empty.",
       '- DATES: `travelDate` must be a single specific calendar date in YYYY-MM-DD format, and ONLY when the customer gave a specific date. If the customer gives a day/month with no year, assume the NEXT future occurrence (never a past date). If they give a range or vague timing (e.g. "mid to end of August", "New Year", "sometime in summer", "October school holidays", "not sure"), leave `travelDate` empty and record their exact wording in `notes`. Do NOT invent an exact date.',
       '- FLEXIBILITY: always leave `flexibility` EMPTY — do not populate it at all, even for vague timing (that wording goes in `notes` only, per the DATES rule above).',
       '- NIGHTS: put the number of nights in `nights` whenever it is stated or clearly implied — e.g. "4 nights" → 4, "a week" → 7, "10 days" → 10, "a fortnight" → 14, "long weekend" → 3. Leave empty if they haven\'t indicated a length.',
       '- BUDGET: put the amount as digits only in `budget` (no "£", commas or words — e.g. "1100"), and set `budgetType` to exactly "Per Person" or "Package". If they give a range (e.g. "1000-2000"), record the TOP of the range.',
       '- DEPARTURE AIRPORT: whenever the customer says they will "fly from", "flying from", "depart(ing) from", "leave from", or simply "from" a place (e.g. "fly from Newcastle", "from Manchester", "out of Gatwick"), record that airport/city in `departureAirports` as an array (e.g. ["Newcastle"]). This is the airport they leave the UK from — do NOT confuse it with their holiday destination.',
-      "- ASKING STYLE (STRICT — this overrides any urge to be thorough or cover everything in one go): every message must be SHORT — at most two sentences — and ask about only ONE thing at a time (or two ONLY if they naturally belong together, e.g. number of adults and children). NEVER stack several separate questions into one reply: do NOT, for example, ask party size AND children's ages AND dates AND airport AND board basis in the same message — pick the single most useful missing detail and ask just that. Prioritise, in order: destination (only if they haven't given one and aren't open to suggestions), then rough dates, then number of nights, then budget; deliberately leave the rest for later messages and pick them up naturally over the next few replies. Never reel off a list, never make it read like a form, and never re-ask a detail they've already given or declined.",
+    ].join("\n"),
+  );
+
+  // ASKING STYLE + the agency rules block are pushed as adjacent, standalone
+  // parts (rather than buried inside the longer enquiry-instructions block
+  // above) so the pacing override sits immediately next to the default it
+  // overrides — the model weighs adjacent instructions together, and a rule
+  // separated by several paragraphs was losing out to the earlier default.
+  parts.push(
+    "- DEFAULT ASKING STYLE (an agency rule below may set a DIFFERENT number of questions per message — if one does, FOLLOW THE AGENCY RULE for pacing, not this default): unless an agency rule says otherwise, every message should be SHORT — at most two sentences — and ask about only ONE thing at a time (or two ONLY if they naturally belong together, e.g. number of adults and children). By default do NOT stack several separate questions into one reply: do NOT, for example, ask party size AND children's ages AND dates AND airport AND board basis in the same message — pick the single most useful missing detail (or however many the agency rule specifies) and ask just that. Prioritise, in order: destination (only if they haven't given one and aren't open to suggestions), then rough dates, then number of nights, then budget; deliberately leave the rest for later messages and pick them up naturally over the next few replies. Never reel off a list, never make it read like a form, and never re-ask a detail they've already given or declined.",
+  );
+  if (rulesBlock) parts.push(rulesBlock);
+
+  parts.push(
+    [
       "- Do NOT offer to arrange a call, a callback, or say a colleague/advisor/the team will be in touch while you are still gathering enquiry details — that step happens later and automatically, so leave it out and just ask the next detail.",
       "- For each field: if they give a value, record it in `slots`. If they say no / none / not sure / no preference / any / doesn't matter, treat that field as ANSWERED — leave it empty, do NOT store it, and never ask about it again.",
       "- If it is not a holiday enquiry, set intent=\"other\" and just answer helpfully.",
@@ -485,6 +687,99 @@ export function buildSystemPrompt(
     'Respond ONLY with JSON: {"hand_off": boolean, "intent": "enquiry"|"other", "slots": object, "client": {"fullName": string, "phone": string}, "beneficiary": {"onBehalf": boolean, "fullName": string, "phone": string}, "reply": string}. `reply` is the message to send the customer; `slots` MUST carry every holiday detail stated so far (see the CRITICAL rule above); `client` holds any personal details the SENDER has given (empty strings if unknown); `beneficiary` is only for when they are enquiring on another named person\'s behalf (onBehalf=false otherwise).',
   );
   return parts.join("\n\n");
+}
+
+// Deterministic backstop for holidayType — the model's slot extraction is
+// unreliable turn-to-turn (it can return empty slots even when "cruise" is
+// plainly stated somewhere in the conversation), so the type is recovered
+// deterministically from the transcript text rather than trusting the model to
+// have captured it on some persisted turn. Callers should run this over the
+// FULL transcript (not just the latest message) so a "cruise" mention on any
+// earlier turn — including turns before the enquiry itself started — still
+// counts. Returns null (leave holidayType unset) when nothing matches, so the
+// Package Holiday default at enquiry creation still applies.
+export function inferHolidayTypeFromText(text: string): string | null {
+  const t = text || "";
+  if (/\bcruise/i.test(t)) return "Cruise Package";
+  if (/\bhot\s*tub|\blodge\b/i.test(t)) return "Hot Tub Break";
+  return null;
+}
+
+// The full set of keys EnquirySlots recognises — used by normalizeTurnSlots to
+// drop anything the model invents (e.g. `cruiseDestination`) so persisted
+// slots stay clean.
+const KNOWN_SLOT_KEYS: ReadonlyArray<keyof EnquirySlots> = [
+  "enquiryTitle",
+  "holidayType",
+  "countries",
+  "destinations",
+  "resorts",
+  "departureAirports",
+  "boardBasis",
+  "starRating",
+  "travelDate",
+  "flexibility",
+  "nights",
+  "adults",
+  "children",
+  "infants",
+  "childAges",
+  "budget",
+  "budgetType",
+  "cabinType",
+  "cruiseLine",
+  "preCruiseStay",
+  "postCruiseStay",
+  "guests",
+  "pets",
+  "weekendLodge",
+  "accommodationType",
+  "notes",
+];
+
+// Normalizes the model's raw slots JSON into a clean EnquirySlots object —
+// applied at the one point the model's JSON becomes an EnquirySlots (inside
+// generateTurn) so it fixes every driver (reply-worker, internal-chat-testflow)
+// at once rather than patching each one. Handles two recurring model mistakes:
+// (a) the prompt used to teach "cruise destination" as a Cruise Package field
+// even though the schema field is `destinations` — the model would then return
+// an invalid `cruiseDestination`/`cruiseDestinations` key instead. That's now
+// fixed in the prompt (§ slot-filling instructions above), but we still alias
+// it defensively here in case the model reverts to habit. (b) any other key
+// the model invents is dropped so persisted slots stay clean. `holidayType` is
+// also canonicalized so downstream keyword checks (e.g. fieldChecksFor's
+// `.includes("cruise")`) reliably light up regardless of the model's casing.
+export function normalizeTurnSlots(raw: Record<string, unknown>): EnquirySlots {
+  const slots: EnquirySlots = {};
+  for (const key of KNOWN_SLOT_KEYS) {
+    if (raw[key] !== undefined) {
+      (slots as Record<string, unknown>)[key] = raw[key];
+    }
+  }
+
+  // Alias cruiseDestination / cruiseDestinations (string or array) → destinations,
+  // merging with (not clobbering) anything already extracted into destinations.
+  const aliasRaw = raw.cruiseDestination ?? raw.cruiseDestinations;
+  if (aliasRaw !== undefined) {
+    const values = Array.isArray(aliasRaw) ? aliasRaw : [aliasRaw];
+    const strings = values.filter((v): v is string => typeof v === "string" && v.trim() !== "");
+    if (strings.length) {
+      const existing = Array.isArray(slots.destinations) ? slots.destinations : [];
+      const merged = [...existing];
+      for (const s of strings) if (!merged.includes(s)) merged.push(s);
+      slots.destinations = merged;
+    }
+  }
+
+  // Canonicalize holidayType casing/shorthand.
+  if (typeof slots.holidayType === "string" && slots.holidayType.trim()) {
+    const t = slots.holidayType;
+    if (/cruise/i.test(t)) slots.holidayType = "Cruise Package";
+    else if (/hot\s*tub|lodge/i.test(t)) slots.holidayType = "Hot Tub Break";
+    else if (/package/i.test(t)) slots.holidayType = "Package Holiday";
+  }
+
+  return slots;
 }
 
 // `messages` only needs the minimal transcript shape (direction/text/created_at)
@@ -533,10 +828,14 @@ export async function generateTurn(
   if (!raw) return fallback;
   try {
     const p = JSON.parse(raw) as Partial<AiTurn>;
+    // Normalize here — the single point the model's JSON becomes an
+    // EnquirySlots — so unknown/aliased keys (e.g. `cruiseDestination`) are
+    // cleaned up for every caller at once (see normalizeTurnSlots).
+    const rawSlots = (p.slots as unknown as Record<string, unknown>) ?? {};
     return {
       hand_off: !!p.hand_off,
       intent: p.intent === "enquiry" ? "enquiry" : "other",
-      slots: (p.slots as EnquirySlots) ?? {},
+      slots: normalizeTurnSlots(rawSlots),
       client: (p.client as AiTurn["client"]) ?? {},
       beneficiary: (p.beneficiary as EnquiryBeneficiary) ?? {},
       reply: (p.reply ?? "").trim() || FALLBACK_REPLY,
@@ -603,6 +902,57 @@ function fieldChecksFor(slots: EnquirySlots): FieldCheck[] {
   if (t.includes("hot tub")) return HOTTUB_FIELDS;
   return PACKAGE_FIELDS;
 }
+
+// The REQUIRED CORE subset of each holiday type's field list — the bot keeps
+// collecting (rather than sending the ONE grouped ask) until these land. Same
+// shape across all three types: destination, travel dates, number of nights,
+// party size (adults for package/cruise, guests for hot tub), budget.
+const PACKAGE_CORE_FIELDS: FieldCheck[] = [
+  { label: "destination", has: hasDestination },
+  { label: "travel dates", has: hasDates },
+  { label: "number of nights", has: (s) => !!s.nights },
+  { label: "number of passengers", has: (s) => !!s.adults },
+  { label: "budget", has: hasBudget },
+];
+
+const CRUISE_CORE_FIELDS: FieldCheck[] = [
+  { label: "cruise destination", has: hasDestination },
+  { label: "travel dates", has: hasDates },
+  { label: "number of nights", has: (s) => !!s.nights },
+  { label: "number of passengers", has: (s) => !!s.adults },
+  { label: "budget", has: hasBudget },
+];
+
+const HOTTUB_CORE_FIELDS: FieldCheck[] = [
+  { label: "destination", has: hasDestination },
+  { label: "travel dates", has: hasDates },
+  { label: "number of nights", has: (s) => !!s.nights },
+  { label: "number of guests", has: (s) => !!s.guests },
+  { label: "budget", has: hasBudget },
+];
+
+function coreFieldChecksFor(slots: EnquirySlots): FieldCheck[] {
+  const t = (slots.holidayType ?? "").toLowerCase();
+  if (t.includes("cruise")) return CRUISE_CORE_FIELDS;
+  if (t.includes("hot tub")) return HOTTUB_CORE_FIELDS;
+  return PACKAGE_CORE_FIELDS;
+}
+
+// Missing = REQUIRED CORE field list − filled slots. While any of these are
+// still missing (and the ask-cap hasn't been hit), the drivers keep collecting
+// naturally instead of sending the ONE grouped ask.
+export function missingCoreFieldsFor(slots: EnquirySlots): string[] {
+  return coreFieldChecksFor(slots)
+    .filter((f) => !f.has(slots))
+    .map((f) => f.label);
+}
+
+// The ask-cap keeps the old speed-to-lead behavior as the floor: a customer
+// who declines/gives vague answers (e.g. vague dates go to `notes`, never
+// `travelDate`, so `hasDates` can stay false forever) still gets their
+// enquiry created after at most this many asks, instead of being
+// interrogated indefinitely waiting for a core field that will never land.
+export const MAX_ENQUIRY_ASKS = 5;
 
 export function isEmptySlotValue(v: unknown): boolean {
   if (v === undefined || v === null) return true;

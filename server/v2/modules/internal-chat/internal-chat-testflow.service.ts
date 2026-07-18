@@ -3,18 +3,26 @@ import {
   buildEnquirySummary,
   buildPhoneConflictReply,
   buildTranscript,
+  decideDeterministicRoute,
+  generateBeneficiaryAsk,
   generateGeneralReply,
   generateGroupedAsk,
   generateTransitionReply,
   generateTurn,
   hasSubstantiveSignal,
+  inferHolidayTypeFromText,
   isAcknowledgement,
+  kbExceedsBudget,
   looksLikeActionableAdmin,
   looksLikeAdminAsk,
+  MAX_ENQUIRY_ASKS,
   mergeSlots,
+  missingCoreFieldsFor,
   missingFieldsFor,
   parseAvailabilityTime,
+  shouldForceTicketNow,
   similarReply,
+  type BeneficiaryAskKind,
 } from "../ai-conversation/ai-conversation.brain";
 import { classifyConversationRoute } from "../ai-conversation/conversation-router";
 import type { EnquirySlots, RetrievedContext, RetrievedMatch, TranscriptMessage } from "../ai-conversation/ai-conversation.types";
@@ -49,6 +57,9 @@ import type { InternalChatMessage, InternalChatSession } from "@shared/schema";
 interface ConversationContext {
   lastReply?: string;
   groupedAskSent?: boolean;
+  // Number of collecting-phase questions asked so far this enquiry. Mirrors
+  // reply-worker's ConversationContext — see there for the full comment.
+  askCount?: number;
   enquiryOwnerUserId?: string;
   availabilityTaskId?: string;
   // For a third-party enquiry: the traveller's name, carried to the
@@ -81,12 +92,23 @@ interface ConversationContext {
 // Drops generic stand-ins the model may report as a traveller's name ("my
 // friend", "your friend", "someone") so we don't create a client literally
 // called "friend"/"your friend". Mirrors reply-worker's cleanTravellerName.
-const GENERIC_TRAVELLER_RE =
+export const GENERIC_TRAVELLER_RE =
   /^(?:(?:a|my|your|his|her|their|the)\s+)?(?:friend|mate|buddy|pal|someone|somebody|colleague|co-?worker|client|customer|person|people|guy|lady|companion|partner|other\s+half)$/i;
-function cleanTravellerName(raw?: string): string | undefined {
+export function cleanTravellerName(raw?: string): string | undefined {
   const v = (raw ?? "").trim();
   if (!v || GENERIC_TRAVELLER_RE.test(v)) return undefined;
   return v;
+}
+
+// Masks a phone number for logging — keeps only the last 4 digits so the
+// state-transition logs stay useful for debugging without dumping a
+// customer's raw phone number into the log stream (e.g. "*******1234").
+// Mirrors reply-worker's redactPhone.
+function redactPhone(phone?: string | null): string {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  if (!digits) return "?";
+  const visible = digits.slice(-4);
+  return `${"*".repeat(Math.max(digits.length - visible.length, 0))}${visible}`;
 }
 
 const HISTORY_LIMIT = 20;
@@ -147,13 +169,15 @@ export const internalChatTestflowService = {
     let clientId = session.clientId;
     const knownClient = !!clientId;
 
-    const [botConfig, kb, existingClient] = await Promise.all([
+    // The user message is already inserted above, so there's no data
+    // dependency between the recent-message fetch and botConfig/kb/existingClient
+    // — fold it into the same parallel batch instead of awaiting it separately.
+    const [botConfig, kb, existingClient, recent] = await Promise.all([
       botConfigRepository.findByOrg(orgId),
       knowledgeBaseRepository.list(orgId),
       clientId ? neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : Promise.resolve(null),
+      internalChatRepository.getRecentMessages(session.id, orgId, HISTORY_LIMIT),
     ]);
-
-    const recent = await internalChatRepository.getRecentMessages(session.id, orgId, HISTORY_LIMIT);
     const transcript = buildTranscript(toTranscriptMessages(recent), userText);
 
     // A test session can, in principle, run several enquiries end to end — once
@@ -164,10 +188,13 @@ export const internalChatTestflowService = {
     const enquiryStatus = isFreshEnquiry ? null : session.enquiryStatus;
     const priorSlots: EnquirySlots = isFreshEnquiry ? {} : ((session.enquirySlots as EnquirySlots) ?? {});
     const prevContext = (session.context as ConversationContext | null) ?? {};
+    // Computed once and reused below (deterministic route precedence) instead of
+    // calling looksLikeAdminAsk(userText) a second time for the same turn.
+    const isAdminAsk = looksLikeAdminAsk(userText);
     // Carry admin intent across the onboarding detour (see reply-worker) — the
     // completion turn's literal message is just a phone number, so its own route
     // classification is unreliable.
-    let sawAdminIntent = prevContext.domain === "admin" || looksLikeAdminAsk(userText);
+    const sawAdminIntent = prevContext.domain === "admin" || isAdminAsk;
 
     // ── Upper-level ROUTER (mirrors reply-worker) ──────────────────────────
     // Decide which bot handles this turn BEFORE running any of them — computed
@@ -182,22 +209,39 @@ export const internalChatTestflowService = {
     // Broadened (2026-07-17) because the router was mis-classifying mid-enquiry
     // replies (a name+phone, a callback time) as admin, which then opened a
     // ticket instead of logging the enquiry — and admin stuck via context.domain.
+    // Computed once and reused below (the ROUTE log line and the sales-bot
+    // retrieval gate `enquiryish`) instead of re-running the same check on the
+    // same (immutable) priorSlots up to three times per turn.
+    const priorSubstantive = hasSubstantiveSignal(priorSlots);
     const enquiryInFlight =
       enquiryStatus === "collecting" ||
       enquiryStatus === "awaiting_availability" ||
       !!prevContext.groupedAskSent ||
       !!prevContext.beneficiary ||
-      hasSubstantiveSignal(priorSlots);
+      priorSubstantive;
+    // (3.2, mirrors reply-worker) A deterministic ACTIONABLE admin signal on THIS
+    // turn breaks OUT of enquiryInFlight stickiness — a customer mid-enquiry who
+    // complains about an existing booking must reach the admin bot, not be
+    // funneled into holiday slot-filling. A merely admin-ish but NON-actionable
+    // question does NOT break out — stays sales-sticky exactly as before.
+    // (3.2, mirrors reply-worker) Deterministic route precedence, shared via
+    // decideDeterministicRoute. This driver has no attachment concept, so
+    // hasAttachments is left undefined (false).
+    const deterministicRoute = decideDeterministicRoute({
+      enquiryInFlight,
+      actionable: looksLikeActionableAdmin(userText),
+      adminAsk: isAdminAsk,
+    });
+    const complaintBreaksOutOfEnquiry = enquiryInFlight && deterministicRoute === "admin";
     // Do NOT force admin purely because a PRIOR turn set domain="admin" (sticky).
     // A single router misfire would otherwise trap the whole conversation in
     // admin and open a ticket instead of logging a sales enquiry. Only a
     // DETERMINISTIC admin ask forces admin; otherwise the classifier decides,
     // with the prior domain passed as a sticky HINT so genuine admin follow-ups
     // still stay admin but a clear new-holiday message can recover to sales.
-    const route: "sales" | "admin" | "general" = enquiryInFlight
-      ? "sales"
-      : looksLikeAdminAsk(userText)
-        ? "admin"
+    const route: "sales" | "admin" | "general" =
+      deterministicRoute !== "classify"
+        ? deterministicRoute
         : await classifyConversationRoute({
             transcript,
             latestText: userText,
@@ -206,8 +250,8 @@ export const internalChatTestflowService = {
           });
     console.log(
       `[internal-chat-testflow] session=${session.id} ROUTE=${route} enquiryInFlight=${enquiryInFlight} ` +
-        `status=${enquiryStatus} groupedAskSent=${!!prevContext.groupedAskSent} beneficiary=${!!prevContext.beneficiary} ` +
-        `sawAdminIntent=${sawAdminIntent} domain=${prevContext.domain ?? "none"} priorSubstantive=${hasSubstantiveSignal(priorSlots)}`,
+        `complaintBreakout=${complaintBreaksOutOfEnquiry} status=${enquiryStatus} groupedAskSent=${!!prevContext.groupedAskSent} ` +
+        `beneficiary=${!!prevContext.beneficiary} sawAdminIntent=${sawAdminIntent} domain=${prevContext.domain ?? "none"} priorSubstantive=${priorSubstantive}`,
     );
 
     // ── General route ────────────────────────────────────────────────────
@@ -321,11 +365,25 @@ export const internalChatTestflowService = {
     // ── Admin bot ──────────────────────────────────────────────────────────
     // Fail-closed on clientId. Answers from the client's OWN records.
     if (route === "admin" && clientId) {
+      // Mirrors reply-worker's atomic claim (claimAdminTurn) before a turn that
+      // may open a ticket. A test session has no real SendSeven redelivery —
+      // turns run one at a time, driven synchronously by a single staff tester —
+      // so there's no duplicate-ticket race to guard here; no claim is taken.
+
       // Actionable = complaint / details submission (needs a ticket) vs a
-      // read-only records query. Once we've asked once for an actionable matter
-      // without opening a ticket, force the ticket instead of re-asking.
+      // read-only records query. `shouldForceTicketNow` (mirrors reply-worker)
+      // requires we already asked without opening a ticket (adminAsked) AND the
+      // CURRENT turn carries signal — either it's itself deterministically
+      // actionable, or a substantive (non-acknowledgement) reply to that
+      // clarifying question. `adminActionable` below is a STICKY flag persisted
+      // for logging/observability only — it is NOT read by the force gate,
+      // since once true it never clears.
       const adminActionable = !!prevContext.adminActionable || looksLikeActionableAdmin(userText);
-      const forceTicketNow = adminActionable && !!prevContext.adminAsked && !prevContext.ticketOpened;
+      const forceTicketNow = shouldForceTicketNow({
+        adminAsked: prevContext.adminAsked,
+        ticketOpened: prevContext.ticketOpened,
+        latestText: userText,
+      });
       console.log(
         `[internal-chat-testflow] session=${session.id} route=admin actionable=${adminActionable} ` +
           `adminAsked=${!!prevContext.adminAsked} forceTicket=${forceTicketNow} -> admin agent`,
@@ -367,9 +425,14 @@ export const internalChatTestflowService = {
     // Vector retrieval (best-effort): KB always, past quotes only for
     // enquiry-ish turns.
     const enquiryish =
-      enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || hasSubstantiveSignal(priorSlots);
+      enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
+    // Skip the knowledge retrieval when the static KB already fits the prompt
+    // budget — see reply-worker's mirror of this for the full rationale.
+    const kbOverflow = kbExceedsBudget(kb);
     const [kbMatches, quoteMatches] = await Promise.all([
-      aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: userText, limit: 3 }),
+      kbOverflow
+        ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: userText, limit: 3 })
+        : Promise.resolve([] as RetrievedMatch[]),
       enquiryish
         ? aiEmbeddingsService.retrieve({ orgId, sourceType: "quote", query: `${userText} ${JSON.stringify(priorSlots)}`, limit: 4 })
         : Promise.resolve([] as RetrievedMatch[]),
@@ -388,6 +451,17 @@ export const internalChatTestflowService = {
     const wouldRepeat = similarReply(turn.reply, lastReply);
     const mergedSlots = mergeSlots(priorSlots, turn.slots);
 
+    // Deterministic holidayType backstop (mirrors reply-worker): the model's
+    // slot extraction is unreliable turn-to-turn (it can return empty slots
+    // even when "cruise" is plainly in the transcript), so if holidayType
+    // still hasn't landed, recover it deterministically from the full
+    // transcript rather than silently falling through to the Package Holiday
+    // default at creation.
+    if (!mergedSlots.holidayType) {
+      const inferred = inferHolidayTypeFromText(transcript);
+      if (inferred) mergedSlots.holidayType = inferred;
+    }
+
     // ── Third-party enquiry ("on behalf of a friend") ──────────────────────
     // Mirrors reply-worker: the enquiry belongs to the named traveller, not the
     // sender. Resolve/collect the traveller (robust phone capture) FIRST, then
@@ -398,53 +472,69 @@ export const internalChatTestflowService = {
     const beneficiaryActive = !!benCtx || !!benTurn?.onBehalf;
     if (beneficiaryActive && enquiryStatus !== "awaiting_availability") {
       const travellerName = cleanTravellerName(benTurn?.fullName) || benCtx?.name;
-      const travellerPhone =
-        (benTurn?.phone?.trim() || extractPhoneNumber(userText) || benCtx?.phone || "").trim() || undefined;
       let benClientId = benCtx?.clientId;
+      // Only TRUST the free-text phone extraction while we're actually in the
+      // phone-collection step (the traveller isn't resolved yet) — mirrors
+      // reply-worker so a later, unrelated large number can't overwrite/
+      // misresolve an already-resolved traveller's phone.
+      const travellerPhone =
+        (
+          benTurn?.phone?.trim() ||
+          (!benClientId ? extractPhoneNumber(userText) : null) ||
+          benCtx?.phone ||
+          ""
+        ).trim() || undefined;
 
       if (!benClientId) {
         if (!travellerName || !travellerPhone) {
           // Need the traveller's NAME and/or phone before logging under them —
           // ask for exactly what's missing, never invent a placeholder name.
-          const ask =
-            !travellerName && !travellerPhone
-              ? "Of course! Could you pop me your friend's name and phone number so I can get this set up for them? 😊"
-              : !travellerName
-                ? "Lovely! And what's your friend's name so I can get this set up for them? 😊"
-                : `Of course! Could you pop me ${travellerName}'s phone number so I can get this set up for them? 😊`;
+          // (3.3, mirrors reply-worker) Generated in the org's voice/language via
+          // the brain, falling back to the fixed English line on any failure.
+          const askKind: BeneficiaryAskKind = !travellerName && !travellerPhone ? "name_and_phone" : !travellerName ? "name" : "phone";
+          const ask = await generateBeneficiaryAsk(botConfig, kb, askKind, travellerName);
           await internalChatRepository.updateSession(session.id, orgId, {
             intent: "enquiry",
             enquiryStatus: "collecting",
             enquirySlots: mergedSlots,
             context: { ...prevContext, lastReply: ask, beneficiary: { name: travellerName, phone: travellerPhone } },
           });
-          console.log(`[internal-chat-testflow] session ${session.id} on-behalf enquiry — asking for traveller name/phone (name=${travellerName ?? "?"} phone=${travellerPhone ?? "?"})`);
+          console.log(`[internal-chat-testflow] session ${session.id} on-behalf enquiry — asking for traveller name/phone (name=${travellerName ?? "?"} phone=${redactPhone(travellerPhone)})`);
           const replyMessage = await persistReply(ask);
           return { replyMessage };
         }
 
-        const pendingBenConflict = benCtx?.phoneConflictPhone;
-        if (pendingBenConflict && samePhoneNumber(pendingBenConflict, travellerPhone)) {
-          benClientId = await insertClient(orgId, { fullName: travellerName, phone: travellerPhone });
-        } else {
-          const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
-          if (resolution.status === "phone_conflict") {
-            const confirmReply = buildPhoneConflictReply(resolution.existingNames, travellerName);
-            await internalChatRepository.updateSession(session.id, orgId, {
-              intent: "enquiry",
-              enquiryStatus: "collecting",
-              enquirySlots: mergedSlots,
-              context: {
-                ...prevContext,
-                lastReply: confirmReply,
-                beneficiary: { name: travellerName, phone: travellerPhone, phoneConflictPhone: travellerPhone },
-              },
-            });
-            console.log(`[internal-chat-testflow] session ${session.id} beneficiary phone clash — ${resolution.existingNames.join(", ")}; asked to confirm`);
-            const replyMessage = await persistReply(confirmReply);
-            return { replyMessage };
+        // Have a real name + phone → resolve/create the traveller. A transient
+        // DB failure here must not fall through as a silent no-reply turn —
+        // hand off instead, mirroring the enquiry-create hardening below.
+        try {
+          const pendingBenConflict = benCtx?.phoneConflictPhone;
+          if (pendingBenConflict && samePhoneNumber(pendingBenConflict, travellerPhone)) {
+            benClientId = await insertClient(orgId, { fullName: travellerName, phone: travellerPhone });
+          } else {
+            const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
+            if (resolution.status === "phone_conflict") {
+              const confirmReply = buildPhoneConflictReply(resolution.existingNames, travellerName);
+              await internalChatRepository.updateSession(session.id, orgId, {
+                intent: "enquiry",
+                enquiryStatus: "collecting",
+                enquirySlots: mergedSlots,
+                context: {
+                  ...prevContext,
+                  lastReply: confirmReply,
+                  beneficiary: { name: travellerName, phone: travellerPhone, phoneConflictPhone: travellerPhone },
+                },
+              });
+              console.log(`[internal-chat-testflow] session ${session.id} beneficiary phone clash — ${resolution.existingNames.join(", ")}; asked to confirm`);
+              const replyMessage = await persistReply(confirmReply);
+              return { replyMessage };
+            }
+            benClientId = resolution.clientId;
           }
-          benClientId = resolution.clientId;
+        } catch (err) {
+          console.error(`[internal-chat-testflow] session ${session.id} beneficiary resolve/insert THREW:`, err);
+          const replyMessage = await doHandoff(prevContext, "Sorry, I'm having trouble setting that up right now — let me get a colleague to help you.");
+          return { replyMessage };
         }
         console.log(`[internal-chat-testflow] session ${session.id} on-behalf enquiry — traveller client ${benClientId} (${travellerName})`);
       }
@@ -463,12 +553,18 @@ export const internalChatTestflowService = {
     const readyToCreate =
       enquiryStatus === "collecting" && (!!prevContext.groupedAskSent || missingBeforeCreate.length === 0);
 
+    // Logs slot KEYS only (never the raw values — destination/notes/etc. can
+    // carry customer PII) so this stays useful for debugging state transitions
+    // without dumping personal data into the log stream. Mirrors reply-worker.
+    const coreMissing = missingCoreFieldsFor(mergedSlots);
+    const askCount = prevContext.askCount ?? 0;
     console.log(
       `[internal-chat-testflow] session=${session.id} ENQUIRY-DECISION route=${route} intent=${turn.intent} ` +
         `status=${enquiryStatus} groupedAskSent=${!!prevContext.groupedAskSent} substantive=${substantive} ` +
         `treatAsEnquiry=${treatAsEnquiry} missing=${missingBeforeCreate.length}[${missingBeforeCreate.join("|")}] ` +
         `readyToCreate=${readyToCreate} beneficiary=${beneficiaryActive} enquiryClientId=${enquiryClientId ?? "null"} ` +
-        `mergedSlots=${JSON.stringify(mergedSlots)} rawTurnSlots=${JSON.stringify(turn.slots)}`,
+        `coreMissing=${coreMissing.length} askCount=${askCount} ` +
+        `mergedSlotKeys=[${Object.keys(mergedSlots).join(",")}] rawTurnSlotKeys=[${Object.keys(turn.slots).join(",")}]`,
     );
 
     // Step: awaiting_availability — the enquiry is already created; this reply
@@ -529,7 +625,7 @@ export const internalChatTestflowService = {
       }
 
       console.log(
-        `[internal-chat-testflow] session ${session.id} CREATING enquiry (clientId=${enquiryClientId ?? "null"}) from slots=${JSON.stringify(mergedSlots)}`,
+        `[internal-chat-testflow] session ${session.id} CREATING enquiry (clientId=${enquiryClientId ?? "null"}) from slotKeys=[${Object.keys(mergedSlots).join(",")}]`,
       );
       const summary = buildEnquirySummary(mergedSlots);
       // Test-mode enquiries are now created as REAL records (is_test=false) so
@@ -583,20 +679,38 @@ export const internalChatTestflowService = {
           intent: "enquiry",
           enquiryStatus: "collecting",
           enquirySlots: mergedSlots,
-          context: { ...prevContext, lastReply: turn.reply },
+          context: { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 },
         });
         const replyMessage = await persistReply(turn.reply);
         return { replyMessage };
       }
 
-      // Enough signal — send the ONE grouped follow-up for whatever's missing.
+      if (coreMissing.length > 0 && askCount < MAX_ENQUIRY_ASKS) {
+        // Required core still incomplete and under the ask-cap — keep
+        // collecting naturally with the model's own next question rather
+        // than jumping to the grouped ask. Mirrors reply-worker.
+        console.log(
+          `[internal-chat-testflow] session ${session.id} BRANCH=collecting-continue coreMissing=[${coreMissing.join("|")}] askCount=${askCount}`,
+        );
+        await internalChatRepository.updateSession(session.id, orgId, {
+          intent: "enquiry",
+          enquiryStatus: "collecting",
+          enquirySlots: mergedSlots,
+          context: { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 },
+        });
+        const replyMessage = await persistReply(turn.reply);
+        return { replyMessage };
+      }
+
+      // Core complete (or ask-cap reached) — send the ONE grouped follow-up
+      // for whatever's still missing.
       console.log(`[internal-chat-testflow] session ${session.id} BRANCH=grouped-ask (setting groupedAskSent=true, missing=${missingBeforeCreate.join("|")})`);
       const groupedReply = await generateGroupedAsk(botConfig, kb, missingBeforeCreate, transcript);
       await internalChatRepository.updateSession(session.id, orgId, {
         intent: "enquiry",
         enquiryStatus: "collecting",
         enquirySlots: mergedSlots,
-        context: { ...prevContext, lastReply: groupedReply, groupedAskSent: true },
+        context: { ...prevContext, lastReply: groupedReply, groupedAskSent: true, askCount: askCount + 1 },
       });
       const replyMessage = await persistReply(groupedReply);
       return { replyMessage };

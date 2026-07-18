@@ -7,6 +7,7 @@ import {
   audienceAllows,
   parseBotRules,
   buildRulesBlock,
+  generateTicketConfirmation,
 } from "../ai-conversation/ai-conversation.brain";
 import { adminDataService, type PendingAttachment } from "./admin-data.service";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
@@ -349,75 +350,110 @@ export const adminAgent = {
       ];
 
       let raw: string | undefined;
-      for (let iteration = 0; iteration < TOOL_CALL_MAX_ITERATIONS; iteration += 1) {
-        const response = await openai.chat.completions.create({
-          model: CHAT_MODEL,
-          temperature: 0.4,
-          max_tokens: 700,
-          messages: chatMessages,
-          tools: [getMyQuotesTool, getMyEnquiriesTool, getMyTicketsTool, getMyFilesTool, getMyFileLinkTool, openTicketTool],
-        });
-        const assistantMessage = response.choices[0]?.message;
-        if (!assistantMessage) break;
 
-        const toolCalls = assistantMessage.tool_calls;
-        if (!toolCalls || toolCalls.length === 0) {
-          raw = assistantMessage.content?.trim();
-          break;
-        }
-
-        chatMessages.push({
-          role: "assistant",
-          content: assistantMessage.content ?? null,
-          tool_calls: toolCalls,
-        });
-
-        for (const toolCall of toolCalls) {
-          const toolResult =
-            toolCall.type === "function" && toolCall.function.name === GET_MY_QUOTES_TOOL_NAME
-              ? await executeGetMyQuotesTool(orgId, clientId)
-              : toolCall.type === "function" && toolCall.function.name === GET_MY_ENQUIRIES_TOOL_NAME
-                ? await executeGetMyEnquiriesTool(orgId, clientId)
-                : toolCall.type === "function" && toolCall.function.name === GET_MY_TICKETS_TOOL_NAME
-                  ? await executeGetMyTicketsTool(orgId, clientId)
-                  : toolCall.type === "function" && toolCall.function.name === GET_MY_FILES_TOOL_NAME
-                    ? await executeGetMyFilesTool(clientId)
-                    : toolCall.type === "function" && toolCall.function.name === GET_MY_FILE_LINK_TOOL_NAME
-                      ? await executeGetMyFileLinkTool(clientId, toolCall.function.arguments)
-                      : toolCall.type === "function" && toolCall.function.name === OPEN_TICKET_TOOL_NAME
-                        ? await executeOpenTicketTool(orgId, clientId, toolCall.function.arguments, pending)
-                        : { error: "Unknown tool" };
-          // Attachments belong to the FIRST ticket opened this turn — don't
-          // re-attach them if the model opens another ticket. Track whether a
-          // ticket was actually created (for the backstop + dedupe flag).
-          if (toolCall.type === "function" && toolCall.function.name === OPEN_TICKET_TOOL_NAME) {
-            pending = [];
-            if ((toolResult as { created?: boolean }).created) ticketOpened = true;
-          }
-          chatMessages.push({
-            role: "tool",
-            tool_call_id: toolCall.id,
-            content: JSON.stringify(toolResult),
+      // forceTicketNow with no ticket open yet: the outcome is already fixed
+      // (open a ticket, canned confirmation below) — skip the up-to-
+      // TOOL_CALL_MAX_ITERATIONS exploratory tool loop and the possible
+      // tool_choice:"none" finalizer entirely, and make ONE call forced onto
+      // open_ticket instead (the model still authors a sensible subject/
+      // description from the conversation history). If a ticket was already
+      // opened earlier this conversation, forceTicketNow is moot — fall through
+      // to the normal loop below (unchanged behavior).
+      if (forceTicketNow && !ticketAlreadyOpen) {
+        try {
+          const forced = await openai.chat.completions.create({
+            model: CHAT_MODEL,
+            temperature: 0.2,
+            max_tokens: 300,
+            messages: chatMessages,
+            tools: [openTicketTool],
+            tool_choice: { type: "function", function: { name: OPEN_TICKET_TOOL_NAME } },
           });
+          const call = forced.choices[0]?.message?.tool_calls?.[0];
+          if (call && call.type === "function" && call.function.name === OPEN_TICKET_TOOL_NAME) {
+            const result = await executeOpenTicketTool(orgId, clientId, call.function.arguments, pending);
+            pending = [];
+            if ((result as { created?: boolean }).created) ticketOpened = true;
+          }
+          console.log(`[admin-agent] forceTicketNow single forced open_ticket call ticketOpened=${ticketOpened}`);
+        } catch (err) {
+          // Swallow and fall through to the backstop below, which retries the
+          // forced call once more rather than leaving the turn reply-less.
+          console.error("[admin-agent] forceTicketNow single forced open_ticket call failed:", err);
         }
-      }
+      } else {
+        for (let iteration = 0; iteration < TOOL_CALL_MAX_ITERATIONS; iteration += 1) {
+          const response = await openai.chat.completions.create({
+            model: CHAT_MODEL,
+            temperature: 0.4,
+            max_tokens: 700,
+            messages: chatMessages,
+            tools: [getMyQuotesTool, getMyEnquiriesTool, getMyTicketsTool, getMyFilesTool, getMyFileLinkTool, openTicketTool],
+          });
+          const assistantMessage = response.choices[0]?.message;
+          if (!assistantMessage) break;
 
-      if (!raw) {
-        const finalResponse = await openai.chat.completions.create({
-          model: CHAT_MODEL,
-          temperature: 0.4,
-          max_tokens: 700,
-          messages: chatMessages,
-          tool_choice: "none",
-        });
-        raw = finalResponse.choices[0]?.message?.content?.trim();
+          const toolCalls = assistantMessage.tool_calls;
+          if (!toolCalls || toolCalls.length === 0) {
+            raw = assistantMessage.content?.trim();
+            break;
+          }
+
+          chatMessages.push({
+            role: "assistant",
+            content: assistantMessage.content ?? null,
+            tool_calls: toolCalls,
+          });
+
+          for (const toolCall of toolCalls) {
+            const toolResult =
+              toolCall.type === "function" && toolCall.function.name === GET_MY_QUOTES_TOOL_NAME
+                ? await executeGetMyQuotesTool(orgId, clientId)
+                : toolCall.type === "function" && toolCall.function.name === GET_MY_ENQUIRIES_TOOL_NAME
+                  ? await executeGetMyEnquiriesTool(orgId, clientId)
+                  : toolCall.type === "function" && toolCall.function.name === GET_MY_TICKETS_TOOL_NAME
+                    ? await executeGetMyTicketsTool(orgId, clientId)
+                    : toolCall.type === "function" && toolCall.function.name === GET_MY_FILES_TOOL_NAME
+                      ? await executeGetMyFilesTool(clientId)
+                      : toolCall.type === "function" && toolCall.function.name === GET_MY_FILE_LINK_TOOL_NAME
+                        ? await executeGetMyFileLinkTool(clientId, toolCall.function.arguments)
+                        : toolCall.type === "function" && toolCall.function.name === OPEN_TICKET_TOOL_NAME
+                          ? await executeOpenTicketTool(orgId, clientId, toolCall.function.arguments, pending)
+                          : { error: "Unknown tool" };
+            // Attachments belong to the FIRST ticket opened this turn — don't
+            // re-attach them if the model opens another ticket. Track whether a
+            // ticket was actually created (for the backstop + dedupe flag).
+            if (toolCall.type === "function" && toolCall.function.name === OPEN_TICKET_TOOL_NAME) {
+              pending = [];
+              if ((toolResult as { created?: boolean }).created) ticketOpened = true;
+            }
+            chatMessages.push({
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(toolResult),
+            });
+          }
+        }
+
+        if (!raw) {
+          const finalResponse = await openai.chat.completions.create({
+            model: CHAT_MODEL,
+            temperature: 0.4,
+            max_tokens: 700,
+            messages: chatMessages,
+            tool_choice: "none",
+          });
+          raw = finalResponse.choices[0]?.message?.content?.trim();
+        }
       }
 
       // Backstop: force a ticket when EITHER the model told the customer it's
       // logged / a colleague will follow up but never called open_ticket, OR the
       // driver says we've already asked once and must stop re-asking
-      // (forceTicketNow). The model authors the subject/description under a forced
-      // tool call. Skipped if a ticket was already opened earlier.
+      // (forceTicketNow) — including a retry if the single forced call above
+      // errored or the model didn't comply. The model authors the subject/
+      // description under a forced tool call. Skipped if a ticket was already
+      // opened earlier.
       if (!ticketOpened && !ticketAlreadyOpen && (forceTicketNow || (raw && CLAIMS_ACTION_RE.test(raw)))) {
         try {
           chatMessages.push({
@@ -437,21 +473,23 @@ export const adminAgent = {
           if (call && call.type === "function" && call.function.name === OPEN_TICKET_TOOL_NAME) {
             const result = await executeOpenTicketTool(orgId, clientId, call.function.arguments, pending);
             pending = [];
-            if ((result as { created?: boolean }).created) {
-              ticketOpened = true;
-              // If we forced the ticket because we'd already asked (rather than
-              // because the model claimed it logged something), its `raw` reply may
-              // still be asking for more — replace it with a clean confirmation so
-              // we don't re-ask after having just logged it.
-              if (forceTicketNow) {
-                raw = "Thanks — I've logged this with the team and a colleague will be in touch shortly to get it sorted for you.";
-              }
-            }
+            if ((result as { created?: boolean }).created) ticketOpened = true;
             console.log(`[admin-agent] forced open_ticket backstop created=${(result as { created?: boolean }).created} force=${!!forceTicketNow}`);
           }
         } catch (err) {
           console.error("[admin-agent] forced open_ticket backstop failed:", err);
         }
+      }
+
+      // forceTicketNow exists to stop the customer being re-asked once a ticket
+      // is opened THIS turn — whether the model called open_ticket during the
+      // main loop above or the backstop just above forced it. Apply the canned
+      // confirmation in EITHER case so `raw` never still asks for more detail.
+      // (3.3) The MEANING is fixed (ticket logged, team will follow up, no
+      // further questions) — generate the WORDING in the org's voice/language
+      // via the brain, falling back to the fixed English line on any failure.
+      if (forceTicketNow && ticketOpened) {
+        raw = await generateTicketConfirmation(botConfig, kb);
       }
 
       return raw ? { reply: raw, ticketOpened } : null;

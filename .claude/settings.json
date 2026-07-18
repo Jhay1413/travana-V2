@@ -48,7 +48,12 @@
       "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/0a94c86f-5a16-49b1-99ab-0eeb4367e08d/scratchpad/re-test4.cjs\")",
       "Bash(findstr /i \"type-check tsc build\")",
       "Bash(echo \"exists: $?\")",
-      "Bash(npx vitest *)"
+      "Bash(npx vitest *)",
+      "Bash(npx tsc *)",
+      "Bash(wc -l /tmp_typecheck_out.txt)",
+      "Bash(grep -c \"error TS\" /tmp_typecheck_out.txt)",
+      "Bash(grep -E \"ai-conversation.brain|reply-worker.service|internal-chat-testflow.service|admin-agent.service\" /tmp_typecheck_out.txt)",
+      "Bash(dir /s /b server\\\\*.test.ts)"
     ],
     "deny": [
       "Bash(drizzle-kit push:*)",

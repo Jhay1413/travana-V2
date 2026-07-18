@@ -48,12 +48,20 @@ export function samePhoneNumber(a: string | null | undefined, b: string | null |
 // traveller's number from a plain reply ("his number is 09355152084") without
 // depending on the model to echo it back in a structured field every turn.
 // Requires 10–15 digits so it won't grab a budget ("1000"), a date, or "4 nights".
+// It ALSO requires a plausible phone SHAPE — a leading "+" (international), a
+// leading "0" (UK/local trunk prefix), or common phone separators (space,
+// hyphen, dot, parens) — so a bare contiguous digit run like a booking
+// reference ("the ref is 12345678901") isn't mistaken for a phone number.
 export function extractPhoneNumber(text: string): string | null {
   const candidates = (text || "").match(/[+(]?\d[\d\s().-]{7,}\d/g);
   if (!candidates) return null;
-  for (const c of candidates) {
+  for (const raw of candidates) {
+    const c = raw.trim();
     const digits = c.replace(/\D/g, "");
-    if (digits.length >= 10 && digits.length <= 15) return c.trim();
+    if (digits.length < 10 || digits.length > 15) continue;
+    const hasSeparator = /[\s().-]/.test(c);
+    if (!c.startsWith("+") && !c.startsWith("0") && !hasSeparator) continue;
+    return c;
   }
   return null;
 }
