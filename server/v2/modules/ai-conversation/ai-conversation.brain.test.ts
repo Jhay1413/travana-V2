@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  audienceAllows,
   buildRulesBlock,
   buildSystemPrompt,
   decideDeterministicRoute,
@@ -11,6 +12,7 @@ import {
   missingCoreFieldsFor,
   normalizeTurnSlots,
   parseBotRules,
+  retrievedAudienceAllows,
   shouldCreateEnquiryNow,
   shouldForceTicketNow,
   type BotRule,
@@ -346,6 +348,28 @@ describe("shouldCreateEnquiryNow (create-immediately gate — no more grouped-as
   });
 });
 
+describe("retrievedAudienceAllows", () => {
+  it("fails CLOSED — null/undefined/missing audience is never visible to any bot, unlike audienceAllows", () => {
+    expect(retrievedAudienceAllows(null, "sales")).toBe(false);
+    expect(retrievedAudienceAllows(undefined, "sales")).toBe(false);
+    expect(retrievedAudienceAllows(null, "admin")).toBe(false);
+    expect(retrievedAudienceAllows(undefined, "internal")).toBe(false);
+
+    // The plain (fail-OPEN) variant defaults the same inputs to "general" —
+    // confirms the two intentionally diverge only on missing audience.
+    expect(audienceAllows(null, "sales")).toBe(true);
+    expect(audienceAllows(undefined, "sales")).toBe(true);
+  });
+
+  it("behaves exactly like audienceAllows once audience is present", () => {
+    for (const bot of ["sales", "admin", "internal"] as const) {
+      for (const audience of ["general", "sales", "admin"]) {
+        expect(retrievedAudienceAllows(audience, bot)).toBe(audienceAllows(audience, bot));
+      }
+    }
+  });
+});
+
 describe("buildSystemPrompt (prompt-caching prefix/tail ordering)", () => {
   it("renders the dynamic client line and retrieved-context blocks AFTER the static agency rules block", () => {
     const botConfig = {
@@ -373,7 +397,7 @@ describe("buildSystemPrompt (prompt-caching prefix/tail ordering)", () => {
     const kb: OrgKnowledgeBase[] = [];
 
     const retrieved: RetrievedContext = {
-      kb: [{ sourceId: "kb-1", content: "RETRIEVED-KB-MARKER", metadata: null, distance: 0 }],
+      kb: [{ sourceId: "kb-1", content: "RETRIEVED-KB-MARKER", metadata: { audience: "general" }, distance: 0 }],
       quotes: [{ sourceId: "quote-1", content: "RETRIEVED-QUOTE-MARKER", metadata: null, distance: 0 }],
     };
 
@@ -410,7 +434,7 @@ describe("buildSystemPrompt (prompt-caching prefix/tail ordering)", () => {
       } as unknown as OrgKnowledgeBase,
     ];
     const retrieved: RetrievedContext = {
-      kb: [{ sourceId: "kb-2", content: "RETRIEVED-ONLY-MARKER", metadata: null, distance: 0 }],
+      kb: [{ sourceId: "kb-2", content: "RETRIEVED-ONLY-MARKER", metadata: { audience: "general" }, distance: 0 }],
       quotes: [],
     };
 
@@ -418,6 +442,26 @@ describe("buildSystemPrompt (prompt-caching prefix/tail ordering)", () => {
 
     expect(prompt).toContain("Company information (use it to answer accurately):\n- Static Fact: STATIC-KB-CONTENT");
     expect(prompt).toContain("Possibly relevant knowledge for THIS message:\n- RETRIEVED-ONLY-MARKER");
+  });
+
+  it("excludes retrieved-KB matches with no audience in their metadata (fail-closed, not defaulted to general)", () => {
+    const retrieved: RetrievedContext = {
+      kb: [
+        // No `audience` key at all — e.g. a stale/pre-migration embedding row.
+        { sourceId: "kb-no-audience", content: "SHOULD-NOT-APPEAR-MARKER", metadata: {}, distance: 0 },
+        { sourceId: "kb-null-metadata", content: "ALSO-SHOULD-NOT-APPEAR-MARKER", metadata: null, distance: 0 },
+        { sourceId: "kb-general", content: "SHOULD-APPEAR-MARKER", metadata: { audience: "general" }, distance: 0 },
+        { sourceId: "kb-admin", content: "ADMIN-SHOULD-NOT-APPEAR-MARKER", metadata: { audience: "admin" }, distance: 0 },
+      ],
+      quotes: [],
+    };
+
+    const prompt = buildSystemPrompt(null, [], null, true, retrieved);
+
+    expect(prompt).not.toContain("SHOULD-NOT-APPEAR-MARKER");
+    expect(prompt).not.toContain("ALSO-SHOULD-NOT-APPEAR-MARKER");
+    expect(prompt).not.toContain("ADMIN-SHOULD-NOT-APPEAR-MARKER");
+    expect(prompt).toContain("SHOULD-APPEAR-MARKER");
   });
 });
 

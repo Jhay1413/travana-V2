@@ -9,28 +9,55 @@ function getOpenAI(): OpenAI {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
+// The model reliably returns `null` (not `undefined`) for fields it can't
+// infer, despite the prompt asking for "" / [] / null. Zod's `.default()`
+// only fires on `undefined`, so every field is preprocessed to turn `null`
+// into `undefined` first — that's what makes the defaults below actually
+// apply to a `null` value instead of failing validation.
+const nullToUndefined = (v: unknown): unknown => (v === null ? undefined : v);
+
+// Same idea for array fields: strip `null`/`undefined` entries out of the
+// array itself (e.g. `["Greece", null]`) so a single bad element can't fail
+// the whole array.
+const arrayNullToUndefined = (v: unknown): unknown => {
+  if (v === null || v === undefined) return undefined;
+  if (Array.isArray(v)) return v.filter((entry) => entry !== null && entry !== undefined);
+  return v;
+};
+
 // Validation for the model's JSON so a malformed field can't break the client.
 // Everything is coerced to a safe default rather than rejected.
-const intentSchema = z.object({
-  enquiryTitle: z.string().default(""),
-  holidayType: z.string().default(""),
-  countries: z.array(z.string()).default([]),
-  destinations: z.array(z.string()).default([]),
-  resorts: z.array(z.string()).default([]),
-  departureAirports: z.array(z.string()).default([]),
-  boardBasis: z.array(z.string()).default([]),
-  starRating: z.string().default(""),
-  travelDate: z.string().default(""),
-  flexibility: z.string().default(""),
+// Exported so it can be unit tested independently of the OpenAI call.
+export const intentSchema = z.object({
+  // NOTE: `.default()` must live INSIDE the preprocess (on the inner schema),
+  // not chained after it — ZodDefault only substitutes its default when the
+  // raw value handed to it is `undefined`. If `.default()` were chained
+  // after `z.preprocess()`, a `null` input would reach ZodDefault first
+  // (still non-undefined), get forwarded into the preprocess step, get
+  // converted to `undefined` there, and then fail the inner schema (which
+  // has no default of its own) instead of resolving to a default.
+  enquiryTitle: z.preprocess(nullToUndefined, z.string().default("")),
+  holidayType: z.preprocess(nullToUndefined, z.string().default("")),
+  countries: z.preprocess(arrayNullToUndefined, z.array(z.string()).default([])),
+  destinations: z.preprocess(arrayNullToUndefined, z.array(z.string()).default([])),
+  resorts: z.preprocess(arrayNullToUndefined, z.array(z.string()).default([])),
+  departureAirports: z.preprocess(arrayNullToUndefined, z.array(z.string()).default([])),
+  boardBasis: z.preprocess(arrayNullToUndefined, z.array(z.string()).default([])),
+  starRating: z.preprocess(nullToUndefined, z.string().default("")),
+  travelDate: z.preprocess(nullToUndefined, z.string().default("")),
+  flexibility: z.preprocess(nullToUndefined, z.string().default("")),
   nights: z.number().nullable().default(null),
-  adults: z.number().default(2),
-  children: z.number().default(0),
-  infants: z.number().default(0),
-  childAges: z.array(z.number()).default([]),
-  budget: z.union([z.string(), z.number()]).transform((v) => String(v ?? "")).default(""),
-  budgetType: z.string().default("Per Person"),
-  notes: z.string().default(""),
-  confidence: z.enum(["low", "medium", "high"]).default("low"),
+  adults: z.preprocess(nullToUndefined, z.number().default(2)),
+  children: z.preprocess(nullToUndefined, z.number().default(0)),
+  infants: z.preprocess(nullToUndefined, z.number().default(0)),
+  childAges: z.preprocess(arrayNullToUndefined, z.array(z.number()).default([])),
+  budget: z.preprocess(
+    (v) => v ?? "",
+    z.union([z.string(), z.number()]).transform((v) => String(v)),
+  ),
+  budgetType: z.preprocess(nullToUndefined, z.string().default("Per Person")),
+  notes: z.preprocess(nullToUndefined, z.string().default("")),
+  confidence: z.preprocess(nullToUndefined, z.enum(["low", "medium", "high"]).default("low")),
 });
 
 const SYSTEM_PROMPT = `You are an assistant for a UK travel agency. You read a customer conversation transcript and extract a structured holiday enquiry.

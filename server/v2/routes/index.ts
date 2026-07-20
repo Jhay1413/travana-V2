@@ -130,7 +130,7 @@ router.use('/referral-withdrawals', ...auth, referralWithdrawalRoutes);
 router.use('/wallet',             ...auth, walletRoutes);
 router.use('/sms',                ...auth, smsRoutes);
 router.use('/neon-clients',       ...auth, neonClientRoutes);
-router.use('/ai',                 isAuthenticated, aiAskRoutes);
+router.use('/ai',                 ...auth, aiAskRoutes);
 router.use('/ai-enquiry',         ...auth, aiEnquiryRoutes);
 router.use('/destination-guru',   ...auth, destinationGuruRoutes);
 router.use('/json-mapper',        isAuthenticated, jsonMapperRoutes);

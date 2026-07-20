@@ -8,6 +8,7 @@ import {
   isStyleExampleCategory,
   buildStyleExamplesBlock,
   audienceAllows,
+  retrievedAudienceAllows,
   parseBotRules,
   buildRulesBlock,
 } from "../ai-conversation/ai-conversation.brain";
@@ -451,7 +452,7 @@ function buildAssistantSystemPrompt(
   const activeKb = kb.filter((k) => k.isActive && audienceAllows(k.audience, "internal"));
   const factKb = activeKb.filter((k) => !isStyleExampleCategory(k.category));
   const factRetrievedKb = retrievedKb.filter(
-    (m) => !isStyleExampleCategory(metaCategory(m.metadata)) && audienceAllows(metaAudience(m.metadata), "internal"),
+    (m) => !isStyleExampleCategory(metaCategory(m.metadata)) && retrievedAudienceAllows(metaAudience(m.metadata), "internal"),
   );
   const kbLines = [...factKb.map((k) => `- ${k.title}: ${k.content}`), ...factRetrievedKb.map((m) => `- ${m.content}`)];
   if (kbLines.length) {
