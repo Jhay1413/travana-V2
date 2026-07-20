@@ -403,7 +403,7 @@ export const adminAgent = {
             tool_choice: { type: "function", function: { name: OPEN_TICKET_TOOL_NAME } },
             prompt_cache_key: orgId,
           });
-          logAiUsage("admin-agent:forceTicketNow", CHAT_MODEL, forced.usage, orgId);
+          logAiUsage("admin-agent:forceTicketNow", CHAT_MODEL, forced.usage, { orgId });
           const call = forced.choices[0]?.message?.tool_calls?.[0];
           if (call && call.type === "function" && call.function.name === OPEN_TICKET_TOOL_NAME) {
             const result = await executeOpenTicketTool(orgId, clientId, call.function.arguments, pending);
@@ -426,7 +426,7 @@ export const adminAgent = {
             tools: [getMyQuotesTool, getMyEnquiriesTool, getMyTicketsTool, getMyFilesTool, getMyFileLinkTool, openTicketTool],
             prompt_cache_key: orgId,
           });
-          logAiUsage("admin-agent:toolLoop", CHAT_MODEL, response.usage, orgId);
+          logAiUsage("admin-agent:toolLoop", CHAT_MODEL, response.usage, { orgId });
           const assistantMessage = response.choices[0]?.message;
           if (!assistantMessage) break;
 
@@ -481,7 +481,7 @@ export const adminAgent = {
             tool_choice: "none",
             prompt_cache_key: orgId,
           });
-          logAiUsage("admin-agent:finalize", CHAT_MODEL, finalResponse.usage, orgId);
+          logAiUsage("admin-agent:finalize", CHAT_MODEL, finalResponse.usage, { orgId });
           raw = finalResponse.choices[0]?.message?.content?.trim();
         }
       }
@@ -509,7 +509,7 @@ export const adminAgent = {
             tool_choice: { type: "function", function: { name: OPEN_TICKET_TOOL_NAME } },
             prompt_cache_key: orgId,
           });
-          logAiUsage("admin-agent:backstop", CHAT_MODEL, forced.usage, orgId);
+          logAiUsage("admin-agent:backstop", CHAT_MODEL, forced.usage, { orgId });
           const call = forced.choices[0]?.message?.tool_calls?.[0];
           if (call && call.type === "function" && call.function.name === OPEN_TICKET_TOOL_NAME) {
             const result = await executeOpenTicketTool(orgId, clientId, call.function.arguments, pending);

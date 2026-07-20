@@ -39,6 +39,18 @@ const SEED_PRICING: InsertModelPricing[] = [
     cachedInputMicrosPerMtok: 0,
     outputMicrosPerMtok: 0,
   },
+  {
+    model: "gpt-4o-mini",
+    inputMicrosPerMtok: 150_000,
+    cachedInputMicrosPerMtok: 75_000,
+    outputMicrosPerMtok: 600_000,
+  },
+  {
+    model: "gpt-3.5-turbo",
+    inputMicrosPerMtok: 500_000,
+    cachedInputMicrosPerMtok: 0,
+    outputMicrosPerMtok: 1_500_000,
+  },
 ];
 
 async function main() {

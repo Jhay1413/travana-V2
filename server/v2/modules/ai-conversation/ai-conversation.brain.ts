@@ -1,5 +1,6 @@
 import { CHAT_MODEL, UTILITY_MODEL, getOpenAI } from "../../utils/ai-model";
 import { usageService } from "../usage/usage.service";
+import type { AiUsageFeature } from "../usage/usage.types";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
 import type { AiTurn, EnquiryBeneficiary, EnquirySlots, RetrievedContext, RetrievedMatch, TranscriptMessage } from "./ai-conversation.types";
 
@@ -176,19 +177,31 @@ interface AiUsageLike {
   prompt_tokens_details?: { cached_tokens?: number } | null;
 }
 
+// Usage-metering context threaded (optionally) into logAiUsage and the brain
+// helpers below — lets a caller (e.g. the internal-chat test flow) attribute
+// usage to a different feature/user than the default customer-bot path
+// without every call site having to know about recordAiUsage directly.
+export interface AiUsageCtx {
+  orgId?: string;
+  feature?: AiUsageFeature;
+  userId?: string;
+  conversationId?: string;
+}
+
 // Prompt-caching observability: one log line per BIG-prompt completion call
 // (generateTurn / admin-agent) so cache hit rates are visible in production
 // logs. No PII — only the call-site tag, model, and token counts.
 // `prompt_tokens_details`/`cached_tokens` may be absent on the response, so
 // this stays null-safe throughout.
-// `orgId` is optional usage-metering context (server-derived). When present,
-// this also persists the usage via `usageService.recordAiUsage` (feature
-// "sendseven_bot", fail-open) — see docs/ai-usage-limits-plan.md Phase 1c.
-// Some call sites (e.g. parseAvailabilityTime, the router before its caller
-// threads an org id) don't have one in scope yet; those keep logging without
-// recording rather than being skipped outright.
-export function logAiUsage(site: string, model: string, usage: AiUsageLike | null | undefined, orgId?: string): void {
+// `ctx.orgId` is optional usage-metering context (server-derived). When
+// present, this also persists the usage via `usageService.recordAiUsage`
+// (feature defaults to "sendseven_bot", fail-open) — see
+// docs/ai-usage-limits-plan.md Phase 1c. Some call sites (e.g. the router
+// before its caller threads an org id) don't have one in scope yet; those
+// keep logging without recording rather than being skipped outright.
+export function logAiUsage(site: string, model: string, usage: AiUsageLike | null | undefined, ctx?: AiUsageCtx): void {
   if (!usage) return;
+  const orgId = ctx?.orgId;
   const cached = usage.prompt_tokens_details?.cached_tokens;
   console.log(
     `[ai-usage] site=${site} model=${model}${orgId ? ` org=${orgId}` : ""} prompt=${usage.prompt_tokens} cached=${cached ?? "n/a"} completion=${usage.completion_tokens}`,
@@ -196,7 +209,7 @@ export function logAiUsage(site: string, model: string, usage: AiUsageLike | nul
   if (orgId) {
     void usageService.recordAiUsage({
       orgId,
-      feature: "sendseven_bot",
+      feature: ctx?.feature ?? "sendseven_bot",
       site,
       model,
       usage: {
@@ -204,6 +217,8 @@ export function logAiUsage(site: string, model: string, usage: AiUsageLike | nul
         completionTokens: usage.completion_tokens,
         cachedTokens: usage.prompt_tokens_details?.cached_tokens,
       },
+      userId: ctx?.userId,
+      conversationId: ctx?.conversationId,
     });
   }
 }
@@ -318,6 +333,10 @@ export async function generateTransitionReply(
   // callback wording refers to the traveller ("a call to run through James's
   // options") rather than addressing the sender ("go through YOUR details").
   onBehalfOfName?: string,
+  // Optional usage-metering context override — when provided, takes
+  // precedence over the default `{ orgId: botConfig?.orgId }` (e.g. the
+  // internal-chat test flow tags this "staff_chat_test" instead).
+  ctx?: AiUsageCtx,
 ): Promise<string> {
   const forFriend = onBehalfOfName?.trim();
   const fallback =
@@ -357,7 +376,7 @@ export async function generateTransitionReply(
       temperature: 0.7,
       messages: [{ role: "system", content: parts.join("\n\n") }],
     });
-    logAiUsage("transitionReply", UTILITY_MODEL, res.usage, botConfig?.orgId);
+    logAiUsage("transitionReply", UTILITY_MODEL, res.usage, ctx ?? { orgId: botConfig?.orgId });
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
@@ -380,6 +399,8 @@ export async function generateBeneficiaryAsk(
   kind: BeneficiaryAskKind,
   // The traveller's name, when already known (only relevant for kind="phone").
   travellerName?: string,
+  // Optional usage-metering context override — see generateTransitionReply.
+  ctx?: AiUsageCtx,
 ): Promise<string> {
   const name = travellerName?.trim();
   const fallback =
@@ -414,7 +435,7 @@ export async function generateBeneficiaryAsk(
       temperature: 0.7,
       messages: [{ role: "system", content: parts.join("\n\n") }],
     });
-    logAiUsage("beneficiaryAsk", UTILITY_MODEL, res.usage, botConfig?.orgId);
+    logAiUsage("beneficiaryAsk", UTILITY_MODEL, res.usage, ctx ?? { orgId: botConfig?.orgId });
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
@@ -449,7 +470,7 @@ export async function generateTicketConfirmation(botConfig: OrgBotConfig | null,
       temperature: 0.7,
       messages: [{ role: "system", content: parts.join("\n\n") }],
     });
-    logAiUsage("ticketConfirmation", UTILITY_MODEL, res.usage, botConfig?.orgId);
+    logAiUsage("ticketConfirmation", UTILITY_MODEL, res.usage, { orgId: botConfig?.orgId });
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
@@ -504,7 +525,7 @@ export async function generateGroupedAsk(
       temperature: 0.7,
       messages: [{ role: "system", content: parts.join("\n\n") }],
     });
-    logAiUsage("groupedAsk", UTILITY_MODEL, res.usage, botConfig?.orgId);
+    logAiUsage("groupedAsk", UTILITY_MODEL, res.usage, { orgId: botConfig?.orgId });
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
@@ -522,6 +543,8 @@ export async function generateGeneralReply(
   kb: OrgKnowledgeBase[],
   transcript: string,
   clientRecord: NeonClient | null,
+  // Optional usage-metering context override — see generateTransitionReply.
+  ctx?: AiUsageCtx,
 ): Promise<string> {
   const fallback = "Hi! How can I help you today?";
   try {
@@ -571,6 +594,7 @@ export async function generateGeneralReply(
         { role: "user", content: `Conversation so far:\n<transcript>\n${transcript}\n</transcript>\n\nReply to the customer's latest message.` },
       ],
     });
+    logAiUsage("generateGeneralReply", CHAT_MODEL, res.usage, ctx ?? { orgId: botConfig?.orgId });
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
@@ -948,6 +972,8 @@ export async function generateTurn(
   slots: EnquirySlots,
   knownClient: boolean,
   retrieved?: RetrievedContext,
+  // Optional usage-metering context override — see generateTransitionReply.
+  ctx?: AiUsageCtx,
 ): Promise<AiTurn> {
   const fallback: AiTurn = { hand_off: true, intent: "other", slots: {}, client: {}, reply: FALLBACK_REPLY };
 
@@ -976,7 +1002,7 @@ export async function generateTurn(
         },
       ],
     });
-    logAiUsage("generateTurn", CHAT_MODEL, response.usage, botConfig?.orgId);
+    logAiUsage("generateTurn", CHAT_MODEL, response.usage, ctx ?? { orgId: botConfig?.orgId });
     raw = response.choices[0]?.message?.content?.trim();
   } catch (err) {
     console.error("[ai-conversation.brain] generateTurn OpenAI call failed:", err instanceof Error ? err.message : err);
@@ -1255,7 +1281,7 @@ export function buildEnquirySummary(slots: EnquirySlots): string {
 // Best-effort extraction of the date/time the customer says they're available
 // for a callback, in Europe/London terms. Returns null if nothing usable was
 // stated (the task is still created — just with no due date).
-export async function parseAvailabilityTime(text: string): Promise<Date | null> {
+export async function parseAvailabilityTime(text: string, ctx?: AiUsageCtx): Promise<Date | null> {
   const now = new Date();
   let raw: string | undefined;
   try {
@@ -1278,7 +1304,7 @@ export async function parseAvailabilityTime(text: string): Promise<Date | null> 
         { role: "user", content: text },
       ],
     });
-    logAiUsage("availabilityParse", UTILITY_MODEL, response.usage);
+    logAiUsage("availabilityParse", UTILITY_MODEL, response.usage, ctx);
     raw = response.choices[0]?.message?.content?.trim();
   } catch (err) {
     console.error("[ai-conversation.brain] parseAvailabilityTime OpenAI call failed:", err instanceof Error ? err.message : err);

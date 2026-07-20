@@ -24,7 +24,7 @@ import {
   type BeneficiaryAskKind,
 } from "../ai-conversation/ai-conversation.brain";
 import { classifyConversationRoute } from "../ai-conversation/conversation-router";
-import type { EnquirySlots, RetrievedContext, RetrievedMatch, TranscriptMessage } from "../ai-conversation/ai-conversation.types";
+import type { AiTurn, EnquirySlots, RetrievedContext, RetrievedMatch, TranscriptMessage } from "../ai-conversation/ai-conversation.types";
 import { botConfigRepository } from "../bot-config/bot-config.repository";
 import { knowledgeBaseRepository } from "../knowledge-base/knowledge-base.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
@@ -250,6 +250,9 @@ export const internalChatTestflowService = {
             latestText: userText,
             enquiryInFlight,
             priorDomainAdmin: prevContext.domain === "admin",
+            orgId,
+            feature: "staff_chat_test",
+            userId: scope.userId ?? undefined,
           });
     console.log(
       `[internal-chat-testflow] session=${session.id} ROUTE=${route} enquiryInFlight=${enquiryInFlight} ` +
@@ -262,7 +265,11 @@ export const internalChatTestflowService = {
     // needed, so this skips both the onboarding gate and the enquiry bot's
     // slot-filling entirely.
     if (route === "general") {
-      const reply = await generateGeneralReply(botConfig, kb, transcript, existingClient);
+      const reply = await generateGeneralReply(botConfig, kb, transcript, existingClient, {
+        orgId,
+        feature: "staff_chat_test",
+        userId: scope.userId ?? undefined,
+      });
       await internalChatRepository.updateSession(session.id, orgId, {
         intent: "other",
         context: { ...prevContext, lastReply: reply },
@@ -271,11 +278,42 @@ export const internalChatTestflowService = {
       return { replyMessage };
     }
 
+    // Vector retrieval (best-effort): KB always (when the static KB exceeds
+    // the prompt budget), past quotes only for enquiry-ish turns. Computed up
+    // here — BEFORE the onboarding gate — so the onboarding generateTurn call
+    // gets the same retrieved context as the sales call, and so a turn that
+    // completes onboarding can reuse that one call instead of running
+    // generateTurn twice. Mirrors reply-worker.
+    let retrieved: RetrievedContext = { kb: [], quotes: [] };
+    if (route === "sales") {
+      const enquiryish =
+        enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
+      const kbOverflow = kbExceedsBudget(kb);
+      const [kbMatches, quoteMatches] = await Promise.all([
+        kbOverflow
+          ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: userText, limit: 3, audience: "sales" })
+          : Promise.resolve([] as RetrievedMatch[]),
+        enquiryish
+          ? aiEmbeddingsService.retrieve({ orgId, sourceType: "quote", query: `${userText} ${JSON.stringify(priorSlots)}`, limit: 4 })
+          : Promise.resolve([] as RetrievedMatch[]),
+      ]);
+      retrieved = { kb: kbMatches, quotes: quoteMatches };
+    }
+
+    // When onboarding completes in this same message, its turn is reused by
+    // the sales section below instead of calling generateTurn a second time
+    // with the resolved client. Mirrors reply-worker's firstTurn reuse.
+    let firstTurn: AiTurn | null = null;
+
     // Client onboarding gate: for an unknown synthetic contact, collect full
     // name + phone ONLY (no email), then create/reuse the test client and
     // fall through to process the enquiry turn in the same call.
     if (!knownClient) {
-      const onboard = await generateTurn(botConfig, kb, null, transcript, enquiryStatus, priorSlots, false);
+      const onboard = await generateTurn(botConfig, kb, null, transcript, enquiryStatus, priorSlots, false, retrieved, {
+        orgId,
+        feature: "staff_chat_test",
+        userId: scope.userId ?? undefined,
+      });
       console.log(
         `[internal-chat-testflow] session=${session.id} onboarding (unknown contact) handoff=${onboard.hand_off} ` +
           `hasName=${!!onboard.client?.fullName} hasPhone=${!!onboard.client?.phone} onBehalf=${!!onboard.beneficiary?.onBehalf}`,
@@ -354,6 +392,10 @@ export const internalChatTestflowService = {
           await internalChatRepository.updateSession(session.id, orgId, { clientId, context: { ...prevContext } });
           console.log(`[internal-chat-testflow] session ${session.id} linked client ${clientId} (collected details)`);
         }
+        // Onboarding resolved name+phone with no early return — the sales
+        // section below reuses this turn's reply/slots/intent instead of
+        // calling generateTurn again (mirrors reply-worker).
+        firstTurn = onboard;
       }
     }
 
@@ -425,24 +467,16 @@ export const internalChatTestflowService = {
     }
 
     // ── Sales / enquiry bot (UNCHANGED flow) ───────────────────────────────
-    // Vector retrieval (best-effort): KB always, past quotes only for
-    // enquiry-ish turns.
-    const enquiryish =
-      enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
-    // Skip the knowledge retrieval when the static KB already fits the prompt
-    // budget — see reply-worker's mirror of this for the full rationale.
-    const kbOverflow = kbExceedsBudget(kb);
-    const [kbMatches, quoteMatches] = await Promise.all([
-      kbOverflow
-        ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: userText, limit: 3 })
-        : Promise.resolve([] as RetrievedMatch[]),
-      enquiryish
-        ? aiEmbeddingsService.retrieve({ orgId, sourceType: "quote", query: `${userText} ${JSON.stringify(priorSlots)}`, limit: 4 })
-        : Promise.resolve([] as RetrievedMatch[]),
-    ]);
-    const retrieved: RetrievedContext = { kb: kbMatches, quotes: quoteMatches };
-
-    const turn = await generateTurn(botConfig, kb, clientRecord, transcript, enquiryStatus, priorSlots, true, retrieved);
+    // Retrieval was computed above (before the onboarding gate). When this
+    // same message completed onboarding, reuse that turn instead of a second
+    // generateTurn call — mirrors reply-worker.
+    const turn =
+      firstTurn ??
+      (await generateTurn(botConfig, kb, clientRecord, transcript, enquiryStatus, priorSlots, true, retrieved, {
+        orgId,
+        feature: "staff_chat_test",
+        userId: scope.userId ?? undefined,
+      }));
 
     if (turn.hand_off) {
       const replyMessage = await doHandoff(prevContext, turn.reply);
@@ -495,7 +529,11 @@ export const internalChatTestflowService = {
           // (3.3, mirrors reply-worker) Generated in the org's voice/language via
           // the brain, falling back to the fixed English line on any failure.
           const askKind: BeneficiaryAskKind = !travellerName && !travellerPhone ? "name_and_phone" : !travellerName ? "name" : "phone";
-          const ask = await generateBeneficiaryAsk(botConfig, kb, askKind, travellerName);
+          const ask = await generateBeneficiaryAsk(botConfig, kb, askKind, travellerName, {
+            orgId,
+            feature: "staff_chat_test",
+            userId: scope.userId ?? undefined,
+          });
           await internalChatRepository.updateSession(session.id, orgId, {
             intent: "enquiry",
             enquiryStatus: "collecting",
@@ -604,11 +642,19 @@ export const internalChatTestflowService = {
       }
 
       const rawTime = userText.trim();
-      const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked", rawTime, prevContext.onBehalfOfName);
+      const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked", rawTime, prevContext.onBehalfOfName, {
+        orgId,
+        feature: "staff_chat_test",
+        userId: scope.userId ?? undefined,
+      });
       const enquiryId = session.enquiryId;
       let taskId: string | undefined;
       if (enquiryId && prevContext.enquiryOwnerUserId) {
-        const dueDate = await parseAvailabilityTime(rawTime);
+        const dueDate = await parseAvailabilityTime(rawTime, {
+          orgId,
+          feature: "staff_chat_test",
+          userId: scope.userId ?? undefined,
+        });
         const created = await taskService.create(
           {
             entityType: "enquiry",
@@ -682,7 +728,11 @@ export const internalChatTestflowService = {
       console.log(`[internal-chat-testflow] session ${session.id} Created enquiry ${enquiryId} — asking for callback time`);
 
       const onBehalfOfName = prevContext.beneficiary?.name;
-      const askTimeReply = await generateTransitionReply(botConfig, kb, "ask_callback_time", undefined, onBehalfOfName);
+      const askTimeReply = await generateTransitionReply(botConfig, kb, "ask_callback_time", undefined, onBehalfOfName, {
+        orgId,
+        feature: "staff_chat_test",
+        userId: scope.userId ?? undefined,
+      });
       await internalChatRepository.updateSession(session.id, orgId, {
         intent: "enquiry",
         enquiryId,

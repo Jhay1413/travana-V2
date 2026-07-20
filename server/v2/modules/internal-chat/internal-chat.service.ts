@@ -12,6 +12,7 @@ import {
   parseBotRules,
   buildRulesBlock,
 } from "../ai-conversation/ai-conversation.brain";
+import { usageService } from "../usage/usage.service";
 import { botConfigRepository } from "../bot-config/bot-config.repository";
 import { knowledgeBaseRepository } from "../knowledge-base/knowledge-base.repository";
 import { internalChatRepository } from "./internal-chat.repository";
@@ -610,6 +611,21 @@ export const internalChatService = {
           messages: chatMessages,
           tools: [pipelineStatsTool, searchClientsTool, getClientDetailsTool, getClientRecordsTool],
         });
+        if (response.usage) {
+          void usageService.recordAiUsage({
+            orgId,
+            feature: "staff_chat",
+            site: "internal-chat:toolLoop",
+            model: CHAT_MODEL,
+            usage: {
+              promptTokens: response.usage.prompt_tokens,
+              completionTokens: response.usage.completion_tokens,
+              cachedTokens: response.usage.prompt_tokens_details?.cached_tokens,
+              totalTokens: response.usage.total_tokens,
+            },
+            userId: scope.userId,
+          });
+        }
         const assistantMessage = response.choices[0]?.message;
         if (!assistantMessage) break;
 
@@ -662,6 +678,21 @@ export const internalChatService = {
           messages: chatMessages,
           tool_choice: "none",
         });
+        if (finalResponse.usage) {
+          void usageService.recordAiUsage({
+            orgId,
+            feature: "staff_chat",
+            site: "internal-chat:finalize",
+            model: CHAT_MODEL,
+            usage: {
+              promptTokens: finalResponse.usage.prompt_tokens,
+              completionTokens: finalResponse.usage.completion_tokens,
+              cachedTokens: finalResponse.usage.prompt_tokens_details?.cached_tokens,
+              totalTokens: finalResponse.usage.total_tokens,
+            },
+            userId: scope.userId,
+          });
+        }
         raw = finalResponse.choices[0]?.message?.content?.trim();
       }
     } catch (err) {

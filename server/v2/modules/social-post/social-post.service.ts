@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { format } from "date-fns";
 import { socialPostRepository } from "./social-post.repository";
+import { usageService } from "../usage/usage.service";
 import { AppError } from "../../utils/error-handler";
 import {
   scheduleOnlySocialsPost,
@@ -239,7 +240,7 @@ ${contactBlock}${deal.tourOperator && deal.tourOperator !== "N/A" ? `🏢 ${deal
 ${hashtagLine}`;
 }
 
-async function callOpenAI(prompt: string, systemPrompt: string, maxTokens: number): Promise<string> {
+async function callOpenAI(prompt: string, systemPrompt: string, maxTokens: number, orgId?: string | null): Promise<string> {
   const models = ["gpt-4o-mini", "gpt-3.5-turbo"];
   for (const model of models) {
     try {
@@ -251,6 +252,22 @@ async function callOpenAI(prompt: string, systemPrompt: string, maxTokens: numbe
         ],
         max_tokens: maxTokens,
       });
+      // Record only the model that actually succeeded — never the failed
+      // attempts before it in the fallback loop.
+      if (orgId && response.usage) {
+        void usageService.recordAiUsage({
+          orgId,
+          feature: "social_post",
+          site: "social-post:generate",
+          model,
+          usage: {
+            promptTokens: response.usage.prompt_tokens,
+            completionTokens: response.usage.completion_tokens,
+            cachedTokens: response.usage.prompt_tokens_details?.cached_tokens,
+            totalTokens: response.usage.total_tokens,
+          },
+        });
+      }
       return response.choices[0]?.message?.content?.trim() ?? "";
     } catch (err: any) {
       if (err?.status === 404 && model !== models[models.length - 1]) continue;
@@ -293,6 +310,10 @@ export interface GeneratePostParams {
 export const socialPostService = {
   async generatePost(params: GeneratePostParams, scope: ScopeOrTrusted): Promise<TravelDeal> {
     await assertQuoteInScope(params.quoteId, scope);
+    // Usage-metering context — null for platform_admin/trusted callers (no
+    // org to attribute the spend to), in which case callOpenAI just skips
+    // recording.
+    const usageOrgId = effectiveOrgId(scope);
 
     if (await socialPostRepository.isTestTransactionForQuote(params.quoteId)) {
       throw new AppError("Cannot generate social post for a test transaction", 400);
@@ -350,7 +371,8 @@ export const socialPostService = {
           ? `Write a short, catchy subtitle (max 10 words) for a hot tub lodge break at "${propertyLabel}" in ${locationLabel}. Make it cosy and romantic. Return ONLY the subtitle text, no quotes.`
           : `Write a short, catchy travel subtitle (max 10 words) for a "${safeTitle}" deal to ${safeDestination}. Return ONLY the subtitle text, no quotes.`,
         "You are a travel copywriter who writes punchy, engaging holiday taglines.",
-        30
+        30,
+        usageOrgId
       ),
       callOpenAI(
         isHotTub
@@ -371,14 +393,16 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
         isHotTub
           ? "You are a travel expert who writes engaging UK lodge and holiday park descriptions."
           : "You are a travel expert who writes engaging resort and hotel descriptions.",
-        200
+        200,
+        usageOrgId
       ),
       callOpenAI(
         isHotTub
           ? `Generate 10 relevant Facebook hashtags for a hot tub lodge break in ${locationLabel} (${safeNights} nights). Return ONLY the hashtags separated by spaces, e.g. #HotTubBreak #LodgeBreak`
           : `Generate 10 relevant Facebook hashtags for a travel deal to ${safeDestination} (${safeNights} nights). Return ONLY the hashtags separated by spaces, e.g. #TravelDeals #Tenerife`,
         "You are a social media expert for a travel agency.",
-        80
+        80,
+        usageOrgId
       ),
     ]);
 

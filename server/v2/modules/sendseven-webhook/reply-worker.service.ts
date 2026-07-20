@@ -46,6 +46,7 @@ import {
   systemScope,
 } from "./identity.service";
 import { taskService } from "../task/task.service";
+import { usageService } from "../usage/usage.service";
 import { adminAgent } from "./admin-agent.service";
 import type { PendingAttachment } from "./admin-data.service";
 import type { AiTurn, EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
@@ -314,6 +315,7 @@ export const replyWorker = {
               latestText,
               enquiryInFlight,
               priorDomainAdmin: prevContext.domain === "admin",
+              orgId,
             });
       console.log(
         `[sendseven-webhook] conv=${conversationId} ROUTE=${route} enquiryInFlight=${enquiryInFlight} ` +
@@ -720,7 +722,7 @@ export const replyWorker = {
             // than a hard-coded English string — one cheap, short-prompt call,
             // falling back to the fixed English line on any failure.
             const askKind: BeneficiaryAskKind = !travellerName && !travellerPhone ? "name_and_phone" : !travellerName ? "name" : "phone";
-            const ask = await generateBeneficiaryAsk(botConfig, kb, askKind, travellerName);
+            const ask = await generateBeneficiaryAsk(botConfig, kb, askKind, travellerName, { orgId });
             await sendReply(orgId, conversationId, message.channel_id, ask, mode, false);
             await conversationStateRepository.update(conversationId, {
               intent: "enquiry",
@@ -849,10 +851,10 @@ export const replyWorker = {
         }
 
         const rawTime = message.text!.trim();
-        const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked", rawTime, prevContext.onBehalfOfName);
+        const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked", rawTime, prevContext.onBehalfOfName, { orgId });
         let taskId: string | undefined;
         if (state.enquiryId && prevContext.enquiryOwnerUserId) {
-          const dueDate = await parseAvailabilityTime(rawTime);
+          const dueDate = await parseAvailabilityTime(rawTime, { orgId });
           const created = await taskService.create(
             {
               entityType: "enquiry",
@@ -930,7 +932,7 @@ export const replyWorker = {
         }
 
         const onBehalfOfName = prevContext.beneficiary?.name;
-        const askTimeReply = await generateTransitionReply(botConfig, kb, "ask_callback_time", undefined, onBehalfOfName);
+        const askTimeReply = await generateTransitionReply(botConfig, kb, "ask_callback_time", undefined, onBehalfOfName, { orgId });
         // enquiryStatus is already committed to "awaiting_availability" by the claim above.
         await conversationStateRepository.update(conversationId, {
           intent: "enquiry",
@@ -1095,6 +1097,9 @@ async function sendReply(
           conversation_id: conversationId,
           text: `🤖 Suggested reply:\n\n${text}`,
         });
+  if (mode === "send" || isHandoff) {
+    void usageService.recordSendsevenSend({ orgId, source: "ai" });
+  }
   const sentId = (sent as { id?: string } | null | undefined)?.id;
   if (sentId) await sendsevenWebhookRepository.markOurMessage(sentId, orgId);
 

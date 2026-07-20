@@ -1,5 +1,6 @@
 import { UTILITY_MODEL } from "../../utils/ai-model";
 import { getOpenAI, logAiUsage, looksLikeAdminAsk } from "./ai-conversation.brain";
+import type { AiUsageFeature } from "../usage/usage.types";
 
 // Upper-level ROUTER bot: a small, focused classifier that runs BEFORE any of
 // the specialized bots and decides which one handles the turn:
@@ -38,9 +39,13 @@ export async function classifyConversationRoute(params: {
   latestText: string;
   enquiryInFlight: boolean;
   priorDomainAdmin?: boolean;
-  // Optional — usage-metering only (server-derived). Not yet threaded by
-  // every caller; see docs/ai-usage-limits-plan.md Phase 1c.
+  // Optional — usage-metering context (server-derived). `orgId` alone keeps
+  // the default "sendseven_bot" feature tag; callers outside the customer
+  // bot flow (e.g. the internal-chat test flow) can override `feature`/
+  // `userId` too — see docs/ai-usage-limits-plan.md Phase 1c.
   orgId?: string;
+  feature?: AiUsageFeature;
+  userId?: string;
 }): Promise<ConversationRoute> {
   if (params.enquiryInFlight) return "sales";
   // Explicit admin phrasing (asks about records / supplies an id / complaint) →
@@ -64,7 +69,7 @@ export async function classifyConversationRoute(params: {
         },
       ],
     });
-    logAiUsage("router", UTILITY_MODEL, res.usage, params.orgId);
+    logAiUsage("router", UTILITY_MODEL, res.usage, { orgId: params.orgId, feature: params.feature, userId: params.userId });
     const raw = res.choices[0]?.message?.content?.trim();
     if (raw) {
       const parsed = JSON.parse(raw) as { route?: unknown };

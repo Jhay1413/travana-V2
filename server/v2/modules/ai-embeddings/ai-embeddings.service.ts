@@ -44,7 +44,7 @@ export const aiEmbeddingsService = {
     const content = input.content?.trim();
     if (!content) return;
     try {
-      const embedding = await embedText(content);
+      const embedding = await embedText(content, { orgId: input.orgId, site: "ai-embeddings:syncSource" });
       await aiEmbeddingsRepository.upsert({
         orgId: input.orgId,
         sourceType: input.sourceType,
@@ -99,7 +99,7 @@ export const aiEmbeddingsService = {
     const query = input.query?.trim();
     if (!query) return [];
     try {
-      const queryEmbedding = await embedText(query);
+      const queryEmbedding = await embedText(query, { orgId: input.orgId, site: "ai-embeddings:retrieve" });
       return await aiEmbeddingsRepository.search({
         orgId: input.orgId,
         sourceType: input.sourceType,
