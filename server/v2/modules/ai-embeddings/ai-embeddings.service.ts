@@ -1,9 +1,12 @@
 import { embedText } from "../../utils/embeddings";
-import { aiEmbeddingsRepository, type EmbeddingMatch } from "./ai-embeddings.repository";
+import { aiEmbeddingsRepository, type EmbeddingMatch, type RetrievalAudience } from "./ai-embeddings.repository";
 
 // Service: embed + persist + retrieve. Embeddings are a BEST-EFFORT enrichment —
 // a failure here must never break the caller (a KB save, a quote save, or a
 // webhook reply). So sync/remove swallow errors and retrieve returns [].
+
+export type { RetrievalAudience } from "./ai-embeddings.repository";
+export { DEFAULT_MAX_COSINE_DISTANCE } from "./ai-embeddings.repository";
 
 export type EmbeddingSourceType = "knowledge" | "quote";
 
@@ -20,6 +23,14 @@ export interface RetrieveInput {
   sourceType: EmbeddingSourceType;
   query: string;
   limit: number;
+  // Maximum cosine distance a match may have to be returned. Defaults to
+  // DEFAULT_MAX_COSINE_DISTANCE (applied by the repository) when omitted.
+  maxDistance?: number;
+  // When provided, restricts matches to rows whose metadata audience is
+  // visible to this bot (fail-closed on missing audience metadata). Omit to
+  // skip audience filtering (existing behaviour) — e.g. when the caller does
+  // its own JS-side audience filtering downstream.
+  audience?: RetrievalAudience;
 }
 
 export const aiEmbeddingsService = {
@@ -94,6 +105,8 @@ export const aiEmbeddingsService = {
         sourceType: input.sourceType,
         queryEmbedding,
         limit: input.limit,
+        maxDistance: input.maxDistance,
+        audience: input.audience,
       });
     } catch (err) {
       console.warn(

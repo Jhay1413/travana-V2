@@ -48,7 +48,7 @@ import {
 import { taskService } from "../task/task.service";
 import { adminAgent } from "./admin-agent.service";
 import type { PendingAttachment } from "./admin-data.service";
-import type { EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
+import type { AiTurn, EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
 import type { SsWebhookEvent } from "./sendseven-webhook.types";
 import type { SendsevenConversationState } from "@shared/schema";
 
@@ -327,8 +327,23 @@ export const replyWorker = {
       // slot-filling entirely.
       if (route === "general") {
         if (!hasText) return; // nothing to reply to
+        // Atomic per-message claim (same mechanism as claimAdminTurn — see
+        // sendsevenWebhookRepository.claimReplyTurn): SendSeven can redeliver
+        // the same message under a DIFFERENT event_id, which recordEvent's
+        // eventId dedupe doesn't catch. Without this, a redelivery would send
+        // a second, duplicate customer-facing reply. Losing the claim (or no
+        // message id to claim on) returns silently, same as the admin path.
+        if (!(await claimReply(conversationId, orgId, message.id))) return;
         const reply = await generateGeneralReply(botConfig, kb, transcript, client);
-        await sendReply(orgId, conversationId, message.channel_id, reply, mode, false);
+        try {
+          await sendReply(orgId, conversationId, message.channel_id, reply, mode, false);
+        } catch (err) {
+          // The claim was won but the send itself failed — release it so a
+          // genuine redelivery of this message can retry rather than the
+          // message going permanently unanswered.
+          await releaseReplyClaim(message.id);
+          throw err;
+        }
         await conversationStateRepository.update(conversationId, {
           intent: "other",
           lastAiReplyAt: new Date(),
@@ -337,11 +352,58 @@ export const replyWorker = {
         return;
       }
 
+      // ── Vector retrieval (Phase 5d) — best-effort context for the sales bot's
+      // generateTurn call(s). Computed up here (BEFORE the onboarding gate,
+      // instead of just before the sales generateTurn call further below) so
+      // an unknown-contact turn that completes onboarding in this SAME message
+      // (name+phone supplied) can pass it into ITS generateTurn call too — see
+      // the onboarding gate below, which then reuses that one turn's output
+      // instead of running generateTurn a second time with the resolved
+      // identity (fixing a double LLM call that discarded the first turn's
+      // extracted slots/reply). Gated to route==="sales" — general already
+      // returned above, and admin never uses retrieval — so this computes
+      // exactly when it used to (previously unreachable for admin/general
+      // since they always returned/branched off before reaching the old call
+      // site further down).
+      let retrieved: RetrievedContext = { kb: [], quotes: [] };
+      if (route === "sales") {
+        const enquiryish = enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
+        const kbOverflow = kbExceedsBudget(kb);
+        const [kbMatches, quoteMatches] = await Promise.all([
+          kbOverflow
+            // audience: "sales" pushes the audience filter into SQL so top-k
+            // returns eligible rows only (admin-audience KB can't crowd out
+            // sales matches). The JS-side retrievedAudienceAllows filter in
+            // buildSystemPrompt stays as defense-in-depth. Deliberately NOT
+            // set on the quote retrieval below — quote embeddings carry no
+            // audience metadata and the fail-closed predicate would exclude
+            // them all.
+            ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: latestText, limit: 3, audience: "sales" })
+            : Promise.resolve([] as RetrievedMatch[]),
+          enquiryish
+            ? aiEmbeddingsService.retrieve({
+                orgId,
+                sourceType: "quote",
+                query: `${latestText} ${JSON.stringify(priorSlots)}`,
+                limit: 4,
+              })
+            : Promise.resolve([] as RetrievedMatch[]),
+        ]);
+        retrieved = { kb: kbMatches, quotes: quoteMatches };
+      }
+
+      // Carries the onboarding turn's AiTurn forward when this SAME message
+      // both completes onboarding (name+phone given) AND has enough signal to
+      // continue straight into the sales flow — set below, just before falling
+      // through past the onboarding gate. When set, the sales section further
+      // down reuses it instead of calling generateTurn a second time (Fix 2).
+      let firstTurn: AiTurn | null = null;
+
       // Client onboarding gate: for an unknown contact, collect full name + phone
       // ONLY (no email). If both arrive (even in the same message), create + link
       // and FALL THROUGH to process the enquiry in the same turn.
       if (!knownClient) {
-        const onboard = await generateTurn(botConfig, kb, null, transcript, enquiryStatus, priorSlots, false);
+        const onboard = await generateTurn(botConfig, kb, null, transcript, enquiryStatus, priorSlots, false, retrieved);
         console.log(
           `[sendseven-webhook] conv=${conversationId} onboarding (unknown contact) mode=${mode} handoff=${onboard.hand_off} ` +
             `adminIntent=${sawAdminIntent} hasName=${!!onboard.client?.fullName} hasPhone=${!!onboard.client?.phone} ` +
@@ -352,7 +414,10 @@ export const replyWorker = {
         // Fall through to the sales flow, which collects the traveller's phone and
         // files the enquiry under them (the beneficiary gate below). Seed the
         // beneficiary context so the sales turn stays in on-behalf mode even if
-        // the model drops the flag on the next turn.
+        // the model drops the flag on the next turn. NOTE: firstTurn is
+        // deliberately left unset for a beneficiary enquiry — the sales turn
+        // there resolves a DIFFERENT identity (the traveller, not the sender)
+        // and genuinely needs its own fresh generateTurn call.
         const beneficiaryEnquiry = !!prevContext.beneficiary || !!onboard.beneficiary?.onBehalf;
         if (beneficiaryEnquiry && !prevContext.beneficiary) {
           prevContext.beneficiary = { name: cleanTravellerName(onboard.beneficiary?.fullName) };
@@ -427,6 +492,12 @@ export const replyWorker = {
           await conversationStateRepository.update(conversationId, { clientId, context: { ...prevContext } });
           console.log(`[sendseven-webhook] Linked client ${clientId} for conv ${conversationId} (collected details)`);
         }
+        // Onboarding completed (name+phone resolved) on THIS message, with no
+        // early return above — the sales section below reuses this turn's
+        // reply/slots/intent instead of calling generateTurn again (Fix 2:
+        // avoids discarding this turn's extraction and re-deriving it from the
+        // same transcript a second time).
+        firstTurn = onboard;
         } // end !beneficiaryEnquiry — a third-party enquiry falls through to sales below
       }
 
@@ -529,7 +600,17 @@ export const replyWorker = {
           forceTicketNow,
         );
         if (adminResult) {
-          await sendReply(orgId, conversationId, message.channel_id, adminResult.reply, mode, false);
+          try {
+            await sendReply(orgId, conversationId, message.channel_id, adminResult.reply, mode, false);
+          } catch (err) {
+            // The admin-turn claim was won (and the ticket, if any, already
+            // opened by adminAgent.answer) but the reply itself failed to
+            // send — release the claim so a genuine redelivery of this same
+            // message can retry rather than the customer going permanently
+            // unanswered.
+            if (message.id) await sendsevenWebhookRepository.releaseAdminTurnClaim(message.id);
+            throw err;
+          }
           const ticketOpenedNow = prevContext.ticketOpened || adminResult.ticketOpened;
           await conversationStateRepository.update(conversationId, {
             intent: "other",
@@ -551,34 +632,26 @@ export const replyWorker = {
         return doHandoff("Let me get a colleague to help you with that.");
       }
 
-      // ── Sales / enquiry bot (UNCHANGED flow) ───────────────────────────
-      // Vector retrieval (Phase 5d) — best-effort context for the enquiry prompt.
-      // Never blocks/breaks the reply: aiEmbeddingsService.retrieve() never throws
-      // and resolves to [] on any failure. Quote retrieval is gated to enquiry-ish
-      // turns; otherwise it's skipped rather than wasting a round-trip.
-      const enquiryish =
-        enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
-      // Skip the knowledge retrieval entirely when the static KB (embedded in
-      // full by buildSystemPrompt, capped at KB_CHAR_BUDGET) already fits — the
-      // retrieved matches would just be embeddings of those same rows appended
-      // to a prompt that already has them all, so it's a wasted round-trip.
-      const kbOverflow = kbExceedsBudget(kb);
-      const [kbMatches, quoteMatches] = await Promise.all([
-        kbOverflow
-          ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: latestText, limit: 3 })
-          : Promise.resolve([] as RetrievedMatch[]),
-        enquiryish
-          ? aiEmbeddingsService.retrieve({
-              orgId,
-              sourceType: "quote",
-              query: `${latestText} ${JSON.stringify(priorSlots)}`,
-              limit: 4,
-            })
-          : Promise.resolve([] as RetrievedMatch[]),
-      ]);
-      const retrieved: RetrievedContext = { kb: kbMatches, quotes: quoteMatches };
-
-      const turn = await generateTurn(botConfig, kb, clientRecord, transcript, enquiryStatus, priorSlots, true, retrieved);
+      // ── Sales / enquiry bot ──────────────────────────────────────────────
+      // Retrieval (`retrieved`) was already computed above, before the
+      // onboarding gate, using the same enquiryish/kbOverflow gating as
+      // before — see the comment there.
+      //
+      // Reuse the onboarding turn's AiTurn (Fix 2) when THIS message both
+      // completed onboarding and already produced a usable turn — set only
+      // when the onboarding gate fell through with no early return (see
+      // `firstTurn = onboard` above). Skips a second generateTurn call that
+      // would otherwise re-derive the same slots/reply from the identical
+      // transcript, just with knownClient now true and (usually) no
+      // meaningfully different retrieval/identity context — the onboarding
+      // prompt already includes the full enquiry-extraction + retrieval
+      // instructions and explicitly handles "customer just gave name+phone
+      // AND holiday interest in one message" (see buildSystemPrompt's
+      // onboarding tail block). The only context this skips is the resolved
+      // NeonClient's name (a personalization nicety, not used for
+      // extraction/correctness) — an acceptable trade-off to avoid the
+      // redundant LLM call and the slot-discarding bug it caused.
+      const turn = firstTurn ?? (await generateTurn(botConfig, kb, clientRecord, transcript, enquiryStatus, priorSlots, true, retrieved));
       console.log(
         `[sendseven-webhook] conv=${conversationId} known=${knownClient} mode=${mode} intent=${turn.intent} ` +
           `handoff=${turn.hand_off} status=${enquiryStatus}`,
@@ -740,7 +813,15 @@ export const replyWorker = {
       const readyToCreate =
         treatAsEnquiry &&
         substantive &&
-        shouldCreateEnquiryNow({ coreMissingCount: coreMissing.length, askCount, groupedAskSentLegacy: !!prevContext.groupedAskSent });
+        shouldCreateEnquiryNow({
+          coreMissingCount: coreMissing.length,
+          askCount,
+          groupedAskSentLegacy: !!prevContext.groupedAskSent,
+          // The model's own completion signal — a declined core field ("any
+          // date is fine") leaves its slot empty, so without this the gate
+          // would deadlock: the model stops asking while coreMissing stays >0.
+          modelSaysComplete: !!turn.complete,
+        });
 
       // One structured line capturing every input to the enquiry state machine —
       // so when creation doesn't happen we can see exactly why (which flag/branch).
@@ -752,7 +833,7 @@ export const replyWorker = {
           `status=${enquiryStatus} groupedAskSentLegacy=${!!prevContext.groupedAskSent} substantive=${substantive} ` +
           `treatAsEnquiry=${treatAsEnquiry} missing=${missingBeforeCreate.length}[${missingBeforeCreate.join("|")}] ` +
           `readyToCreate=${readyToCreate} beneficiary=${beneficiaryActive} enquiryClientId=${enquiryClientId ?? "null"} ` +
-          `coreMissing=${coreMissing.length} askCount=${askCount} ` +
+          `coreMissing=${coreMissing.length} askCount=${askCount} modelComplete=${!!turn.complete} ` +
           `mergedSlotKeys=[${Object.keys(mergedSlots).join(",")}] rawTurnSlotKeys=[${Object.keys(turn.slots).join(",")}]`,
       );
 
@@ -875,7 +956,17 @@ export const replyWorker = {
           update.enquiryStatus = "collecting";
           update.enquirySlots = mergedSlots;
           update.context = { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 };
-          await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
+          // Per-message claim (see claimReply/general-route above) — this
+          // branch previously sent with no idempotency guard, so a
+          // redelivery of the same message would ask the same follow-up
+          // question twice.
+          if (!(await claimReply(conversationId, orgId, message.id))) return;
+          try {
+            await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
+          } catch (err) {
+            await releaseReplyClaim(message.id);
+            throw err;
+          }
           await conversationStateRepository.update(conversationId, update);
           return;
         }
@@ -891,7 +982,13 @@ export const replyWorker = {
         update.enquiryStatus = "collecting";
         update.enquirySlots = mergedSlots;
         update.context = { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 };
-        await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
+        if (!(await claimReply(conversationId, orgId, message.id))) return;
+        try {
+          await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
+        } catch (err) {
+          await releaseReplyClaim(message.id);
+          throw err;
+        }
         await conversationStateRepository.update(conversationId, update);
         return;
       }
@@ -940,6 +1037,36 @@ function redactPhone(phone?: string | null): string {
   if (!digits) return "?";
   const visible = digits.slice(-4);
   return `${"*".repeat(Math.max(digits.length - visible.length, 0))}${visible}`;
+}
+
+// Atomically claims the right to send a reply for THIS inbound message on the
+// general-route and enquiry-collecting branches — modeled exactly on
+// sendsevenWebhookRepository.claimAdminTurn (see that repository for the full
+// rationale): SendSeven can redeliver the same message under a DIFFERENT
+// event_id, which recordEvent's eventId dedupe doesn't catch, so without this
+// a redelivery would send a second, duplicate customer-facing reply. Returns
+// true iff the caller should proceed (either it won the claim, or there's no
+// message id to claim on — same "proceed without a claim" fallback as the
+// admin path). Pair with releaseReplyClaim in a catch around the send itself
+// so a genuinely FAILED send doesn't permanently swallow the message.
+async function claimReply(conversationId: string, orgId: string, messageId: string | undefined): Promise<boolean> {
+  if (!messageId) {
+    console.warn(`[sendseven-webhook] conv ${conversationId} reply turn has no message id — proceeding WITHOUT a claim`);
+    return true;
+  }
+  const claimed = await sendsevenWebhookRepository.claimReplyTurn(messageId, orgId);
+  if (!claimed) {
+    console.log(`[sendseven-webhook] conv ${conversationId} lost the reply-turn claim for message ${messageId} — skipping to avoid a duplicate reply`);
+  }
+  return claimed;
+}
+
+// Releases a reply-turn claim taken by claimReply — call this when the send
+// itself throws, so the next redelivery of the same message can re-claim and
+// retry instead of the message going permanently unanswered.
+async function releaseReplyClaim(messageId: string | undefined): Promise<void> {
+  if (!messageId) return;
+  await sendsevenWebhookRepository.releaseReplyTurnClaim(messageId);
 }
 
 // Sends the AI reply: live to the customer in `send` mode (tagged as ours), or as

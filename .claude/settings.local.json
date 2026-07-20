@@ -149,7 +149,13 @@
       "Bash(git log *)",
       "Bash(git ls-tree *)",
       "Bash(Select-String -Pattern \"ai-ask|v2/routes\")",
-      "Bash(grep -i \"ai-ask\\\\|v2/routes\\\\|v2\\\\\\\\\\\\\\\\routes\")"
+      "Bash(grep -i \"ai-ask\\\\|v2/routes\\\\|v2\\\\\\\\\\\\\\\\routes\")",
+      "Bash(grep -i \"v2\\\\\\\\\\\\\\\\modules\\\\\\\\\\\\\\\\social-post\\\\|v2/modules/social-post\")",
+      "Bash(git checkout *)",
+      "Bash(git reset *)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(tee \"C:\\\\Users\\\\CHRIST~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Christian-Desktop-travana-v2-travana-V2\\\\ac905dc7-69e5-4506-b0df-809d72cb9307\\\\scratchpad\\\\tsc-out.txt\")",
+      "Bash(grep -n \"modules[\\\\\\\\/]usage\\\\|shared[\\\\\\\\/]schema\\\\|routes[\\\\\\\\/]index\\\\|scripts[\\\\\\\\/]seed-model-pricing\" \"C:\\\\Users\\\\Christian\\\\.claude\\\\projects\\\\c--Users-Christian-Desktop-travana-v2-travana-V2\\\\444b03ea-9132-46ad-8688-30535ad1d0eb\\\\tool-results\\\\bak95w6ad.txt\")"
     ],
     "additionalDirectories": [
       "/tmp",

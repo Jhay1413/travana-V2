@@ -1,3 +1,5 @@
+import OpenAI from "openai";
+
 // Central switch for the chat model used across every AI feature (enquiry
 // brain, internal-chat assistant, ai-enquiry, transition/grouped-ask helpers).
 // Override per-environment with OPENAI_CHAT_MODEL.
@@ -23,3 +25,24 @@ export const CHAT_MODEL = process.env.OPENAI_CHAT_MODEL ?? "gpt-4.1";
 // GPT-series chat model that supports JSON mode and `temperature`. Override
 // per-environment with OPENAI_UTILITY_MODEL.
 export const UTILITY_MODEL = process.env.OPENAI_UTILITY_MODEL ?? "gpt-4.1-mini";
+
+// Shared OpenAI client singleton used across every AI feature (conversation
+// brain, ai-enquiry, embeddings, ai-ask, destination-guru, …). Built once
+// with a hardened timeout — the SDK default is 600_000ms, which is long
+// enough for a hung upstream call to stall customer-facing paths for many
+// minutes (the admin bot alone chains up to 6 sequential calls per turn).
+// 30s is generous for both chat and embedding calls used in this app.
+// maxRetries is kept at the SDK default (2).
+let cachedOpenAI: OpenAI | null = null;
+
+export function getOpenAI(): OpenAI {
+  if (!process.env.OPENAI_API_KEY) throw new Error("OpenAI API key is not configured");
+  if (!cachedOpenAI) {
+    cachedOpenAI = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      timeout: 30_000,
+      maxRetries: 2,
+    });
+  }
+  return cachedOpenAI;
+}

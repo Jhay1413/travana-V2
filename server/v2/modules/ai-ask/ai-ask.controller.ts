@@ -8,7 +8,7 @@ import { getScope } from '../../utils/scope';
 export const aiAskController = {
   ask: asyncHandler(async (req: Request, res: Response) => {
     const { question } = req.body || {};
-    const answer = await aiAskService.ask(question);
+    const answer = await aiAskService.ask(question, getScope(req).orgId);
     return successResponse(res, { answer }, 'Answer generated');
   }),
 

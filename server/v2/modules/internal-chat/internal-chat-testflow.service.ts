@@ -574,14 +574,21 @@ export const internalChatTestflowService = {
     const readyToCreate =
       treatAsEnquiry &&
       substantive &&
-      shouldCreateEnquiryNow({ coreMissingCount: coreMissing.length, askCount, groupedAskSentLegacy: !!prevContext.groupedAskSent });
+      shouldCreateEnquiryNow({
+        coreMissingCount: coreMissing.length,
+        askCount,
+        groupedAskSentLegacy: !!prevContext.groupedAskSent,
+        // Mirrors reply-worker: the model's completion signal covers declined
+        // core fields whose slots legitimately stay empty.
+        modelSaysComplete: !!turn.complete,
+      });
 
     console.log(
       `[internal-chat-testflow] session=${session.id} ENQUIRY-DECISION route=${route} intent=${turn.intent} ` +
         `status=${enquiryStatus} groupedAskSentLegacy=${!!prevContext.groupedAskSent} substantive=${substantive} ` +
         `treatAsEnquiry=${treatAsEnquiry} missing=${missingBeforeCreate.length}[${missingBeforeCreate.join("|")}] ` +
         `readyToCreate=${readyToCreate} beneficiary=${beneficiaryActive} enquiryClientId=${enquiryClientId ?? "null"} ` +
-        `coreMissing=${coreMissing.length} askCount=${askCount} ` +
+        `coreMissing=${coreMissing.length} askCount=${askCount} modelComplete=${!!turn.complete} ` +
         `mergedSlotKeys=[${Object.keys(mergedSlots).join(",")}] rawTurnSlotKeys=[${Object.keys(turn.slots).join(",")}]`,
     );
 

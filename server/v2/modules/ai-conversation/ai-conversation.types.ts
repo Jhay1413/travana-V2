@@ -59,6 +59,12 @@ export interface EnquiryBeneficiary {
 export interface AiTurn {
   hand_off: boolean;
   intent: "enquiry" | "other";
+  // Model-declared "every core field has been given or explicitly declined".
+  // Needed because a declined/no-preference core field (e.g. "any date is
+  // fine") legitimately leaves its slot EMPTY, so the server-side
+  // missingCoreFieldsFor gate alone would wait forever on a customer who has
+  // in fact answered everything. Feeds shouldCreateEnquiryNow.
+  complete?: boolean;
   slots: EnquirySlots;
   reply: string;
   // Populated while collecting client details for an unknown contact.

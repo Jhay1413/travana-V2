@@ -38,6 +38,9 @@ export async function classifyConversationRoute(params: {
   latestText: string;
   enquiryInFlight: boolean;
   priorDomainAdmin?: boolean;
+  // Optional — usage-metering only (server-derived). Not yet threaded by
+  // every caller; see docs/ai-usage-limits-plan.md Phase 1c.
+  orgId?: string;
 }): Promise<ConversationRoute> {
   if (params.enquiryInFlight) return "sales";
   // Explicit admin phrasing (asks about records / supplies an id / complaint) →
@@ -61,7 +64,7 @@ export async function classifyConversationRoute(params: {
         },
       ],
     });
-    logAiUsage("router", UTILITY_MODEL, res.usage);
+    logAiUsage("router", UTILITY_MODEL, res.usage, params.orgId);
     const raw = res.choices[0]?.message?.content?.trim();
     if (raw) {
       const parsed = JSON.parse(raw) as { route?: unknown };

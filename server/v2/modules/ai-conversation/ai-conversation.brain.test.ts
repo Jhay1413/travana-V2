@@ -339,6 +339,17 @@ describe("shouldCreateEnquiryNow (create-immediately gate — no more grouped-as
     expect(shouldCreateEnquiryNow({ coreMissingCount: 3, askCount: MAX_ENQUIRY_ASKS + 1 })).toBe(true);
   });
 
+  it("is true when the model declares completion, even with core slots empty and asks under the cap (declined fields leave slots empty)", () => {
+    // e.g. "any date is fine, whatever's cheapest" — travelDate stays empty per
+    // the DATES rule, the model stops asking per the stop rule, and without
+    // this signal the enquiry would never be created.
+    expect(shouldCreateEnquiryNow({ coreMissingCount: 1, askCount: 1, modelSaysComplete: true })).toBe(true);
+  });
+
+  it("ignores a false/absent model completion flag (unchanged gate behavior)", () => {
+    expect(shouldCreateEnquiryNow({ coreMissingCount: 1, askCount: 1, modelSaysComplete: false })).toBe(false);
+  });
+
   it("is true when the conversation already sent the legacy grouped ask on a prior turn, regardless of core/ask-cap", () => {
     expect(shouldCreateEnquiryNow({ coreMissingCount: 5, askCount: 0, groupedAskSentLegacy: true })).toBe(true);
   });
@@ -462,6 +473,90 @@ describe("buildSystemPrompt (prompt-caching prefix/tail ordering)", () => {
     expect(prompt).not.toContain("ALSO-SHOULD-NOT-APPEAR-MARKER");
     expect(prompt).not.toContain("ADMIN-SHOULD-NOT-APPEAR-MARKER");
     expect(prompt).toContain("SHOULD-APPEAR-MARKER");
+  });
+
+  it("fences the transcript with an injection guard that sits in the static prefix (before the dynamic client/retrieved-context tail)", () => {
+    const client = { title: null, firstName: "ZZZCLIENTNAME", surename: "Test" } as unknown as NeonClient;
+    const prompt = buildSystemPrompt(null, [], client, true);
+
+    const guardIdx = prompt.indexOf("<transcript>");
+    const clientIdx = prompt.indexOf("ZZZCLIENTNAME");
+
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(prompt).toContain("untrusted customer input");
+    // The guard must be part of the byte-stable STATIC prefix, i.e. ahead of
+    // the dynamic client line (which varies per customer/turn).
+    expect(guardIdx).toBeLessThan(clientIdx);
+  });
+
+  it("bans proactive asks for anything outside the core fields (incl. non-slot extras like luggage/transfers) and tells the model to stop once cores are answered", () => {
+    const prompt = buildSystemPrompt(null, [], null, true);
+
+    // Categorical ban — not just the enumerated nice-to-have fields.
+    expect(prompt).toContain("Do NOT proactively ask about ANYTHING outside the core fields");
+    expect(prompt).toContain("luggage/baggage, transfers, insurance");
+    // The old open-ended clause that licensed follow-up rounds must be gone.
+    expect(prompt).not.toContain("pick them up naturally over the next few replies");
+    // Explicit conversational stop once every core field is answered.
+    expect(prompt).toContain("ONCE EVERY CORE FIELD IS ANSWERED");
+    expect(prompt).toContain("STOP asking questions entirely");
+    // No confirmation/double-check loops, no unsolicited alternatives.
+    expect(prompt).toContain("NEVER ask the customer to confirm, verify, or double-check");
+    expect(prompt).toContain("never offer alternative hotels, resorts, or dates");
+    // budgetType must not be interrogated when the customer didn't state it.
+    expect(prompt).toContain('leave `budgetType` empty and do NOT ask');
+    // No "Just to check" filler openers.
+    expect(prompt).toContain('Never open a question with filler like "Just to check"');
+  });
+
+  it("reasserts the core-fields-only scope AFTER the agency rules block so a configured rule cannot re-license off-list asks", () => {
+    const botConfig = {
+      rules: [{ text: "always ask 2 or 3 questions that we need from the enquiry form", audience: "sales", isActive: true }],
+    } as unknown as OrgBotConfig;
+    const prompt = buildSystemPrompt(botConfig, [], null, true);
+
+    const ruleIdx = prompt.indexOf("questions that we need from the enquiry form");
+    const scopeIdx = prompt.indexOf("AGENCY RULE SCOPE");
+
+    expect(ruleIdx).toBeGreaterThan(-1);
+    expect(scopeIdx).toBeGreaterThan(ruleIdx);
+    expect(prompt).toContain("They can NEVER expand WHICH details you may proactively ask about");
+
+    // Without agency rules, the reassertion is omitted (keeps the prompt lean).
+    expect(buildSystemPrompt(null, [], null, true)).not.toContain("AGENCY RULE SCOPE");
+  });
+
+  it("includes a complete few-shot example of the JSON output contract, with empty fields shown", () => {
+    const prompt = buildSystemPrompt(null, [], null, true);
+
+    expect(prompt).toContain("EXAMPLE —");
+    expect(prompt).toContain('"hand_off": false');
+    expect(prompt).toContain('"intent": "enquiry"');
+    expect(prompt).toContain('"complete": false');
+    expect(prompt).toContain('"destinations": ["Tenerife"]');
+    // Demonstrates the shape includes empty/null fields, not just filled ones.
+    expect(prompt).toMatch(/"travelDate":\s*""/);
+    expect(prompt).toMatch(/"nights":\s*null/);
+    expect(prompt).toContain('"beneficiary": {"onBehalf": false');
+  });
+
+  it("dedupes the 'do not assume the customer wants to book' rule to one authoritative statement (repeats become short references, not restatements)", () => {
+    const p = buildSystemPrompt(null, [], null, true);
+    // The old restated bullet used this exact ALL-CAPS phrasing — it should no
+    // longer appear verbatim now that it's consolidated into the single
+    // MOST IMPORTANT RULE statement near the top of the static prefix.
+    expect(p).not.toContain("DO NOT ASSUME THE CUSTOMER WANTS TO BOOK.");
+    expect(p).toContain("MOST IMPORTANT RULE: NEVER assume the customer wants to book a holiday.");
+  });
+
+  it("dedupes the 'don't say the team will call' rule to one authoritative statement", () => {
+    const p = buildSystemPrompt(null, [], null, true);
+    // The old second restatement used this exact phrasing — should be gone.
+    expect(p).not.toContain("or that the team/an advisor will call or be in touch");
+    // The single authoritative statement remains.
+    expect(p).toContain(
+      "Do NOT offer to arrange a call, a callback, or say a colleague/advisor/the team will be in touch while you are still gathering enquiry details",
+    );
   });
 });
 

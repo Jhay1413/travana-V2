@@ -1,13 +1,8 @@
-import OpenAI from "openai";
-import { CHAT_MODEL } from "../../utils/ai-model";
+import { CHAT_MODEL, getOpenAI } from "../../utils/ai-model";
 import { z } from "zod";
 import { AppError } from "../../utils/error-handler";
+import { usageService } from "../usage/usage.service";
 import type { EnquiryIntent } from "./ai-enquiry.types";
-
-function getOpenAI(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) throw new AppError("OpenAI API key is not configured", 503);
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-}
 
 // The model reliably returns `null` (not `undefined`) for fields it can't
 // infer, despite the prompt asking for "" / [] / null. Zod's `.default()`
@@ -83,9 +78,21 @@ Return ONLY a JSON object with exactly these keys:
 
 Rules: Only include what is stated or clearly implied. Leave unknown fields empty ("" / [] / null). Do NOT invent destinations, dates, or budgets. GBP is the currency. Output valid JSON only.`;
 
+// Anchors the model's relative-date reasoning ("next month", "August", "next
+// year") to the actual current date, since the model has no other notion of
+// "today". Exported (and parameterized by `now`) so the date anchoring can be
+// tested deterministically.
+export function buildExtractionSystemPrompt(now: Date): string {
+  const today = now.toISOString().slice(0, 10);
+  const dateAnchor = `Today's date is ${today}. All travel dates must be in the future. If a day/month is given with no year, use the NEXT future occurrence. If only a month is given, use the 1st of that month in its next future occurrence. If the timing is a range or vague ("mid-August", "New Year", "school holidays"), leave travelDate "" and put the customer's wording in notes.`;
+  return `${dateAnchor}\n\n${SYSTEM_PROMPT}`;
+}
+
 export const aiEnquiryService = {
   // Extracts a structured enquiry intent from a conversation transcript.
-  async fromTranscript(transcript: string): Promise<EnquiryIntent> {
+  // `orgId` is server-derived (getScope(req).orgId) and only used for usage
+  // metering — it never affects the extraction itself.
+  async fromTranscript(transcript: string, orgId?: string): Promise<EnquiryIntent> {
     const text = (transcript || "").trim();
     if (!text) throw new AppError("Conversation transcript is required", 400);
     // Guard against pathological input; keep well under model limits.
@@ -100,11 +107,24 @@ export const aiEnquiryService = {
         temperature: 0.2,
         max_tokens: 900,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: buildExtractionSystemPrompt(new Date()) },
           { role: "user", content: `Conversation transcript:\n\n${clipped}` },
         ],
       });
       raw = response.choices[0]?.message?.content?.trim();
+
+      if (orgId && response.usage) {
+        void usageService.recordAiUsage({
+          orgId,
+          feature: "enquiry_ai",
+          model: CHAT_MODEL,
+          usage: {
+            promptTokens: response.usage.prompt_tokens,
+            completionTokens: response.usage.completion_tokens,
+            cachedTokens: response.usage.prompt_tokens_details?.cached_tokens,
+          },
+        });
+      }
     } catch (err) {
       throw new AppError(err instanceof Error ? err.message : "Failed to reach the AI service", 502);
     }

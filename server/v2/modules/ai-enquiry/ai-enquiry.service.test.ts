@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { intentSchema } from "./ai-enquiry.service";
+import { intentSchema, buildExtractionSystemPrompt } from "./ai-enquiry.service";
 
 describe("intentSchema", () => {
   it("applies defaults when every field is null (the common gpt-4o response shape)", () => {
@@ -91,5 +91,19 @@ describe("intentSchema", () => {
   it("still rejects a null top-level payload (existing 502 behavior)", () => {
     const result = intentSchema.safeParse(null);
     expect(result.success).toBe(false);
+  });
+});
+
+describe("buildExtractionSystemPrompt", () => {
+  it("anchors the prompt to the given date so relative dates can be grounded", () => {
+    const now = new Date("2026-07-20T12:34:56.000Z");
+    const prompt = buildExtractionSystemPrompt(now);
+    expect(prompt).toContain("Today's date is 2026-07-20.");
+    expect(prompt).toContain("All travel dates must be in the future.");
+  });
+
+  it("uses a different date when a different `now` is passed", () => {
+    const prompt = buildExtractionSystemPrompt(new Date("2027-01-05T00:00:00.000Z"));
+    expect(prompt).toContain("Today's date is 2027-01-05.");
   });
 });

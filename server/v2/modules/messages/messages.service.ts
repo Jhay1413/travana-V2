@@ -1,6 +1,7 @@
 import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
 import { realtimeService } from "../../realtime/realtime.service";
 import { messagesRepository } from "./messages.repository";
+import { usageService } from "../usage/usage.service";
 import type { ListMessagesParams, SsMessage } from "./messages.types";
 
 // Thin orchestration over the repository. SendSeven owns message state; we proxy.
@@ -19,6 +20,9 @@ export const messagesService = {
   // (or appear to fail) the send the user is waiting on.
   async send(orgId: string, body: Record<string, unknown>): Promise<SsMessage> {
     const sent = await messagesRepository.send(body);
+    if (orgId) {
+      void usageService.recordSendsevenSend({ orgId, source: "manual" });
+    }
     const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : sent.conversation_id;
     if (orgId && conversationId) {
       try {

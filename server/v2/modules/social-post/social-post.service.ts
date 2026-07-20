@@ -12,7 +12,12 @@ import {
   fetchOnlySocialsPost,
 } from "../../utils/only-socials";
 import type { TravelDeal } from "@shared/schema";
-import type { OnlySocialsMediaUploadResponse, OnlySocialsMediaContent } from "./social-post.types";
+import type {
+  OnlySocialsMediaUploadResponse,
+  OnlySocialsMediaContent,
+  OrgSocialContact,
+  OrganizationBranding,
+} from "./social-post.types";
 import type { Scope } from "../../utils/scope";
 
 type ScopeOrTrusted = Scope | { orgId: null };
@@ -145,7 +150,7 @@ function pickRandomEmoji(pool: string[]): string {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-interface PostDeal {
+export interface PostDeal {
   title: string;
   travelDate: string | null;
   nights: number;
@@ -156,17 +161,67 @@ interface PostDeal {
   price?: string | null;
 }
 
-function formatPostHTML(
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readOptionalString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/**
+ * Derive the branding used in generated posts from the org's row. Contact
+ * details live under `organization.settings.social` (a passthrough JSON blob
+ * org admins can configure) — if unset, the fields come back null and the
+ * caller must omit them rather than fall back to any hardcoded agency.
+ */
+function buildOrgSocialContact(org: OrganizationBranding | null): OrgSocialContact {
+  const social = org && isRecord(org.settings.social) ? org.settings.social : null;
+  return {
+    businessName: org?.name?.trim() || null,
+    phone: social ? readOptionalString(social.phone) : null,
+    website: social ? readOptionalString(social.website) : null,
+    instagramUrl: social ? readOptionalString(social.instagramUrl) : null,
+  };
+}
+
+/** Turn an org's business name into a hashtag-safe token, e.g. "Tina's Travel" -> "#TinasTravel". */
+function toHashtag(name: string): string | null {
+  const cleaned = name.replace(/[^a-zA-Z0-9]/g, "");
+  return cleaned ? `#${cleaned}` : null;
+}
+
+/**
+ * Builds the "To Book" contact block. Only includes lines for details the org
+ * actually has configured; if none are configured the whole block is omitted
+ * rather than falling back to any tenant's hardcoded details.
+ */
+function formatContactBlock(contact: OrgSocialContact): string {
+  const hasContactDetails = !!(contact.phone || contact.website || contact.instagramUrl);
+  if (!hasContactDetails) return "";
+
+  const lines = ["<br>To Book:<br>"];
+  if (contact.phone) lines.push(`☎ Call us on ${contact.phone}<br>`);
+  lines.push("💬 Private message<br>");
+  lines.push("📍 Pop in and see us<br>");
+  if (contact.website) lines.push(`🌐 Visit our website: ${contact.website}<br>`);
+  if (contact.instagramUrl) lines.push(`📸 Follow us on Instagram: ${contact.instagramUrl}<br>`);
+  return `${lines.join("\n")}\n`;
+}
+
+export function formatPostHTML(
   deal: PostDeal,
   subtitle: string,
   resortSummary: string,
-  hashtags: string[]
+  hashtags: string[],
+  contact: OrgSocialContact
 ): string {
   const tropicalEmoji = pickRandomEmoji(EMOJI_POOLS.tropical);
   const subtitleEmoji = pickRandomEmoji(EMOJI_POOLS.subtitle);
 
   const priceSection = deal.price ? `💸 Total cost from £${deal.price}pp<br>` : "";
   const hashtagLine = hashtags.join(" ");
+  const contactBlock = formatContactBlock(contact);
 
   return `${tropicalEmoji} ${deal.title} ${tropicalEmoji}<br>
 ${subtitleEmoji} ${subtitle} ${subtitleEmoji}<br>
@@ -179,13 +234,7 @@ ${deal.luggageTransfers && deal.luggageTransfers !== "N/A" ? `🧳 ${deal.luggag
 <br>
 ${priceSection}<br>
 ${resortSummary}<br>
-<br>To Book:<br>
-☎ Call us on 0191 594 7999<br>
-💬 Private message<br>
-📍 Pop in and see us<br>
-🌐 Visit our website: tinastraveldeals.co.uk<br>
-📸 Follow us on Instagram: https://www.instagram.com/tinastravel/<br>
-${deal.tourOperator && deal.tourOperator !== "N/A" ? `🏢 ${deal.tourOperator}<br>` : ""}
+${contactBlock}${deal.tourOperator && deal.tourOperator !== "N/A" ? `🏢 ${deal.tourOperator}<br>` : ""}
 <br>
 ${hashtagLine}`;
 }
@@ -249,6 +298,13 @@ export const socialPostService = {
       throw new AppError("Cannot generate social post for a test transaction", 400);
     }
 
+    // Branding always follows the quote's own org, even when the caller is a
+    // platform admin acting outside their normal org scope — never falls back
+    // to any hardcoded agency's contact details.
+    const dealOrgId = await socialPostRepository.findOrgIdForQuote(params.quoteId);
+    const orgBranding = dealOrgId ? await socialPostRepository.findOrganizationBrandingById(dealOrgId) : null;
+    const contact = buildOrgSocialContact(orgBranding);
+
     const {
       quoteId,
       title,
@@ -283,9 +339,10 @@ export const socialPostService = {
     const defaultResortSummary = isHotTub
       ? "🛁 Why You'll Love It:<br>🌿 Surrounded by peaceful countryside<br>🔥 Private hot tub included<br>🛏️ Comfortable lodge accommodation"
       : "🌞 Why You'll Love It:<br>🏖️ Great destination & atmosphere<br>🏨 Quality accommodation<br>🌴 Memorable holiday experience";
+    const businessHashtag = contact.businessName ? toHashtag(contact.businessName) : null;
     const defaultHashtags = isHotTub
-      ? ["#HotTubBreak", "#LodgeBreak", "#UKBreak", "#HolidayPark", "#WeekendGetaway", "#CoupleRetreat", "#HotTub", "#LodgeLife", "#TravelDeals", "#TinasTravelDeals"]
-      : ["#TravelDeals", "#HolidayDeals", "#TravelAgency", "#BookNow", "#HolidayTime", "#TravelLife", "#Vacation", "#HolidayGoals", "#TinasTravelDeals", "#Travel"];
+      ? ["#HotTubBreak", "#LodgeBreak", "#UKBreak", "#HolidayPark", "#WeekendGetaway", "#CoupleRetreat", "#HotTub", "#LodgeLife", "#TravelDeals", ...(businessHashtag ? [businessHashtag] : [])]
+      : ["#TravelDeals", "#HolidayDeals", "#TravelAgency", "#BookNow", "#HolidayTime", "#TravelLife", "#Vacation", "#HolidayGoals", ...(businessHashtag ? [businessHashtag] : []), "#Travel"];
 
     const [subtitleResult, resortSummaryResult, hashtagsRawResult] = await Promise.allSettled([
       callOpenAI(
@@ -349,7 +406,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       price: displayPrice,
     };
 
-    const postHTML = formatPostHTML(deal, subtitle, resortSummary, hashtags);
+    const postHTML = formatPostHTML(deal, subtitle, resortSummary, hashtags, contact);
 
     return await socialPostRepository.create({
       quote_id: quoteId,

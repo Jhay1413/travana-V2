@@ -50,11 +50,13 @@ export const sendsevenWebhookRepository = {
   // Atomically claims the right to run an admin-bot turn (which may open a
   // support ticket) for THIS inbound message. Keyed on message.id, this dedupes
   // redeliveries/duplicate webhook events for the SAME message (e.g. SendSeven
-  // resending the same webhook) that would otherwise both reach the admin path
-  // before either persists `ticketOpened` — this claim (namespaced in the same
-  // idempotency table as markOurMessage, via onConflictDoNothing on the unique
-  // event_id) guarantees at most one caller ever wins per message.
-  // Returns true iff this call won the claim.
+  // resending the same webhook — under a DIFFERENT event_id, so recordEvent's
+  // eventId dedupe above doesn't catch it) that would otherwise both reach the
+  // admin path before either persists `ticketOpened` — this claim (namespaced
+  // in the same idempotency table as markOurMessage, via onConflictDoNothing
+  // on the unique event_id) guarantees at most one caller ever wins per
+  // message. Returns true iff this call won the claim. See releaseAdminTurnClaim
+  // for the failure-compensation counterpart.
   async claimAdminTurn(messageId: string, orgId: string | null): Promise<boolean> {
     const rows = await db
       .insert(sendsevenWebhookEvents)
@@ -62,5 +64,39 @@ export const sendsevenWebhookRepository = {
       .onConflictDoNothing({ target: sendsevenWebhookEvents.eventId })
       .returning({ id: sendsevenWebhookEvents.id });
     return rows.length > 0;
+  },
+
+  // Releases an admin-turn claim taken by claimAdminTurn. Call this when the
+  // claimed turn fails to actually reach the customer (the reply send threw)
+  // — otherwise the claim would persist forever and a genuine redelivery of
+  // that same message would lose the claim and go permanently unanswered.
+  // Safe to call even if no claim exists (no-op). No orgId param needed to
+  // scope the delete — the eventId (namespaced on messageId) is already
+  // globally unique.
+  async releaseAdminTurnClaim(messageId: string): Promise<void> {
+    await db.delete(sendsevenWebhookEvents).where(eq(sendsevenWebhookEvents.eventId, `admin-turn:${messageId}`));
+  },
+
+  // Same mechanism as claimAdminTurn, but for the general-reply and
+  // enquiry-collecting reply branches (reply-worker's `route === "general"`
+  // and the collecting-thin/collecting-continue branches), which previously
+  // sent with no idempotency guard at all — a redelivery of the same inbound
+  // message would otherwise produce a duplicate customer-facing reply.
+  // Namespaced under a different eventId prefix ("reply-turn:") so it can
+  // never collide with an admin-turn claim on the same message id. Returns
+  // true iff this call won the claim.
+  async claimReplyTurn(messageId: string, orgId: string | null): Promise<boolean> {
+    const rows = await db
+      .insert(sendsevenWebhookEvents)
+      .values({ eventId: `reply-turn:${messageId}`, orgId, type: "reply-turn-claim" })
+      .onConflictDoNothing({ target: sendsevenWebhookEvents.eventId })
+      .returning({ id: sendsevenWebhookEvents.id });
+    return rows.length > 0;
+  },
+
+  // Releases a reply-turn claim taken by claimReplyTurn — see
+  // releaseAdminTurnClaim above for why this matters on a failed send.
+  async releaseReplyTurnClaim(messageId: string): Promise<void> {
+    await db.delete(sendsevenWebhookEvents).where(eq(sendsevenWebhookEvents.eventId, `reply-turn:${messageId}`));
   },
 };

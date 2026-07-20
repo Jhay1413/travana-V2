@@ -9,8 +9,10 @@ import {
   lodge_images,
   lodges,
   park,
+  organization,
 } from "@shared/schema";
 import type { TravelDeal, InsertTravelDeal } from "@shared/schema";
+import type { OrganizationBranding } from "./social-post.types";
 import { and, eq, inArray } from "drizzle-orm";
 
 export const socialPostRepository = {
@@ -65,6 +67,26 @@ export const socialPostRepository = {
       .where(and(eq(quote.id, quoteId), eq(transaction.org_id, orgId)))
       .limit(1);
     return !!row;
+  },
+
+  async findOrgIdForQuote(quoteId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ orgId: transaction.org_id })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(eq(quote.id, quoteId))
+      .limit(1);
+    return row?.orgId ?? null;
+  },
+
+  async findOrganizationBrandingById(orgId: string): Promise<OrganizationBranding | null> {
+    const [row] = await db
+      .select({ name: organization.name, settings: organization.settings })
+      .from(organization)
+      .where(eq(organization.id, orgId))
+      .limit(1);
+    if (!row) return null;
+    return { name: row.name, settings: (row.settings as Record<string, unknown>) ?? {} };
   },
 
   async update(id: string, data: Partial<InsertTravelDeal>): Promise<TravelDeal> {

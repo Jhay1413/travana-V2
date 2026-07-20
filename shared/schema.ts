@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, pgEnum, text, varchar, integer, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, vector, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, bigint, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, vector, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -2643,6 +2643,95 @@ export const smsCreditCharge = pgTable("sms_credit_charge", {
 
 export type SmsCreditCharge       = typeof smsCreditCharge.$inferSelect;
 export type InsertSmsCreditCharge = typeof smsCreditCharge.$inferInsert;
+
+// ─── AI + SendSeven usage limits, metering & cost accounting ──────────────────
+// Per-org limits/metering for LLM token usage and outbound SendSeven messages.
+// Monitor-only in Phase 1 (see docs/ai-usage-limits-plan.md) — mirrors the SMS
+// credits subsystem above (append-only ledger + fast monthly aggregate).
+
+export const orgUsageLimits = pgTable("org_usage_limits", {
+  id:                        uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId:                     uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }).unique(),
+  planTier:                  varchar("plan_tier").notNull().default("starter"),
+  monthlyAiTokenLimit:       integer("monthly_ai_token_limit"),
+  monthlyAiMessageLimit:     integer("monthly_ai_message_limit"),
+  monthlySendsevenMsgLimit:  integer("monthly_sendseven_msg_limit"),
+  aiLimitsEnabled:           boolean("ai_limits_enabled").notNull().default(true),
+  sendsevenLimitsEnabled:    boolean("sendseven_limits_enabled").notNull().default(true),
+  enforcementMode:           varchar("enforcement_mode").notNull().default("monitor"),
+  warnThresholdPct:          integer("warn_threshold_pct").notNull().default(80),
+  createdAt:                 timestamp("created_at").notNull().defaultNow(),
+  updatedAt:                 timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type OrgUsageLimits       = typeof orgUsageLimits.$inferSelect;
+export type InsertOrgUsageLimits = typeof orgUsageLimits.$inferInsert;
+
+export const aiUsageEvent = pgTable("ai_usage_event", {
+  id:               uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId:            uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  feature:          varchar("feature").notNull(),
+  site:             varchar("site"),
+  model:            varchar("model").notNull(),
+  promptTokens:     integer("prompt_tokens").notNull().default(0),
+  completionTokens: integer("completion_tokens").notNull().default(0),
+  cachedTokens:     integer("cached_tokens").notNull().default(0),
+  totalTokens:      integer("total_tokens").notNull().default(0),
+  costMicros:       bigint("cost_micros", { mode: "number" }).notNull().default(0),
+  conversationId:   varchar("conversation_id"),
+  userId:           text("user_id"),
+  createdAt:        timestamp("created_at").notNull().defaultNow(),
+}, (table) => ({
+  idx_org_created: index("idx_ai_usage_event_org_created").on(table.orgId, table.createdAt),
+}));
+
+export type AiUsageEvent       = typeof aiUsageEvent.$inferSelect;
+export type InsertAiUsageEvent = typeof aiUsageEvent.$inferInsert;
+
+export const aiUsageMonthly = pgTable("ai_usage_monthly", {
+  id:               uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId:            uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  periodStart:      date("period_start").notNull(),
+  promptTokens:     bigint("prompt_tokens", { mode: "number" }).notNull().default(0),
+  completionTokens: bigint("completion_tokens", { mode: "number" }).notNull().default(0),
+  totalTokens:      bigint("total_tokens", { mode: "number" }).notNull().default(0),
+  messageCount:     integer("message_count").notNull().default(0),
+  costMicros:       bigint("cost_micros", { mode: "number" }).notNull().default(0),
+}, (table) => ({
+  unique_org_period: unique("ai_usage_monthly_org_period_unique").on(table.orgId, table.periodStart),
+  idx_org_period:    index("idx_ai_usage_monthly_org_period").on(table.orgId, table.periodStart),
+}));
+
+export type AiUsageMonthly       = typeof aiUsageMonthly.$inferSelect;
+export type InsertAiUsageMonthly = typeof aiUsageMonthly.$inferInsert;
+
+export const sendsevenMessageUsage = pgTable("sendseven_message_usage", {
+  id:          uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId:       uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  periodStart: date("period_start").notNull(),
+  sentCount:   integer("sent_count").notNull().default(0),
+  aiSentCount: integer("ai_sent_count").notNull().default(0),
+}, (table) => ({
+  unique_org_period: unique("sendseven_message_usage_org_period_unique").on(table.orgId, table.periodStart),
+  idx_org_period:    index("idx_sendseven_message_usage_org_period").on(table.orgId, table.periodStart),
+}));
+
+export type SendsevenMessageUsage       = typeof sendsevenMessageUsage.$inferSelect;
+export type InsertSendsevenMessageUsage = typeof sendsevenMessageUsage.$inferInsert;
+
+export const modelPricing = pgTable("model_pricing", {
+  id:                        uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  model:                     varchar("model").notNull(),
+  inputMicrosPerMtok:        bigint("input_micros_per_mtok", { mode: "number" }).notNull(),
+  cachedInputMicrosPerMtok:  bigint("cached_input_micros_per_mtok", { mode: "number" }).notNull().default(0),
+  outputMicrosPerMtok:       bigint("output_micros_per_mtok", { mode: "number" }).notNull().default(0),
+  effectiveFrom:             timestamp("effective_from").notNull().defaultNow(),
+}, (table) => ({
+  unique_model_effective: unique("model_pricing_model_effective_unique").on(table.model, table.effectiveFrom),
+}));
+
+export type ModelPricing       = typeof modelPricing.$inferSelect;
+export type InsertModelPricing = typeof modelPricing.$inferInsert;
 
 // ─── Multi-role per user (org-level roles; platform_admin is NOT here) ─────────
 

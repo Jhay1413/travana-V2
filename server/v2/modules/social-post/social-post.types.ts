@@ -48,3 +48,17 @@ export interface OnlySocialsMediaUploadResponse {
   is_video: boolean;
   created_at: string;
 }
+
+/** Org-scoped branding used to fill in the "To Book" contact block of a generated post. */
+export interface OrgSocialContact {
+  businessName: string | null;
+  phone: string | null;
+  website: string | null;
+  instagramUrl: string | null;
+}
+
+/** Raw org row (name + generic settings blob) used to derive an OrgSocialContact. */
+export interface OrganizationBranding {
+  name: string;
+  settings: Record<string, unknown>;
+}

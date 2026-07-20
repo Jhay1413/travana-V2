@@ -1,5 +1,5 @@
-import OpenAI from "openai";
 import { AppError } from "./error-handler";
+import { getOpenAI } from "./ai-model";
 
 // Shared OpenAI embeddings helper. All embeddings in the app go through here so
 // the model + dimension are consistent (the pgvector column and HNSW index are
@@ -7,11 +7,6 @@ import { AppError } from "./error-handler";
 
 export const EMBEDDING_DIMENSIONS = 1536;
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL ?? "text-embedding-3-small";
-
-function getOpenAI(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) throw new AppError("OpenAI API key is not configured", 503);
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-}
 
 function assertDims(vector: number[]): number[] {
   if (vector.length !== EMBEDDING_DIMENSIONS) {

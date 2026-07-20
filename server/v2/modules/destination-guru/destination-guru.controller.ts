@@ -3,6 +3,7 @@ import { destinationGuruService } from './destination-guru.service';
 import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
 import { getUserId } from '../../utils/get-user-id';
+import { getScope } from '../../utils/scope';
 
 export const destinationGuruController = {
   getAll: asyncHandler(async (_req: Request, res: Response) => {
@@ -22,7 +23,7 @@ export const destinationGuruController = {
       return res.status(400).json({ success: false, message: 'Destination is required' });
     }
     const userId = getUserId(req);
-    const result = await destinationGuruService.generate(destination.trim(), userId || undefined);
+    const result = await destinationGuruService.generate(destination.trim(), userId || undefined, getScope(req).orgId);
     res.json({ success: true, data: result });
   }),
 
