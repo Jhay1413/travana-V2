@@ -3,6 +3,8 @@ import {
   platformAdminApi,
   type AssignableOrgRole,
   type ChangePlanPayload,
+  type UsageLimitsPatch,
+  type ModelPricingPatch,
 } from "./platform-admin.api";
 import { platformAdminKeys } from "./use-platform-admin-queries";
 import { authKeys } from "@/hooks/queries/use-auth-queries";
@@ -20,6 +22,8 @@ function useInvalidateOrg() {
       qc.invalidateQueries({ queryKey: platformAdminKeys.credits(orgId) });
       qc.invalidateQueries({ queryKey: [...platformAdminKeys.all, "org", orgId, "credit-usage"] });
       qc.invalidateQueries({ queryKey: [...platformAdminKeys.all, "org", orgId, "credit-charges"] });
+      qc.invalidateQueries({ queryKey: platformAdminKeys.usage(orgId) });
+      qc.invalidateQueries({ queryKey: [...platformAdminKeys.all, "org", orgId, "usage-history"] });
     }
   };
 }
@@ -160,5 +164,30 @@ export function useWriteOffCharge() {
     mutationFn: ({ orgId, chargeId, reason }: { orgId: string; chargeId: string; reason?: string }) =>
       platformAdminApi.writeOffCharge(orgId, chargeId, reason),
     onSuccess: (_d, vars) => invalidate(vars.orgId),
+  });
+}
+
+export function useUpdateUsageLimits() {
+  const invalidate = useInvalidateOrg();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orgId, patch }: { orgId: string; patch: UsageLimitsPatch }) =>
+      platformAdminApi.updateUsageLimits(orgId, patch),
+    onSuccess: (_d, vars) => {
+      invalidate(vars.orgId);
+      qc.invalidateQueries({ queryKey: [...platformAdminKeys.all, "usage-overview"] });
+    },
+  });
+}
+
+export function useUpsertModelPricing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ model, patch }: { model: string; patch: ModelPricingPatch }) =>
+      platformAdminApi.upsertModelPricing(model, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: platformAdminKeys.modelPricing() });
+      qc.invalidateQueries({ queryKey: [...platformAdminKeys.all, "usage-overview"] });
+    },
   });
 }

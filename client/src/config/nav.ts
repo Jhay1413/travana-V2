@@ -11,6 +11,7 @@ import {
   Database,
   FileText,
   Forward,
+  Gauge,
   Globe,
   HeartHandshake,
   Hotel,
@@ -208,6 +209,7 @@ const ORG_ADMIN_NAV: NavConfig = [
     icon: CircleDollarSign,
     items: [
       { path: "/agency/billing", label: "Billing", icon: CircleDollarSign },
+      { path: "/agency/usage", label: "AI + Usage", icon: Gauge },
     ],
   },
   {
@@ -240,6 +242,7 @@ const PLATFORM_ADMIN_NAV: NavConfig = [
       { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/platform-admin/organizations", label: "All Agencies", icon: Building2 },
       { path: "/platform-admin/users", label: "All Users", icon: Users },
+      { path: "/platform-admin/usage", label: "AI + Usage", icon: Gauge },
       { path: "/platform-admin/audit-log", label: "Audit Log", icon: Activity },
     ],
   },

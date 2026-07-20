@@ -145,3 +145,47 @@ export const removeUserRoleParamsSchema = z.object({
     role:   ASSIGNABLE_ROLE,
   }),
 });
+
+// AI + SendSeven usage limits & metering (platform-admin monitoring/config)
+
+export const usageHistoryMonthsQuerySchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  query: z.object({
+    months: z.coerce.number().int().min(1).max(24).default(6),
+  }),
+});
+
+export const updateUsageLimitsSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({
+    planTier:                 z.string().min(1).max(32).optional(),
+    // `org_usage_limits.monthly_*_limit` columns are Postgres `integer` (int4)
+    // — cap here so an oversized value fails with a clean 400 instead of a DB 500.
+    monthlyAiTokenLimit:      z.number().int().min(0).max(2_147_483_647).nullable().optional(),
+    monthlyAiMessageLimit:    z.number().int().min(0).max(2_147_483_647).nullable().optional(),
+    monthlySendsevenMsgLimit: z.number().int().min(0).max(2_147_483_647).nullable().optional(),
+    aiLimitsEnabled:          z.boolean().optional(),
+    sendsevenLimitsEnabled:   z.boolean().optional(),
+    enforcementMode:          z.enum(['monitor', 'enforce']).optional(),
+    warnThresholdPct:         z.number().int().min(1).max(100).optional(),
+  }),
+});
+
+export const usageOverviewQuerySchema = z.object({
+  query: z.object({
+    months: z.coerce.number().int().min(1).max(24).default(1),
+  }),
+});
+
+export const modelPricingParamSchema = z.object({
+  params: z.object({ model: z.string().min(1).max(64) }),
+});
+
+export const upsertModelPricingSchema = z.object({
+  params: z.object({ model: z.string().min(1).max(64) }),
+  body: z.object({
+    inputMicrosPerMtok:       z.number().int().min(0),
+    cachedInputMicrosPerMtok: z.number().int().min(0).default(0),
+    outputMicrosPerMtok:      z.number().int().min(0).default(0),
+  }),
+});

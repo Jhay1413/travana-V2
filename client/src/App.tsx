@@ -31,6 +31,7 @@ const PlatformAdminPage = lazy(() => import("@/pages/platform-admin/index"));
 const PlatformAdminOrgPage = lazy(() => import("@/pages/platform-admin/org"));
 const PlatformAdminUsersPage = lazy(() => import("@/pages/platform-admin/users"));
 const PlatformAdminAuditPage = lazy(() => import("@/pages/platform-admin/audit"));
+const PlatformAdminUsagePage = lazy(() => import("@/pages/platform-admin/usage"));
 const ReferralAgentDashboard = lazy(() => import("@/pages/referral-agent"));
 const PublicQuotePage = lazy(() => import("@/pages/public-quote"));
 const AgentOverviewPage = lazy(() => import("@/pages/agent-overview"));
@@ -143,6 +144,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/agents/:agentId" allow={MANAGER_ROLES} component={AgentStatsPage} />
 
         <RoleRoute path="/platform-admin/audit-log" allow={PLATFORM_ROLES} component={PlatformAdminAuditPage} />
+        <RoleRoute path="/platform-admin/usage" allow={PLATFORM_ROLES} component={PlatformAdminUsagePage} />
         <RoleRoute path="/platform-admin/users" allow={PLATFORM_ROLES} component={PlatformAdminUsersPage} />
         <RoleRoute path="/platform-admin/organizations/:id" allow={PLATFORM_ROLES} component={PlatformAdminOrgPage} />
         <RoleRoute path="/platform-admin/organizations" allow={PLATFORM_ROLES} component={PlatformAdminPage} />

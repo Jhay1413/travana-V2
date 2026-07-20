@@ -1,5 +1,6 @@
 import { and, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../../config/database";
+import { phoneDigitsCondition } from "../../utils/phone-search";
 import {
   accomodation_list,
   board_basis,
@@ -205,12 +206,14 @@ export const internalChatClientsRepository = {
     const words = trimmed.split(/\s+/).filter(Boolean);
     const wordTerms = words.map((w) => `%${w}%`);
 
+    const phoneDigits = trimmed ? phoneDigitsCondition(clientTable.phoneNumber, trimmed) : null;
     const searchClause = trimmed
       ? or(
           ...wordTerms.map((t) => ilike(clientTable.firstName, t)),
           ...wordTerms.map((t) => ilike(clientTable.surename, t)),
           ilike(clientTable.email, `%${trimmed}%`),
           ilike(clientTable.phoneNumber, `%${trimmed}%`),
+          ...(phoneDigits ? [phoneDigits] : []),
           sql`concat_ws(' ', ${clientTable.firstName}, ${clientTable.surename}) ilike ${`%${trimmed}%`}`,
         )
       : undefined;

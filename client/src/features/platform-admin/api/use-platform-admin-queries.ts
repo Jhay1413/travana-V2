@@ -12,6 +12,10 @@ import {
   type CreditChargeRow,
   type ChargesFilters,
   type AssignableOrgRole,
+  type OrgUsageSummary,
+  type OrgUsageHistory,
+  type OrgUsageOverviewRow,
+  type ModelPricingRow,
 } from "./platform-admin.api";
 
 export const platformAdminKeys = {
@@ -28,6 +32,10 @@ export const platformAdminKeys = {
   creditUsage: (orgId: string, months: number) => [...platformAdminKeys.all, "org", orgId, "credit-usage", months] as const,
   creditCharges: (orgId: string, filters: ChargesFilters) => [...platformAdminKeys.all, "org", orgId, "credit-charges", filters] as const,
   audit:      (filters: AuditLogFilters) => [...platformAdminKeys.all, "audit", filters] as const,
+  usage:        (orgId: string) => [...platformAdminKeys.all, "org", orgId, "usage"] as const,
+  usageHistory: (orgId: string, months: number) => [...platformAdminKeys.all, "org", orgId, "usage-history", months] as const,
+  usageOverview: (months: number) => [...platformAdminKeys.all, "usage-overview", months] as const,
+  modelPricing:  () => [...platformAdminKeys.all, "model-pricing"] as const,
 };
 
 export function useAdminOrgs() {
@@ -127,5 +135,35 @@ export function useAdminCreditCharges(orgId: string | undefined, filters: Charge
     queryKey: platformAdminKeys.creditCharges(orgId ?? "", filters),
     queryFn:  () => platformAdminApi.listCharges(orgId as string, filters),
     enabled:  !!orgId,
+  });
+}
+
+export function useAdminOrgUsage(orgId: string | undefined) {
+  return useQuery<OrgUsageSummary>({
+    queryKey: platformAdminKeys.usage(orgId ?? ""),
+    queryFn:  () => platformAdminApi.getOrgUsage(orgId as string),
+    enabled:  !!orgId,
+  });
+}
+
+export function useAdminOrgUsageHistory(orgId: string | undefined, months = 6) {
+  return useQuery<OrgUsageHistory>({
+    queryKey: platformAdminKeys.usageHistory(orgId ?? "", months),
+    queryFn:  () => platformAdminApi.getOrgUsageHistory(orgId as string, months),
+    enabled:  !!orgId,
+  });
+}
+
+export function useAdminUsageOverview(months = 1) {
+  return useQuery<OrgUsageOverviewRow[]>({
+    queryKey: platformAdminKeys.usageOverview(months),
+    queryFn:  () => platformAdminApi.getUsageOverview(months),
+  });
+}
+
+export function useAdminModelPricing() {
+  return useQuery<ModelPricingRow[]>({
+    queryKey: platformAdminKeys.modelPricing(),
+    queryFn:  () => platformAdminApi.listModelPricing(),
   });
 }

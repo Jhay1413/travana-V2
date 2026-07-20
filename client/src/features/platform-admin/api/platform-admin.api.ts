@@ -128,6 +128,101 @@ export interface ChargesFilters {
   offset?: number;
 }
 
+// AI + SendSeven usage limits & metering (see docs/ai-usage-limits-plan.md)
+
+export interface AiUsagePeriodSummary {
+  periodStart:      string;
+  promptTokens:     number;
+  completionTokens: number;
+  totalTokens:      number;
+  messageCount:     number;
+  costMicros:       number;
+}
+
+export interface SendsevenUsagePeriodSummary {
+  periodStart: string;
+  sentCount:   number;
+  aiSentCount: number;
+}
+
+export interface UsageCheckResult {
+  allowed:             boolean;
+  remaining:            number | null;
+  warnThresholdCrossed: boolean;
+}
+
+export type EnforcementMode = "monitor" | "enforce";
+
+export interface OrgUsageLimitsDto {
+  planTier:                  string;
+  monthlyAiTokenLimit:       number | null;
+  monthlyAiMessageLimit:     number | null;
+  monthlySendsevenMsgLimit:  number | null;
+  aiLimitsEnabled:           boolean;
+  sendsevenLimitsEnabled:    boolean;
+  enforcementMode:           EnforcementMode;
+  warnThresholdPct:          number;
+}
+
+export interface OrgUsageSummary {
+  orgId:               string;
+  ai:                  AiUsagePeriodSummary;
+  sendseven:           SendsevenUsagePeriodSummary;
+  limits:              OrgUsageLimitsDto | null;
+  aiUsageCheck:        UsageCheckResult;
+  sendsevenUsageCheck: UsageCheckResult;
+}
+
+export interface OrgUsageHistory {
+  orgId:     string;
+  ai:        AiUsagePeriodSummary[];
+  sendseven: SendsevenUsagePeriodSummary[];
+}
+
+export interface UsageLimitsPatch {
+  planTier?:                 string;
+  monthlyAiTokenLimit?:      number | null;
+  monthlyAiMessageLimit?:    number | null;
+  monthlySendsevenMsgLimit?: number | null;
+  aiLimitsEnabled?:          boolean;
+  sendsevenLimitsEnabled?:   boolean;
+  enforcementMode?:          EnforcementMode;
+  warnThresholdPct?:         number;
+}
+
+export interface OrgUsageOverviewRow {
+  orgId:                     string;
+  orgName:                   string;
+  totalTokens:               number;
+  aiMessageCount:            number;
+  costMicros:                number;
+  sentCount:                 number;
+  aiSentCount:               number;
+  planTier:                  string | null;
+  monthlyAiTokenLimit:       number | null;
+  monthlyAiMessageLimit:     number | null;
+  monthlySendsevenMsgLimit:  number | null;
+  aiLimitsEnabled:           boolean | null;
+  sendsevenLimitsEnabled:    boolean | null;
+  enforcementMode:           string | null;
+  warnThresholdPct:          number | null;
+}
+
+export interface ModelPricingRow {
+  id:                        string;
+  model:                     string;
+  inputMicrosPerMtok:        number;
+  cachedInputMicrosPerMtok:  number;
+  outputMicrosPerMtok:       number;
+  effectiveFrom:             string;
+}
+
+export interface ModelPricingPatch {
+  inputMicrosPerMtok:        number;
+  cachedInputMicrosPerMtok:  number;
+  outputMicrosPerMtok:       number;
+}
+
 const BASE = "/api/v2/platform-admin";
 
 export const platformAdminApi = {
@@ -238,5 +333,35 @@ export const platformAdminApi = {
   listAuditLog: async (filters: AuditLogFilters = {}): Promise<AdminAuditEntry[]> => {
     const { data } = await axiosClient.get<AdminAuditEntry[]>(`${BASE}/audit-log`, { params: filters });
     return data ?? [];
+  },
+
+  // AI + SendSeven usage limits & metering (per-org)
+  getOrgUsage: async (orgId: string): Promise<OrgUsageSummary> => {
+    const { data } = await axiosClient.get<OrgUsageSummary>(`${BASE}/organizations/${orgId}/usage`);
+    return data;
+  },
+  getOrgUsageHistory: async (orgId: string, months = 6): Promise<OrgUsageHistory> => {
+    const { data } = await axiosClient.get<OrgUsageHistory>(`${BASE}/organizations/${orgId}/usage/history`, { params: { months } });
+    return data;
+  },
+  updateUsageLimits: async (orgId: string, patch: UsageLimitsPatch): Promise<OrgUsageLimitsDto> => {
+    const { data } = await axiosClient.patch<OrgUsageLimitsDto>(`${BASE}/organizations/${orgId}/usage-limits`, patch);
+    return data;
+  },
+
+  // Cross-org profit-analysis overview
+  getUsageOverview: async (months = 1): Promise<OrgUsageOverviewRow[]> => {
+    const { data } = await axiosClient.get<OrgUsageOverviewRow[]>(`${BASE}/usage/overview`, { params: { months } });
+    return data ?? [];
+  },
+
+  // Model pricing
+  listModelPricing: async (): Promise<ModelPricingRow[]> => {
+    const { data } = await axiosClient.get<ModelPricingRow[]>(`${BASE}/model-pricing`);
+    return data ?? [];
+  },
+  upsertModelPricing: async (model: string, patch: ModelPricingPatch): Promise<ModelPricingRow> => {
+    const { data } = await axiosClient.put<ModelPricingRow>(`${BASE}/model-pricing/${encodeURIComponent(model)}`, patch);
+    return data;
   },
 };

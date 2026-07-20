@@ -26,7 +26,7 @@
     "db:seed-org": "tsx scripts/seed-org.ts",
     "db:seed-roles": "tsx scripts/seed-user-org-roles.ts",
     "db:seed-commission": "tsx scripts/seed-tour-operator-commission.ts",
-    "db:seed-model-pricing": "tsx scripts/seed-model-pricing.ts",
+    "db:seed-model-pricing": "tsx --env-file-if-exists=.env scripts/seed-model-pricing.ts",
     "db:seed-training": "tsx --env-file-if-exists=.env scripts/seed-training.ts",
     "db:backfill-quote-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-quote-embeddings.ts",
     "db:backfill-kb-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-kb-embeddings.ts"

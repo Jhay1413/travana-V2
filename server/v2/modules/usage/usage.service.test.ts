@@ -11,6 +11,9 @@ vi.mock("./usage.repository", () => ({
     upsertLimits: vi.fn(),
     getLatestPricing: vi.fn(),
     getOrgHistory: vi.fn(),
+    getUsageOverview: vi.fn(),
+    listLatestPricingPerModel: vi.fn(),
+    insertPricing: vi.fn(),
   },
 }));
 
@@ -604,5 +607,79 @@ describe("period boundary attribution", () => {
     await usageService.checkSendsevenAllowed("org1");
 
     expect(usageRepository.getSendsevenMonthly).toHaveBeenCalledWith("org1", "2027-02-01");
+  });
+});
+
+// ─── Platform-admin surface: getLimits / upsertLimits / getUsageOverview / model pricing ──
+
+describe("getLimits / upsertLimits", () => {
+  it("getLimits forwards to the repository", async () => {
+    vi.mocked(usageRepository.getLimits).mockResolvedValue({ orgId: "org1" } as never);
+
+    const result = await usageService.getLimits("org1");
+
+    expect(usageRepository.getLimits).toHaveBeenCalledWith("org1");
+    expect(result).toEqual({ orgId: "org1" });
+  });
+
+  it("upsertLimits forwards the patch to the repository", async () => {
+    vi.mocked(usageRepository.upsertLimits).mockResolvedValue({ orgId: "org1", monthlyAiTokenLimit: 1000 } as never);
+
+    const result = await usageService.upsertLimits("org1", { monthlyAiTokenLimit: 1000 });
+
+    expect(usageRepository.upsertLimits).toHaveBeenCalledWith("org1", { monthlyAiTokenLimit: 1000 });
+    expect(result).toEqual({ orgId: "org1", monthlyAiTokenLimit: 1000 });
+  });
+});
+
+describe("getUsageOverview", () => {
+  it("sorts rows by costMicros descending", async () => {
+    vi.mocked(usageRepository.getUsageOverview).mockResolvedValue([
+      { orgId: "a", costMicros: 100 },
+      { orgId: "b", costMicros: 500 },
+      { orgId: "c", costMicros: 250 },
+    ] as never);
+
+    const rows = await usageService.getUsageOverview("2026-07-01");
+
+    expect(usageRepository.getUsageOverview).toHaveBeenCalledWith("2026-07-01");
+    expect(rows.map((r) => r.orgId)).toEqual(["b", "c", "a"]);
+  });
+
+  it("returns an empty array unchanged", async () => {
+    vi.mocked(usageRepository.getUsageOverview).mockResolvedValue([]);
+
+    const rows = await usageService.getUsageOverview("2026-07-01");
+
+    expect(rows).toEqual([]);
+  });
+});
+
+describe("model pricing", () => {
+  it("listModelPricing forwards to the repository", async () => {
+    vi.mocked(usageRepository.listLatestPricingPerModel).mockResolvedValue([{ model: "gpt-4.1" }] as never);
+
+    const rows = await usageService.listModelPricing();
+
+    expect(rows).toEqual([{ model: "gpt-4.1" }]);
+  });
+
+  it("createModelPricingVersion inserts a new row without touching old ones", async () => {
+    vi.mocked(usageRepository.insertPricing).mockResolvedValue({ model: "gpt-4.1", inputMicrosPerMtok: 3 } as never);
+
+    const row = await usageService.createModelPricingVersion({
+      model: "gpt-4.1",
+      inputMicrosPerMtok: 3,
+      cachedInputMicrosPerMtok: 0,
+      outputMicrosPerMtok: 8,
+    });
+
+    expect(usageRepository.insertPricing).toHaveBeenCalledWith({
+      model: "gpt-4.1",
+      inputMicrosPerMtok: 3,
+      cachedInputMicrosPerMtok: 0,
+      outputMicrosPerMtok: 8,
+    });
+    expect(row).toEqual({ model: "gpt-4.1", inputMicrosPerMtok: 3 });
   });
 });

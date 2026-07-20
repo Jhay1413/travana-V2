@@ -33,6 +33,7 @@ export { useChatConversations, useChatMessages, chatKeys } from "@/features/chat
 export { useSharedEmailAccount, useEmailAccounts, useEmailMessages, useEmailMessage, emailKeys } from "@/features/email/api/use-email-queries";
 export { useFacebookPages, useFacebookConversations, useFacebookMessages, facebookKeys } from "@/features/social/api/use-facebook-queries";
 export { useCurrentOrganization, useOrgMembers, organizationKeys } from "@/features/organization/api/use-organization-queries";
+export { useOrgUsageSummary, useOrgUsageHistory, usageKeys } from "@/features/organization/api/use-usage-queries";
 export { useBranches, useBranch, branchKeys } from "@/features/organization/api/use-branch-queries";
 export { usePlans, planKeys } from "@/features/organization/api/use-plan-queries";
 export { usePendingInvites, useInviteByToken, inviteKeys } from "@/features/invite/api/use-invite-queries";
@@ -52,5 +53,9 @@ export {
   useAdminCreditUsage,
   useAdminCreditCharges,
   useAdminUserRoles,
+  useAdminOrgUsage,
+  useAdminOrgUsageHistory,
+  useAdminUsageOverview,
+  useAdminModelPricing,
   platformAdminKeys,
 } from "@/features/platform-admin/api/use-platform-admin-queries";

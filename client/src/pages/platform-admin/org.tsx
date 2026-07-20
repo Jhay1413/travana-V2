@@ -13,6 +13,7 @@ import {
   Activity,
   MessageSquare,
   Plug,
+  Gauge,
 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import {
@@ -32,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { SuspendOrgDialog } from "@/features/platform-admin/components/platform-admin/suspend-org-dialog";
 import { ChangePlanDialog } from "@/features/platform-admin/components/platform-admin/change-plan-dialog";
 import { CreditsTab } from "@/features/platform-admin/components/platform-admin/credits-tab";
+import { UsageTab } from "@/features/platform-admin/components/platform-admin/usage-tab";
 import { RoleChipEditor } from "@/features/platform-admin/components/platform-admin/role-chip-editor";
 import { SendSevenIntegrationCard } from "@/features/conversations";
 import type { AdminUserRow } from "@/features/platform-admin/api/platform-admin.api";
@@ -166,6 +168,9 @@ export default function PlatformAdminOrgPage() {
           <TabsTrigger value="credits" data-testid="tab-credits">
             <MessageSquare className="mr-1 h-3.5 w-3.5" /> Credits
           </TabsTrigger>
+          <TabsTrigger value="usage" data-testid="tab-usage">
+            <Gauge className="mr-1 h-3.5 w-3.5" /> Usage
+          </TabsTrigger>
           <TabsTrigger value="audit" data-testid="tab-audit">
             <Activity className="mr-1 h-3.5 w-3.5" /> Audit
           </TabsTrigger>
@@ -181,6 +186,9 @@ export default function PlatformAdminOrgPage() {
         </TabsContent>
         <TabsContent value="credits" className="mt-4">
           <CreditsTab orgId={org.id} orgName={org.name} />
+        </TabsContent>
+        <TabsContent value="usage" className="mt-4">
+          <UsageTab orgId={org.id} orgName={org.name} />
         </TabsContent>
         <TabsContent value="audit" className="mt-4">
           <AuditTab orgId={org.id} />

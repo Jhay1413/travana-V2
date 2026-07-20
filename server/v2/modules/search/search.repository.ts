@@ -1,6 +1,7 @@
 import { db } from '../../config/database';
 import { clientTable, booking, transaction } from '@shared/schema';
 import { and, asc, eq, or, ilike, sql } from 'drizzle-orm';
+import { phoneDigitsCondition } from '../../utils/phone-search';
 
 interface SearchOpts {
   orgId: string | null;
@@ -19,10 +20,12 @@ export const searchRepository = {
         ? and(...words.map((w) => sql`${fullName} ILIKE ${'%' + w + '%'}`))
         : or(ilike(clientTable.firstName, term), ilike(clientTable.surename, term));
 
+    const phoneDigits = phoneDigitsCondition(clientTable.phoneNumber, searchTerm);
     const matchCondition = or(
       nameCondition,
       ilike(clientTable.email, term),
       ilike(clientTable.phoneNumber, term),
+      ...(phoneDigits ? [phoneDigits] : []),
       ilike(clientTable.city, term),
     );
 

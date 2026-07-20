@@ -81,3 +81,26 @@ export interface OrgUsageHistory {
   ai: AiUsagePeriodSummary[];
   sendseven: SendsevenUsagePeriodSummary[];
 }
+
+/**
+ * One row of the cross-org profit-analysis overview (platform-admin only).
+ * Aggregates AI + SendSeven usage across a period window (see
+ * `usageService.getUsageOverview`).
+ */
+export interface OrgUsageOverviewRow {
+  orgId: string;
+  orgName: string;
+  totalTokens: number;
+  aiMessageCount: number;
+  costMicros: number;
+  sentCount: number;
+  aiSentCount: number;
+  planTier: string | null;
+  monthlyAiTokenLimit: number | null;
+  monthlyAiMessageLimit: number | null;
+  monthlySendsevenMsgLimit: number | null;
+  aiLimitsEnabled: boolean | null;
+  sendsevenLimitsEnabled: boolean | null;
+  enforcementMode: string | null;
+  warnThresholdPct: number | null;
+}

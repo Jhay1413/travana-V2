@@ -9,6 +9,7 @@ import {
   type AssignableOrgRole,
 } from './platform-admin.service';
 import { platformAdminCreditsService } from './platform-admin-credits.service';
+import { platformAdminUsageService, type UsageLimitsPatch, type ModelPricingPatch } from './platform-admin-usage.service';
 import { userOrgRolesService } from '../user-org-roles/user-org-roles.service';
 
 function getStrParam(req: Request, key: string): string {
@@ -218,6 +219,45 @@ export const platformAdminController = {
     const reason   = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
     await platformAdminCreditsService.writeOffCharge(orgId, chargeId, actor, reason);
     successResponse(res, null, 'Charge written off');
+  }),
+
+  getOrgUsage: asyncHandler(async (req: Request, res: Response) => {
+    const data = await platformAdminUsageService.getOrgUsage(getStrParam(req, 'id'));
+    successResponse(res, data);
+  }),
+
+  getOrgUsageHistory: asyncHandler(async (req: Request, res: Response) => {
+    const orgId  = getStrParam(req, 'id');
+    const months = Number((req.query.months as string | undefined) ?? 6);
+    const data = await platformAdminUsageService.getOrgUsageHistory(orgId, months);
+    successResponse(res, data);
+  }),
+
+  updateUsageLimits: asyncHandler(async (req: Request, res: Response) => {
+    const actor = buildActor(req);
+    const orgId = getStrParam(req, 'id');
+    const patch = req.body as UsageLimitsPatch;
+    const data = await platformAdminUsageService.updateUsageLimits(orgId, patch, actor);
+    successResponse(res, data, 'Usage limits updated');
+  }),
+
+  getUsageOverview: asyncHandler(async (req: Request, res: Response) => {
+    const months = Number((req.query.months as string | undefined) ?? 1);
+    const data = await platformAdminUsageService.getUsageOverview(months);
+    successResponse(res, data);
+  }),
+
+  listModelPricing: asyncHandler(async (req: Request, res: Response) => {
+    const data = await platformAdminUsageService.listModelPricing();
+    successResponse(res, data);
+  }),
+
+  upsertModelPricing: asyncHandler(async (req: Request, res: Response) => {
+    const actor = buildActor(req);
+    const model = getStrParam(req, 'model');
+    const patch = req.body as ModelPricingPatch;
+    const data = await platformAdminUsageService.upsertModelPricing(model, patch, actor);
+    successResponse(res, data, 'Model pricing updated');
   }),
 
   listAudit: asyncHandler(async (req: Request, res: Response) => {

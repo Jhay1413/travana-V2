@@ -21,6 +21,10 @@ import {
   orgUserIdParamsSchema,
   addUserRoleBodySchema,
   removeUserRoleParamsSchema,
+  usageHistoryMonthsQuerySchema,
+  updateUsageLimitsSchema,
+  usageOverviewQuerySchema,
+  upsertModelPricingSchema,
 } from './platform-admin.validator';
 
 const router = Router();
@@ -67,6 +71,14 @@ router.post(  '/organizations/:id/credits/topup',                    requirePlat
 router.get(   '/organizations/:id/credits/usage',                    requirePlatformAdmin, validate(usageHistoryQuerySchema),     platformAdminController.getUsageHistory);
 router.get(   '/organizations/:id/credits/charges',                  requirePlatformAdmin, validate(listChargesQuerySchema),      platformAdminController.listCharges);
 router.patch( '/organizations/:id/credits/charges/:chargeId/write-off', requirePlatformAdmin, validate(writeOffChargeSchema),     platformAdminController.writeOffCharge);
+
+// AI + SendSeven usage limits & metering (monitoring + config; see docs/ai-usage-limits-plan.md)
+router.get(   '/organizations/:id/usage',            requirePlatformAdmin, validate(orgIdParamSchema),            platformAdminController.getOrgUsage);
+router.get(   '/organizations/:id/usage/history',     requirePlatformAdmin, validate(usageHistoryMonthsQuerySchema), platformAdminController.getOrgUsageHistory);
+router.patch( '/organizations/:id/usage-limits',      requirePlatformAdmin, validate(updateUsageLimitsSchema),     platformAdminController.updateUsageLimits);
+router.get(   '/usage/overview',                      requirePlatformAdmin, validate(usageOverviewQuerySchema),    platformAdminController.getUsageOverview);
+router.get(   '/model-pricing',                       requirePlatformAdmin,                                          platformAdminController.listModelPricing);
+router.put(   '/model-pricing/:model',                requirePlatformAdmin, validate(upsertModelPricingSchema),    platformAdminController.upsertModelPricing);
 
 // Audit log
 router.get(   '/audit-log',                    requirePlatformAdmin, validate(auditLogQuerySchema),           platformAdminController.listAudit);

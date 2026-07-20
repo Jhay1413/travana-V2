@@ -5,13 +5,16 @@ import {
   sendsevenMessageUsage,
   orgUsageLimits,
   modelPricing,
+  organization,
   type AiUsageMonthly,
   type SendsevenMessageUsage,
   type OrgUsageLimits,
   type InsertOrgUsageLimits,
   type ModelPricing,
+  type InsertModelPricing,
 } from "@shared/schema";
 import { and, desc, eq, lte, sql } from "drizzle-orm";
+import type { OrgUsageOverviewRow } from "./usage.types";
 
 export interface InsertEventParams {
   orgId: string;
@@ -208,5 +211,70 @@ export const usageRepository = {
         .limit(months),
     ]);
     return { ai, sendseven };
+  },
+
+  /**
+   * Cross-org profit-analysis overview (platform-admin only): one row per
+   * org, aggregating AI + SendSeven usage for every monthly period whose
+   * `period_start >= periodFrom`, left-joined with the org's usage limits.
+   * Aggregate subqueries are cast to `float8` — node-pg returns `bigint`
+   * (Postgres's default SUM() type) as a string, not a JS number.
+   */
+  async getUsageOverview(periodFrom: string): Promise<OrgUsageOverviewRow[]> {
+    return db
+      .select({
+        orgId: organization.id,
+        orgName: organization.name,
+        totalTokens: sql<number>`COALESCE((
+          SELECT SUM("total_tokens") FROM "ai_usage_monthly"
+          WHERE "ai_usage_monthly"."org_id" = "organization"."id"
+            AND "ai_usage_monthly"."period_start" >= ${periodFrom}
+        ), 0)::float8`,
+        aiMessageCount: sql<number>`COALESCE((
+          SELECT SUM("message_count") FROM "ai_usage_monthly"
+          WHERE "ai_usage_monthly"."org_id" = "organization"."id"
+            AND "ai_usage_monthly"."period_start" >= ${periodFrom}
+        ), 0)::float8`,
+        costMicros: sql<number>`COALESCE((
+          SELECT SUM("cost_micros") FROM "ai_usage_monthly"
+          WHERE "ai_usage_monthly"."org_id" = "organization"."id"
+            AND "ai_usage_monthly"."period_start" >= ${periodFrom}
+        ), 0)::float8`,
+        sentCount: sql<number>`COALESCE((
+          SELECT SUM("sent_count") FROM "sendseven_message_usage"
+          WHERE "sendseven_message_usage"."org_id" = "organization"."id"
+            AND "sendseven_message_usage"."period_start" >= ${periodFrom}
+        ), 0)::float8`,
+        aiSentCount: sql<number>`COALESCE((
+          SELECT SUM("ai_sent_count") FROM "sendseven_message_usage"
+          WHERE "sendseven_message_usage"."org_id" = "organization"."id"
+            AND "sendseven_message_usage"."period_start" >= ${periodFrom}
+        ), 0)::float8`,
+        planTier: orgUsageLimits.planTier,
+        monthlyAiTokenLimit: orgUsageLimits.monthlyAiTokenLimit,
+        monthlyAiMessageLimit: orgUsageLimits.monthlyAiMessageLimit,
+        monthlySendsevenMsgLimit: orgUsageLimits.monthlySendsevenMsgLimit,
+        aiLimitsEnabled: orgUsageLimits.aiLimitsEnabled,
+        sendsevenLimitsEnabled: orgUsageLimits.sendsevenLimitsEnabled,
+        enforcementMode: orgUsageLimits.enforcementMode,
+        warnThresholdPct: orgUsageLimits.warnThresholdPct,
+      })
+      .from(organization)
+      .leftJoin(orgUsageLimits, eq(orgUsageLimits.orgId, organization.id));
+  },
+
+  /** One row per model: the latest pricing version with `effective_from <= now`. */
+  async listLatestPricingPerModel(now: Date = new Date()): Promise<ModelPricing[]> {
+    return db
+      .selectDistinctOn([modelPricing.model])
+      .from(modelPricing)
+      .where(lte(modelPricing.effectiveFrom, now))
+      .orderBy(modelPricing.model, desc(modelPricing.effectiveFrom));
+  },
+
+  /** Insert a new pricing version for a model — never mutate old rows (history is preserved). */
+  async insertPricing(row: InsertModelPricing): Promise<ModelPricing> {
+    const [inserted] = await db.insert(modelPricing).values(row).returning();
+    return inserted;
   },
 };

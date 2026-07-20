@@ -1,6 +1,6 @@
 import { usageRepository } from "./usage.repository";
 import { startOfMonthUtc } from "../platform-admin/platform-admin-credits.repository";
-import type { ModelPricing } from "@shared/schema";
+import type { ModelPricing, InsertModelPricing, OrgUsageLimits, InsertOrgUsageLimits } from "@shared/schema";
 import type {
   RecordAiUsageInput,
   RecordSendsevenSendInput,
@@ -9,6 +9,7 @@ import type {
   OrgUsageHistory,
   AiUsagePeriodSummary,
   SendsevenUsagePeriodSummary,
+  OrgUsageOverviewRow,
 } from "./usage.types";
 
 const MTOK = 1_000_000;
@@ -206,6 +207,43 @@ export async function getOrgUsageHistory(orgId: string, months = 6): Promise<Org
   };
 }
 
+/** Raw limits row for a single org — platform-admin reads/edits this directly. */
+export async function getLimits(orgId: string): Promise<OrgUsageLimits | null> {
+  return usageRepository.getLimits(orgId);
+}
+
+/** Upsert an org's usage limits (platform-admin only). This module owns `org_usage_limits`. */
+export async function upsertLimits(
+  orgId: string,
+  patch: Partial<InsertOrgUsageLimits>,
+): Promise<OrgUsageLimits> {
+  return usageRepository.upsertLimits(orgId, patch);
+}
+
+/**
+ * Cross-org profit-analysis overview (platform-admin only), sorted by cost
+ * descending. `periodFrom` is an inclusive `YYYY-MM-01` lower bound — pass
+ * the current month's start for a single-period view, or further back to sum
+ * multiple months per org.
+ */
+export async function getUsageOverview(periodFrom: string): Promise<OrgUsageOverviewRow[]> {
+  const rows = await usageRepository.getUsageOverview(periodFrom);
+  return [...rows].sort((a, b) => b.costMicros - a.costMicros);
+}
+
+/** One row per model: the latest active pricing (platform-admin only). */
+export async function listModelPricing(): Promise<ModelPricing[]> {
+  return usageRepository.listLatestPricingPerModel();
+}
+
+/**
+ * Create a new pricing version for a model, effective now — old rows are
+ * never mutated so cost history stays accurate (platform-admin only).
+ */
+export async function createModelPricingVersion(input: InsertModelPricing): Promise<ModelPricing> {
+  return usageRepository.insertPricing(input);
+}
+
 export const usageService = {
   computeCostMicros,
   recordAiUsage,
@@ -214,4 +252,9 @@ export const usageService = {
   checkSendsevenAllowed,
   getOrgUsageSummary,
   getOrgUsageHistory,
+  getLimits,
+  upsertLimits,
+  getUsageOverview,
+  listModelPricing,
+  createModelPricingVersion,
 };

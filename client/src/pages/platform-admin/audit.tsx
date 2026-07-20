@@ -18,6 +18,8 @@ const ACTION_OPTIONS = [
   "org.plan.change",
   "org.impersonate.start",
   "org.impersonate.stop",
+  "usage_limits.update",
+  "model_pricing.update",
 ];
 
 const ALL_ORGS = "__ALL_ORGS__";
