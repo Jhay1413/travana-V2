@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/async-handler";
 import { successResponse } from "../../utils/response";
 import { AppError } from "../../utils/error-handler";
+import { getScope } from "../../utils/scope";
 import { conversationsService } from "./conversations.service";
 
 function num(v: unknown): number | undefined {
@@ -199,5 +200,35 @@ export const conversationsController = {
   // POST /api/v1/conversations/:conversation_id/bot-session/disable
   botDisable: asyncHandler(async (req: Request, res: Response) => {
     return successResponse(res, await conversationsService.botDisable(requireParam(req, "conversation_id")), "Bot disabled");
+  }),
+
+  // GET /api/v2/conversations/:conversation_id/ai-state
+  aiState: asyncHandler(async (req: Request, res: Response) => {
+    const { orgId } = getScope(req);
+    return successResponse(
+      res,
+      await conversationsService.getAiState(orgId, requireParam(req, "conversation_id")),
+      "AI state retrieved",
+    );
+  }),
+
+  // POST /api/v2/conversations/:conversation_id/ai-state/enable
+  aiEnable: asyncHandler(async (req: Request, res: Response) => {
+    const { orgId } = getScope(req);
+    return successResponse(
+      res,
+      await conversationsService.enableAi(orgId, requireParam(req, "conversation_id")),
+      "AI enabled for this conversation",
+    );
+  }),
+
+  // POST /api/v2/conversations/:conversation_id/ai-state/disable
+  aiDisable: asyncHandler(async (req: Request, res: Response) => {
+    const { orgId } = getScope(req);
+    return successResponse(
+      res,
+      await conversationsService.disableAi(orgId, requireParam(req, "conversation_id")),
+      "AI disabled for this conversation",
+    );
   }),
 };

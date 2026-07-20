@@ -51,12 +51,14 @@ import { useRole } from "@/hooks/use-role";
 import { ChannelsDialog } from "./channels-dialog";
 import { ClientLinkSection, contactLinkMatch, formatClientDate, composeClientAddress } from "./client-link-section";
 import { GenerateEnquiryButton } from "./generate-enquiry-button";
+import { AiStatusControl } from "./ai-status-control";
 import { useContactLink } from "../api/use-contact-link";
 import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
 import { useConversations, useConversationBadgeCounts } from "../api/use-conversations-queries";
 import { useCloseConversation, useReopenConversation } from "../api/use-conversations-mutations";
 import { useMessages, useSendMessage, useCreateInternalNote } from "../api/use-messages";
+import { useConversationsRealtime } from "../api/use-conversations-realtime";
 import { useInboxes } from "../api/use-inboxes";
 import { messagesApi } from "../api/messages.api";
 import type { SsInbox } from "../api/inboxes.api";
@@ -617,6 +619,10 @@ export default function ConversationsInbox() {
   const { orgRole } = useRole();
   const canManageChannels = orgRole === "org_admin" || orgRole === "branch_manager" || orgRole === "platform_admin";
 
+  // One shared SSE connection for the whole inbox — maps server events to
+  // targeted query invalidations (new messages, AI state, assignment, etc).
+  const { connected: realtimeConnected } = useConversationsRealtime();
+
   // Custom inboxes (saved views) from SendSeven — drive the inbox switcher.
   const { data: inboxesData } = useInboxes();
   const inboxList = useMemo(
@@ -790,6 +796,14 @@ export default function ConversationsInbox() {
             )}
           </button>
           <div className="flex-1" />
+          <span
+            className={cn(
+              "h-2 w-2 flex-shrink-0 rounded-full transition-colors",
+              realtimeConnected ? "bg-emerald-500" : "bg-black/15 dark:bg-white/15",
+            )}
+            title={realtimeConnected ? "Live" : "Reconnecting…"}
+            data-testid="conversation-realtime-indicator"
+          />
           {canManageChannels && (
             <button
               onClick={() => setChannelsOpen(true)}
@@ -953,6 +967,7 @@ export default function ConversationsInbox() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
+                <AiStatusControl conversationId={selected.id} />
                 <HeaderAction icon={RefreshCw} label="Switch channel" />
                 <HeaderAction icon={StickyNote} label="Notes" />
                 <HeaderAction icon={Contact} label="Contact info" />

@@ -8,6 +8,7 @@ import {
   parseBotRules,
   buildRulesBlock,
   generateTicketConfirmation,
+  logAiUsage,
 } from "../ai-conversation/ai-conversation.brain";
 import { adminDataService, type PendingAttachment } from "./admin-data.service";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
@@ -368,7 +369,9 @@ export const adminAgent = {
             messages: chatMessages,
             tools: [openTicketTool],
             tool_choice: { type: "function", function: { name: OPEN_TICKET_TOOL_NAME } },
+            prompt_cache_key: orgId,
           });
+          logAiUsage("admin-agent:forceTicketNow", CHAT_MODEL, forced.usage);
           const call = forced.choices[0]?.message?.tool_calls?.[0];
           if (call && call.type === "function" && call.function.name === OPEN_TICKET_TOOL_NAME) {
             const result = await executeOpenTicketTool(orgId, clientId, call.function.arguments, pending);
@@ -389,7 +392,9 @@ export const adminAgent = {
             max_tokens: 700,
             messages: chatMessages,
             tools: [getMyQuotesTool, getMyEnquiriesTool, getMyTicketsTool, getMyFilesTool, getMyFileLinkTool, openTicketTool],
+            prompt_cache_key: orgId,
           });
+          logAiUsage("admin-agent:toolLoop", CHAT_MODEL, response.usage);
           const assistantMessage = response.choices[0]?.message;
           if (!assistantMessage) break;
 
@@ -442,7 +447,9 @@ export const adminAgent = {
             max_tokens: 700,
             messages: chatMessages,
             tool_choice: "none",
+            prompt_cache_key: orgId,
           });
+          logAiUsage("admin-agent:finalize", CHAT_MODEL, finalResponse.usage);
           raw = finalResponse.choices[0]?.message?.content?.trim();
         }
       }
@@ -468,7 +475,9 @@ export const adminAgent = {
             messages: chatMessages,
             tools: [openTicketTool],
             tool_choice: { type: "function", function: { name: OPEN_TICKET_TOOL_NAME } },
+            prompt_cache_key: orgId,
           });
+          logAiUsage("admin-agent:backstop", CHAT_MODEL, forced.usage);
           const call = forced.choices[0]?.message?.tool_calls?.[0];
           if (call && call.type === "function" && call.function.name === OPEN_TICKET_TOOL_NAME) {
             const result = await executeOpenTicketTool(orgId, clientId, call.function.arguments, pending);

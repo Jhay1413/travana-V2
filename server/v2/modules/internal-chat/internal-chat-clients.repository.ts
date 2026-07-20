@@ -18,7 +18,6 @@ import {
   transaction,
   user,
 } from "@shared/schema";
-import { quoteStatsConds } from "../../utils/quote-conditions";
 
 // Repository for the internal-chat assistant's client-lookup tools
 // (search_clients / get_client_details / get_client_records). This
@@ -115,6 +114,11 @@ export interface ClientQuoteDetailRow {
   pricePerPerson: string;
   dateCreated: Date | null;
   dateExpiry: Date | null;
+  // True for quotes created through the "quick/free quote" flow (no real
+  // deal behind them yet). Surfaced here — unlike the org-wide analytics
+  // module — because a per-client listing must show everything attached to
+  // the client; the model uses this flag to describe the quote accurately.
+  isFreeQuote: boolean;
 }
 
 export interface ClientBookingDetailRow {
@@ -246,10 +250,16 @@ export const internalChatClientsRepository = {
   // already passed the client-visibility gate for this specific client (via
   // findClientById), so this deliberately does NOT re-apply branch/user
   // filtering on the transactions (that would under-report the authorized
-  // client's own history). Row-level consistency filters mirror
-  // internal-chat-analytics.repository.ts: is_active NULL-or-true on all
-  // three, quotes additionally quoteStatsConds() + deleted_at IS NULL.
-  // Returns counts + latest transaction status/date only — NO prices/amounts.
+  // client's own history). Row-level consistency filters: is_active
+  // NULL-or-true on all three, quotes additionally deleted_at IS NULL.
+  // Deliberately DOES NOT apply quoteStatsConds() (used by
+  // internal-chat-analytics.repository.ts for org-wide aggregate stats) —
+  // that helper excludes free/quick quotes and client-less quotes, which is
+  // correct for aggregate totals but wrong here: staff asking about a
+  // SPECIFIC client need to see everything attached to that client,
+  // including quotes created through the free-quote flow (a large share of
+  // real, client-attached quotes have isFreeQuote=true). Returns counts +
+  // latest transaction status/date only — NO prices/amounts.
   async getClientPipelineCounts(clientId: string, orgId: string): Promise<ClientPipelineCountsRow> {
     const txConds: SQL[] = [
       eq(transaction.client_id, clientId),
@@ -273,7 +283,6 @@ export const internalChatClientsRepository = {
             ...txConds,
             isNull(quote.deleted_at),
             sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
-            ...quoteStatsConds(),
           ),
         ),
 
@@ -363,10 +372,14 @@ export const internalChatClientsRepository = {
   },
 
   // Itemized quote list for get_client_records. Row-consistency filters mirror
-  // getClientPipelineCounts exactly (deleted_at IS NULL, is_active NULL-or-true,
-  // quoteStatsConds()) so this returns details for the SAME set of quotes the
-  // counts tool counted. Destination/resort/country/board-basis names are
-  // resolved via the quote's PRIMARY accommodation — the same
+  // getClientPipelineCounts exactly (deleted_at IS NULL, is_active
+  // NULL-or-true) so this returns details for the SAME set of quotes the
+  // counts tool counted. Deliberately does NOT apply quoteStatsConds() (see
+  // getClientPipelineCounts) — a per-client record listing must include
+  // quick/free quotes attached to the client, not just "real deal" quotes;
+  // isFreeQuote is selected below so the model can flag them as such.
+  // Destination/resort/country/board-basis names are resolved via the
+  // quote's PRIMARY accommodation — the same
   // quote_accomodation(is_primary=true) -> accomodation_list -> resorts ->
   // destination -> country join chain already used across the codebase
   // (see portal.repository.ts#findClientQuotes, quote.repository.ts's public
@@ -398,6 +411,7 @@ export const internalChatClientsRepository = {
         pricePerPerson: quote.price_per_person,
         dateCreated: quote.date_created,
         dateExpiry: quote.date_expiry,
+        isFreeQuote: sql<boolean>`coalesce(${quote.isFreeQuote}, false)`,
       })
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
@@ -413,7 +427,6 @@ export const internalChatClientsRepository = {
           ...txConds,
           isNull(quote.deleted_at),
           sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
-          ...quoteStatsConds(),
         ),
       )
       .orderBy(desc(quote.date_created))

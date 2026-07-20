@@ -53,7 +53,11 @@
       "Bash(wc -l /tmp_typecheck_out.txt)",
       "Bash(grep -c \"error TS\" /tmp_typecheck_out.txt)",
       "Bash(grep -E \"ai-conversation.brain|reply-worker.service|internal-chat-testflow.service|admin-agent.service\" /tmp_typecheck_out.txt)",
-      "Bash(dir /s /b server\\\\*.test.ts)"
+      "Bash(dir /s /b server\\\\*.test.ts)",
+      "Bash(powershell -Command \"Get-ChildItem -Recurse -Path 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\src\\\\features\\\\conversations' -Filter '*inbox*'\")",
+      "Bash(powershell -Command \"\\(Get-Content 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\src\\\\features\\\\conversations\\\\components\\\\conversations-inbox.tsx'\\).Length\")",
+      "Bash(powershell -Command \"Select-String -Path 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\src\\\\features\\\\conversations\\\\components\\\\conversations-inbox.tsx' -Pattern 'toast|sonner'\")",
+      "Bash(powershell -Command \"Get-ChildItem 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\src\\\\components\\\\ui' -Filter 'badge*'\")"
     ],
     "deny": [
       "Bash(drizzle-kit push:*)",

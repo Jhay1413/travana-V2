@@ -38,11 +38,48 @@ export const conversationStateRepository = {
   // like groupedAskSent/availabilityTaskId) — a human owns the thread now, so
   // stale flags must not leak into a later AI turn (e.g. after a manual
   // hand-back before the 1h idle-resume would have cleared them itself).
-  async setNeedsHuman(conversationId: string): Promise<void> {
+  // `orgId` is optional to preserve existing conversationId-only callers
+  // (the webhook's own human-takeover detection, which only ever knows the
+  // conversation's own org) — pass it whenever the caller has it (e.g. a
+  // manual API toggle) so the write can never cross into another org's row.
+  async setNeedsHuman(conversationId: string, orgId?: string): Promise<void> {
+    const conds = [eq(sendsevenConversationState.conversationId, conversationId)];
+    if (orgId) conds.push(eq(sendsevenConversationState.orgId, orgId));
     await db
       .update(sendsevenConversationState)
       .set({ needsHuman: true, handledByHumanAt: new Date(), context: null, updatedAt: new Date() })
-      .where(eq(sendsevenConversationState.conversationId, conversationId));
+      .where(and(...conds));
+  },
+
+  // Manual re-enable (staff toggles AI back on from the inbox) — SAME
+  // clean-slate semantics as the 1h idle auto-resume in reply-worker
+  // (needsHuman/handledByHumanAt/enquiryStatus/enquirySlots/enquiryId/context
+  // all reset) so a fresh AI turn never inherits a stale enquiry-in-progress.
+  // Scoped by conversationId AND orgId so a manual toggle can never reach
+  // another org's row.
+  async clearNeedsHuman(conversationId: string, orgId: string): Promise<void> {
+    await db
+      .update(sendsevenConversationState)
+      .set({
+        needsHuman: false,
+        handledByHumanAt: null,
+        enquiryStatus: null,
+        enquirySlots: {},
+        enquiryId: null,
+        context: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(sendsevenConversationState.conversationId, conversationId), eq(sendsevenConversationState.orgId, orgId)));
+  },
+
+  // Org-scoped read for the AI-state API — a manual toggle/status check must
+  // never leak or touch another org's conversation state.
+  async getState(conversationId: string, orgId: string): Promise<SendsevenConversationState | null> {
+    const [row] = await db
+      .select()
+      .from(sendsevenConversationState)
+      .where(and(eq(sendsevenConversationState.conversationId, conversationId), eq(sendsevenConversationState.orgId, orgId)));
+    return row ?? null;
   },
 
   // Atomically claims a status transition: the write only takes effect if the

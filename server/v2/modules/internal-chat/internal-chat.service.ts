@@ -148,7 +148,8 @@ const getClientRecordsTool: OpenAI.Chat.Completions.ChatCompletionTool = {
       "after search_clients/get_client_details when the colleague asks about a client's actual enquiries, " +
       "quotes, or bookings. Never invent details — always call this. The clientId MUST be a UUID you obtained " +
       "from search_clients or get_client_details in THIS conversation — NEVER invent, guess, or reuse a number " +
-      "from elsewhere. If you don't already have the client's UUID, call search_clients first.",
+      "from elsewhere. If you don't already have the client's UUID, call search_clients first. Quote results " +
+      "may include quick/free comparison quotes (flagged isFreeQuote: true) alongside standard priced quotes.",
     parameters: {
       type: "object",
       properties: {

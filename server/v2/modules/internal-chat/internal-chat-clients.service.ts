@@ -164,6 +164,12 @@ export interface ClientQuoteRecord {
   financials: ClientRecordFinancials;
   createdAt: Date | null;
   expiresAt: Date | null;
+  // Flags quotes created through the quick/free-quote flow (no real deal
+  // behind them yet) — the repository deliberately includes these for a
+  // per-client listing (unlike org-wide analytics), so the model needs this
+  // flag to describe such a quote accurately rather than implying it's a
+  // standard priced deal quote.
+  isFreeQuote: boolean;
 }
 
 export interface ClientBookingRecord {
@@ -241,6 +247,7 @@ function toQuoteRecord(row: ClientQuoteDetailRow): ClientQuoteRecord {
     },
     createdAt: row.dateCreated,
     expiresAt: row.dateExpiry,
+    isFreeQuote: row.isFreeQuote,
   };
 }
 

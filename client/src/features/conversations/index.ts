@@ -46,7 +46,9 @@ export {
   useAvailableBots,
   useTranscriptStatus,
   useTrendingTags,
+  useConversationAiState,
 } from "./api/use-conversations-queries";
+export { useConversationsRealtime } from "./api/use-conversations-realtime";
 export {
   useCreateConversation,
   useUpdateConversation,
@@ -66,6 +68,8 @@ export {
   useSearchSimilarConversations,
   useEnableBot,
   useDisableBot,
+  useEnableConversationAi,
+  useDisableConversationAi,
 } from "./api/use-conversations-mutations";
 export type {
   SsConversation,
@@ -95,6 +99,7 @@ export type {
   TranscriptExportJobResponse,
   ConversationSummaryDetail,
   PreviousConversationsResponse,
+  ConversationAiState,
 } from "./api/conversations.api";
 export type {
   SsMessage,

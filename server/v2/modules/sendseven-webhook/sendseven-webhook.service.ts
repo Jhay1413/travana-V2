@@ -5,10 +5,12 @@ import { getPublicBaseUrl } from "../../utils/public-url";
 import { runWithSendSevenConfigAsync, sendSevenRequest, type SendSevenConfig } from "../../utils/sendseven";
 import { conversationIntegrationRepository } from "../conversation-integration/conversation-integration.repository";
 import { conversationIntegrationService } from "../conversation-integration/conversation-integration.service";
+import { realtimeService } from "../../realtime/realtime.service";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { replyWorker } from "./reply-worker.service";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
-import type { SsWebhookEndpointCreated, SsWebhookEvent } from "./sendseven-webhook.types";
+import type { ConversationAiState, SsWebhookEndpointCreated, SsWebhookEvent } from "./sendseven-webhook.types";
+import type { SendsevenConversationState } from "@shared/schema";
 
 // The SendSeven connection to register the webhook against: the org's resolved
 // config (managed sub-account via parent token + X-Tenant-ID, or a manual token),
@@ -38,6 +40,28 @@ async function pruneEndpoints(cfg: SendSevenConfig, orgId: string): Promise<numb
     );
   }
   return targets.length;
+}
+
+// Maps a (possibly absent) state row to the AI-state API shape. No row yet =
+// the AI has never been paused on this conversation, so it's active.
+function toAiState(row: SendsevenConversationState | null): ConversationAiState {
+  return {
+    aiActive: !row?.needsHuman,
+    needsHuman: !!row?.needsHuman,
+    handledByHumanAt: row?.handledByHumanAt ? row.handledByHumanAt.toISOString() : null,
+    updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
+  };
+}
+
+// Best-effort real-time publish — a bus failure must NEVER break the webhook
+// ack, a staff send, or an AI reply, so every call site wraps this in a
+// try/catch that only warns.
+function publishRealtime(orgId: string, event: Parameters<typeof realtimeService.publish>[1]): void {
+  try {
+    realtimeService.publish(orgId, event);
+  } catch (err) {
+    console.warn(`[sendseven-webhook] realtime publish failed org=${orgId} type=${event.type}:`, err);
+  }
 }
 
 const SUBSCRIBED_EVENTS = ["message.received", "message.sent", "conversation.updated"];
@@ -197,6 +221,8 @@ export const sendsevenWebhookService = {
         console.log(`[sendseven-webhook] human reply detected on conv ${conversationId} → handing off to human`);
         await conversationStateRepository.ensure(conversationId, orgId, m.contact_id ?? null);
         await conversationStateRepository.setNeedsHuman(conversationId);
+        publishRealtime(orgId, { type: "message.sent", conversationId });
+        publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
       }
       return;
     }
@@ -208,13 +234,51 @@ export const sendsevenWebhookService = {
       if (assigned && conv?.id) {
         await conversationStateRepository.ensure(conv.id, orgId, null);
         await conversationStateRepository.setNeedsHuman(conv.id);
+        publishRealtime(orgId, { type: "ai-state.changed", conversationId: conv.id, needsHuman: true });
       }
+      if (conv?.id) publishRealtime(orgId, { type: "conversation.updated", conversationId: conv.id });
       return;
     }
 
     // Inbound customer message → let the AI reply.
     if (event.type === "message.received" && m?.direction === "inbound") {
+      if (conversationId) publishRealtime(orgId, { type: "message.received", conversationId });
       await replyWorker.handleInbound(orgId, event);
     }
+  },
+
+  // ── Per-conversation AI enable/disable/status (conversations module) ──
+
+  async getAiState(orgId: string, conversationId: string): Promise<ConversationAiState> {
+    const row = await conversationStateRepository.getState(conversationId, orgId);
+    return toAiState(row);
+  },
+
+  // Manual re-enable: clean-slate clear (see conversationStateRepository.clearNeedsHuman).
+  async enableAi(orgId: string, conversationId: string): Promise<ConversationAiState> {
+    await conversationStateRepository.clearNeedsHuman(conversationId, orgId);
+    publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: false });
+    return this.getAiState(orgId, conversationId);
+  },
+
+  // Manual pause: ensure a state row exists (a conversation the AI has never
+  // touched yet has none) before setting needsHuman.
+  async disableAi(orgId: string, conversationId: string): Promise<ConversationAiState> {
+    await conversationStateRepository.ensure(conversationId, orgId, null);
+    await conversationStateRepository.setNeedsHuman(conversationId, orgId);
+    publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
+    return this.getAiState(orgId, conversationId);
+  },
+
+  // Synchronous AI pause for a staff reply sent from our inbox (messages
+  // module's send path) — so the AI goes silent immediately rather than
+  // waiting on the message.sent webhook echo (process(), above), which
+  // remains the backstop for replies sent directly in SendSeven. Best-effort:
+  // the caller wraps this in try/catch so a state-write failure never blocks
+  // sending the actual message.
+  async pauseAiForStaffReply(orgId: string, conversationId: string): Promise<void> {
+    await conversationStateRepository.ensure(conversationId, orgId, null);
+    await conversationStateRepository.setNeedsHuman(conversationId, orgId);
+    publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
   },
 };

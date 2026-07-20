@@ -136,10 +136,22 @@
       "Bash(grep -iE \"sendseven|conversation-integration|sendseven-integration-card\" /tmp/tsc.txt || echo \"CONFIRMED: zero errors in any file I touched \\(all 99 are pre-existing, e.g. server/utils/only-socials.ts\\)\")",
       "Bash(tee \"C:\\\\Users\\\\CHRIST~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Christian-Desktop-travana-v2-travana-V2\\\\294931f8-7863-495a-9d6c-2173af84f60b\\\\scratchpad\\\\typecheck.log\")",
       "Bash(awk 'NR<=771 && /pgTable\\\\\\(/ {line=NR; name=$0} END{}' shared/schema.ts)",
-      "Bash(awk -F: '$1<=771')"
+      "Bash(awk -F: '$1<=771')",
+      "Bash(grep -E \"^server[\\\\\\\\\\\\\\\\/]v2[\\\\\\\\\\\\\\\\/]modules[\\\\\\\\\\\\\\\\/]\\(conversations|messages|sendseven-webhook\\)\")",
+      "Bash(powershell -Command \"Test-Path 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\node_modules\\\\lucide-react\\\\dist\\\\esm\\\\icons\\\\bot-off.js'\")",
+      "Bash(Select-String -Pattern \"conversations\")",
+      "Read(//c/Users/Christian/AppData/Local/Temp/**)",
+      "Bash(head -n 40 /c/Users/Christian/AppData/Local/Temp/tsc-out.txt)",
+      "Bash(rm -f /c/Users/Christian/AppData/Local/Temp/tsc-out.txt)",
+      "Bash(node rt-smoke.test.mjs)",
+      "Bash(rm \"c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\rt-smoke.test.mjs\" /tmp/rt-smoke.mjs 2>/dev/null; ls \"c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\rt-smoke.test.mjs\" 2>&1 || echo \"removed\")",
+      "Bash(tee \"C:\\\\Users\\\\CHRIST~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Christian-Desktop-travana-v2-travana-V2\\\\4617b591-fc55-4318-9a89-b01dcd7b9600\\\\scratchpad\\\\tsc-out.txt\")",
+      "Bash(git log *)"
     ],
     "additionalDirectories": [
-      "/tmp"
+      "/tmp",
+      "C:\\Users\\Christian\\AppData\\Local\\Temp",
+      "\\tmp"
     ]
   }
 }

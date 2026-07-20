@@ -89,6 +89,15 @@ export interface SsBadgeCounts {
   is_multi_agent: boolean;
 }
 
+// Per-conversation AI auto-reply state: whether the AI is actively replying,
+// or paused (e.g. a human took over the thread).
+export interface ConversationAiState {
+  aiActive: boolean;
+  needsHuman: boolean;
+  handledByHumanAt: string | null;
+  updatedAt: string | null;
+}
+
 // ─── Request / response payloads ──────────────────────────────────────────────
 
 export interface ListConversationsQuery {
@@ -359,6 +368,10 @@ export const conversationsApi = {
     const { data } = await axiosClient.get<TranscriptExportJobResponse>(`${BASE}/${id}/transcript/${jobId}`);
     return data;
   },
+  aiState: async (id: string): Promise<ConversationAiState> => {
+    const { data } = await axiosClient.get<ConversationAiState>(`${BASE}/${id}/ai-state`);
+    return data;
+  },
 
   // Writes — single conversation
   create: async (body: ConversationCreate): Promise<SsConversation> => {
@@ -411,6 +424,14 @@ export const conversationsApi = {
   },
   botDisable: async (id: string): Promise<Record<string, unknown>> => {
     const { data } = await axiosClient.post<Record<string, unknown>>(`${BASE}/${id}/bot-session/disable`);
+    return data;
+  },
+  aiStateEnable: async (id: string): Promise<ConversationAiState> => {
+    const { data } = await axiosClient.post<ConversationAiState>(`${BASE}/${id}/ai-state/enable`);
+    return data;
+  },
+  aiStateDisable: async (id: string): Promise<ConversationAiState> => {
+    const { data } = await axiosClient.post<ConversationAiState>(`${BASE}/${id}/ai-state/disable`);
     return data;
   },
 

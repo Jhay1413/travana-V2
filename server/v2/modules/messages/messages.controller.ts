@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/async-handler";
 import { successResponse } from "../../utils/response";
 import { AppError } from "../../utils/error-handler";
+import { getScope } from "../../utils/scope";
 import { messagesService } from "./messages.service";
 
 function num(v: unknown): number | undefined {
@@ -31,7 +32,8 @@ export const messagesController = {
 
   // POST /api/v1/messages
   send: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await messagesService.send(req.body ?? {}), "Message sent", 201);
+    const { orgId } = getScope(req);
+    return successResponse(res, await messagesService.send(orgId, req.body ?? {}), "Message sent", 201);
   }),
 
   // POST /api/v1/messages/internal-notes

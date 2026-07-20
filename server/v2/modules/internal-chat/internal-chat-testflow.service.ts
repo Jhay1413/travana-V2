@@ -6,7 +6,6 @@ import {
   decideDeterministicRoute,
   generateBeneficiaryAsk,
   generateGeneralReply,
-  generateGroupedAsk,
   generateTransitionReply,
   generateTurn,
   hasSubstantiveSignal,
@@ -15,11 +14,11 @@ import {
   kbExceedsBudget,
   looksLikeActionableAdmin,
   looksLikeAdminAsk,
-  MAX_ENQUIRY_ASKS,
   mergeSlots,
   missingCoreFieldsFor,
   missingFieldsFor,
   parseAvailabilityTime,
+  shouldCreateEnquiryNow,
   shouldForceTicketNow,
   similarReply,
   type BeneficiaryAskKind,
@@ -56,6 +55,10 @@ import type { InternalChatMessage, InternalChatSession } from "@shared/schema";
 // purpose as reply-worker's ConversationContext.
 interface ConversationContext {
   lastReply?: string;
+  // LEGACY — no longer SET by this driver (the enquiry is now created
+  // immediately once the core fields complete), only READ for backward
+  // compat with a session that started under the old flow. Mirrors
+  // reply-worker's ConversationContext — see there for the full comment.
   groupedAskSent?: boolean;
   // Number of collecting-phase questions asked so far this enquiry. Mirrors
   // reply-worker's ConversationContext — see there for the full comment.
@@ -331,7 +334,7 @@ export const internalChatTestflowService = {
         } else {
           const resolution = await resolveOrCreateTestClient(orgId, scope.userId, { fullName: full, phone });
           if (resolution.status === "phone_conflict") {
-            const confirmReply = buildPhoneConflictReply(resolution.existingNames);
+            const confirmReply = buildPhoneConflictReply();
             await internalChatRepository.updateSession(session.id, orgId, {
               context: {
                 ...prevContext,
@@ -341,7 +344,7 @@ export const internalChatTestflowService = {
               },
             });
             console.log(
-              `[internal-chat-testflow] session ${session.id} phone clash — number belongs to ${resolution.existingNames.join(", ")}; asked to confirm`,
+              `[internal-chat-testflow] session ${session.id} phone clash — number belongs to ${resolution.existingNames.length} existing client(s); asked to confirm`,
             );
             const replyMessage = await persistReply(confirmReply);
             return { replyMessage };
@@ -514,7 +517,7 @@ export const internalChatTestflowService = {
           } else {
             const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
             if (resolution.status === "phone_conflict") {
-              const confirmReply = buildPhoneConflictReply(resolution.existingNames, travellerName);
+              const confirmReply = buildPhoneConflictReply(travellerName);
               await internalChatRepository.updateSession(session.id, orgId, {
                 intent: "enquiry",
                 enquiryStatus: "collecting",
@@ -525,7 +528,7 @@ export const internalChatTestflowService = {
                   beneficiary: { name: travellerName, phone: travellerPhone, phoneConflictPhone: travellerPhone },
                 },
               });
-              console.log(`[internal-chat-testflow] session ${session.id} beneficiary phone clash — ${resolution.existingNames.join(", ")}; asked to confirm`);
+              console.log(`[internal-chat-testflow] session ${session.id} beneficiary phone clash — number belongs to ${resolution.existingNames.length} existing client(s); asked to confirm`);
               const replyMessage = await persistReply(confirmReply);
               return { replyMessage };
             }
@@ -549,18 +552,33 @@ export const internalChatTestflowService = {
     // call you", which must NOT drop the enquiry). Mirrors reply-worker.
     const substantive = hasSubstantiveSignal(mergedSlots);
     const treatAsEnquiry = turn.intent === "enquiry" || substantive || beneficiaryActive;
-    const missingBeforeCreate = missingFieldsFor(mergedSlots);
-    const readyToCreate =
-      enquiryStatus === "collecting" && (!!prevContext.groupedAskSent || missingBeforeCreate.length === 0);
 
-    // Logs slot KEYS only (never the raw values — destination/notes/etc. can
-    // carry customer PII) so this stays useful for debugging state transitions
+    // "Additional fields still needed" (ALL fields, incl. nice-to-haves) — no
+    // longer a create gate; only used for the note on enquiry creation (and
+    // for observability in the log line below). Mirrors reply-worker.
+    const missingBeforeCreate = missingFieldsFor(mergedSlots);
+
+    // Required-CORE gate: while any of these are missing (and the ask-cap
+    // hasn't been hit), keep collecting naturally instead of creating. Logs
+    // slot KEYS only (never the raw values — destination/notes/etc. can carry
+    // customer PII) so this stays useful for debugging state transitions
     // without dumping personal data into the log stream. Mirrors reply-worker.
     const coreMissing = missingCoreFieldsFor(mergedSlots);
     const askCount = prevContext.askCount ?? 0;
+
+    // Create trigger — fires on THIS SAME TURN once we're treating this as an
+    // enquiry with real signal AND either the required core fields are
+    // complete, the ask-cap has been reached, or this conversation already
+    // sent the (now-legacy) grouped ask on a prior turn. See
+    // shouldCreateEnquiryNow. Mirrors reply-worker.
+    const readyToCreate =
+      treatAsEnquiry &&
+      substantive &&
+      shouldCreateEnquiryNow({ coreMissingCount: coreMissing.length, askCount, groupedAskSentLegacy: !!prevContext.groupedAskSent });
+
     console.log(
       `[internal-chat-testflow] session=${session.id} ENQUIRY-DECISION route=${route} intent=${turn.intent} ` +
-        `status=${enquiryStatus} groupedAskSent=${!!prevContext.groupedAskSent} substantive=${substantive} ` +
+        `status=${enquiryStatus} groupedAskSentLegacy=${!!prevContext.groupedAskSent} substantive=${substantive} ` +
         `treatAsEnquiry=${treatAsEnquiry} missing=${missingBeforeCreate.length}[${missingBeforeCreate.join("|")}] ` +
         `readyToCreate=${readyToCreate} beneficiary=${beneficiaryActive} enquiryClientId=${enquiryClientId ?? "null"} ` +
         `coreMissing=${coreMissing.length} askCount=${askCount} ` +
@@ -607,18 +625,17 @@ export const internalChatTestflowService = {
       return { replyMessage };
     }
 
-    // Step: create the enquiry. Fires once we're mid-collection AND either the
-    // grouped follow-up was sent OR nothing's left worth asking. Driven by the
-    // COLLECTED DATA, not the model's intent label. Mirrors reply-worker.
+    // Step: create the enquiry — IMMEDIATELY, on this same turn, once the
+    // required core fields are complete (or the ask-cap is hit) — no more
+    // grouped follow-up round for whatever optional fields are still missing
+    // (those land in the enquiry note via missingBeforeCreate instead).
+    // Driven by the COLLECTED DATA, not the model's intent label. `enquiryStatus`
+    // here is the status BEFORE this turn (null on a brand-new enquiry that
+    // just became complete in one message, or "collecting" if gathered across
+    // several turns) — the atomic claim below transitions FROM that value
+    // either way. Mirrors reply-worker.
     if (readyToCreate) {
-      if (!substantive) {
-        // Nothing substantive to log (declined / off-topic) — hand off.
-        console.log(`[internal-chat-testflow] session ${session.id} nothing substantive to log after ask — handing off instead of creating`);
-        const replyMessage = await doHandoff(prevContext, turn.reply);
-        return { replyMessage };
-      }
-
-      const claimed = await internalChatRepository.claimStatusTransition(session.id, orgId, "collecting", "awaiting_availability");
+      const claimed = await internalChatRepository.claimStatusTransition(session.id, orgId, enquiryStatus, "awaiting_availability");
       if (!claimed) {
         const replyMessage = await persistReply("That's already been logged.");
         return { replyMessage };
@@ -670,7 +687,9 @@ export const internalChatTestflowService = {
       return { replyMessage };
     }
 
-    // Step: enquiry, grouped ask not yet sent.
+    // Step: enquiry intent, still collecting (readyToCreate was false above,
+    // so either there's not enough signal yet, or the required core fields
+    // are still incomplete and we're under the ask-cap).
     if (treatAsEnquiry) {
       if (!substantive) {
         // Soft anti-empty threshold not met — keep collecting naturally.
@@ -685,34 +704,20 @@ export const internalChatTestflowService = {
         return { replyMessage };
       }
 
-      if (coreMissing.length > 0 && askCount < MAX_ENQUIRY_ASKS) {
-        // Required core still incomplete and under the ask-cap — keep
-        // collecting naturally with the model's own next question rather
-        // than jumping to the grouped ask. Mirrors reply-worker.
-        console.log(
-          `[internal-chat-testflow] session ${session.id} BRANCH=collecting-continue coreMissing=[${coreMissing.join("|")}] askCount=${askCount}`,
-        );
-        await internalChatRepository.updateSession(session.id, orgId, {
-          intent: "enquiry",
-          enquiryStatus: "collecting",
-          enquirySlots: mergedSlots,
-          context: { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 },
-        });
-        const replyMessage = await persistReply(turn.reply);
-        return { replyMessage };
-      }
-
-      // Core complete (or ask-cap reached) — send the ONE grouped follow-up
-      // for whatever's still missing.
-      console.log(`[internal-chat-testflow] session ${session.id} BRANCH=grouped-ask (setting groupedAskSent=true, missing=${missingBeforeCreate.join("|")})`);
-      const groupedReply = await generateGroupedAsk(botConfig, kb, missingBeforeCreate, transcript);
+      // Required core still incomplete and under the ask-cap — keep
+      // collecting naturally with the model's own next question (which, per
+      // the prompt, only ever asks about the missing CORE fields — never the
+      // nice-to-haves). Mirrors reply-worker.
+      console.log(
+        `[internal-chat-testflow] session ${session.id} BRANCH=collecting-continue coreMissing=[${coreMissing.join("|")}] askCount=${askCount}`,
+      );
       await internalChatRepository.updateSession(session.id, orgId, {
         intent: "enquiry",
         enquiryStatus: "collecting",
         enquirySlots: mergedSlots,
-        context: { ...prevContext, lastReply: groupedReply, groupedAskSent: true, askCount: askCount + 1 },
+        context: { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 },
       });
-      const replyMessage = await persistReply(groupedReply);
+      const replyMessage = await persistReply(turn.reply);
       return { replyMessage };
     }
 

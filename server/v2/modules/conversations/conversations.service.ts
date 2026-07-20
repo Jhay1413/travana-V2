@@ -1,9 +1,15 @@
+import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
 import { conversationsRepository } from "./conversations.repository";
 import type { ListConversationsParams } from "./conversations.types";
 
 // Service layer. SendSeven is the source of truth for conversation state, so
 // this is thin orchestration over the repository. Client-side code owns the
 // snake_case → UI mapping; the proxy forwards provider payloads verbatim.
+//
+// The AI enable/disable/status trio is the one exception — that's OUR data
+// (sendseven_conversation_state), not SendSeven's, so it delegates to the
+// sendseven-webhook module's service (service→service, matching bot-config's
+// cross-module calls into the same service) rather than the repository above.
 
 export const conversationsService = {
   list: (params: ListConversationsParams) => conversationsRepository.list(params),
@@ -32,6 +38,10 @@ export const conversationsService = {
   switchChannel: (id: string, body: unknown) => conversationsRepository.switchChannel(id, body),
   botDisable: (id: string) => conversationsRepository.botDisable(id),
   botEnable: (id: string, botId?: string) => conversationsRepository.botEnable(id, botId),
+
+  getAiState: (orgId: string, id: string) => sendsevenWebhookService.getAiState(orgId, id),
+  enableAi: (orgId: string, id: string) => sendsevenWebhookService.enableAi(orgId, id),
+  disableAi: (orgId: string, id: string) => sendsevenWebhookService.disableAi(orgId, id),
 
   bulkClose: (body: unknown) => conversationsRepository.bulkClose(body),
   searchSimilar: (body: unknown) => conversationsRepository.searchSimilar(body),

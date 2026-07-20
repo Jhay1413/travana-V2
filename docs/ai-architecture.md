@@ -75,18 +75,44 @@ feeds every prompt the core builds — see §6 for how each bot filters it.
 
 ## 2. Models & OpenAI usage
 
-Model selection is centralized in [`server/v2/utils/ai-model.ts`](../server/v2/utils/ai-model.ts):
+Model selection is centralized in [`server/v2/utils/ai-model.ts`](../server/v2/utils/ai-model.ts),
+**tiered by call risk**:
 
 | Constant | Value | Used by |
 |---|---|---|
-| `CHAT_MODEL` | `OPENAI_CHAT_MODEL` env, default **`gpt-4.1`** | Enquiry brain (`generateTurn`), conversation router, all org-voice generators, admin-agent, internal-chat assistant, ai-enquiry |
+| `CHAT_MODEL` | `OPENAI_CHAT_MODEL` env, default **`gpt-4.1`** | Enquiry brain (`generateTurn`), general replies, admin-agent, internal-chat assistant, ai-enquiry — everywhere quality is customer-visible or correctness-critical |
+| `UTILITY_MODEL` | `OPENAI_UTILITY_MODEL` env, default **`gpt-4.1-mini`** (~80% cheaper) | Conversation router, `generateGroupedAsk`, `generateTransitionReply`, `generateBeneficiaryAsk`, `generateTicketConfirmation`, availability-time parsing — small classification/short-utterance calls, all with hardcoded fallbacks |
 | `EMBEDDING_MODEL` | `EMBEDDING_MODEL` env, default **`text-embedding-3-small`** (1536 dims) | `ai-embeddings` via `utils/embeddings.ts` |
 | *(hardcoded)* `gpt-4o` | — | `ai-ask.service.ts` and `destination-guru.service.ts` **bypass `CHAT_MODEL`** (known inconsistency) |
 
-`CHAT_MODEL` must support JSON mode, tool calling, and `temperature` (o-series models
-are explicitly unsuitable). There is no shared OpenAI client singleton — each module
-constructs its own via a local `getOpenAI()`; the brain's instance is exported and
-reused by admin-agent and the router.
+Both chat constants must support JSON mode, tool calling, and `temperature` (o-series
+models are explicitly unsuitable). There is no shared OpenAI client singleton — each
+module constructs its own via a local `getOpenAI()`; the brain's instance is exported
+and reused by admin-agent and the router.
+
+### 2.1 Prompt caching (cost architecture — IMPORTANT invariant)
+
+`buildSystemPrompt` is deliberately ordered **static-per-org prefix first, dynamic
+tail last** so OpenAI's automatic prefix caching (75% off cached input on gpt-4.1)
+hits on every turn:
+
+- **Static prefix** (byte-identical per org): bot identity/persona/greeting/sign-off/
+  language → behavioral instructions → default asking style **immediately followed by
+  the agency rules block** (adjacency is load-bearing for rule precedence, §6) →
+  remaining instructions → static fact-KB block → style examples.
+- **Dynamic tail** (per-customer/per-turn): client record line, retrieved-KB block
+  ("Possibly relevant knowledge for THIS message"), retrieved quotes, known/unknown-
+  contact onboarding branch.
+
+**Rule for contributors: any NEW per-turn or per-customer prompt content MUST go in
+the tail** — inserting it mid-prefix silently breaks caching for every turn. Measured
+hit rate is ~97% of the prompt on warm turns (~3k tokens cached). `prompt_cache_key`
+(the org id) is passed on `generateTurn` and admin-agent calls. Known accepted caveat:
+a "Today's date is …" line in the prefix resets the cache once per UTC day.
+
+Every model call logs an `[ai-usage] site=… model=… prompt=… cached=… completion=…`
+line (`logAiUsage` in the brain), so per-site/per-model spend and cache hit rates are
+measurable straight from server logs.
 
 ---
 
@@ -112,6 +138,28 @@ reused by admin-agent and the router.
 Auto-reply mode is per-org (`sendseven_integrations.autoReplyMode`): **`draft`**
 (AI reply saved as a draft for staff) or **`send`** (AI replies directly).
 
+### 3.1b Human takeover & resume
+
+The AI yields to humans per conversation via `needsHuman` on
+`sendseven_conversation_state`:
+
+- **Pause (automatic)** — a staff reply pauses the AI two ways: sends from **our
+  inbox** pause it *synchronously* (`messages.service.send` sets `needsHuman` right
+  after a successful send — the AI's own sends bypass this path entirely and are
+  tagged `AI_META` + `markOurMessage`), and replies sent **directly in SendSeven's
+  UI** pause it via the `message.sent` webhook echo (outbound + not-ours →
+  `setNeedsHuman`). Agent assignment (`conversation.updated`) also pauses.
+- **Pause (manual)** — `POST /api/v2/conversations/:conversation_id/ai-state/disable`
+  ("Pause AI" in the inbox header).
+- **Resume (automatic)** — lazy 1-hour rule: when the next customer message arrives
+  after ≥1h of no activity (`RESUME_AFTER_MS`, clock = state `updatedAt`), the reply
+  worker clears `needsHuman` and resumes with a **clean slate** (enquiry state and
+  context wiped — the human may have progressed things offline). No cron: the AI has
+  nothing to say until a customer messages anyway.
+- **Resume (manual)** — `POST …/ai-state/enable` ("Resume AI" button), same clean-
+  slate semantics. `GET …/ai-state` feeds the inbox badge ("AI active" / "AI paused —
+  agent handling", `AiStatusControl` in the thread header).
+
 ### 3.2 Turn processing — the three-bot router
 
 Every inbound customer message is routed to exactly one bot **before** any bot runs:
@@ -135,6 +183,15 @@ flowchart LR
   clear new-holiday message can always recover to sales — a single misroute never
   traps the conversation.
 
+The deterministic tier is the pure, unit-tested `decideDeterministicRoute` in the
+brain. Precedence: (1) an **actionable** admin signal (complaint regex / attachment)
+on the current message breaks OUT of an in-flight enquiry → admin — a customer
+mid-enquiry who says "my existing booking is filthy" reaches the admin bot instead of
+being funneled into slot-filling (enquiry slots survive the detour and sales resumes
+after); (2) otherwise an in-flight enquiry stays sales; (3) otherwise a deterministic
+admin ask/attachment → admin; (4) only genuinely ambiguous messages reach the LLM
+classifier (`UTILITY_MODEL`, temp 0, ~20 output tokens).
+
 ### 3.3 Sales route — enquiry state machine
 
 The reply worker (`reply-worker.service.ts`) drives a per-conversation state machine
@@ -145,18 +202,32 @@ server-side (`mergeSlots`) so a terse reply never loses earlier-captured fields.
 ```mermaid
 stateDiagram-v2
     [*] --> collecting : customer shows holiday intent
-    collecting --> collecting : ask one question at a time,<br/>then ONE grouped follow-up
-    collecting --> awaiting_availability : enquiry CREATED in the CRM
+    collecting --> collecting : keep asking (CORE fields only)<br/>until they're filled or 5 asks
+    collecting --> awaiting_availability : CORE complete (or ask-cap hit) →<br/>enquiry CREATED immediately, same turn
     awaiting_availability --> scheduled : callback time given,<br/>callback task created
     scheduled --> [*] : AI goes silent (needsHuman)
     collecting --> [*] : nothing real to log,<br/>or create failed → human takes over
 ```
 
-How the `collecting → created` step decides to fire: once the customer has given
-at least one substantive detail, the bot sends **one** grouped follow-up listing
-whatever's still missing; the *next* reply triggers creation regardless of gaps
-(anything unanswered lands in the enquiry note). A customer who front-loads
-everything skips the follow-up and the enquiry is created immediately.
+How the `collecting → created` step decides to fire — the **required-core gate**:
+once the customer shows real signal, the bot keeps asking its own next question
+(`collecting-continue` branch) until the five **core fields** are captured —
+destination, travel dates, nights, party size (`guests` for hot tub), budget
+(`missingCoreFieldsFor`) — or until **`MAX_ENQUIRY_ASKS` (5)** questions have been
+asked (`context.askCount`), whichever comes first. The cap keeps speed-to-lead as the
+floor: a customer who declines or gives vague answers ("sometime in summer" → notes,
+never `travelDate`) still gets their enquiry created rather than interrogated. The
+bot is prompted to **only ever ask about the core fields** during collection — it must
+never proactively ask about nice-to-haves (resort, board basis, star rating,
+departure airport, cabin type, cruise line, pre/post-cruise stay, weekend lodge,
+pets); if the customer volunteers one unprompted it's still extracted and recorded.
+As soon as the core is complete (or the ask-cap is hit), the enquiry is **created
+immediately, on that same turn** — there is no intermediate grouped follow-up round
+for the remaining nice-to-haves any more; whatever is still missing simply lands in
+the enquiry note (`missingFieldsFor`). The pure `shouldCreateEnquiryNow` gate (mirrors
+`shouldForceTicketNow`) makes this decision so both drivers can't drift. A customer
+who front-loads everything in one message gets the enquiry created on that very
+first reply.
 
 Key properties:
 
@@ -168,12 +239,23 @@ Key properties:
 - **Creation is data-driven** — fires on collected slots, not the model's intent
   label (the model routinely flips to `intent="other"` while wrapping up).
 - **Atomic claims** — `claimStatusTransition` guards enquiry creation and callback
-  task creation against webhook retries / concurrent inbounds.
+  task creation against webhook retries / concurrent inbounds; `claimAdminTurn`
+  (idempotency-keyed on the inbound message id) guards admin turns that may open a
+  ticket against duplicate webhook deliveries.
 - **Fail-honest** — a failed create resets state and hands off to a human instead of
   telling the customer it was logged.
 - Holiday types: **Package Holiday** (default), **Cruise Package**, **Hot Tub
-  Break** — each with its own field checklist driving the grouped ask and the
-  "fields still needed" note.
+  Break** — each with its own field checklist driving the core-vs-nice-to-have
+  split (`missingCoreFieldsFor`) and the "fields still needed" note
+  (`missingFieldsFor`).
+- **Model output is not trusted for the holiday type or slot keys.**
+  `normalizeTurnSlots` runs inside `generateTurn`'s JSON parse: invented keys are
+  aliased to canonical ones (`cruiseDestination` → `destinations`), unknown keys are
+  dropped against an allowlist, and `holidayType` shorthands are canonicalized. As a
+  backstop, if `holidayType` is still unset after the merge, both drivers infer it
+  deterministically from the full transcript (`inferHolidayTypeFromText`: "cruise" →
+  Cruise Package, "hot tub"/"lodge" → Hot Tub Break) — a cruise mentioned on a
+  discarded onboarding turn still files as a cruise.
 
 ### 3.4 Slot → enquiry resolution
 
@@ -206,6 +288,14 @@ about their own data only:
   called `open_ticket`, the worker forces a `tool_choice: open_ticket` call, then
   renders a confirmation in the org's voice. Tickets land in the `ticket` table
   (default owner, type Admin, Open/Medium) with any message attachments.
+- **`forceTicketNow`** — the pure `shouldForceTicketNow` gate fires when the agent
+  already asked a clarifying question without opening a ticket (`adminAsked`) AND the
+  current turn carries signal (deterministically actionable, or a substantive
+  non-acknowledgement answer — a bare "thanks"/"ok" never forces a ticket). When it
+  fires on an unopened ticket, the agent skips the exploratory tool loop entirely and
+  makes **one** `tool_choice`-forced `open_ticket` call (~6 LLM round-trips → 1),
+  then replies with a persona/language-aware confirmation
+  (`generateTicketConfirmation`, English fallback).
 
 ---
 
@@ -249,7 +339,7 @@ flowchart LR
     KBS["KB entry saved"] --> SYNC["embed + upsert<br/>(best-effort, never blocks the save)"]
     QS["Free quote saved"] --> SYNC
     SYNC --> V[("ai_embeddings<br/>vector store")]
-    V --> RET["retrieve top-4 knowledge<br/>+ top-4 quotes per turn"]
+    V --> RET["retrieve top-3 knowledge (only when<br/>static KB overflows) + top-4 quotes<br/>(enquiry-ish turns)"]
     RET --> BOTS["sales bot · staff assistant · test flow"]
 ```
 
@@ -272,6 +362,20 @@ default), hand-off instructions, and a **rules list** — up to 50 entries of
 `{ text, audience: general|sales|admin, isActive }`. Also surfaces auto-reply status
 (`enabled`, `mode: draft|send`, provisioned) and enable/disable/mode endpoints that
 manage the SendSeven webhook registration.
+
+**Rule precedence (scoped, declared explicitly in the prompt):** agency rules win
+over the built-in defaults for **tone, pacing, and phrasing** — e.g. a rule "ask 2–3
+questions per message" overrides the default one-question-at-a-time style — but can
+**never** override data-integrity/flow rules (never invent facts/prices/availability,
+never skip identity steps, never promise callbacks early). Structurally, the rules
+block is rendered *immediately after* the default asking-style instruction in
+`buildSystemPrompt` (adjacency matters for adherence), and is also threaded into the
+short-utterance helpers (`generateTransitionReply`, `generateBeneficiaryAsk`) so
+pacing rules apply consistently across every customer-facing message. Agency rules
+can change **how many** core questions are asked per message; they can never change
+**which** fields the bot is allowed to ask about — the nice-to-have prohibition is
+fixed regardless of any rule. (`generateGroupedAsk` still exists in the brain but is
+no longer called by either driver — see §3.3.)
 
 **`knowledge-base`** (`org_knowledge_base`): entries with `title`, `content`,
 `category`, `audience` (`general` default), `isActive`. Saved entries sync to the
@@ -317,7 +421,7 @@ non-empty must-do list), cached in its own table, auto-triggered from the quote 
 
 | Table | Purpose |
 |---|---|
-| `sendseven_conversation_state` | Per-conversation memory for the auto-reply: `intent`, `enquirySlots` (jsonb), `enquiryStatus`, `enquiryId`, `needsHuman`, `context` (jsonb: `domain`, `groupedAskSent`, `beneficiary`, `lastReply`…), `lastAiReplyAt` |
+| `sendseven_conversation_state` | Per-conversation memory for the auto-reply: `intent`, `enquirySlots` (jsonb), `enquiryStatus`, `enquiryId`, `needsHuman` + `handledByHumanAt` (human takeover, §3.1b), `context` (jsonb: `domain`, `groupedAskSent` (legacy — read only, no longer set), `askCount`, `adminAsked`, `ticketOpened`, `beneficiary`, `lastReply`…), `lastAiReplyAt` |
 | `sendseven_webhook_events` | Idempotent webhook event log (dedupe) |
 | `sendseven_contact_links` | 1:1 org-scoped link between a SendSeven contact and a CRM client |
 | `internal_chat_session` | Staff chat sessions — `mode` (`assistant`/`test_flow`), mirrors the enquiry state shape so the same machinery runs in test mode |
@@ -350,8 +454,8 @@ sequenceDiagram
     AI-->>R: reply text + extracted slots
     R->>DB: merge slots into conversation state
     alt still collecting details
-        R->>C: next question (or the one grouped follow-up)
-    else ready to create
+        R->>C: next question (core fields only)
+    else ready to create (core complete or ask-cap hit)
         R->>DB: create transaction + enquiry (+ note with gaps)
         R->>C: "when suits a callback?"
     else callback time given
@@ -373,7 +477,7 @@ persona-grounded reply with no state change.
    flow are thin drivers. Fixes land in both surfaces automatically.
 2. **Code decides, the model words it.** State transitions, enquiry creation, ticket
    creation, and routing short-circuits are deterministic; the LLM only extracts
-   slots and generates wording (including the org-voice transition/grouped-ask
+   slots and generates wording (including the org-voice transition/callback-time
    replies).
 3. **Fail-closed permissions.** Every tool executor resolves identity and scope
    server-side; the model can neither name a client ID it wasn't given nor widen its
@@ -384,10 +488,16 @@ persona-grounded reply with no state change.
 5. **Nothing is silently dropped.** Unmappable slot values go into enquiry notes;
    vague dates are preserved verbatim rather than coerced.
 
+6. **Static prefix, dynamic tail.** The system prompt's caching invariant (§2.1):
+   org-static content first, per-turn/per-customer content last. New prompt content
+   must respect this or every turn pays full input price.
+
 ### Known inconsistencies / follow-ups
 
 - `ai-ask` and `destination-guru` hardcode `gpt-4o` instead of using `CHAT_MODEL`.
 - OpenAI client construction is duplicated per module (no shared singleton).
-- Cruise slot capture depends on the model using the canonical `destinations` /
-  `holidayType` keys; there is currently **no defensive slot sanitizer** remapping
-  invented keys (e.g. `cruiseDestination`) — see the cruise enquiry investigation.
+- The onboarding-completion turn runs `generateTurn` twice (the onboarding call's
+  reply is discarded once client details are complete) — the largest known remaining
+  LLM-cost waste; fixing it needs an onboarding restructure.
+- The "Today's date is …" line in the prompt prefix resets the OpenAI prompt cache
+  once per UTC day (accepted trade-off).

@@ -1,5 +1,5 @@
-import { CHAT_MODEL } from "../../utils/ai-model";
-import { getOpenAI, looksLikeAdminAsk } from "./ai-conversation.brain";
+import { UTILITY_MODEL } from "../../utils/ai-model";
+import { getOpenAI, logAiUsage, looksLikeAdminAsk } from "./ai-conversation.brain";
 
 // Upper-level ROUTER bot: a small, focused classifier that runs BEFORE any of
 // the specialized bots and decides which one handles the turn:
@@ -49,7 +49,7 @@ export async function classifyConversationRoute(params: {
       ? "NOTE: this conversation is already an ongoing ADMIN/support matter (e.g. a complaint, document request, or account query). Treat the latest message as ADMIN unless it clearly starts a brand-new holiday search.\n\n"
       : "";
     const res = await getOpenAI().chat.completions.create({
-      model: CHAT_MODEL,
+      model: UTILITY_MODEL,
       response_format: { type: "json_object" },
       temperature: 0,
       max_tokens: 20,
@@ -61,6 +61,7 @@ export async function classifyConversationRoute(params: {
         },
       ],
     });
+    logAiUsage("router", UTILITY_MODEL, res.usage);
     const raw = res.choices[0]?.message?.content?.trim();
     if (raw) {
       const parsed = JSON.parse(raw) as { route?: unknown };

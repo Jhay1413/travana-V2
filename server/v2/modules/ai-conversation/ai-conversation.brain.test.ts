@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildRulesBlock,
+  buildSystemPrompt,
   decideDeterministicRoute,
   inferHolidayTypeFromText,
   isAcknowledgement,
@@ -10,10 +11,12 @@ import {
   missingCoreFieldsFor,
   normalizeTurnSlots,
   parseBotRules,
+  shouldCreateEnquiryNow,
   shouldForceTicketNow,
   type BotRule,
 } from "./ai-conversation.brain";
-import type { EnquirySlots } from "./ai-conversation.types";
+import type { EnquirySlots, RetrievedContext } from "./ai-conversation.types";
+import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
 
 describe("looksLikeAdminAsk", () => {
   it("matches a read-only query about the customer's own records", () => {
@@ -281,7 +284,7 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
     const slots: EnquirySlots = { holidayType: "Hot Tub Break", adults: 2 };
     // adults being set must NOT satisfy the hot-tub core party-size check —
     // only `guests` counts.
-    expect(missingCoreFieldsFor(slots)).toEqual(["destination", "travel dates", "number of nights", "number of guests", "budget"]);
+    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of nights", "number of guests", "budget"]);
 
     const filled: EnquirySlots = {
       holidayType: "Hot Tub Break",
@@ -294,9 +297,127 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
     expect(missingCoreFieldsFor(filled)).toEqual([]);
   });
 
+  it("hot tub core does NOT require destination — customers shop by radius/area, not a named destination", () => {
+    const slots: EnquirySlots = {
+      holidayType: "Hot Tub Break",
+      travelDate: "2026-08-22",
+      nights: 7,
+      guests: 4,
+      budget: "800",
+      notes: "within an hour's drive of Newcastle",
+    };
+    expect(missingCoreFieldsFor(slots)).toEqual([]);
+  });
+
+  it("package and cruise core still require destination", () => {
+    const packageSlots: EnquirySlots = { travelDate: "2026-08-22", nights: 7, adults: 2, budget: "800" };
+    expect(missingCoreFieldsFor(packageSlots)).toContain("destination");
+
+    const cruiseSlots: EnquirySlots = { holidayType: "Cruise Package", travelDate: "2026-08-22", nights: 7, adults: 2, budget: "800" };
+    expect(missingCoreFieldsFor(cruiseSlots)).toContain("cruise destination");
+  });
+
   it("treats flexibility (vague dates) as satisfying hasDates, same as travelDate", () => {
     const slots: EnquirySlots = { flexibility: "sometime in summer" };
     expect(missingCoreFieldsFor(slots)).not.toContain("travel dates");
+  });
+});
+
+describe("shouldCreateEnquiryNow (create-immediately gate — no more grouped-ask round)", () => {
+  it("is true once the required core fields are complete, even under the ask-cap", () => {
+    expect(shouldCreateEnquiryNow({ coreMissingCount: 0, askCount: 1 })).toBe(true);
+  });
+
+  it("is false while core fields are still missing and the ask-cap hasn't been hit", () => {
+    expect(shouldCreateEnquiryNow({ coreMissingCount: 2, askCount: 1 })).toBe(false);
+  });
+
+  it("is true once the ask-cap is reached, even with core fields still missing", () => {
+    expect(shouldCreateEnquiryNow({ coreMissingCount: 3, askCount: MAX_ENQUIRY_ASKS })).toBe(true);
+    expect(shouldCreateEnquiryNow({ coreMissingCount: 3, askCount: MAX_ENQUIRY_ASKS + 1 })).toBe(true);
+  });
+
+  it("is true when the conversation already sent the legacy grouped ask on a prior turn, regardless of core/ask-cap", () => {
+    expect(shouldCreateEnquiryNow({ coreMissingCount: 5, askCount: 0, groupedAskSentLegacy: true })).toBe(true);
+  });
+
+  it("is false with core missing, under the ask-cap, and no legacy grouped ask sent", () => {
+    expect(shouldCreateEnquiryNow({ coreMissingCount: 1, askCount: 0, groupedAskSentLegacy: false })).toBe(false);
+  });
+});
+
+describe("buildSystemPrompt (prompt-caching prefix/tail ordering)", () => {
+  it("renders the dynamic client line and retrieved-context blocks AFTER the static agency rules block", () => {
+    const botConfig = {
+      orgId: "org-1",
+      name: "Test Bot",
+      avatarUrl: null,
+      persona: null,
+      preferredResponse: null,
+      greeting: null,
+      signOff: null,
+      language: "en-GB",
+      handoffInstructions: null,
+      rules: [{ text: "AGENCY-MARKER-RULE", audience: "general" }],
+      updatedBy: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as unknown as OrgBotConfig;
+
+    const client = {
+      title: null,
+      firstName: "ZZZCLIENTNAME",
+      surename: "Test",
+    } as unknown as NeonClient;
+
+    const kb: OrgKnowledgeBase[] = [];
+
+    const retrieved: RetrievedContext = {
+      kb: [{ sourceId: "kb-1", content: "RETRIEVED-KB-MARKER", metadata: null, distance: 0 }],
+      quotes: [{ sourceId: "quote-1", content: "RETRIEVED-QUOTE-MARKER", metadata: null, distance: 0 }],
+    };
+
+    const prompt = buildSystemPrompt(botConfig, kb, client, true, retrieved);
+
+    const rulesIdx = prompt.indexOf("AGENCY-MARKER-RULE");
+    const clientIdx = prompt.indexOf("ZZZCLIENTNAME");
+    const retrievedKbIdx = prompt.indexOf("RETRIEVED-KB-MARKER");
+    const retrievedQuoteIdx = prompt.indexOf("RETRIEVED-QUOTE-MARKER");
+
+    expect(rulesIdx).toBeGreaterThan(-1);
+    expect(clientIdx).toBeGreaterThan(-1);
+    expect(retrievedKbIdx).toBeGreaterThan(-1);
+    expect(retrievedQuoteIdx).toBeGreaterThan(-1);
+
+    expect(clientIdx).toBeGreaterThan(rulesIdx);
+    expect(retrievedKbIdx).toBeGreaterThan(rulesIdx);
+    expect(retrievedQuoteIdx).toBeGreaterThan(rulesIdx);
+  });
+
+  it("does NOT fold retrieved-KB matches into the static company-info block", () => {
+    const kb: OrgKnowledgeBase[] = [
+      {
+        id: "kb-1",
+        orgId: "org-1",
+        title: "Static Fact",
+        content: "STATIC-KB-CONTENT",
+        category: null,
+        audience: "general",
+        isActive: true,
+        createdBy: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as OrgKnowledgeBase,
+    ];
+    const retrieved: RetrievedContext = {
+      kb: [{ sourceId: "kb-2", content: "RETRIEVED-ONLY-MARKER", metadata: null, distance: 0 }],
+      quotes: [],
+    };
+
+    const prompt = buildSystemPrompt(null, kb, null, true, retrieved);
+
+    expect(prompt).toContain("Company information (use it to answer accurately):\n- Static Fact: STATIC-KB-CONTENT");
+    expect(prompt).toContain("Possibly relevant knowledge for THIS message:\n- RETRIEVED-ONLY-MARKER");
   });
 });
 

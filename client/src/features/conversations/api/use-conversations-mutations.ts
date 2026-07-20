@@ -160,3 +160,19 @@ export function useDisableBot() {
     onSuccess: (_data, id) => invalidate(id),
   });
 }
+
+export function useEnableConversationAi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => conversationsApi.aiStateEnable(id),
+    onSuccess: (state, id) => qc.setQueryData(conversationsKeys.aiState(id), state),
+  });
+}
+
+export function useDisableConversationAi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => conversationsApi.aiStateDisable(id),
+    onSuccess: (state, id) => qc.setQueryData(conversationsKeys.aiState(id), state),
+  });
+}

@@ -1,5 +1,7 @@
 import { Router } from "express";
+import { validate } from "../../middlewares/validation.middleware";
 import { conversationsController as c } from "./conversations.controller";
+import { conversationIdParamValidator } from "./conversations.validator";
 
 const router = Router();
 
@@ -35,5 +37,12 @@ router.get("/:conversation_id/bot-session", c.botSession);
 router.get("/:conversation_id/available-bots", c.availableBots);
 router.post("/:conversation_id/bot-session/enable", c.botEnable);
 router.post("/:conversation_id/bot-session/disable", c.botDisable);
+
+// Our own per-conversation AI auto-reply enable/disable/status (sendseven-webhook
+// module's conversation state) — distinct from bot-session above, which proxies
+// SendSeven's native bots.
+router.get("/:conversation_id/ai-state", validate(conversationIdParamValidator), c.aiState);
+router.post("/:conversation_id/ai-state/enable", validate(conversationIdParamValidator), c.aiEnable);
+router.post("/:conversation_id/ai-state/disable", validate(conversationIdParamValidator), c.aiDisable);
 
 export default router;

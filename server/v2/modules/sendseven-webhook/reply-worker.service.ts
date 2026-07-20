@@ -1,4 +1,5 @@
 import { runWithSendSevenConfigAsync } from "../../utils/sendseven";
+import { realtimeService } from "../../realtime/realtime.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import {
   buildEnquirySummary,
@@ -7,7 +8,6 @@ import {
   decideDeterministicRoute,
   generateBeneficiaryAsk,
   generateGeneralReply,
-  generateGroupedAsk,
   generateTransitionReply,
   generateTurn,
   hasSubstantiveSignal,
@@ -16,11 +16,11 @@ import {
   kbExceedsBudget,
   looksLikeActionableAdmin,
   looksLikeAdminAsk,
-  MAX_ENQUIRY_ASKS,
   mergeSlots,
   missingCoreFieldsFor,
   missingFieldsFor,
   parseAvailabilityTime,
+  shouldCreateEnquiryNow,
   shouldForceTicketNow,
   similarReply,
   type BeneficiaryAskKind,
@@ -53,17 +53,22 @@ import type { SsWebhookEvent } from "./sendseven-webhook.types";
 import type { SendsevenConversationState } from "@shared/schema";
 
 // Transient flags/context we keep on `sendseven_conversation_state.context`
-// (jsonb) across the grouped-ask → create → awaiting-availability → scheduled
+// (jsonb) across the collecting → create → awaiting-availability → scheduled
 // flow. No schema columns needed.
 interface ConversationContext {
   lastReply?: string;
-  // Set once we've sent the ONE grouped follow-up asking for whatever enquiry
-  // fields are still missing — the customer's next reply creates the enquiry.
+  // LEGACY: was set once we'd sent the ONE grouped follow-up for whatever
+  // enquiry fields were still missing (the customer's next reply would then
+  // create the enquiry). No longer SET by this driver — the enquiry is now
+  // created immediately, on the same turn the core fields complete — but
+  // still READ, so a conversation that started under the old flow (this flag
+  // already true from a prior turn) is still treated as ready-to-create. See
+  // shouldCreateEnquiryNow.
   groupedAskSent?: boolean;
   // Number of collecting-phase questions asked so far this enquiry (the
-  // collecting-thin, collecting-continue and grouped-ask branches). Gates the
+  // collecting-thin and collecting-continue branches). Gates the
   // required-core-fields wait: once the ask-cap (MAX_ENQUIRY_ASKS) is hit, the
-  // grouped ask fires regardless of what core fields are still missing, so a
+  // enquiry is created regardless of what core fields are still missing, so a
   // customer who declines/gives vague answers is never interrogated forever.
   // Reset implicitly on enquiry creation — the new context object built there
   // omits it.
@@ -401,7 +406,7 @@ export const replyWorker = {
         } else {
           const resolution = await resolveClientForOnboarding(orgId, contactId, { fullName: full, phone, email: null });
           if (resolution.status === "phone_conflict") {
-            const confirmReply = buildPhoneConflictReply(resolution.existingNames);
+            const confirmReply = buildPhoneConflictReply();
             await sendReply(orgId, conversationId, message.channel_id, confirmReply, mode, false);
             await conversationStateRepository.update(conversationId, {
               lastAiReplyAt: new Date(),
@@ -413,7 +418,7 @@ export const replyWorker = {
               },
             });
             console.log(
-              `[sendseven-webhook] conv ${conversationId} phone clash — number belongs to ${resolution.existingNames.join(", ")}; asked to confirm`,
+              `[sendseven-webhook] conv ${conversationId} phone clash — number belongs to ${resolution.existingNames.length} existing client(s); asked to confirm`,
             );
             return;
           }
@@ -667,7 +672,7 @@ export const replyWorker = {
             } else {
               const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
               if (resolution.status === "phone_conflict") {
-                const confirmReply = buildPhoneConflictReply(resolution.existingNames, travellerName);
+                const confirmReply = buildPhoneConflictReply(travellerName);
                 await sendReply(orgId, conversationId, message.channel_id, confirmReply, mode, false);
                 await conversationStateRepository.update(conversationId, {
                   intent: "enquiry",
@@ -681,7 +686,7 @@ export const replyWorker = {
                   },
                 });
                 console.log(
-                  `[sendseven-webhook] conv ${conversationId} beneficiary phone clash — belongs to ${resolution.existingNames.join(", ")}; asked to confirm`,
+                  `[sendseven-webhook] conv ${conversationId} beneficiary phone clash — number belongs to ${resolution.existingNames.length} existing client(s); asked to confirm`,
                 );
                 return;
               }
@@ -715,23 +720,36 @@ export const replyWorker = {
       // drop the enquiry on the floor. `beneficiaryActive` kept for clarity.
       const treatAsEnquiry = turn.intent === "enquiry" || substantive || beneficiaryActive;
 
-      // Create trigger, computed up here so we can log the full decision state in
-      // one place before branching. Fires once we're mid-collection AND either the
-      // grouped follow-up was sent OR nothing's left worth asking.
+      // "Additional fields still needed" (ALL fields, incl. nice-to-haves) —
+      // no longer a create gate; only used for the note on enquiry creation
+      // (and for observability in the log line below).
       const missingBeforeCreate = missingFieldsFor(mergedSlots);
+
+      // Required-CORE gate: while any of these are missing (and the ask-cap
+      // hasn't been hit), keep collecting naturally instead of creating.
+      const coreMissing = missingCoreFieldsFor(mergedSlots);
+      const askCount = prevContext.askCount ?? 0;
+
+      // Create trigger, computed up here so we can log the full decision state
+      // in one place before branching. Fires — on THIS SAME TURN — once we're
+      // treating this as an enquiry with real signal AND either the required
+      // core fields are complete, the ask-cap has been reached, or this
+      // conversation already sent the (now-legacy) grouped ask on a prior turn
+      // (a conversation that started under the old flow) — no more waiting
+      // for a further customer reply. See shouldCreateEnquiryNow.
       const readyToCreate =
-        enquiryStatus === "collecting" && (!!prevContext.groupedAskSent || missingBeforeCreate.length === 0);
+        treatAsEnquiry &&
+        substantive &&
+        shouldCreateEnquiryNow({ coreMissingCount: coreMissing.length, askCount, groupedAskSentLegacy: !!prevContext.groupedAskSent });
 
       // One structured line capturing every input to the enquiry state machine —
       // so when creation doesn't happen we can see exactly why (which flag/branch).
       // Logs slot KEYS only (never the raw values — destination/notes/etc. can
       // carry customer PII) so this stays useful for debugging state transitions
       // without dumping personal data into the log stream.
-      const coreMissing = missingCoreFieldsFor(mergedSlots);
-      const askCount = prevContext.askCount ?? 0;
       console.log(
         `[sendseven-webhook] conv=${conversationId} ENQUIRY-DECISION route=${route} intent=${turn.intent} ` +
-          `status=${enquiryStatus} groupedAskSent=${!!prevContext.groupedAskSent} substantive=${substantive} ` +
+          `status=${enquiryStatus} groupedAskSentLegacy=${!!prevContext.groupedAskSent} substantive=${substantive} ` +
           `treatAsEnquiry=${treatAsEnquiry} missing=${missingBeforeCreate.length}[${missingBeforeCreate.join("|")}] ` +
           `readyToCreate=${readyToCreate} beneficiary=${beneficiaryActive} enquiryClientId=${enquiryClientId ?? "null"} ` +
           `coreMissing=${coreMissing.length} askCount=${askCount} ` +
@@ -781,25 +799,22 @@ export const replyWorker = {
         return;
       }
 
-      // Step: create the enquiry. Fires once we're mid-collection AND either the
-      // ONE grouped follow-up has been sent OR there's nothing left worth asking
-      // (a customer who front-loaded destination + dates + pax + budget shouldn't
-      // be asked a pointless extra question). Creation is driven by the COLLECTED
-      // DATA, not the model's intent label — the model often flips to intent
-      // "other" while closing with "the team will call you", and that must still
-      // create the enquiry. Guarded on enquiryStatus="collecting" (survives a
-      // reset) and an atomic claim taken BEFORE the create so a retried/concurrent
-      // inbound that loses the claim does nothing. (missingBeforeCreate /
-      // readyToCreate / substantive computed + logged above.)
+      // Step: create the enquiry — IMMEDIATELY, on this same turn, once the
+      // required core fields are complete (or the ask-cap is hit) — no more
+      // grouped follow-up round for whatever optional fields are still
+      // missing (those land in the enquiry note via missingBeforeCreate
+      // instead). Creation is driven by the COLLECTED DATA, not the model's
+      // intent label — the model often flips to intent "other" while closing
+      // with "the team will call you", and that must still create the
+      // enquiry. `enquiryStatus` here is the status BEFORE this turn (null on
+      // a brand-new enquiry that just became complete in one message, or
+      // "collecting" if it's been gathered across several turns) — the
+      // atomic claim below transitions FROM that value either way, so a
+      // retried/concurrent inbound that loses the claim does nothing.
+      // (missingBeforeCreate / readyToCreate / substantive computed + logged
+      // above.)
       if (readyToCreate) {
-        if (!substantive) {
-          // Nothing substantive to log (they declined / went off-topic with no
-          // detail) — do not fabricate an enquiry; hand off instead.
-          console.log(`[sendseven-webhook] conv ${conversationId} nothing substantive to log after ask — handing off instead of creating`);
-          return doHandoff(turn.reply);
-        }
-
-        const claimed = await conversationStateRepository.claimStatusTransition(conversationId, "collecting", "awaiting_availability");
+        const claimed = await conversationStateRepository.claimStatusTransition(conversationId, enquiryStatus, "awaiting_availability");
         if (!claimed) {
           console.log(`[sendseven-webhook] conv ${conversationId} lost the create-enquiry claim — already actioned, skipping`);
           return;
@@ -849,7 +864,9 @@ export const replyWorker = {
         return;
       }
 
-      // Step: enquiry intent, grouped ask not yet sent.
+      // Step: enquiry intent, still collecting (readyToCreate was false above,
+      // so either there's not enough signal yet, or the required core fields
+      // are still incomplete and we're under the ask-cap).
       if (treatAsEnquiry) {
         if (!substantive) {
           // Soft anti-empty threshold not met — keep collecting naturally.
@@ -863,31 +880,18 @@ export const replyWorker = {
           return;
         }
 
-        if (coreMissing.length > 0 && askCount < MAX_ENQUIRY_ASKS) {
-          // Required core still incomplete and under the ask-cap — keep
-          // collecting naturally with the model's own next question rather
-          // than jumping to the grouped ask.
-          console.log(
-            `[sendseven-webhook] conv ${conversationId} BRANCH=collecting-continue coreMissing=[${coreMissing.join("|")}] askCount=${askCount}`,
-          );
-          update.intent = "enquiry";
-          update.enquiryStatus = "collecting";
-          update.enquirySlots = mergedSlots;
-          update.context = { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 };
-          await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
-          await conversationStateRepository.update(conversationId, update);
-          return;
-        }
-
-        // Core complete (or ask-cap reached) — send the ONE grouped follow-up
-        // for whatever's still missing.
-        console.log(`[sendseven-webhook] conv ${conversationId} BRANCH=grouped-ask (setting groupedAskSent=true, missing=${missingBeforeCreate.join("|")})`);
-        const groupedReply = await generateGroupedAsk(botConfig, kb, missingBeforeCreate, transcript);
+        // Required core still incomplete and under the ask-cap — keep
+        // collecting naturally with the model's own next question (which,
+        // per the prompt, only ever asks about the missing CORE fields —
+        // never the nice-to-haves).
+        console.log(
+          `[sendseven-webhook] conv ${conversationId} BRANCH=collecting-continue coreMissing=[${coreMissing.join("|")}] askCount=${askCount}`,
+        );
         update.intent = "enquiry";
         update.enquiryStatus = "collecting";
         update.enquirySlots = mergedSlots;
-        update.context = { ...prevContext, lastReply: groupedReply, groupedAskSent: true, askCount: askCount + 1 };
-        await sendReply(orgId, conversationId, message.channel_id, groupedReply, mode, false);
+        update.context = { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 };
+        await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
         await conversationStateRepository.update(conversationId, update);
         return;
       }
@@ -966,4 +970,13 @@ async function sendReply(
         });
   const sentId = (sent as { id?: string } | null | undefined)?.id;
   if (sentId) await sendsevenWebhookRepository.markOurMessage(sentId, orgId);
+
+  // Best-effort — a bus failure must never break the AI reply itself. Single
+  // choke point for AI outbound (both the live send and the draft/internal-note
+  // path), so one publish here covers everything reply-worker sends.
+  try {
+    realtimeService.publish(orgId, { type: "message.sent", conversationId });
+  } catch (err) {
+    console.warn(`[sendseven-webhook] realtime publish failed for conv ${conversationId}:`, err);
+  }
 }

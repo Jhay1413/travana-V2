@@ -73,6 +73,7 @@ import settingsRoutes from '../settings';
 import fileRoutes from '../modules/files/file.routes';
 import trainingRoutes from '../modules/training/training.routes';
 import internalChatRoutes from '../modules/internal-chat/internal-chat.routes';
+import realtimeRoutes from '../realtime/realtime.routes';
 
 const router = Router();
 const auth = [isAuthenticated, orgBranchScope] as const;
@@ -147,6 +148,7 @@ router.use('/lookup',             lookupRoutes);
 router.use('/settings',           isAuthenticated, settingsRoutes);
 router.use('/training',           ...auth, trainingRoutes);
 router.use('/internal-chat',      ...auth, internalChatRoutes);
+router.use('/realtime',           ...auth, realtimeRoutes);
 
 // v2 error handler — must be LAST so it catches errors from every v2 route above.
 // Without this, v2 errors bubble to the global v1 errorHandler, whose `instanceof

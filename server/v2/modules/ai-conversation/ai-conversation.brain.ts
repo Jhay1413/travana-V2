@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { CHAT_MODEL } from "../../utils/ai-model";
+import { CHAT_MODEL, UTILITY_MODEL } from "../../utils/ai-model";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
 import type { AiTurn, EnquiryBeneficiary, EnquirySlots, RetrievedContext, RetrievedMatch, TranscriptMessage } from "./ai-conversation.types";
 
@@ -151,6 +151,28 @@ export function getOpenAI(): OpenAI {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
+// Structurally matches OpenAI's `CompletionUsage` (chat.completions response
+// `usage` field) without importing that exact nested type path — kept minimal
+// on purpose so this stays SDK-version tolerant.
+interface AiUsageLike {
+  prompt_tokens: number;
+  completion_tokens: number;
+  prompt_tokens_details?: { cached_tokens?: number } | null;
+}
+
+// Prompt-caching observability: one log line per BIG-prompt completion call
+// (generateTurn / admin-agent) so cache hit rates are visible in production
+// logs. No PII — only the call-site tag, model, and token counts.
+// `prompt_tokens_details`/`cached_tokens` may be absent on the response, so
+// this stays null-safe throughout.
+export function logAiUsage(site: string, model: string, usage: AiUsageLike | null | undefined): void {
+  if (!usage) return;
+  const cached = usage.prompt_tokens_details?.cached_tokens;
+  console.log(
+    `[ai-usage] site=${site} model=${model} prompt=${usage.prompt_tokens} cached=${cached ?? "n/a"} completion=${usage.completion_tokens}`,
+  );
+}
+
 // Deterministic detector for an ADMIN message — an existing customer either (a)
 // asking about their OWN records (enquiry/quote/booking/ticket/document/…) or
 // (b) PROVIDING verification/booking details they were asked for (an ID /
@@ -296,10 +318,11 @@ export async function generateTransitionReply(
     parts.push(instruction);
 
     const res = await getOpenAI().chat.completions.create({
-      model: CHAT_MODEL,
+      model: UTILITY_MODEL,
       temperature: 0.7,
       messages: [{ role: "system", content: parts.join("\n\n") }],
     });
+    logAiUsage("transitionReply", UTILITY_MODEL, res.usage);
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
@@ -352,10 +375,11 @@ export async function generateBeneficiaryAsk(
     parts.push(`${instruction} ONE short, warm sentence only — do NOT ask about anything else. Reply with the message text ONLY.`);
 
     const res = await getOpenAI().chat.completions.create({
-      model: CHAT_MODEL,
+      model: UTILITY_MODEL,
       temperature: 0.7,
       messages: [{ role: "system", content: parts.join("\n\n") }],
     });
+    logAiUsage("beneficiaryAsk", UTILITY_MODEL, res.usage);
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
@@ -386,20 +410,25 @@ export async function generateTicketConfirmation(botConfig: OrgBotConfig | null,
     );
 
     const res = await getOpenAI().chat.completions.create({
-      model: CHAT_MODEL,
+      model: UTILITY_MODEL,
       temperature: 0.7,
       messages: [{ role: "system", content: parts.join("\n\n") }],
     });
+    logAiUsage("ticketConfirmation", UTILITY_MODEL, res.usage);
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
   }
 }
 
-// The "grouped follow-up" (ask for the still-missing enquiry fields in one go)
-// was a fixed bullet-list template, which reads like a form. Generate it in the
-// house voice instead — conversational, not a list — while still covering the
-// same missing fields. Falls back to the fixed template on any failure.
+// LEGACY / UNUSED BY THE DRIVERS as of the "create-immediately" change: the
+// grouped follow-up (asking for still-missing OPTIONAL fields in one go,
+// before creating the enquiry on the customer's NEXT reply) has been removed
+// from both reply-worker.service.ts and internal-chat-testflow.service.ts —
+// they now create the enquiry immediately once the required core fields land
+// (or the ask-cap is hit), on the same turn, via shouldCreateEnquiryNow below.
+// Left in place (not deleted) in case another caller/test still exercises it;
+// do not wire this back into a driver without re-checking that decision.
 export async function generateGroupedAsk(
   botConfig: OrgBotConfig | null,
   kb: OrgKnowledgeBase[],
@@ -431,10 +460,11 @@ export async function generateGroupedAsk(
         `${missingFields.join(", ")}. Reply with the message text ONLY.`,
     );
     const res = await getOpenAI().chat.completions.create({
-      model: CHAT_MODEL,
+      model: UTILITY_MODEL,
       temperature: 0.7,
       messages: [{ role: "system", content: parts.join("\n\n") }],
     });
+    logAiUsage("groupedAsk", UTILITY_MODEL, res.usage);
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
@@ -525,6 +555,36 @@ export function kbExceedsBudget(kb: OrgKnowledgeBase[]): boolean {
   return company.length > KB_CHAR_BUDGET;
 }
 
+// buildSystemPrompt is deliberately ordered STATIC-PREFIX-FIRST, DYNAMIC-TAIL-
+// LAST so OpenAI's automatic prompt caching (which caches the longest
+// byte-identical prompt PREFIX, ≥1024 tokens, in 128-token increments) can
+// reuse the shared prefix across every turn/customer for a given org, instead
+// of the cache breaking on per-customer/per-turn content that used to sit
+// mid-prompt. See buildAdminSystemPrompt (admin-agent.service.ts) for the
+// admin-bot equivalent.
+//
+// STATIC PER ORG (prefix — identical for every customer/turn of this org,
+// bar the daily-changing "today's date" line):
+//   1. bot identity/persona/greeting/sign-off/language lines
+//   2. general behaviour ("never quote firm prices…")
+//   3. enquiry slot-filling instructions
+//   4. DEFAULT ASKING STYLE immediately followed by the agency rules block
+//      (kept adjacent on purpose — see the comment at the push site — so the
+//      agency rule wins precedence over the default it overrides)
+//   5. remaining slot-filling/flow instructions
+//   6. CRITICAL "how the enquiry gets logged" + the JSON response-format spec
+//   7. ENQUIRING ON BEHALF OF SOMEONE ELSE (beneficiary/on-behalf rules)
+//   8. hand-off instructions
+//   9. company KB block (static fact-KB rows only, capped at KB_CHAR_BUDGET)
+//  10. style-examples block
+//
+// DYNAMIC TAIL (last — varies per customer/turn, so it must NOT sit in the
+// cached prefix):
+//   11. the client record line ("You are speaking with …")
+//   12. vector-retrieved KB matches for THIS message (small, separate block —
+//       see the KB-split note below)
+//   13. vector-retrieved similar past quotes for THIS message
+//   14. the known/unknown-contact onboarding branch block
 export function buildSystemPrompt(
   botConfig: OrgBotConfig | null,
   kb: OrgKnowledgeBase[],
@@ -540,21 +600,6 @@ export function buildSystemPrompt(
     "MOST IMPORTANT RULE: NEVER assume the customer wants to book a holiday. If everything they've said so far is just a greeting (e.g. \"hi\", \"hi ai\"), small talk, or their name/phone — with NO mention of a trip, destination, dates, or wanting to travel — then do NOT ask about destinations, dates, nights, budget or who's travelling, do NOT start an enquiry, and set intent to \"other\". Simply greet them warmly and ask ONE open question like \"what can I help you with today?\". Only begin helping with a holiday once THEY have actually said they want one.",
   ];
 
-  // Client onboarding gate: collect details before anything else for unknown contacts.
-  // Only a name and phone number are required — we do NOT ask for email.
-  if (!knownClient) {
-    parts.push(
-      [
-        "IMPORTANT — this customer is NOT on our system yet. Your FIRST reply must do TWO things in one short, friendly message:",
-        "  1. Briefly acknowledge their message in a natural, friendly way so they know you've understood what they asked — the way a warm UK travel agent would reassure them you can help. VARY your wording naturally to fit their message; do NOT open with a canned phrase like \"Of course\". Keep it to a line, and do NOT start answering the enquiry or asking holiday details yet.",
-        "  2. Then ask for their NAME and PHONE NUMBER so you can check them on the system — phrase it naturally and casually in the message, e.g. \"can you pop me your name and phone number so I can check you're on the system?\". Do NOT ask for an email address, and do NOT use stiff phrasing like \"set up your file\".",
-        "  EXCEPTION: if they are enquiring on behalf of ANOTHER named person and are not travelling themselves (see the 'ENQUIRING ON BEHALF OF SOMEONE ELSE' rules below), do NOT ask the sender for their own name/phone — follow those rules and ask for the TRAVELLER's phone instead.",
-        "- On every reply after that, look at what they have already given and ask ONLY for what is still missing — e.g. if they gave just their name, ask for their phone number only. NEVER re-ask for a detail they have already provided.",
-        "- Put whatever they provide into `client`: { fullName, phone } — leave a field as an empty string until they actually give it.",
-        "Only once you have BOTH their name and phone, give a brief confirmation that you can see them on the system (e.g. \"That's great, I can see you on the system\"), then respond to WHAT THEY ACTUALLY ASKED FOR: if they've already shown they want a holiday, carry on helping with that; if they only greeted you or haven't said what they need, ask an OPEN, friendly question about how you can help (e.g. \"what can I help you with today?\") — do NOT assume they want to book, and do NOT start asking for destination, dates, or who's travelling. Do not start collecting holiday enquiry details until you have their name and phone AND they've actually expressed interest in a holiday.",
-      ].join("\n"),
-    );
-  }
   if (botConfig?.persona?.trim()) parts.push(`Persona: ${botConfig.persona.trim()}`);
   if (botConfig?.preferredResponse?.trim()) parts.push(`How to respond: ${botConfig.preferredResponse.trim()}`);
   if (botConfig?.greeting?.trim()) parts.push(`Greeting style: ${botConfig.greeting.trim()}`);
@@ -570,59 +615,11 @@ export function buildSystemPrompt(
     "Never quote firm prices, availability, or confirm bookings you cannot verify — instead gather the enquiry and let a human advisor follow up.",
   );
 
-  const handoff = [
-    "Set hand_off=true ONLY if the customer explicitly asks for a human/agent, is clearly upset or complaining, or makes a request genuinely unrelated to booking a holiday.",
-    "NEVER hand off just because an enquiry looks already logged, repeated, or previously mentioned, or because you've said 'an advisor will get back' before — a repeated or restated holiday interest is NOT a hand-off reason; help with it as a normal enquiry.",
-    botConfig?.handoffInstructions?.trim() || "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  parts.push(handoff);
-
-  // Company info: static KB rows plus any vector-retrieved KB matches (Phase 5d),
-  // folded into the same block and capped together at KB_CHAR_BUDGET. Retrieved
-  // (query-relevant) lines go first so they survive truncation when the static
-  // list alone already exceeds the budget — the static list absorbs the cut.
-  const activeKb = kb.filter((k) => k.isActive && audienceAllows(k.audience, "sales"));
-  const factKb = salesFactKb(kb);
-  const retrievedKb = (retrieved?.kb ?? []).filter(
-    (m) => !isStyleExampleCategory(retrievedMatchCategory(m)) && audienceAllows(retrievedMatchAudience(m), "sales"),
-  );
-  const kbLines = [...retrievedKb.map((m) => `- ${m.content}`), ...factKb.map((k) => `- ${k.title}: ${k.content}`)];
-  if (kbLines.length) {
-    let company = kbLines.join("\n");
-    if (company.length > KB_CHAR_BUDGET) company = company.slice(0, KB_CHAR_BUDGET) + "…";
-    parts.push(`Company information (use it to answer accurately):\n${company}`);
-  }
-
-  // Tone/style examples (e.g. real conversations pasted into the KB) — these
-  // teach HOW we talk, not what is true.
-  const styleBlock = buildStyleExamplesBlock(
-    activeKb,
-    "How our team talks to customers — study these real example conversations and MATCH this tone, warmth, phrasing and overall approach in your replies. They are STYLE examples ONLY: do NOT treat the specific holidays, destinations, dates, prices, phone numbers or customers in them as real, current, or relevant to this conversation.",
-  );
-  if (styleBlock) parts.push(styleBlock);
-
-  // Vector-retrieved similar past quotes (Phase 5d) — internal context only, never
-  // to be surfaced as a firm price/availability/promise to the customer.
-  const retrievedQuotes = retrieved?.quotes ?? [];
-  if (retrievedQuotes.length) {
-    let quotesText = retrievedQuotes.map((m) => `- ${m.content}`).join("\n");
-    if (quotesText.length > QUOTE_REFERENCE_CHAR_BUDGET) quotesText = quotesText.slice(0, QUOTE_REFERENCE_CHAR_BUDGET) + "…";
-    parts.push(
-      "Reference — similar past trips (INTERNAL ONLY — do NOT quote prices, availability, or promise these to the customer; " +
-        `use only to ask better questions and suggest ideas):\n${quotesText}\n\n` +
-        "Reminder: never quote firm prices or availability from this reference — always gather the enquiry and let a human advisor follow up.",
-    );
-  }
-
-  if (client) {
-    parts.push(`You are speaking with ${[client.title, client.firstName, client.surename].filter(Boolean).join(" ")}.`);
-  }
-
   // Enquiry slot-filling instructions (§14). There is NO confirmation gate —
-  // the worker (in code) sends one grouped follow-up for whatever is missing,
-  // then creates the enquiry on the customer's next reply regardless of gaps.
+  // and NO grouped follow-up round for optional fields either: the worker (in
+  // code) creates the enquiry as soon as the required CORE fields land (or the
+  // ask-cap is hit), on that same turn. Whatever nice-to-have fields are still
+  // missing at that point simply go into the enquiry note (see missingFieldsFor).
   parts.push(
     [
       "If the customer is enquiring about a holiday, capture it conversationally — do NOT wait for the customer to confirm before it can be logged, and do NOT insist on collecting every field before you can help further.",
@@ -631,7 +628,7 @@ export function buildSystemPrompt(
       "- The 'Current enquiry status' and 'Known enquiry details' provided below are the AUTHORITATIVE source of what's already captured. Earlier messages in the transcript may show a PREVIOUS enquiry that was already logged — do NOT say things like 'we already have your enquiry' or refuse to help based on them. If the current status is none/collecting and the customer shows holiday interest, treat it as a brand-new enquiry and collect it from scratch.",
       '- Classify the holiday type into one of: "Package Holiday" (default), "Cruise Package", "Hot Tub Break".',
       '- `boardBasis` (only if they mentioned meals/board) must use these exact values: "All Inclusive", "Bed and Breakfast", "Self Catering", "Half Board", "Full Board", "Room Only". `starRating` (only if they mentioned a hotel star rating) must be one of: "2 Star", "3 Star", "4 Star", "5 Star" — a word like "luxury" is NOT a star rating.',
-      "- Collect the fields for the detected holiday type (ask for what's offered, never block on any one field):",
+      "- These are the fields for the detected holiday type — EXTRACTION targets, not an asking checklist. Capture any of them the moment the customer mentions one unprompted, but see the ASKING STYLE rule below for which of these you are actually allowed to proactively ask about (only a small core subset — never the rest):",
       "   • Package Holiday: destination, resort, departure airport, travel date, number of nights, passengers (adults/children/infants + child ages), board basis, minimum star rating, budget.",
       "   • Hot Tub Break: destination, resort, travel date, number of nights, number of guests, weekend lodge (yes/no), pets (how many), budget.",
       "   • Cruise Package: destination(s) (record in `destinations`), travel date, number of nights, passengers, cabin type, cruise line, pre-cruise stay nights, post-cruise stay nights, departure airport, budget.",
@@ -650,7 +647,11 @@ export function buildSystemPrompt(
   // overrides — the model weighs adjacent instructions together, and a rule
   // separated by several paragraphs was losing out to the earlier default.
   parts.push(
-    "- DEFAULT ASKING STYLE (an agency rule below may set a DIFFERENT number of questions per message — if one does, FOLLOW THE AGENCY RULE for pacing, not this default): unless an agency rule says otherwise, every message should be SHORT — at most two sentences — and ask about only ONE thing at a time (or two ONLY if they naturally belong together, e.g. number of adults and children). By default do NOT stack several separate questions into one reply: do NOT, for example, ask party size AND children's ages AND dates AND airport AND board basis in the same message — pick the single most useful missing detail (or however many the agency rule specifies) and ask just that. Prioritise, in order: destination (only if they haven't given one and aren't open to suggestions), then rough dates, then number of nights, then budget; deliberately leave the rest for later messages and pick them up naturally over the next few replies. Never reel off a list, never make it read like a form, and never re-ask a detail they've already given or declined.",
+    [
+      "- DEFAULT ASKING STYLE (an agency rule below may set a DIFFERENT NUMBER of questions per message — if one does, FOLLOW THE AGENCY RULE for HOW MANY questions to ask per message; it can NEVER change WHICH fields you're allowed to ask about, which is fixed below regardless of any agency rule): unless an agency rule says otherwise, every message should be SHORT — at most two sentences — and ask about only ONE thing at a time (or two ONLY if they naturally belong together, e.g. number of adults and children). By default do NOT stack several separate questions into one reply. You may ONLY proactively ask about the required CORE fields, in this priority order: destination (only if they haven't given one and aren't open to suggestions), then rough dates, then number of nights, then party size (adults for Package/Cruise, guests for Hot Tub), then budget — deliberately leave the rest for later messages and pick them up naturally over the next few replies. Never reel off a list, never make it read like a form, and never re-ask a detail they've already given or declined.",
+      "- HOT TUB BREAKS AND AREA/RADIUS: for Hot Tub Break enquiries, if the customer gives an AREA or RADIUS instead of a named destination (e.g. \"within an hour's drive of Newcastle\", \"near me in the North East\", \"somewhere close by\"), that IS their location answer — record it in `notes`, do NOT ask for a destination, and never re-ask where they want to go.",
+      "- Do NOT ask about resort, board basis, minimum star rating, departure airport, accommodation type, cabin type, cruise line, pre-cruise stay, post-cruise stay, weekend lodges, or pets — these are nice-to-have fields and you must NEVER proactively ask about them, no matter how many questions per message an agency rule allows. If the customer VOLUNTEERS one of these unprompted, extract and record it into `slots` exactly as normal — you just must never be the one who brings it up.",
+    ].join("\n"),
   );
   if (rulesBlock) parts.push(rulesBlock);
 
@@ -665,6 +666,18 @@ export function buildSystemPrompt(
 
   parts.push(
     [
+      "CRITICAL — HOW THE ENQUIRY GETS LOGGED: the enquiry is created from the `slots` object, NOT from your `reply` text. You MUST copy EVERY holiday detail the customer has stated so far into `slots` on EVERY turn — carry forward everything from earlier messages too, don't just include the newest detail. If the customer has said e.g. \"Benidorm, 2 adults, £500, 1st September\", then `slots` MUST contain destinations:[\"Benidorm\"], adults:2, budget:\"500\", travelDate:\"2025-09-01\" (next future date). Putting details only in `reply` and leaving `slots` empty means the enquiry is LOST and never logged — this is the single most important rule.",
+      "While the customer is giving or refining holiday details, keep intent=\"enquiry\" (do NOT switch to \"other\" just because you're wrapping up a detail).",
+      "Do NOT tell the customer you've \"got everything\", it's \"all sorted\", or that the team/an advisor will call or be in touch — the system handles logging the enquiry and arranging the callback automatically AFTER you. Just keep gathering details or answer their question.",
+    ].join("\n"),
+  );
+
+  parts.push(
+    'Respond ONLY with JSON: {"hand_off": boolean, "intent": "enquiry"|"other", "slots": object, "client": {"fullName": string, "phone": string}, "beneficiary": {"onBehalf": boolean, "fullName": string, "phone": string}, "reply": string}. `reply` is the message to send the customer; `slots` MUST carry every holiday detail stated so far (see the CRITICAL rule above); `client` holds any personal details the SENDER has given (empty strings if unknown); `beneficiary` is only for when they are enquiring on another named person\'s behalf (onBehalf=false otherwise).',
+  );
+
+  parts.push(
+    [
       "ENQUIRING ON BEHALF OF SOMEONE ELSE: If the customer makes clear the holiday is for ANOTHER person and they themselves are NOT one of the travellers — e.g. \"my friend James wants to book Benidorm\", \"I'm enquiring for my mum Susan\", \"my friend saw your Benidorm post\" — then:",
       "  • set beneficiary.onBehalf=true. Put the traveller's REAL name in beneficiary.fullName ONLY if they've actually told you it. NEVER put a generic word like \"friend\", \"my friend\", \"your friend\", \"mate\", or \"my mum\" in beneficiary.fullName — that is NOT a name. If you don't have their real name yet, leave beneficiary.fullName EMPTY.",
       "  • if you DO have the traveller's real name, do NOT ask for it again — just ask for their phone (naming them, e.g. \"Can I grab James's phone number?\"). If you do NOT have their real name, ask for their NAME and phone number (e.g. \"Of course! What's your friend's name and number so I can set this up for them?\"). Either way, do NOT ask the sender for their OWN name or number.",
@@ -675,17 +688,87 @@ export function buildSystemPrompt(
     ].join("\n"),
   );
 
-  parts.push(
-    [
-      "CRITICAL — HOW THE ENQUIRY GETS LOGGED: the enquiry is created from the `slots` object, NOT from your `reply` text. You MUST copy EVERY holiday detail the customer has stated so far into `slots` on EVERY turn — carry forward everything from earlier messages too, don't just include the newest detail. If the customer has said e.g. \"Benidorm, 2 adults, £500, 1st September\", then `slots` MUST contain destinations:[\"Benidorm\"], adults:2, budget:\"500\", travelDate:\"2025-09-01\" (next future date). Putting details only in `reply` and leaving `slots` empty means the enquiry is LOST and never logged — this is the single most important rule.",
-      "While the customer is giving or refining holiday details, keep intent=\"enquiry\" (do NOT switch to \"other\" just because you're wrapping up a detail).",
-      "Do NOT tell the customer you've \"got everything\", it's \"all sorted\", or that the team/an advisor will call or be in touch — the system handles logging the enquiry and arranging the callback automatically AFTER you. Just keep gathering details or answer their question.",
-    ].join("\n"),
-  );
+  const handoff = [
+    "Set hand_off=true ONLY if the customer explicitly asks for a human/agent, is clearly upset or complaining, or makes a request genuinely unrelated to booking a holiday.",
+    "NEVER hand off just because an enquiry looks already logged, repeated, or previously mentioned, or because you've said 'an advisor will get back' before — a repeated or restated holiday interest is NOT a hand-off reason; help with it as a normal enquiry.",
+    botConfig?.handoffInstructions?.trim() || "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  parts.push(handoff);
 
-  parts.push(
-    'Respond ONLY with JSON: {"hand_off": boolean, "intent": "enquiry"|"other", "slots": object, "client": {"fullName": string, "phone": string}, "beneficiary": {"onBehalf": boolean, "fullName": string, "phone": string}, "reply": string}. `reply` is the message to send the customer; `slots` MUST carry every holiday detail stated so far (see the CRITICAL rule above); `client` holds any personal details the SENDER has given (empty strings if unknown); `beneficiary` is only for when they are enquiring on another named person\'s behalf (onBehalf=false otherwise).',
+  // Company info: STATIC fact-KB rows only, capped at KB_CHAR_BUDGET — kept as
+  // its own block so this part of the prefix stays byte-identical turn-to-turn
+  // regardless of what the vector search returns this turn (see the retrieved-
+  // KB tail block below for the per-turn matches, which used to be folded into
+  // this same capped string and would otherwise break the cached prefix).
+  const activeKb = kb.filter((k) => k.isActive && audienceAllows(k.audience, "sales"));
+  const factKb = salesFactKb(kb);
+  if (factKb.length) {
+    let company = factKb.map((k) => `- ${k.title}: ${k.content}`).join("\n");
+    if (company.length > KB_CHAR_BUDGET) company = company.slice(0, KB_CHAR_BUDGET) + "…";
+    parts.push(`Company information (use it to answer accurately):\n${company}`);
+  }
+
+  // Tone/style examples (e.g. real conversations pasted into the KB) — these
+  // teach HOW we talk, not what is true.
+  const styleBlock = buildStyleExamplesBlock(
+    activeKb,
+    "How our team talks to customers — study these real example conversations and MATCH this tone, warmth, phrasing and overall approach in your replies. They are STYLE examples ONLY: do NOT treat the specific holidays, destinations, dates, prices, phone numbers or customers in them as real, current, or relevant to this conversation.",
   );
+  if (styleBlock) parts.push(styleBlock);
+
+  // --- DYNAMIC TAIL below: everything from here on varies per customer/turn,
+  // so it is deliberately kept OUT of the static prefix above (prompt-caching
+  // optimization) — see the block comment above this function. ---
+
+  if (client) {
+    parts.push(`You are speaking with ${[client.title, client.firstName, client.surename].filter(Boolean).join(" ")}.`);
+  }
+
+  // Vector-retrieved KB matches for THIS message (Phase 5d) — rendered as
+  // their own small tail block (rather than folded into the static company-
+  // info block above) so the static prefix stays byte-stable; these are
+  // already individually small (retrieval is capped at 3 matches).
+  const retrievedKb = (retrieved?.kb ?? []).filter(
+    (m) => !isStyleExampleCategory(retrievedMatchCategory(m)) && audienceAllows(retrievedMatchAudience(m), "sales"),
+  );
+  if (retrievedKb.length) {
+    const retrievedLines = retrievedKb.map((m) => `- ${m.content}`).join("\n");
+    parts.push(`Possibly relevant knowledge for THIS message:\n${retrievedLines}`);
+  }
+
+  // Vector-retrieved similar past quotes (Phase 5d) — internal context only, never
+  // to be surfaced as a firm price/availability/promise to the customer.
+  const retrievedQuotes = retrieved?.quotes ?? [];
+  if (retrievedQuotes.length) {
+    let quotesText = retrievedQuotes.map((m) => `- ${m.content}`).join("\n");
+    if (quotesText.length > QUOTE_REFERENCE_CHAR_BUDGET) quotesText = quotesText.slice(0, QUOTE_REFERENCE_CHAR_BUDGET) + "…";
+    parts.push(
+      "Reference — similar past trips (INTERNAL ONLY — do NOT quote prices, availability, or promise these to the customer; " +
+        `use only to ask better questions and suggest ideas):\n${quotesText}\n\n` +
+        "Reminder: never quote firm prices or availability from this reference — always gather the enquiry and let a human advisor follow up.",
+    );
+  }
+
+  // Client onboarding gate: collect details before anything else for unknown
+  // contacts. Only a name and phone number are required — we do NOT ask for
+  // email. Kept last (dynamic tail) because it depends on `knownClient`,
+  // which varies per contact.
+  if (!knownClient) {
+    parts.push(
+      [
+        "IMPORTANT — this customer is NOT on our system yet. Your FIRST reply must do TWO things in one short, friendly message:",
+        "  1. Briefly acknowledge their message in a natural, friendly way so they know you've understood what they asked — the way a warm UK travel agent would reassure them you can help. VARY your wording naturally to fit their message; do NOT open with a canned phrase like \"Of course\". Keep it to a line, and do NOT start answering the enquiry or asking holiday details yet.",
+        "  2. Then ask for their NAME and PHONE NUMBER so you can check them on the system — phrase it naturally and casually in the message, e.g. \"can you pop me your name and phone number so I can check you're on the system?\". Do NOT ask for an email address, and do NOT use stiff phrasing like \"set up your file\".",
+        "  EXCEPTION: if they are enquiring on behalf of ANOTHER named person and are not travelling themselves (see the 'ENQUIRING ON BEHALF OF SOMEONE ELSE' rules above), do NOT ask the sender for their own name/phone — follow those rules and ask for the TRAVELLER's phone instead.",
+        "- On every reply after that, look at what they have already given and ask ONLY for what is still missing — e.g. if they gave just their name, ask for their phone number only. NEVER re-ask for a detail they have already provided.",
+        "- Put whatever they provide into `client`: { fullName, phone } — leave a field as an empty string until they actually give it.",
+        "Only once you have BOTH their name and phone, give a brief confirmation that you can see them on the system (e.g. \"That's great, I can see you on the system\"), then respond to WHAT THEY ACTUALLY ASKED FOR: if they've already shown they want a holiday, carry on helping with that; if they only greeted you or haven't said what they need, ask an OPEN, friendly question about how you can help (e.g. \"what can I help you with today?\") — do NOT assume they want to book, and do NOT start asking for destination, dates, or who's travelling. Do not start collecting holiday enquiry details until you have their name and phone AND they've actually expressed interest in a holiday.",
+      ].join("\n"),
+    );
+  }
+
   return parts.join("\n\n");
 }
 
@@ -810,6 +893,10 @@ export async function generateTurn(
     response_format: { type: "json_object" },
     temperature: 0.4,
     max_tokens: 700,
+    // Boosts OpenAI's prompt-cache hit rate by bucketing requests for the same
+    // org together (the cached prefix built by buildSystemPrompt above is
+    // shared per-org) — omitted when the org id isn't available.
+    ...(botConfig?.orgId ? { prompt_cache_key: botConfig.orgId } : {}),
     messages: [
       { role: "system", content: buildSystemPrompt(botConfig, kb, client, knownClient, retrieved) },
       {
@@ -823,6 +910,7 @@ export async function generateTurn(
       },
     ],
   });
+  logAiUsage("generateTurn", CHAT_MODEL, response.usage);
   const raw = response.choices[0]?.message?.content?.trim();
   const fallback: AiTurn = { hand_off: true, intent: "other", slots: {}, client: {}, reply: FALLBACK_REPLY };
   if (!raw) return fallback;
@@ -846,10 +934,10 @@ export async function generateTurn(
 }
 
 // ---------------------------------------------------------------------------
-// Holiday-type field checklists — used to (a) gate the ONE grouped follow-up
-// on a soft anti-empty threshold and (b) compute what's still missing, both
-// for the grouped-ask reply and for the "additional fields still needed" note
-// written on enquiry creation.
+// Holiday-type field checklists — used to (a) gate the immediate enquiry
+// creation (see missingCoreFieldsFor/shouldCreateEnquiryNow below) and (b)
+// compute the full "additional fields still needed" note written on enquiry
+// creation (missingFieldsFor), covering the nice-to-have fields too.
 // ---------------------------------------------------------------------------
 
 interface FieldCheck {
@@ -905,8 +993,9 @@ function fieldChecksFor(slots: EnquirySlots): FieldCheck[] {
 
 // The REQUIRED CORE subset of each holiday type's field list — the bot keeps
 // collecting (rather than sending the ONE grouped ask) until these land. Same
-// shape across all three types: destination, travel dates, number of nights,
-// party size (adults for package/cruise, guests for hot tub), budget.
+// shape across package/cruise: destination, travel dates, number of nights,
+// party size (adults for package/cruise, guests for hot tub), budget. Hot tub
+// is the exception — see HOTTUB_CORE_FIELDS below.
 const PACKAGE_CORE_FIELDS: FieldCheck[] = [
   { label: "destination", has: hasDestination },
   { label: "travel dates", has: hasDates },
@@ -923,8 +1012,16 @@ const CRUISE_CORE_FIELDS: FieldCheck[] = [
   { label: "budget", has: hasBudget },
 ];
 
+// No destination check here on purpose: hot tub lodge customers routinely
+// shop by radius/area from home ("within an hour's drive", "near me in the
+// North East") rather than a named destination. That area lands in `notes`
+// (see the prompt's hot-tub guidance), not `destinations`, so gating core
+// completion on hasDestination would mean these enquiries never complete
+// naturally and only ever get created at the MAX_ENQUIRY_ASKS cap — or never,
+// if the conversation winds down first. The human agent picks parks near the
+// customer's stated area; the full HOTTUB_FIELDS checklist below still lists
+// destination as a "nice to have" missing field on creation.
 const HOTTUB_CORE_FIELDS: FieldCheck[] = [
-  { label: "destination", has: hasDestination },
   { label: "travel dates", has: hasDates },
   { label: "number of nights", has: (s) => !!s.nights },
   { label: "number of guests", has: (s) => !!s.guests },
@@ -940,7 +1037,7 @@ function coreFieldChecksFor(slots: EnquirySlots): FieldCheck[] {
 
 // Missing = REQUIRED CORE field list − filled slots. While any of these are
 // still missing (and the ask-cap hasn't been hit), the drivers keep collecting
-// naturally instead of sending the ONE grouped ask.
+// naturally instead of creating the enquiry.
 export function missingCoreFieldsFor(slots: EnquirySlots): string[] {
   return coreFieldChecksFor(slots)
     .filter((f) => !f.has(slots))
@@ -953,6 +1050,24 @@ export function missingCoreFieldsFor(slots: EnquirySlots): string[] {
 // enquiry created after at most this many asks, instead of being
 // interrogated indefinitely waiting for a core field that will never land.
 export const MAX_ENQUIRY_ASKS = 5;
+
+// The single create-trigger decision, pulled out of reply-worker/
+// internal-chat-testflow into one pure, unit-testable function so the two
+// drivers can't drift (mirrors the shouldForceTicketNow pattern). True once
+// the required core fields are complete, OR the ask-cap has been reached, OR
+// this conversation already sent the (now-legacy) grouped ask on a prior turn
+// before this change shipped — any of those means "stop asking, create the
+// enquiry now" rather than sending another follow-up round. Callers still own
+// the surrounding gates (treatAsEnquiry / substantive / enquiry status) —
+// this only decides the core-vs-ask-cap-vs-legacy question.
+export interface CreateEnquiryGateInput {
+  coreMissingCount: number;
+  askCount: number;
+  groupedAskSentLegacy?: boolean;
+}
+export function shouldCreateEnquiryNow(input: CreateEnquiryGateInput): boolean {
+  return !!input.groupedAskSentLegacy || input.coreMissingCount === 0 || input.askCount >= MAX_ENQUIRY_ASKS;
+}
 
 export function isEmptySlotValue(v: unknown): boolean {
   if (v === undefined || v === null) return true;
@@ -976,8 +1091,8 @@ export function mergeSlots(prior: EnquirySlots, next: EnquirySlots): EnquirySlot
   return merged;
 }
 
-// Missing = holiday-type field list − filled slots (used for both the grouped
-// follow-up and the "additional fields still needed" note on creation).
+// Missing = holiday-type field list − filled slots (used for the "additional
+// fields still needed" note written on enquiry creation).
 export function missingFieldsFor(slots: EnquirySlots): string[] {
   return fieldChecksFor(slots)
     .filter((f) => !f.has(slots))
@@ -985,7 +1100,7 @@ export function missingFieldsFor(slots: EnquirySlots): string[] {
 }
 
 // Soft anti-empty threshold: at least one substantive detail beyond the
-// (default) holiday type, so a bare "hi" never starts the grouped-ask/create
+// (default) holiday type, so a bare "hi" never starts the collecting/create
 // path.
 export function hasSubstantiveSignal(slots: EnquirySlots): boolean {
   return !!(
@@ -1014,17 +1129,15 @@ export function hasSubstantiveSignal(slots: EnquirySlots): boolean {
 // them to confirm the number (or send the right one) rather than silently
 // attaching them to someone else's record. `subjectName` names the person the
 // number is meant to be for — omitted for the sender themselves, or e.g. "James"
-// when they're enquiring on someone else's behalf.
-export function buildPhoneConflictReply(existingNames: string[], subjectName?: string): string {
-  const names = existingNames.filter(Boolean);
-  const who =
-    names.length <= 1
-      ? names[0] || "another client"
-      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+// when they're enquiring on someone else's behalf. Never discloses the names of
+// the other clients the number is already registered under — that would leak
+// other clients' PII to whoever typed the number.
+export function buildPhoneConflictReply(subjectName?: string): string {
   const subject = subjectName?.trim();
-  const forWhom = subject ? `for ${subject}` : "for you";
-  const findWhom = subject ? "them" : "you";
-  return `Thanks! Just to double-check — that number is already saved on our system under ${who}. Could you confirm it's the right number ${forWhom}, or pop me the correct one so I can find ${findWhom}?`;
+  if (!subject) {
+    return "Thanks! Just to double-check — that number is already registered on our system. Could you confirm it's definitely the right number for you, or pop me the correct one so I can find you?";
+  }
+  return `Thanks! Just to double-check — that number is already registered on our system. Could you confirm it's definitely the right number for ${subject}, or pop me the correct one so I can find them?`;
 }
 
 export function buildGroupedAskReply(missing: string[]): string {
@@ -1063,7 +1176,7 @@ export async function parseAvailabilityTime(text: string): Promise<Date | null> 
   const openai = getOpenAI();
   const now = new Date();
   const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
+    model: UTILITY_MODEL,
     response_format: { type: "json_object" },
     temperature: 0,
     max_tokens: 100,
@@ -1080,6 +1193,7 @@ export async function parseAvailabilityTime(text: string): Promise<Date | null> 
       { role: "user", content: text },
     ],
   });
+  logAiUsage("availabilityParse", UTILITY_MODEL, response.usage);
   const raw = response.choices[0]?.message?.content?.trim();
   if (!raw) return null;
   try {

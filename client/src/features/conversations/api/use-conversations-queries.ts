@@ -14,6 +14,7 @@ export const conversationsKeys = {
   availableBots: (id: string) => [...conversationsKeys.all, "available-bots", id] as const,
   transcript: (id: string, jobId: string) => [...conversationsKeys.all, "transcript", id, jobId] as const,
   trendingTags: (limit?: number) => [...conversationsKeys.all, "trending-tags", limit ?? null] as const,
+  aiState: (id: string) => [...conversationsKeys.all, "ai-state", id] as const,
 };
 
 export function useConversations(query: ListConversationsQuery = {}) {
@@ -102,5 +103,16 @@ export function useTrendingTags(limit?: number, enabled = true) {
     queryKey: conversationsKeys.trendingTags(limit),
     queryFn: () => conversationsApi.trendingTags(limit),
     enabled,
+  });
+}
+
+// Per-conversation AI auto-reply state (active/paused). Short staleTime so the
+// badge stays fresh as staff send messages or the AI hands off to a human.
+export function useConversationAiState(id: string | null, enabled = true) {
+  return useQuery({
+    queryKey: conversationsKeys.aiState(id ?? ""),
+    queryFn: () => conversationsApi.aiState(id as string),
+    enabled: !!id && enabled,
+    staleTime: 30_000,
   });
 }

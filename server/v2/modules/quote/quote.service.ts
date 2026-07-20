@@ -13,6 +13,7 @@ import type {
   Quote,
   InsertQuote,
   InsertTransaction,
+  Transaction,
   InsertQuoteFlight,
   InsertQuoteAccomodation,
   InsertQuoteTransfer,
@@ -191,6 +192,114 @@ function removeFreeQuoteEmbedding(quoteId: string): void {
   void aiEmbeddingsService.removeSourceById("quote", quoteId);
 }
 
+interface QuoteSectionsInput {
+  outboundFlight?: Partial<InsertQuoteFlight>;
+  inboundFlight?: Partial<InsertQuoteFlight>;
+  outboundConnectingLegs?: Partial<InsertQuoteFlight>[];
+  inboundConnectingLegs?: Partial<InsertQuoteFlight>[];
+  primaryAccommodation?: Partial<InsertQuoteAccomodation>;
+  transfers?: Record<string, unknown>[];
+  carHires?: Record<string, unknown>[];
+  attractionTickets?: Record<string, unknown>[];
+  loungePasses?: Record<string, unknown>[];
+  airportParkings?: Record<string, unknown>[];
+  extraAccommodations?: Record<string, unknown>[];
+  cruiseData: Record<string, unknown> | null;
+  childAges?: number[];
+  normalizedImages: string[];
+  lodgeId?: string | null;
+  // Skip linking the quote's images back to the accommodation/lodge inventory records.
+  // The free social copy only needs the images on the quote itself. Defaults to true.
+  linkImagesToInventory?: boolean;
+}
+
+// Writes every quote-section row (flights, accommodation, transfers, cruise, images…) for a
+// single quote id. Sections write to distinct tables/rows and run concurrently.
+//
+// The one exception is quote_flights: upsertFlightByType (leg_order = 0) and
+// replaceConnectingLegs (leg_order > 0) both target that table for a given flight_type. Their
+// row predicates never overlap, but upsertFlightByType isn't transactional (select-then-insert),
+// so each direction's own leg-0 upsert is kept ordered before that same direction's leg replace.
+// Outbound and inbound never touch each other's rows, so the two chains — and every other
+// section below — all run concurrently.
+async function writeQuoteSections(quoteId: string, parts: QuoteSectionsInput): Promise<void> {
+  const {
+    outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs,
+    primaryAccommodation, transfers, carHires, attractionTickets, loungePasses,
+    airportParkings, extraAccommodations, cruiseData, childAges,
+    normalizedImages, lodgeId, linkImagesToInventory,
+  } = parts;
+
+  const outboundFlightChain = (async () => {
+    if (outboundFlight) await newQuoteRepository.upsertFlightByType(quoteId, "outbound", outboundFlight, 0);
+    if (outboundConnectingLegs?.length) await newQuoteRepository.replaceConnectingLegs(quoteId, "outbound", outboundConnectingLegs);
+  })();
+
+  const inboundFlightChain = (async () => {
+    if (inboundFlight) await newQuoteRepository.upsertFlightByType(quoteId, "inbound", inboundFlight, 0);
+    if (inboundConnectingLegs?.length) await newQuoteRepository.replaceConnectingLegs(quoteId, "inbound", inboundConnectingLegs);
+  })();
+
+  const writes: Promise<unknown>[] = [outboundFlightChain, inboundFlightChain];
+
+  if (primaryAccommodation) writes.push(newQuoteRepository.upsertPrimaryAccommodation(quoteId, primaryAccommodation));
+  if (transfers !== undefined) writes.push(newQuoteRepository.replaceTransfers(quoteId, transfers));
+  if (carHires !== undefined) writes.push(newQuoteRepository.replaceCarHires(quoteId, carHires));
+  if (attractionTickets !== undefined) writes.push(newQuoteRepository.replaceAttractionTickets(quoteId, attractionTickets));
+  if (loungePasses !== undefined) writes.push(newQuoteRepository.replaceLoungePasses(quoteId, loungePasses));
+  if (airportParkings !== undefined) writes.push(newQuoteRepository.replaceAirportParkings(quoteId, airportParkings));
+  if (extraAccommodations !== undefined) writes.push(newQuoteRepository.replaceExtraAccommodations(quoteId, extraAccommodations));
+  if (cruiseData) writes.push(newQuoteRepository.upsertCruise(quoteId, cruiseData));
+  if (childAges !== undefined) writes.push(newQuoteRepository.replaceChildPassengers(quoteId, "quote", childAges));
+
+  if (normalizedImages.length > 0) {
+    writes.push(quoteImageRepository.addImages(quoteId, normalizedImages));
+    if (linkImagesToInventory !== false) {
+      if (primaryAccommodation?.accomodation_id) {
+        writes.push(newQuoteRepository.saveImagesToAccommodation(primaryAccommodation.accomodation_id as string, normalizedImages));
+      }
+      if (lodgeId) {
+        writes.push(newQuoteRepository.saveImagesToLodge(lodgeId, normalizedImages));
+      }
+    }
+  }
+
+  await Promise.all(writes);
+}
+
+// The subset of a create payload passed straight through to newQuoteRepository.create —
+// everything in CreateQuotePayload except the section/relation fields handled separately.
+type QuoteBaseFields = Omit<CreateQuotePayload,
+  | 'outboundFlight' | 'inboundFlight' | 'outboundConnectingLegs' | 'inboundConnectingLegs'
+  | 'primaryAccommodation' | 'images' | 'transfers' | 'carHires' | 'attractionTickets'
+  | 'loungePasses' | 'airportParkings' | 'extraAccommodations' | 'childAges'
+  | 'cruiseTitle' | 'cruiseLine' | 'shipName' | 'cruiseDate' | 'cabinType' | 'cabinNumber'
+  | 'embarkation' | 'debarkation' | 'cruiseExtras' | 'cruiseOnly' | 'preCruiseStay'
+  | 'postCruiseStay' | 'cruiseItinerary'
+>;
+
+interface FreeSocialCopyRelations extends QuoteSectionsInput {
+  tags?: string[];
+}
+
+// Duplicates a newly-created quote into its own "free quote" transaction for social posting.
+// This mirrors createQuote's own section writes but on a separate transaction/quote row.
+// Best-effort and never awaited by the caller — see the fire-and-forget call site below.
+async function createFreeSocialCopy(
+  quoteFields: QuoteBaseFields,
+  relations: FreeSocialCopyRelations,
+  txn: Pick<Transaction, 'user_id' | 'is_test' | 'org_id'>,
+): Promise<void> {
+  const { tags, ...sections } = relations;
+  const freeTxn = await transactionRepository.create({ status: 'on_quote', user_id: txn.user_id, is_test: txn.is_test ?? false } as InsertTransaction);
+  const freeQ = await newQuoteRepository.create({ ...quoteFields, transaction_id: freeTxn.id, isFreeQuote: true, isQuoteCopy: false });
+  await writeQuoteSections(freeQ.id, { ...sections, linkImagesToInventory: false });
+  if (tags && Array.isArray(tags) && tags.length > 0) await tagService.addQuoteTags(freeQ.id, tags);
+  // Tag the auto-generated free copy with the ORIGINAL transaction's org —
+  // freeTxn itself is created without a scope and so has no org of its own.
+  syncFreeQuoteEmbedding(freeQ.id, txn.org_id);
+}
+
 export const newQuoteService = {
   async listQuotes(scope: ScopeOrTrusted) {
     return newQuoteRepository.findAll(scope);
@@ -279,60 +388,34 @@ export const newQuoteService = {
       }
     }
 
-    if (outboundFlight) await newQuoteRepository.upsertFlightByType(q.id, "outbound", outboundFlight, 0);
-    if (inboundFlight) await newQuoteRepository.upsertFlightByType(q.id, "inbound", inboundFlight, 0);
-    if (outboundConnectingLegs?.length) await newQuoteRepository.replaceConnectingLegs(q.id, "outbound", outboundConnectingLegs);
-    if (inboundConnectingLegs?.length) await newQuoteRepository.replaceConnectingLegs(q.id, "inbound", inboundConnectingLegs);
-    if (primaryAccommodation) await newQuoteRepository.upsertPrimaryAccommodation(q.id, primaryAccommodation);
-    if (transfers !== undefined) await newQuoteRepository.replaceTransfers(q.id, transfers);
-    if (carHires !== undefined) await newQuoteRepository.replaceCarHires(q.id, carHires);
-    if (attractionTickets !== undefined) await newQuoteRepository.replaceAttractionTickets(q.id, attractionTickets);
-    if (loungePasses !== undefined) await newQuoteRepository.replaceLoungePasses(q.id, loungePasses);
-    if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(q.id, airportParkings);
-    if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(q.id, extraAccommodations);
-    if (cruiseData) await newQuoteRepository.upsertCruise(q.id, cruiseData);
-    if (childAges !== undefined) await newQuoteRepository.replaceChildPassengers(q.id, "quote", childAges);
-
     const normalizedImages = normalizeUniqueImageUrls(images);
-    if (normalizedImages.length > 0) {
-      await quoteImageRepository.addImages(q.id, normalizedImages);
-      if (primaryAccommodation?.accomodation_id) {
-        await newQuoteRepository.saveImagesToAccommodation(primaryAccommodation.accomodation_id as string, normalizedImages);
-      }
-      if (quoteFields.lodge_id) {
-        await newQuoteRepository.saveImagesToLodge(quoteFields.lodge_id, normalizedImages);
-      }
-    }
+
+    await writeQuoteSections(q.id, {
+      outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs,
+      primaryAccommodation, transfers, carHires, attractionTickets, loungePasses,
+      airportParkings, extraAccommodations, cruiseData, childAges,
+      normalizedImages, lodgeId: quoteFields.lodge_id,
+    });
 
     if (quoteFields.isFreeQuote) {
       syncFreeQuoteEmbedding(q.id, txn.org_id);
     }
 
     if (!quoteFields.isFreeQuote && !txn.is_test && !quoteFields.not_for_social) {
-      try {
-        const freeTxn = await transactionRepository.create({ status: 'on_quote', user_id: txn.user_id, is_test: txn.is_test ?? false } as InsertTransaction);
-        const freeQ = await newQuoteRepository.create({ ...quoteFields, transaction_id: freeTxn.id, isFreeQuote: true, isQuoteCopy: false });
-        if (outboundFlight) await newQuoteRepository.upsertFlightByType(freeQ.id, "outbound", outboundFlight, 0);
-        if (inboundFlight) await newQuoteRepository.upsertFlightByType(freeQ.id, "inbound", inboundFlight, 0);
-        if (outboundConnectingLegs?.length) await newQuoteRepository.replaceConnectingLegs(freeQ.id, "outbound", outboundConnectingLegs);
-        if (inboundConnectingLegs?.length) await newQuoteRepository.replaceConnectingLegs(freeQ.id, "inbound", inboundConnectingLegs);
-        if (primaryAccommodation) await newQuoteRepository.upsertPrimaryAccommodation(freeQ.id, primaryAccommodation);
-        if (transfers !== undefined) await newQuoteRepository.replaceTransfers(freeQ.id, transfers);
-        if (carHires !== undefined) await newQuoteRepository.replaceCarHires(freeQ.id, carHires);
-        if (attractionTickets !== undefined) await newQuoteRepository.replaceAttractionTickets(freeQ.id, attractionTickets);
-        if (loungePasses !== undefined) await newQuoteRepository.replaceLoungePasses(freeQ.id, loungePasses);
-        if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(freeQ.id, airportParkings);
-        if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(freeQ.id, extraAccommodations);
-        if (cruiseData) await newQuoteRepository.upsertCruise(freeQ.id, cruiseData);
-        if (childAges !== undefined) await newQuoteRepository.replaceChildPassengers(freeQ.id, "quote", childAges);
-        if (normalizedImages.length > 0) await quoteImageRepository.addImages(freeQ.id, normalizedImages);
-        if (data.tags && Array.isArray(data.tags) && data.tags.length > 0) await tagService.addQuoteTags(freeQ.id, data.tags);
-        // Tag the auto-generated free copy with the ORIGINAL transaction's org —
-        // freeTxn itself is created without a scope and so has no org of its own.
-        syncFreeQuoteEmbedding(freeQ.id, txn.org_id);
-      } catch (err) {
+      // Duplicating into a free social copy is best-effort and its result is never used by
+      // the caller — run it off the request path instead of doubling create-quote latency.
+      createFreeSocialCopy(
+        quoteFields,
+        {
+          outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs,
+          primaryAccommodation, transfers, carHires, attractionTickets, loungePasses,
+          airportParkings, extraAccommodations, cruiseData, childAges,
+          normalizedImages, tags: data.tags,
+        },
+        { user_id: txn.user_id, is_test: txn.is_test, org_id: txn.org_id },
+      ).catch((err) => {
         console.error('FREE QUOTE (quote.service) - error:', err);
-      }
+      });
     }
 
     if (primaryAccommodation?.accomodation_id) {

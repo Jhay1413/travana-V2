@@ -28,3 +28,13 @@ export interface SsWebhookEndpointCreated {
   secret_key: string;
   message?: string;
 }
+
+// Per-conversation AI enable/disable/status surface (conversations module's
+// ai-state endpoints). `aiActive` is the inverse of `needsHuman` — exposed
+// this way so callers don't have to reason about the double-negative.
+export interface ConversationAiState {
+  aiActive: boolean;
+  needsHuman: boolean;
+  handledByHumanAt: string | null;
+  updatedAt: string | null;
+}
