@@ -23,7 +23,12 @@ export interface RetrieveInput {
 }
 
 export const aiEmbeddingsService = {
-  // Embed `content` and upsert the row. No-op (logged) on any failure.
+  // Embed `content` and upsert the row. No-op (logged) on any failure — but on
+  // failure we also best-effort DELETE any existing vector row for this
+  // source, rather than leaving it in place. Otherwise a re-embed that fails
+  // right after a source edit (e.g. a KB entry's audience tightened from
+  // general to admin) would leave the OLD content/metadata live and
+  // retrievable under the OLD (now-wrong) audience indefinitely.
   async syncSource(input: SyncSourceInput): Promise<void> {
     const content = input.content?.trim();
     if (!content) return;
@@ -42,6 +47,14 @@ export const aiEmbeddingsService = {
         `[ai-embeddings] syncSource failed (org=${input.orgId} ${input.sourceType}/${input.sourceId}):`,
         err instanceof Error ? err.message : err,
       );
+      try {
+        await aiEmbeddingsRepository.deleteBySource(input.orgId, input.sourceType, input.sourceId);
+      } catch (deleteErr) {
+        console.warn(
+          `[ai-embeddings] syncSource stale-row cleanup also failed (org=${input.orgId} ${input.sourceType}/${input.sourceId}):`,
+          deleteErr instanceof Error ? deleteErr.message : deleteErr,
+        );
+      }
     }
   },
 

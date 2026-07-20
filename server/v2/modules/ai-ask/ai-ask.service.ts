@@ -1,8 +1,12 @@
 import OpenAI from 'openai';
 import { noteRepository } from '../note/note.repository';
+import { clientRepository } from '../client/client.repository';
+import { AppError } from '../../utils/error-handler';
+import type { Note } from '@shared/schema';
+import type { Scope } from '../../utils/scope';
 
 function getOpenAI(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) throw new Error('OpenAI API key is not configured');
+  if (!process.env.OPENAI_API_KEY) throw new AppError('OpenAI API key is not configured', 500);
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
@@ -12,7 +16,7 @@ const SYSTEM_PROMPT =
 export const aiAskService = {
   async ask(question: string): Promise<string> {
     const trimmed = (question || '').trim();
-    if (!trimmed) throw new Error('Question is required');
+    if (!trimmed) throw new AppError('Question is required', 400);
     const openai = getOpenAI();
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -21,16 +25,28 @@ export const aiAskService = {
       max_tokens: 1200,
     });
     const content = response.choices[0]?.message?.content?.trim();
-    if (!content) throw new Error('Failed to generate answer');
+    if (!content) throw new AppError('Failed to generate answer', 502);
     return content;
   },
 
-  async saveToClient(params: { clientId: string; question: string; answer: string; agentId?: string | null }) {
-    const { clientId, question, answer, agentId } = params;
-    if (!clientId) throw new Error('clientId is required');
-    if (!question?.trim() || !answer?.trim()) throw new Error('Question and answer are required');
+  async saveToClient(params: {
+    clientId: string;
+    question: string;
+    answer: string;
+    agentId?: string | null;
+    scope: Scope;
+  }): Promise<Note> {
+    const { clientId, question, answer, agentId, scope } = params;
+    if (!clientId) throw new AppError('clientId is required', 400);
+    if (!question?.trim() || !answer?.trim()) throw new AppError('Question and answer are required', 400);
+
+    // Guard against cross-org writes: the client must resolve within the
+    // caller's scope before we attach a note to it.
+    const client = await clientRepository.findById(clientId, scope);
+    if (!client) throw new AppError('Client not found', 404);
+
     const description = `Ask AI: ${question.trim().slice(0, 120)}`;
     const content = `Q: ${question.trim()}\n\nA: ${answer.trim()}`;
-    return noteRepository.create({ description, content, client_id: clientId, agent_id: agentId || null } as any);
+    return noteRepository.create({ description, content, client_id: clientId, agent_id: agentId || null });
   },
 };

@@ -49,7 +49,7 @@ async function main() {
           sourceType: "knowledge",
           sourceId: row.id,
           content: embeddableTexts[i],
-          metadata: { category: row.category, isActive: row.isActive },
+          metadata: { category: row.category, audience: row.audience, isActive: row.isActive },
           embedding: vectors[i],
         });
         totalEmbedded++;

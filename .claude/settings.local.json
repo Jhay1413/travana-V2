@@ -146,7 +146,10 @@
       "Bash(node rt-smoke.test.mjs)",
       "Bash(rm \"c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\rt-smoke.test.mjs\" /tmp/rt-smoke.mjs 2>/dev/null; ls \"c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\rt-smoke.test.mjs\" 2>&1 || echo \"removed\")",
       "Bash(tee \"C:\\\\Users\\\\CHRIST~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Christian-Desktop-travana-v2-travana-V2\\\\4617b591-fc55-4318-9a89-b01dcd7b9600\\\\scratchpad\\\\tsc-out.txt\")",
-      "Bash(git log *)"
+      "Bash(git log *)",
+      "Bash(git ls-tree *)",
+      "Bash(Select-String -Pattern \"ai-ask|v2/routes\")",
+      "Bash(grep -i \"ai-ask\\\\|v2/routes\\\\|v2\\\\\\\\\\\\\\\\routes\")"
     ],
     "additionalDirectories": [
       "/tmp",

@@ -66,6 +66,22 @@ export function audienceAllows(entryAudience: string | null | undefined, bot: Bo
   return normalized === bot;
 }
 
+// STRICT variant for RETRIEVED VECTOR MATCHES only. audienceAllows defaults a
+// missing audience to "general" (correct for KB rows read straight from the
+// DB, which always have a real audience column). But a vector-embedding row's
+// metadata can be missing `audience` altogether — e.g. an old backfill that
+// pre-dates the audience field, or a failed re-embed after an edit left a
+// stale row — and defaulting THAT to "general" would leak restricted content
+// (e.g. admin-only KB) to a customer-facing bot. So here, missing/null/
+// undefined audience fails CLOSED (not visible to any bot) instead of
+// defaulting to "general". Only use this for content sourced from retrieved
+// embedding matches; KB rows read directly from the DB must keep using
+// audienceAllows.
+export function retrievedAudienceAllows(entryAudience: string | null | undefined, bot: BotAudience): boolean {
+  if (!entryAudience) return false;
+  return audienceAllows(entryAudience, bot);
+}
+
 export interface BotRule {
   text: string;
   audience: "general" | "sales" | "admin";
@@ -731,7 +747,7 @@ export function buildSystemPrompt(
   // info block above) so the static prefix stays byte-stable; these are
   // already individually small (retrieval is capped at 3 matches).
   const retrievedKb = (retrieved?.kb ?? []).filter(
-    (m) => !isStyleExampleCategory(retrievedMatchCategory(m)) && audienceAllows(retrievedMatchAudience(m), "sales"),
+    (m) => !isStyleExampleCategory(retrievedMatchCategory(m)) && retrievedAudienceAllows(retrievedMatchAudience(m), "sales"),
   );
   if (retrievedKb.length) {
     const retrievedLines = retrievedKb.map((m) => `- ${m.content}`).join("\n");
@@ -887,32 +903,39 @@ export async function generateTurn(
   knownClient: boolean,
   retrieved?: RetrievedContext,
 ): Promise<AiTurn> {
-  const openai = getOpenAI();
-  const response = await openai.chat.completions.create({
-    model: CHAT_MODEL,
-    response_format: { type: "json_object" },
-    temperature: 0.4,
-    max_tokens: 700,
-    // Boosts OpenAI's prompt-cache hit rate by bucketing requests for the same
-    // org together (the cached prefix built by buildSystemPrompt above is
-    // shared per-org) — omitted when the org id isn't available.
-    ...(botConfig?.orgId ? { prompt_cache_key: botConfig.orgId } : {}),
-    messages: [
-      { role: "system", content: buildSystemPrompt(botConfig, kb, client, knownClient, retrieved) },
-      {
-        role: "user",
-        content:
-          `Customer on file: ${knownClient ? "yes" : "no — collect their name and phone first"}\n` +
-          `Current enquiry status: ${status ?? "none"}\n` +
-          `Known enquiry details (JSON): ${JSON.stringify(slots ?? {})}\n\n` +
-          `Conversation so far:\n${transcript}\n\n` +
-          "Decide the next step and reply.",
-      },
-    ],
-  });
-  logAiUsage("generateTurn", CHAT_MODEL, response.usage);
-  const raw = response.choices[0]?.message?.content?.trim();
   const fallback: AiTurn = { hand_off: true, intent: "other", slots: {}, client: {}, reply: FALLBACK_REPLY };
+
+  let raw: string | undefined;
+  try {
+    const openai = getOpenAI();
+    const response = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      response_format: { type: "json_object" },
+      temperature: 0.4,
+      max_tokens: 700,
+      // Boosts OpenAI's prompt-cache hit rate by bucketing requests for the same
+      // org together (the cached prefix built by buildSystemPrompt above is
+      // shared per-org) — omitted when the org id isn't available.
+      ...(botConfig?.orgId ? { prompt_cache_key: botConfig.orgId } : {}),
+      messages: [
+        { role: "system", content: buildSystemPrompt(botConfig, kb, client, knownClient, retrieved) },
+        {
+          role: "user",
+          content:
+            `Customer on file: ${knownClient ? "yes" : "no — collect their name and phone first"}\n` +
+            `Current enquiry status: ${status ?? "none"}\n` +
+            `Known enquiry details (JSON): ${JSON.stringify(slots ?? {})}\n\n` +
+            `Conversation so far:\n${transcript}\n\n` +
+            "Decide the next step and reply.",
+        },
+      ],
+    });
+    logAiUsage("generateTurn", CHAT_MODEL, response.usage);
+    raw = response.choices[0]?.message?.content?.trim();
+  } catch (err) {
+    console.error("[ai-conversation.brain] generateTurn OpenAI call failed:", err instanceof Error ? err.message : err);
+    return fallback;
+  }
   if (!raw) return fallback;
   try {
     const p = JSON.parse(raw) as Partial<AiTurn>;
@@ -1173,28 +1196,34 @@ export function buildEnquirySummary(slots: EnquirySlots): string {
 // for a callback, in Europe/London terms. Returns null if nothing usable was
 // stated (the task is still created — just with no due date).
 export async function parseAvailabilityTime(text: string): Promise<Date | null> {
-  const openai = getOpenAI();
   const now = new Date();
-  const response = await openai.chat.completions.create({
-    model: UTILITY_MODEL,
-    response_format: { type: "json_object" },
-    temperature: 0,
-    max_tokens: 100,
-    messages: [
-      {
-        role: "system",
-        content:
-          `The current UTC date/time is ${now.toISOString()}. The customer is in the UK (Europe/London timezone). ` +
-          "Extract the specific date and time they say they're available for a callback from their message. " +
-          "Always resolve to the NEXT future occurrence (never in the past). If they gave only a time with no date, assume today if that time is still ahead in UK time, otherwise tomorrow. " +
-          "If they gave only a day with no time, use 10:00 UK time. If no usable date/time can be determined at all, return null. " +
-          'Respond ONLY with JSON: {"iso": string | null} where iso is a full ISO 8601 UTC datetime, e.g. "2026-07-13T14:00:00.000Z".',
-      },
-      { role: "user", content: text },
-    ],
-  });
-  logAiUsage("availabilityParse", UTILITY_MODEL, response.usage);
-  const raw = response.choices[0]?.message?.content?.trim();
+  let raw: string | undefined;
+  try {
+    const openai = getOpenAI();
+    const response = await openai.chat.completions.create({
+      model: UTILITY_MODEL,
+      response_format: { type: "json_object" },
+      temperature: 0,
+      max_tokens: 100,
+      messages: [
+        {
+          role: "system",
+          content:
+            `The current UTC date/time is ${now.toISOString()}. The customer is in the UK (Europe/London timezone). ` +
+            "Extract the specific date and time they say they're available for a callback from their message. " +
+            "Always resolve to the NEXT future occurrence (never in the past). If they gave only a time with no date, assume today if that time is still ahead in UK time, otherwise tomorrow. " +
+            "If they gave only a day with no time, use 10:00 UK time. If no usable date/time can be determined at all, return null. " +
+            'Respond ONLY with JSON: {"iso": string | null} where iso is a full ISO 8601 UTC datetime, e.g. "2026-07-13T14:00:00.000Z".',
+        },
+        { role: "user", content: text },
+      ],
+    });
+    logAiUsage("availabilityParse", UTILITY_MODEL, response.usage);
+    raw = response.choices[0]?.message?.content?.trim();
+  } catch (err) {
+    console.error("[ai-conversation.brain] parseAvailabilityTime OpenAI call failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as { iso?: string | null };
