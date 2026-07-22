@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axiosClient from "@/api/client/axios-client";
+import { env } from "@/config/env";
 import { useToast } from "@/hooks/use-toast";
 
 /**
@@ -29,7 +30,7 @@ export function useQuoteShare(quoteId: string) {
 
   async function copyShareLink(opts?: { silent?: boolean }) {
     if (!shareToken) return;
-    await navigator.clipboard.writeText(`${window.location.origin}/view-quote/${shareToken}`);
+    await navigator.clipboard.writeText(`${env.publicBaseUrl}/view-quote/${shareToken}`);
     setShareCopied(true);
     // Silent when the caller is also sending an SMS, so the only toast the user
     // sees is the send result rather than a confusing "copied to clipboard".
