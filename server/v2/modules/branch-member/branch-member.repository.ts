@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
-import { branchMembers, branches, user, type BranchMember } from "@shared/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { branchMembers, branches, user, userOrgRoles, type BranchMember } from "@shared/schema";
+import { and, eq, isNull, notInArray } from "drizzle-orm";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -99,11 +99,29 @@ export const branchMemberRepository = {
   /**
    * Atomic: update both user.orgRole AND every branch_members.orgRole row for that user.
    * Used when an org admin changes a member's role — the two stores must stay in sync.
+   *
+   * Also clears out any stale `user_org_roles` junction row for a *different*
+   * management role (org_admin/branch_manager/homeworker/social_media_manager/
+   * referral_agent) so the auth-time union of junction rows + branch_members.orgRole
+   * doesn't end up granting both the old and new role. The `agent` "also sells"
+   * flag is preserved, unless the new role is `referral_agent`, which is
+   * incompatible with every internal role including `agent`.
    */
   async setOrgRoleAtomic(orgId: string, userId: string, orgRole: string): Promise<void> {
     await db.transaction(async (tx) => {
       await tx.update(user).set({ orgRole, updatedAt: new Date() }).where(eq(user.id, userId));
       await this.setRoleForUser(orgId, userId, orgRole, tx);
+
+      const rolesToKeep = Array.from(new Set(orgRole === "referral_agent" ? [orgRole] : [orgRole, "agent"]));
+      await tx
+        .delete(userOrgRoles)
+        .where(
+          and(
+            eq(userOrgRoles.userId, userId),
+            eq(userOrgRoles.orgId, orgId),
+            notInArray(userOrgRoles.role, rolesToKeep),
+          ),
+        );
     });
   },
 

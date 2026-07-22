@@ -23,7 +23,7 @@
 | Tables defined (`pgTable`) in schema.ts | 155 |
 | Enums (`pgEnum`) in schema.ts | 27 |
 | `orgId`/`org_id` references in schema.ts | 89 |
-| Migrations (`migrations/*.sql`) | 32 (latest: `0031_tour_operator_logo.sql`) |
+| Migrations (`migrations/*.sql`) | 33 (latest: `0032_cleanup_stale_management_roles.sql`) |
 | Client pages (`client/src/pages`) | ~48 |
 | Automated test runner | ✅ present |
 | Legacy v1 backend (`server/`) present | ⚠️ yes (alongside v2) |

@@ -68,6 +68,12 @@ function assertCompatibleRoleSet(roles: string[]): void {
       400,
     );
   }
+
+  // Management roles are mutually exclusive — a user is either an org admin or
+  // a branch manager, never both at once.
+  if (roles.includes('org_admin') && roles.includes('branch_manager')) {
+    throw new AppError('org_admin cannot be combined with branch_manager', 400);
+  }
 }
 
 export const userOrgRolesService = {
