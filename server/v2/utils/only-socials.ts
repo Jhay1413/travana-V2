@@ -5,7 +5,7 @@ import path from "path";
 import axios from "axios";
 import type { OnlySocialsPost, OnlySocialsMediaUploadResponse } from "../modules/social-post/social-post.types";
 
-const ACCOUNT_ID = 44362;
+const ACCOUNT_ID = 81085;
 
 function getApiBase(): string {
   const workspace = process.env.ONLY_SOCIALS_WORKSPACE;

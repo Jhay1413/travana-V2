@@ -60,6 +60,22 @@ describe("userOrgRolesService.addRole", () => {
     expect(userOrgRolesRepository.addRole).not.toHaveBeenCalled();
   });
 
+  it("refuses to combine org_admin with branch_manager", async () => {
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["branch_manager"] as never);
+
+    await expect(userOrgRolesService.addRole("u1", "o1", "org_admin", ACTOR)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(userOrgRolesRepository.addRole).not.toHaveBeenCalled();
+
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["org_admin"] as never);
+
+    await expect(userOrgRolesService.addRole("u1", "o1", "branch_manager", ACTOR)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(userOrgRolesRepository.addRole).not.toHaveBeenCalled();
+  });
+
   it("adds a valid role and recomputes the primary", async () => {
     vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["agent"] as never);
 

@@ -225,6 +225,13 @@
       "when": 1784627591343,
       "tag": "0031_tour_operator_logo",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1784708351995,
+      "tag": "0032_cleanup_stale_management_roles",
+      "breakpoints": true
     }
   ]
 }
