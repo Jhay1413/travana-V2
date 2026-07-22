@@ -305,14 +305,14 @@ portalRouter.get('/deals', async (req: Request, res: Response) => {
     const filterCountry = ((req.query.country as string) || '').trim();
     const filterTag = ((req.query.tag as string) || '').trim();
     // "Latest Deals" passes ?recent=1 to limit results to deals added to the portal
-    // within the last 6 days; the browse Deals page omits it and sees all deals.
+    // within the last 7 days; the browse Deals page omits it and sees all deals.
     const recentOnly = ((req.query.recent as string) || '') === '1';
 
     const results = await portalRepository.findDeals({
       country: filterCountry || undefined,
       tag: filterTag || undefined,
       limit: 50,
-      recentDays: recentOnly ? 6 : undefined,
+      recentDays: recentOnly ? 7 : undefined,
     });
     res.json(await enrichDealRows(results));
   } catch (err: any) {

@@ -1,0 +1,1 @@
+ALTER TABLE "tour_operator_table" ADD COLUMN "logo_url" text;

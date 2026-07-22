@@ -218,6 +218,13 @@
       "when": 1784532150600,
       "tag": "0030_ai_usage_limits",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1784627591343,
+      "tag": "0031_tour_operator_logo",
+      "breakpoints": true
     }
   ]
 }

@@ -146,7 +146,7 @@ router.use('/portal',             portalRoutes);
 router.use('/platform-admin',     isAuthenticated, platformAdminRoutes);
 router.use('/user-org-roles',     ...auth, userOrgRolesRoutes);
 router.use('/lookup',             lookupRoutes);
-router.use('/settings',           isAuthenticated, settingsRoutes);
+router.use('/settings',           ...auth, settingsRoutes);
 router.use('/training',           ...auth, trainingRoutes);
 router.use('/internal-chat',      ...auth, internalChatRoutes);
 router.use('/realtime',           ...auth, realtimeRoutes);

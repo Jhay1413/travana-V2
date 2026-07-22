@@ -302,6 +302,7 @@ export const tour_operator = pgTable('tour_operator_table', {
   name: varchar(),
   commission_percentage: decimal({ precision: 5, scale: 2 }),
   org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  logo_url: text("logo_url"),
 });
 export type TourOperatorLookup = typeof tour_operator.$inferSelect;
 export type InsertTourOperatorLookup = typeof tour_operator.$inferInsert;

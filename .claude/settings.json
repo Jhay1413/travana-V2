@@ -57,7 +57,18 @@
       "Bash(powershell -Command \"Get-ChildItem -Recurse -Path 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\src\\\\features\\\\conversations' -Filter '*inbox*'\")",
       "Bash(powershell -Command \"\\(Get-Content 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\src\\\\features\\\\conversations\\\\components\\\\conversations-inbox.tsx'\\).Length\")",
       "Bash(powershell -Command \"Select-String -Path 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\src\\\\features\\\\conversations\\\\components\\\\conversations-inbox.tsx' -Pattern 'toast|sonner'\")",
-      "Bash(powershell -Command \"Get-ChildItem 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\src\\\\components\\\\ui' -Filter 'badge*'\")"
+      "Bash(powershell -Command \"Get-ChildItem 'c:\\\\Users\\\\Christian\\\\Desktop\\\\travana-v2\\\\travana-V2\\\\client\\\\src\\\\components\\\\ui' -Filter 'badge*'\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -m 5 \"http://localhost:5000/api/v2/settings/tour-operators\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -m 5 -X POST \"http://localhost:5000/api/v2/settings/tour-operators/00000000-0000-0000-0000-000000000000/logo\")",
+      "Bash(netstat -ano)",
+      "Bash(powershell -NoProfile -Command \"\\(Get-Process -Id 26872\\).StartTime; \\(Get-Item 'server/v2/settings/tour-operator/tour-operator-settings.routes.ts'\\).LastWriteTime\")",
+      "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/cd8d79c0-523a-4073-a76c-01183eae5df9/scratchpad/check-s3.mjs\")",
+      "Bash(powershell -NoProfile -Command \"\\(Get-CimInstance Win32_Process -Filter 'ProcessId=26872'\\).CommandLine\")",
+      "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/cd8d79c0-523a-4073-a76c-01183eae5df9/scratchpad/check-orgs.mjs\")",
+      "Bash(node -e \"const d = require\\('drizzle-orm'\\); console.log\\(typeof d.notExists, typeof d.exists\\);\")",
+      "Bash(curl -s -m 8 \"http://localhost:5000/api/v2/portal/deals?recent=1\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -m 8 \"http://localhost:5000/api/v2/portal/deals?recent=1\")",
+      "Bash(node \"C:/Users/CHRIST~1/AppData/Local/Temp/claude/c--Users-Christian-Desktop-travana-v2-travana-V2/cd8d79c0-523a-4073-a76c-01183eae5df9/scratchpad/check-deals.mjs\")"
     ],
     "deny": [
       "Bash(drizzle-kit push:*)",
