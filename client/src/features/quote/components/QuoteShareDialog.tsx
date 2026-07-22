@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { env } from "@/config/env";
 import { useSendSms } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 
@@ -131,7 +132,7 @@ export function QuoteShareDialog({
               <div className="flex items-center gap-2">
                 <input
                   readOnly
-                  value={`${window.location.origin}/view-quote/${shareToken}`}
+                  value={`${env.publicBaseUrl}/view-quote/${shareToken}`}
                   className="flex-1 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-xs text-black/70 outline-none"
                   data-testid="input-share-link"
                   onClick={(e) => (e.target as HTMLInputElement).select()}

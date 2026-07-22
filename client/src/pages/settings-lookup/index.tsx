@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useParams } from "wouter";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Role } from "@/types/auth/auth.types";
@@ -32,13 +32,15 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Upload,
+  ImagePlus,
 } from "lucide-react";
 import axios from "@/api/client/axios-client";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 
 // ─── Field & Table Definitions ────────────────────────────────────────────────
 
-type FieldType = "text" | "number" | "boolean" | "select" | "relation";
+type FieldType = "text" | "number" | "boolean" | "select" | "relation" | "image";
 
 interface FieldDef {
   key: string;
@@ -51,13 +53,22 @@ interface FieldDef {
   lookupApi?: string;
   /** For type="relation": the row field to use as the display label */
   lookupLabelKey?: string;
+  /** For type="number": a unit/adornment shown inside the field (e.g. "%") */
+  suffix?: string;
+}
+
+interface DisplayColumn {
+  key: string;
+  label: string;
+  /** Custom cell renderer, overrides the default value rendering */
+  render?: (row: Record<string, any>) => ReactNode;
 }
 
 interface TableDef {
   label: string;
   apiPath: string;
   navKey: string;
-  displayColumns: { key: string; label: string }[];
+  displayColumns: DisplayColumn[];
   formFields: FieldDef[];
   primaryLabel: (row: Record<string, any>) => string;
   /** Returns the URL segment for edit/delete (defaults to row.id) */
@@ -74,12 +85,30 @@ const TABLE_DEFS: Record<string, TableDef> = {
     apiPath: "/api/v2/settings/tour-operators",
     navKey: "tour-operators",
     displayColumns: [
-      { key: "name", label: "Name" },
+      {
+        key: "name",
+        label: "Name",
+        render: (row) => (
+          <div className="flex items-center gap-2">
+            {row.logo_url ? (
+              <img
+                src={row.logo_url}
+                alt={`${row.name ?? "Tour operator"} logo`}
+                className="h-10 w-10 shrink-0 rounded-xl border border-black/10 bg-white object-contain dark:border-white/10"
+              />
+            ) : (
+              <div className="h-10 w-10 shrink-0 rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" />
+            )}
+            <span>{row.name ?? "–"}</span>
+          </div>
+        ),
+      },
       { key: "commission_percentage", label: "Commission %" },
     ],
     formFields: [
       { key: "name", label: "Name", type: "text", required: true, placeholder: "e.g. TUI, Jet2" },
-      { key: "commission_percentage", label: "Commission %", type: "number", placeholder: "e.g. 10.5" },
+      { key: "commission_percentage", label: "Commission %", type: "number", placeholder: "e.g. 10.5", suffix: "%" },
+      { key: "logo_url", label: "Logo", type: "image" },
     ],
     primaryLabel: (r) => r.name ?? "–",
   },
@@ -374,6 +403,7 @@ const TABLE_DEFS: Record<string, TableDef> = {
 };
 
 const PAGE_SIZE = 25;
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 
 // ─── Relation Select ──────────────────────────────────────────────────────────
 
@@ -445,19 +475,149 @@ function RelationSelect({
   );
 }
 
+// ─── Image Field Input ─────────────────────────────────────────────────────────
+
+function ImageFieldInput({
+  value,
+  pendingFile,
+  onFileSelect,
+  onRemove,
+}: {
+  value: string | null;
+  pendingFile?: File;
+  onFileSelect: (file: File) => void;
+  onRemove: () => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!pendingFile) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(pendingFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pendingFile]);
+
+  const displayUrl = previewUrl ?? value ?? null;
+
+  const handleFiles = (files: FileList | null) => {
+    const file = files?.[0];
+    if (file) onFileSelect(file);
+  };
+
+  return (
+    <div className="space-y-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          e.target.value = "";
+        }}
+        className="hidden"
+      />
+
+      {displayUrl ? (
+        <div className="flex items-center gap-3 rounded-xl border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-white/5">
+          <img
+            src={displayUrl}
+            alt="Logo preview"
+            className="h-24 w-24 shrink-0 rounded-xl border border-black/10 bg-white object-contain dark:border-white/10"
+          />
+          <div className="flex flex-col items-start gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => inputRef.current?.click()}
+              className="h-7 rounded-lg px-2.5 text-xs"
+            >
+              <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
+              Replace
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onRemove}
+              className="h-7 justify-start rounded-lg px-2.5 text-xs text-red-500 hover:text-red-600"
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              Remove
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              inputRef.current?.click();
+            }
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            handleFiles(e.dataTransfer.files);
+          }}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed p-6 text-center transition-colors ${
+            dragging
+              ? "border-[#3b82f6] bg-[#3b82f6]/5"
+              : "border-black/10 bg-black/5 hover:border-black/20 dark:border-white/10 dark:bg-white/5 dark:hover:border-white/20"
+          }`}
+        >
+          <Upload className="h-6 w-6 text-black/30 dark:text-white/30" />
+          <p className="text-sm font-medium text-black/70 dark:text-white/70">Click or drag an image here</p>
+          <p className="text-[11px] text-black/40 dark:text-white/40">PNG, JPG, WebP or GIF, max 5MB</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Field Input Component ────────────────────────────────────────────────────
 
 function FieldInput({
   field,
   value,
   onChange,
+  pendingFile,
+  onFileSelect,
+  onFileRemove,
 }: {
   field: FieldDef;
   value: any;
   onChange: (val: any) => void;
+  pendingFile?: File;
+  onFileSelect?: (file: File) => void;
+  onFileRemove?: () => void;
 }) {
   const baseClass =
     "w-full h-9 rounded-xl border border-black/10 bg-black/5 px-3 text-sm dark:border-white/10 dark:bg-white/5 focus:outline-none focus:ring-1 focus:ring-ring";
+
+  if (field.type === "image") {
+    return (
+      <ImageFieldInput
+        value={value}
+        pendingFile={pendingFile}
+        onFileSelect={(file) => onFileSelect?.(file)}
+        onRemove={() => onFileRemove?.()}
+      />
+    );
+  }
 
   if (field.type === "relation" && field.lookupApi && field.lookupLabelKey) {
     return (
@@ -503,14 +663,25 @@ function FieldInput({
   }
 
   if (field.type === "number") {
-    return (
+    const input = (
       <input
         type="number"
         value={value ?? ""}
         placeholder={field.placeholder}
         onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
-        className={baseClass}
+        className={field.suffix ? `${baseClass} pr-8` : baseClass}
       />
+    );
+
+    if (!field.suffix) return input;
+
+    return (
+      <div className="relative">
+        {input}
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-black/40 dark:text-white/40">
+          {field.suffix}
+        </span>
+      </div>
     );
   }
 
@@ -535,33 +706,62 @@ function RecordModal({
   initial,
   title,
   isSaving,
+  onError,
 }: {
   open: boolean;
   onClose: () => void;
-  onSave: (data: Record<string, any>) => void;
+  onSave: (data: Record<string, any>, pendingFiles: Record<string, File>) => void;
   fields: FieldDef[];
   initial: Record<string, any>;
   title: string;
   isSaving: boolean;
+  onError?: (message: string) => void;
 }) {
   const [form, setForm] = useState<Record<string, any>>(initial);
+  const [pendingFiles, setPendingFiles] = useState<Record<string, File>>({});
 
   useEffect(() => {
     setForm(initial);
+    setPendingFiles({});
   }, [initial, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(form);
+    onSave(form, pendingFiles);
   };
 
   const setField = useCallback((key: string, val: any) => {
     setForm((prev) => ({ ...prev, [key]: val }));
   }, []);
 
+  const handleFileSelect = useCallback(
+    (key: string, file: File) => {
+      if (file.size > MAX_IMAGE_SIZE_BYTES) {
+        onError?.("Image must be smaller than 5MB");
+        return;
+      }
+      setPendingFiles((prev) => ({ ...prev, [key]: file }));
+    },
+    [onError]
+  );
+
+  const handleFileRemove = useCallback(
+    (key: string) => {
+      setPendingFiles((prev) => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setField(key, null);
+    },
+    [setField]
+  );
+
+  const hasImageField = fields.some((f) => f.type === "image");
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md rounded-2xl">
+      <DialogContent className={`${hasImageField ? "max-w-lg" : "max-w-md"} rounded-2xl`}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
@@ -572,7 +772,14 @@ function RecordModal({
                 {field.label}
                 {field.required && <span className="text-red-500 ml-1">*</span>}
               </label>
-              <FieldInput field={field} value={form[field.key]} onChange={(v) => setField(field.key, v)} />
+              <FieldInput
+                field={field}
+                value={form[field.key]}
+                onChange={(v) => setField(field.key, v)}
+                pendingFile={pendingFiles[field.key]}
+                onFileSelect={(file) => handleFileSelect(field.key, file)}
+                onFileRemove={() => handleFileRemove(field.key)}
+              />
             </div>
           ))}
           <DialogFooter className="pt-2">
@@ -653,29 +860,113 @@ export default function SettingsLookupPage() {
     placeholderData: (prev) => prev,
   });
 
+  const imageFieldKeys = def?.formFields.filter((f) => f.type === "image").map((f) => f.key) ?? [];
+
+  const uploadLogo = async (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append("logo", file);
+    await axios.post(`${def!.apiPath}/${id}/logo`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  };
+
   const createMutation = useMutation({
-    mutationFn: async (payload: Record<string, any>) => {
-      await axios.post(def!.apiPath, payload);
+    mutationFn: async ({
+      payload,
+      files,
+    }: {
+      payload: Record<string, any>;
+      files: Record<string, File>;
+    }): Promise<{ logoUploadFailed: boolean }> => {
+      const createPayload = { ...payload };
+      imageFieldKeys.forEach((key) => delete createPayload[key]);
+      const res = await axios.post(def!.apiPath, createPayload);
+      const created = res.data?.data ?? res.data;
+      const newId = created?.id;
+
+      // The record has been created at this point. Any failure from here on
+      // (uploading the logo) must NOT reject the mutation — otherwise the
+      // modal stays open and re-submitting would create a duplicate record.
+      let logoUploadFailed = false;
+      if (newId) {
+        for (const key of imageFieldKeys) {
+          const file = files[key];
+          if (!file) continue;
+          try {
+            await uploadLogo(newId, file);
+          } catch {
+            logoUploadFailed = true;
+          }
+        }
+      }
+      return { logoUploadFailed };
     },
-    onSuccess: () => {
-      toast({ title: "Record added successfully" });
+    onSuccess: ({ logoUploadFailed }) => {
       queryClient.invalidateQueries({ queryKey: ["settings", tableSlug] });
       setAddOpen(false);
+      if (logoUploadFailed) {
+        toast({
+          title: `${def!.label.replace(/s$/, "")} created, but the logo upload failed`,
+          description: "Edit the record to retry the logo.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Record added successfully" });
+      }
     },
     onError: (err: any) =>
       toast({ title: "Failed to add record", description: err?.response?.data?.message ?? err.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, payload, record }: { id: string; payload: Record<string, any>; record?: Record<string, any> }) => {
+    mutationFn: async ({
+      id,
+      payload,
+      record,
+      files,
+    }: {
+      id: string;
+      payload: Record<string, any>;
+      record?: Record<string, any>;
+      files: Record<string, File>;
+    }): Promise<{ logoOpFailed: boolean }> => {
       const path = record && def!.getEditPath ? def!.getEditPath(record) : `${def!.apiPath}/${id}`;
       if (!path) throw new Error("Cannot determine edit path for this record");
-      await axios.patch(path, payload);
+
+      const patchPayload = { ...payload };
+      imageFieldKeys.forEach((key) => delete patchPayload[key]);
+      await axios.patch(path, patchPayload);
+
+      // The core fields have been saved at this point (PATCH is idempotent,
+      // so re-submitting on a later failure is harmless). Keep logo failures
+      // from being reported as a failed record update.
+      let logoOpFailed = false;
+      for (const key of imageFieldKeys) {
+        const file = files[key];
+        try {
+          if (file) {
+            await uploadLogo(id, file);
+          } else if (payload[key] == null && record?.[key]) {
+            await axios.delete(`${def!.apiPath}/${id}/logo`);
+          }
+        } catch {
+          logoOpFailed = true;
+        }
+      }
+      return { logoOpFailed };
     },
-    onSuccess: () => {
-      toast({ title: "Record updated successfully" });
+    onSuccess: ({ logoOpFailed }) => {
       queryClient.invalidateQueries({ queryKey: ["settings", tableSlug] });
       setEditRecord(null);
+      if (logoOpFailed) {
+        toast({
+          title: `${def!.label.replace(/s$/, "")} updated, but the logo change failed`,
+          description: "Edit the record again to retry the logo.",
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Record updated successfully" });
+      }
     },
     onError: (err: any) =>
       toast({ title: "Failed to update record", description: err?.response?.data?.message ?? err.message, variant: "destructive" }),
@@ -699,7 +990,7 @@ export default function SettingsLookupPage() {
   const emptyForm = useCallback(() => {
     if (!def) return {};
     return def.formFields.reduce<Record<string, any>>((acc, f) => {
-      acc[f.key] = f.type === "boolean" ? false : f.type === "number" ? null : "";
+      acc[f.key] = f.type === "boolean" ? false : f.type === "number" || f.type === "image" ? null : "";
       return acc;
     }, {});
   }, [def]);
@@ -708,7 +999,7 @@ export default function SettingsLookupPage() {
     (record: Record<string, any>) => {
       if (!def) return {};
       return def.formFields.reduce<Record<string, any>>((acc, f) => {
-        acc[f.key] = record[f.key] ?? (f.type === "boolean" ? false : f.type === "number" ? null : "");
+        acc[f.key] = record[f.key] ?? (f.type === "boolean" ? false : f.type === "number" || f.type === "image" ? null : "");
         return acc;
       }, {});
     },
@@ -841,7 +1132,7 @@ export default function SettingsLookupPage() {
                         </td>
                         {def.displayColumns.map((col) => (
                           <td key={col.key} className="py-3 px-3 max-w-[240px] truncate">
-                            {renderCellValue(col.key, row[col.key])}
+                            {col.render ? col.render(row) : renderCellValue(col.key, row[col.key])}
                           </td>
                         ))}
                         <td className="py-3 px-3">
@@ -919,27 +1210,29 @@ export default function SettingsLookupPage() {
       <RecordModal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        onSave={(data) => createMutation.mutate(data)}
+        onSave={(data, files) => createMutation.mutate({ payload: data, files })}
         fields={def.formFields}
         initial={emptyForm()}
         title={`Add ${def.label.replace(/s$/, "")}`}
         isSaving={createMutation.isPending}
+        onError={(message) => toast({ title: "Invalid file", description: message, variant: "destructive" })}
       />
 
       {/* Edit Modal */}
       <RecordModal
         open={!!editRecord}
         onClose={() => setEditRecord(null)}
-        onSave={(data) => {
+        onSave={(data, files) => {
           const rowId = editRecord ? (def.getRowId ? def.getRowId(editRecord) : editRecord.id) : null;
           if (rowId || def.getEditPath) {
-            updateMutation.mutate({ id: rowId ?? "", payload: data, record: editRecord ?? undefined });
+            updateMutation.mutate({ id: rowId ?? "", payload: data, record: editRecord ?? undefined, files });
           }
         }}
         fields={def.formFields}
         initial={editRecord ? editForm(editRecord) : emptyForm()}
         title={`Edit ${def.label.replace(/s$/, "")}`}
         isSaving={updateMutation.isPending}
+        onError={(message) => toast({ title: "Invalid file", description: message, variant: "destructive" })}
       />
 
       {/* Delete Confirmation */}

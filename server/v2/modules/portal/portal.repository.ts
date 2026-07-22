@@ -25,7 +25,7 @@ import {
   tags,
   clientTags,
 } from '@shared/schema';
-import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, notExists, sql, type SQL } from 'drizzle-orm';
 
 const portalDealActiveWhere = () =>
   and(
@@ -519,7 +519,23 @@ export const portalRepository = {
       .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
       .leftJoin(destination, eq(resorts.destination_id, destination.id))
       .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(eq(transaction.client_id, clientId), eq(quote.is_active, true)))
+      .where(and(
+        eq(transaction.client_id, clientId),
+        eq(quote.is_active, true),
+        // Exclude quotes whose transaction already has an active booked booking —
+        // once a trip is booked, its other quote options/copies must stop
+        // appearing as pending quotes. Transaction-level (not booking.quote_id)
+        // so it also covers bookings created without a quote_id.
+        notExists(
+          db.select({ one: sql`1` })
+            .from(booking)
+            .where(and(
+              eq(booking.transaction_id, transaction.id),
+              eq(booking.is_active, true),
+              eq(booking.booking_status, 'BOOKED'),
+            )),
+        ),
+      ))
       .orderBy(desc(quote.date_created));
   },
 

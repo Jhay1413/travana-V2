@@ -253,7 +253,7 @@ export function usePortalDeals(country?: string, tag?: string) {
 }
 
 /** Home "Latest Deals" — v2 route, limited to deals added to the portal in the last
- *  6 days. Distinct from usePortalDeals (browse page), which shows all portal deals. */
+ *  7 days. Distinct from usePortalDeals (browse page), which shows all portal deals. */
 export function usePortalLatestDeals() {
   return useQuery<PortalDeal[]>({
     queryKey: portalKeys.latestDeals,
