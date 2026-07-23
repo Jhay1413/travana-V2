@@ -53,8 +53,9 @@ export const quoteApi = {
     return data;
   },
 
-  update: async (id: string, quoteData: Partial<CreateQuoteData> & Record<string, any>): Promise<Quote> => {
-    const { data } = await axiosClient.patch<Quote>(`/api/v2/quotes/${id}`, quoteData);
+  update: async (id: string, quoteData: (Partial<CreateQuoteData> & Record<string, any>) | FormData): Promise<Quote> => {
+    const config = quoteData instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : {};
+    const { data } = await axiosClient.patch<Quote>(`/api/v2/quotes/${id}`, quoteData, config);
     return data;
   },
 

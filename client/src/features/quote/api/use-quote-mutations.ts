@@ -42,7 +42,7 @@ export function useDuplicateQuote() {
 export function useUpdateQuote() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, any> }) => quoteApi.update(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, any> | FormData }) => quoteApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });

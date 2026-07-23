@@ -25,7 +25,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateQuote, useUpdateTransaction } from "@/hooks/mutations";
-import { useUploadQuoteImages, useAddQuoteImageUrls, useDeleteQuoteImage } from "@/features/quote/api/use-quote-image-mutations";
 import { useQuote } from "@/hooks/queries";
 import { usePackageTypes } from "@/hooks/queries";
 import { QuoteRHFForm } from "./quote-rhf-form";
@@ -496,9 +495,6 @@ export function QuoteEditDialog({
 }: QuoteEditDialogProps) {
   const { toast } = useToast();
   const updateQuote = useUpdateQuote();
-  const uploadImages = useUploadQuoteImages();
-  const addImageUrls = useAddQuoteImageUrls();
-  const deleteImage = useDeleteQuoteImage();
   const updateTransaction = useUpdateTransaction();
   const { data: packageTypesData } = usePackageTypes();
   const { data: quoteData, isLoading, isError } = useQuote(quoteId);
@@ -509,7 +505,7 @@ export function QuoteEditDialog({
   const existingImages = (quoteData?.images || []).map((img: any) => ({ id: img.id, url: img.image_url }));
 
   const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[] }) => {
-    const payload = buildUpdatePayload(values, packageTypesData);
+    const basePayload = buildUpdatePayload(values, packageTypesData);
     const imageFiles = images?.files || [];
     const imageUrls = images?.urls || [];
     const deletedImageIds = images?.deletedImageIds || [];
@@ -519,40 +515,31 @@ export function QuoteEditDialog({
       await updateTransaction.mutateAsync({ id: quoteData.transaction_id, data: { is_test: values.is_test } }).catch(() => {});
     }
 
+    // One request carries everything — pasted image URLs, deleted image ids
+    // and (via FormData) any newly-uploaded files — so the server can process
+    // deletions, uploads and section writes in one deterministic order instead
+    // of the client racing several independent image API calls.
+    const json = {
+      ...basePayload,
+      ...(imageUrls.length > 0 && { images: imageUrls }),
+      ...(deletedImageIds.length > 0 && { deletedImageIds }),
+    };
+
+    let payload: typeof json | FormData = json;
+    if (imageFiles.length > 0) {
+      const fd = new FormData();
+      fd.append("data", JSON.stringify(json));
+      imageFiles.forEach((f) => fd.append("images", f));
+      payload = fd;
+    }
+
     updateQuote.mutate(
       { id: quoteId, data: payload },
       {
-        onSuccess: async () => {
-          let imageUploadFailed = false;
-
-          if (deletedImageIds.length > 0) {
-            await Promise.allSettled(
-              deletedImageIds.map((imageId) => deleteImage.mutateAsync({ quoteId, imageId }))
-            );
-          }
-
-          if (imageFiles.length > 0) {
-            try {
-              await uploadImages.mutateAsync({ quoteId, files: imageFiles });
-            } catch {
-              imageUploadFailed = true;
-            }
-          }
-
-          if (imageUrls.length > 0) {
-            try {
-              await addImageUrls.mutateAsync({ quoteId, urls: imageUrls });
-            } catch {
-              imageUploadFailed = true;
-            }
-          }
-
+        onSuccess: () => {
           toast({
             title: "Quote updated",
-            description: imageUploadFailed
-              ? "Changes saved, but some images failed to upload."
-              : "Changes saved successfully.",
-            variant: imageUploadFailed ? "destructive" : "default",
+            description: "Changes saved successfully.",
           });
           onOpenChange(false);
           onSuccess?.();

@@ -27,7 +27,7 @@ router.get("/:id", quoteController.getQuoteById);
 router.post("/social-post", upload.array("images", 50), quoteController.createSocialQuote);
 router.post("/", upload.array("images", 50), quoteController.createQuote);
 router.post("/:id/duplicate", quoteController.duplicateQuote);
-router.patch("/:id", quoteController.updateQuote);
+router.patch("/:id", upload.array("images", 50), quoteController.updateQuote);
 router.patch("/:id/primary", quoteController.setPrimaryQuote);
 router.delete("/:id", quoteController.deleteQuote);
 

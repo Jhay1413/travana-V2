@@ -1,6 +1,7 @@
 import { newQuoteRepository } from "./quote.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { quoteImageRepository } from "./quote-image.repository";
+import { quoteImageService } from "./quote-image.service";
 import { tagService } from "../tag/tag.service";
 import { taskService } from "../task/task.service";
 import { enquiryTableRepository } from "../enquiry/enquiry.repository";
@@ -123,6 +124,10 @@ type UpdateQuotePayload = Partial<InsertQuote> & QuoteRelationData & {
   loungePasses?: Record<string, unknown>[];
   airportParkings?: Record<string, unknown>[];
   extraAccommodations?: Record<string, unknown>[];
+  // Image ids (from quote_images, accommodation_images, lodge_images or
+  // deal_images — see quote-image.repository getImageUrl) to remove as part
+  // of this same update, processed before the new images are added.
+  deletedImageIds?: string[];
 };
 
 // Total price the customer pays = sales price − discount + service charge.
@@ -496,7 +501,7 @@ export const newQuoteService = {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber,
       embarkation, debarkation, cruiseExtras, cruiseOnly, preCruiseStay, postCruiseStay, cruiseItinerary, lead_source, images, tags, childAges,
-      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations, deletedImageIds,
       ...quoteFields
     } = data;
 
@@ -566,35 +571,70 @@ export const newQuoteService = {
       await transactionRepository.update(q.transaction_id, { lead_source: lead_source as any });
     }
 
-    if (outboundFlight) await newQuoteRepository.upsertFlightByType(id, "outbound", outboundFlight, 0);
-    if (inboundFlight) await newQuoteRepository.upsertFlightByType(id, "inbound", inboundFlight, 0);
-    if (outboundConnectingLegs !== undefined) await newQuoteRepository.replaceConnectingLegs(id, "outbound", outboundConnectingLegs || []);
-    if (inboundConnectingLegs !== undefined) await newQuoteRepository.replaceConnectingLegs(id, "inbound", inboundConnectingLegs || []);
-    if (primaryAccommodation) await newQuoteRepository.upsertPrimaryAccommodation(id, primaryAccommodation);
-    if (transfers !== undefined) await newQuoteRepository.replaceTransfers(id, transfers);
-    if (carHires !== undefined) await newQuoteRepository.replaceCarHires(id, carHires);
-    if (attractionTickets !== undefined) await newQuoteRepository.replaceAttractionTickets(id, attractionTickets);
-    if (loungePasses !== undefined) await newQuoteRepository.replaceLoungePasses(id, loungePasses);
-    if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(id, airportParkings);
-    if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(id, extraAccommodations);
-    if (cruiseData) await newQuoteRepository.upsertCruise(id, cruiseData);
-    if (childAges !== undefined) await newQuoteRepository.replaceChildPassengers(id, "quote", childAges);
-    if (tags !== undefined) await tagService.updateQuoteTags(id, tags);
+    // Deletions must finish BEFORE the images-add write below: quoteImageRepository.addImages
+    // decides the new primary flag from the current "does this quote already have a primary
+    // image" state, so removing an existing primary has to land first or the two writes can
+    // race into either two primaries or zero. The deletions themselves are independent rows,
+    // so they run concurrently among each other; reuse quoteImageService.deleteImage so the
+    // reference-counted S3 cleanup (quote_images/accommodation_images/lodge_images/deal_images)
+    // still applies.
+    if (deletedImageIds && deletedImageIds.length > 0) {
+      await Promise.all(deletedImageIds.map((imageId) => quoteImageService.deleteImage(id, imageId)));
+    }
+
+    // Section writes below target distinct tables/rows and run concurrently — same
+    // pattern as writeQuoteSections() above. The one ordering dependency kept is
+    // per-direction: upsertFlightByType (leg_order = 0) isn't transactional
+    // (select-then-insert), so each direction's leg-0 upsert stays ordered before
+    // that same direction's connecting-leg replace. Outbound/inbound and every
+    // other section never touch each other's rows, so they all run together.
+    const outboundFlightChain = (async () => {
+      if (outboundFlight) await newQuoteRepository.upsertFlightByType(id, "outbound", outboundFlight, 0);
+      if (outboundConnectingLegs !== undefined) await newQuoteRepository.replaceConnectingLegs(id, "outbound", outboundConnectingLegs || []);
+    })();
+
+    const inboundFlightChain = (async () => {
+      if (inboundFlight) await newQuoteRepository.upsertFlightByType(id, "inbound", inboundFlight, 0);
+      if (inboundConnectingLegs !== undefined) await newQuoteRepository.replaceConnectingLegs(id, "inbound", inboundConnectingLegs || []);
+    })();
+
+    const writes: Promise<unknown>[] = [outboundFlightChain, inboundFlightChain];
+
+    if (primaryAccommodation) writes.push(newQuoteRepository.upsertPrimaryAccommodation(id, primaryAccommodation));
+    if (transfers !== undefined) writes.push(newQuoteRepository.replaceTransfers(id, transfers));
+    if (carHires !== undefined) writes.push(newQuoteRepository.replaceCarHires(id, carHires));
+    if (attractionTickets !== undefined) writes.push(newQuoteRepository.replaceAttractionTickets(id, attractionTickets));
+    if (loungePasses !== undefined) writes.push(newQuoteRepository.replaceLoungePasses(id, loungePasses));
+    if (airportParkings !== undefined) writes.push(newQuoteRepository.replaceAirportParkings(id, airportParkings));
+    if (extraAccommodations !== undefined) writes.push(newQuoteRepository.replaceExtraAccommodations(id, extraAccommodations));
+    if (cruiseData) writes.push(newQuoteRepository.upsertCruise(id, cruiseData));
+    if (childAges !== undefined) writes.push(newQuoteRepository.replaceChildPassengers(id, "quote", childAges));
+    if (tags !== undefined) writes.push(tagService.updateQuoteTags(id, tags));
 
     if (images && images.length > 0) {
       const normalizedUpdateImages = normalizeUniqueImageUrls(images);
-      await quoteImageRepository.addImages(id, normalizedUpdateImages);
-      if (primaryAccommodation?.accomodation_id) await newQuoteRepository.saveImagesToAccommodation(primaryAccommodation.accomodation_id as string, normalizedUpdateImages);
+      writes.push(quoteImageRepository.addImages(id, normalizedUpdateImages));
+      if (primaryAccommodation?.accomodation_id) writes.push(newQuoteRepository.saveImagesToAccommodation(primaryAccommodation.accomodation_id as string, normalizedUpdateImages));
+      // q is already resolved above (either from the update or the pre-fetch), so
+      // reading q.lodge_id here is safe even though it now runs inside Promise.all.
       const lodgeId = (quoteData.lodge_id as string | undefined) || (q?.lodge_id as string | undefined);
-      if (lodgeId) await newQuoteRepository.saveImagesToLodge(lodgeId, normalizedUpdateImages);
+      if (lodgeId) writes.push(newQuoteRepository.saveImagesToLodge(lodgeId, normalizedUpdateImages));
     }
+
+    await Promise.all(writes);
 
     if (q.isFreeQuote) {
       const txn = await transactionRepository.findById(q.transaction_id);
       syncFreeQuoteEmbedding(id, txn?.org_id);
     }
 
-    return newQuoteRepository.findWithDetails(id);
+    // Skip the expensive multi-join findWithDetails() here — the controller just
+    // forwards this return value in the response, and the only client consumer
+    // (the quote edit dialog's update mutation) ignores the resolved data and
+    // relies on its own query invalidation/refetch instead. Re-fetch the bare
+    // row so the response still reflects the is_active/status writes above,
+    // without paying for the full detail joins.
+    return (await newQuoteRepository.findById(id)) ?? q;
   },
 
   async deleteQuote(id: string, scope: ScopeOrTrusted) {
