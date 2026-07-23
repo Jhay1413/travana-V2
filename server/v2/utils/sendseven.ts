@@ -7,12 +7,15 @@ import { AppError } from "./error-handler";
 //
 // Multi-tenant: each org has its own SendSeven workspace token. A per-request
 // context (set by the conversation-integration middleware) carries the resolved
-// config so every proxied call uses the logged-in org's token. When no org
-// token is set, we fall back to the global env token (dev/single-tenant).
+// config so every proxied call uses the logged-in org's token. Inside that
+// context the config is used verbatim — a null config (org not provisioned)
+// FAILS CLOSED and is never replaced by the global env token, so one org can
+// never be served another org's inbox. The env token is only used when there is
+// no tenant context at all (background/CLI usage, single-tenant dev).
 //
 // Env:
 //   CONVERSATIONS_API_URL       base URL (e.g. https://api.sendseven.com/api/v1)
-//   CONVERSATIONS_API_TOKEN     global fallback Bearer token (optional in prod)
+//   CONVERSATIONS_API_TOKEN     env token for no-context usage only (optional)
 //   CONVERSATIONS_DISABLE_FIXTURES  set "true" to 503 instead of serving samples
 
 export interface SendSevenConfig {
@@ -30,7 +33,8 @@ export type SsQuery = Record<string, QueryValue>;
 const tenantContext = new AsyncLocalStorage<{ config: SendSevenConfig | null }>();
 
 // Run `fn` (and everything it awaits) with a resolved per-tenant SendSeven
-// config. Pass null when the org has no token → falls through to the env token.
+// config. Pass null when the org has no token → the request fails closed (no env
+// fallback), so an unprovisioned org can never read another tenant's inbox.
 export function runWithSendSevenConfig(config: SendSevenConfig | null, fn: () => void): void {
   tenantContext.run({ config }, fn);
 }
@@ -48,9 +52,22 @@ function envConfig(): SendSevenConfig | null {
   return { baseUrl: baseUrl.replace(/\/$/, ""), token };
 }
 
-// The org's token wins; otherwise the global env token (or null).
+// Resolve the SendSeven config for the current call.
+//
+// Inside a per-request tenant context (set by the conversation-integration
+// middleware for every conversations/messages request) the context's config is
+// authoritative — INCLUDING null, which means the org has no SendSeven
+// integration. We deliberately do NOT fall back to the global env token there:
+// doing so would serve that org the shared workspace's inbox and leak
+// conversations across tenants. Fail closed instead — the caller gets null and
+// returns a 503 "not configured".
+//
+// The env token is used only when there is no tenant context at all (background
+// jobs / CLI / single-tenant dev not routed through the middleware).
 function config(): SendSevenConfig | null {
-  return tenantContext.getStore()?.config ?? envConfig();
+  const store = tenantContext.getStore();
+  if (store) return store.config;
+  return envConfig();
 }
 
 export const isSendSevenConfigured = (): boolean => config() !== null;
