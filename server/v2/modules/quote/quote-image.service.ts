@@ -1,6 +1,6 @@
 import { quoteImageRepository } from "./quote-image.repository";
 import { AppError } from "../../utils/error-handler";
-import { uploadImageToS3, deleteImageByStoredUrl } from "../../utils/image-storage";
+import { uploadImageToS3, deleteImageByStoredUrl, s3KeyFromStoredUrl } from "../../utils/image-storage";
 
 export const quoteImageService = {
   /** Upload image files to S3 and persist their proxy URLs against the quote. */
@@ -20,6 +20,9 @@ export const quoteImageService = {
     const validUrls = imageUrls.filter(url => {
       if (url.startsWith('data:image/')) return true;
       if (url.startsWith('/uploads/') || url.startsWith('/avatars/')) return true;
+      // Our own S3-backed proxy URLs (e.g. "/api/v2/files/img?key=...") are
+      // relative and would otherwise be rejected by the http(s) check below.
+      if (s3KeyFromStoredUrl(url) !== null) return true;
       try {
         new URL(url);
         return url.startsWith('http://') || url.startsWith('https://');
@@ -45,8 +48,16 @@ export const quoteImageService = {
   async deleteImage(quoteId: string, imageId: string) {
     const url = await quoteImageRepository.getImageUrl(quoteId, imageId);
     await quoteImageRepository.deleteImage(quoteId, imageId);
-    // Best-effort: remove the backing S3 object (no-op for legacy/base64 urls).
-    await deleteImageByStoredUrl(url).catch(() => {});
+    // Only remove the backing S3 object once no row anywhere (quote_images,
+    // accommodation_images, lodge_images, deal_images) still references this
+    // exact URL — those tables are shared inventory across other quotes/deals.
+    // Best-effort: no-op for legacy/base64 urls, and swallow S3 errors.
+    if (url) {
+      const stillReferenced = await quoteImageRepository.isUrlReferenced(url).catch(() => true);
+      if (!stillReferenced) {
+        await deleteImageByStoredUrl(url).catch(() => {});
+      }
+    }
   },
 
   async setPrimaryImage(quoteId: string, imageId: string) {

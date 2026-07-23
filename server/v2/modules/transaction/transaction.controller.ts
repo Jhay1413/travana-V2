@@ -1,12 +1,12 @@
 import { Request, Response } from "express";
 import { transactionService } from "./transaction.service";
-import { socialPostService } from "../social-post/social-post.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
 import { getScope } from "../../utils/scope";
 import { authStorage } from "../../middlewares/auth";
 import { normalizeEnquiry } from "../../utils/enum-normalizers";
+import { uploadImageToS3 } from "../../utils/image-storage";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   // New-enum identity pass-through
@@ -140,8 +140,7 @@ export const transactionController = {
     const files = (req.files as Express.Multer.File[]) || [];
     let uploadedUrls: string[] = [];
     if (files.length > 0) {
-      const uploaded = await socialPostService.uploadMedia(files);
-      uploadedUrls = uploaded.map((m) => m.url);
+      uploadedUrls = await Promise.all(files.map((f) => uploadImageToS3(f, "quote-images")));
     }
     if (uploadedUrls.length > 0) {
       if (quote) quote.images = [...(quote.images || []), ...uploadedUrls];

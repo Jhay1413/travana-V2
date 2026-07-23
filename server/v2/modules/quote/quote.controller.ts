@@ -1,11 +1,11 @@
 import { Request, Response } from "express";
 import { newQuoteService } from "./quote.service";
-import { socialPostService } from "../social-post/social-post.service";
 import { pushNotificationService } from "../notification/push-notification.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
 import { getScope } from "../../utils/scope";
+import { uploadImageToS3 } from "../../utils/image-storage";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   // New-enum identity pass-through
@@ -103,8 +103,8 @@ export const quoteController = {
     }
 
     if (files.length > 0) {
-      const uploaded = await socialPostService.uploadMedia(files);
-      body.images = [...(body.images || []), ...uploaded.map((m) => m.url)];
+      const urls = await Promise.all(files.map((f) => uploadImageToS3(f, "quote-images")));
+      body.images = [...(body.images || []), ...urls];
     }
     normalizeQuoteStatus(body);
     const quote = await newQuoteService.createQuote(body, scope);
@@ -122,8 +122,8 @@ export const quoteController = {
     }
 
     if (files.length > 0) {
-      const uploaded = await socialPostService.uploadMedia(files);
-      body.images = [...(body.images || []), ...uploaded.map((m) => m.url)];
+      const urls = await Promise.all(files.map((f) => uploadImageToS3(f, "quote-images")));
+      body.images = [...(body.images || []), ...urls];
     }
 
     normalizeQuoteStatus(body);
@@ -141,8 +141,16 @@ export const quoteController = {
   updateQuote: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const id = req.params.id as string;
-    normalizeQuoteStatus(req.body);
-    const quote = await newQuoteService.updateQuote(id, req.body, scope);
+    const body = req.body.data ? JSON.parse(req.body.data) : req.body;
+    const files = (req.files as Express.Multer.File[]) || [];
+
+    if (files.length > 0) {
+      const urls = await Promise.all(files.map((f) => uploadImageToS3(f, "quote-images")));
+      body.images = [...(body.images || []), ...urls];
+    }
+
+    normalizeQuoteStatus(body);
+    const quote = await newQuoteService.updateQuote(id, body, scope);
     return successResponse(res, quote, "Quote updated successfully");
   }),
 

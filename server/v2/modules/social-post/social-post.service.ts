@@ -12,6 +12,7 @@ import {
   uploadMediaFromUrl,
   fetchOnlySocialsPost,
 } from "../../utils/only-socials";
+import { s3KeyFromStoredUrl, presignImageKey } from "../../utils/image-storage";
 import type { TravelDeal } from "@shared/schema";
 import type {
   OnlySocialsMediaUploadResponse,
@@ -58,6 +59,20 @@ type MediaTask =
   | { kind: "url"; url: string };
 
 /**
+ * OnlySocials fetches media URLs itself (`uploadMediaFromUrl` does a
+ * server-side `axios.get(imageUrl)`), so it needs a fully-qualified, publicly
+ * reachable URL. Our own S3-backed quote images are stored as relative proxy
+ * URLs (`/api/v2/files/img?key=...`) which would fail that fetch, so swap
+ * those for a short-lived presigned S3 URL first. Any other URL (external
+ * OnlySocials CDN, legacy absolute URLs, etc.) is passed through unchanged.
+ */
+async function resolveUploadableUrl(url: string): Promise<string> {
+  const key = s3KeyFromStoredUrl(url);
+  if (!key) return url;
+  return presignImageKey(key);
+}
+
+/**
  * Upload new files and quote-image URLs to OnlySocials and return the full
  * ordered list of media ids (existing + uploaded). Files and URLs are uploaded
  * together through a single bounded-concurrency queue, so total time scales with
@@ -93,7 +108,8 @@ async function resolveMediaIds(
       return Number(result.id);
     }
     try {
-      const result = await uploadMediaFromUrl(task.url);
+      const uploadableUrl = await resolveUploadableUrl(task.url);
+      const result = await uploadMediaFromUrl(uploadableUrl);
       console.log(`[SocialPost][timing]   uploaded ${label} in ${Date.now() - taskStart}ms`);
       return Number(result.id);
     } catch (err) {
