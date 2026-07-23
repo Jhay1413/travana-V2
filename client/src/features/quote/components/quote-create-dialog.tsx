@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateQuote, useCreateTransaction, useCreateSocialQuote } from "@/hooks/mutations";
 import { usePackageTypes } from "@/hooks/queries";
+import { uploadImagesDirect } from "@/features/quote/api/upload-images-direct";
 import { QuoteRHFForm } from "./quote-rhf-form";
 import type { QuoteFormValues, QuoteCreateDialogProps } from "@/features/quote/types";
 import { defaultQuoteFormValues } from "@/features/quote/types";
@@ -230,6 +231,7 @@ export function QuoteCreateDialog({
   const createTransaction = useCreateTransaction();
   const createSocialQuote = useCreateSocialQuote();
   const { data: packageTypesData } = usePackageTypes();
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
 
   const defaultValues = useMemo<Partial<QuoteFormValues>>(
     () => ({ ...defaultQuoteFormValues, ...initialValues }),
@@ -237,12 +239,40 @@ export function QuoteCreateDialog({
     [initialValues],
   );
 
-  const isSubmitting = createQuote.isPending || createTransaction.isPending || createSocialQuote.isPending;
+  const isSubmitting =
+    isUploadingImages || createQuote.isPending || createTransaction.isPending || createSocialQuote.isPending;
+
+  const warnFailedUploads = (failed: number) => {
+    if (failed > 0) {
+      toast({
+        title: "Some images failed to upload",
+        description: `${failed} image(s) failed to upload. The rest of your changes were saved.`,
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
     const quotePayload = buildQuotePayload(values, packageTypesData);
-    const imageUrls = images?.urls || [];
+    const pastedImageUrls = images?.urls || [];
     const imageFiles = images?.files || [];
+
+    // Upload any picked files straight to S3 (presigned PUT) before building the
+    // request payload, so the whole submission — quote fields + image URLs —
+    // goes to the server as a single plain-JSON request instead of multipart.
+    let uploadedImageUrls: string[] = [];
+    let failedUploads = 0;
+    if (imageFiles.length > 0) {
+      setIsUploadingImages(true);
+      try {
+        const result = await uploadImagesDirect(imageFiles);
+        uploadedImageUrls = result.proxyUrls;
+        failedUploads = result.failed;
+      } finally {
+        setIsUploadingImages(false);
+      }
+    }
+    const imageUrls = [...pastedImageUrls, ...uploadedImageUrls];
 
     if (socialPost) {
       const json = {
@@ -250,17 +280,10 @@ export function QuoteCreateDialog({
         ...(imageUrls.length > 0 && { images: imageUrls }),
       };
 
-      let payload: typeof json | FormData = json;
-      if (imageFiles.length > 0) {
-        const fd = new FormData();
-        fd.append("data", JSON.stringify(json));
-        imageFiles.forEach((f) => fd.append("images", f));
-        payload = fd;
-      }
-
-      createSocialQuote.mutate(payload as any, {
+      createSocialQuote.mutate(json, {
         onSuccess: (newQuote) => {
           toast({ title: "Social post created", description: "New social post has been created." });
+          warnFailedUploads(failedUploads);
           onOpenChange(false);
           onSuccess?.(newQuote.id);
         },
@@ -293,17 +316,10 @@ export function QuoteCreateDialog({
         ...(markAsCopy && initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
       } as CreateQuoteData;
 
-      let payload: CreateQuoteData | FormData = json;
-      if (imageFiles.length > 0) {
-        const fd = new FormData();
-        fd.append("data", JSON.stringify(json));
-        imageFiles.forEach((f) => fd.append("images", f));
-        payload = fd;
-      }
-
-      createQuote.mutate(payload as CreateQuoteData, {
+      createQuote.mutate(json, {
         onSuccess: (newQuote) => {
           toast({ title: "Quote created", description: "New quote has been created." });
+          warnFailedUploads(failedUploads);
           onOpenChange(false);
           onSuccess?.(newQuote.id);
         },
@@ -329,17 +345,10 @@ export function QuoteCreateDialog({
         },
       };
 
-      let txnPayload: typeof txnJson | FormData = txnJson;
-      if (imageFiles.length > 0) {
-        const fd = new FormData();
-        fd.append("data", JSON.stringify(txnJson));
-        imageFiles.forEach((f) => fd.append("images", f));
-        txnPayload = fd;
-      }
-
-      createTransaction.mutate(txnPayload as CreateTransactionData, {
+      createTransaction.mutate(txnJson as CreateTransactionData, {
           onSuccess: (txn) => {
             toast({ title: "Quote created", description: "New quote has been created." });
+            warnFailedUploads(failedUploads);
             onOpenChange(false);
             const newQuoteId = txn.quotes?.[0]?.id;
             if (newQuoteId) {

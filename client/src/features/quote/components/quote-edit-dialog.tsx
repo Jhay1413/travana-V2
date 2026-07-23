@@ -14,6 +14,7 @@
  *   />
  */
 
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpdateQuote, useUpdateTransaction } from "@/hooks/mutations";
 import { useQuote } from "@/hooks/queries";
 import { usePackageTypes } from "@/hooks/queries";
+import { uploadImagesDirect } from "@/features/quote/api/upload-images-direct";
 import { QuoteRHFForm } from "./quote-rhf-form";
 import { defaultQuoteFormValues } from "@/features/quote/types";
 import type { QuoteEditDialogProps, QuoteFormValues } from "@/features/quote/types";
@@ -498,6 +500,7 @@ export function QuoteEditDialog({
   const updateTransaction = useUpdateTransaction();
   const { data: packageTypesData } = usePackageTypes();
   const { data: quoteData, isLoading, isError } = useQuote(quoteId);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const defaultValues = quoteData ? buildDefaultValues(quoteData) : undefined;
   const initialExtraAccomLabels = (quoteData?.accommodations || [])
     .filter((a: any) => !a.is_primary)
@@ -505,54 +508,73 @@ export function QuoteEditDialog({
   const existingImages = (quoteData?.images || []).map((img: any) => ({ id: img.id, url: img.image_url }));
 
   const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[] }) => {
-    const basePayload = buildUpdatePayload(values, packageTypesData);
-    const imageFiles = images?.files || [];
-    const imageUrls = images?.urls || [];
-    const deletedImageIds = images?.deletedImageIds || [];
+    // Flip the submitting/uploading flag before anything else (including the
+    // is_test sync below) so the submit button is disabled for the entire
+    // handler — otherwise there's a brief window where it's clickable again
+    // while the is_test mutation is in flight.
+    setIsUploadingImages(true);
+    try {
+      const basePayload = buildUpdatePayload(values, packageTypesData);
+      const imageFiles = images?.files || [];
+      const pastedImageUrls = images?.urls || [];
+      const deletedImageIds = images?.deletedImageIds || [];
 
-    // Sync is_test to the transaction if it changed
-    if (quoteData?.transaction_id && values.is_test !== (quoteData.is_test ?? false)) {
-      await updateTransaction.mutateAsync({ id: quoteData.transaction_id, data: { is_test: values.is_test } }).catch(() => {});
-    }
-
-    // One request carries everything — pasted image URLs, deleted image ids
-    // and (via FormData) any newly-uploaded files — so the server can process
-    // deletions, uploads and section writes in one deterministic order instead
-    // of the client racing several independent image API calls.
-    const json = {
-      ...basePayload,
-      ...(imageUrls.length > 0 && { images: imageUrls }),
-      ...(deletedImageIds.length > 0 && { deletedImageIds }),
-    };
-
-    let payload: typeof json | FormData = json;
-    if (imageFiles.length > 0) {
-      const fd = new FormData();
-      fd.append("data", JSON.stringify(json));
-      imageFiles.forEach((f) => fd.append("images", f));
-      payload = fd;
-    }
-
-    updateQuote.mutate(
-      { id: quoteId, data: payload },
-      {
-        onSuccess: () => {
-          toast({
-            title: "Quote updated",
-            description: "Changes saved successfully.",
-          });
-          onOpenChange(false);
-          onSuccess?.();
-        },
-        onError: (err) => {
-          toast({
-            title: "Failed to update quote",
-            description: err instanceof Error ? err.message : "Something went wrong.",
-            variant: "destructive",
-          });
-        },
+      // Sync is_test to the transaction if it changed
+      if (quoteData?.transaction_id && values.is_test !== (quoteData.is_test ?? false)) {
+        await updateTransaction.mutateAsync({ id: quoteData.transaction_id, data: { is_test: values.is_test } }).catch(() => {});
       }
-    );
+
+      // Upload any picked files straight to S3 (presigned PUT) first, so the
+      // single PATCH below carries everything — updated fields, pasted image
+      // URLs, newly-uploaded image URLs and deletedImageIds — as plain JSON.
+      // The server processes deletions before the images-add write in one
+      // deterministic order instead of the client racing several independent
+      // image API calls.
+      let uploadedImageUrls: string[] = [];
+      let failedUploads = 0;
+      if (imageFiles.length > 0) {
+        const result = await uploadImagesDirect(imageFiles);
+        uploadedImageUrls = result.proxyUrls;
+        failedUploads = result.failed;
+      }
+      const imageUrls = [...pastedImageUrls, ...uploadedImageUrls];
+
+      const json = {
+        ...basePayload,
+        ...(imageUrls.length > 0 && { images: imageUrls }),
+        ...(deletedImageIds.length > 0 && { deletedImageIds }),
+      };
+
+      updateQuote.mutate(
+        { id: quoteId, data: json },
+        {
+          onSuccess: () => {
+            toast({
+              title: "Quote updated",
+              description: "Changes saved successfully.",
+            });
+            if (failedUploads > 0) {
+              toast({
+                title: "Some images failed to upload",
+                description: `${failedUploads} image(s) failed to upload. The rest of your changes were saved.`,
+                variant: "destructive",
+              });
+            }
+            onOpenChange(false);
+            onSuccess?.();
+          },
+          onError: (err) => {
+            toast({
+              title: "Failed to update quote",
+              description: err instanceof Error ? err.message : "Something went wrong.",
+              variant: "destructive",
+            });
+          },
+        }
+      );
+    } finally {
+      setIsUploadingImages(false);
+    }
   };
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -583,7 +605,7 @@ export function QuoteEditDialog({
                 existingImages={existingImages}
                 initialExtraAccomLabels={initialExtraAccomLabels}
                 onSubmit={handleSubmit}
-                isLoading={updateQuote.isPending}
+                isLoading={isUploadingImages || updateQuote.isPending}
                 submitLabel="Save Changes"
                 onCancel={() => onOpenChange(false)}
               />

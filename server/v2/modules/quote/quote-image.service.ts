@@ -1,6 +1,16 @@
 import { quoteImageRepository } from "./quote-image.repository";
 import { AppError } from "../../utils/error-handler";
-import { uploadImageToS3, deleteImageByStoredUrl, s3KeyFromStoredUrl } from "../../utils/image-storage";
+import {
+  uploadImageToS3,
+  deleteImageByStoredUrl,
+  s3KeyFromStoredUrl,
+  buildImageKey,
+  buildImageProxyUrl,
+  getPresignedPutUrl,
+} from "../../utils/image-storage";
+import type { PresignQuoteImageInput, PresignQuoteImageResult } from "./quote-image.types";
+
+const QUOTE_IMAGE_KEY_PREFIX = "quote-images";
 
 export const quoteImageService = {
   /** Upload image files to S3 and persist their proxy URLs against the quote. */
@@ -10,6 +20,24 @@ export const quoteImageService = {
     }
     const urls = await Promise.all(files.map((file) => uploadImageToS3(file, "quote-images")));
     return quoteImageRepository.addImages(quoteId, urls);
+  },
+
+  /**
+   * Presign direct-to-S3 PUTs for quote image uploads (Option A, single PUT —
+   * same pattern as training-upload.service.ts). The server generates the S3
+   * key for every file — the client never chooses it — so the fixed
+   * "quote-images/" prefix and the resulting proxyUrl are always trustworthy.
+   * This does not touch the DB; the caller still submits the returned
+   * proxyUrls as part of a create/update quote payload.
+   */
+  async presignUploads(files: PresignQuoteImageInput[]): Promise<PresignQuoteImageResult[]> {
+    return Promise.all(
+      files.map(async ({ filename, contentType }) => {
+        const key = buildImageKey(QUOTE_IMAGE_KEY_PREFIX, filename, contentType);
+        const uploadUrl = await getPresignedPutUrl(key, contentType);
+        return { uploadUrl, key, proxyUrl: buildImageProxyUrl(key) };
+      }),
+    );
   },
 
   async addImages(quoteId: string, imageUrls: string[]) {

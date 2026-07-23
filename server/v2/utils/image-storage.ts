@@ -25,6 +25,14 @@ const MIME_EXT: Record<string, string> = {
   "image/gif": ".gif",
 };
 
+/**
+ * The image mime types this storage layer knows how to key (kept in sync
+ * with MIME_EXT above). Exported so validators (e.g. the quote images presign
+ * endpoint) can restrict `contentType` to the same allowlist instead of
+ * re-declaring it.
+ */
+export const ALLOWED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+
 /** Build the stable proxy URL stored in the DB for an S3 object key. */
 export function buildImageProxyUrl(key: string): string {
   return `${PROXY_PREFIX}${encodeURIComponent(key)}`;
@@ -36,13 +44,24 @@ export function s3KeyFromStoredUrl(storedUrl: string): string | null {
   return decodeURIComponent(storedUrl.slice(PROXY_PREFIX.length));
 }
 
+/**
+ * Build a fresh, unpredictable S3 key under `keyPrefix/` for a file, keeping
+ * its extension (falling back to the mimetype's extension when the filename
+ * has none). Shared by the server-side buffered upload below and by any
+ * presign-for-direct-PUT flow (e.g. quote images) — the client must never
+ * choose the key itself, so both paths generate it here.
+ */
+export function buildImageKey(keyPrefix: string, filename: string, mimetype: string): string {
+  const ext = path.extname(filename) || MIME_EXT[mimetype] || "";
+  return `${keyPrefix}/${Date.now()}-${randomUUID()}${ext}`;
+}
+
 /** Upload one file to S3 under `keyPrefix/` and return the stable proxy URL. */
 export async function uploadImageToS3(
   file: Express.Multer.File,
   keyPrefix: string,
 ): Promise<string> {
-  const ext = path.extname(file.originalname) || MIME_EXT[file.mimetype] || "";
-  const key = `${keyPrefix}/${Date.now()}-${randomUUID()}${ext}`;
+  const key = buildImageKey(keyPrefix, file.originalname, file.mimetype);
 
   await s3Client.send(
     new PutObjectCommand({

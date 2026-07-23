@@ -2,8 +2,19 @@ import { Request, Response } from "express";
 import { quoteImageService } from "./quote-image.service";
 import { asyncHandler } from "../../utils/async-handler";
 import { successResponse } from "../../utils/response";
+import type { PresignQuoteImagesBody } from "./quote.validator";
 
 export const quoteImageController = {
+  /**
+   * Presign direct-to-S3 PUTs for quote image uploads.
+   * POST /api/v2/quotes/images/presign
+   */
+  presignUploads: asyncHandler(async (req: Request, res: Response) => {
+    const { files } = req.body as PresignQuoteImagesBody;
+    const results = await quoteImageService.presignUploads(files);
+    return successResponse(res, results, "Upload URLs generated successfully");
+  }),
+
   /**
    * Add images to a quote
    * POST /api/quotes/:quoteId/images

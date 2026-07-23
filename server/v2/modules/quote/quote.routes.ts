@@ -3,7 +3,7 @@ import multer from "multer";
 import { quoteController } from "./quote.controller";
 import { quoteImageController } from "./quote-image.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { addImagesValidator } from "./quote.validator";
+import { addImagesValidator, presignQuoteImagesValidator } from "./quote.validator";
 import { requireOrgRole } from "../../middlewares/auth/require-org-role";
 
 const router = Router();
@@ -19,6 +19,11 @@ const upload = multer({
     }
   },
 });
+
+// Direct-to-S3 presigned upload for quote images (Option A, single PUT — same
+// pattern as training-upload.service.ts). Registered before the "/:id"-style
+// routes below so "/images/presign" is never captured as an :id param.
+router.post("/images/presign", validate(presignQuoteImagesValidator), quoteImageController.presignUploads);
 
 router.get("/free", quoteController.listFreeQuotes);
 router.get("/engagement/recent", quoteController.listRecentClientEngagement);
