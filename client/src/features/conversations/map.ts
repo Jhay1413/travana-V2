@@ -94,6 +94,16 @@ function readContact(contact: Record<string, unknown> | null | undefined) {
   };
 }
 
+// Picks whichever of two ISO timestamps is chronologically newer, comparing
+// parsed dates rather than raw strings. Falls back to whichever is present.
+function newestTimestamp(a: string | null | undefined, b: string | null | undefined): string | undefined {
+  const aTime = a ? Date.parse(a) : NaN;
+  const bTime = b ? Date.parse(b) : NaN;
+  if (Number.isNaN(aTime)) return b ?? undefined;
+  if (Number.isNaN(bTime)) return a ?? undefined;
+  return aTime >= bTime ? a! : b!;
+}
+
 // Turns a SendSeven conversation into the UI model. Because only the list
 // endpoint drives the inbox, the thread is seeded with the single
 // `last_message`; the full history arrives via the messages API later.
@@ -112,7 +122,9 @@ export function toUiConversation(item: SsConversation): Conversation {
           ? "Messenger"
           : `${CHANNELS[channel].label} (Phone)`;
 
-  const lastActivityAt = item.last_message_at ?? item.updated_at ?? item.created_at;
+  // SendSeven's `last_message_at` can lag behind the embedded `last_message` for
+  // outbound sends, so use whichever timestamp is actually newer.
+  const lastActivityAt = newestTimestamp(item.last_message?.created_at, item.last_message_at) ?? item.updated_at ?? item.created_at;
   const assignedUser = item.assigned_user as Record<string, unknown> | null | undefined;
   const assignee = typeof assignedUser?.name === "string" ? (assignedUser.name as string) : undefined;
 

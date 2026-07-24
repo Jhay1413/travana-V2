@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -39,6 +39,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +57,7 @@ import { useContactLink } from "../api/use-contact-link";
 import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
 import { useConversations, useConversationBadgeCounts } from "../api/use-conversations-queries";
-import { useCloseConversation, useReopenConversation } from "../api/use-conversations-mutations";
+import { useCloseConversation, useReopenConversation, useMarkConversationRead } from "../api/use-conversations-mutations";
 import { useMessages, useSendMessage, useCreateInternalNote } from "../api/use-messages";
 import { useConversationsRealtime } from "../api/use-conversations-realtime";
 import { useInboxes } from "../api/use-inboxes";
@@ -488,9 +489,12 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
 
 // ─── Composer ─────────────────────────────────────────────────────────────────
 
+const COMPOSER_MAX_HEIGHT_PX = 120;
+
 function Composer({ onSend, sending, conversation }: { onSend: (body: string, mode: "reply" | "note") => void; sending?: boolean; conversation: Conversation }) {
   const [mode, setMode] = useState<"reply" | "note">("reply");
   const [text, setText] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const submit = () => {
     const trimmed = text.trim();
@@ -498,6 +502,15 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
     onSend(trimmed, mode);
     setText("");
   };
+
+  // Auto-grow the composer up to a max height as the message spans more lines,
+  // shrinking back down (e.g. after send resets `text`).
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
+  }, [text]);
 
   return (
     <div className="border-t border-black/8 px-4 py-3 dark:border-white/8">
@@ -532,22 +545,23 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
 
       <div
         className={cn(
-          "flex items-center gap-2 rounded-2xl border px-3 py-2",
+          "flex items-end gap-2 rounded-2xl border px-3 py-2",
           mode === "note"
             ? "border-amber-400/40 bg-amber-400/5"
             : "border-black/10 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.03]",
         )}
       >
-        <button className="text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
+        <button className="mb-1 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
           <Paperclip className="h-4 w-4" />
         </button>
-        <button className="text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
+        <button className="mb-1 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
           <Pen className="h-4 w-4" />
         </button>
-        <button className="text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
+        <button className="mb-1 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
           <Smile className="h-4 w-4" />
         </button>
-        <Input
+        <Textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -557,14 +571,15 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
             }
           }}
           placeholder={mode === "note" ? "Add an internal note…" : "Type a message… (/ for commands, @ to assign)"}
-          className="h-9 flex-1 border-0 bg-transparent px-1 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          rows={1}
+          className="min-h-0 flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           data-testid="conversation-composer-input"
         />
         <Button
           onClick={submit}
           disabled={!text.trim() || sending}
           size="icon"
-          className="h-9 w-9 flex-shrink-0 rounded-xl bg-black text-white hover:bg-black/85 disabled:opacity-40 dark:bg-white dark:text-black"
+          className="mb-1 h-9 w-9 flex-shrink-0 rounded-xl bg-black text-white hover:bg-black/85 disabled:opacity-40 dark:bg-white dark:text-black"
           data-testid="conversation-send"
         >
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -615,6 +630,10 @@ export default function ConversationsInbox() {
   const [overlay, setOverlay] = useState<Overlay>({});
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [inboxId, setInboxId] = useState<string | null>(null); // null = All Messages
+  // Conversation id → ISO timestamp of when the user last opened it. Clears the
+  // unread dot locally the instant a conversation is opened, without waiting on
+  // (or depending on) SendSeven accepting the mark-read PATCH.
+  const [seenAt, setSeenAt] = useState<Record<string, string>>({});
 
   const { orgRole } = useRole();
   const canManageChannels = orgRole === "org_admin" || orgRole === "branch_manager" || orgRole === "platform_admin";
@@ -642,6 +661,7 @@ export default function ConversationsInbox() {
   const { data: badges } = useConversationBadgeCounts();
   const closeMutation = useCloseConversation();
   const reopenMutation = useReopenConversation();
+  const markReadMutation = useMarkConversationRead();
 
   const pagination = data?.pagination;
 
@@ -655,18 +675,24 @@ export default function ConversationsInbox() {
     const base = (data?.items ?? []).map(toUiConversation);
     return base.map((c) => {
       const o = overlay[c.id];
-      if (!o) return c;
-      const last = o.extraMessages[o.extraMessages.length - 1];
-      return {
-        ...c,
-        status: o.status ?? c.status,
-        messages: [...c.messages, ...o.extraMessages],
-        preview: last ? last.body : c.preview,
-        lastActivityAt: last ? last.sentAt : c.lastActivityAt,
-        unread: last ? false : c.unread,
-      };
+      const merged = o
+        ? {
+            ...c,
+            status: o.status ?? c.status,
+            messages: [...c.messages, ...o.extraMessages],
+            preview: o.extraMessages.length > 0 ? o.extraMessages[o.extraMessages.length - 1].body : c.preview,
+            lastActivityAt: o.extraMessages.length > 0 ? o.extraMessages[o.extraMessages.length - 1].sentAt : c.lastActivityAt,
+            unread: o.extraMessages.length > 0 ? false : c.unread,
+          }
+        : c;
+      // A conversation only renders as unread if it hasn't been seen since its
+      // last activity — clears the dot instantly on open, and re-lights it if a
+      // newer message arrives after the user viewed the thread.
+      const seen = seenAt[merged.id];
+      const unread = merged.unread && (!seen || Date.parse(merged.lastActivityAt) > Date.parse(seen));
+      return { ...merged, unread };
     });
-  }, [data, overlay]);
+  }, [data, overlay, seenAt]);
 
   // Conversations are filtered server-side by inbox_id (see useConversations);
   // here we only apply the local search + status.
@@ -693,6 +719,23 @@ export default function ConversationsInbox() {
     () => conversations.find((c) => c.id === selectedId) ?? null,
     [conversations, selectedId],
   );
+
+  // Stamp "seen" the moment a conversation is opened (covers both the row
+  // onClick and any auto-selection path above) so the unread dot clears
+  // instantly. Also best-effort tells SendSeven the conversation was read —
+  // `selected.unread` here still reflects the pre-stamp state since `seenAt`
+  // hasn't been updated yet this render.
+  // Re-runs when the open conversation's lastActivityAt moves too, so a message
+  // arriving while the thread is on screen doesn't re-light its unread dot.
+  useEffect(() => {
+    if (!selectedId) return;
+    const wasUnread = selected?.unread ?? false;
+    setSeenAt((prev) => ({ ...prev, [selectedId]: new Date().toISOString() }));
+    if (wasUnread) {
+      markReadMutation.mutate(selectedId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, selected?.lastActivityAt]);
 
   // Real thread for the selected conversation (the list only carries the
   // last_message). Falls back to that seed while the messages query loads.
@@ -768,6 +811,31 @@ export default function ConversationsInbox() {
     }
     return out;
   }, [selected, threadMessages]);
+
+  // Thread scroll container: opens at the newest message (bottom) instead of
+  // the top, and stays pinned to the bottom as new messages arrive while the
+  // user is already near it — without yanking them away if they've scrolled
+  // up to read history.
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
+  const lastScrolledIdRef = useRef<string | null>(null);
+
+  const handleThreadScroll = () => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
+
+  useLayoutEffect(() => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    const firstLoadForConversation = lastScrolledIdRef.current !== selectedId;
+    if (firstLoadForConversation || nearBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+      nearBottomRef.current = true;
+    }
+    if (firstLoadForConversation) lastScrolledIdRef.current = selectedId;
+  }, [selectedId, threadMessages.length]);
 
   return (
     <section
@@ -985,7 +1053,11 @@ export default function ConversationsInbox() {
               </button>
             </div>
 
-            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5">
+            <div
+              ref={threadScrollRef}
+              onScroll={handleThreadScroll}
+              className="flex-1 space-y-4 overflow-y-auto px-5 py-5"
+            >
               {messagesLoading && threadMessages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-black/30 dark:text-white/30">
                   <Loader2 className="h-6 w-6 animate-spin" />

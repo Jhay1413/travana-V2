@@ -145,6 +145,23 @@ export function useSearchSimilarConversations() {
   });
 }
 
+// Best-effort server-side clear of the unread flag when a conversation is
+// opened. SendSeven may not accept `needs_reply` on PATCH — the local `seenAt`
+// state in ConversationsInbox is the primary fix for the unread dot, so any
+// failure here is silently ignored.
+export function useMarkConversationRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => conversationsApi.update(id, { needs_reply: false }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: conversationsKeys.all });
+    },
+    onError: () => {
+      // Ignore — see comment above.
+    },
+  });
+}
+
 export function useEnableBot() {
   const invalidate = useInvalidateConversations();
   return useMutation({

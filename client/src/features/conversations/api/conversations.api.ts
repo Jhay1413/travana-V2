@@ -127,6 +127,7 @@ export interface ConversationUpdate {
   assigned_user_id?: string | null;
   subject?: string | null;
   notes?: string | null;
+  needs_reply?: boolean | null;
 }
 
 export interface CloseConversationRequest {
