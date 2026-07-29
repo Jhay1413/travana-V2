@@ -120,6 +120,8 @@ export default function QuotePage() {
     removeImage: deleteImage,
     uploadFiles: uploadImageFiles,
     openFilePicker: openImageFilePicker,
+    reorderImages: reorderImageOrder,
+    reorderImagesMutation,
   } = useQuoteImageActions(quoteId);
 
   const { primaryImage, galleryImages, quoteImageUrls } = useQuoteImages(quoteData);
@@ -207,6 +209,8 @@ export default function QuotePage() {
                     deleteImage={deleteImage}
                     uploadFiles={uploadImageFiles}
                     openFilePicker={openImageFilePicker}
+                    reorderImages={reorderImageOrder}
+                    isReordering={reorderImagesMutation.isPending}
                   />
 
                 </div>
@@ -470,7 +474,13 @@ export default function QuotePage() {
           open={showCopyDialog}
           onOpenChange={setShowCopyDialog}
           markAsCopy
-          initialValues={{ ...quoteToFormValues, discount: 0 }}
+          duplicateFromQuoteId={quoteData.id}
+          // Package commission carries over — it's a property of the package, not
+          // of the individual sale. Discount and service charge are per-sale
+          // concessions, so they reset and get re-entered deliberately.
+          // pricePerPerson is cleared so the server recalculates it from the new
+          // figures instead of keeping the source's now-stale per-person price.
+          initialValues={{ ...quoteToFormValues, discount: 0, serviceCharge: 0, pricePerPerson: 0 }}
           initialImages={quoteImageUrls}
           onSuccess={(newQuoteId) => {
             setShowCopyDialog(false);

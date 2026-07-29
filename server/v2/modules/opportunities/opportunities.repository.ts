@@ -2,6 +2,7 @@ import { db } from '../../config/database';
 import { enquiry_table, quote, booking, transaction, clientTable, user, branchMembers } from '@shared/schema';
 import { eq, and, sql, ilike, or, gte, lte, count, isNull, type SQL } from 'drizzle-orm';
 import type { Scope } from '../../utils/scope';
+import { notSuspendedOrBanned } from '../../utils/user-conditions';
 import { userOrgRolesRepository } from '../user-org-roles/user-org-roles.repository';
 
 export interface OpportunityFilters {
@@ -97,7 +98,11 @@ export const opportunitiesRepository = {
 
   async findAgents(scope: Scope) {
     if (scope.orgRole === 'platform_admin') {
-      return db.select({ id: user.id, name: user.name, firstName: user.firstName }).from(user).orderBy(user.firstName);
+      return db
+        .select({ id: user.id, name: user.name, firstName: user.firstName })
+        .from(user)
+        .where(notSuspendedOrBanned())
+        .orderBy(user.firstName);
     }
     // Pure social media managers aren't sales agents — keep them out of the picker.
     const socialOnly = new Set(
@@ -109,12 +114,12 @@ export const opportunitiesRepository = {
             .select({ id: user.id, name: user.name, firstName: user.firstName })
             .from(user)
             .innerJoin(branchMembers, and(eq(branchMembers.userId, user.id), eq(branchMembers.isActive, true)))
-            .where(and(eq(user.orgId, scope.orgId), eq(branchMembers.branchId, scope.branchId)))
+            .where(and(eq(user.orgId, scope.orgId), eq(branchMembers.branchId, scope.branchId), notSuspendedOrBanned()))
             .orderBy(user.firstName)
         : await db
             .select({ id: user.id, name: user.name, firstName: user.firstName })
             .from(user)
-            .where(eq(user.orgId, scope.orgId))
+            .where(and(eq(user.orgId, scope.orgId), notSuspendedOrBanned()))
             .orderBy(user.firstName);
     return rows.filter((r) => !socialOnly.has(r.id));
   },

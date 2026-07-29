@@ -53,60 +53,26 @@ import { ChannelsDialog } from "./channels-dialog";
 import { ClientLinkSection, contactLinkMatch, formatClientDate, composeClientAddress } from "./client-link-section";
 import { GenerateEnquiryButton } from "./generate-enquiry-button";
 import { AiStatusControl } from "./ai-status-control";
+import {
+  DayDivider,
+  MessageBubble,
+  dayLabel,
+  gradientFor,
+  groupMessagesByDay,
+  initials,
+} from "./message-thread";
 import { useContactLink } from "../api/use-contact-link";
 import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
-import { useConversations, useConversationBadgeCounts } from "../api/use-conversations-queries";
+import { useConversations, useConversationBadgeCounts, unreadBadgeCount } from "../api/use-conversations-queries";
 import { useCloseConversation, useReopenConversation, useMarkConversationRead } from "../api/use-conversations-mutations";
 import { useMessages, useSendMessage, useCreateInternalNote } from "../api/use-messages";
-import { useConversationsRealtime } from "../api/use-conversations-realtime";
+import { useConversationsRealtimeState } from "./conversations-realtime-provider";
 import { useInboxes } from "../api/use-inboxes";
-import { messagesApi } from "../api/messages.api";
 import type { SsInbox } from "../api/inboxes.api";
-import type { Conversation, ConversationMessage, ConversationStatus, ConversationTag, MessageAttachment } from "../types";
-
-// ─── Formatting ───────────────────────────────────────────────────────────────
-
-function clockTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-}
-
-function dayLabel(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-  if (sameDay(d, today)) return "Today";
-  if (sameDay(d, yesterday)) return "Yesterday";
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-}
+import type { Conversation, ConversationMessage, ConversationStatus, ConversationTag } from "../types";
 
 // ─── Avatar with channel badge ────────────────────────────────────────────────
-
-function initials(name: string): string {
-  return name
-    .split(" ")
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
-const AVATAR_GRADIENTS = [
-  "from-emerald-400 to-teal-600",
-  "from-violet-400 to-purple-600",
-  "from-amber-400 to-orange-600",
-  "from-sky-400 to-blue-600",
-  "from-pink-400 to-rose-600",
-  "from-indigo-400 to-blue-700",
-];
-
-function gradientFor(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
-}
 
 function ChannelAvatar({
   conversation,
@@ -210,158 +176,6 @@ function ConversationRow({
       </div>
       {conversation.unread && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-sky-500" />}
     </button>
-  );
-}
-
-// ─── Message bubble ───────────────────────────────────────────────────────────
-
-// Renders one attachment. Images are fetched as a blob through the shared axios
-// client (so auth + the app's configured base URL apply) and shown via an object
-// URL — a raw <img src="/api/…"> would bypass that and break off-origin. The blob
-// fetch is deferred until the image scrolls near the viewport (IntersectionObserver)
-// so opening a long thread renders instantly instead of firing every image request
-// at once. Non-image files fetch on click and open in a new tab.
-function AttachmentView({ attachment }: { attachment: MessageAttachment }) {
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [inView, setInView] = useState(false);
-  const placeholderRef = useRef<HTMLDivElement | null>(null);
-
-  // Start loading only when the placeholder is about to enter the viewport.
-  useEffect(() => {
-    if (!attachment.isImage || inView) return;
-    const el = placeholderRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          setInView(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: "300px" }, // prefetch just before it's visible
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [attachment.isImage, inView]);
-
-  useEffect(() => {
-    if (!attachment.isImage || !inView) return;
-    let active = true;
-    let created: string | null = null;
-    messagesApi
-      .attachmentBlob(attachment.id)
-      .then((blob) => {
-        if (!active) return;
-        created = URL.createObjectURL(blob);
-        setObjectUrl(created);
-      })
-      .catch(() => active && setFailed(true));
-    return () => {
-      active = false;
-      if (created) URL.revokeObjectURL(created);
-    };
-  }, [attachment.id, attachment.isImage, inView]);
-
-  if (attachment.isImage) {
-    if (failed) {
-      return (
-        <div className="rounded-lg bg-black/5 px-2.5 py-1.5 text-xs text-black/50 dark:bg-white/10 dark:text-white/50">
-          Couldn't load image
-        </div>
-      );
-    }
-    if (!objectUrl) {
-      // Reserved box keeps layout stable and is the IntersectionObserver target.
-      return <div ref={placeholderRef} className="h-40 w-40 animate-pulse rounded-lg bg-black/10 dark:bg-white/10" />;
-    }
-    return (
-      <a href={objectUrl} target="_blank" rel="noopener noreferrer" className="block">
-        <img src={objectUrl} alt={attachment.filename} className="max-h-64 max-w-full rounded-lg object-cover" />
-      </a>
-    );
-  }
-
-  const openFile = async () => {
-    try {
-      const blob = await messagesApi.attachmentBlob(attachment.id);
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch {
-      /* ignore — the button simply does nothing on failure */
-    }
-  };
-  return (
-    <button
-      type="button"
-      onClick={openFile}
-      className="flex items-center gap-2 rounded-lg bg-black/5 px-2.5 py-1.5 text-xs font-medium hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/15"
-    >
-      <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
-      <span className="truncate">{attachment.filename}</span>
-    </button>
-  );
-}
-
-function MessageBubble({ message, conversation }: { message: ConversationMessage; conversation: Conversation }) {
-  const outbound = message.direction === "outbound";
-  const meta = CHANNELS[conversation.channel];
-  const ChannelIcon = meta.icon;
-
-  // Internal notes are teammate-only — render as a centered amber sticky note.
-  if (message.isNote) {
-    return (
-      <div className="flex justify-center">
-        <div className="max-w-[80%] rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-sm text-amber-800 dark:text-amber-200">
-          <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600/80 dark:text-amber-300/80">
-            <StickyNote className="h-3 w-3" /> Internal note · {clockTime(message.sentAt)}
-          </div>
-          <p className="whitespace-pre-wrap">{message.body}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={cn("flex items-end gap-2", outbound ? "justify-end" : "justify-start")}>
-      {!outbound && (
-        <div className={cn("grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-gradient-to-br text-[11px] font-semibold text-white", gradientFor(conversation.contact.id))}>
-          {initials(conversation.contact.displayName)}
-        </div>
-      )}
-      <div className={cn("max-w-[70%]", outbound && "flex flex-col items-end")}>
-        <div
-          className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
-            outbound
-              ? "rounded-br-md bg-[#dcf37a] text-black dark:bg-[#c7e85f]/90"
-              : "rounded-bl-md bg-white text-black/85 ring-1 ring-black/5 dark:bg-white/[0.08] dark:text-white/90 dark:ring-white/10",
-          )}
-        >
-          {message.body && <p className="whitespace-pre-wrap">{message.body}</p>}
-          {message.attachments && message.attachments.length > 0 && (
-            <div className={cn("flex flex-col gap-1.5", message.body && "mt-2")}>
-              {message.attachments.map((a) => (
-                <AttachmentView key={a.id} attachment={a} />
-              ))}
-            </div>
-          )}
-          {message.cta && (
-            <>
-              <div className="my-2 h-px bg-black/10" />
-              <div className="text-center text-sm font-semibold text-black">{message.cta.label}</div>
-            </>
-          )}
-        </div>
-        <span className="mt-1 px-1 text-[10px] text-black/40 dark:text-white/40">{clockTime(message.sentAt)}</span>
-      </div>
-      {outbound && (
-        <div className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-emerald-500/90 text-[11px] font-semibold text-white">
-          <ChannelIcon className="h-3.5 w-3.5" />
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -638,9 +452,10 @@ export default function ConversationsInbox() {
   const { orgRole } = useRole();
   const canManageChannels = orgRole === "org_admin" || orgRole === "branch_manager" || orgRole === "platform_admin";
 
-  // One shared SSE connection for the whole inbox — maps server events to
-  // targeted query invalidations (new messages, AI state, assignment, etc).
-  const { connected: realtimeConnected } = useConversationsRealtime();
+  // The SSE connection is owned app-wide by ConversationsRealtimeProvider (it
+  // also raises the new-message toast); read its state rather than opening a
+  // second stream here.
+  const { connected: realtimeConnected } = useConversationsRealtimeState();
 
   // Custom inboxes (saved views) from SendSeven — drive the inbox switcher.
   const { data: inboxesData } = useInboxes();
@@ -659,6 +474,8 @@ export default function ConversationsInbox() {
     inboxId: inboxId ?? undefined,
   });
   const { data: badges } = useConversationBadgeCounts();
+  // Same rule as the sidebar nav badge — see unreadBadgeCount.
+  const unreadCount = unreadBadgeCount(badges);
   const closeMutation = useCloseConversation();
   const reopenMutation = useReopenConversation();
   const markReadMutation = useMarkConversationRead();
@@ -799,18 +616,10 @@ export default function ConversationsInbox() {
   };
 
   // Group the thread's messages by day for the date dividers.
-  const grouped = useMemo(() => {
-    if (!selected) return [];
-    const out: { day: string; messages: ConversationMessage[] }[] = [];
-    for (const m of threadMessages) {
-      const label = `${dayLabel(m.sentAt)}, ${clockTime(m.sentAt)}`;
-      const key = dayLabel(m.sentAt);
-      const last = out[out.length - 1];
-      if (last && last.day.startsWith(key)) last.messages.push(m);
-      else out.push({ day: label, messages: [m] });
-    }
-    return out;
-  }, [selected, threadMessages]);
+  const grouped = useMemo(
+    () => (selected ? groupMessagesByDay(threadMessages) : []),
+    [selected, threadMessages],
+  );
 
   // Thread scroll container: opens at the newest message (bottom) instead of
   // the top, and stays pinned to the bottom as new messages arrive while the
@@ -857,9 +666,9 @@ export default function ConversationsInbox() {
           </button>
           <button className="relative grid h-8 w-8 place-items-center rounded-full text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/5">
             <MessageSquare className="h-4 w-4" />
-            {badges && badges.total_unanswered > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-[#0b0b0f]">
-                {badges.total_unanswered > 99 ? "99+" : badges.total_unanswered}
+                {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
           </button>
@@ -1072,11 +881,7 @@ export default function ConversationsInbox() {
                       animate={{ opacity: 1, y: 0 }}
                       className="space-y-4"
                     >
-                      <div className="flex justify-center">
-                        <span className="rounded-full bg-black/[0.04] px-3 py-1 text-[10px] font-medium text-black/40 dark:bg-white/[0.06] dark:text-white/40">
-                          {group.day}
-                        </span>
-                      </div>
+                      <DayDivider label={group.day} />
                       {group.messages.map((m) => (
                         <MessageBubble key={m.id} message={m} conversation={selected} />
                       ))}

@@ -76,7 +76,7 @@ export const quotePublicRepository = {
 
     const id = q.quote.id;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, quoteTags_list, accommodationImgs, lodgeImgs, agentData] = await Promise.all([
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, quoteTags_list, agentData] = await Promise.all([
       db.select({
         flight: quote_flights,
         departing_airport_name: sql<string>`CASE WHEN ${departAirport.airport_code} IS NOT NULL AND ${departAirport.airport_code} <> '' THEN concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')') ELSE ${departAirport.airport_name} END`,
@@ -149,30 +149,6 @@ export const quotePublicRepository = {
         .innerJoin(tags, eq(quoteTags.tagId, tags.id))
         .where(eq(quoteTags.quoteId, id)),
 
-      db.select({
-        id: accommodation_images.id,
-        accommodation_id: accommodation_images.accommodation_id,
-        image_url: accommodation_images.image_url,
-        isPrimary: accommodation_images.isPrimary,
-      })
-        .from(accommodation_images)
-        .innerJoin(
-          quote_accomodation,
-          and(
-            eq(quote_accomodation.accomodation_id, accommodation_images.accommodation_id),
-            eq(quote_accomodation.quote_id, id)
-          )
-        ),
-
-      q.quote.lodge_id
-        ? db.select({
-            id: lodge_images.id,
-            lodge_id: lodge_images.lodge_id,
-            image_url: lodge_images.image_url,
-            isPrimary: lodge_images.isPrimary,
-          }).from(lodge_images).where(eq(lodge_images.lodge_id, q.quote.lodge_id))
-        : Promise.resolve([]),
-
       q.user_id
         ? db.select({ id: user.id, firstName: user.firstName, lastName: user.lastName, profileImageUrl: user.image })
             .from(user)
@@ -199,18 +175,12 @@ export const quotePublicRepository = {
       destinationGuru = guruData || null;
     }
 
+    // Only the quote's own images — the shared accommodation/lodge libraries
+    // are no longer merged into any gallery (see quote.repository).
     const allImages: Array<{ id: string; image_url: string | null; isPrimary: boolean | null }> = [];
     const seen = new Set<string>();
     for (const img of images) {
       const url = img.url || "";
-      if (url && !seen.has(url)) { seen.add(url); allImages.push({ id: img.id, image_url: url, isPrimary: img.isPrimary }); }
-    }
-    for (const img of accommodationImgs) {
-      const url = img.image_url || "";
-      if (url && !seen.has(url)) { seen.add(url); allImages.push({ id: img.id, image_url: url, isPrimary: img.isPrimary }); }
-    }
-    for (const img of (lodgeImgs as Array<{ id: string; lodge_id: string; image_url: string; isPrimary: boolean | null }>)) {
-      const url = img.image_url || "";
       if (url && !seen.has(url)) { seen.add(url); allImages.push({ id: img.id, image_url: url, isPrimary: img.isPrimary }); }
     }
 

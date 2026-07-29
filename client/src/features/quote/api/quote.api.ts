@@ -1,5 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
-import type { Quote, CreateQuoteData, QuoteFilters } from "@/features/quote/types";
+import type { Quote, CreateQuoteData, QuoteFilters, PortalStatus } from "@/features/quote/types";
 
 interface FreeQuotesResponse {
   quotes: any[];
@@ -18,7 +18,7 @@ export const quoteApi = {
     return data;
   },
 
-  getFreeQuotes: async (page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", unscheduledOnly = false, showOnPortal = false): Promise<FreeQuotesResponse> => {
+  getFreeQuotes: async (page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all"): Promise<FreeQuotesResponse> => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (scheduledOnly) params.set("scheduledOnly", "true");
     if (scheduledOnly && scheduleFilter !== "none") params.set("scheduleFilter", scheduleFilter);
@@ -26,6 +26,7 @@ export const quoteApi = {
     if (scheduledOnly && rangeEnd) params.set("rangeEnd", rangeEnd);
     if (unscheduledOnly) params.set("unscheduledOnly", "true");
     if (showOnPortal) params.set("showOnPortal", "true");
+    if (showOnPortal && portalStatus !== "all") params.set("portalStatus", portalStatus);
     if (search) params.set("search", search);
     const { data } = await axiosClient.get<FreeQuotesResponse>(`/api/v2/quotes/free?${params}`);
     return data;
@@ -129,6 +130,18 @@ export const quoteApi = {
 
   setPrimaryImage: async (quoteId: string, imageId: string): Promise<any> => {
     const { data } = await axiosClient.patch(`/api/v2/quotes/${quoteId}/images/${imageId}/primary`);
+    return data;
+  },
+
+  // `imageIds` is the full gallery in the desired order. Ids belonging to the
+  // shared accommodation/lodge libraries are ignored server-side.
+  // Identify images by id (saved rows) or by url (the edit form, which arranges
+  // images before the new ones exist as rows).
+  reorderImages: async (
+    quoteId: string,
+    order: { imageIds?: string[]; imageUrls?: string[] },
+  ): Promise<any> => {
+    const { data } = await axiosClient.patch(`/api/v2/quotes/${quoteId}/images/order`, order);
     return data;
   },
 

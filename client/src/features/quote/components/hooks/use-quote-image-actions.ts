@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import {
   useDeleteQuoteImage,
+  useReorderQuoteImages,
   useSetPrimaryQuoteImage,
   useUploadQuoteImages,
 } from "@/features/quote/api/use-quote-image-mutations";
@@ -17,6 +18,7 @@ export function useQuoteImageActions(quoteId: string) {
   const setPrimaryImageMutation = useSetPrimaryQuoteImage();
   const uploadImagesMutation = useUploadQuoteImages();
   const deleteImageMutation = useDeleteQuoteImage();
+  const reorderImagesMutation = useReorderQuoteImages();
 
   function setPrimary(imageId: string) {
     setPrimaryImageMutation.mutate(
@@ -55,6 +57,16 @@ export function useQuoteImageActions(quoteId: string) {
     );
   }
 
+  function reorderImages(imageIds: string[]) {
+    reorderImagesMutation.mutate(
+      { quoteId, imageIds },
+      {
+        onSuccess: () => toast({ title: "Image order saved" }),
+        onError: () => toast({ title: "Failed to save image order", variant: "destructive" }),
+      },
+    );
+  }
+
   function openFilePicker() {
     imageInputRef.current?.click();
   }
@@ -64,9 +76,11 @@ export function useQuoteImageActions(quoteId: string) {
     setPrimaryImageMutation,
     uploadImagesMutation,
     deleteImageMutation,
+    reorderImagesMutation,
     setPrimary,
     removeImage,
     uploadFiles,
     openFilePicker,
+    reorderImages,
   };
 }

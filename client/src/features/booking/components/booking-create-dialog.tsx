@@ -9,6 +9,12 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateTransaction } from "@/hooks/mutations";
+import {
+  useAddBookingImageUrls,
+  useReorderBookingImages,
+  useUploadBookingImages,
+} from "@/features/booking/api/use-booking-image-mutations";
+import { orderedImageUrls, type FormImageItem } from "@/features/quote/lib/form-images";
 import { usePackageTypes, useCurrentUser } from "@/hooks/queries";
 import { BookingRHFForm } from "./booking-rhf-form";
 import type { BookingFormValues, BookingCreateDialogProps } from "@/features/booking/types";
@@ -224,6 +230,9 @@ export function BookingCreateDialog({
 }: BookingCreateDialogProps) {
   const { toast } = useToast();
   const createTransaction = useCreateTransaction();
+  const uploadImages = useUploadBookingImages();
+  const addImageUrls = useAddBookingImageUrls();
+  const reorderImages = useReorderBookingImages();
   const { data: packageTypesData } = usePackageTypes();
   const { data: currentUser } = useCurrentUser();
 
@@ -233,7 +242,10 @@ export function BookingCreateDialog({
     [initialValues],
   );
 
-  const handleSubmit = async (values: BookingFormValues) => {
+  const handleSubmit = async (
+    values: BookingFormValues,
+    images?: { files: File[]; urls: string[]; deletedImageIds: string[]; items?: FormImageItem[] },
+  ) => {
     if (!currentUser?.id) {
       toast({
         title: "Error",
@@ -247,7 +259,58 @@ export function BookingCreateDialog({
     createTransaction.mutate(payload, {
       onSuccess: async (result) => {
         const bookingId = result?.booking?.id;
-        toast({ title: "Booking created", description: "New booking has been created." });
+
+        // Images are attached after the booking exists, since they need its id.
+        // Previously this handler ignored the `images` argument entirely, so
+        // anything picked while creating a booking was silently discarded.
+        const imageFiles = images?.files ?? [];
+        const importedUrls = images?.items
+          ? images.items.flatMap((i) => (i.kind === "url" ? [i.url] : []))
+          : images?.urls ?? [];
+        let imagesFailed = false;
+
+        if (bookingId && (imageFiles.length > 0 || importedUrls.length > 0)) {
+          const urlByFile = new Map<File, string>();
+          if (imageFiles.length > 0) {
+            try {
+              // Returns the inserted rows in the order the files were sent, so a
+              // File can be paired back to its stored URL for the reorder below.
+              const uploaded = await uploadImages.mutateAsync({ bookingId, files: imageFiles });
+              if (Array.isArray(uploaded)) {
+                imageFiles.forEach((file, i) => {
+                  const url = uploaded[i]?.url;
+                  if (typeof url === "string" && url) urlByFile.set(file, url);
+                });
+              }
+            } catch {
+              imagesFailed = true;
+            }
+          }
+          if (importedUrls.length > 0) {
+            try {
+              await addImageUrls.mutateAsync({ bookingId, urls: importedUrls });
+            } catch {
+              imagesFailed = true;
+            }
+          }
+          // Apply the arrangement from the form once every image exists.
+          const orderedUrls = images?.items ? orderedImageUrls(images.items, urlByFile) : [];
+          if (orderedUrls.length > 1) {
+            try {
+              await reorderImages.mutateAsync({ bookingId, imageUrls: orderedUrls });
+            } catch {
+              imagesFailed = true;
+            }
+          }
+        }
+
+        toast({
+          title: "Booking created",
+          description: imagesFailed
+            ? "Booking saved, but some images failed to save."
+            : "New booking has been created.",
+          variant: imagesFailed ? "destructive" : "default",
+        });
         onOpenChange(false);
         onSuccess?.(bookingId || "");
       },

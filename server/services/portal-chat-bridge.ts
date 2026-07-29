@@ -5,6 +5,7 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { notificationRepository } from "../repositories/notification.repository";
+import { notSuspendedOrBanned } from "../v2/utils/user-conditions";
 import { pushNotificationService } from "./push-notification.service";
 
 const PORTAL_SENDER_PREFIX = "portal-client:";
@@ -42,11 +43,29 @@ async function findAgentForClient(clientId: string): Promise<string | null> {
   return txn?.userId || null;
 }
 
-async function getAllAgentIds(): Promise<string[]> {
+async function getClientOrgId(clientId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ orgId: clientTable.orgId })
+    .from(clientTable)
+    .where(eq(clientTable.id, clientId))
+    .limit(1);
+  return row?.orgId ?? null;
+}
+
+/**
+ * Every agent who should be pulled into a client's group chat: the client's own
+ * organisation, excluding anyone suspended or banned.
+ *
+ * MUST stay org-scoped. This previously selected every non-banned user on the
+ * platform, so a client with no active transaction had their message — and their
+ * name — broadcast into the Live Chat of every agent in every organisation.
+ */
+async function getActiveOrgAgentIds(orgId: string | null): Promise<string[]> {
+  if (!orgId) return [];
   const agents = await db
     .select({ id: user.id })
     .from(user)
-    .where(sql`${user.banned} = false OR ${user.banned} IS NULL`);
+    .where(and(eq(user.orgId, orgId), notSuspendedOrBanned()));
   return agents.map(a => a.id);
 }
 
@@ -162,19 +181,24 @@ export async function bridgePortalMessageToChat(
 ): Promise<void> {
   try {
     const clientName = await getClientName(clientId);
+    const orgId = await getClientOrgId(clientId);
     let agentIds: string[] = [];
     let isGroupChat = false;
 
+    // With an active transaction the client has an owning agent, so the message
+    // is a direct thread with them. Otherwise — and always for deal enquiries,
+    // which aren't tied to anyone — it becomes a group chat with the client and
+    // every active agent in their organisation, so nothing goes unanswered.
     if (isFromDeal) {
-      agentIds = await getAllAgentIds();
-      isGroupChat = agentIds.length > 1;
+      agentIds = await getActiveOrgAgentIds(orgId);
+      isGroupChat = true;
     } else {
       const agentId = await findAgentForClient(clientId);
       if (agentId) {
         agentIds = [agentId];
       } else {
-        agentIds = await getAllAgentIds();
-        isGroupChat = agentIds.length > 1;
+        agentIds = await getActiveOrgAgentIds(orgId);
+        isGroupChat = true;
       }
     }
 

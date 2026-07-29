@@ -4,7 +4,18 @@ import { contactLinkApi, type CreateClientForContactInput } from "./contact-link
 export const contactLinkKeys = {
   all: ["contact-link"] as const,
   status: (contactId: string) => [...contactLinkKeys.all, contactId] as const,
+  byClient: (clientId: string) => [...contactLinkKeys.all, "by-client", clientId] as const,
 };
+
+// The SendSeven contact a client is linked to (null when not connected).
+export function useClientContactLink(clientId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: contactLinkKeys.byClient(clientId ?? ""),
+    queryFn: () => contactLinkApi.getByClient(clientId as string),
+    enabled: !!clientId && enabled,
+    staleTime: 60_000,
+  });
+}
 
 export function useContactLink(
   contactId: string | null,
@@ -23,7 +34,9 @@ export function useLinkContact(contactId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (clientId: string) => contactLinkApi.link(contactId, clientId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: contactLinkKeys.status(contactId) }),
+    // Invalidate the whole namespace so both the by-contact status and the
+    // client dashboard's by-client view refresh after a link change.
+    onSuccess: () => qc.invalidateQueries({ queryKey: contactLinkKeys.all }),
   });
 }
 
@@ -31,7 +44,9 @@ export function useCreateAndLinkContact(contactId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateClientForContactInput) => contactLinkApi.createAndLink(contactId, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: contactLinkKeys.status(contactId) }),
+    // Invalidate the whole namespace so both the by-contact status and the
+    // client dashboard's by-client view refresh after a link change.
+    onSuccess: () => qc.invalidateQueries({ queryKey: contactLinkKeys.all }),
   });
 }
 
@@ -39,6 +54,8 @@ export function useUnlinkContact(contactId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => contactLinkApi.unlink(contactId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: contactLinkKeys.status(contactId) }),
+    // Invalidate the whole namespace so both the by-contact status and the
+    // client dashboard's by-client view refresh after a link change.
+    onSuccess: () => qc.invalidateQueries({ queryKey: contactLinkKeys.all }),
   });
 }

@@ -207,7 +207,7 @@ export function useLogPortalQuoteView() {
 
 /** Whether the logged-in client owns the quote behind this share token. */
 export function usePortalQuoteOwnership(token: string) {
-  return useQuery<{ found: boolean; owns: boolean }>({
+  return useQuery<{ found: boolean; owns: boolean; isPublicDeal?: boolean }>({
     queryKey: ["portal", "quote-owns", token],
     queryFn: () => portalFetch(`/api/portal/quote/${token}/owns`),
     retry: false,

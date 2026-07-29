@@ -1563,6 +1563,12 @@ export const quoteImages = pgTable("quote_images", {
   quoteId: uuid("quote_id").references(() => quote.id, { onDelete: 'cascade' }),
   url: text("url"),
   isPrimary: boolean("is_primary"),
+  // Display order within the quote's gallery, ascending. `id` is a random UUID
+  // so it carries no insertion sequence — without this column the order the DB
+  // returns is arbitrary and can shift. Images merged in from the shared
+  // accommodation/lodge libraries have no per-quote row, so they sort after
+  // these (see quote.repository `images`).
+  position: integer("position").notNull().default(0),
 });
 
 export const insertQuoteImageSchema = createInsertSchema(quoteImages);
@@ -1574,6 +1580,8 @@ export const bookingImages = pgTable("booking_images", {
   bookingId: uuid("booking_id").references(() => booking.id, { onDelete: 'cascade' }),
   url: text("url"),
   isPrimary: boolean("is_primary"),
+  /** Display order within the booking's gallery — see quoteImages.position. */
+  position: integer("position").notNull().default(0),
 });
 
 export const insertBookingImageSchema = createInsertSchema(bookingImages);

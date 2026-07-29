@@ -8,9 +8,10 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { useCreateQuote, useCreateTransaction, useCreateSocialQuote } from "@/hooks/mutations";
+import { useCreateQuote, useCreateTransaction, useCreateSocialQuote, useDuplicateQuote } from "@/hooks/mutations";
 import { usePackageTypes } from "@/hooks/queries";
 import { uploadImagesDirect } from "@/features/quote/api/upload-images-direct";
+import { orderedImageUrls, type FormImageItem } from "@/features/quote/lib/form-images";
 import { QuoteRHFForm } from "./quote-rhf-form";
 import type { QuoteFormValues, QuoteCreateDialogProps } from "@/features/quote/types";
 import { defaultQuoteFormValues } from "@/features/quote/types";
@@ -225,11 +226,13 @@ export function QuoteCreateDialog({
   initialImages,
   socialPost = false,
   markAsCopy = false,
+  duplicateFromQuoteId,
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
   const createQuote = useCreateQuote();
   const createTransaction = useCreateTransaction();
   const createSocialQuote = useCreateSocialQuote();
+  const duplicateQuote = useDuplicateQuote();
   const { data: packageTypesData } = usePackageTypes();
   const [isUploadingImages, setIsUploadingImages] = useState(false);
 
@@ -240,7 +243,11 @@ export function QuoteCreateDialog({
   );
 
   const isSubmitting =
-    isUploadingImages || createQuote.isPending || createTransaction.isPending || createSocialQuote.isPending;
+    isUploadingImages ||
+    createQuote.isPending ||
+    createTransaction.isPending ||
+    createSocialQuote.isPending ||
+    duplicateQuote.isPending;
 
   const warnFailedUploads = (failed: number) => {
     if (failed > 0) {
@@ -252,27 +259,34 @@ export function QuoteCreateDialog({
     }
   };
 
-  const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
+  const handleSubmit = async (
+    values: QuoteFormValues,
+    images?: { files: File[]; urls: string[]; items?: FormImageItem[] },
+  ) => {
     const quotePayload = buildQuotePayload(values, packageTypesData);
-    const pastedImageUrls = images?.urls || [];
     const imageFiles = images?.files || [];
 
     // Upload any picked files straight to S3 (presigned PUT) before building the
     // request payload, so the whole submission — quote fields + image URLs —
     // goes to the server as a single plain-JSON request instead of multipart.
-    let uploadedImageUrls: string[] = [];
+    let urlByFile = new Map<File, string>();
     let failedUploads = 0;
     if (imageFiles.length > 0) {
       setIsUploadingImages(true);
       try {
         const result = await uploadImagesDirect(imageFiles);
-        uploadedImageUrls = result.proxyUrls;
+        urlByFile = result.urlByFile;
         failedUploads = result.failed;
       } finally {
         setIsUploadingImages(false);
       }
     }
-    const imageUrls = [...pastedImageUrls, ...uploadedImageUrls];
+    // Slot the uploads back into the order the user arranged in the form; the
+    // server assigns `position` from this array's index (and marks the first
+    // one primary), so this order is what the gallery ends up showing.
+    const imageUrls = images?.items
+      ? orderedImageUrls(images.items, urlByFile)
+      : [...(images?.urls || []), ...Array.from(urlByFile.values())];
 
     if (socialPost) {
       const json = {
@@ -315,6 +329,32 @@ export function QuoteCreateDialog({
         ...(imageUrls.length > 0 && { images: imageUrls }),
         ...(markAsCopy && initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
       } as CreateQuoteData;
+
+      // Copying an existing quote goes through the duplicate endpoint: it clones
+      // the source's extras (each with its own cost/commission), tags and child
+      // ages server-side, then applies these form values on top. Plain create
+      // would silently drop all of that, because the form never loads extras.
+      if (duplicateFromQuoteId) {
+        duplicateQuote.mutate(
+          { id: duplicateFromQuoteId, data: json },
+          {
+            onSuccess: (newQuote) => {
+              toast({ title: "Quote copied", description: "The copy has been created." });
+              warnFailedUploads(failedUploads);
+              onOpenChange(false);
+              onSuccess?.(newQuote.id);
+            },
+            onError: (err) => {
+              toast({
+                title: "Failed to copy quote",
+                description: err instanceof Error ? err.message : "Something went wrong.",
+                variant: "destructive",
+              });
+            },
+          },
+        );
+        return;
+      }
 
       createQuote.mutate(json, {
         onSuccess: (newQuote) => {

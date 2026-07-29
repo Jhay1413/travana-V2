@@ -4,7 +4,7 @@ import { bookingController } from "./booking.controller";
 import { bookingImageController } from "./booking-image.controller";
 import { bookingUpsellController } from "./booking-upsell.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { addImagesValidator } from "./booking.validator";
+import { addImagesValidator, reorderImagesValidator } from "./booking.validator";
 import { createUpsellValidator, listUpsellsValidator } from "./booking-upsell.validator";
 
 const router = Router();
@@ -38,6 +38,7 @@ router.post("/:bookingId/images/upload", upload.array("images", 50), bookingImag
 router.post("/:bookingId/images", validate(addImagesValidator), bookingImageController.addImages);
 router.get("/:bookingId/images", bookingImageController.getImages);
 router.delete("/:bookingId/images/:imageId", bookingImageController.deleteImage);
+router.patch("/:bookingId/images/order", validate(reorderImagesValidator), bookingImageController.reorderImages);
 router.patch("/:bookingId/images/:imageId/primary", bookingImageController.setPrimaryImage);
 
 router.get("/:bookingId/upsells", validate(listUpsellsValidator), bookingUpsellController.list);

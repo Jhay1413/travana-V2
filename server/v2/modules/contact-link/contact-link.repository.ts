@@ -15,6 +15,16 @@ export const contactLinkRepository = {
     return row ?? null;
   },
 
+  // Reverse lookup: the contact a client is linked to, if any. Used by the
+  // client dashboard's Chats tab to find the SendSeven conversations thread.
+  async findByClient(orgId: string, clientId: string): Promise<SendsevenContactLink | null> {
+    const [row] = await db
+      .select()
+      .from(sendsevenContactLinks)
+      .where(and(eq(sendsevenContactLinks.orgId, orgId), eq(sendsevenContactLinks.clientId, clientId)));
+    return row ?? null;
+  },
+
   // Links a contact to a client. A client maps to at most one contact, so any
   // prior link for this client is removed first; then we upsert on the contact.
   async link(

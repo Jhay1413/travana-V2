@@ -261,9 +261,10 @@ async function enrichDealRows(
       initialMap[img.quoteId] = img.url;
     }
   }
-  const missingImageIds = quoteIds.filter((id) => !initialMap[id]);
-  const accomImages = await portalRepository.findAccommodationImagesForQuotes(missingImageIds);
-  const imageMap = buildImageMap(primary, accomImages);
+  // Own quote images only — the shared accommodation library is no longer used
+  // as a fallback anywhere (see quote.repository), so what the client sees in
+  // the portal matches what the agent arranged on the quote.
+  const imageMap = buildImageMap(primary, []);
 
   return results.map((r) => ({
     id: r.id,
@@ -398,18 +399,16 @@ portalRouter.get('/bookings', portalAuth, async (req: Request, res: Response) =>
     const results = await portalRepository.findClientBookings(clientId);
 
     const bookingIds = results.map((r) => r.bookingId);
-    const lodgeIds = results.map((r) => r.lodgeId).filter((id): id is string => !!id);
-    // Resolve imagery to match the canonical booking-details read: the source quote's
-    // images (quote_images) via booking.quote_id first (mirroring /quotes), then the
-    // booking's own images, then legacy deal_images, then its accommodation's images,
-    // then lodge images for lodge-based bookings.
+    // Resolve imagery to match the canonical booking-details read: the source
+    // quote's images (quote_images) via booking.quote_id first (mirroring
+    // /quotes), then the booking's own images, then legacy deal_images. The
+    // shared accommodation/lodge libraries are deliberately NOT used — a client
+    // should only ever see photos put on their own quote or booking.
     const quoteIds = results.map((r) => r.quoteId).filter((id): id is string => !!id);
-    const [quoteImgs, ownImages, dealImages, accomImages, lodgeImages] = await Promise.all([
+    const [quoteImgs, ownImages, dealImages] = await Promise.all([
       portalRepository.findImagesForQuotes(quoteIds),
       portalRepository.findImagesForBookings(bookingIds),
       portalRepository.findDealImagesForBookings(bookingIds),
-      portalRepository.findAccommodationImagesForBookings(bookingIds),
-      portalRepository.findLodgeImagesForBookings(lodgeIds),
     ]);
 
     // Prefer quote imagery (primary first, mirroring /quotes).
@@ -421,8 +420,8 @@ portalRouter.get('/bookings', portalAuth, async (req: Request, res: Response) =>
     }
 
     // Per-booking fallbacks in the same precedence the booking-details read uses:
-    // own booking images → deal_images → accommodation images. Each source only fills
-    // a booking that no earlier source resolved (primary image wins within a source).
+    // own booking images → deal_images. Each source only fills a booking that no
+    // earlier source resolved (primary image wins within a source).
     const imageMap: Record<string, string> = {};
     const fillFrom = (
       imgs: Array<{ bookingId: string | null; url: string; isPrimary: boolean | null }>,
@@ -438,18 +437,6 @@ portalRouter.get('/bookings', portalAuth, async (req: Request, res: Response) =>
     };
     fillFrom(ownImages);
     fillFrom(dealImages);
-    fillFrom(accomImages);
-
-    // Lodge images are keyed by lodge id — map them onto their bookings as a last resort.
-    const lodgeImageMap: Record<string, string> = {};
-    for (const img of lodgeImages) {
-      if (!lodgeImageMap[img.lodgeId] || img.isPrimary) lodgeImageMap[img.lodgeId] = img.url;
-    }
-    for (const r of results) {
-      if (!imageMap[r.bookingId] && r.lodgeId && lodgeImageMap[r.lodgeId]) {
-        imageMap[r.bookingId] = lodgeImageMap[r.lodgeId];
-      }
-    }
 
     res.json(results.map((r) => {
       const dest = r.destinationName && r.countryName

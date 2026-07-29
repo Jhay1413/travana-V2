@@ -44,3 +44,12 @@ export function useSetPrimaryBookingImage() {
     onSuccess: () => invalidateBookingImageRelated(queryClient),
   });
 }
+
+export function useReorderBookingImages() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, ...order }: { bookingId: string; imageIds?: string[]; imageUrls?: string[] }) =>
+      bookingApi.reorderImages(bookingId, order),
+    onSuccess: () => invalidateBookingImageRelated(queryClient),
+  });
+}

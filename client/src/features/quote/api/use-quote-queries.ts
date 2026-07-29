@@ -1,7 +1,7 @@
 import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { quoteApi } from "@/api";
 import type { QuoteEngagementRow } from "./quote.api";
-import type { EnrichedQuote, QuoteFilters } from "@/features/quote/types";
+import type { EnrichedQuote, QuoteFilters, PortalStatus } from "@/features/quote/types";
 
 export const quoteKeys = {
   all: ["quotes"] as const,
@@ -39,11 +39,12 @@ export function useFreeQuotesInfinite(
   rangeEnd = "",
   unscheduledOnly = false,
   showOnPortal = false,
+  portalStatus: PortalStatus = "all",
   options?: { enabled?: boolean },
 ) {
   return useInfiniteQuery({
-    queryKey: [...quoteKeys.freeQuotes(), scheduledOnly ? "scheduled" : "all", scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal],
-    queryFn: ({ pageParam = 0 }) => quoteApi.getFreeQuotes(pageParam, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal),
+    queryKey: [...quoteKeys.freeQuotes(), scheduledOnly ? "scheduled" : "all", scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal, portalStatus],
+    queryFn: ({ pageParam = 0 }) => quoteApi.getFreeQuotes(pageParam, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal, portalStatus),
     getNextPageParam: (lastPage) => {
       return lastPage.hasMore ? lastPage.page + 1 : undefined;
     },

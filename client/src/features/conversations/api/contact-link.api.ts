@@ -10,6 +10,14 @@ export interface ContactLinkStatus {
   suggestions: NeonClient[];
 }
 
+// Reverse view: which SendSeven contact a CRM client is linked to (drives the
+// client dashboard's Chats tab).
+export interface ClientContactLink {
+  clientId: string;
+  contactId: string | null;
+  linkedAt: string | null;
+}
+
 export interface CreateClientForContactInput {
   title?: string | null;
   firstName: string;
@@ -25,6 +33,12 @@ export const contactLinkApi = {
     const { data } = await axiosClient.get<ContactLinkStatus>(base(contactId), {
       params: { phone: match?.phone, email: match?.email },
     });
+    return data;
+  },
+  getByClient: async (clientId: string): Promise<ClientContactLink> => {
+    const { data } = await axiosClient.get<ClientContactLink>(
+      `/api/v2/contact-links/by-client/${encodeURIComponent(clientId)}`,
+    );
     return data;
   },
   link: async (contactId: string, clientId: string): Promise<NeonClient> => {

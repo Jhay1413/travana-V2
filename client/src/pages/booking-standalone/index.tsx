@@ -71,6 +71,8 @@ export default function BookingPage() {
     removeImage: deleteImage,
     uploadFiles: uploadImageFiles,
     openFilePicker: openImageFilePicker,
+    reorderImages: reorderImageOrder,
+    reorderImagesMutation,
   } = useBookingImageActions(bookingId);
 
   const booking = useMemo(() => {
@@ -162,6 +164,8 @@ export default function BookingPage() {
                     deleteImage={deleteImage}
                     uploadFiles={uploadImageFiles}
                     openFilePicker={openImageFilePicker}
+                    reorderImages={reorderImageOrder}
+                    isReordering={reorderImagesMutation.isPending}
                   />
 
                   <QuoteTagsCard

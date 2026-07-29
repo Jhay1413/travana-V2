@@ -44,6 +44,19 @@ export const bookingImageController = {
     return successResponse(res, image, "Primary image updated successfully");
   }),
 
+  /**
+   * Set the display order of a booking's images
+   * PATCH /api/v2/bookings/:bookingId/images/order  { imageIds: [...] }
+   */
+  reorderImages: asyncHandler(async (req: Request, res: Response) => {
+    const bookingId = req.params.bookingId as string;
+    const { imageIds, imageUrls } = req.body as { imageIds?: string[]; imageUrls?: string[] };
+
+    const images = await bookingImageService.reorderImages(bookingId, { imageIds, imageUrls });
+
+    return successResponse(res, images, "Image order updated successfully");
+  }),
+
   uploadImages: asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.bookingId as string;
     const files = req.files as Express.Multer.File[];

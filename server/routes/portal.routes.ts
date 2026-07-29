@@ -382,18 +382,9 @@ portalRouter.get("/deals/for-you", portalAuth, async (req: Request, res: Respons
           imageMap[img.quoteId] = img.url;
         }
       }
-      const missingImageIds = quoteIds.filter((id) => !imageMap[id]);
-      if (missingImageIds.length > 0) {
-        const accomImages = await db
-          .select({ quoteId: quote_accomodation.quote_id, url: accommodation_images.image_url })
-          .from(quote_accomodation)
-          .innerJoin(accommodation_images, eq(accommodation_images.accommodation_id, quote_accomodation.accomodation_id))
-          .where(and(inArray(quote_accomodation.quote_id, missingImageIds), eq(quote_accomodation.is_primary, true)))
-          .limit(missingImageIds.length);
-        for (const img of accomImages) {
-          if (img.quoteId && !imageMap[img.quoteId]) imageMap[img.quoteId] = img.url;
-        }
-      }
+      // Own quote images only — the shared accommodation library is no longer
+      // used as a fallback anywhere, so the portal shows exactly the photos the
+      // agent put on the quote.
     }
 
     res.json(results.map((r) => ({
@@ -491,27 +482,7 @@ portalRouter.get("/deals", async (req: Request, res: Response) => {
         }
       }
 
-      const missingImageIds = quoteIds.filter((id) => !imageMap[id]);
-      if (missingImageIds.length > 0) {
-        const accomImages = await db
-          .select({
-            quoteId: quote_accomodation.quote_id,
-            url: accommodation_images.image_url,
-          })
-          .from(quote_accomodation)
-          .innerJoin(accommodation_images, eq(accommodation_images.accommodation_id, quote_accomodation.accomodation_id))
-          .where(and(
-            inArray(quote_accomodation.quote_id, missingImageIds),
-            eq(quote_accomodation.is_primary, true)
-          ))
-          .limit(missingImageIds.length);
-
-        for (const img of accomImages) {
-          if (img.quoteId && !imageMap[img.quoteId]) {
-            imageMap[img.quoteId] = img.url;
-          }
-        }
-      }
+      // Own quote images only — see the note on the other portal quotes read.
     }
 
     const deals = results.map((r) => ({
@@ -1077,13 +1048,25 @@ portalRouter.get("/quote/:token/owns", portalAuth, async (req: Request, res: Res
     const { clientId } = (req as any).portalClient;
     const { token } = req.params;
     const [row] = await db
-      .select({ ownerId: transaction.client_id })
+      .select({
+        ownerId: transaction.client_id,
+        showOnPortal: quote.show_on_portal,
+        isActive: quote.is_active,
+      })
       .from(quote)
       .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
       .where(eq(quote.quote_token, String(token)))
       .limit(1);
-    if (!row) return res.json({ found: false, owns: false });
-    return res.json({ found: true, owns: row.ownerId === clientId });
+    if (!row) return res.json({ found: false, owns: false, isPublicDeal: false });
+    // show_on_portal is the publish switch: once staff turn it on, the quote is a
+    // portal deal and any signed-in client may view it. It belongs to no client
+    // (or not to *this* one), so the ownership test can never pass for it —
+    // without this flag "View Deal" bounced everyone back to their own quotes.
+    //
+    // Deliberately NOT also requiring isFreeQuote: publishing is the intent, and
+    // a published quote must be viewable by whoever the deal is shown to.
+    const isPublicDeal = !!row.showOnPortal && !!row.isActive;
+    return res.json({ found: true, owns: row.ownerId === clientId, isPublicDeal });
   } catch (err: any) {
     console.error("Portal quote ownership check error:", err);
     res.status(500).json({ error: "Failed to check quote access" });

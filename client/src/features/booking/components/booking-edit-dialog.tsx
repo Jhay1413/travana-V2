@@ -10,10 +10,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateBooking, useUploadBookingImages, useAddBookingImageUrls, useDeleteBookingImage, useReconcileUpsells } from "@/hooks/mutations";
+import { useReorderBookingImages } from "@/features/booking/api/use-booking-image-mutations";
 import { useBooking, usePackageTypes } from "@/hooks/queries";
 import { BookingRHFForm } from "./booking-rhf-form";
 import { defaultBookingFormValues, upsellsToFormValues } from "@/features/booking/types";
 import type { BookingFormValues, BookingUpdateDialogProps, UpsellRecord } from "@/features/booking/types";
+import { orderedImageUrls, type FormImageItem } from "@/features/quote/lib/form-images";
 
 function splitDateTime(iso: string | null | undefined): { date: string; time: string } {
   if (!iso) return { date: "", time: "" };
@@ -426,6 +428,7 @@ export function BookingEditDialog({
   const uploadImages = useUploadBookingImages();
   const addImageUrls = useAddBookingImageUrls();
   const deleteImage = useDeleteBookingImage();
+  const reorderImages = useReorderBookingImages();
   const { data: packageTypesData } = usePackageTypes();
   const { data: bookingData, isLoading, isError } = useBooking(bookingId);
 
@@ -453,11 +456,15 @@ export function BookingEditDialog({
 
   const handleSubmit = async (
     values: BookingFormValues,
-    images?: { files: File[]; urls: string[]; deletedImageIds: string[] }
+    images?: { files: File[]; urls: string[]; deletedImageIds: string[]; items?: FormImageItem[] }
   ) => {
     const payload = buildUpdatePayload(values, packageTypesData);
     const imageFiles = images?.files || [];
-    const imageUrls = images?.urls || [];
+    // Only images that aren't already saved — addImageUrls appends with no
+    // dedupe, so resubmitting saved ones would duplicate the whole gallery.
+    const imageUrls = images?.items
+      ? images.items.flatMap((i) => (i.kind === "url" ? [i.url] : []))
+      : images?.urls || [];
     const deletedImageIds = images?.deletedImageIds || [];
 
     updateBooking.mutate(
@@ -482,9 +489,19 @@ export function BookingEditDialog({
             );
           }
 
+          // The upload endpoint returns the inserted rows in the same order as
+          // the files it received, which is how a just-uploaded File is paired
+          // back to its stored URL for the reorder step below.
+          const urlByFile = new Map<File, string>();
           if (imageFiles.length > 0) {
             try {
-              await uploadImages.mutateAsync({ bookingId, files: imageFiles });
+              const uploaded = await uploadImages.mutateAsync({ bookingId, files: imageFiles });
+              if (Array.isArray(uploaded)) {
+                imageFiles.forEach((file, i) => {
+                  const url = uploaded[i]?.url;
+                  if (typeof url === "string" && url) urlByFile.set(file, url);
+                });
+              }
             } catch {
               imageUploadFailed = true;
             }
@@ -493,6 +510,19 @@ export function BookingEditDialog({
           if (imageUrls.length > 0) {
             try {
               await addImageUrls.mutateAsync({ bookingId, urls: imageUrls });
+            } catch {
+              imageUploadFailed = true;
+            }
+          }
+
+          // Persist the arrangement last, once every image exists as a row.
+          // Matched by URL rather than id because images added in this same save
+          // have no client-side id yet — the server resolves new and
+          // already-saved rows alike. Mirrors the quote edit dialog.
+          const orderedUrls = images?.items ? orderedImageUrls(images.items, urlByFile) : [];
+          if (orderedUrls.length > 1) {
+            try {
+              await reorderImages.mutateAsync({ bookingId, imageUrls: orderedUrls });
             } catch {
               imageUploadFailed = true;
             }

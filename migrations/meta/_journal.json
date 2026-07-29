@@ -232,6 +232,13 @@
       "when": 1784708351995,
       "tag": "0032_cleanup_stale_management_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1785289342504,
+      "tag": "0033_quote_booking_image_position",
+      "breakpoints": true
     }
   ]
 }

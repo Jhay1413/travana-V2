@@ -57,7 +57,6 @@ const ConversationsPage = lazy(() => import("@/pages/conversations"));
 const HubPage = lazy(() => import("@/pages/hub"));
 const SocialPostsPage = lazy(() => import("@/pages/social-posts"));
 const SocialQuotePage = lazy(() => import("@/pages/social-quote"));
-const SocialWallPage = lazy(() => import("@/pages/social-wall"));
 const DestinationGuruPage = lazy(() => import("@/pages/destination-guru"));
 const SmsCenterPage = lazy(() => import("@/pages/sms-center"));
 const HrPage = lazy(() => import("@/pages/hr"));
@@ -186,7 +185,6 @@ function AuthenticatedRouter() {
         <RoleRoute path="/sms-center" allow={STAFF_ROLES} component={SmsCenterPage} />
         <RoleRoute path="/social-posts" allow={STAFF_ROLES} component={SocialPostsPage} />
         <RoleRoute path="/social-posts/quotes/:quoteId" allow={STAFF_ROLES} component={SocialQuotePage} />
-        <RoleRoute path="/social-wall" allow={STAFF_ROLES} component={SocialWallPage} />
         <RoleRoute path="/tickets" allow={STAFF_ROLES} component={TicketsPage} />
         <RoleRoute path="/tickets/:ticketId" allow={STAFF_ROLES} component={TicketsPage} />
         {/* /hub is handled standalone (outside AppLayout) above — TheHUB has its own shell. */}

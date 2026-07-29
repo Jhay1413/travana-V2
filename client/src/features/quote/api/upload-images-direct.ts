@@ -27,6 +27,13 @@ interface PresignedUpload {
 export interface UploadImagesDirectResult {
   proxyUrls: string[];
   failed: number;
+  /**
+   * Per-file mapping of the uploaded URL. `proxyUrls` alone can't be
+   * index-matched back to the input because failed files are dropped from it,
+   * so anything that needs to slot uploads back into a user-chosen order (see
+   * the quote/booking image forms) must use this instead.
+   */
+  urlByFile: Map<File, string>;
 }
 
 // Kept in sync with server/v2/utils/image-storage.ts ALLOWED_IMAGE_MIME_TYPES —
@@ -49,7 +56,7 @@ const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
  * throwing and aborting the whole submit.
  */
 export async function uploadImagesDirect(files: File[]): Promise<UploadImagesDirectResult> {
-  if (!files || files.length === 0) return { proxyUrls: [], failed: 0 };
+  if (!files || files.length === 0) return { proxyUrls: [], failed: 0, urlByFile: new Map() };
 
   const validFiles = files.filter(
     (f) => ALLOWED_IMAGE_MIME_TYPES.has(f.type) && f.size <= MAX_IMAGE_SIZE_BYTES,
@@ -57,7 +64,7 @@ export async function uploadImagesDirect(files: File[]): Promise<UploadImagesDir
   let failed = files.length - validFiles.length;
 
   if (validFiles.length === 0) {
-    return { proxyUrls: [], failed };
+    return { proxyUrls: [], failed, urlByFile: new Map() };
   }
 
   let presigned: PresignedUpload[];
@@ -71,7 +78,7 @@ export async function uploadImagesDirect(files: File[]): Promise<UploadImagesDir
     // Presigning failed outright (validation error, network error, etc.) —
     // degrade like a per-file PUT failure rather than throwing and aborting
     // the caller's submit.
-    return { proxyUrls: [], failed: failed + validFiles.length };
+    return { proxyUrls: [], failed: failed + validFiles.length, urlByFile: new Map() };
   }
 
   const results = await Promise.allSettled(
@@ -83,13 +90,15 @@ export async function uploadImagesDirect(files: File[]): Promise<UploadImagesDir
   );
 
   const proxyUrls: string[] = [];
+  const urlByFile = new Map<File, string>();
   results.forEach((result, index) => {
     if (result.status === "fulfilled") {
       proxyUrls.push(presigned[index].proxyUrl);
+      urlByFile.set(validFiles[index], presigned[index].proxyUrl);
     } else {
       failed += 1;
     }
   });
 
-  return { proxyUrls, failed };
+  return { proxyUrls, failed, urlByFile };
 }

@@ -17,10 +17,11 @@ import type {
   InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
   InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
 } from "@shared/schema";
-import { eq, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike, ne } from "drizzle-orm";
+import { eq, asc, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 import type { QuoteEmbeddingDetails } from "./quote-embedding";
+import { PORTAL_ACTIVE_WINDOW_DAYS, type PortalStatus } from "./quote.types";
 
 function toDateOrNull(value: unknown): Date | null {
   if (value == null) return null;
@@ -264,7 +265,7 @@ export const newQuoteRepository = {
     return rows.map((r) => r.quote);
   },
 
-  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false) {
+  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all") {
     const scopeConds = buildTransactionScopeConds(scope);
     const offset = page * pageSize;
     const searchPattern = search.trim() ? `%${search.trim().toLowerCase()}%` : null;
@@ -300,6 +301,19 @@ export const newQuoteRepository = {
         ? [sql`NOT EXISTS (SELECT 1 FROM ${travel_deal} WHERE ${travel_deal.quote_id} = ${quote.id} AND ${travel_deal.onlySocialsId} IS NOT NULL)`]
         : []),
       ...(showOnPortal ? [eq(quote.show_on_portal, true)] : []),
+      // Portal age bucket. A post is "active" for PORTAL_ACTIVE_WINDOW_DAYS from
+      // portal_added_at (stamped by setPortalVisibility) and "expired" after that.
+      // An unstamped row counts as expired — it can't be inside the window, which
+      // matches how the portal's own recency query treats a NULL portal_added_at.
+      // Only meaningful alongside showOnPortal, so it's ignored otherwise.
+      // Parenthesised explicitly: drizzle's and() concatenates raw sql`` fragments
+      // without wrapping them, so a bare OR here would bind looser than the AND.
+      ...(showOnPortal && portalStatus === "active"
+        ? [sql`(${quote.portal_added_at} IS NOT NULL AND ${quote.portal_added_at} >= now() - make_interval(days => ${PORTAL_ACTIVE_WINDOW_DAYS}))`]
+        : []),
+      ...(showOnPortal && portalStatus === "expired"
+        ? [sql`(${quote.portal_added_at} IS NULL OR ${quote.portal_added_at} < now() - make_interval(days => ${PORTAL_ACTIVE_WINDOW_DAYS}))`]
+        : []),
     ];
 
     let ids: string[];
@@ -718,7 +732,7 @@ export const newQuoteRepository = {
 
     if (!q) return undefined;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, quoteTags_list, accommodationImgs, lodgeImgs, dealImgs] = await Promise.all([
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, quoteTags_list, dealImgs] = await Promise.all([
       db.select({
         flight: quote_flights,
         departing_airport_name: sql<string>`CASE WHEN ${departAirport.airport_code} IS NOT NULL AND ${departAirport.airport_code} <> '' THEN concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')') ELSE ${departAirport.airport_name} END`,
@@ -808,7 +822,7 @@ export const newQuoteRepository = {
         .where(eq(quote_cruise.quote_id, id)),
 
       db.select().from(passengers).where(eq(passengers.quote_id, id)),
-      db.select().from(quoteImages).where(eq(quoteImages.quoteId, id)),
+      db.select().from(quoteImages).where(eq(quoteImages.quoteId, id)).orderBy(asc(quoteImages.position), asc(quoteImages.id)),
 
       // Fetch tags through junction table
       db.select({
@@ -817,32 +831,6 @@ export const newQuoteRepository = {
         .from(quoteTags)
         .innerJoin(tags, eq(quoteTags.tagId, tags.id))
         .where(eq(quoteTags.quoteId, id)),
-
-      // Fetch accommodation images through quote_accomodation junction
-      db.select({
-        id: accommodation_images.id,
-        accommodation_id: accommodation_images.accommodation_id,
-        image_url: accommodation_images.image_url,
-        isPrimary: accommodation_images.isPrimary,
-      })
-        .from(accommodation_images)
-        .innerJoin(
-          quote_accomodation,
-          and(
-            eq(quote_accomodation.accomodation_id, accommodation_images.accommodation_id),
-            eq(quote_accomodation.quote_id, id)
-          )
-        ),
-
-      // Fetch lodge images if quote has a lodge
-      q.quote.lodge_id
-        ? db.select({
-            id: lodge_images.id,
-            lodge_id: lodge_images.lodge_id,
-            image_url: lodge_images.image_url,
-            isPrimary: lodge_images.isPrimary,
-          }).from(lodge_images).where(eq(lodge_images.lodge_id, q.quote.lodge_id))
-        : Promise.resolve([]),
 
       // Legacy fallback: deal_images owned by this quote (used only when no quote_images exist)
       db.select().from(deal_images).where(eq(deal_images.owner_id, id)),
@@ -912,24 +900,23 @@ export const newQuoteRepository = {
           .sort((a, b) => (a.day_number || 0) - (b.day_number || 0)),
       })),
       passengers: passengerList,
+      // Only the quote's OWN images. The shared accommodation/lodge libraries are
+      // deliberately not merged in any more: an agent's gallery should show what
+      // they put on this quote, not every photo any colleague ever uploaded for
+      // that hotel. Uploads are still copied into those libraries on create (see
+      // quote.service writeQuoteSections) — they're just not read back here.
+      //
+      // deal_images stays as a fallback: it's this quote's own legacy storage
+      // (owner_id = quote id), not shared inventory.
       images: (() => {
         const seen = new Set<string>();
         const result: Array<{ id: string; image_url: string | null; isPrimary: boolean | null; owner_id: string; owner_type: string; s3Key: null }> = [];
-        // Prefer the quote's own images; fall back to legacy deal_images only when none exist.
         const ownImgs = images.length > 0
           ? images.map(img => ({ id: img.id, image_url: img.url, isPrimary: img.isPrimary, owner_id: id, owner_type: 'quote', s3Key: null as null }))
           : dealImgs.map(img => ({ id: img.id, image_url: img.image_url, isPrimary: img.isPrimary, owner_id: id, owner_type: 'quote', s3Key: null as null }));
         for (const img of ownImgs) {
           const url = img.image_url || '';
           if (url && !seen.has(url)) { seen.add(url); result.push(img); }
-        }
-        for (const img of accommodationImgs) {
-          const url = img.image_url || '';
-          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.accommodation_id, owner_type: 'accommodation', s3Key: null }); }
-        }
-        for (const img of (lodgeImgs as Array<{ id: string; lodge_id: string; image_url: string; isPrimary: boolean | null }>)) {
-          const url = img.image_url || '';
-          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.lodge_id, owner_type: 'lodge', s3Key: null }); }
         }
         return result;
       })(),

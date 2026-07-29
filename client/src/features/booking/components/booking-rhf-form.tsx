@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import type { UseFormSetValue } from "react-hook-form";
@@ -7,6 +7,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2 } from "lucide-react";
 import { walletApi } from "@/features/wallet/api/wallet.api";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
+import { QuoteImagesSection } from "@/features/quote/components/sections/QuoteImagesSection";
+import {
+  existingImageItem,
+  pendingFiles,
+  resolvedUrls,
+  urlImageItem,
+  type FormImageItem,
+} from "@/features/quote/lib/form-images";
 import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/types";
 import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues, UpsellsFormValues } from "@/features/booking/types";
@@ -298,10 +306,21 @@ export function BookingRHFForm({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: { ...defaultBookingFormValues, ...defaultValues },
   });
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imageUrls, setImageUrls] = useState<string[]>(initialImageUrls);
+  // One ordered list — see features/quote/lib/form-images. Saved images first,
+  // then anything pre-seeded from a JSON import.
+  const [imageItems, setImageItems] = useState<FormImageItem[]>(() => [
+    ...existingImages.map((i) => existingImageItem(i.id, i.url)),
+    ...initialImageUrls.map(urlImageItem),
+  ]);
   const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
-  const [existingImagesState, setExistingImagesState] = useState<{ id: string; url: string }[]>(existingImages);
+
+  const setImageUrlsFromJson = useCallback((updater: (prev: string[]) => string[]) => {
+    setImageItems((prev) => {
+      const kept = prev.filter((i) => i.kind !== "url");
+      const nextUrls = updater(prev.flatMap((i) => (i.kind === "url" ? [i.url] : [])));
+      return [...kept, ...nextUrls.map(urlImageItem)];
+    });
+  }, []);
   const [destSearch, setDestSearch] = useState("");
   const [destLabel, setDestLabel] = useState("");
   const [accomSearch, setAccomSearch] = useState("");
@@ -622,7 +641,7 @@ export function BookingRHFForm({
       queryClient,
       lookupKeys,
       toast,
-      setImageUrls,
+      setImageUrls: setImageUrlsFromJson,
       fallbackFieldMapper: (data, setIfPresent) => {
         setIfPresent("haysRef", data.haysRef || data.hays_ref);
         setIfPresent("supplierRef", data.supplierRef || data.supplier_ref);
@@ -650,7 +669,12 @@ export function BookingRHFForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((values) => onSubmit(values, { files: imageFiles, urls: imageUrls, deletedImageIds }))} className="space-y-4">
+      <form onSubmit={form.handleSubmit((values) => onSubmit(values, {
+        files: pendingFiles(imageItems),
+        urls: resolvedUrls(imageItems),
+        deletedImageIds,
+        items: imageItems,
+      }))} className="space-y-4">
 
         <div className="flex items-center justify-end">
           <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
@@ -819,111 +843,12 @@ export function BookingRHFForm({
             />
           </div>
         </div>
-        <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-          <SectionHeader icon={ImagePlus} title="Quote Images" />
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp"
-                multiple
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  if (files.length > 0) {
-                    setImageFiles((prev) => [...prev, ...files]);
-                  }
-                  if (imageInputRef.current) imageInputRef.current.value = "";
-                }}
-                className="hidden"
-                data-testid="input-quote-images"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="h-9 w-full rounded-xl border-black/10 bg-white/70 text-sm"
-                onClick={() => imageInputRef.current?.click()}
-                data-testid="button-add-images"
-              >
-                <ImagePlus className="mr-2 h-4 w-4" />
-                Add images
-              </Button>
-            </div>
-
-            {existingImagesState.length > 0 && (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
-                {existingImagesState.map((img) => (
-                  <div key={img.id} className="group relative overflow-hidden rounded-xl border border-black/10">
-                    <img src={img.url} alt="Existing image" className="h-20 w-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeletedImageIds((prev) => [...prev, img.id]);
-                        setExistingImagesState((prev) => prev.filter((i) => i.id !== img.id));
-                      }}
-                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
-                      data-testid={`button-remove-existing-image-${img.id}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white">Saved</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {(imageFiles.length > 0 || imageUrls.length > 0) && (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
-                {imageFiles.map((file, idx) => (
-                  <div key={`file-${idx}`} className="group relative overflow-hidden rounded-xl border border-black/10">
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt={file.name}
-                      className="h-20 w-full object-cover"
-                      data-testid={`img-quote-preview-file-${idx}`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setImageFiles((prev) => prev.filter((_, i) => i !== idx))}
-                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
-                      data-testid={`button-remove-image-file-${idx}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white truncate">
-                      {file.name}
-                    </div>
-                  </div>
-                ))}
-                {imageUrls.map((url, idx) => (
-                  <div key={`url-${idx}`} className="group relative overflow-hidden rounded-xl border border-black/10">
-                    <img
-                      src={url}
-                      alt={`Image ${idx + 1}`}
-                      className="h-20 w-full object-cover"
-                      data-testid={`img-quote-preview-url-${idx}`}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = "";
-                        (e.target as HTMLImageElement).alt = "Failed to load";
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setImageUrls((prev) => prev.filter((_, i) => i !== idx))}
-                      className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
-                      data-testid={`button-remove-image-url-${idx}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5 text-[9px] text-white">
-                      From JSON
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <QuoteImagesSection
+          title="Booking Images"
+          items={imageItems}
+          setItems={setImageItems}
+          setDeletedImageIds={setDeletedImageIds}
+        />
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
           <SectionHeader icon={Users} title="Travel Details" />
           <div className="grid gap-3 md:grid-cols-3">

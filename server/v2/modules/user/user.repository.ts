@@ -2,6 +2,7 @@ import { db } from "../../config/database";
 import { user, branchMembers, type User, type InsertUser, type UpsertUser } from "@shared/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Scope } from "../../utils/scope";
+import { notSuspendedOrBanned } from "../../utils/user-conditions";
 import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 
 export const userRepository = {
@@ -35,11 +36,14 @@ export const userRepository = {
 
   /** Lightweight roster used by mention/notification fan-out. */
   async findAllIdsAndNames(): Promise<Array<{ id: string; name: string | null }>> {
-    return db.select({ id: user.id, name: user.name }).from(user);
+    return db.select({ id: user.id, name: user.name }).from(user).where(notSuspendedOrBanned());
   },
 
   async findAllIdsNamesAndRoles(): Promise<Array<{ id: string; name: string | null; role: string | null }>> {
-    return db.select({ id: user.id, name: user.name, role: user.role }).from(user);
+    return db
+      .select({ id: user.id, name: user.name, role: user.role })
+      .from(user)
+      .where(notSuspendedOrBanned());
   },
 
   async findByEmail(email: string): Promise<User | undefined> {
@@ -122,19 +126,27 @@ export const userRepository = {
     const salesOnly = opts?.salesAgentsOnly === true;
 
     if (!scope || scope.orgRole === "platform_admin") {
-      if (!salesOnly) return await db.select().from(user);
+      if (!salesOnly) return await db.select().from(user).where(notSuspendedOrBanned());
       const agentIds = await userOrgRolesRepository.findSalesAgentUserIds();
       if (agentIds.length === 0) return [];
-      return await db.select().from(user).where(inArray(user.id, agentIds));
+      return await db
+        .select()
+        .from(user)
+        .where(and(inArray(user.id, agentIds), notSuspendedOrBanned()));
     }
     if (scope.orgRole === "org_admin") {
-      if (!salesOnly) return await db.select().from(user).where(eq(user.orgId, scope.orgId));
+      if (!salesOnly) {
+        return await db
+          .select()
+          .from(user)
+          .where(and(eq(user.orgId, scope.orgId), notSuspendedOrBanned()));
+      }
       const agentIds = await userOrgRolesRepository.findSalesAgentUserIds({ orgId: scope.orgId });
       if (agentIds.length === 0) return [];
       return await db
         .select()
         .from(user)
-        .where(and(eq(user.orgId, scope.orgId), inArray(user.id, agentIds)));
+        .where(and(eq(user.orgId, scope.orgId), inArray(user.id, agentIds), notSuspendedOrBanned()));
     }
     if (!scope.branchId) return [];
     const memberRows = await db
@@ -149,6 +161,8 @@ export const userRepository = {
       ids = ids.filter(id => agentSet.has(id));
     }
     if (ids.length === 0) return [];
-    return await db.select().from(user).where(inArray(user.id, ids));
+    // This path already filters on active membership, but still needs the ban
+    // check — a platform-admin ban leaves branch membership untouched.
+    return await db.select().from(user).where(and(inArray(user.id, ids), notSuspendedOrBanned()));
   },
 };

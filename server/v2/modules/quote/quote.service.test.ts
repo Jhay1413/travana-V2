@@ -286,6 +286,26 @@ describe("newQuoteService.duplicateQuote", () => {
     }
   });
 
+  it("prefers caller-supplied tags over the source's", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "src", transaction_id: "t1" } as never);
+    vi.mocked(quoteImageRepository.getByQuoteId).mockResolvedValue([] as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({
+      transfers: [], carHires: [], attractionTickets: [], loungePasses: [], airportParkings: [], accommodations: [],
+      passengers: [],
+      tags: ["fromSource"],
+    } as never);
+    const createSpy = vi.spyOn(newQuoteService, "createQuote").mockResolvedValue({ id: "newQ" } as never);
+
+    try {
+      await newQuoteService.duplicateQuote("src", { tags: ["edited"] } as never, TRUSTED);
+
+      const payload = createSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload.tags).toEqual(["edited"]);
+    } finally {
+      createSpy.mockRestore();
+    }
+  });
+
   it("throws 404 when the source quote does not exist", async () => {
     vi.mocked(newQuoteRepository.findById).mockResolvedValue(undefined as never);
 

@@ -17,6 +17,13 @@ export const contactLinkController = {
     return successResponse(res, status, "Contact link status");
   }),
 
+  // GET /api/v2/contact-links/by-client/:clientId
+  getByClient: asyncHandler(async (req: Request, res: Response) => {
+    const clientId = req.params.clientId as string;
+    const link = await contactLinkService.getByClient(clientId, getScope(req));
+    return successResponse(res, link, "Client contact link");
+  }),
+
   // PUT /api/v2/contact-links/:contactId  { clientId }
   link: asyncHandler(async (req: Request, res: Response) => {
     const contactId = req.params.contactId as string;

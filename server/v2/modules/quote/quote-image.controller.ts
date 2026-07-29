@@ -72,6 +72,19 @@ export const quoteImageController = {
   }),
 
   /**
+   * Set the display order of a quote's images
+   * PATCH /api/v2/quotes/:quoteId/images/order  { imageIds: [...] }
+   */
+  reorderImages: asyncHandler(async (req: Request, res: Response) => {
+    const quoteId = req.params.quoteId as string;
+    const { imageIds, imageUrls } = req.body as { imageIds?: string[]; imageUrls?: string[] };
+
+    const images = await quoteImageService.reorderImages(quoteId, { imageIds, imageUrls });
+
+    return successResponse(res, images, "Image order updated successfully");
+  }),
+
+  /**
    * Upload image files for a quote
    * POST /api/quotes/:quoteId/images/upload
    */

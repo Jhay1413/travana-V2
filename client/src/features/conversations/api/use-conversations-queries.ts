@@ -1,5 +1,5 @@
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { conversationsApi, type ListConversationsQuery } from "./conversations.api";
+import { conversationsApi, type ListConversationsQuery, type SsBadgeCounts } from "./conversations.api";
 
 export const conversationsKeys = {
   all: ["conversations"] as const,
@@ -40,6 +40,27 @@ export function useConversationBadgeCounts(inboxId?: string) {
     queryFn: () => conversationsApi.badgeCounts(inboxId),
     staleTime: 15_000,
   });
+}
+
+/**
+ * The number to show on an unread badge. Deliberately just `total_unanswered`:
+ * it's the only badge-counts field whose meaning is unambiguous, and it matches
+ * what the conversation list itself calls unread (`needs_reply`).
+ *
+ * Do NOT "improve" this to `unanswered_assigned_to_me + unassigned_count` for
+ * multi-agent workspaces. SendSeven's guide describes the badge that way in
+ * prose, but it never defines the response fields, and `unassigned_count` is
+ * not filtered by reply state — so the sum counts unassigned conversations that
+ * have already been answered and reads high. Tried it; it overcounted.
+ *
+ * Note this counts conversations awaiting a REPLY, not unread messages —
+ * `needs_reply` is derived server-side from message direction and there is no
+ * mark-as-read endpoint, so the count drops when you answer, not when you open.
+ * A conversation you've opened but not replied to is still counted here, while
+ * the list clears its dot locally: that gap is expected, not a bug.
+ */
+export function unreadBadgeCount(counts: SsBadgeCounts | undefined): number {
+  return counts?.total_unanswered ?? 0;
 }
 
 export function useConversationSummary(id: string | null, enabled = true) {

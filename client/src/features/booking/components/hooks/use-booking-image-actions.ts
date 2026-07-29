@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import {
   useDeleteBookingImage,
+  useReorderBookingImages,
   useSetPrimaryBookingImage,
   useUploadBookingImages,
 } from "@/features/booking/api/use-booking-image-mutations";
@@ -18,6 +19,7 @@ export function useBookingImageActions(bookingId: string) {
   const setPrimaryImageMutation = useSetPrimaryBookingImage();
   const uploadImagesMutation = useUploadBookingImages();
   const deleteImageMutation = useDeleteBookingImage();
+  const reorderImagesMutation = useReorderBookingImages();
 
   function setPrimary(imageId: string) {
     setPrimaryImageMutation.mutate(
@@ -56,6 +58,16 @@ export function useBookingImageActions(bookingId: string) {
     );
   }
 
+  function reorderImages(imageIds: string[]) {
+    reorderImagesMutation.mutate(
+      { bookingId, imageIds },
+      {
+        onSuccess: () => toast({ title: "Image order saved" }),
+        onError: () => toast({ title: "Failed to save image order", variant: "destructive" }),
+      },
+    );
+  }
+
   function openFilePicker() {
     imageInputRef.current?.click();
   }
@@ -65,9 +77,11 @@ export function useBookingImageActions(bookingId: string) {
     setPrimaryImageMutation,
     uploadImagesMutation,
     deleteImageMutation,
+    reorderImagesMutation,
     setPrimary,
     removeImage,
     uploadFiles,
     openFilePicker,
+    reorderImages,
   };
 }

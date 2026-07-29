@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
 import { getScope } from "../../utils/scope";
 import { uploadImageToS3 } from "../../utils/image-storage";
+import type { PortalStatus } from "./quote.types";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   // New-enum identity pass-through
@@ -80,8 +81,11 @@ export const quoteController = {
     const search = (req.query.search as string) || "";
     const unscheduledOnly = (req.query.unscheduledOnly as string) === "true";
     const showOnPortal = (req.query.showOnPortal as string) === "true";
+    const portalStatusParam = req.query.portalStatus as string;
+    const portalStatus: PortalStatus =
+      portalStatusParam === "active" || portalStatusParam === "expired" ? portalStatusParam : "all";
 
-    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal);
+    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus);
 
     return successResponse(res, { quotes, page, pageSize, hasMore: quotes.length === pageSize }, "Free quotes retrieved successfully");
   }),

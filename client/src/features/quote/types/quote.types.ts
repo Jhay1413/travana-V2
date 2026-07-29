@@ -1,6 +1,16 @@
 import { z } from "zod";
 import type { UpsellRecord } from "@/features/booking/types";
 
+/**
+ * Lifecycle bucket for a quote published to the client portal, derived from
+ * `portal_added_at`: "active" while inside the PORTAL_ACTIVE_WINDOW_DAYS window,
+ * "expired" once past it. Mirrors the server-side type in quote.types.ts.
+ */
+export type PortalStatus = "all" | "active" | "expired";
+
+/** Days a portal post stays active before it counts as expired. Keep in sync with the server. */
+export const PORTAL_ACTIVE_WINDOW_DAYS = 7;
+
 // Enriched extras — include all base type fields plus joined tour_operator_name / airport_name
 // so that EnrichedTransfer is structurally assignable to QuoteTransfer, etc.
 export const enrichedTransferSchema = z.object({
@@ -233,6 +243,8 @@ export interface Quote {
   parent_quote_id: string | null;
   isFreeQuote: boolean | null;
   show_on_portal: boolean | null;
+  /** When the quote was (last) published to the portal — drives active vs expired. */
+  portal_added_at: string | null;
   is_featured: boolean | null;
   not_for_social: boolean | null;
   flights?: QuoteFlight[];

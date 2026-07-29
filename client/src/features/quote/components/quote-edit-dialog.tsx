@@ -26,9 +26,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateQuote, useUpdateTransaction } from "@/hooks/mutations";
+import { useReorderQuoteImages } from "@/features/quote/api/use-quote-image-mutations";
 import { useQuote } from "@/hooks/queries";
 import { usePackageTypes } from "@/hooks/queries";
 import { uploadImagesDirect } from "@/features/quote/api/upload-images-direct";
+import { newImageUrls, orderedImageUrls, type FormImageItem } from "@/features/quote/lib/form-images";
 import { QuoteRHFForm } from "./quote-rhf-form";
 import { defaultQuoteFormValues } from "@/features/quote/types";
 import type { QuoteEditDialogProps, QuoteFormValues } from "@/features/quote/types";
@@ -497,6 +499,7 @@ export function QuoteEditDialog({
 }: QuoteEditDialogProps) {
   const { toast } = useToast();
   const updateQuote = useUpdateQuote();
+  const reorderImages = useReorderQuoteImages();
   const updateTransaction = useUpdateTransaction();
   const { data: packageTypesData } = usePackageTypes();
   const { data: quoteData, isLoading, isError } = useQuote(quoteId);
@@ -507,7 +510,7 @@ export function QuoteEditDialog({
     .map((a: any) => a.accomodation_name || "");
   const existingImages = (quoteData?.images || []).map((img: any) => ({ id: img.id, url: img.image_url }));
 
-  const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[] }) => {
+  const handleSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[]; items?: FormImageItem[] }) => {
     // Flip the submitting/uploading flag before anything else (including the
     // is_test sync below) so the submit button is disabled for the entire
     // handler — otherwise there's a brief window where it's clickable again
@@ -516,7 +519,6 @@ export function QuoteEditDialog({
     try {
       const basePayload = buildUpdatePayload(values, packageTypesData);
       const imageFiles = images?.files || [];
-      const pastedImageUrls = images?.urls || [];
       const deletedImageIds = images?.deletedImageIds || [];
 
       // Sync is_test to the transaction if it changed
@@ -530,14 +532,19 @@ export function QuoteEditDialog({
       // The server processes deletions before the images-add write in one
       // deterministic order instead of the client racing several independent
       // image API calls.
-      let uploadedImageUrls: string[] = [];
+      let urlByFile = new Map<File, string>();
       let failedUploads = 0;
       if (imageFiles.length > 0) {
         const result = await uploadImagesDirect(imageFiles);
-        uploadedImageUrls = result.proxyUrls;
+        urlByFile = result.urlByFile;
         failedUploads = result.failed;
       }
-      const imageUrls = [...pastedImageUrls, ...uploadedImageUrls];
+      // Only images that aren't already saved: `updateQuote` appends these via
+      // addImages with no dedupe, so resubmitting saved ones would duplicate the
+      // whole gallery. Saved images are reordered through the Arrange dialog.
+      const imageUrls = images?.items
+        ? newImageUrls(images.items, urlByFile)
+        : [...(images?.urls || []), ...Array.from(urlByFile.values())];
 
       const json = {
         ...basePayload,
@@ -548,7 +555,22 @@ export function QuoteEditDialog({
       updateQuote.mutate(
         { id: quoteId, data: json },
         {
-          onSuccess: () => {
+          onSuccess: async () => {
+            // Persist the arrangement. Matching on URL rather than id because
+            // images added in this same save have no client-side id yet; the
+            // server resolves both new and already-saved rows by URL.
+            const orderedUrls = images?.items ? orderedImageUrls(images.items, urlByFile) : [];
+            if (orderedUrls.length > 1) {
+              await reorderImages
+                .mutateAsync({ quoteId, imageUrls: orderedUrls })
+                .catch(() => {
+                  toast({
+                    title: "Image order not saved",
+                    description: "Your other changes were saved.",
+                    variant: "destructive",
+                  });
+                });
+            }
             toast({
               title: "Quote updated",
               description: "Changes saved successfully.",

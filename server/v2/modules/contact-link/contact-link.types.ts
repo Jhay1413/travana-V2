@@ -8,6 +8,13 @@ export interface ContactLinkStatus {
   suggestions: NeonClient[];
 }
 
+// The reverse view: which SendSeven contact (if any) a CRM client is linked to.
+export interface ClientContactLink {
+  clientId: string;
+  contactId: string | null;
+  linkedAt: string | null;
+}
+
 // Payload to create a brand-new client from an unmatched SendSeven contact.
 export interface CreateClientFromContactInput {
   title?: string | null;

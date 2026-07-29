@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { FormImageItem } from "@/features/quote/lib/form-images";
 
 export const flightLegSchema = z.object({
   departAirportId: z.string().default(""),
@@ -275,7 +276,7 @@ export interface BookingRHFFormProps {
   defaultValues?: Partial<BookingFormValues>;
   onSubmit: (
     values: BookingFormValues,
-    images?: { files: File[]; urls: string[]; deletedImageIds: string[] }
+    images?: { files: File[]; urls: string[]; deletedImageIds: string[]; items?: FormImageItem[] }
   ) => Promise<void> | void;
   isLoading?: boolean;
   submitLabel?: string;

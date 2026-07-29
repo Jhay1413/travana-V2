@@ -14,8 +14,14 @@ export default function PortalQuoteViewPage() {
 
   // Ownership guard — a logged-in client may only view their own quote.
   const ownershipQ = usePortalQuoteOwnership(isAuthed ? token : "");
-  const ownsQuote = isAuthed && ownershipQ.data?.found === true && ownershipQ.data.owns === true;
-  const notOwned = isAuthed && ownershipQ.data?.found === true && ownershipQ.data.owns === false;
+  // A portal deal is a free quote published to the portal: nobody owns it, so it
+  // is viewable by any signed-in client. Treated as viewable here, otherwise the
+  // ownership guard below bounces every "View Deal" click to the quotes list.
+  const isPublicDeal = ownershipQ.data?.isPublicDeal === true;
+  const ownsQuote =
+    isAuthed && ownershipQ.data?.found === true && (ownershipQ.data.owns === true || isPublicDeal);
+  const notOwned =
+    isAuthed && ownershipQ.data?.found === true && ownershipQ.data.owns === false && !isPublicDeal;
   const notFound = isAuthed && ownershipQ.data?.found === false;
 
   // The quote payload is only fetched once ownership is confirmed.

@@ -18,6 +18,11 @@ import { useRoles } from "@/hooks/use-role";
 import { useCurrentUser, useUnreadNotifications, useCurrentOrganization } from "@/hooks/queries";
 import { getNavForRoles, isNavItem, type NavBadgeKey, type NavItem, type NavSection } from "@/config/nav";
 import { useTicketsByUser } from "@/features/tickets";
+// Imported from the module rather than the feature barrel on purpose: the
+// barrel re-exports ConversationsInbox, and since the sidebar lives in the main
+// bundle (not a lazy route) that pulled the whole inbox in with it — +221KB on
+// the entry chunk, measured. Keep this deep import.
+import { useConversationBadgeCounts, unreadBadgeCount } from "@/features/conversations/api/use-conversations-queries";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { Sheet, SheetPortal, SheetTrigger } from "@/components/ui/sheet";
 
@@ -361,9 +366,15 @@ function SidenavInner({
       return s !== "resolved" && s !== "closed";
     }).length;
   }, [assignedTickets, currentUser?.id]);
+  // Conversations awaiting a reply, shown as a badge on the "Conversations" nav
+  // item. Shares unreadBadgeCount with the inbox's own header badge so the two
+  // can never disagree.
+  const { data: conversationBadges } = useConversationBadgeCounts();
+  const conversationCount = unreadBadgeCount(conversationBadges);
+
   const badgeCounts = useMemo<Partial<Record<NavBadgeKey, number>>>(
-    () => ({ tickets: ticketCount }),
-    [ticketCount],
+    () => ({ tickets: ticketCount, conversations: conversationCount }),
+    [ticketCount, conversationCount],
   );
 
   const toggleSection = (id: string) => {
@@ -443,7 +454,7 @@ function SidenavInner({
                 <img
                   src={currentOrganization.logoUrl}
                   alt={currentOrganization.name || currentUser?.orgName || "Logo"}
-                  className="max-h-[82px] w-auto object-contain"
+                  className="h-9 w-auto max-w-full object-contain object-left"
                   data-testid="img-brand-logo"
                 />
               ) : (

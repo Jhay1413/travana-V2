@@ -24,7 +24,6 @@ import {
   MapPin,
   MessageCircle,
   MessageSquare,
-  Newspaper,
   Package,
   Plane,
   Settings2,
@@ -48,7 +47,7 @@ import type { OrgRole } from "@/types/auth/auth.types";
 
 // Keys for dynamic count badges rendered next to a nav item. The sidebar
 // resolves each key to a live count (see app-sidenav.tsx).
-export type NavBadgeKey = "tickets";
+export type NavBadgeKey = "tickets" | "conversations";
 
 export type NavItem = {
   path: string;
@@ -77,10 +76,9 @@ const AGENT_NAV: NavConfig = [
       { path: "/agent-overview", label: "Agent Dashboard", icon: LayoutGrid },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/social-posts", label: "Social Posts", icon: Share2 },
-      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
       { path: "/tickets", label: "Tickets", icon: LifeBuoy, badge: "tickets" },
-      { path: "/conversations", label: "Conversations", icon: Inbox },
+      { path: "/conversations", label: "Conversations", icon: Inbox, badge: "conversations" },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/opportunities", label: "Opportunities", icon: Target },
     ],
@@ -94,10 +92,9 @@ const BRANCH_MANAGER_NAV: NavConfig = [
       { path: "/branch-overview", label: "Dashboard", icon: LayoutGrid },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/tickets", label: "Tickets", icon: LifeBuoy, badge: "tickets" },
-      { path: "/conversations", label: "Conversations", icon: Inbox },
+      { path: "/conversations", label: "Conversations", icon: Inbox, badge: "conversations" },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/sms-center", label: "Text", icon: MessageCircle },
-      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
       { path: "/opportunities", label: "Opportunities", icon: Target },
       { path: "/branch/targets", label: "Targets", icon: Target },
@@ -179,7 +176,6 @@ const ORG_ADMIN_NAV: NavConfig = [
     id: "overview",
     items: [
       { path: "/agency/overview", label: "Admin Dashboard", icon: LayoutGrid },
-      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
     ],
   },
   {
@@ -239,7 +235,6 @@ const PLATFORM_ADMIN_NAV: NavConfig = [
     id: "main",
     items: [
       { path: "/platform-admin", label: "Dashboard", icon: LayoutGrid },
-      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/platform-admin/organizations", label: "All Agencies", icon: Building2 },
       { path: "/platform-admin/users", label: "All Users", icon: Users },
       { path: "/platform-admin/usage", label: "AI + Usage", icon: Gauge },
@@ -264,7 +259,6 @@ const SOCIAL_MEDIA_NAV: NavConfig = [
     items: [
       { path: "/agent-overview", label: "Dashboard", icon: LayoutGrid },
       { path: "/social-posts", label: "Social Posts", icon: Share2 },
-      { path: "/social-wall", label: "Social Wall", icon: Newspaper },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/my-profile", label: "My Profile", icon: UserCircle },
     ],

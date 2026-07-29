@@ -2,7 +2,7 @@ import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { contactLinkRepository } from "./contact-link.repository";
-import type { ContactLinkStatus, CreateClientFromContactInput } from "./contact-link.types";
+import type { ClientContactLink, ContactLinkStatus, CreateClientFromContactInput } from "./contact-link.types";
 import type { InsertClientTable, NeonClient } from "@shared/schema";
 
 // Business logic for linking a SendSeven contact to a CRM client. Owns the link
@@ -28,6 +28,19 @@ export const contactLinkService = {
 
     const suggestions = linkedClient ? [] : await neonClientService.findMatches(match, scope);
     return { contactId, linkedClient, suggestions };
+  },
+
+  // Reverse view for the client dashboard: the SendSeven contact this client is
+  // linked to, or a null contactId when the client has no inbox presence.
+  async getByClient(clientId: string, scope: Scope): Promise<ClientContactLink> {
+    // Scope-enforced existence check: out-of-scope client reads as 404.
+    await neonClientService.getNeonClientById(clientId, scope);
+    const row = await contactLinkRepository.findByClient(scope.orgId, clientId);
+    return {
+      clientId,
+      contactId: row?.sendsevenContactId ?? null,
+      linkedAt: row ? row.linkedAt.toISOString() : null,
+    };
   },
 
   async link(contactId: string, clientId: string, scope: Scope): Promise<NeonClient> {

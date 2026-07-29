@@ -8,6 +8,10 @@ export const getContactLinkValidator = z.object({
   }),
 });
 
+export const getClientContactLinkValidator = z.object({
+  params: z.object({ clientId: z.string().uuid() }),
+});
+
 export const linkContactValidator = z.object({
   params: z.object({ contactId: z.string().min(1) }),
   body: z.object({ clientId: z.string().uuid() }),

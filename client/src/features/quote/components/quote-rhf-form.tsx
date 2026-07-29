@@ -1,9 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
+import {
+  existingImageItem,
+  pendingFiles,
+  resolvedUrls,
+  urlImageItem,
+  type FormImageItem,
+} from "@/features/quote/lib/form-images";
 import { QuoteExtrasSection } from "@/features/quote/components/quote-extras-section";
 import { QuoteTestToggleSection } from "@/features/quote/components/sections/QuoteTestToggleSection";
 import { QuoteImportRow } from "@/features/quote/components/sections/QuoteImportRow";
@@ -45,10 +52,23 @@ export function QuoteRHFForm({
     defaultValues: { ...defaultQuoteFormValues, ...defaultValues },
   });
 
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
-  const [imageUrls, setImageUrls] = useState<string[]>(initialImageUrls);
+  // Saved images first, then anything pre-seeded from a JSON import. One
+  // ordered list — see features/quote/lib/form-images.
+  const [imageItems, setImageItems] = useState<FormImageItem[]>(() => [
+    ...existingImages.map((i) => existingImageItem(i.id, i.url)),
+    ...initialImageUrls.map(urlImageItem),
+  ]);
   const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
-  const [existingImagesState, setExistingImagesState] = useState<{ id: string; url: string }[]>(existingImages);
+
+  // The JSON importer replaces the imported-URL images wholesale; saved and
+  // picked-file entries keep their place in the order.
+  const setImageUrlsFromJson = useCallback((updater: (prev: string[]) => string[]) => {
+    setImageItems((prev) => {
+      const kept = prev.filter((i) => i.kind !== "url");
+      const nextUrls = updater(prev.flatMap((i) => (i.kind === "url" ? [i.url] : [])));
+      return [...kept, ...nextUrls.map(urlImageItem)];
+    });
+  }, []);
   const skipLodgeResetRef = useRef(false);
 
   const { setValue, control } = form;
@@ -173,9 +193,12 @@ export function QuoteRHFForm({
   // ── JSON upload ───────────────────────────────────────────────────────────
   const handleJsonUpload = (file: File) => {
     // Clear all existing images and stage them for deletion before importing new ones
-    setDeletedImageIds((prev) => [...prev, ...existingImagesState.map((i) => i.id)]);
-    setExistingImagesState([]);
-    setImageFiles([]);
+    setDeletedImageIds((prev) => [
+      ...prev,
+      ...imageItems.flatMap((i) => (i.kind === "existing" ? [i.id] : [])),
+    ]);
+    // Drop saved + picked-file entries; the importer repopulates the URL ones.
+    setImageItems((prev) => prev.filter((i) => i.kind === "url"));
 
     handleJsonUploadUtil(file, {
       form,
@@ -184,7 +207,7 @@ export function QuoteRHFForm({
       queryClient,
       lookupKeys,
       toast,
-      setImageUrls,
+      setImageUrls: setImageUrlsFromJson,
       skipLodgeResetRef,
       fallbackFieldMapper: (data, setIfPresent) => {
         setIfPresent("quoteLink", data.quoteLink || data.quote_link || data.link);
@@ -195,7 +218,12 @@ export function QuoteRHFForm({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((values) => onSubmit(values, { files: imageFiles, urls: imageUrls, deletedImageIds }))} className="space-y-4">
+      <form onSubmit={form.handleSubmit((values) => onSubmit(values, {
+        files: pendingFiles(imageItems),
+        urls: resolvedUrls(imageItems),
+        deletedImageIds,
+        items: imageItems,
+      }))} className="space-y-4">
 
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
         <QuoteImportRow onJsonUpload={handleJsonUpload} />
@@ -205,12 +233,8 @@ export function QuoteRHFForm({
 
         {/* ── QUOTE IMAGES ─────────────────────────────────────────────────── */}
         <QuoteImagesSection
-          imageFiles={imageFiles}
-          setImageFiles={setImageFiles}
-          imageUrls={imageUrls}
-          setImageUrls={setImageUrls}
-          existingImagesState={existingImagesState}
-          setExistingImagesState={setExistingImagesState}
+          items={imageItems}
+          setItems={setImageItems}
           setDeletedImageIds={setDeletedImageIds}
         />
 

@@ -3,7 +3,7 @@ import multer from "multer";
 import { quoteController } from "./quote.controller";
 import { quoteImageController } from "./quote-image.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { addImagesValidator, presignQuoteImagesValidator } from "./quote.validator";
+import { addImagesValidator, reorderImagesValidator, presignQuoteImagesValidator } from "./quote.validator";
 import { requireOrgRole } from "../../middlewares/auth/require-org-role";
 
 const router = Router();
@@ -54,6 +54,7 @@ router.post("/:quoteId/images/upload", upload.array("images", 50), quoteImageCon
 router.post("/:quoteId/images", validate(addImagesValidator), quoteImageController.addImages);
 router.get("/:quoteId/images", quoteImageController.getImages);
 router.delete("/:quoteId/images/:imageId", quoteImageController.deleteImage);
+router.patch("/:quoteId/images/order", validate(reorderImagesValidator), quoteImageController.reorderImages);
 router.patch("/:quoteId/images/:imageId/primary", quoteImageController.setPrimaryImage);
 
 router.put("/:id/tags", quoteController.updateQuoteTags);

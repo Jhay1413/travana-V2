@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ImagePlus, Loader2, Star, Trash2 } from "lucide-react";
+import { ArrowUpDown, ImagePlus, Loader2, Star, Trash2 } from "lucide-react";
+import { ImageReorderDialog } from "@/components/shared/image-reorder-dialog";
 import type { QuoteImage } from "@/features/quote/components/hooks";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 
@@ -16,6 +17,8 @@ interface QuoteMediaPanelProps {
   deleteImage: (imageId: string) => void;
   uploadFiles: (files: File[]) => void;
   openFilePicker: () => void;
+  reorderImages: (imageIds: string[]) => void;
+  isReordering?: boolean;
 }
 
 export function QuoteMediaPanel({
@@ -27,6 +30,8 @@ export function QuoteMediaPanel({
   deleteImage,
   uploadFiles,
   openFilePicker,
+  reorderImages,
+  isReordering = false,
 }: QuoteMediaPanelProps) {
   // Lightbox scrolls through ALL images, ordered with the primary first. Only
   // quote-owned images can be promoted to primary (mirrors the thumbnail logic).
@@ -45,6 +50,7 @@ export function QuoteMediaPanel({
     [allImages],
   );
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [arrangeOpen, setArrangeOpen] = useState(false);
 
   const shownThumbs = galleryImages.slice(0, MAX_GALLERY_THUMBS);
   const extraCount = galleryImages.length - shownThumbs.length;
@@ -175,6 +181,33 @@ export function QuoteMediaPanel({
           </>
         )}
       </button>
+
+      {allImages.length > 1 && (
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-black/10 bg-white/70 py-2 text-[10px] font-semibold text-black/60 transition hover:bg-black/[0.03] hover:text-black/80"
+          data-testid="button-arrange-images"
+          onClick={() => setArrangeOpen(true)}
+        >
+          <ArrowUpDown className="h-3 w-3" /> Arrange
+        </button>
+      )}
+
+      <ImageReorderDialog
+        open={arrangeOpen}
+        onOpenChange={setArrangeOpen}
+        images={allImages}
+        ownedType="quote"
+        isSaving={isReordering}
+        onAddFiles={uploadFiles}
+        isUploading={isUploading}
+        onSetPrimary={setPrimary}
+        onDelete={deleteImage}
+        onSave={(imageIds) => {
+          reorderImages(imageIds);
+          setArrangeOpen(false);
+        }}
+      />
 
       <ImageLightbox
         images={lightboxImages}

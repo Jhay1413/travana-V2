@@ -23,6 +23,25 @@ export {
   useTestConversationIntegration,
 } from "./api/use-conversation-integration";
 export type { IntegrationStatus, IntegrationSummary } from "./api/conversation-integration.api";
+export { contactLinkApi } from "./api/contact-link.api";
+export type { ClientContactLink, ContactLinkStatus } from "./api/contact-link.api";
+export {
+  contactLinkKeys,
+  useContactLink,
+  useClientContactLink,
+  useLinkContact,
+  useCreateAndLinkContact,
+  useUnlinkContact,
+} from "./api/use-contact-link";
+export {
+  AttachmentView,
+  DayDivider,
+  MessageBubble,
+  clockTime,
+  dayLabel,
+  groupMessagesByDay,
+} from "./components/message-thread";
+export type { MessageDayGroup } from "./components/message-thread";
 export { toUiConversation, toUiChannel, toUiMessage } from "./map";
 export { conversationsApi } from "./api/conversations.api";
 export { messagesApi } from "./api/messages.api";
@@ -47,8 +66,13 @@ export {
   useTranscriptStatus,
   useTrendingTags,
   useConversationAiState,
+  unreadBadgeCount,
 } from "./api/use-conversations-queries";
 export { useConversationsRealtime } from "./api/use-conversations-realtime";
+export {
+  ConversationsRealtimeProvider,
+  useConversationsRealtimeState,
+} from "./components/conversations-realtime-provider";
 export {
   useCreateConversation,
   useUpdateConversation,

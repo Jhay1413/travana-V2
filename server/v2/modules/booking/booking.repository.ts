@@ -14,7 +14,7 @@ import type {
   InsertBookingAirportParking, InsertBookingCruise, InsertBookingCruiseItemExtra,
   InsertBookingCruiseItinerary,
 } from "@shared/schema";
-import { eq, desc, sql, and, inArray, ilike } from "drizzle-orm";
+import { eq, asc, desc, sql, and, inArray, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
@@ -148,35 +148,11 @@ export const bookingRepository = {
     const bookingIds = bookings.map(b => b.id);
     const lodgeIds = bookings.map(b => b.lodge_id).filter((id): id is string => id !== null);
 
-    const [dealImgs, bookingImgs, accommodationImgs, lodgeImgs] = await Promise.all([
+    const [dealImgs, bookingImgs] = await Promise.all([
       db.select().from(deal_images).where(inArray(deal_images.owner_id, bookingIds)),
 
-      db.select().from(bookingImages).where(inArray(bookingImages.bookingId, bookingIds)),
+      db.select().from(bookingImages).where(inArray(bookingImages.bookingId, bookingIds)).orderBy(asc(bookingImages.position), asc(bookingImages.id)),
 
-      db.select({
-        booking_id: booking_accomodation.booking_id,
-        id: accommodation_images.id,
-        accommodation_id: accommodation_images.accommodation_id,
-        image_url: accommodation_images.image_url,
-        isPrimary: accommodation_images.isPrimary,
-      })
-        .from(accommodation_images)
-        .innerJoin(
-          booking_accomodation,
-          and(
-            eq(booking_accomodation.accomodation_id, accommodation_images.accommodation_id),
-            inArray(booking_accomodation.booking_id, bookingIds)
-          )
-        ),
-
-      lodgeIds.length > 0
-        ? db.select({
-            id: lodge_images.id,
-            lodge_id: lodge_images.lodge_id,
-            image_url: lodge_images.image_url,
-            isPrimary: lodge_images.isPrimary,
-          }).from(lodge_images).where(inArray(lodge_images.lodge_id, lodgeIds))
-        : Promise.resolve([]),
     ]);
 
     const dealImgsByBookingId = new Map<string, typeof dealImgs>();
@@ -194,26 +170,13 @@ export const bookingRepository = {
       bookingImgsByBookingId.set(img.bookingId, list);
     }
 
-    const accomImgsByBookingId = new Map<string, (typeof accommodationImgs)[number][]>();
-    for (const img of accommodationImgs) {
-      if (!img.booking_id) continue;
-      const list = accomImgsByBookingId.get(img.booking_id) ?? [];
-      list.push(img);
-      accomImgsByBookingId.set(img.booking_id, list);
-    }
-
-    const lodgeImgsByLodgeId = new Map<string, (typeof lodgeImgs)[number][]>();
-    for (const img of lodgeImgs) {
-      const list = lodgeImgsByLodgeId.get(img.lodge_id) ?? [];
-      list.push(img);
-      lodgeImgsByLodgeId.set(img.lodge_id, list);
-    }
-
     return bookings.map(b => {
       const seen = new Set<string>();
       const images: { id: string; image_url: string | null; isPrimary: boolean | null; owner_id: string; s3Key: string | null }[] = [];
 
-      // Prefer the booking's own images; fall back to legacy deal_images only when none exist.
+      // Only the booking's own images — the shared accommodation/lodge
+      // libraries are no longer merged in. deal_images stays as this
+      // booking's own legacy storage.
       const ownBookingImgs = (bookingImgsByBookingId.get(b.id) ?? []).map(img => ({
         id: img.id, image_url: img.url, isPrimary: img.isPrimary, owner_id: b.id, s3Key: null,
       }));
@@ -222,17 +185,6 @@ export const bookingRepository = {
         const url = img.image_url || '';
         if (url && !seen.has(url)) { seen.add(url); images.push(img); }
       }
-      for (const img of accomImgsByBookingId.get(b.id) ?? []) {
-        const url = img.image_url || '';
-        if (url && !seen.has(url)) { seen.add(url); images.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.accommodation_id, s3Key: null }); }
-      }
-      if (b.lodge_id) {
-        for (const img of lodgeImgsByLodgeId.get(b.lodge_id) ?? []) {
-          const url = img.image_url || '';
-          if (url && !seen.has(url)) { seen.add(url); images.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.lodge_id, s3Key: null }); }
-        }
-      }
-
       return { ...b, images };
     });
   },
@@ -272,7 +224,7 @@ export const bookingRepository = {
     const bookingTransactionId = b.booking.transaction_id;
     const bookingLodgeId = b.booking.lodge_id;
 
-    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, bookingImgs, referralRows, accommodationImgs, lodgeImgs, upsellRows] = await Promise.all([
+    const [flights, accommodations, transfers, carHires, attractionTickets, loungePasses, airportParkings, cruises, passengerList, images, bookingImgs, referralRows, upsellRows] = await Promise.all([
       db.select({
         flight: booking_flights,
         departing_airport_name: sql<string>`concat(${departAirport.airport_name}, ' (', ${departAirport.airport_code}, ')')`,
@@ -362,35 +314,9 @@ export const bookingRepository = {
 
       db.select().from(passengers).where(eq(passengers.booking_id, id)),
       db.select().from(deal_images).where(eq(deal_images.owner_id, id)),
-      db.select().from(bookingImages).where(eq(bookingImages.bookingId, id)),
+      db.select().from(bookingImages).where(eq(bookingImages.bookingId, id)).orderBy(asc(bookingImages.position), asc(bookingImages.id)),
       bookingTransactionId
         ? db.select({ id: referral.id }).from(referral).where(eq(referral.transactionId, bookingTransactionId)).limit(1)
-        : Promise.resolve([]),
-
-      // Fetch accommodation images through booking_accomodation junction
-      db.select({
-        id: accommodation_images.id,
-        accommodation_id: accommodation_images.accommodation_id,
-        image_url: accommodation_images.image_url,
-        isPrimary: accommodation_images.isPrimary,
-      })
-        .from(accommodation_images)
-        .innerJoin(
-          booking_accomodation,
-          and(
-            eq(booking_accomodation.accomodation_id, accommodation_images.accommodation_id),
-            eq(booking_accomodation.booking_id, id)
-          )
-        ),
-
-      // Fetch lodge images if booking has a lodge
-      bookingLodgeId
-        ? db.select({
-            id: lodge_images.id,
-            lodge_id: lodge_images.lodge_id,
-            image_url: lodge_images.image_url,
-            isPrimary: lodge_images.isPrimary,
-          }).from(lodge_images).where(eq(lodge_images.lodge_id, bookingLodgeId))
         : Promise.resolve([]),
 
       // Active upsells (extra line items added post-creation), newest first.
@@ -459,24 +385,18 @@ export const bookingRepository = {
       upsells: upsellRows,
       passengers: passengerList,
       hasReferral: referralRows.length > 0,
+      // Only the booking's OWN images — see the equivalent comment in
+      // quote.repository. Shared accommodation/lodge library photos are still
+      // written on create but no longer read back into the gallery.
       images: (() => {
         const seen = new Set<string>();
         const result: any[] = [];
-        // Prefer the booking's own images; fall back to legacy deal_images only when none exist.
         const ownImgs = bookingImgs.length > 0
-          ? bookingImgs.map(img => ({ id: img.id, image_url: img.url, isPrimary: img.isPrimary, owner_id: id, s3Key: null }))
-          : images;
+          ? bookingImgs.map(img => ({ id: img.id, image_url: img.url, isPrimary: img.isPrimary, owner_id: id, owner_type: 'booking', s3Key: null }))
+          : images.map((img: any) => ({ ...img, owner_type: 'booking' }));
         for (const img of ownImgs) {
           const url = img.image_url || '';
           if (url && !seen.has(url)) { seen.add(url); result.push(img); }
-        }
-        for (const img of accommodationImgs) {
-          const url = img.image_url || '';
-          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.accommodation_id, s3Key: null }); }
-        }
-        for (const img of (lodgeImgs as Array<{ id: string; lodge_id: string; image_url: string; isPrimary: boolean | null }>)) {
-          const url = img.image_url || '';
-          if (url && !seen.has(url)) { seen.add(url); result.push({ id: img.id, image_url: url, isPrimary: img.isPrimary, owner_id: img.lodge_id, s3Key: null }); }
         }
         return result;
       })(),

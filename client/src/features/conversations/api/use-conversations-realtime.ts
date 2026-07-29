@@ -49,30 +49,55 @@ function parsePayload(raw: string): RealtimeEventPayload | null {
   }
 }
 
-// Opens ONE shared EventSource for the whole inbox and maps the server's thin
-// SSE events to targeted TanStack Query invalidations. Mount once at the top
-// of the conversations inbox (see docs/realtime-inbox-sse-plan.md, Phase 3).
-export function useConversationsRealtime() {
+export interface ConversationsRealtimeOptions {
+  /**
+   * Fired once per debounce window with the conversations that received INBOUND
+   * messages (never the ones we sent ourselves). Coalesced deliberately: a burst
+   * of ten messages produces one call with the affected ids, not ten calls.
+   */
+  onMessagesReceived?: (conversationIds: string[]) => void;
+}
+
+// Opens ONE shared EventSource and maps the server's thin SSE events to
+// targeted TanStack Query invalidations (see docs/realtime-inbox-sse-plan.md,
+// Phase 3). Mount exactly once per app — ConversationsRealtimeProvider does
+// this at the layout root; other components read the state from that context
+// rather than calling this hook again, which would open a second stream.
+export function useConversationsRealtime(options: ConversationsRealtimeOptions = {}) {
   const qc = useQueryClient();
   const [connected, setConnected] = useState(false);
 
   const pendingConversationIds = useRef<Set<string>>(new Set());
+  // Tracked apart from `pendingConversationIds` so the notify callback only
+  // hears about inbound traffic — invalidation still needs both directions.
+  const receivedConversationIds = useRef<Set<string>>(new Set());
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Held in a ref so a caller passing an inline arrow doesn't re-run the effect
+  // that owns the EventSource on every render.
+  const onMessagesReceivedRef = useRef(options.onMessagesReceived);
+  useEffect(() => {
+    onMessagesReceivedRef.current = options.onMessagesReceived;
+  }, [options.onMessagesReceived]);
 
   const flushMessageInvalidations = useCallback(() => {
     debounceTimer.current = null;
     const ids = pendingConversationIds.current;
     pendingConversationIds.current = new Set();
+    const received = receivedConversationIds.current;
+    receivedConversationIds.current = new Set();
     for (const conversationId of ids) {
       qc.invalidateQueries({ queryKey: messagesKeys.list(conversationId) });
     }
     // A new message changes last_message / preview / ordering / badges.
     qc.invalidateQueries({ queryKey: conversationsKeys.all });
+    if (received.size > 0) onMessagesReceivedRef.current?.(Array.from(received));
   }, [qc]);
 
   const scheduleMessageInvalidation = useCallback(
-    (conversationId: string) => {
+    (conversationId: string, direction: "received" | "sent") => {
       pendingConversationIds.current.add(conversationId);
+      if (direction === "received") receivedConversationIds.current.add(conversationId);
       if (debounceTimer.current) return;
       debounceTimer.current = setTimeout(flushMessageInvalidations, MESSAGE_DEBOUNCE_MS);
     },
@@ -104,11 +129,11 @@ export function useConversationsRealtime() {
 
       source.addEventListener("message.received", (raw: MessageEvent) => {
         const payload = parsePayload(raw.data);
-        if (payload) scheduleMessageInvalidation(payload.conversationId);
+        if (payload) scheduleMessageInvalidation(payload.conversationId, "received");
       });
       source.addEventListener("message.sent", (raw: MessageEvent) => {
         const payload = parsePayload(raw.data);
-        if (payload) scheduleMessageInvalidation(payload.conversationId);
+        if (payload) scheduleMessageInvalidation(payload.conversationId, "sent");
       });
       source.addEventListener("conversation.updated", (raw: MessageEvent) => {
         const payload = parsePayload(raw.data);

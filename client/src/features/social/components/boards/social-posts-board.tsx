@@ -37,11 +37,26 @@ import {
   Tag,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { EnrichedQuote } from "@/features/quote/types";
+import type { EnrichedQuote, PortalStatus } from "@/features/quote/types";
+import { PORTAL_ACTIVE_WINDOW_DAYS } from "@/features/quote/types";
 import type { TravelDeal } from "@/features/social/api/social-post.api";
 
 type ViewMode = "scheduled" | "all" | "portal" | "unscheduled";
 type ScheduleFilter = "none" | "today" | "tomorrow" | "this-week" | "next-week" | "next-month" | "specific-date";
+
+/** Whole days a portal post has been live, or null when it was never stamped. */
+function portalAgeDays(portalAddedAt: string | null | undefined): number | null {
+  if (!portalAddedAt) return null;
+  const added = new Date(portalAddedAt).getTime();
+  if (Number.isNaN(added)) return null;
+  return (Date.now() - added) / 86400000;
+}
+
+/** Mirrors the server filter: an unstamped post can't be inside the window, so it reads as expired. */
+function isPortalPostExpired(portalAddedAt: string | null | undefined): boolean {
+  const age = portalAgeDays(portalAddedAt);
+  return age === null || age >= PORTAL_ACTIVE_WINDOW_DAYS;
+}
 
 interface SocialPost {
   quote: EnrichedQuote;
@@ -139,7 +154,7 @@ function DetailRow({ icon: Icon, label, value, testId }: { icon: typeof Hotel; l
 }
 
 
-function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPortalToggle, onPushNotify, onFeaturedToggle }: { post: SocialPost; onGeneratePost: (quote: EnrichedQuote) => void; onViewPost: (quote: EnrichedQuote) => void; isGenerating: boolean; onPortalToggle: (quoteId: string, checked: boolean) => void; onPushNotify: (quoteId: string) => void; onFeaturedToggle: (quoteId: string, checked: boolean) => void; }) {
+function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPortalToggle, onPushNotify, onFeaturedToggle, showPortalStatus = false }: { post: SocialPost; onGeneratePost: (quote: EnrichedQuote) => void; onViewPost: (quote: EnrichedQuote) => void; isGenerating: boolean; onPortalToggle: (quoteId: string, checked: boolean) => void; onPushNotify: (quoteId: string) => void; onFeaturedToggle: (quoteId: string, checked: boolean) => void; showPortalStatus?: boolean; }) {
   const { quote } = post;
   const imageUrl = getFirstImage(quote);
   const cruise = getCruise(quote);
@@ -153,6 +168,10 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
   const [featuredChecked, setFeaturedChecked] = useState(!!quote.is_featured);
   const [pushSending, setPushSending] = useState(false);
 
+  const portalExpired = isPortalPostExpired(quote.portal_added_at);
+  const portalAge = portalAgeDays(quote.portal_added_at);
+  const portalDaysLeft = portalAge === null ? null : Math.max(0, Math.ceil(PORTAL_ACTIVE_WINDOW_DAYS - portalAge));
+
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="glass ringed grain rounded-2xl overflow-hidden flex flex-col" data-testid={`card-social-post-${quote.id}`}>
       <div className="relative h-52 bg-gradient-to-br from-blue-100 to-blue-50 dark:from-blue-950 dark:to-slate-900 overflow-hidden">
@@ -165,6 +184,17 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
         {isScheduled && (
           <Badge className="absolute top-3 right-3 bg-green-500 text-white border-0 shadow-lg text-xs font-semibold px-3 py-1 rounded-full">
             <Clock className="w-3 h-3 mr-1 inline" />Scheduled
+          </Badge>
+        )}
+        {showPortalStatus && (
+          <Badge
+            className={`absolute bottom-3 left-3 border-0 shadow-lg text-xs font-semibold px-3 py-1 rounded-full text-white ${portalExpired ? "bg-red-500" : "bg-emerald-500"}`}
+            data-testid={`badge-portal-status-${quote.id}`}
+          >
+            <Globe className="w-3 h-3 mr-1 inline" />
+            {portalExpired
+              ? "Expired"
+              : `Active${portalDaysLeft !== null ? ` · ${portalDaysLeft}d left` : ""}`}
           </Badge>
         )}
       </div>
@@ -266,6 +296,7 @@ export default function SocialPostsBoard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("scheduled");
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("none");
+  const [portalStatus, setPortalStatus] = useState<PortalStatus>("all");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
@@ -281,6 +312,8 @@ export default function SocialPostsBoard() {
   }, [searchQuery]);
 
   const activeFilter = viewMode === "scheduled" ? scheduleFilter : "none";
+  // The expired/active split only applies to portal posts — every other view sends "all".
+  const activePortalStatus: PortalStatus = viewMode === "portal" ? portalStatus : "all";
 
   function computeDayRange(offsetDays: number): { rangeStart: string; rangeEnd: string } {
     const d = new Date();
@@ -313,7 +346,7 @@ export default function SocialPostsBoard() {
     if (r) { rangeStart = r.rangeStart; rangeEnd = r.rangeEnd; }
   }
 
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, rangeStart, rangeEnd, viewMode === "unscheduled", viewMode === "portal");
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, rangeStart, rangeEnd, viewMode === "unscheduled", viewMode === "portal", activePortalStatus);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Portal filtering is now server-side (showOnPortal param) so it covers the
@@ -423,6 +456,19 @@ export default function SocialPostsBoard() {
     }
   }
 
+  // Switching top-level view drops any sub-filters that don't apply to it.
+  function selectViewMode(mode: ViewMode) {
+    setViewMode(mode);
+    setScheduleFilter("none");
+    if (mode !== "portal") setPortalStatus("all");
+  }
+
+  const portalStatusButtons: { label: string; value: PortalStatus }[] = [
+    { label: "All Portal Posts", value: "all" },
+    { label: "Active", value: "active" },
+    { label: "Expired", value: "expired" },
+  ];
+
   const scheduleFilterButtons: { label: string; value: ScheduleFilter }[] = [
     { label: "All Scheduled", value: "none" },
     { label: "Today", value: "today" },
@@ -446,7 +492,7 @@ export default function SocialPostsBoard() {
               size="sm"
               variant={viewMode === "scheduled" ? "default" : "outline"}
               className={`rounded-xl text-xs font-medium ${viewMode === "scheduled" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => { setViewMode("scheduled"); setScheduleFilter("none"); }}
+              onClick={() => selectViewMode("scheduled")}
               data-testid="button-view-scheduled"
             >
               <Clock className="w-3.5 h-3.5 mr-1" />Scheduled
@@ -455,7 +501,7 @@ export default function SocialPostsBoard() {
               size="sm"
               variant={viewMode === "all" ? "default" : "outline"}
               className={`rounded-xl text-xs font-medium ${viewMode === "all" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => { setViewMode("all"); setScheduleFilter("none"); }}
+              onClick={() => selectViewMode("all")}
               data-testid="button-view-all"
             >
               Show All
@@ -464,7 +510,7 @@ export default function SocialPostsBoard() {
               size="sm"
               variant={viewMode === "portal" ? "default" : "outline"}
               className={`rounded-xl text-xs font-medium ${viewMode === "portal" ? "bg-purple-500 hover:bg-purple-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => { setViewMode("portal"); setScheduleFilter("none"); }}
+              onClick={() => selectViewMode("portal")}
               data-testid="button-view-portal"
             >
               <Globe className="w-3.5 h-3.5 mr-1" />Portal Posts
@@ -473,7 +519,7 @@ export default function SocialPostsBoard() {
               size="sm"
               variant={viewMode === "unscheduled" ? "default" : "outline"}
               className={`rounded-xl text-xs font-medium ${viewMode === "unscheduled" ? "bg-amber-500 hover:bg-amber-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => { setViewMode("unscheduled"); setScheduleFilter("none"); }}
+              onClick={() => selectViewMode("unscheduled")}
               data-testid="button-view-unscheduled"
             >
               <CalendarClock className="w-3.5 h-3.5 mr-1" />Not Scheduled
@@ -525,6 +571,26 @@ export default function SocialPostsBoard() {
             )}
           </div>
         )}
+
+        {viewMode === "portal" && (
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {portalStatusButtons.map((btn) => (
+              <Button
+                key={btn.value}
+                size="sm"
+                variant={portalStatus === btn.value ? "default" : "outline"}
+                className={`rounded-xl text-xs font-medium ${portalStatus === btn.value ? "bg-purple-500 hover:bg-purple-600 text-white" : "border-black/10 dark:border-white/10"}`}
+                onClick={() => setPortalStatus(btn.value)}
+                data-testid={`button-portal-status-${btn.value}`}
+              >
+                {btn.label}
+              </Button>
+            ))}
+            <span className="text-xs text-black/45 dark:text-white/45">
+              Portal posts expire {PORTAL_ACTIVE_WINDOW_DAYS} days after they were added
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between">
@@ -540,13 +606,23 @@ export default function SocialPostsBoard() {
           <CalendarClock className="w-12 h-12 mx-auto text-black/20 dark:text-white/20 mb-3" />
           <p className="text-sm font-medium text-black/60 dark:text-white/60">No posts found</p>
           <p className="text-xs text-black/40 dark:text-white/40 mt-1">
-            {viewMode === "scheduled" ? "No scheduled posts match your filters" : viewMode === "portal" ? "No posts have been added to the portal yet" : viewMode === "unscheduled" ? "No unscheduled posts found" : "Try adjusting your search"}
+            {viewMode === "scheduled"
+              ? "No scheduled posts match your filters"
+              : viewMode === "portal"
+                ? portalStatus === "active"
+                  ? `No portal posts added in the last ${PORTAL_ACTIVE_WINDOW_DAYS} days`
+                  : portalStatus === "expired"
+                    ? `No portal posts older than ${PORTAL_ACTIVE_WINDOW_DAYS} days`
+                    : "No posts have been added to the portal yet"
+                : viewMode === "unscheduled"
+                  ? "No unscheduled posts found"
+                  : "Try adjusting your search"}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <AnimatePresence mode="popLayout">
-            {filteredPosts.map((post) => (<SocialPostCard key={post.quote.id} post={post} onGeneratePost={handleGeneratePost} onViewPost={handleViewPost} isGenerating={generatePost.isPending && previewQuoteId === post.quote.id} onPortalToggle={handlePortalToggle} onPushNotify={handlePushNotify} onFeaturedToggle={handleFeaturedToggle} />))}
+            {filteredPosts.map((post) => (<SocialPostCard key={post.quote.id} post={post} onGeneratePost={handleGeneratePost} onViewPost={handleViewPost} isGenerating={generatePost.isPending && previewQuoteId === post.quote.id} onPortalToggle={handlePortalToggle} onPushNotify={handlePushNotify} onFeaturedToggle={handleFeaturedToggle} showPortalStatus={viewMode === "portal"} />))}
           </AnimatePresence>
         </div>
       )}

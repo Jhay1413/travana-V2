@@ -58,4 +58,14 @@ export const bookingImageService = {
 
     return image;
   },
+
+  // `imageIds` is the full desired order — see quoteImageService.reorderImages.
+  // Accepts ids OR urls. The edit form arranges images before the new ones
+  // exist as rows, so it can only identify them by URL; the Arrange dialog
+  // works on saved rows and uses ids.
+  async reorderImages(bookingId: string, order: { imageIds?: string[]; imageUrls?: string[] }) {
+    if (order.imageUrls?.length) await bookingImageRepository.reorderByUrl(bookingId, order.imageUrls);
+    else if (order.imageIds?.length) await bookingImageRepository.reorder(bookingId, order.imageIds);
+    return bookingImageRepository.getByBookingId(bookingId);
+  },
 };

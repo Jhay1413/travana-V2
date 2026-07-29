@@ -41,6 +41,7 @@ import { ClientQuotesTab } from "@/features/client/components/tabs/ClientQuotesT
 import { ClientBookedTab } from "@/features/client/components/tabs/ClientBookedTab";
 import { ClientFilesTab } from "@/features/client/components/tabs/ClientFilesTab";
 import { ClientTicketsTab } from "@/features/client/components/tabs/ClientTicketsTab";
+import { ClientChatsTab } from "@/features/client/components/tabs/ClientChatsTab";
 import { ClientVipClubTab } from "@/features/client/components/tabs/ClientVipClubTab";
 import { ReferrerSelector } from "@/features/client/components/sections/ReferrerSelector";
 import { ClientProfileHeader } from "@/features/client/components/sections/ClientProfileHeader";
@@ -62,8 +63,8 @@ export default function ClientPage() {
 
   const { role } = useRole();
   const [q, setQ] = useState("");
-  type ClientTab = "overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "vip-club";
-  const validTabs: ClientTab[] = ["overview", "enquiries", "quotes", "booked", "files", "tickets", "vip-club"];
+  type ClientTab = "overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "chats" | "vip-club";
+  const validTabs: ClientTab[] = ["overview", "enquiries", "quotes", "booked", "files", "tickets", "chats", "vip-club"];
   const [tab, setTab] = useState<ClientTab>(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("tab") as ClientTab | null;
@@ -323,7 +324,7 @@ export default function ClientPage() {
 
             <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
               <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
-                <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 rounded-2xl border border-black/10 bg-white/70">
+                <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 rounded-2xl border border-black/10 bg-white/70">
                   <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-overview">
                     Overview
                   </TabsTrigger>
@@ -341,6 +342,9 @@ export default function ClientPage() {
                   </TabsTrigger>
                   <TabsTrigger value="tickets" className="rounded-xl" data-testid="tab-tickets">
                     Tickets
+                  </TabsTrigger>
+                  <TabsTrigger value="chats" className="rounded-xl" data-testid="tab-chats">
+                    Chats
                   </TabsTrigger>
                   <TabsTrigger value="vip-club" className="rounded-xl" data-testid="tab-vip-club">
                     VIP Club
@@ -425,6 +429,10 @@ export default function ClientPage() {
                     users={usersData ?? []}
                     onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
                   />
+                </TabsContent>
+
+                <TabsContent value="chats" className="mt-3">
+                  <ClientChatsTab clientId={clientId} />
                 </TabsContent>
 
                 <TabsContent value="vip-club" className="mt-3">

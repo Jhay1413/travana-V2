@@ -97,4 +97,16 @@ export const quoteImageService = {
 
     return image;
   },
+
+  // `imageIds` is the full desired order. Ids the quote doesn't own are ignored
+  // rather than rejected: the gallery merges in shared accommodation/lodge
+  // library images, which have no per-quote row and so can't be reordered.
+  // Accepts ids OR urls. The edit form arranges images before the new ones
+  // exist as rows, so it can only identify them by URL; the Arrange dialog
+  // works on saved rows and uses ids.
+  async reorderImages(quoteId: string, order: { imageIds?: string[]; imageUrls?: string[] }) {
+    if (order.imageUrls?.length) await quoteImageRepository.reorderByUrl(quoteId, order.imageUrls);
+    else if (order.imageIds?.length) await quoteImageRepository.reorder(quoteId, order.imageIds);
+    return quoteImageRepository.getByQuoteId(quoteId);
+  },
 };

@@ -44,3 +44,12 @@ export function useSetPrimaryQuoteImage() {
     onSuccess: () => invalidateQuoteImageRelated(queryClient),
   });
 }
+
+export function useReorderQuoteImages() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ quoteId, ...order }: { quoteId: string; imageIds?: string[]; imageUrls?: string[] }) =>
+      quoteApi.reorderImages(quoteId, order),
+    onSuccess: () => invalidateQuoteImageRelated(queryClient),
+  });
+}

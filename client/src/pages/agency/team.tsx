@@ -9,6 +9,7 @@ import {
 import { useCurrentUser } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
 import { PageLoading } from "@/features/organization/components/agency/PageLoading";
 import { StatCard } from "@/features/organization/components/agency/StatCard";
@@ -32,6 +33,7 @@ export default function AgencyTeamPage() {
   const allowed = isOrgAdmin || isBranchManager;
 
   const [filter, setFilter] = useState("");
+  const [tab, setTab] = useState<"active" | "suspended">("active");
 
   const list = members ?? [];
   const filtered = useMemo(() => {
@@ -43,6 +45,14 @@ export default function AgencyTeamPage() {
       m.branches.some((b) => b.branchName.toLowerCase().includes(q)),
     );
   }, [list, filter]);
+
+  // Suspended members get their own tab so they stop cluttering the working
+  // roster, while staying reachable for reactivation. The search box applies to
+  // whichever tab is open.
+  const activeMembers = useMemo(() => filtered.filter((m) => !isMemberSuspended(m)), [filtered]);
+  const suspendedMembers = useMemo(() => filtered.filter(isMemberSuspended), [filtered]);
+  const visibleMembers = tab === "active" ? activeMembers : suspendedMembers;
+  const suspendedTotal = useMemo(() => list.filter(isMemberSuspended).length, [list]);
 
   const activeCount = useMemo(() => list.filter((m) => !isMemberSuspended(m)).length, [list]);
   const seatLimit = org?.seatLimit ?? 0;
@@ -94,7 +104,7 @@ export default function AgencyTeamPage() {
         <StatCard
           icon={<PauseCircle className="h-4 w-4" />}
           label="Suspended"
-          value={String(list.filter(isMemberSuspended).length)}
+          value={String(suspendedTotal)}
         />
         <StatCard
           icon={<Shield className="h-4 w-4" />}
@@ -113,7 +123,29 @@ export default function AgencyTeamPage() {
       <PendingInvitesList />
 
       <div className="overflow-hidden rounded-3xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/5">
-        <div className="flex items-center justify-between gap-3 border-b border-black/5 px-4 py-3 dark:border-white/10">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/5 px-4 py-3 dark:border-white/10">
+          <div className="flex items-center gap-1 rounded-xl border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]">
+            {([
+              { key: "active" as const, label: "Active", count: activeMembers.length },
+              { key: "suspended" as const, label: "Suspended", count: suspendedMembers.length },
+            ]).map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                  tab === t.key
+                    ? "bg-white text-black shadow-sm dark:bg-white/15 dark:text-white"
+                    : "text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white",
+                )}
+                data-testid={`tab-team-${t.key}`}
+              >
+                {t.label}
+                <span className="ml-1.5 text-[11px] font-medium tabular-nums opacity-60">{t.count}</span>
+              </button>
+            ))}
+          </div>
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -121,14 +153,19 @@ export default function AgencyTeamPage() {
             className="max-w-xs"
             data-testid="input-team-filter"
           />
-          <span className="text-xs text-black/50 dark:text-white/50">{filtered.length} of {list.length}</span>
         </div>
 
         {isLoading ? (
           <PageLoading size="small" />
-        ) : filtered.length === 0 ? (
+        ) : visibleMembers.length === 0 ? (
           <div className="px-6 py-12 text-center text-sm text-black/50 dark:text-white/50">
-            No team members match.
+            {tab === "suspended"
+              ? filter.trim()
+                ? "No suspended members match."
+                : "No suspended members."
+              : filter.trim()
+                ? "No team members match."
+                : "No active team members."}
           </div>
         ) : (
           <table className="w-full text-sm">
@@ -142,7 +179,7 @@ export default function AgencyTeamPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m) => (
+              {visibleMembers.map((m) => (
                 <MemberRow
                   key={m.user.id}
                   member={m}

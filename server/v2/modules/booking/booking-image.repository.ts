@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { bookingImages, deal_images, accommodation_images, lodge_images } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export const bookingImageRepository = {
@@ -12,11 +12,19 @@ export const bookingImageRepository = {
 
     const hasPrimary = existing.length > 0;
 
+    // New images append to the end of the existing order.
+    const [{ maxPosition } = { maxPosition: null }] = await db
+      .select({ maxPosition: sql<number | null>`MAX(${bookingImages.position})` })
+      .from(bookingImages)
+      .where(eq(bookingImages.bookingId, bookingId));
+    const nextPosition = (maxPosition ?? -1) + 1;
+
     const imagesToInsert = imageUrls.map((url, index) => ({
       id: randomUUID(),
       bookingId,
       url,
       isPrimary: !hasPrimary && index === 0,
+      position: nextPosition + index,
     }));
 
     const insertedImages = await db
@@ -25,6 +33,23 @@ export const bookingImageRepository = {
       .returning();
 
     return insertedImages;
+  },
+
+  /**
+   * Apply a user-chosen order — see quoteImageRepository.reorder. Ids not
+   * belonging to this booking are ignored, since the merged gallery can hand
+   * back ids from the shared accommodation/lodge libraries.
+   */
+  async reorder(bookingId: string, imageIds: string[]): Promise<void> {
+    if (imageIds.length === 0) return;
+    await db.transaction(async (tx) => {
+      for (const [index, imageId] of imageIds.entries()) {
+        await tx
+          .update(bookingImages)
+          .set({ position: index })
+          .where(and(eq(bookingImages.id, imageId), eq(bookingImages.bookingId, bookingId)));
+      }
+    });
   },
 
   /**
@@ -43,9 +68,23 @@ export const bookingImageRepository = {
     const images = await db
       .select()
       .from(bookingImages)
-      .where(eq(bookingImages.bookingId, bookingId));
+      .where(eq(bookingImages.bookingId, bookingId))
+      .orderBy(asc(bookingImages.position), asc(bookingImages.id));
 
     return images;
+  },
+
+  /** Reorder by URL — see quoteImageRepository.reorderByUrl. */
+  async reorderByUrl(bookingId: string, imageUrls: string[]): Promise<void> {
+    if (imageUrls.length === 0) return;
+    await db.transaction(async (tx) => {
+      for (const [index, url] of imageUrls.entries()) {
+        await tx
+          .update(bookingImages)
+          .set({ position: index })
+          .where(and(eq(bookingImages.bookingId, bookingId), eq(bookingImages.url, url)));
+      }
+    });
   },
 
   /**

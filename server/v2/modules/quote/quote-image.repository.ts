@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { quoteImages, deal_images, accommodation_images, lodge_images } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export const quoteImageRepository = {
@@ -21,11 +21,21 @@ export const quoteImageRepository = {
 
       const hasPrimary = existing.length > 0;
 
+      // New images append to the end of the existing order. Read inside the
+      // same transaction as the insert so two concurrent adds can't both claim
+      // the same starting position.
+      const [{ maxPosition } = { maxPosition: null }] = await tx
+        .select({ maxPosition: sql<number | null>`MAX(${quoteImages.position})` })
+        .from(quoteImages)
+        .where(eq(quoteImages.quoteId, quoteId));
+      const nextPosition = (maxPosition ?? -1) + 1;
+
       const imagesToInsert = imageUrls.map((url, index) => ({
         id: randomUUID(),
         quoteId,
         url,
         isPrimary: !hasPrimary && index === 0,
+        position: nextPosition + index,
       }));
 
       const insertedImages = await tx
@@ -83,9 +93,51 @@ export const quoteImageRepository = {
     const images = await db
       .select()
       .from(quoteImages)
-      .where(eq(quoteImages.quoteId, quoteId));
+      .where(eq(quoteImages.quoteId, quoteId))
+      // `id` is a random UUID, so it's only a stable tiebreak, not an order —
+      // `position` is what actually carries the arrangement.
+      .orderBy(asc(quoteImages.position), asc(quoteImages.id));
 
     return images;
+  },
+
+  /**
+   * Apply a user-chosen order. `imageIds` is the full desired sequence; each row
+   * takes its index as its new position. Ids that don't belong to this quote are
+   * ignored — the merged gallery can hand back ids from the shared
+   * accommodation/lodge libraries, which have no per-quote row to reorder.
+   *
+   * Runs as one transaction so a partial write can't leave the gallery in a
+   * half-reordered state.
+   */
+  async reorder(quoteId: string, imageIds: string[]): Promise<void> {
+    if (imageIds.length === 0) return;
+    await db.transaction(async (tx) => {
+      for (const [index, imageId] of imageIds.entries()) {
+        await tx
+          .update(quoteImages)
+          .set({ position: index })
+          .where(and(eq(quoteImages.id, imageId), eq(quoteImages.quoteId, quoteId)));
+      }
+    });
+  },
+
+  /**
+   * Reorder by URL rather than id. The quote edit form knows the arrangement it
+   * wants before the new images exist as rows, so it has URLs but no ids —
+   * matching on URL lets one call set positions for both freshly-inserted and
+   * already-saved images. URLs not belonging to this quote simply match nothing.
+   */
+  async reorderByUrl(quoteId: string, imageUrls: string[]): Promise<void> {
+    if (imageUrls.length === 0) return;
+    await db.transaction(async (tx) => {
+      for (const [index, url] of imageUrls.entries()) {
+        await tx
+          .update(quoteImages)
+          .set({ position: index })
+          .where(and(eq(quoteImages.quoteId, quoteId), eq(quoteImages.url, url)));
+      }
+    });
   },
 
   /**

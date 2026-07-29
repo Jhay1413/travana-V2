@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { FormImageItem } from "@/features/quote/lib/form-images";
 
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
 
@@ -269,7 +270,7 @@ export const defaultQuoteFormValues: QuoteFormValues = {
 
 export interface QuoteRHFFormProps {
   defaultValues?: Partial<QuoteFormValues>;
-  onSubmit: (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[] }) => Promise<void> | void;
+  onSubmit: (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[]; items?: FormImageItem[] }) => Promise<void> | void;
   isLoading?: boolean;
   submitLabel?: string;
   onCancel?: () => void;
@@ -296,4 +297,12 @@ export interface QuoteCreateDialogProps {
   initialImages?: string[];
   socialPost?: boolean;
   markAsCopy?: boolean;
+  /**
+   * Id of the quote being copied. When set, the dialog submits through the
+   * server's duplicate endpoint instead of plain create, so the source's extras
+   * (transfers, car hires, attraction tickets, lounge passes, airport parking,
+   * additional accommodations) come across with their own cost/commission —
+   * the create path can't carry them, since the form never loads them.
+   */
+  duplicateFromQuoteId?: string;
 }

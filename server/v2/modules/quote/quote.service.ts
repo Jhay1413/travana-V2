@@ -24,6 +24,7 @@ import type {
   InsertQuoteAirportParking,
   InsertPassenger,
 } from "@shared/schema";
+import type { PortalStatus } from "./quote.types";
 
 type ScopeOrTrusted = Scope | { orgId: null };
 
@@ -319,8 +320,8 @@ export const newQuoteService = {
     return newQuoteRepository.findByStatus(status, scope);
   },
 
-  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false) {
-    return newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal);
+  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all") {
+    return newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus);
   },
 
   async getQuoteById(id: string, scope: ScopeOrTrusted) {
@@ -476,7 +477,9 @@ export const newQuoteService = {
       parent_quote_id: sourceQuoteId,
       quote_status: 'quoted',
       images: mergedImages,
-      tags: sourceDetails?.tags ?? [],
+      // Caller-supplied tags win, so a copy made through the quote dialog keeps
+      // whatever the user edited there; otherwise inherit the source's.
+      tags: data.tags ?? sourceDetails?.tags ?? [],
     };
 
     const newQuote = await newQuoteService.createQuote(payload, scope);

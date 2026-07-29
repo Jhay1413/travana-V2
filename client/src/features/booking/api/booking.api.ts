@@ -78,6 +78,17 @@ export const bookingApi = {
     return data;
   },
 
+  // `imageIds` is the full gallery in the desired order.
+  // Identify images by id (saved rows) or by url (the edit form, which arranges
+  // images before the new ones exist as rows).
+  reorderImages: async (
+    bookingId: string,
+    order: { imageIds?: string[]; imageUrls?: string[] },
+  ): Promise<any> => {
+    const { data } = await axiosClient.patch(`/api/v2/bookings/${bookingId}/images/order`, order);
+    return data;
+  },
+
   // ─── Upsells ────────────────────────────────────────────────────────────────
   // Extra line items added to a booking after creation. Commission is recognised
   // in the month the upsell was added (`added_at`), so they have their own

@@ -146,9 +146,15 @@ export function useSearchSimilarConversations() {
 }
 
 // Best-effort server-side clear of the unread flag when a conversation is
-// opened. SendSeven may not accept `needs_reply` on PATCH — the local `seenAt`
-// state in ConversationsInbox is the primary fix for the unread dot, so any
-// failure here is silently ignored.
+// opened, kept only in case the provider ever gains a write path.
+//
+// CONFIRMED INEFFECTIVE as of SendSeven's current API: `needs_reply` is derived
+// server-side from message direction and is documented only as a GET filter —
+// there is no mark-as-read endpoint or read/seen state for conversations. So a
+// conversation stays "unanswered" until someone actually replies, and no badge
+// count will move on open. The local `seenAt` state in ConversationsInbox is
+// what clears the unread dot; failures here stay silent because the call is
+// expected not to take effect.
 export function useMarkConversationRead() {
   const qc = useQueryClient();
   return useMutation({
