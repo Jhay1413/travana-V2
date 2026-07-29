@@ -7,8 +7,6 @@ import {
   UserPlus,
   MessageSquare,
   Tag,
-  StickyNote,
-  Contact,
   X as XIcon,
   RefreshCw,
   Paperclip,
@@ -27,6 +25,8 @@ import {
   Lock,
   Inbox,
   Loader2,
+  AlarmClock,
+  AlarmClockOff,
   AlertCircle,
   RadioTower,
   Check,
@@ -65,12 +65,18 @@ import { useContactLink } from "../api/use-contact-link";
 import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
 import { useConversations, useConversationBadgeCounts, unreadBadgeCount } from "../api/use-conversations-queries";
-import { useCloseConversation, useReopenConversation, useMarkConversationRead } from "../api/use-conversations-mutations";
+import {
+  useCloseConversation,
+  useReopenConversation,
+  useMarkConversationRead,
+  useSnoozeConversation,
+  useUnsnoozeConversation,
+} from "../api/use-conversations-mutations";
 import { useMessages, useSendMessage, useCreateInternalNote } from "../api/use-messages";
 import { useConversationsRealtimeState } from "./conversations-realtime-provider";
 import { useInboxes } from "../api/use-inboxes";
 import type { SsInbox } from "../api/inboxes.api";
-import type { Conversation, ConversationMessage, ConversationStatus, ConversationTag } from "../types";
+import type { Conversation, ConversationMessage, ConversationStatus, ConversationTag, InboxTab } from "../types";
 
 // ─── Avatar with channel badge ────────────────────────────────────────────────
 
@@ -434,10 +440,10 @@ const PAGE_SIZE = 25;
 // Client-side overlay for the interactions the messages/send endpoints don't
 // cover yet (list-only scope): locally-sent replies and open/close toggles.
 // Keyed by conversation id; merged onto the server data below.
-type Overlay = Record<string, { extraMessages: ConversationMessage[]; status?: ConversationStatus }>;
+type Overlay = Record<string, { extraMessages: ConversationMessage[]; status?: ConversationStatus; snoozed?: boolean }>;
 
 export default function ConversationsInbox() {
-  const [tab, setTab] = useState<ConversationStatus>("open");
+  const [tab, setTab] = useState<InboxTab>("open");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -478,6 +484,8 @@ export default function ConversationsInbox() {
   const unreadCount = unreadBadgeCount(badges);
   const closeMutation = useCloseConversation();
   const reopenMutation = useReopenConversation();
+  const snoozeMutation = useSnoozeConversation();
+  const unsnoozeMutation = useUnsnoozeConversation();
   const markReadMutation = useMarkConversationRead();
 
   const pagination = data?.pagination;
@@ -500,6 +508,7 @@ export default function ConversationsInbox() {
             preview: o.extraMessages.length > 0 ? o.extraMessages[o.extraMessages.length - 1].body : c.preview,
             lastActivityAt: o.extraMessages.length > 0 ? o.extraMessages[o.extraMessages.length - 1].sentAt : c.lastActivityAt,
             unread: o.extraMessages.length > 0 ? false : c.unread,
+            snoozed: o.snoozed ?? c.snoozed,
           }
         : c;
       // A conversation only renders as unread if it hasn't been seen since its
@@ -516,7 +525,15 @@ export default function ConversationsInbox() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return conversations
-      .filter((c) => c.status === tab)
+      // The server already filters by tab; this mirrors it so optimistic local
+      // changes (close/snooze) move a row out of the list immediately.
+      .filter((c) =>
+        tab === "snoozed"
+          ? c.snoozed
+          : tab === "closed"
+            ? c.status === "closed"
+            : c.status === "open" && !c.snoozed,
+      )
       .filter((c) => !q || c.contact.displayName.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q))
       .sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
   }, [conversations, tab, search]);
@@ -598,6 +615,36 @@ export default function ConversationsInbox() {
     const opts = { onSuccess: () => clearOptimistic(convId) };
     if (mode === "note") createNote.mutate({ conversation_id: convId, text: body }, opts);
     else sendMessage.mutate({ conversation_id: convId, message_type: "text", text: body }, opts);
+  };
+
+  // Snooze presets. `reopen_on_message: true` so a customer reply pulls the
+  // thread straight back into Open — the provider clears the snooze on the first
+  // genuine inbound message when this flag is set.
+  const SNOOZE_PRESETS: Array<{ label: string; hours: number }> = [
+    { label: "1 hour", hours: 1 },
+    { label: "3 hours", hours: 3 },
+    { label: "Tomorrow", hours: 24 },
+    { label: "Next week", hours: 24 * 7 },
+  ];
+
+  const snoozeFor = (hours: number) => {
+    if (!selected) return;
+    const until = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+    // Optimistically mark it snoozed so it leaves the Open list immediately.
+    setOverlay((prev) => {
+      const cur = prev[selected.id] ?? { extraMessages: [] };
+      return { ...prev, [selected.id]: { ...cur, snoozed: true } };
+    });
+    snoozeMutation.mutate({ id: selected.id, body: { snoozed_until: until, reopen_on_message: true } });
+  };
+
+  const unsnooze = () => {
+    if (!selected) return;
+    setOverlay((prev) => {
+      const cur = prev[selected.id] ?? { extraMessages: [] };
+      return { ...prev, [selected.id]: { ...cur, snoozed: false } };
+    });
+    unsnoozeMutation.mutate(selected.id);
   };
 
   const closeTicket = () => {
@@ -755,7 +802,7 @@ export default function ConversationsInbox() {
         </div>
 
         <div className="flex items-center gap-6 border-b border-black/8 px-4 pt-3 dark:border-white/8">
-          {(["open", "closed"] as const).map((t) => (
+          {(["open", "snoozed", "closed"] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -845,11 +892,34 @@ export default function ConversationsInbox() {
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <AiStatusControl conversationId={selected.id} />
-                <HeaderAction icon={RefreshCw} label="Switch channel" />
-                <HeaderAction icon={StickyNote} label="Notes" />
-                <HeaderAction icon={Contact} label="Contact info" />
+                {selected.snoozed ? (
+                  <HeaderAction icon={AlarmClockOff} label="Unsnooze" onClick={unsnooze} />
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="flex items-center gap-1.5 rounded-xl border border-black/8 px-3 py-1.5 text-xs font-medium text-black/70 transition hover:bg-black/[0.03] dark:border-white/8 dark:text-white/70 dark:hover:bg-white/[0.04]"
+                        data-testid="conversation-snooze"
+                      >
+                        <AlarmClock className="h-3.5 w-3.5" />
+                        Snooze
+                        <ChevronDown className="h-3 w-3" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {SNOOZE_PRESETS.map((preset) => (
+                        <DropdownMenuItem
+                          key={preset.label}
+                          onClick={() => snoozeFor(preset.hours)}
+                          data-testid={`conversation-snooze-${preset.hours}h`}
+                        >
+                          {preset.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 <HeaderAction icon={XIcon} label={selected.status === "open" ? "Close ticket" : "Reopen"} onClick={closeTicket} />
-                <HeaderAction icon={UserPlus} label="Assign" />
               </div>
             </div>
 

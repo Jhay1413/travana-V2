@@ -134,6 +134,10 @@ export function toUiConversation(item: SsConversation): Conversation {
     status: toUiStatus(item.status),
     assignee,
     unread: !!item.needs_reply,
+    // Snooze is derived from `snoozed_until`, not from `status` — the provider
+    // keeps a snoozed conversation's status as "open".
+    snoozed: !!item.snoozed_until,
+    snoozedUntil: item.snoozed_until ?? null,
     preview: lastMessagePreview(item.last_message),
     lastActivityAt,
     tags: (item.tags ?? []).map((t) => ({ id: t.id, name: t.name, color: t.color ?? "#94a3b8" })),

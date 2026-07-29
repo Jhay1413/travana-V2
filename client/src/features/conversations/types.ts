@@ -10,6 +10,11 @@ export type ConversationChannel =
 
 export type ConversationStatus = "open" | "closed";
 
+// The inbox's three tabs. Snoozed is NOT a status on the provider side — a
+// snoozed conversation's underlying status stays "open" — but it is served as
+// its own tab and excluded from Open, so it needs its own filter value.
+export type InboxTab = "open" | "snoozed" | "closed";
+
 export type MessageDirection = "inbound" | "outbound";
 
 export interface ConversationContact {
@@ -71,6 +76,10 @@ export interface Conversation {
   preview: string;
   lastActivityAt: string; // ISO timestamp
   unread: boolean;
+  /** Parked until `snoozedUntil`; hidden from Open until then. */
+  snoozed: boolean;
+  /** ISO timestamp the snooze expires, when snoozed. */
+  snoozedUntil?: string | null;
   tags?: ConversationTag[];
   messages: ConversationMessage[];
 }
