@@ -22,6 +22,16 @@ export const botConfigApi = {
     return data;
   },
 
+  connectWebhook: async (): Promise<BotConfigResponse> => {
+    const { data } = await axiosClient.post<BotConfigResponse>("/api/v2/bot-config/webhook");
+    return data;
+  },
+
+  disconnectWebhook: async (): Promise<BotConfigResponse> => {
+    const { data } = await axiosClient.delete<BotConfigResponse>("/api/v2/bot-config/webhook");
+    return data;
+  },
+
   setMode: async (mode: BotMode): Promise<BotConfigResponse> => {
     const { data } = await axiosClient.put<BotConfigResponse>("/api/v2/bot-config/mode", { mode });
     return data;

@@ -63,3 +63,19 @@ export interface AttachmentDownload {
   contentType: string;
   cacheControl: string | null;
 }
+
+// Response of POST /attachments/upload. `id` (=== `attachment_id`) is what gets
+// passed in a message's `attachments` array. download_url/public_url are
+// SendSeven-hosted and deliberately not surfaced to the browser — inline media
+// is served through our own /attachments/:id/download proxy instead, so the
+// workspace token never leaves the server.
+export interface SsAttachmentUpload {
+  id: string;
+  attachment_id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  storage_path?: string;
+  download_url?: string;
+  public_url?: string;
+}

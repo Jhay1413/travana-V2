@@ -58,24 +58,43 @@ export const conversationIntegrationRepository = {
     return row;
   },
 
-  // Stores the registered webhook (endpoint id + encrypted secret) and turns
-  // auto-reply on. Requires an existing row (the org must be provisioned first).
+  // Stores the registered webhook (endpoint id + encrypted secret). Requires an
+  // existing row (the org must be provisioned first).
+  //
+  // Deliberately does NOT touch autoReplyEnabled: receiving webhooks and letting
+  // the AI answer are separate switches. A connected webhook drives the realtime
+  // inbox (SSE toasts, cache invalidation) whether or not the bot is on, so the
+  // caller decides the auto-reply flag explicitly.
   async setWebhook(
     orgId: string,
-    data: { webhookEndpointId: string; webhookSecret: string; autoReplyMode?: string },
+    data: {
+      webhookEndpointId: string;
+      webhookSecret: string;
+      autoReplyMode?: string;
+      autoReplyEnabled?: boolean;
+    },
   ): Promise<SendsevenIntegration> {
     const [row] = await db
       .update(sendsevenIntegrations)
       .set({
         webhookEndpointId: data.webhookEndpointId,
         webhookSecret: data.webhookSecret,
-        autoReplyEnabled: true,
+        ...(data.autoReplyEnabled === undefined ? {} : { autoReplyEnabled: data.autoReplyEnabled }),
         ...(data.autoReplyMode ? { autoReplyMode: data.autoReplyMode } : {}),
         updatedAt: new Date(),
       })
       .where(eq(sendsevenIntegrations.orgId, orgId))
       .returning();
     return row;
+  },
+
+  // Flips the AI auto-reply switch alone, leaving the webhook registration
+  // intact — turning the bot off must not stop deliveries arriving.
+  async setAutoReplyEnabled(orgId: string, enabled: boolean): Promise<void> {
+    await db
+      .update(sendsevenIntegrations)
+      .set({ autoReplyEnabled: enabled, updatedAt: new Date() })
+      .where(eq(sendsevenIntegrations.orgId, orgId));
   },
 
   // Updates just the auto-reply mode ('draft' | 'send') without re-registering.
@@ -87,6 +106,8 @@ export const conversationIntegrationRepository = {
   },
 
   // Clears the webhook + disables auto-reply (keeps the token/tenant link).
+  // Disconnecting necessarily disables the bot: with no deliveries there is
+  // nothing for it to answer.
   async clearWebhook(orgId: string): Promise<void> {
     await db
       .update(sendsevenIntegrations)

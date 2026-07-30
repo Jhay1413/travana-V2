@@ -5,6 +5,7 @@ export const getContactLinkValidator = z.object({
   query: z.object({
     phone: z.string().optional(),
     email: z.string().optional(),
+    name: z.string().optional(),
   }),
 });
 

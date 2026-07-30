@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { messagesController as m } from "./messages.controller";
+import { attachmentUpload, messagesController as m } from "./messages.controller";
 
 const router = Router();
 
@@ -8,6 +8,7 @@ router.get("/", m.list);
 router.post("/", m.send);
 router.post("/internal-notes", m.createInternalNote);
 router.get("/mention-users", m.mentionUsers);
+router.post("/attachments/upload", attachmentUpload.single("file"), m.uploadAttachment);
 router.get("/attachments/:attachment_id/download", m.downloadAttachment);
 
 router.get("/:message_id", m.getById);

@@ -42,6 +42,15 @@ export function useCreateInternalNote(conversationId?: string) {
   });
 }
 
+// Upload only — it does not send anything. The caller holds the returned ids and
+// passes them as `attachments` on the eventual send, which is what lets a user
+// attach several files and still post one message.
+export function useUploadAttachment() {
+  return useMutation({
+    mutationFn: (file: File) => messagesApi.uploadAttachment(file),
+  });
+}
+
 export function useMessageList(query: ListMessagesQuery, enabled = true) {
   return useQuery({
     queryKey: [...messagesKeys.list(query.conversationId), query.page ?? 1, query.cursor ?? null],

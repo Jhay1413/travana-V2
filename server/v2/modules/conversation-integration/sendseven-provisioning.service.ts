@@ -1,5 +1,6 @@
 import { isPlatformConfigured, platformRequest } from "../../utils/sendseven";
 import { organizationRepository } from "../organization/organization.repository";
+import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
 import { conversationIntegrationRepository } from "./conversation-integration.repository";
 
 // Auto-provisions a SendSeven sub-account (tenant) for an org during onboarding,
@@ -27,15 +28,43 @@ interface SsTenantResponse {
   trial_ends_at?: string | null;
 }
 
+// Registers the org's webhook so its inbox is live from day one — new messages
+// stream in over SSE and staff get notified without anyone visiting a settings
+// page. Connects with the AI left OFF (connectWebhook doesn't touch that flag,
+// and the column defaults to false): real-time messaging is infrastructure every
+// org wants, auto-replying on a customer's behalf is an explicit decision.
+//
+// Best-effort and idempotent: skipped when already connected, and any failure
+// (commonly no HTTPS PUBLIC_BASE_URL in dev) is logged, never thrown — a webhook
+// that didn't register must not break sign-up. The Organisation → Messaging
+// toggle is the manual recovery path.
+async function ensureWebhookConnected(orgId: string, alreadyConnected: boolean): Promise<void> {
+  if (alreadyConnected) return;
+  try {
+    const { url } = await sendsevenWebhookService.connectWebhook(orgId);
+    console.log(`[sendseven] Auto-connected webhook for org ${orgId} → ${url} (AI auto-reply left off).`);
+  } catch (err) {
+    console.warn(
+      `[sendseven] Webhook auto-connect skipped for org ${orgId}:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
 export const sendsevenProvisioningService = {
   // Idempotent: safe to call multiple times. Returns the linked tenant id, or
   // null when provisioning is skipped (not configured / org missing).
   async provisionForOrg(orgId: string, opts: { companyEmail?: string } = {}): Promise<{ tenantId: string } | null> {
     if (!orgId) return null;
 
-    // Already linked → nothing to do.
+    // Already linked → the tenant exists, but the webhook may still be missing
+    // (an org provisioned before auto-connect existed, or a failed attempt), so
+    // give it another chance rather than returning early.
     const existing = await conversationIntegrationRepository.findByOrg(orgId);
-    if (existing?.tenantId) return { tenantId: existing.tenantId };
+    if (existing?.tenantId) {
+      await ensureWebhookConnected(orgId, !!existing.webhookSecret);
+      return { tenantId: existing.tenantId };
+    }
 
     // No platform credential configured → feature not enabled; skip quietly.
     if (!isPlatformConfigured()) {
@@ -61,6 +90,8 @@ export const sendsevenProvisioningService = {
 
     // No per-tenant token to mint: the inbox reaches this sub-account via the
     // parent token + X-Tenant-ID header (see conversationIntegrationService.resolveConfig).
+
+    await ensureWebhookConnected(orgId, false);
 
     return { tenantId: tenant.id };
   },

@@ -35,6 +35,10 @@ export const neonClientService = {
     return neonClientRepository.findMatches(opts, scope);
   },
 
+  async findNameMatches(name: string | null | undefined, scope: Scope): Promise<NeonClient[]> {
+    return neonClientRepository.findNameMatches(name, scope);
+  },
+
   async updateNeonClient(id: string, data: Partial<InsertClientTable>, scope: Scope): Promise<NeonClient> {
     const client = await neonClientRepository.update(id, data, scope);
     if (!client) throw new AppError('Neon client not found', 404);

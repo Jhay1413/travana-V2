@@ -48,4 +48,6 @@ export const messagesService = {
   removeReaction: (id: string, body: unknown) => messagesRepository.removeReaction(id, body),
   translate: (id: string, body: unknown) => messagesRepository.translate(id, body),
   downloadAttachment: (attachmentId: string) => messagesRepository.downloadAttachment(attachmentId),
+  uploadAttachment: (file: { buffer: Buffer; filename: string; contentType: string }) =>
+    messagesRepository.uploadAttachment(file),
 };

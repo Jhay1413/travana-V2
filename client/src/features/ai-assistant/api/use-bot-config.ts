@@ -44,6 +44,26 @@ export function useDisableBot() {
   });
 }
 
+export function useConnectWebhook() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => botConfigApi.connectWebhook(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: botConfigKeys.detail() });
+    },
+  });
+}
+
+export function useDisconnectWebhook() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => botConfigApi.disconnectWebhook(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: botConfigKeys.detail() });
+    },
+  });
+}
+
 export function useSetBotMode() {
   const queryClient = useQueryClient();
   return useMutation({

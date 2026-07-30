@@ -28,6 +28,9 @@ export interface AutoReplyStatus {
   enabled: boolean;
   mode: BotMode;
   provisioned: boolean;
+  /** Webhook registered with SendSeven. Separate from `enabled`: connected with
+   *  the bot off means live inbox updates and no automated replies. */
+  webhookConnected: boolean;
 }
 
 export interface BotConfigResponse {

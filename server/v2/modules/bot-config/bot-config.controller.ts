@@ -26,9 +26,19 @@ export const botConfigController = {
     return successResponse(res, await botConfigService.enable(getScope(req).orgId, mode), "AI auto-reply enabled");
   }),
 
-  // POST /api/v2/bot-config/disable
+  // POST /api/v2/bot-config/disable — silences the bot, webhook stays connected
   disable: asyncHandler(async (req: Request, res: Response) => {
     return successResponse(res, await botConfigService.disable(getScope(req).orgId), "AI auto-reply disabled");
+  }),
+
+  // POST /api/v2/bot-config/webhook — connect deliveries without enabling the AI
+  connectWebhook: asyncHandler(async (req: Request, res: Response) => {
+    return successResponse(res, await botConfigService.connectWebhook(getScope(req).orgId), "Webhook connected");
+  }),
+
+  // DELETE /api/v2/bot-config/webhook — stop deliveries (also stops the bot)
+  disconnectWebhook: asyncHandler(async (req: Request, res: Response) => {
+    return successResponse(res, await botConfigService.disconnectWebhook(getScope(req).orgId), "Webhook disconnected");
   }),
 
   // PUT /api/v2/bot-config/mode

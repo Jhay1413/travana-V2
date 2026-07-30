@@ -19,7 +19,7 @@ export function useClientContactLink(clientId: string | null, enabled = true) {
 
 export function useContactLink(
   contactId: string | null,
-  match?: { phone?: string; email?: string },
+  match?: { phone?: string; email?: string; name?: string },
   enabled = true,
 ) {
   return useQuery({

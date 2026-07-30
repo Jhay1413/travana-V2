@@ -13,6 +13,10 @@ router.get("/", c.get);
 router.put("/", validate(updateBotConfigValidator), c.update);
 router.post("/enable", validate(enableBotValidator), c.enable);
 router.post("/disable", c.disable);
+// The webhook switch, separate from the bot: connected + AI off = live inbox
+// updates with no automated replies.
+router.post("/webhook", c.connectWebhook);
+router.delete("/webhook", c.disconnectWebhook);
 router.put("/mode", validate(setModeValidator), c.setMode);
 
 export default router;

@@ -2,6 +2,7 @@ import { db } from '../../config/database';
 import { clientTable, booking, transaction } from '@shared/schema';
 import { and, asc, eq, or, ilike, sql } from 'drizzle-orm';
 import { phoneDigitsCondition } from '../../utils/phone-search';
+import { clientNameCondition } from '../../utils/client-name-search';
 
 interface SearchOpts {
   orgId: string | null;
@@ -13,12 +14,9 @@ export const searchRepository = {
   async globalSearch(searchTerm: string, opts: SearchOpts) {
     const { orgId, limit = 15, offset = 0 } = opts;
     const term = `%${searchTerm}%`;
-    const words = searchTerm.trim().split(/\s+/).filter(Boolean);
-    const fullName = sql`concat_ws(' ', ${clientTable.firstName}, ${clientTable.surename})`;
-    const nameCondition =
-      words.length > 1
-        ? and(...words.map((w) => sql`${fullName} ILIKE ${'%' + w + '%'}`))
-        : or(ilike(clientTable.firstName, term), ilike(clientTable.surename, term));
+    // Shared with the client list/search endpoint so both agree on what a
+    // multi-word name query matches (see utils/client-name-search).
+    const nameCondition = clientNameCondition(clientTable.firstName, clientTable.surename, searchTerm);
 
     const phoneDigits = phoneDigitsCondition(clientTable.phoneNumber, searchTerm);
     const matchCondition = or(

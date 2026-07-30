@@ -47,7 +47,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { EMOJI_CATEGORIES } from "@/lib/emoji";
+import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/hooks/use-role";
 import { ChannelsDialog } from "./channels-dialog";
 import { ClientLinkSection, contactLinkMatch, formatClientDate, composeClientAddress } from "./client-link-section";
@@ -66,17 +69,16 @@ import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
 import { useConversations, useConversationBadgeCounts, unreadBadgeCount } from "../api/use-conversations-queries";
 import {
-  useCloseConversation,
-  useReopenConversation,
   useMarkConversationRead,
   useSnoozeConversation,
   useUnsnoozeConversation,
 } from "../api/use-conversations-mutations";
-import { useMessages, useSendMessage, useCreateInternalNote } from "../api/use-messages";
+import { useMessages, useSendMessage, useCreateInternalNote, useUploadAttachment } from "../api/use-messages";
+import { MAX_ATTACHMENT_BYTES } from "../api/messages.api";
 import { useConversationsRealtimeState } from "./conversations-realtime-provider";
 import { useInboxes } from "../api/use-inboxes";
 import type { SsInbox } from "../api/inboxes.api";
-import type { Conversation, ConversationMessage, ConversationStatus, ConversationTag, InboxTab } from "../types";
+import type { Conversation, ConversationMessage, ConversationTag, InboxTab } from "../types";
 
 // ─── Avatar with channel badge ────────────────────────────────────────────────
 
@@ -311,16 +313,102 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
 
 const COMPOSER_MAX_HEIGHT_PX = 120;
 
-function Composer({ onSend, sending, conversation }: { onSend: (body: string, mode: "reply" | "note") => void; sending?: boolean; conversation: Conversation }) {
+// A file the user has picked. Uploaded to SendSeven as soon as it's chosen, so
+// the id is ready by the time they hit send (see docs.sendseven.com two-phase
+// attachment flow: upload → id → reference the id on the message).
+interface PendingAttachment {
+  key: string;
+  file: File;
+  status: "uploading" | "ready" | "error";
+  id?: string;
+  error?: string;
+}
+
+export interface ComposerAttachments {
+  ids: string[];
+  filenames: string[];
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function Composer({ onSend, sending, conversation }: { onSend: (body: string, mode: "reply" | "note", attachments?: ComposerAttachments) => void; sending?: boolean; conversation: Conversation }) {
   const [mode, setMode] = useState<"reply" | "note">("reply");
   const [text, setText] = useState("");
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadAttachment = useUploadAttachment();
+  const { toast } = useToast();
+
+  const uploading = attachments.some((a) => a.status === "uploading");
+  const ready = attachments.filter((a) => a.status === "ready" && a.id);
+  // Internal notes are text-only in SendSeven's API — there's no attachments
+  // field on the internal-notes endpoint — so the picker is disabled in note mode.
+  const canAttach = mode === "reply";
+
+  const pickFiles = (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    for (const file of Array.from(fileList)) {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        toast({
+          title: "File too large",
+          description: `${file.name} is ${formatBytes(file.size)} — the limit is 50MB.`,
+          variant: "destructive",
+        });
+        continue;
+      }
+      const key = `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`;
+      setAttachments((prev) => [...prev, { key, file, status: "uploading" }]);
+      uploadAttachment.mutate(file, {
+        onSuccess: (uploaded) =>
+          setAttachments((prev) =>
+            prev.map((a) => (a.key === key ? { ...a, status: "ready", id: uploaded.id } : a)),
+          ),
+        onError: (err: Error) =>
+          setAttachments((prev) =>
+            prev.map((a) => (a.key === key ? { ...a, status: "error", error: err.message } : a)),
+          ),
+      });
+    }
+  };
+
+  const removeAttachment = (key: string) => setAttachments((prev) => prev.filter((a) => a.key !== key));
+
+  // Insert at the caret rather than appending, and hand focus back so typing
+  // continues where the emoji landed.
+  const insertEmoji = (emoji: string) => {
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    setText(text.slice(0, start) + emoji + text.slice(end));
+    setEmojiOpen(false);
+    requestAnimationFrame(() => {
+      el?.focus();
+      const caret = start + emoji.length;
+      el?.setSelectionRange(caret, caret);
+    });
+  };
 
   const submit = () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    onSend(trimmed, mode);
+    // An attachment on its own is a valid message; text is only required when
+    // there's nothing else to send. Never send mid-upload — the ids aren't in yet.
+    if (uploading) return;
+    if (!trimmed && ready.length === 0) return;
+    onSend(
+      trimmed,
+      mode,
+      ready.length > 0
+        ? { ids: ready.map((a) => a.id as string), filenames: ready.map((a) => a.file.name) }
+        : undefined,
+    );
     setText("");
+    setAttachments([]);
   };
 
   // Auto-grow the composer up to a max height as the message spans more lines,
@@ -363,6 +451,43 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
         ))}
       </div>
 
+      {/* Staged files: uploaded on pick, so by send time these are just ids. */}
+      {attachments.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2" data-testid="composer-attachments">
+          {attachments.map((a) => (
+            <span
+              key={a.key}
+              className={cn(
+                "flex max-w-[220px] items-center gap-1.5 rounded-xl border px-2 py-1 text-xs",
+                a.status === "error"
+                  ? "border-red-400/40 bg-red-500/5 text-red-600 dark:text-red-400"
+                  : "border-black/10 bg-black/[0.03] text-black/70 dark:border-white/10 dark:bg-white/[0.05] dark:text-white/70",
+              )}
+              title={a.status === "error" ? a.error : `${a.file.name} (${formatBytes(a.file.size)})`}
+              data-testid={`composer-attachment-${a.key}`}
+            >
+              {a.status === "uploading" ? (
+                <Loader2 className="h-3 w-3 flex-none animate-spin" />
+              ) : a.status === "error" ? (
+                <AlertCircle className="h-3 w-3 flex-none" />
+              ) : (
+                <Paperclip className="h-3 w-3 flex-none" />
+              )}
+              <span className="truncate">{a.file.name}</span>
+              <span className="flex-none opacity-50">{formatBytes(a.file.size)}</span>
+              <button
+                type="button"
+                onClick={() => removeAttachment(a.key)}
+                className="flex-none opacity-50 transition hover:opacity-100"
+                aria-label={`Remove ${a.file.name}`}
+              >
+                <XIcon className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div
         className={cn(
           "flex items-end gap-2 rounded-2xl border px-3 py-2",
@@ -371,15 +496,66 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
             : "border-black/10 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.03]",
         )}
       >
-        <button className="mb-1 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            pickFiles(e.target.files);
+            // Reset so picking the same file twice in a row still fires onChange.
+            e.target.value = "";
+          }}
+          data-testid="conversation-composer-file-input"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={!canAttach}
+          title={canAttach ? "Attach a file" : "Attachments aren't supported on internal notes"}
+          className="mb-1 text-black/40 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-black/40 dark:text-white/40 dark:hover:text-white"
+          data-testid="conversation-composer-attach"
+        >
           <Paperclip className="h-4 w-4" />
         </button>
         <button className="mb-1 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
           <Pen className="h-4 w-4" />
         </button>
-        <button className="mb-1 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
-          <Smile className="h-4 w-4" />
-        </button>
+        <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="mb-1 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white"
+              title="Insert emoji"
+              data-testid="conversation-composer-emoji"
+            >
+              <Smile className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" side="top" className="w-72 p-2">
+            <div className="max-h-[240px] space-y-2 overflow-y-auto" data-testid="conversation-emoji-picker">
+              {EMOJI_CATEGORIES.map((cat) => (
+                <div key={cat.name}>
+                  <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
+                    {cat.name}
+                  </div>
+                  <div className="grid grid-cols-8 gap-0.5">
+                    {cat.emojis.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => insertEmoji(emoji)}
+                        className="rounded-lg p-1 text-lg leading-none transition hover:bg-black/5 dark:hover:bg-white/10"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
         <Textarea
           ref={textareaRef}
           value={text}
@@ -392,17 +568,23 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
           }}
           placeholder={mode === "note" ? "Add an internal note…" : "Type a message… (/ for commands, @ to assign)"}
           rows={1}
+          // Native browser spellcheck, stated explicitly so it can't be lost, with
+          // the dictionary pinned to en-GB — on a US-locale machine the browser
+          // otherwise flags "organise"/"colour" in every outbound message.
+          spellCheck
+          lang="en-GB"
           className="min-h-0 flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           data-testid="conversation-composer-input"
         />
         <Button
           onClick={submit}
-          disabled={!text.trim() || sending}
+          disabled={(!text.trim() && ready.length === 0) || uploading || sending}
           size="icon"
+          title={uploading ? "Waiting for the upload to finish…" : undefined}
           className="mb-1 h-9 w-9 flex-shrink-0 rounded-xl bg-black text-white hover:bg-black/85 disabled:opacity-40 dark:bg-white dark:text-black"
           data-testid="conversation-send"
         >
-          {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {sending || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
       </div>
     </div>
@@ -440,7 +622,7 @@ const PAGE_SIZE = 25;
 // Client-side overlay for the interactions the messages/send endpoints don't
 // cover yet (list-only scope): locally-sent replies and open/close toggles.
 // Keyed by conversation id; merged onto the server data below.
-type Overlay = Record<string, { extraMessages: ConversationMessage[]; status?: ConversationStatus; snoozed?: boolean }>;
+type Overlay = Record<string, { extraMessages: ConversationMessage[]; snoozed?: boolean }>;
 
 export default function ConversationsInbox() {
   const [tab, setTab] = useState<InboxTab>("open");
@@ -482,8 +664,6 @@ export default function ConversationsInbox() {
   const { data: badges } = useConversationBadgeCounts();
   // Same rule as the sidebar nav badge — see unreadBadgeCount.
   const unreadCount = unreadBadgeCount(badges);
-  const closeMutation = useCloseConversation();
-  const reopenMutation = useReopenConversation();
   const snoozeMutation = useSnoozeConversation();
   const unsnoozeMutation = useUnsnoozeConversation();
   const markReadMutation = useMarkConversationRead();
@@ -503,7 +683,6 @@ export default function ConversationsInbox() {
       const merged = o
         ? {
             ...c,
-            status: o.status ?? c.status,
             messages: [...c.messages, ...o.extraMessages],
             preview: o.extraMessages.length > 0 ? o.extraMessages[o.extraMessages.length - 1].body : c.preview,
             lastActivityAt: o.extraMessages.length > 0 ? o.extraMessages[o.extraMessages.length - 1].sentAt : c.lastActivityAt,
@@ -593,14 +772,17 @@ export default function ConversationsInbox() {
       return { ...prev, [convId]: { ...cur, extraMessages: [] } };
     });
 
-  const handleSend = (body: string, mode: "reply" | "note") => {
+  const handleSend = (body: string, mode: "reply" | "note", attachments?: ComposerAttachments) => {
     if (!selected) return;
     const convId = selected.id;
-    // Optimistic bubble for instant feedback…
+    const hasFiles = (attachments?.ids.length ?? 0) > 0;
+    // Optimistic bubble for instant feedback… the attachments themselves only
+    // appear once the refetch lands (we hold ids, not the rendered media), so
+    // name them in the placeholder rather than showing an empty bubble.
     const optimisticMsg: ConversationMessage = {
       id: `opt-${convId}-${new Date().getTime()}`,
       direction: "outbound",
-      body,
+      body: body || (hasFiles ? attachments!.filenames.join(", ") : ""),
       sentAt: new Date().toISOString(),
       authorName: "You",
       read: false,
@@ -614,7 +796,20 @@ export default function ConversationsInbox() {
     // messages query refetches and we drop the optimistic copy to avoid dupes.
     const opts = { onSuccess: () => clearOptimistic(convId) };
     if (mode === "note") createNote.mutate({ conversation_id: convId, text: body }, opts);
-    else sendMessage.mutate({ conversation_id: convId, message_type: "text", text: body }, opts);
+    else
+      sendMessage.mutate(
+        {
+          conversation_id: convId,
+          // SendSeven infers the media type from the attachment itself; the
+          // message type stays "text" and carries the optional caption.
+          message_type: "text",
+          text: body,
+          ...(hasFiles
+            ? { attachments: attachments!.ids, attachment_filenames: attachments!.filenames }
+            : {}),
+        },
+        opts,
+      );
   };
 
   // Snooze presets. `reopen_on_message: true` so a customer reply pulls the
@@ -645,21 +840,6 @@ export default function ConversationsInbox() {
       return { ...prev, [selected.id]: { ...cur, snoozed: false } };
     });
     unsnoozeMutation.mutate(selected.id);
-  };
-
-  const closeTicket = () => {
-    if (!selected) return;
-    const wasOpen = selected.status === "open";
-    const nextStatus: ConversationStatus = wasOpen ? "closed" : "open";
-    // Optimistic overlay for instant feedback…
-    setOverlay((prev) => {
-      const cur = prev[selected.id] ?? { extraMessages: [] };
-      return { ...prev, [selected.id]: { ...cur, status: nextStatus } };
-    });
-    // …then persist via the real SendSeven close/reopen endpoint (the mutation
-    // invalidates the list so the server state reconciles on refetch).
-    if (wasOpen) closeMutation.mutate({ id: selected.id, body: { summarize: false } });
-    else reopenMutation.mutate(selected.id);
   };
 
   // Group the thread's messages by day for the date dividers.
@@ -919,7 +1099,6 @@ export default function ConversationsInbox() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
-                <HeaderAction icon={XIcon} label={selected.status === "open" ? "Close ticket" : "Reopen"} onClick={closeTicket} />
               </div>
             </div>
 

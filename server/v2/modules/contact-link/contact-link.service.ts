@@ -11,11 +11,15 @@ import type { InsertClientTable, NeonClient } from "@shared/schema";
 
 export const contactLinkService = {
   // Current link + suggestions for one contact. `match` carries the contact's
-  // phone/email (the inbox already has them) so we can suggest without calling
-  // SendSeven. Suggestions are only computed when nothing is linked yet.
+  // phone/email/name (the inbox already has them) so we can suggest without
+  // calling SendSeven. Suggestions are only computed when nothing is linked yet.
+  //
+  // Phone/email wins outright. The name fallback runs ONLY when those found
+  // nothing: mixing a near-certain match with same-name guesses in one list
+  // invites staff to link the wrong person.
   async getStatus(
     contactId: string,
-    match: { phone?: string | null; email?: string | null },
+    match: { phone?: string | null; email?: string | null; name?: string | null },
     scope: Scope,
   ): Promise<ContactLinkStatus> {
     const row = await contactLinkRepository.findByContact(scope.orgId, contactId);
@@ -26,8 +30,17 @@ export const contactLinkService = {
       linkedClient = await neonClientService.getNeonClientById(row.clientId, scope).catch(() => null);
     }
 
-    const suggestions = linkedClient ? [] : await neonClientService.findMatches(match, scope);
-    return { contactId, linkedClient, suggestions };
+    if (linkedClient) {
+      return { contactId, linkedClient, suggestions: [], suggestionMatch: "contact" };
+    }
+
+    const byContact = await neonClientService.findMatches(match, scope);
+    if (byContact.length > 0) {
+      return { contactId, linkedClient, suggestions: byContact, suggestionMatch: "contact" };
+    }
+
+    const byName = await neonClientService.findNameMatches(match.name, scope);
+    return { contactId, linkedClient, suggestions: byName, suggestionMatch: "name" };
   },
 
   // Reverse view for the client dashboard: the SendSeven contact this client is

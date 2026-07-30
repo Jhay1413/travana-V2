@@ -134,7 +134,7 @@ export function BotSettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Bot className="h-4 w-4" /> Auto-reply
+            <Bot className="h-4 w-4" /> AI auto-reply
           </CardTitle>
           <CardDescription>Let the AI assistant respond to incoming conversations automatically.</CardDescription>
         </CardHeader>
@@ -153,13 +153,23 @@ export function BotSettingsPage() {
                   <div className="text-xs text-black/50 dark:text-white/50">
                     {autoReply.enabled
                       ? `Currently in ${autoReply.mode === "draft" ? "Draft" : "Send"} mode.`
-                      : "The bot will not respond until enabled."}
+                      : autoReply.webhookConnected
+                        ? "Messages still arrive live — the bot just won't answer."
+                        : "Turning this on also switches on real-time messages."}
                   </div>
+                  {/* The connection itself is org-level config, not an AI setting. */}
+                  <a
+                    href="/agency/messaging"
+                    className="mt-1 inline-block text-xs text-black/45 underline-offset-2 hover:underline dark:text-white/45"
+                  >
+                    Real-time messaging: {autoReply.webhookConnected ? "on" : "off"} — manage in Organisation → Messaging
+                  </a>
                 </div>
                 <Switch
                   checked={autoReply.enabled}
                   disabled={enableBot.isPending || disableBot.isPending}
                   onCheckedChange={handleToggleAutoReply}
+                  data-testid="switch-auto-reply"
                 />
               </div>
 
@@ -175,6 +185,10 @@ export function BotSettingsPage() {
                       <SelectItem value="send">Send — replies are sent automatically</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-black/50 dark:text-white/50">
+                    Draft still runs the AI on every message — it only holds the reply back as an internal
+                    note. Switch auto-reply off entirely to stop the AI running.
+                  </p>
                 </div>
               )}
             </>

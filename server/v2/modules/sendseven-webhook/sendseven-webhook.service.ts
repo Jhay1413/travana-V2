@@ -97,9 +97,18 @@ function verifySignature(
 }
 
 export const sendsevenWebhookService = {
-  // Registers the org's webhook and turns auto-reply on. Requires a provisioned
-  // sub-account (tenantId) and a public HTTPS base URL.
-  async enableAutoReply(orgId: string, opts: { name?: string; mode?: string } = {}): Promise<{ endpointId: string; url: string }> {
+  // Registers the org's webhook endpoint. Requires a provisioned sub-account
+  // (tenantId) and a public HTTPS base URL.
+  //
+  // Connecting the webhook is INDEPENDENT of the AI: it's what powers the
+  // realtime inbox (SSE toasts + cache invalidation) and human-takeover
+  // detection. `autoReply` decides whether the bot also answers — pass false to
+  // get live updates with the AI silent. Omit it to leave the flag as-is (a
+  // re-register must not silently switch the bot on).
+  async connectWebhook(
+    orgId: string,
+    opts: { name?: string; mode?: string; autoReply?: boolean } = {},
+  ): Promise<{ endpointId: string; url: string }> {
     const cfg = await effectiveConfig(orgId);
     if (!cfg) {
       throw new AppError("Connect this org's SendSeven workspace before enabling the bot (no tenant, token, or env fallback).", 400);
@@ -129,6 +138,7 @@ export const sendsevenWebhookService = {
         webhookEndpointId: created.webhook_id,
         webhookSecret: encrypt(created.secret_key),
         autoReplyMode: opts.mode,
+        autoReplyEnabled: opts.autoReply,
       });
     } catch (err) {
       await runWithSendSevenConfigAsync(cfg, () =>
@@ -136,19 +146,38 @@ export const sendsevenWebhookService = {
       ).catch(() => undefined);
       throw err;
     }
-    console.log(`[sendseven-webhook] Registered endpoint ${created.webhook_id} for org ${orgId} → ${url}`);
+    console.log(
+      `[sendseven-webhook] Registered endpoint ${created.webhook_id} for org ${orgId} → ${url}` +
+        (opts.autoReply === undefined ? "" : ` (auto-reply ${opts.autoReply ? "on" : "off"})`),
+    );
     return { endpointId: created.webhook_id, url };
   },
 
-  // Deletes the org's webhook and disables auto-reply. Endpoint deletion is
-  // best-effort — we always clear our side.
-  async disableAutoReply(orgId: string): Promise<void> {
+  // Deletes the org's webhook endpoint and clears our side (which also disables
+  // auto-reply — no deliveries, nothing to reply to). Endpoint deletion is
+  // best-effort. This STOPS realtime inbox updates too; to silence only the bot,
+  // use setAutoReply(orgId, false) instead.
+  async disconnectWebhook(orgId: string): Promise<void> {
     const cfg = await effectiveConfig(orgId);
     if (cfg) {
       const removed = await pruneEndpoints(cfg, orgId).catch(() => 0);
       console.log(`[sendseven-webhook] Removed ${removed} webhook endpoint(s) for org ${orgId}`);
     }
     await conversationIntegrationRepository.clearWebhook(orgId);
+  },
+
+  // Turns the AI bot on/off without touching the webhook registration, so the
+  // inbox keeps updating live either way. Enabling registers the endpoint first
+  // when it isn't connected yet — an enabled bot with no deliveries would be a
+  // silent no-op.
+  async setAutoReply(orgId: string, enabled: boolean, opts: { mode?: string } = {}): Promise<void> {
+    const integration = await conversationIntegrationRepository.findByOrg(orgId);
+    if (enabled && !integration?.webhookSecret) {
+      await this.connectWebhook(orgId, { mode: opts.mode, autoReply: true });
+      return;
+    }
+    if (opts.mode) await conversationIntegrationRepository.setAutoReplyMode(orgId, opts.mode);
+    await conversationIntegrationRepository.setAutoReplyEnabled(orgId, enabled);
   },
 
   // Verifies + records a delivery (fast, synchronous work only). Returns the
@@ -163,9 +192,12 @@ export const sendsevenWebhookService = {
   ): Promise<SsWebhookEvent | null> {
     if (!rawBody || rawBody.length === 0) throw new AppError("Empty webhook body", 400);
 
+    // Gated on the webhook registration alone, NOT on autoReplyEnabled: a
+    // connected webhook feeds the realtime inbox regardless of whether the bot
+    // is answering. Whether the AI runs is decided later, in process().
     const integration = await conversationIntegrationRepository.findByOrg(orgId);
-    if (!integration?.autoReplyEnabled || !integration.webhookSecret) {
-      throw new AppError("Webhook not enabled for this organisation", 404);
+    if (!integration?.webhookSecret) {
+      throw new AppError("Webhook not connected for this organisation", 404);
     }
 
     let secret: string;
@@ -209,20 +241,31 @@ export const sendsevenWebhookService = {
 
   // Async processing (after the 200 ack). Routes by event type: human takeover
   // detection vs. an inbound customer message the AI should reply to (§6, §8).
+  //
+  // Every branch publishes its realtime event unconditionally — those drive the
+  // inbox regardless of the bot. Only the AI-specific work (hand-off bookkeeping
+  // and the reply itself) is gated on autoReplyEnabled, which is what lets an org
+  // run a live inbox with the bot switched off.
   async process(orgId: string, event: SsWebhookEvent): Promise<void> {
     const m = event.data?.message;
     const conversationId = m?.conversation_id;
+    const integration = await conversationIntegrationRepository.findByOrg(orgId);
+    const aiEnabled = !!integration?.autoReplyEnabled;
 
     // A human agent replied (outbound and NOT one of ours) → they own it now.
     if (event.type === "message.sent" && m?.direction === "outbound") {
       const metaOurs = (m.meta as { source?: string } | null | undefined)?.source === "travana-ai";
       const ours = metaOurs || (m.id ? await sendsevenWebhookRepository.isOurMessage(m.id) : false);
       if (!ours && conversationId) {
-        console.log(`[sendseven-webhook] human reply detected on conv ${conversationId} → handing off to human`);
-        await conversationStateRepository.ensure(conversationId, orgId, m.contact_id ?? null);
-        await conversationStateRepository.setNeedsHuman(conversationId);
         publishRealtime(orgId, { type: "message.sent", conversationId });
-        publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
+        // Hand-off state only matters to the bot; with it off, skip the writes
+        // rather than accumulating needsHuman rows nothing will ever read.
+        if (aiEnabled) {
+          console.log(`[sendseven-webhook] human reply detected on conv ${conversationId} → handing off to human`);
+          await conversationStateRepository.ensure(conversationId, orgId, m.contact_id ?? null);
+          await conversationStateRepository.setNeedsHuman(conversationId);
+          publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
+        }
       }
       return;
     }
@@ -231,7 +274,7 @@ export const sendsevenWebhookService = {
     if (event.type === "conversation.updated") {
       const conv = event.data?.conversation as { id?: string; assigned_user?: unknown; assigned_user_id?: unknown } | undefined;
       const assigned = conv?.assigned_user ?? conv?.assigned_user_id;
-      if (assigned && conv?.id) {
+      if (aiEnabled && assigned && conv?.id) {
         await conversationStateRepository.ensure(conv.id, orgId, null);
         await conversationStateRepository.setNeedsHuman(conv.id);
         publishRealtime(orgId, { type: "ai-state.changed", conversationId: conv.id, needsHuman: true });
@@ -240,10 +283,10 @@ export const sendsevenWebhookService = {
       return;
     }
 
-    // Inbound customer message → let the AI reply.
+    // Inbound customer message → notify the inbox, and let the AI reply if it's on.
     if (event.type === "message.received" && m?.direction === "inbound") {
       if (conversationId) publishRealtime(orgId, { type: "message.received", conversationId });
-      await replyWorker.handleInbound(orgId, event);
+      if (aiEnabled) await replyWorker.handleInbound(orgId, event);
     }
   },
 

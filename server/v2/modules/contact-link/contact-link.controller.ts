@@ -13,7 +13,8 @@ export const contactLinkController = {
     const contactId = req.params.contactId as string;
     const phone = (req.query.phone as string) || undefined;
     const email = (req.query.email as string) || undefined;
-    const status = await contactLinkService.getStatus(contactId, { phone, email }, getScope(req));
+    const name = (req.query.name as string) || undefined;
+    const status = await contactLinkService.getStatus(contactId, { phone, email, name }, getScope(req));
     return successResponse(res, status, "Contact link status");
   }),
 

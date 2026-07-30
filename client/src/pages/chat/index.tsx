@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { FileText, MessageSquare, Plus, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,38 @@ export default function ChatPage() {
   const markChatReadMutation = useMarkChatRead();
 
   const currentUserId = currentUser?.id;
+
+  // Open a chat at the newest message (bottom) rather than the top, and keep it
+  // pinned there as messages arrive — but only while the user is already near
+  // the bottom, so scrolling up to read history doesn't yank them back down.
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
+  const scrolledConversationRef = useRef<string | null>(null);
+  const messageCount = (chatMessages || []).length;
+
+  const scrollToBottom = () => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    nearBottomRef.current = true;
+  };
+
+  const handleMessagesScroll = () => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
+
+  // useLayoutEffect, not useEffect: this runs before paint, so the thread never
+  // flashes at the top before jumping down.
+  useLayoutEffect(() => {
+    if (!chatSelectedConversation) return;
+    // Messages arrive a tick after the conversation id changes, so "first load"
+    // stays true until there's actually something to scroll past.
+    const firstLoad = scrolledConversationRef.current !== chatSelectedConversation;
+    if (firstLoad || nearBottomRef.current) scrollToBottom();
+    if (firstLoad && messageCount > 0) scrolledConversationRef.current = chatSelectedConversation;
+  }, [chatSelectedConversation, messageCount]);
 
   return (
     <section
@@ -216,7 +248,14 @@ export default function ChatPage() {
               );
             })()}
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3" data-testid="chat-messages-area">
+            {/* min-h-0 so this flex child can shrink below its content and
+                actually scroll — without it there's no scrollback to jump to. */}
+            <div
+              ref={messagesScrollRef}
+              onScroll={handleMessagesScroll}
+              className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3"
+              data-testid="chat-messages-area"
+            >
               {(chatMessages || []).length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="text-sm text-black/40 dark:text-white/40">No messages yet. Say hello!</div>
@@ -260,6 +299,12 @@ export default function ChatPage() {
                                   src={msg.fileUrl}
                                   alt={msg.fileName || "image"}
                                   className="max-w-full rounded-lg max-h-[200px] object-cover"
+                                  // An image has no height until it loads, so the
+                                  // jump-to-bottom above lands short whenever the
+                                  // last messages contain one. Re-pin once it does.
+                                  onLoad={() => {
+                                    if (nearBottomRef.current) scrollToBottom();
+                                  }}
                                   data-testid={`chat-img-${msg.id}`}
                                 />
                               </a>

@@ -1,7 +1,13 @@
 import { AppError } from "../../utils/error-handler";
-import { sendSevenRaw, sendSevenRequest, useSampleData, type SsQuery } from "../../utils/sendseven";
+import { sendSevenRaw, sendSevenRequest, sendSevenUpload, useSampleData, type SsQuery } from "../../utils/sendseven";
 import { sampleCreateInternalNote, sampleMessagesList, sampleSendMessage } from "./messages.fixtures";
-import type { AttachmentDownload, ListMessagesParams, SsMessage, SsMessageList } from "./messages.types";
+import type {
+  AttachmentDownload,
+  ListMessagesParams,
+  SsAttachmentUpload,
+  SsMessage,
+  SsMessageList,
+} from "./messages.types";
 
 // Repository: the only place that talks to the SendSeven messages API. Thin
 // gateway with a fixture fallback for list/send/notes while unconfigured.
@@ -51,6 +57,13 @@ export const messagesRepository = {
 
   translate(id: string, body: unknown): Promise<unknown> {
     return request("POST", `/${id}/translate`, { body });
+  },
+
+  // Phase 1 of the two-phase send: push the bytes to SendSeven and get back an
+  // id. Note the path is /attachments/upload, NOT under /messages — attachments
+  // are a top-level resource, reusable across messages and channels.
+  uploadAttachment(file: { buffer: Buffer; filename: string; contentType: string }): Promise<SsAttachmentUpload> {
+    return sendSevenUpload<SsAttachmentUpload>("/attachments/upload", file);
   },
 
   // Streams an attachment's bytes from SendSeven (auth + X-Tenant-ID applied by

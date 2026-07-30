@@ -172,6 +172,10 @@ function ChatComposer({
           }}
           placeholder={mode === "note" ? "Add an internal note…" : "Type a reply…"}
           rows={1}
+          // Matches the inbox composer: native spellcheck, dictionary pinned to
+          // en-GB so British spellings aren't flagged on a US-locale machine.
+          spellCheck
+          lang="en-GB"
           className="min-h-0 flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           data-testid="client-chat-composer-input"
         />
@@ -205,10 +209,17 @@ function ConversationThread({ conversation }: { conversation: Conversation }) {
   // Drop optimistic bubbles when switching threads so they can't leak across.
   useEffect(() => setOptimistic([]), [conversation.id]);
 
-  const messages = useMemo(
-    () => [...(data?.items ?? []).map(toUiMessage), ...optimistic],
-    [data, optimistic],
-  );
+  // Sort oldest → newest so the latest message sits at the bottom. The messages
+  // endpoint is a passthrough to SendSeven and doesn't guarantee ascending order,
+  // so don't rely on it — rendering items as-received put the newest on top. The
+  // main inbox thread sorts the same way.
+  const messages = useMemo(() => {
+    const base = (data?.items ?? []).map(toUiMessage);
+    const baseIds = new Set(base.map((m) => m.id));
+    return [...base, ...optimistic.filter((m) => !baseIds.has(m.id))].sort(
+      (a, b) => Date.parse(a.sentAt) - Date.parse(b.sentAt),
+    );
+  }, [data, optimistic]);
   const grouped = useMemo(() => groupMessagesByDay(messages), [messages]);
 
   useEffect(() => {

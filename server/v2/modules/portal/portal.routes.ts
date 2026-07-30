@@ -287,13 +287,23 @@ async function enrichDealRows(
   }));
 }
 
+// How long a deal stays live on the portal. A deal added longer ago than this is
+// expired and must not appear in any portal list — Latest Deals, the Deals page,
+// or For You. One constant so those three can't drift apart.
+const PORTAL_DEAL_WINDOW_DAYS = 7;
+
 portalRouter.get('/deals/for-you', portalAuth, async (req: Request, res: Response) => {
   try {
     const { clientId } = (req as any).portalClient;
+    const recentOnly = ((req.query.recent as string) || '') === '1';
     const clientTagIds = await portalRepository.findClientTagIds(clientId);
     if (clientTagIds.length === 0) return res.json([]);
 
-    const results = await portalRepository.findForYouDeals(clientTagIds, 20);
+    const results = await portalRepository.findForYouDeals({
+      clientTagIds,
+      limit: 20,
+      recentDays: recentOnly ? PORTAL_DEAL_WINDOW_DAYS : undefined,
+    });
     res.json(await enrichDealRows(results));
   } catch (err: any) {
     console.error('Error fetching for-you deals:', err);
@@ -305,15 +315,17 @@ portalRouter.get('/deals', async (req: Request, res: Response) => {
   try {
     const filterCountry = ((req.query.country as string) || '').trim();
     const filterTag = ((req.query.tag as string) || '').trim();
-    // "Latest Deals" passes ?recent=1 to limit results to deals added to the portal
-    // within the last 7 days; the browse Deals page omits it and sees all deals.
+    // ?recent=1 limits results to deals still inside the portal window. Both the
+    // home "Latest Deals" strip and the browse Deals page pass it, so neither can
+    // show an expired deal; omitting it still returns everything, for any caller
+    // that genuinely wants the full history.
     const recentOnly = ((req.query.recent as string) || '') === '1';
 
     const results = await portalRepository.findDeals({
       country: filterCountry || undefined,
       tag: filterTag || undefined,
       limit: 50,
-      recentDays: recentOnly ? 7 : undefined,
+      recentDays: recentOnly ? PORTAL_DEAL_WINDOW_DAYS : undefined,
     });
     res.json(await enrichDealRows(results));
   } catch (err: any) {

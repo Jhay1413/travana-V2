@@ -190,6 +190,58 @@ export async function sendSevenRequest<T>(
   return (await res.json()) as T;
 }
 
+// Multipart variant, for SendSeven's two-phase attachment flow: upload the bytes
+// once to get an id, then reference that id in the message body (see
+// docs.sendseven.com/guides/attachments/overview). Deliberately separate from
+// sendSevenRequest — that one JSON-encodes the body and sets Content-Type, both
+// of which would corrupt a multipart upload. Content-Type is left unset here on
+// purpose so fetch derives it from FormData, including the boundary.
+export async function sendSevenUpload<T>(
+  path: string,
+  file: { buffer: Buffer; filename: string; contentType: string },
+): Promise<T> {
+  const cfg = config();
+  if (!cfg) {
+    warnSendSevenOnce();
+    throw new AppError("SendSeven API is not configured (set CONVERSATIONS_API_URL and CONVERSATIONS_API_TOKEN)", 503);
+  }
+
+  const form = new FormData();
+  // Field name is `file` per the upload contract; sending it under any other
+  // name is rejected with a 422.
+  form.append("file", new Blob([file.buffer], { type: file.contentType }), file.filename);
+
+  let res: globalThis.Response;
+  try {
+    res = await fetch(`${cfg.baseUrl}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${cfg.token}`,
+        Accept: "application/json",
+        ...(cfg.tenantId ? { "X-Tenant-ID": cfg.tenantId } : {}),
+      },
+      body: form,
+    });
+  } catch {
+    throw new AppError("Failed to reach the SendSeven service", 502);
+  }
+
+  if (!res.ok) {
+    let message = `SendSeven service returned ${res.status}`;
+    try {
+      const err = (await res.json()) as { detail?: unknown; message?: unknown };
+      const detail = err?.detail ?? err?.message;
+      if (typeof detail === "string") message = detail;
+    } catch {
+      /* non-JSON error body — keep the generic message */
+    }
+    const status = res.status >= 400 && res.status < 500 ? res.status : 502;
+    throw new AppError(message, status);
+  }
+
+  return (await res.json()) as T;
+}
+
 // Low-level variant that returns the raw Response, for binary/streaming proxies
 // (e.g. attachment/image downloads) where we don't want JSON parsing. Applies the
 // same auth + X-Tenant-ID + query rules; the caller inspects status/headers/body.

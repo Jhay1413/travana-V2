@@ -100,6 +100,19 @@ export interface InternalNoteCreate {
   meta?: Record<string, unknown>;
 }
 
+/** Result of uploading a file. `id` is what goes in MessageCreate.attachments. */
+export interface SsAttachmentUpload {
+  id: string;
+  attachment_id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+}
+
+/** SendSeven's documented per-file limit; checked client-side too so an oversized
+ *  file fails instantly instead of after uploading 50MB+ to be rejected. */
+export const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
+
 export const messagesApi = {
   list: async (query: ListMessagesQuery): Promise<SsMessageList> => {
     const { data } = await axiosClient.get<SsMessageList>(BASE, {
@@ -118,6 +131,17 @@ export const messagesApi = {
   },
   send: async (body: MessageCreate): Promise<SsMessage> => {
     const { data } = await axiosClient.post<SsMessage>(BASE, body);
+    return data;
+  },
+  // Phase 1 of a send-with-attachment. Goes through our own proxy rather than
+  // straight to SendSeven so the workspace token stays server-side. Axios swaps
+  // the declared multipart type for one carrying the real boundary.
+  uploadAttachment: async (file: File): Promise<SsAttachmentUpload> => {
+    const form = new FormData();
+    form.append("file", file);
+    const { data } = await axiosClient.post<SsAttachmentUpload>(`${BASE}/attachments/upload`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
     return data;
   },
   createInternalNote: async (body: InternalNoteCreate): Promise<SsMessage> => {

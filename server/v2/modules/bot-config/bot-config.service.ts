@@ -8,7 +8,14 @@ import type { OrgBotConfig } from "@shared/schema";
 // a SendSeven sub-account exists yet (required before enabling).
 export interface BotStatus {
   config: OrgBotConfig | null;
-  autoReply: { enabled: boolean; mode: string; provisioned: boolean };
+  autoReply: {
+    enabled: boolean;
+    mode: string;
+    provisioned: boolean;
+    /** Webhook registered with SendSeven. Independent of `enabled`: connected
+     *  with the bot off = live inbox updates, no AI replies. */
+    webhookConnected: boolean;
+  };
 }
 
 export const botConfigService = {
@@ -27,6 +34,7 @@ export const botConfigService = {
         enabled: !!integration?.autoReplyEnabled,
         mode: integration?.autoReplyMode ?? "draft",
         provisioned,
+        webhookConnected: !!integration?.webhookSecret,
       },
     };
   },
@@ -36,14 +44,29 @@ export const botConfigService = {
     return this.getStatus(orgId);
   },
 
-  // Registers the webhook + turns auto-reply on (delegates to the webhook service).
+  // Turns the AI on (registering the webhook first if it isn't connected yet).
   async enable(orgId: string, mode: string | undefined): Promise<BotStatus> {
-    await sendsevenWebhookService.enableAutoReply(orgId, { mode });
+    await sendsevenWebhookService.setAutoReply(orgId, true, { mode });
     return this.getStatus(orgId);
   },
 
+  // Silences the bot but LEAVES the webhook connected, so the inbox keeps
+  // updating live. Use disconnectWebhook to stop deliveries entirely.
   async disable(orgId: string): Promise<BotStatus> {
-    await sendsevenWebhookService.disableAutoReply(orgId);
+    await sendsevenWebhookService.setAutoReply(orgId, false);
+    return this.getStatus(orgId);
+  },
+
+  // The webhook switch itself — independent of the bot. No `autoReply` flag, so
+  // connecting never changes the bot's state: a fresh org lands on the column
+  // default (off) and re-connecting an existing one leaves it as the admin set it.
+  async connectWebhook(orgId: string): Promise<BotStatus> {
+    await sendsevenWebhookService.connectWebhook(orgId);
+    return this.getStatus(orgId);
+  },
+
+  async disconnectWebhook(orgId: string): Promise<BotStatus> {
+    await sendsevenWebhookService.disconnectWebhook(orgId);
     return this.getStatus(orgId);
   },
 

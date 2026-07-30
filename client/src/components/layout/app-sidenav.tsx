@@ -5,13 +5,9 @@ import {
   ChevronRight,
   Command,
   LifeBuoy,
-  Mail,
   Menu,
-  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
-  Sparkles,
-  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRoles } from "@/hooks/use-role";
@@ -25,13 +21,6 @@ import { useTicketsByUser } from "@/features/tickets";
 import { useConversationBadgeCounts, unreadBadgeCount } from "@/features/conversations/api/use-conversations-queries";
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { Sheet, SheetPortal, SheetTrigger } from "@/components/ui/sheet";
-
-const CONNECT_CHANNELS: Array<{ key: string; label: string; icon: React.ComponentType<{ className?: string }>; awaiting: number; href?: string }> = [
-  { key: "whatsapp", label: "WhatsApp", icon: MessageSquare, awaiting: 43 },
-  { key: "facebook", label: "Facebook", icon: Users, awaiting: 2 },
-  { key: "instagram", label: "Instagram", icon: Sparkles, awaiting: 0 },
-  { key: "email", label: "Email", icon: Mail, awaiting: 9, href: "/email" },
-];
 
 const COLLAPSED_KEY = "sidebar-collapsed";
 
@@ -366,7 +355,7 @@ function SidenavInner({
       return s !== "resolved" && s !== "closed";
     }).length;
   }, [assignedTickets, currentUser?.id]);
-  // Conversations awaiting a reply, shown as a badge on the "Conversations" nav
+  // Conversations awaiting a reply, shown as a badge on the "Inbox" nav
   // item. Shares unreadBadgeCount with the inbox's own header badge so the two
   // can never disagree.
   const { data: conversationBadges } = useConversationBadgeCounts();
@@ -422,13 +411,19 @@ function SidenavInner({
   return (
     <div
       className={cn(
-        "glass ringed grain rounded-3xl transition-all duration-250",
-        sticky && "sticky ",
+        "glass ringed grain flex flex-col rounded-3xl transition-all duration-250",
+        // Spans the full viewport height and stays put while the page scrolls.
+        // The rail is `hidden xl:block`, so the shell's gutter is always the lg
+        // one (py-4 = 1rem a side) — hence top-4 and 100vh minus both gutters,
+        // which keeps the panel's margins even top and bottom.
+        // `sticky` (not `fixed`): the aside still needs to occupy width in the
+        // flex row, and sticky travels within it without being taken out of flow.
+        sticky ? "sticky h-[calc(100vh-2rem)]" : "h-full",
         collapsed ? "p-2" : "p-4"
       )}
     >
         {collapsed ? (
-          <div className="flex flex-col items-center gap-1">
+          <div className="flex shrink-0 flex-col items-center gap-1">
             {onToggleCollapsed && (
               <button
                 type="button"
@@ -448,17 +443,20 @@ function SidenavInner({
             </div>
           </div>
         ) : (
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
+          // Brand sits flush left, aligned with the nav items below it. The collapse
+          // button is absolutely positioned top-right; pr-11 reserves its width so a
+          // wide logo can't run underneath it.
+          <div className="relative flex min-h-12 shrink-0 items-center">
+            <div className="flex min-w-0 max-w-full items-center justify-start pr-11">
               {currentOrganization?.logoUrl ? (
                 <img
                   src={currentOrganization.logoUrl}
                   alt={currentOrganization.name || currentUser?.orgName || "Logo"}
-                  className="h-9 w-auto max-w-full object-contain object-left"
+                  className="h-12 w-auto max-w-full object-contain"
                   data-testid="img-brand-logo"
                 />
               ) : (
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <div
                     className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
                     data-testid="img-brand-mark"
@@ -481,7 +479,7 @@ function SidenavInner({
               <button
                 type="button"
                 onClick={onToggleCollapsed}
-                className="shrink-0 grid h-9 w-9 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
+                className="absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
                 title="Minimise sidebar"
                 data-testid="button-collapse-sidebar"
               >
@@ -491,9 +489,18 @@ function SidenavInner({
           </div>
         )}
 
-        <div className={cn("h-px bg-black/10 dark:bg-white/10", collapsed ? "my-2" : "my-4")} />
+        <div className={cn("h-px shrink-0 bg-black/10 dark:bg-white/10", collapsed ? "my-2" : "my-4")} />
 
-        <nav className={collapsed ? "flex flex-col items-center gap-1" : "space-y-1"}>
+        {/* The one growing child, so a nav taller than the screen (org admin has
+            the most sections) scrolls inside the panel rather than pushing
+            TheHub card out of view. min-h-0 is required — without it this flex
+            child won't shrink below its content and the panel overflows. */}
+        <nav
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto",
+            collapsed ? "flex flex-col items-center gap-1" : "space-y-1",
+          )}
+        >
           {sections.map((section) => (
             <SectionBlock
               key={section.id}
@@ -527,11 +534,13 @@ function SidenavInner({
           )}
         </nav>
 
+        {/* Sits below the scrolling nav, so on a tall screen it rests at the
+            bottom of the panel and stays reachable without scrolling. */}
         {!collapsed && (
           <>
-            <div className="my-4 h-px bg-black/10 dark:bg-white/10" />
+            <div className="my-4 h-px shrink-0 bg-black/10 dark:bg-white/10" />
 
-            <div className="grid gap-2">
+            <div className="grid shrink-0 gap-2">
               <Link
                 href="/hub"
                 className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 no-underline"
@@ -559,94 +568,6 @@ function SidenavInner({
                 <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
               </Link>
             </div>
-
-            <div className="my-4 h-px bg-black/10 dark:bg-white/10" />
-
-            <div className="flex items-center gap-3 px-3">
-              <div
-                className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-                data-testid="img-connect-mark"
-              >
-                <MessageSquare className="h-5 w-5 text-black/70 dark:text-white/85" />
-                <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
-              </div>
-              <div className="min-w-0">
-                <div className="title-serif truncate text-sm font-semibold" data-testid="text-connect-name">
-                  Connect
-                </div>
-                <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-connect-sub">
-                  Channels & conversations
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="mt-3 mb-1 h-px bg-black/10 dark:bg-white/10"
-              data-testid="separator-connect"
-            />
-
-            <div className="space-y-1" data-testid="section-connect">
-              {CONNECT_CHANNELS.map(({ key, label, icon: Icon, awaiting, href }) => {
-                const channelHref = href ?? `/?s=connect-${key}`;
-                const isActiveChannel = href ? currentPath === href : currentSearch === `s=connect-${key}`;
-                return (
-                  <Link
-                    key={key}
-                    href={channelHref}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition no-underline",
-                      isActiveChannel
-                        ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
-                        : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
-                    )}
-                    data-testid={`nav-connect-${key}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={cn(
-                          "inline-flex h-8 w-8 items-center justify-center rounded-xl border",
-                          isActiveChannel
-                            ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
-                            : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-                        )}
-                        aria-hidden
-                      >
-                        <Icon className="h-4 w-4 text-black/70 dark:text-white/80" />
-                      </span>
-                      <span className="text-sm font-medium" data-testid={`text-connect-label-${key}`}>
-                        {label}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {awaiting > 0 && (
-                        <span
-                          className={cn(
-                            "inline-flex min-w-[28px] items-center justify-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums",
-                            isActiveChannel
-                              ? "border-black/10 bg-black/10 text-black dark:border-white/15 dark:bg-white/15 dark:text-white"
-                              : "border-black/10 bg-black/5 text-black/70 dark:border-white/10 dark:bg-white/10 dark:text-white/80"
-                          )}
-                          data-testid={`badge-connect-awaiting-${key}`}
-                          aria-label={`${awaiting} awaiting`}
-                        >
-                          {awaiting}
-                        </span>
-                      )}
-                      <ChevronRight
-                        className={cn(
-                          "h-4 w-4",
-                          isActiveChannel
-                            ? "text-black/50 dark:text-white/70"
-                            : "text-black/35 dark:text-white/40"
-                        )}
-                      />
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-
           </>
         )}
     </div>

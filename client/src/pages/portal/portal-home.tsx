@@ -557,7 +557,14 @@ export default function PortalHomePage() {
   const unreadMessages = messages?.length ?? 0;
   const greeting = user?.firstName ? `Hello, ${user.firstName}` : "Hello, Traveller";
 
-  const deals = apiDeals ?? (dealsError ? fallbackDeals : []);
+  // Home shows a teaser of each list; "View all" opens the matching Deals tab for
+  // the rest. The endpoints already exclude expired deals, so these are the
+  // newest live ones.
+  const HOME_LATEST_DEALS = 3;
+  const HOME_FOR_YOU_DEALS = 2;
+  const allDeals = apiDeals ?? (dealsError ? fallbackDeals : []);
+  const deals = allDeals.slice(0, HOME_LATEST_DEALS);
+  const visibleForYouDeals = forYouDeals.slice(0, HOME_FOR_YOU_DEALS);
   const myTagNames = myTags.map((t) => t.name);
   const resolvedQuotes = quotes && quotes.length > 0 ? quotes : fallbackQuotes;
   const latestQuotes = resolvedQuotes.slice(0, 5);
@@ -702,12 +709,12 @@ export default function PortalHomePage() {
                   <Sparkles className="w-4 h-4 text-purple-400" />
                   <h2 className="text-base font-bold text-white">For You</h2>
                 </div>
-                <button onClick={() => setLocation("/portal/deals")} className="text-xs text-purple-400 flex items-center gap-1 hover:text-purple-300 transition-colors">
+                <button onClick={() => setLocation("/portal/deals?tab=for-you")} className="text-xs text-purple-400 flex items-center gap-1 hover:text-purple-300 transition-colors" data-testid="link-view-all-for-you">
                   View all <ArrowRight className="w-3 h-3" />
                 </button>
               </div>
               <div className="space-y-3 mb-6">
-                {forYouDeals.map((deal, idx) => (
+                {visibleForYouDeals.map((deal, idx) => (
                   <motion.div
                     key={deal.id}
                     initial={{ opacity: 0, y: 10 }}

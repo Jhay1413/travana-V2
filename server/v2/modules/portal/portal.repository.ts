@@ -379,8 +379,28 @@ export const portalRepository = {
     return rows.map((r) => r.tagId);
   },
 
-  async findForYouDeals(clientTagIds: string[], limit: number): Promise<PortalDealRow[]> {
+  async findForYouDeals(opts: { clientTagIds: string[]; limit: number; recentDays?: number }): Promise<PortalDealRow[]> {
+    const { clientTagIds, limit, recentDays } = opts;
     if (clientTagIds.length === 0) return [];
+
+    const conds: SQL[] = [
+      eq(quote.is_active, true),
+      isNotNull(quote.quote_token),
+      eq(quote.isFreeQuote, true),
+      exists(
+        db.select({ one: sql`1` })
+          .from(quoteTags)
+          .where(and(eq(quoteTags.quoteId, quote.id), inArray(quoteTags.tagId, clientTagIds))),
+      ),
+    ];
+    // Same recency window as findDeals: a deal that has aged out of the portal is
+    // expired everywhere, including a client's personalised list.
+    if (recentDays && recentDays > 0) {
+      conds.push(
+        sql`${quote.portal_added_at} IS NOT NULL AND ${quote.portal_added_at} >= now() - make_interval(days => ${recentDays})`,
+      );
+    }
+
     return db
       .select({
         id: quote.id,
@@ -392,6 +412,7 @@ export const portalRepository = {
         accommodationName: accomodation_list.name,
         destinationName: destination.name,
         countryName: country.country_name,
+        portalAddedAt: quote.portal_added_at,
       })
       .from(quote)
       .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
@@ -399,16 +420,7 @@ export const portalRepository = {
       .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
       .leftJoin(destination, eq(resorts.destination_id, destination.id))
       .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(
-        eq(quote.is_active, true),
-        isNotNull(quote.quote_token),
-        eq(quote.isFreeQuote, true),
-        exists(
-          db.select({ one: sql`1` })
-            .from(quoteTags)
-            .where(and(eq(quoteTags.quoteId, quote.id), inArray(quoteTags.tagId, clientTagIds))),
-        ),
-      ))
+      .where(and(...conds))
       .orderBy(desc(quote.date_created))
       .limit(limit);
   },

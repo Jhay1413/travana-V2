@@ -48,13 +48,15 @@ export const conversationIntegrationController = {
   // POST /api/v2/conversation-integration/:orgId/auto-reply — register the webhook + enable
   enableAutoReply: asyncHandler(async (req: Request, res: Response) => {
     const { mode } = (req.body ?? {}) as { mode?: string };
-    const result = await sendsevenWebhookService.enableAutoReply(requireOrgId(req), { mode });
+    const result = await sendsevenWebhookService.connectWebhook(requireOrgId(req), { mode, autoReply: true });
     return successResponse(res, result, "AI auto-reply enabled");
   }),
 
-  // DELETE /api/v2/conversation-integration/:orgId/auto-reply — delete the webhook + disable
+  // DELETE /api/v2/conversation-integration/:orgId/auto-reply — tears the webhook
+  // down entirely (platform-admin teardown). To silence only the bot and keep the
+  // realtime inbox, use POST /api/v2/bot-config/disable instead.
   disableAutoReply: asyncHandler(async (req: Request, res: Response) => {
-    await sendsevenWebhookService.disableAutoReply(requireOrgId(req));
-    return successResponse(res, { ok: true }, "AI auto-reply disabled");
+    await sendsevenWebhookService.disconnectWebhook(requireOrgId(req));
+    return successResponse(res, { ok: true }, "Webhook disconnected");
   }),
 };

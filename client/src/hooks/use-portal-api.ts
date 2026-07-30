@@ -236,14 +236,16 @@ export function usePortalBookings() {
   });
 }
 
+/** Browse Deals page. v2 route with recent=1: shows every deal still inside the
+ *  portal window, so expired free quotes are excluded here exactly as they are
+ *  from the home "Latest Deals" strip. */
 export function usePortalDeals(country?: string, tag?: string) {
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({ recent: "1" });
   if (country) params.set("country", country);
   if (tag) params.set("tag", tag);
-  const qs = params.toString();
   return useQuery<PortalDeal[]>({
     queryKey: portalKeys.deals(country, tag),
-    queryFn: () => portalFetch(`/api/portal/deals${qs ? `?${qs}` : ""}`),
+    queryFn: () => portalFetch(`/api/v2/portal/deals?${params.toString()}`),
     retry: false,
     enabled: !!getPortalToken(),
     refetchOnWindowFocus: true,
@@ -266,10 +268,12 @@ export function usePortalLatestDeals() {
   });
 }
 
+/** Personalised deals matching the client's saved tags. v2 route with recent=1 so
+ *  it honours the same portal window as every other deal list. */
 export function usePortalForYouDeals() {
   return useQuery<PortalDeal[]>({
     queryKey: portalKeys.forYouDeals,
-    queryFn: () => portalFetch("/api/portal/deals/for-you"),
+    queryFn: () => portalFetch("/api/v2/portal/deals/for-you?recent=1"),
     retry: false,
     enabled: !!getPortalToken(),
     refetchOnWindowFocus: true,

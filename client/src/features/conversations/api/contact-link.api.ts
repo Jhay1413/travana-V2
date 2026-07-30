@@ -4,10 +4,15 @@ import type { NeonClient } from "@/features/client/types/neon-client";
 // Links a SendSeven inbox contact to a CRM client (client_table). Server module:
 // server/v2/modules/contact-link. The axios interceptor unwraps the envelope.
 
+/** How `suggestions` were found. "contact" = phone/email, near-certain.
+ *  "name" = same first and last name only — a guess the UI must flag. */
+export type SuggestionMatchType = "contact" | "name";
+
 export interface ContactLinkStatus {
   contactId: string;
   linkedClient: NeonClient | null;
   suggestions: NeonClient[];
+  suggestionMatch: SuggestionMatchType;
 }
 
 // Reverse view: which SendSeven contact a CRM client is linked to (drives the
@@ -29,9 +34,12 @@ export interface CreateClientForContactInput {
 const base = (contactId: string) => `/api/v2/contact-links/${encodeURIComponent(contactId)}`;
 
 export const contactLinkApi = {
-  getStatus: async (contactId: string, match?: { phone?: string; email?: string }): Promise<ContactLinkStatus> => {
+  getStatus: async (
+    contactId: string,
+    match?: { phone?: string; email?: string; name?: string },
+  ): Promise<ContactLinkStatus> => {
     const { data } = await axiosClient.get<ContactLinkStatus>(base(contactId), {
-      params: { phone: match?.phone, email: match?.email },
+      params: { phone: match?.phone, email: match?.email, name: match?.name },
     });
     return data;
   },

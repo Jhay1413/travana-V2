@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Loader2, Link2, UserPlus, ArrowUpRight, Unlink, UserCheck, Sparkles } from "lucide-react";
+import { Loader2, Link2, UserPlus, ArrowUpRight, Unlink, UserCheck, Sparkles, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useContactLink, useLinkContact, useUnlinkContact } from "../api/use-contact-link";
@@ -8,11 +8,23 @@ import { LinkClientDialog, type ClientPrefill } from "./link-client-dialog";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import type { Conversation } from "../types";
 
-// The phone/email we try to auto-match a contact to a client with. Shared with
-// ContactPanel so both read the same cached contact-link query (keyed by contact).
-export function contactLinkMatch(conversation: Conversation): { phone?: string; email?: string } {
-  const handle = conversation.contact.handle;
-  return conversation.channel === "email" ? { email: handle } : { phone: handle };
+// What we try to auto-match a contact to a client with. Shared with ContactPanel
+// so both read the same cached contact-link query (keyed by contact).
+//
+// The handle is whichever identifier SendSeven has — phone, email, or a bare
+// contact id (see map.ts) — so classify it by SHAPE, not by channel. Keying off
+// the channel misfiled a WhatsApp contact's email as a phone (and an email
+// conversation's phone as an email), and neither could ever match.
+//
+// `name` is the weaker fallback the server only uses when phone/email find nothing.
+export function contactLinkMatch(conversation: Conversation): { phone?: string; email?: string; name?: string } {
+  const handle = (conversation.contact.handle ?? "").trim();
+  const name = conversation.contact.displayName?.trim() || undefined;
+
+  if (handle.includes("@")) return { email: handle, name };
+  // Enough digits to be a real number; an Instagram/Messenger id isn't.
+  if (handle.replace(/\D/g, "").length >= 7) return { phone: handle, name };
+  return { name };
 }
 
 export function formatClientDate(value: string | null | undefined): string | null {
@@ -82,6 +94,9 @@ export function ClientLinkSection({ conversation }: { conversation: Conversation
 
   const linked = data?.linkedClient ?? null;
   const suggestions = data?.suggestions ?? [];
+  // Name-only matches are a guess — two clients can share a name — so they get a
+  // different heading and a warning icon. Never presented as a confident match.
+  const isNameGuess = data?.suggestionMatch === "name";
 
   return (
     <div>
@@ -129,11 +144,24 @@ export function ClientLinkSection({ conversation }: { conversation: Conversation
         <div className="space-y-2">
           {suggestions.length > 0 && (
             <div className="space-y-1.5">
-              <div className="flex items-center gap-1 text-[11px] text-black/45 dark:text-white/45">
-                <Sparkles className="h-3 w-3" /> Possible match{suggestions.length > 1 ? "es" : ""}
-              </div>
+              {isNameGuess ? (
+                <div className="flex items-center gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="h-3 w-3 flex-none" /> Same name — check before linking
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-[11px] text-black/45 dark:text-white/45">
+                  <Sparkles className="h-3 w-3" /> Possible match{suggestions.length > 1 ? "es" : ""}
+                </div>
+              )}
               {suggestions.map((c) => (
-                <div key={c.id} className="flex items-center gap-2 rounded-xl border border-black/8 px-2.5 py-1.5 dark:border-white/8">
+                <div
+                  key={c.id}
+                  className={
+                    isNameGuess
+                      ? "flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/5 px-2.5 py-1.5"
+                      : "flex items-center gap-2 rounded-xl border border-black/8 px-2.5 py-1.5 dark:border-white/8"
+                  }
+                >
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">{c.firstName} {c.surename}</div>
                     <div className="truncate text-[11px] text-black/45 dark:text-white/45">
