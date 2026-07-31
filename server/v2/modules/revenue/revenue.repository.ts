@@ -1,8 +1,27 @@
 import { db } from "../../config/database";
 import { booking, transaction, clientTable, user, forwardsReport, booking_upsell } from "@shared/schema";
-import { sql, eq, and, gte, lte, isNotNull, notInArray } from "drizzle-orm";
+import { sql, eq, and, gte, lte, isNull, isNotNull, notInArray } from "drizzle-orm";
 import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 import { totalBookingCommissionExpr } from "../../utils/commission-sql";
+
+/**
+ * Inclusive [start, end] `travel_date` bounds (YYYY-MM-DD) for a report month's
+ * 56-day forwards window: [monthStart + 56d, monthEnd + 56d].
+ *
+ * Built with Date.UTC so the calendar arithmetic is independent of the server
+ * timezone — round-tripping local-midnight Dates through toISOString() shifted
+ * a boundary by one day on any non-UTC server, making adjacent months' windows
+ * overlap and double-count bookings on the shared date.
+ */
+function forwardsWindow(year: number, month: number): { start: string; end: string } {
+  const toDateStr = (d: Date) => d.toISOString().split("T")[0];
+  return {
+    // Day 0 of the next month is the last day of this month; day numbers
+    // outside 1..31 roll over, so +56 stays exact across month/year ends.
+    start: toDateStr(new Date(Date.UTC(year, month - 1, 1 + 56))),
+    end: toDateStr(new Date(Date.UTC(year, month, 0 + 56))),
+  };
+}
 
 export const revenueRepository = {
   /**
@@ -49,18 +68,11 @@ export const revenueRepository = {
     totalCommission: number;
     dealCount: number;
   }> {
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
-
-    const travelDateStart = new Date(monthStart);
-    travelDateStart.setDate(travelDateStart.getDate() + 56);
-
-    const travelDateEnd = new Date(monthEnd);
-    travelDateEnd.setDate(travelDateEnd.getDate() + 56);
+    const window = forwardsWindow(year, month);
 
     const conditions: any[] = [
-      gte(booking.travel_date, travelDateStart.toISOString().split('T')[0]),
-      lte(booking.travel_date, travelDateEnd.toISOString().split('T')[0]),
+      gte(booking.travel_date, window.start),
+      lte(booking.travel_date, window.end),
       eq(booking.is_active, true),
       isNotNull(booking.package_commission),
     ];
@@ -97,17 +109,11 @@ export const revenueRepository = {
     dealIds: string[];
     upsellIds: string[];
   }> {
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
-
-    const travelDateStart = new Date(monthStart);
-    travelDateStart.setDate(travelDateStart.getDate() + 56);
-    const travelDateEnd = new Date(monthEnd);
-    travelDateEnd.setDate(travelDateEnd.getDate() + 56);
+    const window = forwardsWindow(year, month);
 
     const conditions: any[] = [
-      gte(booking.travel_date, travelDateStart.toISOString().split('T')[0]),
-      lte(booking.travel_date, travelDateEnd.toISOString().split('T')[0]),
+      gte(booking.travel_date, window.start),
+      lte(booking.travel_date, window.end),
       eq(booking.is_active, true),
       isNotNull(booking.package_commission),
     ];
@@ -134,8 +140,10 @@ export const revenueRepository = {
     };
   },
 
-  // Upsert a single month's forwards_report row by (year, month). Updates the
-  // computed columns and leaves manual `adjustment` + `historical_ids` intact.
+  // Upsert a single month's forwards_report row by (org_id, year, month) —
+  // rows are per-org; orgId null is the platform-wide row written by platform
+  // admins. Updates the computed columns and leaves manual `adjustment` +
+  // `historical_ids` intact.
   async upsertForwardsReportMonth(input: {
     year: number;
     month: number;
@@ -144,14 +152,18 @@ export const revenueRepository = {
     companyCommission: number;
     dealIds: string[];
     upsellIds: string[];
+    orgId: string | null;
   }): Promise<"inserted" | "updated"> {
     const company = input.companyCommission.toFixed(2);
     const target = input.target.toFixed(2);
+    const orgCondition = input.orgId
+      ? eq(forwardsReport.org_id, input.orgId)
+      : isNull(forwardsReport.org_id);
 
     const [existing] = await db
       .select({ id: forwardsReport.id })
       .from(forwardsReport)
-      .where(and(eq(forwardsReport.year, input.year), eq(forwardsReport.month, input.month)))
+      .where(and(eq(forwardsReport.year, input.year), eq(forwardsReport.month, input.month), orgCondition))
       .limit(1);
 
     if (existing) {
@@ -179,23 +191,17 @@ export const revenueRepository = {
       deal_ids: input.dealIds,
       upsell_ids: input.upsellIds,
       historical_ids: [],
+      org_id: input.orgId,
     });
     return "inserted";
   },
 
   async getBookingsForMonth(year: number, month: number, orgId: string | null) {
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
-
-    const travelDateStart = new Date(monthStart);
-    travelDateStart.setDate(travelDateStart.getDate() + 56);
-
-    const travelDateEnd = new Date(monthEnd);
-    travelDateEnd.setDate(travelDateEnd.getDate() + 56);
+    const window = forwardsWindow(year, month);
 
     const conditions: any[] = [
-      gte(booking.travel_date, travelDateStart.toISOString().split('T')[0]),
-      lte(booking.travel_date, travelDateEnd.toISOString().split('T')[0]),
+      gte(booking.travel_date, window.start),
+      lte(booking.travel_date, window.end),
       eq(booking.is_active, true),
       isNotNull(booking.package_commission),
     ];

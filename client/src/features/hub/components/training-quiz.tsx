@@ -7,11 +7,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { HubBadge, HubEmptyState } from "@/features/hub/components/hub-components";
-import { useMyCourseStatus, useQuiz } from "@/features/hub/api/use-training-queries";
-import { useSubmitQuizAttempt } from "@/features/hub/api/use-training-mutations";
+import { useMyCourseStatus, useQuiz, useLessonQuiz } from "@/features/hub/api/use-training-queries";
+import { useSubmitQuizAttempt, useSubmitLessonQuizAttempt } from "@/features/hub/api/use-training-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { QuizAttemptResult } from "@/features/hub/types/training.types";
+import type { QuizAttemptResult, LessonWithAssets } from "@/features/hub/types/training.types";
 
 interface TrainingQuizProps {
   courseId: string;
@@ -123,8 +123,80 @@ export function TrainingQuiz({ courseId, requireContentBeforeQuiz }: TrainingQui
   );
 }
 
+interface TrainingLessonQuizProps {
+  courseId: string;
+  lesson: LessonWithAssets;
+}
+
+/**
+ * Per-lesson quiz panel, rendered under the selected lesson's info card in
+ * `TrainingCourseView` (only when `lesson.has_quiz`). Reads the lesson's quiz
+ * state from `useMyCourseStatus().lessonProgress` and opens the shared runner
+ * dialog targeted at the lesson. Passing marks the lesson complete.
+ */
+export function TrainingLessonQuiz({ courseId, lesson }: TrainingLessonQuizProps) {
+  const { data: status } = useMyCourseStatus(courseId);
+  const [open, setOpen] = useState(false);
+
+  const lessonStatus = status?.lessonProgress.find((p) => p.lessonId === lesson.id);
+  const passed = lessonStatus?.quizPassed ?? false;
+  const attemptCount = lessonStatus?.attemptCount ?? 0;
+  const bestScorePct = lessonStatus?.bestScorePct ?? null;
+  const required = lessonStatus?.quizRequired ?? lesson.quiz_required;
+
+  return (
+    <div
+      className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
+      data-testid={`panel-lesson-quiz-${lesson.id}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Lesson quiz</h3>
+            {required && !passed && <HubBadge variant="amber">Required</HubBadge>}
+          </div>
+          {passed ? (
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400" data-testid={`text-lesson-quiz-passed-${lesson.id}`}>
+              <CheckCircle2 className="h-3.5 w-3.5" /> Passed
+              {bestScorePct !== null ? ` · best score ${bestScorePct}%` : ""}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {attemptCount > 0
+                ? `${attemptCount} attempt${attemptCount === 1 ? "" : "s"} so far${bestScorePct !== null ? ` · best score ${bestScorePct}%` : ""}`
+                : required
+                  ? "You must pass this quiz to complete the lesson."
+                  : "Check your knowledge — passing marks this lesson complete."}
+            </p>
+          )}
+        </div>
+        <Button
+          size="sm"
+          variant={passed ? "outline" : "default"}
+          onClick={() => setOpen(true)}
+          data-testid={`button-take-lesson-quiz-${lesson.id}`}
+        >
+          {passed ? (
+            <>
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Retake quiz
+            </>
+          ) : attemptCount > 0 ? (
+            "Retake quiz"
+          ) : (
+            "Take quiz"
+          )}
+        </Button>
+      </div>
+
+      <TrainingQuizRunnerDialog courseId={courseId} lessonId={lesson.id} open={open} onOpenChange={setOpen} />
+    </div>
+  );
+}
+
 interface TrainingQuizRunnerDialogProps {
   courseId: string;
+  /** When set, the runner takes this LESSON's quiz instead of the course final quiz. */
+  lessonId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -134,10 +206,18 @@ interface TrainingQuizRunnerDialogProps {
  * collects one answer set per question (radio for single, checkboxes for
  * multiple), submits for server-side grading, then swaps to a result screen
  * built entirely from the attempt's `results` (never from `isCorrect`).
+ * Runs either the course final quiz or, with `lessonId`, a lesson's quiz.
+ * Exported for the finished-lesson quiz prompt in `TrainingCourseView`.
  */
-function TrainingQuizRunnerDialog({ courseId, open, onOpenChange }: TrainingQuizRunnerDialogProps) {
-  const { data: quiz, isLoading } = useQuiz(open ? courseId : "");
-  const submitAttempt = useSubmitQuizAttempt();
+export function TrainingQuizRunnerDialog({ courseId, lessonId, open, onOpenChange }: TrainingQuizRunnerDialogProps) {
+  // Exactly one of the two queries is enabled (both hooks always run — the
+  // disabled one gets an empty id, matching its `enabled: !!id` guard).
+  const courseQuizQuery = useQuiz(open && !lessonId ? courseId : "");
+  const lessonQuizQuery = useLessonQuiz(open && lessonId ? lessonId : "");
+  const { data: quiz, isLoading } = lessonId ? lessonQuizQuery : courseQuizQuery;
+  const submitCourseAttempt = useSubmitQuizAttempt();
+  const submitLessonAttempt = useSubmitLessonQuizAttempt();
+  const submitting = lessonId ? submitLessonAttempt.isPending : submitCourseAttempt.isPending;
   const { toast } = useToast();
 
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
@@ -186,11 +266,11 @@ function TrainingQuizRunnerDialog({ courseId, open, onOpenChange }: TrainingQuiz
   };
 
   const handleSubmit = async () => {
+    const answerList = questions.map((q) => ({ questionId: q.id, choiceIds: answers[q.id] ?? [] }));
     try {
-      const data = await submitAttempt.mutateAsync({
-        courseId,
-        answers: questions.map((q) => ({ questionId: q.id, choiceIds: answers[q.id] ?? [] })),
-      });
+      const data = lessonId
+        ? await submitLessonAttempt.mutateAsync({ lessonId, courseId, answers: answerList })
+        : await submitCourseAttempt.mutateAsync({ courseId, answers: answerList });
       setResult(data);
     } catch (err) {
       toast({
@@ -266,6 +346,11 @@ function TrainingQuizRunnerDialog({ courseId, open, onOpenChange }: TrainingQuiz
                     ? ` · issued ${new Date(result.certificate.issued_at).toLocaleDateString()}`
                     : ""}
                 </div>
+              )}
+              {result.lessonCompleted && (
+                <p className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400" data-testid="text-lesson-quiz-completed">
+                  Lesson marked complete.
+                </p>
               )}
             </div>
 
@@ -456,10 +541,10 @@ function TrainingQuizRunnerDialog({ courseId, open, onOpenChange }: TrainingQuiz
                     <Button
                       type="button"
                       onClick={handleSubmit}
-                      disabled={!currentAnswered || submitAttempt.isPending}
+                      disabled={!currentAnswered || submitting}
                       data-testid="button-quiz-submit"
                     >
-                      {submitAttempt.isPending ? "Submitting..." : "Submit"}
+                      {submitting ? "Submitting..." : "Submit"}
                     </Button>
                   ) : (
                     <Button type="button" onClick={goNext} disabled={!currentAnswered} data-testid="button-quiz-next">

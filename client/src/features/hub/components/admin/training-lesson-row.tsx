@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ImageIcon, PlayCircle, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, HelpCircle, ImageIcon, PlayCircle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HubBadge } from "@/features/hub/components/hub-components";
 import type { LessonType } from "@/features/hub/types/training.types";
@@ -17,6 +17,12 @@ interface LessonRowProps {
   onMoveDown: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  /** Opens the lesson's quiz builder (persisted lessons only — drafts have no id yet). */
+  onQuiz?: () => void;
+  /** Show the "Quiz" badge (the lesson already has a quiz). */
+  hasQuiz?: boolean;
+  /** The lesson's quiz must be passed to complete the lesson. */
+  quizRequired?: boolean;
   /** Disable reorder buttons while a reorder mutation is in flight (persisted list only). */
   reordering?: boolean;
 }
@@ -38,6 +44,9 @@ export function LessonRow({
   onMoveDown,
   onEdit,
   onDelete,
+  onQuiz,
+  hasQuiz,
+  quizRequired,
   reordering,
 }: LessonRowProps) {
   const LessonIcon = type === "video" ? PlayCircle : ImageIcon;
@@ -76,9 +85,15 @@ export function LessonRow({
           <HubBadge>{type}</HubBadge>
           {!isRequired && <HubBadge variant="amber">Optional</HubBadge>}
           {mediaBadge && <HubBadge variant="blue">{mediaBadge}</HubBadge>}
+          {hasQuiz && <HubBadge variant="green">{quizRequired ? "Required quiz" : "Quiz"}</HubBadge>}
         </div>
       </div>
 
+      {onQuiz && (
+        <Button variant="outline" size="sm" onClick={onQuiz} data-testid={`button-quiz-lesson-${id}`}>
+          <HelpCircle className="mr-1.5 h-3.5 w-3.5" /> Quiz
+        </Button>
+      )}
       <Button variant="outline" size="sm" onClick={onEdit} data-testid={`button-edit-lesson-${id}`}>
         Edit
       </Button>

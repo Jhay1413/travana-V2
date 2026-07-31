@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { HubEmptyState } from "@/features/hub/components/hub-components";
+import { TrainingQuizBuilder } from "./training-quiz-builder";
 import { useCourseContent } from "@/features/hub/api/use-training-queries";
 import {
   useCreateLesson,
@@ -38,6 +40,7 @@ export function TrainingLessonEditor({ courseId }: TrainingLessonEditorProps) {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<LessonWithAssets | null>(null);
+  const [quizLesson, setQuizLesson] = useState<LessonWithAssets | null>(null);
 
   const lessons = [...(course?.lessons ?? [])].sort((a, b) => a.position - b.position);
 
@@ -162,10 +165,13 @@ export function TrainingLessonEditor({ courseId }: TrainingLessonEditorProps) {
               index={i}
               total={lessons.length}
               reordering={reorderLessons.isPending}
+              hasQuiz={lesson.has_quiz}
+              quizRequired={lesson.quiz_required}
               onMoveUp={() => moveLesson(i, -1)}
               onMoveDown={() => moveLesson(i, 1)}
               onEdit={() => openEditDialog(lesson)}
               onDelete={() => handleDelete(lesson)}
+              onQuiz={() => setQuizLesson(lesson)}
             />
           ))}
         </div>
@@ -183,6 +189,26 @@ export function TrainingLessonEditor({ courseId }: TrainingLessonEditorProps) {
         savingLabel="Saving..."
         onSubmit={handleDialogSubmit}
       />
+
+      {/* Per-lesson quiz builder — keyed by lesson so the builder state resets
+          when switching between lessons. */}
+      <Dialog open={quizLesson !== null} onOpenChange={(open) => !open && setQuizLesson(null)}>
+        <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Quiz — {quizLesson?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto">
+            {quizLesson && (
+              <TrainingQuizBuilder
+                key={quizLesson.id}
+                courseId={courseId}
+                lessonId={quizLesson.id}
+                onSaved={() => setQuizLesson(null)}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,12 +1,13 @@
 import { randomBytes } from 'crypto';
-import { trainingQuizRepository, type QuizQuestionWithChoices } from './training-quiz.repository';
+import { trainingQuizRepository, type QuizQuestionWithChoices, type QuizWithQuestions, type QuizTreeQuestionInput } from './training-quiz.repository';
 import { trainingProgressRepository } from './training-progress.repository';
-import { getContentComplete } from './training-progress.service';
+import { trainingLessonRepository } from './training-lesson.repository';
+import { getContentComplete, assertLessonUnlocked } from './training-progress.service';
 import { trainingService, isAdminContext } from './training.service';
 import type { ScopeOrTrusted } from './training.repository';
 import { AppError } from '../../utils/error-handler';
 import type { Scope } from '../../utils/scope';
-import type { TrainingQuiz } from '@shared/schema';
+import type { TrainingLesson, TrainingQuiz } from '@shared/schema';
 import type {
   UpsertQuizInput,
   QuizView,
@@ -18,7 +19,7 @@ import type {
 
 function shapeQuizView(quiz: TrainingQuiz, questions: QuizQuestionWithChoices[], includeCorrect: boolean): QuizView {
   return {
-    quiz: { id: quiz.id, title: quiz.title, shuffleQuestions: quiz.shuffle_questions },
+    quiz: { id: quiz.id, title: quiz.title, shuffleQuestions: quiz.shuffle_questions, isRequired: quiz.is_required },
     questions: questions.map((q) => ({
       id: q.id,
       text: q.text,
@@ -52,6 +53,82 @@ function generateCertificateNo(): string {
   return `CERT-${year}-${hex}`;
 }
 
+/**
+ * Validate + shape the authoring payload into the repository's question tree.
+ * Zod only checks structural shape; the semantic rules (choice counts,
+ * correct-answer counts per question type) live here, shared by the course
+ * final quiz and per-lesson quizzes.
+ */
+function shapeQuestionTreeInput(input: UpsertQuizInput): QuizTreeQuestionInput[] {
+  if (input.questions.length === 0) {
+    throw new AppError('At least one question is required', 400);
+  }
+
+  return input.questions.map((q, qIndex) => {
+    if (q.choices.length < 2) {
+      throw new AppError(`Question ${qIndex + 1} must have at least 2 choices`, 400);
+    }
+    const correctCount = q.choices.filter((c) => c.isCorrect).length;
+    if (q.type === 'single' && correctCount !== 1) {
+      throw new AppError(`Question ${qIndex + 1} (single-answer) must have exactly 1 correct choice`, 400);
+    }
+    if (q.type === 'multiple' && correctCount < 1) {
+      throw new AppError(`Question ${qIndex + 1} (multi-answer) must have at least 1 correct choice`, 400);
+    }
+
+    return {
+      text: q.text,
+      type: q.type,
+      points: q.points ?? 1,
+      position: qIndex,
+      choices: q.choices.map((c, cIndex) => ({ text: c.text, is_correct: c.isCorrect, position: cIndex })),
+    };
+  });
+}
+
+/** Server-side grading, shared by final-quiz and lesson-quiz submissions. */
+function gradeAnswers(
+  quizData: QuizWithQuestions,
+  input: SubmitQuizInput,
+): { scorePct: number; results: QuizAttemptQuestionResult[]; snapshot: unknown[] } {
+  const answersByQuestion = new Map(input.answers.map((a) => [a.questionId, a.choiceIds]));
+
+  let earned = 0;
+  let total = 0;
+  const results: QuizAttemptQuestionResult[] = [];
+  const snapshot: unknown[] = [];
+
+  for (const question of quizData.questions) {
+    const correctChoiceIds = question.choices.filter((c) => c.is_correct).map((c) => c.id);
+    const selectedChoiceIds = answersByQuestion.get(question.id) ?? [];
+    const correct = sameChoiceSet(correctChoiceIds, selectedChoiceIds);
+
+    total += question.points;
+    if (correct) earned += question.points;
+
+    results.push({ questionId: question.id, correct, correctChoiceIds, selectedChoiceIds });
+
+    snapshot.push({
+      questionId: question.id,
+      text: question.text,
+      type: question.type,
+      points: question.points,
+      choices: question.choices.map((c) => ({ id: c.id, text: c.text, isCorrect: c.is_correct })),
+      selectedChoiceIds,
+      correct,
+    });
+  }
+
+  return { scorePct: total > 0 ? Math.round((earned / total) * 100) : 0, results, snapshot };
+}
+
+/** 404 (not 400) for a bad lesson id, matching the module's not-found pattern. */
+async function requireLesson(lessonId: string): Promise<TrainingLesson> {
+  const lesson = await trainingLessonRepository.findLessonById(lessonId);
+  if (!lesson) throw new AppError('Lesson not found', 404);
+  return lesson;
+}
+
 export const trainingQuizService = {
   /**
    * Full replace-upsert of a course's quiz (authoring, `platform_admin`
@@ -61,35 +138,34 @@ export const trainingQuizService = {
   async upsertQuiz(courseId: string, input: UpsertQuizInput, scope: ScopeOrTrusted): Promise<QuizView> {
     await trainingService.assertCourseEditable(courseId, scope);
 
-    if (input.questions.length === 0) {
-      throw new AppError('At least one question is required', 400);
-    }
+    const { quiz, questions: savedQuestions } = await trainingQuizRepository.upsertQuizTree(
+      { courseId, lessonId: null },
+      // is_required is a lesson-quiz concept — the final quiz's "requiredness"
+      // is already expressed by course completion, so it stays false here.
+      { title: input.title ?? null, shuffle_questions: input.shuffleQuestions ?? false, is_required: false },
+      shapeQuestionTreeInput(input),
+    );
 
-    const questions = input.questions.map((q, qIndex) => {
-      if (q.choices.length < 2) {
-        throw new AppError(`Question ${qIndex + 1} must have at least 2 choices`, 400);
-      }
-      const correctCount = q.choices.filter((c) => c.isCorrect).length;
-      if (q.type === 'single' && correctCount !== 1) {
-        throw new AppError(`Question ${qIndex + 1} (single-answer) must have exactly 1 correct choice`, 400);
-      }
-      if (q.type === 'multiple' && correctCount < 1) {
-        throw new AppError(`Question ${qIndex + 1} (multi-answer) must have at least 1 correct choice`, 400);
-      }
+    return shapeQuizView(quiz, savedQuestions, true);
+  },
 
-      return {
-        text: q.text,
-        type: q.type,
-        points: q.points ?? 1,
-        position: qIndex,
-        choices: q.choices.map((c, cIndex) => ({ text: c.text, is_correct: c.isCorrect, position: cIndex })),
-      };
-    });
+  /**
+   * Full replace-upsert of a LESSON's quiz (authoring, `platform_admin`
+   * only) — same validation and tree shape as the course final quiz, keyed
+   * by lesson instead.
+   */
+  async upsertLessonQuiz(lessonId: string, input: UpsertQuizInput, scope: ScopeOrTrusted): Promise<QuizView> {
+    const lesson = await requireLesson(lessonId);
+    await trainingService.assertCourseEditable(lesson.course_id, scope);
 
     const { quiz, questions: savedQuestions } = await trainingQuizRepository.upsertQuizTree(
-      courseId,
-      { title: input.title ?? null, shuffle_questions: input.shuffleQuestions ?? false },
-      questions,
+      { courseId: lesson.course_id, lessonId: lesson.id },
+      {
+        title: input.title ?? null,
+        shuffle_questions: input.shuffleQuestions ?? false,
+        is_required: input.isRequired ?? false,
+      },
+      shapeQuestionTreeInput(input),
     );
 
     return shapeQuizView(quiz, savedQuestions, true);
@@ -107,6 +183,17 @@ export const trainingQuizService = {
     await trainingService.getCourse(courseId, scope);
 
     const quizData = await trainingQuizRepository.findQuizWithQuestions(courseId);
+    if (!quizData) return { quiz: null, questions: [] };
+
+    return shapeQuizView(quizData.quiz, quizData.questions, isAdminContext(scope));
+  },
+
+  /** Role-aware read of a LESSON's quiz — same gating as `getQuiz`, via the lesson's course. */
+  async getLessonQuiz(lessonId: string, scope: ScopeOrTrusted): Promise<QuizView> {
+    const lesson = await requireLesson(lessonId);
+    await trainingService.getCourse(lesson.course_id, scope);
+
+    const quizData = await trainingQuizRepository.findQuizWithQuestionsByLessonId(lessonId);
     if (!quizData) return { quiz: null, questions: [] };
 
     return shapeQuizView(quizData.quiz, quizData.questions, isAdminContext(scope));
@@ -141,35 +228,7 @@ export const trainingQuizService = {
       throw new AppError('Finish all required lessons first', 400);
     }
 
-    const answersByQuestion = new Map(input.answers.map((a) => [a.questionId, a.choiceIds]));
-
-    let earned = 0;
-    let total = 0;
-    const results: QuizAttemptQuestionResult[] = [];
-    const snapshot: unknown[] = [];
-
-    for (const question of quizData.questions) {
-      const correctChoiceIds = question.choices.filter((c) => c.is_correct).map((c) => c.id);
-      const selectedChoiceIds = answersByQuestion.get(question.id) ?? [];
-      const correct = sameChoiceSet(correctChoiceIds, selectedChoiceIds);
-
-      total += question.points;
-      if (correct) earned += question.points;
-
-      results.push({ questionId: question.id, correct, correctChoiceIds, selectedChoiceIds });
-
-      snapshot.push({
-        questionId: question.id,
-        text: question.text,
-        type: question.type,
-        points: question.points,
-        choices: question.choices.map((c) => ({ id: c.id, text: c.text, isCorrect: c.is_correct })),
-        selectedChoiceIds,
-        correct,
-      });
-    }
-
-    const scorePct = total > 0 ? Math.round((earned / total) * 100) : 0;
+    const { scorePct, results, snapshot } = gradeAnswers(quizData, input);
     const passed = scorePct >= course.passing_score;
     const attemptNumber = (await trainingQuizRepository.getMaxAttemptNumber(enrollment.id, quizData.quiz.id)) + 1;
 
@@ -211,6 +270,65 @@ export const trainingQuizService = {
       passingScore: course.passing_score,
       courseCompleted,
       certificate,
+      results,
+    };
+  },
+
+  /**
+   * Submit + server-side-grade a LESSON quiz attempt. Unlimited retakes and
+   * no content gating (the quiz belongs to the lesson being studied). Passing
+   * marks the lesson's progress complete — it never completes the course or
+   * issues a certificate; that stays with the course final quiz.
+   */
+  async submitLessonAttempt(lessonId: string, input: SubmitQuizInput, scope: Scope): Promise<QuizAttemptResult> {
+    if (!scope.userId) throw new AppError('User not found in scope', 401);
+
+    const lesson = await requireLesson(lessonId);
+    const course = await trainingService.getCourse(lesson.course_id, scope);
+
+    const quizData = await trainingQuizRepository.findQuizWithQuestionsByLessonId(lessonId);
+    if (!quizData || quizData.questions.length === 0) {
+      throw new AppError('This lesson has no quiz', 400);
+    }
+
+    const { enrollment } = await trainingProgressRepository.findOrCreateEnrollment({
+      course_id: lesson.course_id,
+      user_id: scope.userId,
+      // '' → null: org_id is a uuid column (see submitAttempt above).
+      org_id: scope.orgId || null,
+      status: 'in_progress',
+    });
+
+    // Sequential progression: the lesson (and thus its quiz) must be unlocked.
+    await assertLessonUnlocked(lesson, enrollment.id);
+
+    const { scorePct, results, snapshot } = gradeAnswers(quizData, input);
+    const passed = scorePct >= course.passing_score;
+    const attemptNumber = (await trainingQuizRepository.getMaxAttemptNumber(enrollment.id, quizData.quiz.id)) + 1;
+
+    await trainingQuizRepository.createAttempt({
+      enrollment_id: enrollment.id,
+      quiz_id: quizData.quiz.id,
+      user_id: scope.userId,
+      attempt_number: attemptNumber,
+      score_pct: scorePct,
+      passed,
+      answers_snapshot: snapshot,
+      submitted_at: new Date(),
+    });
+
+    if (passed) {
+      await trainingProgressRepository.upsertProgress(enrollment.id, lessonId, { completed: true });
+    }
+
+    return {
+      attemptNumber,
+      scorePct,
+      passed,
+      passingScore: course.passing_score,
+      courseCompleted: false,
+      certificate: null,
+      lessonCompleted: passed,
       results,
     };
   },

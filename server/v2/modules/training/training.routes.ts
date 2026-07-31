@@ -18,7 +18,14 @@ import {
 } from './training-lesson.validator';
 import { presignUploadValidator } from './training-upload.validator';
 import { enrollValidator, myStatusValidator, progressUpdateValidator } from './training-progress.validator';
-import { upsertQuizValidator, quizCourseIdValidator, submitQuizAttemptValidator } from './training-quiz.validator';
+import {
+  upsertQuizValidator,
+  quizCourseIdValidator,
+  submitQuizAttemptValidator,
+  upsertLessonQuizValidator,
+  quizLessonIdValidator,
+  submitLessonQuizAttemptValidator,
+} from './training-quiz.validator';
 
 const router = Router();
 
@@ -63,6 +70,12 @@ router.patch('/lessons/:id/progress', validate(progressUpdateValidator), trainin
 router.get('/courses/:id/quiz', validate(quizCourseIdValidator), trainingQuizController.getQuiz);
 router.post('/courses/:id/quiz/attempts', validate(submitQuizAttemptValidator), trainingQuizController.submitAttempt);
 
+// Per-lesson quizzes — same role-aware GET / learner-attempt pattern as the
+// course final quiz above, keyed by lesson id. Distinct 3-segment paths, so
+// they never collide with `PATCH/DELETE /lessons/:id`.
+router.get('/lessons/:id/quiz', validate(quizLessonIdValidator), trainingQuizController.getLessonQuiz);
+router.post('/lessons/:id/quiz/attempts', validate(submitLessonQuizAttemptValidator), trainingQuizController.submitLessonAttempt);
+
 // Authoring (platform_admin only)
 router.post('/courses', requireOrgRole(['platform_admin']), validate(createCourseValidator), trainingController.createCourse);
 router.patch('/courses/:id', requireOrgRole(['platform_admin']), validate(updateCourseValidator), trainingController.updateCourse);
@@ -70,6 +83,7 @@ router.post('/courses/:id/publish', requireOrgRole(['platform_admin']), validate
 router.post('/courses/:id/archive', requireOrgRole(['platform_admin']), validate(courseIdValidator), trainingController.archiveCourse);
 router.delete('/courses/:id', requireOrgRole(['platform_admin']), validate(courseIdValidator), trainingController.deleteCourse);
 router.put('/courses/:id/quiz', requireOrgRole(['platform_admin']), validate(upsertQuizValidator), trainingQuizController.upsertQuiz);
+router.put('/lessons/:id/quiz', requireOrgRole(['platform_admin']), validate(upsertLessonQuizValidator), trainingQuizController.upsertLessonQuiz);
 
 // Video: presigned direct-to-S3 PUT — server never buffers the file (see
 // training-upload.service.ts).

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Circle, ImageIcon, Loader2, PlayCircle } from "lucide-react";
+import { CheckCircle2, Circle, HelpCircle, ImageIcon, Loader2, Lock, PlayCircle } from "lucide-react";
 import { HubBadge, HubEmptyState, HubProgressBar } from "@/features/hub/components/hub-components";
 import { useCourseContent, useMyCourseStatus } from "@/features/hub/api/use-training-queries";
 import { useEnroll, useUpdateLessonProgress } from "@/features/hub/api/use-training-mutations";
 import { TrainingVideoPlayer } from "./training-video-player";
 import { TrainingGraphicsViewer } from "./training-graphics-viewer";
-import { TrainingQuiz } from "./training-quiz";
+import { TrainingQuiz, TrainingLessonQuiz, TrainingQuizRunnerDialog } from "./training-quiz";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { LessonProgress } from "../types/training.types";
+import type { LessonProgress, LessonWithAssets } from "../types/training.types";
 
 interface TrainingCourseViewProps {
   courseId: string;
@@ -30,6 +31,13 @@ export function TrainingCourseView({ courseId }: TrainingCourseViewProps) {
 
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const hasRequestedEnrollRef = useRef(false);
+
+  // Finished-lesson quiz prompt: shown once per lesson when its content is
+  // done and the lesson has an unpassed quiz. "Take the quiz" hands off to
+  // the runner dialog.
+  const [quizPromptLesson, setQuizPromptLesson] = useState<LessonWithAssets | null>(null);
+  const [quizRunnerLesson, setQuizRunnerLesson] = useState<LessonWithAssets | null>(null);
+  const promptedLessonIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (status && !status.enrolled && !hasRequestedEnrollRef.current) {
@@ -55,13 +63,38 @@ export function TrainingCourseView({ courseId }: TrainingCourseViewProps) {
 
   const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId) ?? null;
 
+  // Sequential progression, mirroring the server rule (`assertLessonUnlocked`):
+  // a lesson is locked until every REQUIRED lesson before it is completed —
+  // optional lessons never block. The first lesson is always unlocked.
+  const lockedLessonIds = useMemo(() => {
+    const locked = new Set<string>();
+    let blocked = false;
+    for (const lesson of lessons) {
+      if (blocked) locked.add(lesson.id);
+      if (lesson.is_required && !progressByLessonId.get(lesson.id)?.completed) blocked = true;
+    }
+    return locked;
+  }, [lessons, progressByLessonId]);
+
   const requiredLessons = lessons.filter((lesson) => lesson.is_required);
   const requiredCompletedCount = requiredLessons.filter(
     (lesson) => progressByLessonId.get(lesson.id)?.completed,
   ).length;
 
+  // When a lesson's content finishes and the lesson has a quiz the learner
+  // hasn't passed, surface the prompt (once per lesson per visit).
+  const maybePromptLessonQuiz = (lessonId: string) => {
+    const lesson = lessons.find((l) => l.id === lessonId);
+    if (!lesson?.has_quiz) return;
+    if (progressByLessonId.get(lessonId)?.quizPassed) return;
+    if (promptedLessonIdsRef.current.has(lessonId)) return;
+    promptedLessonIdsRef.current.add(lessonId);
+    setQuizPromptLesson(lesson);
+  };
+
   const markLessonComplete = (lessonId: string) => {
     updateProgress.mutate({ lessonId, courseId, completed: true });
+    maybePromptLessonQuiz(lessonId);
   };
 
   const handleVideoProgressPct = (lessonId: string) => (pct: number) => {
@@ -71,6 +104,7 @@ export function TrainingCourseView({ courseId }: TrainingCourseViewProps) {
       progressPct: pct,
       ...(pct >= COMPLETE_THRESHOLD_PCT ? { completed: true } : {}),
     });
+    if (pct >= COMPLETE_THRESHOLD_PCT) maybePromptLessonQuiz(lessonId);
   };
 
   if (isCourseLoading || isStatusLoading || !course) {
@@ -121,6 +155,10 @@ export function TrainingCourseView({ courseId }: TrainingCourseViewProps) {
                 <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{selectedLesson.description}</p>
               )}
             </div>
+
+            {selectedLesson.has_quiz && (
+              <TrainingLessonQuiz key={`quiz-${selectedLesson.id}`} courseId={courseId} lesson={selectedLesson} />
+            )}
           </>
         ) : (
           <HubEmptyState title="No lessons yet" description="Check back soon for course content." />
@@ -151,33 +189,88 @@ export function TrainingCourseView({ courseId }: TrainingCourseViewProps) {
             {lessons.map((lesson) => {
               const progress = progressByLessonId.get(lesson.id);
               const isSelected = lesson.id === selectedLessonId;
+              const isLocked = lockedLessonIds.has(lesson.id);
               const LessonIcon = lesson.type === "video" ? PlayCircle : ImageIcon;
               return (
                 <button
                   key={lesson.id}
                   type="button"
                   onClick={() => setSelectedLessonId(lesson.id)}
+                  disabled={isLocked}
+                  title={isLocked ? "Complete the previous lessons to unlock" : undefined}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors",
                     isSelected
                       ? "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400"
-                      : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800",
+                      : isLocked
+                        ? "cursor-not-allowed text-slate-400 opacity-60 dark:text-slate-600"
+                        : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800",
                   )}
                   data-testid={`button-lesson-${lesson.id}`}
                 >
                   {progress?.completed ? (
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  ) : isLocked ? (
+                    <Lock className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
                   ) : (
                     <Circle className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
                   )}
                   <LessonIcon className="h-4 w-4 shrink-0" />
                   <span className="line-clamp-1 flex-1">{lesson.title}</span>
+                  {lesson.has_quiz && (
+                    <HelpCircle
+                      className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500"
+                      aria-label="Has quiz"
+                    />
+                  )}
                 </button>
               );
             })}
           </div>
         </div>
       </div>
+
+      <Dialog open={quizPromptLesson !== null} onOpenChange={(open) => !open && setQuizPromptLesson(null)}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-lesson-quiz-prompt">
+          <DialogHeader>
+            <DialogTitle>Lesson complete — quiz time!</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-slate-600 dark:text-slate-400">
+            {quizPromptLesson?.quiz_required
+              ? `Great work finishing "${quizPromptLesson?.title}"! This lesson has a quiz — pass it to unlock the next lesson.`
+              : `Great work finishing "${quizPromptLesson?.title}"! This lesson has a short quiz if you'd like to check what you've learned.`}
+          </p>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setQuizPromptLesson(null)}
+              data-testid="button-quiz-prompt-later"
+            >
+              Not now
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                setQuizRunnerLesson(quizPromptLesson);
+                setQuizPromptLesson(null);
+              }}
+              data-testid="button-quiz-prompt-take"
+            >
+              Take the quiz
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {quizRunnerLesson && (
+        <TrainingQuizRunnerDialog
+          courseId={courseId}
+          lessonId={quizRunnerLesson.id}
+          open
+          onOpenChange={(open) => !open && setQuizRunnerLesson(null)}
+        />
+      )}
     </div>
   );
 }

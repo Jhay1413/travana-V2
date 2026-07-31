@@ -18,6 +18,8 @@ export const trainingKeys = {
   adminList: () => [...trainingKeys.adminLists()] as const,
   quizzes: () => [...trainingKeys.all, "quiz"] as const,
   quiz: (courseId: string) => [...trainingKeys.quizzes(), courseId] as const,
+  lessonQuizzes: () => [...trainingKeys.all, "lesson-quiz"] as const,
+  lessonQuiz: (lessonId: string) => [...trainingKeys.lessonQuizzes(), lessonId] as const,
 };
 
 export function useTrainingCourses() {
@@ -72,5 +74,14 @@ export function useQuiz(courseId: string) {
     queryKey: trainingKeys.quiz(courseId),
     queryFn: () => trainingApi.getQuiz(courseId),
     enabled: !!courseId,
+  });
+}
+
+/** A LESSON's quiz — same role-aware shape as `useQuiz`, keyed by lesson id. */
+export function useLessonQuiz(lessonId: string) {
+  return useQuery<QuizView>({
+    queryKey: trainingKeys.lessonQuiz(lessonId),
+    queryFn: () => trainingApi.getLessonQuiz(lessonId),
+    enabled: !!lessonId,
   });
 }

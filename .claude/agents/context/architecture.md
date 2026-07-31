@@ -15,16 +15,16 @@
 
 <!-- AUTO:START -->
 <!-- Run `npm run docs:arch` to regenerate this block from the live codebase. -->
-**Last refreshed:** 2026-07-22 (auto-generated — do not edit by hand)
+**Last refreshed:** 2026-07-31 (auto-generated — do not edit by hand)
 
 | Fact | Value |
 |------|-------|
 | Backend modules (`server/v2/modules/`) | **66** |
 | Tables defined (`pgTable`) in schema.ts | 155 |
 | Enums (`pgEnum`) in schema.ts | 27 |
-| `orgId`/`org_id` references in schema.ts | 89 |
-| Migrations (`migrations/*.sql`) | 33 (latest: `0032_cleanup_stale_management_roles.sql`) |
-| Client pages (`client/src/pages`) | ~48 |
+| `orgId`/`org_id` references in schema.ts | 91 |
+| Migrations (`migrations/*.sql`) | 37 (latest: `0036_training_quiz_is_required.sql`) |
+| Client pages (`client/src/pages`) | ~47 |
 | Automated test runner | ✅ present |
 | Legacy v1 backend (`server/`) present | ⚠️ yes (alongside v2) |
 

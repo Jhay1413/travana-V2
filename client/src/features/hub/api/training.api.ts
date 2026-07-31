@@ -87,11 +87,29 @@ export const trainingApi = {
     return data;
   },
 
+  /** A LESSON's quiz — same role-aware shape as `getQuiz`, keyed by lesson id. */
+  async getLessonQuiz(lessonId: string): Promise<QuizView> {
+    const { data } = await axios.get<QuizView>(`${LESSONS_BASE}/${lessonId}/quiz`);
+    return data;
+  },
+
+  /** Learner: submit a lesson-quiz attempt; passing marks the lesson complete. */
+  async submitLessonQuizAttempt(lessonId: string, answers: QuizAttemptAnswer[]): Promise<QuizAttemptResult> {
+    const { data } = await axios.post<QuizAttemptResult>(`${LESSONS_BASE}/${lessonId}/quiz/attempts`, { answers });
+    return data;
+  },
+
   // === Admin (authoring, platform_admin only) ===
 
   /** Full replace-upsert of a course's quiz. */
   async upsertQuiz(courseId: string, input: UpsertQuizInput): Promise<QuizView> {
     const { data } = await axios.put<QuizView>(`${BASE}/${courseId}/quiz`, input);
+    return data;
+  },
+
+  /** Full replace-upsert of a LESSON's quiz. */
+  async upsertLessonQuiz(lessonId: string, input: UpsertQuizInput): Promise<QuizView> {
+    const { data } = await axios.put<QuizView>(`${LESSONS_BASE}/${lessonId}/quiz`, input);
     return data;
   },
 
