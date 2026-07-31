@@ -83,10 +83,12 @@ export const revenueService = {
     };
   },
 
-  // Regenerate the persisted forwards_report table from live bookings for the
-  // current calendar year (January–December). Commission is recorded entirely as
-  // company commission (agent_commission = 0). Manual `adjustment` / `historical_ids`
-  // on existing rows are preserved. Feeds the Admin → Data → Forwards Reports table.
+  // Regenerate the persisted forwards_report rows from live bookings for the
+  // current calendar year (January–December). Rows are per-org (platform admins
+  // write the org_id-null platform-wide rows), so orgs never overwrite each
+  // other's reports. Commission is recorded entirely as company commission
+  // (agent_commission = 0). Manual `adjustment` / `historical_ids` on existing
+  // rows are preserved. Feeds the Admin → Data → Forwards Reports table.
   async regenerateForwardsReport(scope: Scope): Promise<{ monthsWritten: number; inserted: number; updated: number }> {
     const orgId = effectiveOrgId(scope);
     const now = new Date();
@@ -103,7 +105,7 @@ export const revenueService = {
       const target = DEFAULT_MONTHLY_TARGETS[month] || 10000;
 
       const result = await revenueRepository.upsertForwardsReportMonth({
-        year, month, monthName, target, companyCommission: totalCommission, dealIds, upsellIds,
+        year, month, monthName, target, companyCommission: totalCommission, dealIds, upsellIds, orgId,
       });
       if (result === "inserted") inserted++;
       else updated++;

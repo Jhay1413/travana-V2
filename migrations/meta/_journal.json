@@ -239,6 +239,27 @@
       "when": 1785289342504,
       "tag": "0033_quote_booking_image_position",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1785462750961,
+      "tag": "0034_forwards_report_org_scoped",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1785465939400,
+      "tag": "0035_training_quiz_per_lesson",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1785466884035,
+      "tag": "0036_training_quiz_is_required",
+      "breakpoints": true
     }
   ]
 }

@@ -25,6 +25,26 @@ export async function getContentComplete(courseId: string, enrollmentId: string)
   return computeContentComplete(lessons, progressByLesson);
 }
 
+/**
+ * Sequential progression: a lesson is LOCKED until every REQUIRED lesson
+ * before it (by position) is completed — optional lessons never block.
+ * Throws 400 when locked. Shared by lesson-progress writes and lesson-quiz
+ * attempt submissions so the client's locked sidebar can't be bypassed via
+ * the API.
+ */
+export async function assertLessonUnlocked(lesson: TrainingLesson, enrollmentId: string): Promise<void> {
+  const lessons = await trainingLessonRepository.listLessonsByCourseId(lesson.course_id);
+  const progressRows = await trainingProgressRepository.listProgressByEnrollmentId(enrollmentId);
+  const completedByLesson = new Map(progressRows.map((p) => [p.lesson_id, p.completed]));
+
+  for (const candidate of lessons) {
+    if (candidate.id === lesson.id) return;
+    if (candidate.is_required && completedByLesson.get(candidate.id) !== true) {
+      throw new AppError('Complete the previous lessons first', 400);
+    }
+  }
+}
+
 export const trainingProgressService = {
   /** Idempotent: returns the existing enrollment if the learner is already enrolled. */
   async enroll(courseId: string, scope: Scope): Promise<{ enrollment: TrainingEnrollment; created: boolean }> {
@@ -63,12 +83,25 @@ export const trainingProgressService = {
       status: 'in_progress',
     });
 
+    await assertLessonUnlocked(lesson, enrollment.id);
+
     const progressPct = input.progressPct !== undefined ? Math.max(0, Math.min(100, input.progressPct)) : undefined;
 
     const patch: { progress_pct?: number; completed?: boolean } = {};
     if (progressPct !== undefined) patch.progress_pct = progressPct;
     if (input.completed !== undefined || progressPct !== undefined) {
       patch.completed = input.completed === true || (progressPct !== undefined && progressPct >= 90);
+    }
+
+    // A lesson with a REQUIRED quiz can only be completed by passing that quiz
+    // (see trainingQuizService.submitLessonAttempt) — content progress alone
+    // records the pct but never flips `completed`.
+    if (patch.completed === true) {
+      const lessonQuiz = await trainingQuizRepository.findQuizByLessonId(lessonId);
+      if (lessonQuiz?.is_required) {
+        const attempts = await trainingQuizRepository.listAttemptsByEnrollmentAndQuiz(enrollment.id, lessonQuiz.id);
+        if (!attempts.some((a) => a.passed)) delete patch.completed;
+      }
     }
 
     return trainingProgressRepository.upsertProgress(enrollment.id, lessonId, patch);
@@ -119,12 +152,44 @@ export const trainingProgressService = {
     const progressRows = await trainingProgressRepository.listProgressByEnrollmentId(enrollment.id);
     const progressByLesson = new Map(progressRows.map((p) => [p.lesson_id, p]));
 
+    // Per-lesson quiz state: quiz rows keyed by lesson, plus this enrollment's
+    // attempts across all of them in one batch query.
+    const lessonQuizzes = await trainingQuizRepository.listLessonQuizzesByCourseId(courseId);
+    const quizByLessonId = new Map(lessonQuizzes.map((q) => [q.lesson_id as string, q]));
+    const lessonQuizAttempts = await trainingQuizRepository.listAttemptsByEnrollmentAndQuizIds(
+      enrollment.id,
+      lessonQuizzes.map((q) => q.id),
+    );
+    const attemptsByQuizId = new Map<string, typeof lessonQuizAttempts>();
+    for (const attempt of lessonQuizAttempts) {
+      const list = attemptsByQuizId.get(attempt.quiz_id) ?? [];
+      list.push(attempt);
+      attemptsByQuizId.set(attempt.quiz_id, list);
+    }
+
     const lessonProgress = lessons.map((lesson) => {
       const progress = progressByLesson.get(lesson.id);
+      const lessonQuiz = quizByLessonId.get(lesson.id);
+      const attempts = lessonQuiz ? attemptsByQuizId.get(lessonQuiz.id) ?? [] : [];
+
+      let lessonQuizPassed = false;
+      let lessonBestScorePct: number | null = null;
+      for (const attempt of attempts) {
+        if (attempt.passed) lessonQuizPassed = true;
+        if (attempt.score_pct !== null && (lessonBestScorePct === null || attempt.score_pct > lessonBestScorePct)) {
+          lessonBestScorePct = attempt.score_pct;
+        }
+      }
+
       return {
         lessonId: lesson.id,
         completed: progress?.completed ?? false,
         progressPct: progress?.progress_pct ?? 0,
+        hasQuiz: lessonQuiz !== undefined,
+        quizRequired: lessonQuiz?.is_required ?? false,
+        quizPassed: lessonQuizPassed,
+        bestScorePct: lessonBestScorePct,
+        attemptCount: attempts.length,
       };
     });
 

@@ -174,3 +174,17 @@ export function useUpsertQuiz() {
     },
   });
 }
+
+/** Full replace-upsert of a LESSON's quiz (authoring, `platform_admin` only). */
+export function useUpsertLessonQuiz() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ lessonId, ...input }: { lessonId: string; courseId: string } & UpsertQuizInput) =>
+      trainingApi.upsertLessonQuiz(lessonId, input),
+    onSuccess: (_data, { lessonId, courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.lessonQuiz(lessonId) });
+      // The lesson's `has_quiz` flag lives on the cached course content.
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}

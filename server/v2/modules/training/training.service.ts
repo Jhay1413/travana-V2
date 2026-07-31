@@ -1,5 +1,6 @@
 import { trainingRepository, type ScopeOrTrusted } from './training.repository';
 import { trainingLessonRepository } from './training-lesson.repository';
+import { trainingQuizRepository } from './training-quiz.repository';
 import { AppError } from '../../utils/error-handler';
 import type { Scope } from '../../utils/scope';
 import type { InsertTrainingCourse, TrainingCourse, TrainingLessonAsset } from '@shared/schema';
@@ -113,6 +114,9 @@ export const trainingService = {
     const lessons = await trainingLessonRepository.listLessonsByCourseId(id);
     const lessonIds = lessons.map((l) => l.id);
     const assets = await trainingLessonRepository.listAssetsByLessonIds(lessonIds);
+    const lessonQuizzes = await trainingQuizRepository.listLessonQuizzesByCourseId(id);
+    const lessonIdsWithQuiz = new Set(lessonQuizzes.map((q) => q.lesson_id));
+    const lessonIdsWithRequiredQuiz = new Set(lessonQuizzes.filter((q) => q.is_required).map((q) => q.lesson_id));
 
     const assetsByLesson = new Map<string, TrainingLessonAsset[]>();
     for (const asset of assets) {
@@ -126,6 +130,8 @@ export const trainingService = {
       lessons: lessons.map((lesson) => ({
         ...lesson,
         assets: lesson.type === 'graphics' ? assetsByLesson.get(lesson.id) ?? [] : [],
+        has_quiz: lessonIdsWithQuiz.has(lesson.id),
+        quiz_required: lessonIdsWithRequiredQuiz.has(lesson.id),
       })),
     };
   },

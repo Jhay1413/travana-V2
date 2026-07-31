@@ -545,9 +545,10 @@ export default function TrainingCourseEditor() {
               {isNew && (
                 <div className="flex items-center justify-between rounded-lg border border-dashed border-slate-200 p-3 dark:border-slate-800">
                   <div>
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Quiz</p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Quizzes</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Save the course first — you'll be able to build its quiz from here once it exists.
+                      Save the course first — you'll then be able to build its final quiz and a quiz for each
+                      lesson (via the lesson's Quiz button).
                     </p>
                   </div>
                 </div>

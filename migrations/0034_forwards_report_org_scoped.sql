@@ -1,0 +1,2 @@
+ALTER TABLE "forwards_report" DROP CONSTRAINT "forwards_report_year_month_unique";--> statement-breakpoint
+ALTER TABLE "forwards_report" ADD CONSTRAINT "forwards_report_org_year_month_unique" UNIQUE("org_id","year","month");

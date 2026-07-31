@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, pgEnum, text, varchar, integer, bigint, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, vector, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, bigint, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, uniqueIndex, vector, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -451,7 +451,11 @@ export const forwardsReport = pgTable('forwards_report', {
   org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   branch_id: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
 }, (table) => ({
-  unique_year_month: unique().on(table.year, table.month),
+  // Report rows are per-org; org_id IS NULL holds the platform-wide (all orgs)
+  // report written by platform admins. NULLs are distinct in Postgres unique
+  // constraints, so the app-level upsert in revenue.repository is what keeps
+  // the NULL-org rows singular per (year, month).
+  unique_org_year_month: unique('forwards_report_org_year_month_unique').on(table.org_id, table.year, table.month),
   year_month_idx: index('forwards_report_year_month_idx').on(table.year, table.month),
 }));
 export type ForwardsReport = typeof forwardsReport.$inferSelect;
@@ -1781,12 +1785,22 @@ export type InsertTrainingLessonAsset = z.infer<typeof insertTrainingLessonAsset
 
 export const training_quiz = pgTable('training_quiz', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
-  course_id: uuid("course_id").notNull().unique().references(() => training_course.id, { onDelete: "cascade" }),
+  course_id: uuid("course_id").notNull().references(() => training_course.id, { onDelete: "cascade" }),
+  // NULL = the course-level "final" quiz (at most one per course, enforced by
+  // the partial unique index below). Set = a per-lesson quiz (one per lesson).
+  lesson_id: uuid("lesson_id").unique().references(() => training_lesson.id, { onDelete: "cascade" }),
   title: varchar("title"),
   shuffle_questions: boolean("shuffle_questions").notNull().default(false),
+  // Lesson quizzes only: when true, content progress alone cannot complete the
+  // lesson — the learner must pass this quiz. Always false on final quizzes.
+  is_required: boolean("is_required").notNull().default(false),
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  course_final_quiz_unique: uniqueIndex('training_quiz_course_final_unique')
+    .on(table.course_id)
+    .where(sql`${table.lesson_id} IS NULL`),
+}));
 
 export const insertTrainingQuizSchema = createInsertSchema(training_quiz).omit({ id: true, created_at: true, updated_at: true });
 export type TrainingQuiz = typeof training_quiz.$inferSelect;

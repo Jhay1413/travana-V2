@@ -60,24 +60,38 @@ export function useUpdateLessonProgress() {
 
       // Mirror the server rule (training-progress.service.ts): `completed`
       // is only touched when completed/progressPct is provided, and becomes
-      // true when explicitly completed OR progressPct >= 90.
+      // true when explicitly completed OR progressPct >= 90 — EXCEPT when the
+      // lesson has a required quiz that isn't passed yet (only passing the
+      // quiz completes such a lesson).
       const touchesCompleted = completed !== undefined || progressPct !== undefined;
       const nextCompleted = completed === true || (progressPct !== undefined && progressPct >= 90);
 
       // Monotonic, mirroring the server upsert (GREATEST pct, never un-complete):
       // a replay starting at 0 must not visibly drop the bar/checkmark.
-      const patchEntry = (p: LessonProgress): LessonProgress => ({
-        ...p,
-        progressPct: progressPct !== undefined ? Math.max(p.progressPct, progressPct) : p.progressPct,
-        completed: touchesCompleted ? p.completed || nextCompleted : p.completed,
-      });
+      const patchEntry = (p: LessonProgress): LessonProgress => {
+        const blockedByRequiredQuiz = p.quizRequired && !p.quizPassed;
+        return {
+          ...p,
+          progressPct: progressPct !== undefined ? Math.max(p.progressPct, progressPct) : p.progressPct,
+          completed: touchesCompleted ? p.completed || (nextCompleted && !blockedByRequiredQuiz) : p.completed,
+        };
+      };
 
       const exists = previous.lessonProgress.some((p) => p.lessonId === lessonId);
       const lessonProgress = exists
         ? previous.lessonProgress.map((p) => (p.lessonId === lessonId ? patchEntry(p) : p))
         : [
             ...previous.lessonProgress,
-            patchEntry({ lessonId, completed: false, progressPct: 0 }),
+            patchEntry({
+              lessonId,
+              completed: false,
+              progressPct: 0,
+              hasQuiz: false,
+              quizRequired: false,
+              quizPassed: false,
+              bestScorePct: null,
+              attemptCount: 0,
+            }),
           ];
 
       queryClient.setQueryData<MyCourseStatus>(key, {
@@ -115,6 +129,22 @@ export function useSubmitQuizAttempt() {
     onSuccess: (_data, { courseId }) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.myStatus(courseId) });
       queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
+/**
+ * Submit + server-side-grade a LESSON quiz attempt (unlimited retakes).
+ * Passing marks the lesson complete server-side, so `myStatus` (checkmarks,
+ * progress bar, per-lesson quiz state) is refreshed on success.
+ */
+export function useSubmitLessonQuizAttempt() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ lessonId, answers }: { lessonId: string; courseId: string; answers: QuizAttemptAnswer[] }) =>
+      trainingApi.submitLessonQuizAttempt(lessonId, answers),
+    onSuccess: (_data, { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.myStatus(courseId) });
     },
   });
 }

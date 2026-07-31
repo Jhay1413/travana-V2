@@ -17,6 +17,7 @@ export const upsertQuizValidator = z.object({
   body: z.object({
     title: z.string().nullable().optional(),
     shuffleQuestions: z.boolean().optional(),
+    isRequired: z.boolean().optional(),
     questions: z.array(quizQuestionBody).min(1, 'At least one question is required'),
   }),
 });
@@ -25,16 +26,33 @@ export const quizCourseIdValidator = z.object({
   params: z.object({ id: z.string().uuid('Invalid course id') }),
 });
 
+const attemptBody = z.object({
+  answers: z.array(
+    z.object({
+      questionId: z.string().uuid('Invalid question id'),
+      choiceIds: z.array(z.string().uuid('Invalid choice id')),
+    }),
+  ),
+});
+
 export const submitQuizAttemptValidator = z.object({
   params: z.object({ id: z.string().uuid('Invalid course id') }),
-  body: z.object({
-    answers: z.array(
-      z.object({
-        questionId: z.string().uuid('Invalid question id'),
-        choiceIds: z.array(z.string().uuid('Invalid choice id')),
-      }),
-    ),
-  }),
+  body: attemptBody,
+});
+
+// Lesson-quiz variants: same bodies, the :id param is a lesson id instead.
+export const upsertLessonQuizValidator = z.object({
+  params: z.object({ id: z.string().uuid('Invalid lesson id') }),
+  body: upsertQuizValidator.shape.body,
+});
+
+export const quizLessonIdValidator = z.object({
+  params: z.object({ id: z.string().uuid('Invalid lesson id') }),
+});
+
+export const submitLessonQuizAttemptValidator = z.object({
+  params: z.object({ id: z.string().uuid('Invalid lesson id') }),
+  body: attemptBody,
 });
 
 export type UpsertQuizBody = z.infer<typeof upsertQuizValidator>['body'];

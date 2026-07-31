@@ -56,6 +56,10 @@ export interface TrainingLessonAsset {
 /** A lesson with its ordered graphics assets attached (empty array for video lessons). */
 export interface LessonWithAssets extends TrainingLesson {
   assets: TrainingLessonAsset[];
+  /** Whether this lesson has its own quiz (per-lesson knowledge check). */
+  has_quiz: boolean;
+  /** Passing the lesson quiz is required to complete the lesson (false when no quiz). */
+  quiz_required: boolean;
 }
 
 /** Single cohesive course-read shape: course + its ordered lessons (+ each lesson's assets). */
@@ -86,6 +90,13 @@ export interface LessonProgress {
   lessonId: string;
   completed: boolean;
   progressPct: number;
+  // Per-lesson quiz state (all-default when the lesson has no quiz).
+  hasQuiz: boolean;
+  /** Passing the lesson quiz is the only way to complete this lesson. */
+  quizRequired: boolean;
+  quizPassed: boolean;
+  bestScorePct: number | null;
+  attemptCount: number;
 }
 
 /**
@@ -115,7 +126,7 @@ export interface QuizQuestionView {
 
 /** `quiz: null` (with empty `questions`) means the course has no quiz yet. */
 export interface QuizView {
-  quiz: { id: string; title: string | null; shuffleQuestions: boolean } | null;
+  quiz: { id: string; title: string | null; shuffleQuestions: boolean; isRequired: boolean } | null;
   questions: QuizQuestionView[];
 }
 
@@ -135,6 +146,8 @@ export interface QuizQuestionInput {
 export interface UpsertQuizInput {
   title?: string | null;
   shuffleQuestions?: boolean;
+  /** Lesson quizzes only: passing is required to complete the lesson. Ignored on the course final quiz. */
+  isRequired?: boolean;
   questions: QuizQuestionInput[];
 }
 
@@ -162,6 +175,8 @@ export interface QuizAttemptResult {
   passingScore: number;
   courseCompleted: boolean;
   certificate: QuizCertificateView | null;
+  /** Lesson-quiz submissions only: passing marked the lesson complete. */
+  lessonCompleted?: boolean;
   results: QuizAttemptQuestionResult[];
 }
 
