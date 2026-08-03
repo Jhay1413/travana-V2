@@ -4,7 +4,9 @@ import {
   buildPhoneConflictReply,
   buildTranscript,
   decideDeterministicRoute,
+  effectiveAttachmentKind,
   generateBeneficiaryAsk,
+  generateDocumentReceivedAsk,
   generateGeneralReply,
   generateTransitionReply,
   generateTurn,
@@ -21,6 +23,7 @@ import {
   shouldCreateEnquiryNow,
   shouldForceTicketNow,
   similarReply,
+  triageImageAttachments,
   type BeneficiaryAskKind,
 } from "../ai-conversation/ai-conversation.brain";
 import { classifyConversationRoute } from "../ai-conversation/conversation-router";
@@ -29,6 +32,7 @@ import { botConfigRepository } from "../bot-config/bot-config.repository";
 import { knowledgeBaseRepository } from "../knowledge-base/knowledge-base.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { adminAgent } from "../sendseven-webhook/admin-agent.service";
+import type { PendingAttachment } from "../sendseven-webhook/admin-data.service";
 import { resolveAndCreateEnquiry } from "../sendseven-webhook/enquiry-auto-create.service";
 import {
   extractPhoneNumber,
@@ -82,6 +86,21 @@ interface ConversationContext {
   // asked them to confirm it. Lets the next turn tell a correction (new number)
   // from a confirmation (same number again). Mirrors reply-worker.
   phoneConflictPhone?: string;
+  // Accumulated details read (vision triage) from holiday_info image(s) the
+  // tester sent — persisted so they stay in the AI's view on EVERY collecting
+  // turn, not just the turn the image arrived (a field the model doesn't
+  // extract into slots immediately would otherwise be lost for good). Cleared
+  // automatically when the enquiry is created / the session hands off (those
+  // branches build a fresh context). Mirrors reply-worker.
+  holidayImageInfo?: string;
+  // A DOCUMENT sent BEFORE the tester was identified (mirrors reply-worker's
+  // pendingAttachmentRefs): the test chat has no message store to re-download
+  // from, so the bytes are held in-process (deferredAttachmentBytes, TTL'd)
+  // and this persisted marker carries the filenames + vision description so
+  // the identify turn can still route admin, open the ticket, and describe
+  // the document even if the process restarted (bytes lost → note says so).
+  // Consumed (deleted) on the turn the tester is identified.
+  pendingAttachmentInfo?: { filenames: string[]; description?: string };
   // Third-party enquiry ("my friend James wants…") — the enquiry is filed under
   // this traveller, not the sender. Mirrors reply-worker's ConversationContext.
   beneficiary?: {
@@ -117,6 +136,38 @@ function redactPhone(phone?: string | null): string {
 const HISTORY_LIMIT = 20;
 const FALLBACK_REPLY = "Thanks for your message — one of our advisors will be in touch shortly.";
 
+// In-process holding pen for document bytes sent BEFORE the tester was
+// identified (see ConversationContext.pendingAttachmentInfo). Keyed by
+// session id; TTL'd so an abandoned test session doesn't pin buffers. This is
+// deliberately process-local — the test chat is a single-server dev tool, and
+// a restart merely means the eventual ticket lacks the file (the persisted
+// marker still carries the vision description).
+const DEFERRED_BYTES_TTL_MS = 60 * 60 * 1000;
+const deferredAttachmentBytes = new Map<string, { attachments: PendingAttachment[]; storedAt: number }>();
+
+function pruneDeferredBytes(): void {
+  const cutoff = Date.now() - DEFERRED_BYTES_TTL_MS;
+  for (const [key, entry] of deferredAttachmentBytes) {
+    if (entry.storedAt < cutoff) deferredAttachmentBytes.delete(key);
+  }
+}
+
+function stashDeferredAttachmentBytes(sessionId: string, attachments: PendingAttachment[]): void {
+  pruneDeferredBytes();
+  const existing = deferredAttachmentBytes.get(sessionId);
+  deferredAttachmentBytes.set(sessionId, {
+    attachments: [...(existing?.attachments ?? []), ...attachments],
+    storedAt: Date.now(),
+  });
+}
+
+function takeDeferredAttachmentBytes(sessionId: string): PendingAttachment[] {
+  pruneDeferredBytes();
+  const entry = deferredAttachmentBytes.get(sessionId);
+  deferredAttachmentBytes.delete(sessionId);
+  return entry?.attachments ?? [];
+}
+
 export interface RunTestFlowTurnResult {
   replyMessage: InternalChatMessage;
 }
@@ -142,8 +193,21 @@ export const internalChatTestflowService = {
   // assistant message (unlike reply-worker, this transport has no
   // draft-vs-send distinction and no silent no-op branch — the tester is
   // watching a live chat, so every turn gets a reply).
-  async runTestFlowTurn(session: InternalChatSession, userText: string, scope: Scope): Promise<RunTestFlowTurnResult> {
+  async runTestFlowTurn(
+    session: InternalChatSession,
+    userText: string,
+    scope: Scope,
+    // Optional file(s) the tester "sent" with this message — lets the test
+    // flow exercise the real attachment path (vision read → admin route →
+    // ticket with the file + AI-read description), mirroring reply-worker.
+    // Bytes exist only for THIS turn: unlike the SendSeven flow there is no
+    // message store to re-download from, so the test flow has NO pre-
+    // onboarding deferral — send attachments on a turn where the tester is
+    // already identified (or identifies themselves in the same message).
+    attachments?: PendingAttachment[],
+  ): Promise<RunTestFlowTurnResult> {
     const orgId = session.orgId;
+    const pendingAttachments = attachments ?? [];
 
     const persistReply = (text: string): Promise<InternalChatMessage> =>
       internalChatRepository.createMessage({ sessionId: session.id, role: "assistant", content: text || FALLBACK_REPLY });
@@ -222,16 +286,93 @@ export const internalChatTestflowService = {
       !!prevContext.groupedAskSent ||
       !!prevContext.beneficiary ||
       priorSubstantive;
+
+    // ── Image triage (mirrors reply-worker) ────────────────────────────────
+    // Classify + read any image(s) sent this turn BEFORE routing: a DOCUMENT
+    // (passport, booking paperwork…) forces the admin/ticket path exactly as
+    // before; a HOLIDAY_INFO image (a deal/advert/offer screenshot) is a
+    // SALES signal — its extracted details are injected into the transcript
+    // the AI sees, treated as stated by the customer, so the enquiry bot
+    // fills slots from them and only asks for what's still missing. A null
+    // triage (vision failed) falls back to the document default (fail-safe).
+    const imageTriage = pendingAttachments.length
+      ? await triageImageAttachments(pendingAttachments, { orgId, feature: "staff_chat_test", userId: scope.userId ?? undefined })
+      : null;
+    // Accumulate holiday-image details in the context (containment-deduped,
+    // capped) so they persist across the WHOLE collecting flow — the model
+    // gets every chance to extract each field, not just one turn. Mutating
+    // prevContext means every later context persist carries it; the
+    // create/hand-off branches build fresh contexts, clearing it.
+    if (imageTriage?.kind === "holiday_info") {
+      const existing = prevContext.holidayImageInfo ?? "";
+      if (!existing.includes(imageTriage.description.slice(0, 120))) {
+        prevContext.holidayImageInfo = `${existing} ${imageTriage.description}`.trim().slice(0, 1500);
+      }
+    }
+    const imageInfoNote = prevContext.holidayImageInfo
+      ? `[Details from the image(s) I've sent in this chat — treat these as details I've stated: ${prevContext.holidayImageInfo}]`
+      : null;
+    // Defer a pre-identification DOCUMENT upload (mirrors reply-worker's
+    // pendingAttachmentRefs): bytes go to the in-process holding pen, the
+    // marker (filenames + vision description) is persisted on the session
+    // context — the identify turn consumes both into the ticket.
+    const currentEffectiveKind = pendingAttachments.length ? effectiveAttachmentKind(imageTriage?.kind ?? null, userText) : null;
+    if (!clientId && pendingAttachments.length && currentEffectiveKind === "document") {
+      stashDeferredAttachmentBytes(session.id, pendingAttachments);
+      const priorInfo = prevContext.pendingAttachmentInfo;
+      const description =
+        [priorInfo?.description, imageTriage?.kind !== "holiday_info" ? imageTriage?.description : undefined]
+          .filter(Boolean)
+          .join(" ")
+          .slice(0, 800) || undefined;
+      prevContext.pendingAttachmentInfo = {
+        filenames: [...(priorInfo?.filenames ?? []), ...pendingAttachments.map((a) => a.filename)],
+        description,
+      };
+      console.log(`[internal-chat-testflow] session ${session.id} deferring ${pendingAttachments.length} document attachment(s) until the tester is identified`);
+    }
+    // What the LLMs read. The stored transcript keeps only the typed text —
+    // the image details ride along via the note; anything worth keeping lands
+    // in the extracted slots, which are persisted. A document attachment gets
+    // its own line so the (pre-identification) onboarding turn KNOWS a file
+    // arrived and acknowledges it while asking for name+phone, instead of
+    // replying as if the message were empty chat.
+    const documentAttachmentLine =
+      currentEffectiveKind === "document"
+        ? `Customer: [I've attached ${pendingAttachments.length === 1 ? "a file" : "files"}: ${pendingAttachments.map((a) => a.filename).join(", ")}]`
+        : null;
+    const transcriptForAi = [transcript, imageInfoNote ? `Customer: ${imageInfoNote}` : null, documentAttachmentLine]
+      .filter(Boolean)
+      .join("\n");
     // (3.2, mirrors reply-worker) A deterministic ACTIONABLE admin signal on THIS
     // turn breaks OUT of enquiryInFlight stickiness — a customer mid-enquiry who
     // complains about an existing booking must reach the admin bot, not be
     // funneled into holiday slot-filling. A merely admin-ish but NON-actionable
     // question does NOT break out — stays sales-sticky exactly as before.
     // (3.2, mirrors reply-worker) Deterministic route precedence, shared via
-    // decideDeterministicRoute. This driver has no attachment concept, so
-    // hasAttachments is left undefined (false).
+    // decideDeterministicRoute. An attachment on this turn (a document being
+    // submitted) forces admin, exactly like the SendSeven flow.
     const deterministicRoute = decideDeterministicRoute({
       enquiryInFlight,
+      hasAttachments: pendingAttachments.length > 0,
+      // holidayImageInfo persisting from a PRIOR turn keeps the conversation
+      // deterministically on SALES for the whole collecting flow (mirrors
+      // reply-worker) — a follow-up like "october 2nd" must not fall to the
+      // classifier, which can misread "other dates for this deal" as an
+      // amendment → admin → a spurious ticket. Documents and deterministic
+      // admin signals still take precedence in decideDeterministicRoute.
+      // effectiveAttachmentKind: null triage → document (fail-safe); triage
+      // "other" but the tester SAYS it's a document ("heres my passport") →
+      // the customer's words win — vision can misjudge real-world photos.
+      // A deferred pre-identification document (pendingAttachmentInfo) keeps
+      // later, attachment-less turns on the admin route until consumed.
+      attachmentKind: pendingAttachments.length
+        ? currentEffectiveKind
+        : prevContext.pendingAttachmentInfo
+          ? "document"
+          : prevContext.holidayImageInfo
+            ? "holiday_info"
+            : null,
       actionable: looksLikeActionableAdmin(userText),
       adminAsk: isAdminAsk,
     });
@@ -246,7 +387,7 @@ export const internalChatTestflowService = {
       deterministicRoute !== "classify"
         ? deterministicRoute
         : await classifyConversationRoute({
-            transcript,
+            transcript: transcriptForAi,
             latestText: userText,
             enquiryInFlight,
             priorDomainAdmin: prevContext.domain === "admin",
@@ -291,10 +432,10 @@ export const internalChatTestflowService = {
       const kbOverflow = kbExceedsBudget(kb);
       const [kbMatches, quoteMatches] = await Promise.all([
         kbOverflow
-          ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: userText, limit: 3, audience: "sales" })
+          ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: imageInfoNote ? `${userText} ${imageInfoNote}` : userText, limit: 3, audience: "sales" })
           : Promise.resolve([] as RetrievedMatch[]),
         enquiryish
-          ? aiEmbeddingsService.retrieve({ orgId, sourceType: "quote", query: `${userText} ${JSON.stringify(priorSlots)}`, limit: 4 })
+          ? aiEmbeddingsService.retrieve({ orgId, sourceType: "quote", query: `${imageInfoNote ? `${userText} ${imageInfoNote}` : userText} ${JSON.stringify(priorSlots)}`, limit: 4 })
           : Promise.resolve([] as RetrievedMatch[]),
       ]);
       retrieved = { kb: kbMatches, quotes: quoteMatches };
@@ -309,7 +450,7 @@ export const internalChatTestflowService = {
     // name + phone ONLY (no email), then create/reuse the test client and
     // fall through to process the enquiry turn in the same call.
     if (!knownClient) {
-      const onboard = await generateTurn(botConfig, kb, null, transcript, enquiryStatus, priorSlots, false, retrieved, {
+      const onboard = await generateTurn(botConfig, kb, null, transcriptForAi, enquiryStatus, priorSlots, false, retrieved, {
         orgId,
         feature: "staff_chat_test",
         userId: scope.userId ?? undefined,
@@ -352,8 +493,21 @@ export const internalChatTestflowService = {
                 adminActionable: prevContext.adminActionable || looksLikeActionableAdmin(userText),
               },
             });
+          } else if (prevContext.holidayImageInfo) {
+            // A deal-image's details must survive the onboarding detour even
+            // though this isn't an admin matter — persist the context so the
+            // completion turn still has them in view.
+            await internalChatRepository.updateSession(session.id, orgId, { context: { ...prevContext } });
           }
-          const replyMessage = await persistReply(onboard.reply);
+          // A document sent on THIS pre-identification turn: reply
+          // deterministically (confirm receipt + ask name/phone) — the
+          // general onboarding turn can't be trusted with attachments (it
+          // tends to deny being able to "view" them).
+          const reply =
+            currentEffectiveKind === "document"
+              ? await generateDocumentReceivedAsk(botConfig, kb, { orgId, feature: "staff_chat_test", userId: scope.userId ?? undefined })
+              : onboard.reply;
+          const replyMessage = await persistReply(reply);
           return { replyMessage };
         }
 
@@ -407,6 +561,50 @@ export const internalChatTestflowService = {
 
     // `route` was already decided above (before onboarding).
 
+    // ── Attachment note + deferred-document consume (mirrors reply-worker) ──
+    // Built from the triage that already ran above (one vision call per turn).
+    // A HOLIDAY_INFO image is NOT a document submission — its details were
+    // injected into transcriptForAi for the sales bot instead, so no note (and
+    // no ticket instruction) is built for it. A null triage (vision failed)
+    // keeps the pre-vision wording — the attachment is still ticketed.
+    //
+    // Once the tester is identified, any document deferred from a PRE-
+    // identification turn is consumed here: its bytes (if the process hasn't
+    // restarted) join the ticket attachments, its stored vision description
+    // joins the note, and the marker is deleted (later context persists drop
+    // it). Deferred files arrived first, so they're prepended.
+    let ticketAttachments = pendingAttachments;
+    let deferredDescription: string | undefined;
+    let deferredFilenames: string[] = [];
+    if (clientId && prevContext.pendingAttachmentInfo) {
+      const stashedBytes = takeDeferredAttachmentBytes(session.id);
+      if (stashedBytes.length) ticketAttachments = [...stashedBytes, ...pendingAttachments];
+      deferredDescription = prevContext.pendingAttachmentInfo.description;
+      deferredFilenames = prevContext.pendingAttachmentInfo.filenames;
+      delete prevContext.pendingAttachmentInfo;
+      console.log(
+        `[internal-chat-testflow] session ${session.id} consumed deferred document(s): ${deferredFilenames.join(", ")} (bytes ${stashedBytes.length ? "recovered" : "NOT recovered — process restarted?"})`,
+      );
+    }
+    const noteFilenames = [...deferredFilenames.filter((f) => !pendingAttachments.some((a) => a.filename === f)), ...pendingAttachments.map((a) => a.filename)];
+    const imageDescription =
+      [deferredDescription, imageTriage && imageTriage.kind !== "holiday_info" ? imageTriage.description : undefined]
+        .filter(Boolean)
+        .join(" ") || null;
+    const attachmentNote =
+      noteFilenames.length && currentEffectiveKind !== "holiday_info"
+        ? `The customer has sent the following file(s) in this conversation: ${noteFilenames.join(", ")}. ` +
+          (imageDescription
+            ? `AI-read summary of the image(s), UNVERIFIED — a colleague must still review the actual file(s): ${imageDescription} ` +
+              "Include these AI-read details in the ticket description so staff have context. "
+            : "") +
+          "Treat this as a document submission: use open_ticket to log it for a colleague — " +
+          (ticketAttachments.length
+            ? "the file(s) will be attached to that ticket automatically. "
+            : "NOTE: the original file could not be carried over, so ask the customer to resend it if staff will need it, and say so in the ticket description. ") +
+          "Then confirm to the customer you've received and logged it. Do NOT claim to have checked or verified the document yourself."
+        : undefined;
+
     // ── Admin bot ──────────────────────────────────────────────────────────
     // Fail-closed on clientId. Answers from the client's OWN records.
     if (route === "admin" && clientId) {
@@ -423,14 +621,15 @@ export const internalChatTestflowService = {
       // clarifying question. `adminActionable` below is a STICKY flag persisted
       // for logging/observability only — it is NOT read by the force gate,
       // since once true it never clears.
-      const adminActionable = !!prevContext.adminActionable || looksLikeActionableAdmin(userText);
+      const adminActionable = !!prevContext.adminActionable || looksLikeActionableAdmin(userText) || !!attachmentNote;
       const forceTicketNow = shouldForceTicketNow({
         adminAsked: prevContext.adminAsked,
         ticketOpened: prevContext.ticketOpened,
         latestText: userText,
+        hasAttachment: !!attachmentNote,
       });
       console.log(
-        `[internal-chat-testflow] session=${session.id} route=admin actionable=${adminActionable} ` +
+        `[internal-chat-testflow] session=${session.id} route=admin actionable=${adminActionable} attachments=${!!attachmentNote} ` +
           `adminAsked=${!!prevContext.adminAsked} forceTicket=${forceTicketNow} -> admin agent`,
       );
       const adminResult = await adminAgent.answer(
@@ -440,8 +639,8 @@ export const internalChatTestflowService = {
         kb,
         transcript,
         clientRecord,
-        undefined,
-        undefined,
+        attachmentNote,
+        ticketAttachments,
         !!prevContext.ticketOpened,
         forceTicketNow,
       );
@@ -472,7 +671,7 @@ export const internalChatTestflowService = {
     // generateTurn call — mirrors reply-worker.
     const turn =
       firstTurn ??
-      (await generateTurn(botConfig, kb, clientRecord, transcript, enquiryStatus, priorSlots, true, retrieved, {
+      (await generateTurn(botConfig, kb, clientRecord, transcriptForAi, enquiryStatus, priorSlots, true, retrieved, {
         orgId,
         feature: "staff_chat_test",
         userId: scope.userId ?? undefined,
@@ -495,7 +694,7 @@ export const internalChatTestflowService = {
     // transcript rather than silently falling through to the Package Holiday
     // default at creation.
     if (!mergedSlots.holidayType) {
-      const inferred = inferHolidayTypeFromText(transcript);
+      const inferred = inferHolidayTypeFromText(transcriptForAi);
       if (inferred) mergedSlots.holidayType = inferred;
     }
 

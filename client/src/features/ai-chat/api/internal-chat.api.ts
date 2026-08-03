@@ -28,9 +28,26 @@ export const internalChatApi = {
   // responds 501 `{ success: false, reply: "Test flow coming soon" }` instead
   // of the usual success envelope, so it rejects via the axios error path.
   // Normalize both outcomes into one PostMessageResult instead of throwing.
-  postMessage: async (sessionId: string, text: string): Promise<PostMessageResult> => {
+  //
+  // `files` (test-flow only): image attachment(s) sent with the message so a
+  // tester can exercise the document-submission path (vision read → admin
+  // route → ticket). With files the request goes up as multipart form-data
+  // ("text" field + "attachments" files — axios sets the content type from
+  // the FormData); without, the plain JSON body is unchanged.
+  postMessage: async (sessionId: string, text: string, files?: File[]): Promise<PostMessageResult> => {
     try {
-      const { data } = await axiosClient.post<ChatMessage>(`${BASE}/sessions/${sessionId}/messages`, { text });
+      let body: { text: string } | FormData = { text };
+      let config: { headers: Record<string, string> } | undefined;
+      if (files?.length) {
+        const form = new FormData();
+        form.append("text", text);
+        for (const f of files) form.append("attachments", f, f.name);
+        body = form;
+        // Override the client's default application/json — axios replaces this
+        // marker with the real multipart content type + boundary.
+        config = { headers: { "Content-Type": "multipart/form-data" } };
+      }
+      const { data } = await axiosClient.post<ChatMessage>(`${BASE}/sessions/${sessionId}/messages`, body, config);
       return { kind: "assistant_reply", message: data };
     } catch (err) {
       if (isTestFlowPendingError(err)) {

@@ -11,6 +11,16 @@ import type { EnquirySlots } from "./enquiry.types";
 const str = (v: unknown): string => String(v ?? "").trim();
 const norm = (s: unknown): string => str(s).toLowerCase();
 
+// Airport-name comparison form: lowercase, generic suffix words removed
+// ("International", "Intl", "Int", "Airport", "Apt" — with or without a
+// trailing dot), punctuation collapsed. "Newcastle Int." and "Newcastle
+// International Airport" both normalize to "newcastle".
+export const normAirport = (s: unknown): string =>
+  norm(s)
+    .replace(/\b(?:international|intl|int|airport|apt)\b\.?/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
 // Coerce to an integer, accepting numbers OR numeric strings ("4", "4 nights").
 // The AI sometimes returns numeric fields as strings — without this they'd be lost.
 function toInt(v: unknown): number | undefined {
@@ -31,11 +41,15 @@ function toInt(v: unknown): number | undefined {
 const ALLOWED_BOARD_BASIS = ["all inclusive", "bed and breakfast", "self catering", "half board", "full board", "room only"];
 const ALLOWED_STAR_RATINGS = ["2 star", "3 star", "4 star", "5 star"];
 
-// Case-insensitively de-duplicates a string array, preserving the first spelling.
+// Case-insensitively de-duplicates a string array, preserving the first
+// spelling. A bare string is treated as a one-element array — the model
+// returns some fields (e.g. boardBasis: "All Inclusive") as strings, and
+// those used to be silently dropped here (never mapped, never noted).
 function dedupe(arr: unknown): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const s of Array.isArray(arr) ? arr : []) {
+  const list = Array.isArray(arr) ? arr : typeof arr === "string" && arr.trim() ? [arr] : [];
+  for (const s of list) {
     const v = str(s);
     const k = v.toLowerCase();
     if (k && !seen.has(k)) {
@@ -162,13 +176,18 @@ export async function resolveAndCreateEnquiry(
   const resortIds = [...resortSet];
 
   // Departure airports → IDs, matched by code ("NCL") or name ("Newcastle").
+  // Name comparisons use normAirport (punctuation stripped, generic suffixes
+  // like "International"/"Int."/"Airport" removed) so ad-copy spellings the AI
+  // extracts verbatim — "Newcastle Int.", "Manchester Airport" — still match
+  // the lookup row instead of being dropped to the note.
   const airportSet = new Set<string>();
   for (const name of dedupe(slots.departureAirports)) {
     const q = norm(name);
+    const qa = normAirport(name);
     const a =
       airports.find((x) => norm(x.airport_code) === q) ||
-      airports.find((x) => norm(x.airport_name) === q) ||
-      airports.find((x) => norm(x.airport_name).includes(q) || q.includes(norm(x.airport_name)));
+      airports.find((x) => normAirport(x.airport_name) === qa) ||
+      (qa ? airports.find((x) => normAirport(x.airport_name).includes(qa) || qa.includes(normAirport(x.airport_name))) : undefined);
     if (a) airportSet.add(a.id);
     else unmapped.push(`Departure airport: ${name.trim()}`);
   }

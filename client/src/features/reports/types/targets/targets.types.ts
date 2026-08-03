@@ -45,6 +45,8 @@ export interface AgentInfo {
 
 // ─── Target Summary ───────────────────────────────────────────────────────────
 
+export type TargetBalanceStatus = "balanced" | "over" | "under";
+
 export interface MonthTargetSummary {
   year: number;
   month: number;
@@ -52,6 +54,7 @@ export interface MonthTargetSummary {
   shopTarget: string;
   totalAgentTargets: string;
   difference: string;
+  status: TargetBalanceStatus;
 }
 
 // ─── Bulk Operations ───────────────────────────────────────────────────────────

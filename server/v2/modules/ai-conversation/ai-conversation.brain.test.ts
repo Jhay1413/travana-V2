@@ -4,9 +4,11 @@ import {
   buildRulesBlock,
   buildSystemPrompt,
   decideDeterministicRoute,
+  effectiveAttachmentKind,
   IMAGE_TRIAGE_MAX_BYTES,
   IMAGE_TRIAGE_MAX_IMAGES,
   inferHolidayTypeFromText,
+  looksLikeDocumentMention,
   isAcknowledgement,
   looksLikeActionableAdmin,
   looksLikeAdminAsk,
@@ -238,6 +240,43 @@ describe("decideDeterministicRoute (Phase 3.2 route precedence)", () => {
 
   it("falls back to the LLM classifier when nothing deterministic applies", () => {
     expect(decideDeterministicRoute({ enquiryInFlight: false, actionable: false, adminAsk: false })).toBe("classify");
+  });
+
+  // ── Attachment-kind awareness (vision triage) ─────────────────────────────
+  it("routes a holiday_info image (deal/advert screenshot) to SALES, not admin", () => {
+    expect(
+      decideDeterministicRoute({ enquiryInFlight: false, hasAttachments: true, attachmentKind: "holiday_info", actionable: false, adminAsk: false }),
+    ).toBe("sales");
+  });
+
+  it("a holiday_info image mid-enquiry stays sales (never breaks out to admin)", () => {
+    expect(
+      decideDeterministicRoute({ enquiryInFlight: true, hasAttachments: true, attachmentKind: "holiday_info", actionable: false, adminAsk: false }),
+    ).toBe("sales");
+  });
+
+  it("a document image still forces admin, in and out of an enquiry", () => {
+    expect(
+      decideDeterministicRoute({ enquiryInFlight: false, hasAttachments: true, attachmentKind: "document", actionable: false, adminAsk: false }),
+    ).toBe("admin");
+    expect(
+      decideDeterministicRoute({ enquiryInFlight: true, hasAttachments: true, attachmentKind: "document", actionable: false, adminAsk: false }),
+    ).toBe("admin");
+  });
+
+  it("an 'other' image gives no routing signal — the text decides", () => {
+    expect(
+      decideDeterministicRoute({ enquiryInFlight: false, hasAttachments: true, attachmentKind: "other", actionable: false, adminAsk: false }),
+    ).toBe("classify");
+    expect(
+      decideDeterministicRoute({ enquiryInFlight: false, hasAttachments: true, attachmentKind: "other", actionable: false, adminAsk: true }),
+    ).toBe("admin");
+  });
+
+  it("an attachment with NO triage (kind null/omitted) keeps the fail-safe document default", () => {
+    expect(
+      decideDeterministicRoute({ enquiryInFlight: false, hasAttachments: true, attachmentKind: null, actionable: false, adminAsk: false }),
+    ).toBe("admin");
   });
 });
 
@@ -659,5 +698,37 @@ describe("selectImagesForTriage (vision guardrails)", () => {
 
   it("returns empty for no attachments (caller then behaves exactly as before)", () => {
     expect(selectImagesForTriage([])).toEqual([]);
+  });
+});
+
+describe("effectiveAttachmentKind (customer's words vs vision verdict)", () => {
+  it("null triage (vision failed) → fail-safe document", () => {
+    expect(effectiveAttachmentKind(null, "hi")).toBe("document");
+    expect(effectiveAttachmentKind(undefined, "hi")).toBe("document");
+  });
+
+  it("triage 'other' + the customer naming a document → document (their words win)", () => {
+    expect(effectiveAttachmentKind("other", "Hi heres my passport")).toBe("document");
+    expect(effectiveAttachmentKind("other", "sending my driving licence over")).toBe("document");
+    expect(effectiveAttachmentKind("other", "insurance attached")).toBe("document");
+    expect(effectiveAttachmentKind("other", "here's the booking confirmation")).toBe("document");
+  });
+
+  it("triage 'other' with no document mention stays other", () => {
+    expect(effectiveAttachmentKind("other", "look at this lovely beach!")).toBe("other");
+    expect(effectiveAttachmentKind("other", "")).toBe("other");
+  });
+
+  it("a confident document/holiday_info verdict stands regardless of text", () => {
+    expect(effectiveAttachmentKind("document", "look at this")).toBe("document");
+    expect(effectiveAttachmentKind("holiday_info", "can you do this deal? passport ready when needed")).toBe("holiday_info");
+  });
+
+  it("looksLikeDocumentMention: matches document words, not ordinary chat", () => {
+    expect(looksLikeDocumentMention("heres my passport")).toBe(true);
+    expect(looksLikeDocumentMention("my ID")).toBe(true);
+    expect(looksLikeDocumentMention("the paperwork you asked for")).toBe(true);
+    expect(looksLikeDocumentMention("we want a week in Tenerife")).toBe(false);
+    expect(looksLikeDocumentMention("I'd love that")).toBe(false);
   });
 });

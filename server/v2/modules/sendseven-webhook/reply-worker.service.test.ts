@@ -23,7 +23,10 @@ vi.mock("../ai-conversation/ai-conversation.brain", () => ({
   buildPhoneConflictReply: vi.fn(() => "Can you confirm that number's yours?"),
   buildTranscript: vi.fn((_messages: unknown, latest: string) => `Customer: ${latest}`),
   decideDeterministicRoute: vi.fn(() => "classify"),
-  describeImageAttachments: vi.fn(async () => null),
+  // Mirrors the real fail-safe: no triage → document.
+  effectiveAttachmentKind: vi.fn((kind: unknown) => kind ?? "document"),
+  generateDocumentReceivedAsk: vi.fn(async () => "Got the file — can I grab your name and phone number so I can log it?"),
+  triageImageAttachments: vi.fn(async () => null),
   generateBeneficiaryAsk: vi.fn(async () => "Who's this for, and what's their number?"),
   generateGeneralReply: vi.fn(async () => "Happy to help!"),
   generateTransitionReply: vi.fn(async () => "Great, when suits a callback?"),
@@ -322,7 +325,9 @@ describe("handleInbound — single generateTurn call on new-lead onboarding (Fix
 // the turn that completes onboarding collects them into the admin/ticket flow.
 
 const PASSPORT_ATTACHMENT = { id: "att-1", filename: "passport.jpg", content_type: "image/jpeg", file_size: 100 };
-const STORED_PASSPORT_REF = { id: "att-1", filename: "passport.jpg", contentType: "image/jpeg", size: 100 };
+// Stored ref shape: kind comes from the stash turn's triage — the mocked
+// triage returns null, so the fail-safe "document" default applies.
+const STORED_PASSPORT_REF = { id: "att-1", filename: "passport.jpg", contentType: "image/jpeg", size: 100, kind: "document" };
 
 describe("handleInbound — pre-onboarding attachment deferral", () => {
   it("turn 1 (unknown contact sends a photo): defers the attachment refs instead of downloading", async () => {
@@ -354,9 +359,11 @@ describe("handleInbound — pre-onboarding attachment deferral", () => {
     // A caption-less photo: no text, media message_type.
     await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "", message_type: "image" }));
 
-    // No clientId yet → nothing downloaded, refs remembered in the persisted
-    // context (alongside the admin domain carry-over).
-    expect(messagesRepository.downloadAttachment).not.toHaveBeenCalled();
+    // Bytes ARE downloaded on this turn (the pre-routing vision triage needs
+    // them) but with no clientId nothing is ACTIONED: no admin turn, no
+    // ticket — the refs are remembered in the persisted context instead
+    // (alongside the admin domain carry-over).
+    expect(adminAgent.answer).not.toHaveBeenCalled();
     const updates = vi.mocked(conversationStateRepository.update).mock.calls;
     const ctx = updates[updates.length - 1][1].context as {
       pendingAttachmentRefs?: unknown;

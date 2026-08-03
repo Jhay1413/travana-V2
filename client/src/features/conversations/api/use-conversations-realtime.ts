@@ -88,6 +88,7 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
     receivedConversationIds.current = new Set();
     for (const conversationId of ids) {
       qc.invalidateQueries({ queryKey: messagesKeys.list(conversationId) });
+      qc.invalidateQueries({ queryKey: conversationsKeys.detail(conversationId) });
     }
     // A new message changes last_message / preview / ordering / badges.
     qc.invalidateQueries({ queryKey: conversationsKeys.all });

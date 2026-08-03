@@ -6,7 +6,9 @@ import {
   buildPhoneConflictReply,
   buildTranscript,
   decideDeterministicRoute,
-  describeImageAttachments,
+  effectiveAttachmentKind,
+  generateDocumentReceivedAsk,
+  triageImageAttachments,
   generateBeneficiaryAsk,
   generateGeneralReply,
   generateTransitionReply,
@@ -104,17 +106,33 @@ interface ConversationContext {
   // the number in question so the next turn can tell a correction (new number)
   // from a confirmation (same number again).
   phoneConflictPhone?: string;
+  // Accumulated details read (vision triage) from holiday_info image(s) the
+  // customer sent — persisted so they stay in the AI's view on EVERY
+  // collecting turn, not just the turn the image arrived (a field the model
+  // doesn't extract into slots immediately would otherwise be lost for good).
+  // Cleared automatically when the enquiry is created / the conversation
+  // hands off or resets (those paths build fresh contexts).
+  holidayImageInfo?: string;
   // Attachment refs (id + metadata, NEVER bytes) from message(s) sent BEFORE
-  // onboarding completed. A file can only be downloaded/actioned once the
-  // sender is identified (the download step needs a clientId, and the admin
-  // bot needs a client to ticket against), and the download step only ever
-  // looks at the CURRENT message — so a passport photo sent as the opening
-  // message would otherwise be lost by the time the customer's next message
-  // completes onboarding. The onboarding gate stashes the refs here; the
-  // first post-onboarding turn downloads them into the ticket flow and
-  // clears this (consume-once). Wiped with the rest of the context by the
-  // needsHuman/idle-resume resets, so it can never linger across a hand-off.
-  pendingAttachmentRefs?: Array<{ id: string; filename: string; contentType: string; size: number }>;
+  // onboarding completed. A file can only be ACTIONED once the sender is
+  // identified (the admin bot needs a client to ticket against; a holiday
+  // enquiry needs a client to file under) — so a passport photo or deal
+  // screenshot sent as the opening message would otherwise be lost by the
+  // time the customer's next message completes onboarding. The onboarding
+  // gate stashes the refs here — `kind`/`description` carry that turn's
+  // vision triage so the consume turn can route (document → admin/ticket,
+  // holiday_info → sales with the details re-injected) without re-running
+  // vision. The first post-onboarding turn consumes + clears this. Wiped
+  // with the rest of the context by the needsHuman/idle-resume resets, so it
+  // can never linger across a hand-off.
+  pendingAttachmentRefs?: Array<{
+    id: string;
+    filename: string;
+    contentType: string;
+    size: number;
+    kind?: "document" | "holiday_info" | "other";
+    description?: string;
+  }>;
   // Set when the customer is enquiring on behalf of a named third party — the
   // enquiry is filed under this traveller, not the sender. Persisted across turns
   // so we keep asking for/resolving the traveller (and don't re-ask their name).
@@ -291,21 +309,99 @@ export const replyWorker = {
         !!prevContext.beneficiary ||
         priorSubstantive;
       // The current message's own record from the batch fetched above — looked
-      // up once and reused below for the attachment-download step instead of a
+      // up once and reused below for the attachment steps instead of a
       // second list.items.find() over the same (immutable) list.
       const currentMessage = list.items.find((m) => m.id === message.id);
       const currentAttachments = (currentMessage?.attachments ?? []).filter((a) => a?.id);
       // Attachment refs remembered from earlier, PRE-onboarding messages (see
-      // pendingAttachmentRefs on ConversationContext). Counted as attachments
-      // for the routing decision below so the conversation stays deterministically
-      // on the admin route until the deferred document is actually collected and
-      // ticketed (the download step below consumes + clears them once clientId
-      // is resolved). Only ever set in the non-beneficiary onboarding flow, so
-      // this can't hijack a beneficiary enquiry's sales routing.
+      // pendingAttachmentRefs on ConversationContext) — kind-tagged at stash
+      // time. Document refs keep the conversation deterministically on the
+      // admin route until collected + ticketed (the consume step below, once
+      // clientId is resolved); holiday_info refs are a SALES signal whose
+      // stored details are re-injected below. Only ever set in the
+      // non-beneficiary onboarding flow, so this can't hijack a beneficiary
+      // enquiry's sales routing.
       const rememberedAttachmentRefs = prevContext.pendingAttachmentRefs ?? [];
       const hasAttachments = currentAttachments.length > 0 || rememberedAttachmentRefs.length > 0;
+
+      // ── Attachment download + vision triage (BEFORE routing) ──────────
+      // The current message's attachment bytes are downloaded up front — the
+      // triage that classifies them (document vs holiday_info vs other) now
+      // DRIVES the routing decision, so it can't wait until after the route
+      // is picked like the old describe-only call did. Best-effort: a failed
+      // download/triage degrades to the fail-safe document default below.
+      const pendingAttachments: PendingAttachment[] = [];
+      for (const att of currentAttachments) {
+        try {
+          const dl = await messagesRepository.downloadAttachment(att.id);
+          pendingAttachments.push({ buffer: dl.buffer, filename: att.filename, contentType: att.content_type, size: att.file_size });
+        } catch (err) {
+          console.error(`[sendseven-webhook] conv ${conversationId} failed to download attachment ${att.id}:`, err);
+        }
+      }
+      const imageTriage = pendingAttachments.length ? await triageImageAttachments(pendingAttachments, { orgId }) : null;
+      // Effective attachment kind for routing, folding in remembered refs:
+      // any document (or untriaged — fail-safe) attachment wins; else any
+      // holiday_info one; else "other"/none. Refs stashed before kind-tagging
+      // existed have no kind and default to document (their old behavior).
+      // effectiveAttachmentKind: null triage → document (fail-safe); triage
+      // "other" but the customer SAYS it's a document ("heres my passport")
+      // → the customer's words win — vision can misjudge real-world photos.
+      const currentKind = currentAttachments.length ? effectiveAttachmentKind(imageTriage?.kind ?? null, latestText) : null;
+      const rememberedKinds = rememberedAttachmentRefs.map((r) => r.kind ?? "document");
+      const anyDocument = currentKind === "document" || rememberedKinds.includes("document");
+      // holidayImageInfo persisting from a PRIOR turn counts too: a customer
+      // who sent a deal advert stays deterministically on SALES for the whole
+      // collecting flow — without this, a follow-up turn with no attachment
+      // ("october 2nd") falls to the LLM classifier, which can misread "other
+      // dates for this deal" as amending an existing booking → admin → a
+      // spurious ticket. Documents and deterministic admin signals
+      // (complaint / providing details / admin ask) still take precedence —
+      // see decideDeterministicRoute.
+      const anyHolidayInfo =
+        currentKind === "holiday_info" || rememberedKinds.includes("holiday_info") || !!prevContext.holidayImageInfo;
+      const attachmentKind = anyDocument ? ("document" as const) : anyHolidayInfo ? ("holiday_info" as const) : currentKind;
+      // A holiday_info image's extracted details (this turn's triage + any
+      // remembered from the onboarding detour) are ACCUMULATED in the context
+      // (containment-deduped, capped) and injected into the transcript the AI
+      // sees on EVERY collecting turn — treated as stated by the customer, so
+      // the sales bot extracts slots from them and only asks for what's
+      // missing, with every later turn as a second chance for fields it
+      // missed. Mutating prevContext means every later context persist
+      // carries it; the enquiry-create / hand-off / reset paths build fresh
+      // contexts, clearing it.
+      const holidayImageDetails =
+        attachmentKind === "holiday_info"
+          ? [
+              ...(imageTriage?.kind === "holiday_info" ? [imageTriage.description] : []),
+              ...rememberedAttachmentRefs.filter((r) => r.kind === "holiday_info" && r.description).map((r) => r.description as string),
+            ]
+          : [];
+      for (const detail of holidayImageDetails) {
+        const existing = prevContext.holidayImageInfo ?? "";
+        if (!existing.includes(detail.slice(0, 120))) {
+          prevContext.holidayImageInfo = `${existing} ${detail}`.trim().slice(0, 1500);
+        }
+      }
+      const imageInfoNote = prevContext.holidayImageInfo
+        ? `[Details from the image(s) I've sent in this chat — treat these as details I've stated: ${prevContext.holidayImageInfo}]`
+        : null;
+      // What the LLMs read. The stored message history keeps only real
+      // message text — the image details ride along via the note; anything
+      // worth keeping lands in the extracted slots, which persist. A document
+      // attachment gets its own line so the (pre-onboarding) turn KNOWS a
+      // file arrived and acknowledges it while asking for name+phone, instead
+      // of replying as if the message were empty chat.
+      const documentAttachmentLine =
+        currentKind === "document"
+          ? `Customer: [I've attached ${currentAttachments.length === 1 ? "a file" : "files"}: ${currentAttachments.map((a) => a.filename).join(", ")}]`
+          : null;
+      const transcriptForAi = [transcript, imageInfoNote ? `Customer: ${imageInfoNote}` : null, documentAttachmentLine]
+        .filter(Boolean)
+        .join("\n");
+
       // (3.2) A deterministic ACTIONABLE admin signal (complaint / verification
-      // details) or a document attachment on THIS turn breaks OUT of
+      // details) or a DOCUMENT attachment on THIS turn breaks OUT of
       // enquiryInFlight stickiness — a customer mid-enquiry who says "my existing
       // booking is filthy, I want a refund" must reach the admin bot, not be
       // funneled into holiday slot-filling. A merely admin-ish but NON-actionable
@@ -313,11 +409,12 @@ export const replyWorker = {
       // does NOT break out — it stays sales-sticky exactly as before. This takes
       // precedence over enquiryInFlight below; everything else is unchanged.
       // (3.2) Deterministic route precedence — see decideDeterministicRoute for
-      // the full rationale; shared with internal-chat-testflow so the two
-      // drivers can't drift.
+      // the full rationale (incl. the attachment-kind semantics); shared with
+      // internal-chat-testflow so the two drivers can't drift.
       const deterministicRoute = decideDeterministicRoute({
         enquiryInFlight,
         hasAttachments,
+        attachmentKind,
         actionable: looksLikeActionableAdmin(latestText),
         adminAsk: isAdminAsk,
       });
@@ -332,7 +429,7 @@ export const replyWorker = {
         deterministicRoute !== "classify"
           ? deterministicRoute
           : await classifyConversationRoute({
-              transcript,
+              transcript: transcriptForAi,
               latestText,
               enquiryInFlight,
               priorDomainAdmin: prevContext.domain === "admin",
@@ -401,13 +498,13 @@ export const replyWorker = {
             // set on the quote retrieval below — quote embeddings carry no
             // audience metadata and the fail-closed predicate would exclude
             // them all.
-            ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: latestText, limit: 3, audience: "sales" })
+            ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: imageInfoNote ? `${latestText} ${imageInfoNote}` : latestText, limit: 3, audience: "sales" })
             : Promise.resolve([] as RetrievedMatch[]),
           enquiryish
             ? aiEmbeddingsService.retrieve({
                 orgId,
                 sourceType: "quote",
-                query: `${latestText} ${JSON.stringify(priorSlots)}`,
+                query: `${imageInfoNote ? `${latestText} ${imageInfoNote}` : latestText} ${JSON.stringify(priorSlots)}`,
                 limit: 4,
               })
             : Promise.resolve([] as RetrievedMatch[]),
@@ -426,7 +523,7 @@ export const replyWorker = {
       // ONLY (no email). If both arrive (even in the same message), create + link
       // and FALL THROUGH to process the enquiry in the same turn.
       if (!knownClient) {
-        const onboard = await generateTurn(botConfig, kb, null, transcript, enquiryStatus, priorSlots, false, retrieved);
+        const onboard = await generateTurn(botConfig, kb, null, transcriptForAi, enquiryStatus, priorSlots, false, retrieved);
         console.log(
           `[sendseven-webhook] conv=${conversationId} onboarding (unknown contact) mode=${mode} handoff=${onboard.hand_off} ` +
             `adminIntent=${sawAdminIntent} hasName=${!!onboard.client?.fullName} hasPhone=${!!onboard.client?.phone} ` +
@@ -458,11 +555,22 @@ export const replyWorker = {
           const priorRefs = prevContext.pendingAttachmentRefs ?? [];
           const freshRefs = currentAttachments
             .filter((a) => !priorRefs.some((r) => r.id === a.id))
-            .map((a) => ({ id: a.id, filename: a.filename, contentType: a.content_type, size: a.file_size }));
+            .map((a, i) => ({
+              id: a.id,
+              filename: a.filename,
+              contentType: a.content_type,
+              size: a.file_size,
+              // Carry this turn's triage so the consume turn can route and
+              // re-inject holiday details WITHOUT re-running vision. The
+              // (message-level) description is stored on the first ref of the
+              // batch only, capped — refs live in the context jsonb.
+              kind: currentKind ?? undefined,
+              description: i === 0 && imageTriage?.description ? imageTriage.description.slice(0, 600) : undefined,
+            }));
           if (freshRefs.length) {
             prevContext.pendingAttachmentRefs = [...priorRefs, ...freshRefs];
             console.log(
-              `[sendseven-webhook] conv ${conversationId} deferring ${freshRefs.length} attachment(s) until onboarding completes (no clientId yet)`,
+              `[sendseven-webhook] conv ${conversationId} deferring ${freshRefs.length} attachment(s) (kind=${currentKind ?? "unknown"}) until onboarding completes (no clientId yet)`,
             );
           }
         }
@@ -480,8 +588,13 @@ export const replyWorker = {
         if (!(full && phone && contactId)) {
           // Still missing details — ask for them and stop here. Persist the admin
           // intent (domain) so it survives to the completion turn, where the admin
-          // bot serves the request.
-          await sendReply(orgId, conversationId, message.channel_id, onboard.reply, mode, false);
+          // bot serves the request. A document sent on THIS turn gets a
+          // deterministic reply (confirm receipt + ask name/phone) — the
+          // general onboarding turn can't be trusted with attachments (it
+          // tends to deny being able to "view" them).
+          const onboardingReply =
+            currentKind === "document" ? await generateDocumentReceivedAsk(botConfig, kb, { orgId }) : onboard.reply;
+          await sendReply(orgId, conversationId, message.channel_id, onboardingReply, mode, false);
           await conversationStateRepository.update(conversationId, {
             lastAiReplyAt: new Date(),
             ...(adminMatter
@@ -557,74 +670,75 @@ export const replyWorker = {
           ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null)
           : null;
 
-      // ── Attachments (SendSeven only) ───────────────────────────────────
-      // A customer can send a document (e.g. a passport photo) with no caption.
-      // Attachments aren't in the text transcript, so pull them off the current
-      // message — PLUS any refs remembered from pre-onboarding messages (see
-      // pendingAttachmentRefs), now collectible because clientId is resolved —
-      // and download the bytes, oldest first. They are NOT saved to the client's
-      // files — instead they're handed to the admin bot, which attaches them to
-      // the ticket it opens (staff can move them to the client record from
-      // there). Best-effort: a failed download never breaks the reply.
-      // (currentAttachments computed up top, alongside the routing decision.)
-      const rememberedNow = clientId
-        ? rememberedAttachmentRefs.filter((r) => !currentAttachments.some((a) => a.id === r.id))
+      // ── Deferred-attachment consume (SendSeven only) ───────────────────
+      // The CURRENT message's bytes were already downloaded (pre-routing, for
+      // the triage). Here, once clientId is resolved, collect any DOCUMENT
+      // refs remembered from pre-onboarding messages — downloaded now so the
+      // admin bot can attach them to the ticket it opens. holiday_info refs
+      // need no bytes (their stored details were re-injected into
+      // transcriptForAi above). Files are NOT saved to the client's files —
+      // staff can move them there from the ticket. Best-effort: a failed
+      // download never breaks the reply.
+      const rememberedDocRefsNow = clientId
+        ? rememberedAttachmentRefs.filter((r) => (r.kind ?? "document") === "document" && !currentAttachments.some((a) => a.id === r.id))
         : [];
-      const toDownload = [
-        ...rememberedNow.map((r) => ({ id: r.id, filename: r.filename, content_type: r.contentType, file_size: r.size })),
-        ...currentAttachments,
-      ];
-      const pendingAttachments: PendingAttachment[] = [];
-      if (toDownload.length && clientId) {
-        for (const att of toDownload) {
-          try {
-            const dl = await messagesRepository.downloadAttachment(att.id);
-            pendingAttachments.push({ buffer: dl.buffer, filename: att.filename, contentType: att.content_type, size: att.file_size });
-          } catch (err) {
-            console.error(`[sendseven-webhook] conv ${conversationId} failed to download attachment ${att.id}:`, err);
-          }
+      for (const ref of rememberedDocRefsNow) {
+        try {
+          const dl = await messagesRepository.downloadAttachment(ref.id);
+          // Prepend — deferred files arrived before the current message's.
+          pendingAttachments.unshift({ buffer: dl.buffer, filename: ref.filename, contentType: ref.contentType, size: ref.size });
+        } catch (err) {
+          console.error(`[sendseven-webhook] conv ${conversationId} failed to download deferred attachment ${ref.id}:`, err);
         }
       }
-      // Consume-once: the deferred refs have now been collected (or attempted —
+      // Consume-once: the deferred refs have now been actioned (or attempted —
       // a persistently failing download must not force the admin route forever).
       // Deleting from prevContext means whichever branch persists context next
       // drops the marker; if this turn dies before any persist, the refs are
       // still in the DB and a redelivery retries the collection. Read from
       // prevContext (NOT the rememberedAttachmentRefs captured up top): when
       // onboarding completed on THIS same message, the gate stashed refs for
-      // the current attachments AFTER that capture — they're already covered
-      // by the currentAttachments download above and must be cleared too.
+      // the current attachments AFTER that capture — those are already covered
+      // by the pre-routing download and must be cleared too.
       if (prevContext.pendingAttachmentRefs?.length && clientId) {
         delete prevContext.pendingAttachmentRefs;
-        if (rememberedNow.length) {
+        if (rememberedAttachmentRefs.length) {
           console.log(
-            `[sendseven-webhook] conv ${conversationId} collected ${rememberedNow.length} attachment(s) deferred from before onboarding`,
+            `[sendseven-webhook] conv ${conversationId} consumed ${rememberedAttachmentRefs.length} deferred attachment ref(s) (${rememberedDocRefsNow.length} document file(s) collected)`,
           );
         }
       }
-      // Vision read (best-effort, ADDITIVE only): describe what any image
-      // attachment(s) show so the note below — and therefore the ticket the
-      // admin bot opens from it — carries real context ("passport photo,
-      // appears to be for J Smith") instead of just a filename. This enriches
-      // the note TEXT only; routing, claims, and the ticket flow are untouched,
-      // and a null (non-image files, oversized, vision call failed, or a
-      // non-vision model override) leaves the note exactly as it was before.
-      const imageDescription = pendingAttachments.length ? await describeImageAttachments(pendingAttachments, { orgId }) : null;
-      const attachmentNote = pendingAttachments.length
-        ? `The customer has just sent the following file(s) in their latest message: ${pendingAttachments.map((a) => a.filename).join(", ")}. ` +
-          (imageDescription
-            ? `AI-read summary of the image(s), UNVERIFIED — a colleague must still review the actual file(s): ${imageDescription} ` +
-              "Include these AI-read details in the ticket description so staff have context. "
-            : "") +
-          "Treat this as a document submission: use open_ticket to log it for a colleague — the file(s) will be attached to that ticket automatically. Then confirm to the customer you've received and logged it. Do NOT claim to have checked or verified the document yourself."
-        : undefined;
-      if (pendingAttachments.length) {
-        console.log(`[sendseven-webhook] conv ${conversationId} downloaded ${pendingAttachments.length} attachment(s) for a ticket`);
+      // Document-submission note for the admin bot — built from the triage
+      // that already ran (plus any stored deferred-document descriptions), so
+      // the ticket carries what the image shows, not just a filename. NOT
+      // built for holiday_info images: those aren't a document submission —
+      // their details went to the sales bot via transcriptForAi instead. A
+      // null triage (vision failed) keeps the pre-vision wording — the
+      // attachment is still ticketed.
+      const documentDescriptions =
+        attachmentKind === "holiday_info"
+          ? []
+          : [
+              ...(imageTriage && imageTriage.kind !== "holiday_info" ? [imageTriage.description] : []),
+              ...rememberedDocRefsNow.map((r) => r.description).filter((d): d is string => !!d),
+            ];
+      const imageDescription = documentDescriptions.length ? documentDescriptions.join(" ") : null;
+      const attachmentNote =
+        pendingAttachments.length && attachmentKind !== "holiday_info"
+          ? `The customer has just sent the following file(s) in their latest message: ${pendingAttachments.map((a) => a.filename).join(", ")}. ` +
+            (imageDescription
+              ? `AI-read summary of the image(s), UNVERIFIED — a colleague must still review the actual file(s): ${imageDescription} ` +
+                "Include these AI-read details in the ticket description so staff have context. "
+              : "") +
+            "Treat this as a document submission: use open_ticket to log it for a colleague — the file(s) will be attached to that ticket automatically. Then confirm to the customer you've received and logged it. Do NOT claim to have checked or verified the document yourself."
+          : undefined;
+      if (pendingAttachments.length && attachmentNote) {
+        console.log(`[sendseven-webhook] conv ${conversationId} holding ${pendingAttachments.length} attachment(s) for a ticket`);
       }
 
       // Nothing actionable (a media message we couldn't download, or an empty
-      // text) — stay silent rather than replying to nothing.
-      if (!hasText && !attachmentNote) return;
+      // text with no usable image) — stay silent rather than replying to nothing.
+      if (!hasText && !attachmentNote && !imageInfoNote) return;
 
       // `route` was already decided above (before onboarding). Saved
       // attachments and admin intent carried across the onboarding detour
@@ -738,7 +852,7 @@ export const replyWorker = {
       // NeonClient's name (a personalization nicety, not used for
       // extraction/correctness) — an acceptable trade-off to avoid the
       // redundant LLM call and the slot-discarding bug it caused.
-      const turn = firstTurn ?? (await generateTurn(botConfig, kb, clientRecord, transcript, enquiryStatus, priorSlots, true, retrieved));
+      const turn = firstTurn ?? (await generateTurn(botConfig, kb, clientRecord, transcriptForAi, enquiryStatus, priorSlots, true, retrieved));
       console.log(
         `[sendseven-webhook] conv=${conversationId} known=${knownClient} mode=${mode} intent=${turn.intent} ` +
           `handoff=${turn.hand_off} status=${enquiryStatus}`,
@@ -746,7 +860,9 @@ export const replyWorker = {
 
       if (turn.hand_off) return doHandoff(turn.reply);
 
-      const customerAcked = isAcknowledgement(message.text!.trim());
+      // Safe access: a holiday_info image with no caption reaches here with no
+      // text at all (the old code never did — text-less turns were admin-only).
+      const customerAcked = isAcknowledgement((message.text ?? "").trim());
       const lastReply = prevContext.lastReply ?? "";
       const wouldRepeat = similarReply(turn.reply, lastReply);
 
@@ -765,7 +881,7 @@ export const replyWorker = {
       // recover it deterministically from the full transcript rather than
       // silently falling through to the Package Holiday default at creation.
       if (!mergedSlots.holidayType) {
-        const inferred = inferHolidayTypeFromText(transcript);
+        const inferred = inferHolidayTypeFromText(transcriptForAi);
         if (inferred) mergedSlots.holidayType = inferred;
       }
 
@@ -935,7 +1051,7 @@ export const replyWorker = {
           return;
         }
 
-        const rawTime = message.text!.trim();
+        const rawTime = (message.text ?? "").trim();
         const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked", rawTime, prevContext.onBehalfOfName, { orgId });
         let taskId: string | undefined;
         if (state.enquiryId && prevContext.enquiryOwnerUserId) {

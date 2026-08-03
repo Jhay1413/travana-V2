@@ -26,6 +26,7 @@ import {
 } from "./internal-chat-analytics.service";
 import { internalChatClientsService, type ClientRecordType } from "./internal-chat-clients.service";
 import { internalChatTestflowService } from "./internal-chat-testflow.service";
+import type { PendingAttachment } from "../sendseven-webhook/admin-data.service";
 
 // Service: the in-system AI chatbot for staff.
 //
@@ -545,7 +546,7 @@ export const internalChatService = {
     return session;
   },
 
-  async postMessage(scope: Scope, sessionId: string, text: string): Promise<PostMessageResult> {
+  async postMessage(scope: Scope, sessionId: string, text: string, attachments?: PendingAttachment[]): Promise<PostMessageResult> {
     const trimmed = (text || "").trim();
     if (!trimmed) throw new AppError("Message text is required", 400);
     const session = await this.getSessionForCaller(scope, sessionId);
@@ -554,10 +555,17 @@ export const internalChatService = {
       // Replays the SendSeven client-conversation flow against the internal_chat
       // tables using a synthetic client (see internal-chat-testflow.service.ts).
       // The driver persists both the user's turn and the reply itself.
-      const { replyMessage } = await internalChatTestflowService.runTestFlowTurn(session, trimmed, scope);
+      // Attachments (test-flow only) exercise the document-submission path:
+      // vision read → admin route → ticket with the file attached.
+      const { replyMessage } = await internalChatTestflowService.runTestFlowTurn(session, trimmed, scope, attachments);
       return { kind: "assistant_reply", message: replyMessage };
     }
 
+    // Assistant mode has no attachment concept — a file sent here is ignored
+    // rather than erroring, so the message itself still goes through.
+    if (attachments?.length) {
+      console.warn(`[internal-chat] session ${sessionId} attachments ignored (assistant mode)`);
+    }
     const message = await this.answer(scope, session, trimmed);
     return { kind: "assistant_reply", message };
   },

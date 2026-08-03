@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { validate } from "../../middlewares/validation.middleware";
-import { internalChatController as c } from "./internal-chat.controller";
+import { chatAttachmentUpload, internalChatController as c } from "./internal-chat.controller";
 import { createSessionValidator, postMessageValidator, listMessagesValidator } from "./internal-chat.validator";
 
 const router = Router();
@@ -11,7 +11,9 @@ const router = Router();
 // internal-chat.service.ts createSession).
 
 router.post("/sessions", validate(createSessionValidator), c.createSession);
-router.post("/sessions/:id/messages", validate(postMessageValidator), c.postMessage);
+// chatAttachmentUpload only engages on multipart requests (test-flow image
+// attachments) — plain JSON messages pass straight through it unchanged.
+router.post("/sessions/:id/messages", chatAttachmentUpload.array("attachments", 3), validate(postMessageValidator), c.postMessage);
 router.get("/sessions/:id/messages", validate(listMessagesValidator), c.listMessages);
 
 export default router;

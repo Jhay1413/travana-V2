@@ -32,7 +32,7 @@ import {
   useUpsertAgentTargets,
   useMonthBookings,
 } from "@/hooks/queries";
-import type { ShopTargetInput, AgentTargetInput } from "@/features/reports/types/targets/targets.types";
+import type { ShopTargetInput, AgentTargetInput, TargetBalanceStatus } from "@/features/reports/types/targets/targets.types";
 
 function generateMonths(count: number) {
   const now = new Date();
@@ -52,18 +52,41 @@ function generateMonths(count: number) {
 
 const MONTHS = generateMonths(24);
 
+// Resolves a "YYYY-MM" key to the same shape as a MONTHS entry. Works for any
+// month, including ones before MONTHS' current-month start.
+function parseMonthKey(key: string) {
+  const match = /^(\d{4})-(\d{2})$/.exec(key);
+  if (!match) return null;
+  const d = new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, 1);
+  return {
+    key,
+    label: d.toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
+    short: d.toLocaleDateString("en-GB", { month: "short" }),
+    monthNum: d.getMonth(),
+    year: d.getFullYear(),
+  };
+}
+
 function fmt(v: number) {
   return "£" + v.toLocaleString("en-GB");
 }
 
+const STATUS_META = {
+  balanced: { label: "Balanced", color: "emerald" as const },
+  over: { label: "Over", color: "red" as const },
+  under: { label: "Under", color: "amber" as const },
+};
+
+// Live-draft feedback only (wizard / edit sheet). Saved months use the
+// server-computed status from the overview summary; this mirrors the server's
+// BALANCE_THRESHOLD so unsaved values preview the same verdict.
 function statusInfo(diff: number) {
-  if (Math.abs(diff) < 500) return { label: "Balanced", color: "emerald" as const };
-  if (diff > 0) return { label: "Over", color: "red" as const };
-  return { label: "Under", color: "amber" as const };
+  if (Math.abs(diff) < 500) return STATUS_META.balanced;
+  return diff > 0 ? STATUS_META.over : STATUS_META.under;
 }
 
-function StatusBadge({ diff }: { diff: number }) {
-  const s = statusInfo(diff);
+function StatusBadge({ diff, status }: { diff?: number; status?: TargetBalanceStatus }) {
+  const s = status ? STATUS_META[status] : statusInfo(diff ?? 0);
   const cls = s.color === "emerald"
     ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700"
     : s.color === "red"
@@ -315,43 +338,45 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
 
   const [overviewHorizon, setOverviewHorizon] = useState<12 | 18 | 24>(12);
 
-  const validationData = useMemo(() => {
-    return MONTHS.map((m) => {
-      const shop = shopTargets[m.key] ?? 0;
-      const agentTotal = agents.reduce((s, a) => s + (agentTargets[a.id]?.[m.key] ?? 0), 0);
-      return { ...m, shop, agentTotal, diff: agentTotal - shop };
-    });
-  }, [shopTargets, agentTargets, agents]);
+  // All saved-target aggregates (totals, differences, statuses) come from the
+  // server-computed overview summary, which is calendar-anchored: it starts at
+  // January of the current year and runs ~2 years forward.
+  const summaryRows = useMemo(
+    () =>
+      (overview?.summary ?? []).map((s) => ({
+        key: `${s.year}-${String(s.month).padStart(2, "0")}`,
+        label: `${s.monthName} ${s.year}`,
+        year: s.year,
+        month: s.month,
+        shop: parseFloat(s.shopTarget),
+        agentTotal: parseFloat(s.totalAgentTargets),
+        diff: parseFloat(s.difference),
+        status: s.status,
+      })),
+    [overview?.summary],
+  );
 
-  const validationData12 = validationData.slice(0, 12);
+  // The overview table is a calendar-year view: January of the current year
+  // plus the selected horizon.
+  const overviewRows = useMemo(
+    () => summaryRows.slice(0, overviewHorizon),
+    [summaryRows, overviewHorizon],
+  );
 
-  const overviewRows = useMemo(() => {
+  // The summary cards measure the next 12 months from the current month.
+  const next12 = useMemo(() => {
     const now = new Date();
-    const startYear = now.getFullYear();
-    const rows: typeof validationData = [];
-    for (let i = 0; i < overviewHorizon; i++) {
-      const d = new Date(startYear, i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const shop = shopTargets[key] ?? 0;
-      const agentTotal = agents.reduce((s, a) => s + (agentTargets[a.id]?.[key] ?? 0), 0);
-      rows.push({
-        key,
-        label: d.toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
-        short: d.toLocaleDateString("en-GB", { month: "short" }),
-        monthNum: d.getMonth(),
-        year: d.getFullYear(),
-        shop,
-        agentTotal,
-        diff: agentTotal - shop,
-      });
-    }
-    return rows;
-  }, [overviewHorizon, shopTargets, agentTargets, agents]);
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const idx = summaryRows.findIndex((r) => r.year === y && r.month === m);
+    return idx >= 0 ? summaryRows.slice(idx, idx + 12) : [];
+  }, [summaryRows]);
 
   const overallHealth = useMemo(() => {
-    const balanced = validationData12.filter(v => Math.abs(v.diff) < 500).length;
-    return Math.round((balanced / validationData12.length) * 100);
-  }, [validationData12]);
+    if (next12.length === 0) return 0;
+    const balanced = next12.filter((r) => r.status === "balanced").length;
+    return Math.round((balanced / next12.length) * 100);
+  }, [next12]);
 
   const openEditMonth = useCallback((monthKey: string) => {
     setEditDrafts({
@@ -366,8 +391,10 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
 
   const saveEditMonth = useCallback(async () => {
     if (!editMonth) return;
-    
-    const monthData = MONTHS.find(m => m.key === editMonth);
+
+    // Derive year/month from the "YYYY-MM" key rather than looking it up in
+    // MONTHS — overview rows can be earlier than MONTHS' current-month start.
+    const monthData = parseMonthKey(editMonth);
     if (!monthData) return;
 
     // Update shop target
@@ -470,7 +497,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
     { title: "Apply", icon: CheckCircle2, desc: "Review and apply your targets" },
   ];
 
-  const editMonthData = editMonth ? MONTHS.find(m => m.key === editMonth) : null;
+  const editMonthData = editMonth ? parseMonthKey(editMonth) : null;
   const editMonthValidation = editMonth ? (() => {
     const shop = parseInt(editDrafts.shop, 10) || 0;
     const agentTotal = agents.reduce((s, a) => s + (parseInt(editDrafts.agents[a.id] ?? "0", 10) || 0), 0);
@@ -544,11 +571,11 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
             </div>
             <span className="text-lg font-bold">{overallHealth}%</span>
           </div>
-          <p className="mt-1 text-[11px] text-black/40">{validationData12.filter(v => Math.abs(v.diff) < 500).length} of {validationData12.length} months balanced</p>
+          <p className="mt-1 text-[11px] text-black/40">{next12.filter((r) => r.status === "balanced").length} of {next12.length} months balanced</p>
         </Card>
         <Card className="rounded-2xl border-black/10 bg-white/80 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5">
           <p className="text-xs font-medium text-black/50 dark:text-white/50">Total Shop Target (12m)</p>
-          <p className="mt-1 text-xl font-bold">{fmt(MONTHS.slice(0, 12).reduce((s, m) => s + (shopTargets[m.key] ?? 0), 0))}</p>
+          <p className="mt-1 text-xl font-bold">{fmt(next12.reduce((s, r) => s + r.shop, 0))}</p>
           <p className="mt-0.5 text-[11px] text-black/40">Next 12 months combined</p>
         </Card>
         <Card className="rounded-2xl border-black/10 bg-white/80 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5">
@@ -621,7 +648,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
                     <td key={a.id} className="px-3 py-2 text-right text-sm text-black/70">{fmt(agentTargets[a.id]?.[row.key] ?? 0)}</td>
                   ))}
                   <td className="px-4 py-2 text-right text-sm font-semibold">{fmt(row.agentTotal)}</td>
-                  <td className="px-4 py-2 text-right"><StatusBadge diff={row.diff} /></td>
+                  <td className="px-4 py-2 text-right"><StatusBadge status={row.status} /></td>
                   <td className="px-2 py-2"><ChevronRight className="h-3.5 w-3.5 text-black/20" /></td>
                 </tr>
               ))}

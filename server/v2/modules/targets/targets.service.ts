@@ -13,6 +13,9 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+// Agent targets within £500 of the shop target count as balanced.
+const BALANCE_THRESHOLD = 500;
+
 /**
  * Resolve which branch the request operates on.
  *
@@ -135,11 +138,13 @@ export async function getTargetsOverview(scope: Scope, branchOverride?: string):
     }
   }
 
+  // Fetch from January of the current year (not the current month) so the
+  // client's calendar-year overview can show figures for months already past.
   const [shopTargets, agentTargets, agents, summaryData] = await Promise.all([
-    targetsRepository.getShopTargetsByDateRange(branchId, currentYear, currentMonth, endYear, endMonth),
-    targetsRepository.getAgentTargetsByDateRange(branchId, currentYear, currentMonth, endYear, endMonth),
+    targetsRepository.getShopTargetsByDateRange(branchId, currentYear, 1, endYear, endMonth),
+    targetsRepository.getAgentTargetsByDateRange(branchId, currentYear, 1, endYear, endMonth),
     targetsRepository.getAllAgents(branchId),
-    targetsRepository.getTargetSummaryByDateRange(branchId, currentYear, currentMonth, endYear, endMonth),
+    targetsRepository.getTargetSummaryByDateRange(branchId, currentYear, 1, endYear, endMonth),
   ]);
 
   const summary: MonthTargetSummary[] = [];
@@ -156,14 +161,13 @@ export async function getTargetsOverview(scope: Scope, branchOverride?: string):
     shopTargetMap.set(key, target.targetAmount);
   }
 
-  for (let i = 0; i < 24; i++) {
-    let year = currentYear;
-    let month = currentMonth + i;
-
-    if (month > 12) {
-      year += Math.floor((month - 1) / 12);
-      month = ((month - 1) % 12) + 1;
-    }
+  // The summary is calendar-anchored: it starts at January of the current year
+  // (so the client's year overview can show months already past) and runs
+  // through the end of the 24-month fetch window.
+  const totalMonths = (endYear - currentYear) * 12 + endMonth;
+  for (let i = 0; i < totalMonths; i++) {
+    const year = currentYear + Math.floor(i / 12);
+    const month = (i % 12) + 1;
 
     const key = `${year}-${month}`;
     const shopTarget = shopTargetMap.get(key) || "0.00";
@@ -171,7 +175,7 @@ export async function getTargetsOverview(scope: Scope, branchOverride?: string):
 
     const shopAmount = parseFloat(shopTarget);
     const agentAmount = parseFloat(totalAgentTargets);
-    const difference = (agentAmount - shopAmount).toFixed(2);
+    const diff = agentAmount - shopAmount;
 
     summary.push({
       year,
@@ -179,7 +183,8 @@ export async function getTargetsOverview(scope: Scope, branchOverride?: string):
       monthName: MONTH_NAMES[month - 1],
       shopTarget,
       totalAgentTargets,
-      difference,
+      difference: diff.toFixed(2),
+      status: Math.abs(diff) < BALANCE_THRESHOLD ? "balanced" : diff > 0 ? "over" : "under",
     });
   }
 
