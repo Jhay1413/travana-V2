@@ -6,6 +6,8 @@ import type {
   TrainingLessonAsset,
   CreateCourseInput,
   UpdateCourseInput,
+  CreateSectionInput,
+  UpdateSectionInput,
   CreateLessonInput,
   UpdateLessonInput,
   UpsertQuizInput,
@@ -82,11 +84,58 @@ export function useDeleteCourse() {
   });
 }
 
+// Sections (course → sections → lessons). Mutations carry `courseId` purely
+// for cache invalidation — the section/lesson id drives the request itself.
+
+export function useCreateSection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ courseId, ...body }: { courseId: string } & CreateSectionInput) =>
+      trainingApi.createSection(courseId, body),
+    onSuccess: (_data, { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
+export function useUpdateSection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; courseId: string } & UpdateSectionInput) =>
+      trainingApi.updateSection(id, body),
+    onSuccess: (_data, { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
+/** Irreversible — cascades to the section's lessons, their assets/progress and its quiz. */
+export function useDeleteSection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; courseId: string }) => trainingApi.deleteSection(id),
+    onSuccess: (_data, { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
+export function useReorderSections() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ courseId, order }: { courseId: string; order: { id: string; position: number }[] }) =>
+      trainingApi.reorderSections(courseId, order),
+    onSuccess: (_data, { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
 export function useCreateLesson() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ courseId, ...body }: { courseId: string } & CreateLessonInput) =>
-      trainingApi.createLesson(courseId, body),
+    mutationFn: ({ sectionId, ...body }: { sectionId: string; courseId: string } & CreateLessonInput) =>
+      trainingApi.createLesson(sectionId, body),
     onSuccess: (_data, { courseId }) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
     },
@@ -117,8 +166,8 @@ export function useDeleteLesson() {
 export function useReorderLessons() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ courseId, order }: { courseId: string; order: { id: string; position: number }[] }) =>
-      trainingApi.reorderLessons(courseId, order),
+    mutationFn: ({ sectionId, order }: { sectionId: string; courseId: string; order: { id: string; position: number }[] }) =>
+      trainingApi.reorderLessons(sectionId, order),
     onSuccess: (_data, { courseId }) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
     },
@@ -184,6 +233,20 @@ export function useUpsertLessonQuiz() {
     onSuccess: (_data, { lessonId, courseId }) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.lessonQuiz(lessonId) });
       // The lesson's `has_quiz` flag lives on the cached course content.
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
+/** Full replace-upsert of a SECTION's quiz (authoring, `platform_admin` only). */
+export function useUpsertSectionQuiz() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sectionId, ...input }: { sectionId: string; courseId: string } & UpsertQuizInput) =>
+      trainingApi.upsertSectionQuiz(sectionId, input),
+    onSuccess: (_data, { sectionId, courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.sectionQuiz(sectionId) });
+      // The section's `has_quiz` flag lives on the cached course content.
       queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
     },
   });

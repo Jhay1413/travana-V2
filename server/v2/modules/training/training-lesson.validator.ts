@@ -11,13 +11,14 @@ const lessonBody = z.object({
 });
 
 export const createLessonValidator = z.object({
-  params: z.object({ id: z.string().uuid('Invalid course id') }),
+  params: z.object({ id: z.string().uuid('Invalid section id') }),
   body: lessonBody,
 });
 
 export const updateLessonValidator = z.object({
   params: z.object({ id: z.string().uuid('Invalid lesson id') }),
-  body: lessonBody.partial(),
+  // sectionId moves the lesson to another section of the same course.
+  body: lessonBody.partial().extend({ sectionId: z.string().uuid('Invalid section id').optional() }),
 });
 
 export const lessonIdValidator = z.object({
@@ -25,7 +26,7 @@ export const lessonIdValidator = z.object({
 });
 
 export const reorderLessonsValidator = z.object({
-  params: z.object({ id: z.string().uuid('Invalid course id') }),
+  params: z.object({ id: z.string().uuid('Invalid section id') }),
   body: z.object({
     order: z
       .array(z.object({ id: z.string().uuid(), position: z.number().int().min(0) }))

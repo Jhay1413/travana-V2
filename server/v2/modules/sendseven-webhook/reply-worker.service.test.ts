@@ -23,6 +23,7 @@ vi.mock("../ai-conversation/ai-conversation.brain", () => ({
   buildPhoneConflictReply: vi.fn(() => "Can you confirm that number's yours?"),
   buildTranscript: vi.fn((_messages: unknown, latest: string) => `Customer: ${latest}`),
   decideDeterministicRoute: vi.fn(() => "classify"),
+  describeImageAttachments: vi.fn(async () => null),
   generateBeneficiaryAsk: vi.fn(async () => "Who's this for, and what's their number?"),
   generateGeneralReply: vi.fn(async () => "Happy to help!"),
   generateTransitionReply: vi.fn(async () => "Great, when suits a callback?"),
@@ -119,11 +120,12 @@ vi.mock("./admin-agent.service", () => ({
 }));
 
 import { cleanTravellerName, replyWorker } from "./reply-worker.service";
-import { generateTurn } from "../ai-conversation/ai-conversation.brain";
+import { decideDeterministicRoute, generateTurn } from "../ai-conversation/ai-conversation.brain";
 import { classifyConversationRoute } from "../ai-conversation/conversation-router";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
 import { messagesRepository } from "../messages/messages.repository";
+import { adminAgent } from "./admin-agent.service";
 import type { SsWebhookEvent } from "./sendseven-webhook.types";
 import type { SendsevenConversationState } from "@shared/schema";
 
@@ -310,5 +312,99 @@ describe("handleInbound — single generateTurn call on new-lead onboarding (Fix
     // The single call is the onboarding call (client=null, knownClient=false).
     expect(vi.mocked(generateTurn).mock.calls[0][2]).toBeNull();
     expect(vi.mocked(generateTurn).mock.calls[0][6]).toBe(false);
+  });
+});
+
+// ── Pre-onboarding attachment deferral ──────────────────────────────────────
+// A document sent BEFORE the contact is identified can't be downloaded yet (no
+// clientId), and the download step only reads the CURRENT message — so the
+// onboarding gate stashes the attachment refs in the conversation context, and
+// the turn that completes onboarding collects them into the admin/ticket flow.
+
+const PASSPORT_ATTACHMENT = { id: "att-1", filename: "passport.jpg", content_type: "image/jpeg", file_size: 100 };
+const STORED_PASSPORT_REF = { id: "att-1", filename: "passport.jpg", contentType: "image/jpeg", size: 100 };
+
+describe("handleInbound — pre-onboarding attachment deferral", () => {
+  it("turn 1 (unknown contact sends a photo): defers the attachment refs instead of downloading", async () => {
+    // Attachments deterministically force the admin route (mirrors the real
+    // decideDeterministicRoute).
+    vi.mocked(decideDeterministicRoute).mockReturnValueOnce("admin" as never);
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null }));
+    vi.mocked(messagesRepository.list).mockResolvedValue({
+      items: [
+        {
+          id: "msg-1",
+          direction: "inbound",
+          text: "",
+          created_at: "2026-07-20T00:01:00.000Z",
+          attachments: [PASSPORT_ATTACHMENT],
+        },
+      ],
+    } as never);
+    // Onboarding turn: the bot asks for name+phone (none given yet).
+    vi.mocked(generateTurn).mockResolvedValue({
+      hand_off: false,
+      intent: "other",
+      slots: {},
+      client: {},
+      beneficiary: { onBehalf: false },
+      reply: "Can I grab your name and phone number?",
+    } as never);
+
+    // A caption-less photo: no text, media message_type.
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "", message_type: "image" }));
+
+    // No clientId yet → nothing downloaded, refs remembered in the persisted
+    // context (alongside the admin domain carry-over).
+    expect(messagesRepository.downloadAttachment).not.toHaveBeenCalled();
+    const updates = vi.mocked(conversationStateRepository.update).mock.calls;
+    const ctx = updates[updates.length - 1][1].context as {
+      pendingAttachmentRefs?: unknown;
+      domain?: string;
+    };
+    expect(ctx.pendingAttachmentRefs).toEqual([STORED_PASSPORT_REF]);
+    expect(ctx.domain).toBe("admin");
+  });
+
+  it("turn 2 (onboarding completes): collects the deferred attachment into the admin flow and clears the marker", async () => {
+    vi.mocked(decideDeterministicRoute).mockReturnValueOnce("admin" as never);
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(
+      makeState({
+        clientId: null,
+        context: { domain: "admin", adminActionable: true, pendingAttachmentRefs: [STORED_PASSPORT_REF] } as never,
+      }),
+    );
+    vi.mocked(messagesRepository.list).mockResolvedValue({
+      items: [{ id: "msg-1", direction: "inbound", text: "John Smith 07123456789", created_at: "2026-07-20T00:02:00.000Z" }],
+    } as never);
+    vi.mocked(messagesRepository.downloadAttachment).mockResolvedValue({ buffer: Buffer.from("img-bytes") } as never);
+    // Onboarding completes this turn (name+phone given) → clientId resolves.
+    vi.mocked(generateTurn).mockResolvedValue({
+      hand_off: false,
+      intent: "other",
+      slots: {},
+      client: { fullName: "John Smith", phone: "07123456789" },
+      beneficiary: { onBehalf: false },
+      reply: "Thanks John, I can see you on the system.",
+    } as never);
+    vi.mocked(adminAgent.answer).mockResolvedValue({ reply: "Logged — a colleague will follow up.", ticketOpened: true });
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "John Smith 07123456789" }));
+
+    // The deferred file was downloaded and handed to the admin agent (which
+    // attaches it to the ticket it opens), with the note naming the file.
+    expect(messagesRepository.downloadAttachment).toHaveBeenCalledWith("att-1");
+    expect(adminAgent.answer).toHaveBeenCalledTimes(1);
+    const answerArgs = vi.mocked(adminAgent.answer).mock.calls[0];
+    expect(answerArgs[6]).toContain("passport.jpg"); // attachmentNote
+    expect(answerArgs[7]).toHaveLength(1); // pendingAttachments
+    expect(answerArgs[7]?.[0]?.filename).toBe("passport.jpg");
+
+    // Consume-once: the marker is gone from the persisted context, so later
+    // turns neither re-download nor stay forced onto the admin route.
+    const updates = vi.mocked(conversationStateRepository.update).mock.calls;
+    const finalCtx = updates[updates.length - 1][1].context as { pendingAttachmentRefs?: unknown; ticketOpened?: boolean };
+    expect(finalCtx.pendingAttachmentRefs).toBeUndefined();
+    expect(finalCtx.ticketOpened).toBe(true);
   });
 });

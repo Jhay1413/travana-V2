@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { trainingController } from './training.controller';
+import { trainingSectionController } from './training-section.controller';
 import { trainingLessonController } from './training-lesson.controller';
 import { trainingUploadController } from './training-upload.controller';
 import { trainingProgressController } from './training-progress.controller';
@@ -8,6 +9,12 @@ import { trainingQuizController } from './training-quiz.controller';
 import { validate } from '../../middlewares/validation.middleware';
 import { requireOrgRole } from '../../middlewares/auth/require-org-role';
 import { createCourseValidator, updateCourseValidator, courseIdValidator } from './training.validator';
+import {
+  createSectionValidator,
+  updateSectionValidator,
+  sectionIdValidator,
+  reorderSectionsValidator,
+} from './training-section.validator';
 import {
   createLessonValidator,
   updateLessonValidator,
@@ -25,6 +32,9 @@ import {
   upsertLessonQuizValidator,
   quizLessonIdValidator,
   submitLessonQuizAttemptValidator,
+  upsertSectionQuizValidator,
+  quizSectionIdValidator,
+  submitSectionQuizAttemptValidator,
 } from './training-quiz.validator';
 
 const router = Router();
@@ -76,6 +86,12 @@ router.post('/courses/:id/quiz/attempts', validate(submitQuizAttemptValidator), 
 router.get('/lessons/:id/quiz', validate(quizLessonIdValidator), trainingQuizController.getLessonQuiz);
 router.post('/lessons/:id/quiz/attempts', validate(submitLessonQuizAttemptValidator), trainingQuizController.submitLessonAttempt);
 
+// Per-section quizzes — same role-aware GET / learner-attempt pattern, keyed
+// by section id. Distinct 3-segment paths under /sections, so they never
+// collide with `PATCH/DELETE /sections/:id`.
+router.get('/sections/:id/quiz', validate(quizSectionIdValidator), trainingQuizController.getSectionQuiz);
+router.post('/sections/:id/quiz/attempts', validate(submitSectionQuizAttemptValidator), trainingQuizController.submitSectionAttempt);
+
 // Authoring (platform_admin only)
 router.post('/courses', requireOrgRole(['platform_admin']), validate(createCourseValidator), trainingController.createCourse);
 router.patch('/courses/:id', requireOrgRole(['platform_admin']), validate(updateCourseValidator), trainingController.updateCourse);
@@ -84,6 +100,33 @@ router.post('/courses/:id/archive', requireOrgRole(['platform_admin']), validate
 router.delete('/courses/:id', requireOrgRole(['platform_admin']), validate(courseIdValidator), trainingController.deleteCourse);
 router.put('/courses/:id/quiz', requireOrgRole(['platform_admin']), validate(upsertQuizValidator), trainingQuizController.upsertQuiz);
 router.put('/lessons/:id/quiz', requireOrgRole(['platform_admin']), validate(upsertLessonQuizValidator), trainingQuizController.upsertLessonQuiz);
+router.put('/sections/:id/quiz', requireOrgRole(['platform_admin']), validate(upsertSectionQuizValidator), trainingQuizController.upsertSectionQuiz);
+
+// Sections (course → sections → lessons)
+router.post(
+  '/courses/:id/sections',
+  requireOrgRole(['platform_admin']),
+  validate(createSectionValidator),
+  trainingSectionController.createSection,
+);
+router.patch(
+  '/courses/:id/sections/reorder',
+  requireOrgRole(['platform_admin']),
+  validate(reorderSectionsValidator),
+  trainingSectionController.reorderSections,
+);
+router.patch(
+  '/sections/:id',
+  requireOrgRole(['platform_admin']),
+  validate(updateSectionValidator),
+  trainingSectionController.updateSection,
+);
+router.delete(
+  '/sections/:id',
+  requireOrgRole(['platform_admin']),
+  validate(sectionIdValidator),
+  trainingSectionController.deleteSection,
+);
 
 // Video: presigned direct-to-S3 PUT — server never buffers the file (see
 // training-upload.service.ts).
@@ -94,15 +137,15 @@ router.post(
   trainingUploadController.presign,
 );
 
-// Lessons
+// Lessons — created and reordered within their SECTION.
 router.post(
-  '/courses/:id/lessons',
+  '/sections/:id/lessons',
   requireOrgRole(['platform_admin']),
   validate(createLessonValidator),
   trainingLessonController.createLesson,
 );
 router.patch(
-  '/courses/:id/lessons/reorder',
+  '/sections/:id/lessons/reorder',
   requireOrgRole(['platform_admin']),
   validate(reorderLessonsValidator),
   trainingLessonController.reorderLessons,

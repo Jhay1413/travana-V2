@@ -9,10 +9,13 @@ import type {
   MyCourseStatus,
   MyEnrollment,
   UpdateLessonProgressInput,
+  TrainingSection,
   TrainingLesson,
   TrainingLessonAsset,
   CreateCourseInput,
   UpdateCourseInput,
+  CreateSectionInput,
+  UpdateSectionInput,
   CreateLessonInput,
   UpdateLessonInput,
   PresignVideoInput,
@@ -28,6 +31,7 @@ import type {
 // so `response.data` below IS the course / course[] payload.
 
 const BASE = `${API_V2}/training/courses`;
+const SECTIONS_BASE = `${API_V2}/training/sections`;
 const LESSONS_BASE = `${API_V2}/training/lessons`;
 const ASSETS_BASE = `${API_V2}/training/assets`;
 const UPLOADS_BASE = `${API_V2}/training/uploads`;
@@ -44,7 +48,7 @@ export const trainingApi = {
   },
 
   /** Same endpoint as `getCourse`, but retyped for the learner content view
-   * (course + ordered lessons, each with its ordered graphics assets). */
+   * (course + ordered sections, each with its ordered lessons + assets). */
   async getCourseWithContent(id: string): Promise<CourseWithContent> {
     const { data } = await axios.get<CourseWithContent>(`${BASE}/${id}`);
     return data;
@@ -99,6 +103,18 @@ export const trainingApi = {
     return data;
   },
 
+  /** A SECTION's quiz — same role-aware shape as `getQuiz`, keyed by section id. */
+  async getSectionQuiz(sectionId: string): Promise<QuizView> {
+    const { data } = await axios.get<QuizView>(`${SECTIONS_BASE}/${sectionId}/quiz`);
+    return data;
+  },
+
+  /** Learner: submit a section-quiz attempt; passing a required one counts toward content completion. */
+  async submitSectionQuizAttempt(sectionId: string, answers: QuizAttemptAnswer[]): Promise<QuizAttemptResult> {
+    const { data } = await axios.post<QuizAttemptResult>(`${SECTIONS_BASE}/${sectionId}/quiz/attempts`, { answers });
+    return data;
+  },
+
   // === Admin (authoring, platform_admin only) ===
 
   /** Full replace-upsert of a course's quiz. */
@@ -110,6 +126,12 @@ export const trainingApi = {
   /** Full replace-upsert of a LESSON's quiz. */
   async upsertLessonQuiz(lessonId: string, input: UpsertQuizInput): Promise<QuizView> {
     const { data } = await axios.put<QuizView>(`${LESSONS_BASE}/${lessonId}/quiz`, input);
+    return data;
+  },
+
+  /** Full replace-upsert of a SECTION's quiz. */
+  async upsertSectionQuiz(sectionId: string, input: UpsertQuizInput): Promise<QuizView> {
+    const { data } = await axios.put<QuizView>(`${SECTIONS_BASE}/${sectionId}/quiz`, input);
     return data;
   },
 
@@ -162,8 +184,31 @@ export const trainingApi = {
     return data;
   },
 
-  async createLesson(courseId: string, body: CreateLessonInput): Promise<TrainingLesson> {
-    const { data } = await axios.post<TrainingLesson>(`${BASE}/${courseId}/lessons`, body);
+  // Sections (course → sections → lessons)
+
+  async createSection(courseId: string, body: CreateSectionInput): Promise<TrainingSection> {
+    const { data } = await axios.post<TrainingSection>(`${BASE}/${courseId}/sections`, body);
+    return data;
+  },
+
+  async updateSection(id: string, body: UpdateSectionInput): Promise<TrainingSection> {
+    const { data } = await axios.patch<TrainingSection>(`${SECTIONS_BASE}/${id}`, body);
+    return data;
+  },
+
+  /** Deleting a section cascades to its lessons, their assets/progress and the section's quiz. */
+  async deleteSection(id: string): Promise<void> {
+    await axios.delete(`${SECTIONS_BASE}/${id}`);
+  },
+
+  async reorderSections(courseId: string, order: { id: string; position: number }[]): Promise<TrainingSection[]> {
+    const { data } = await axios.patch<TrainingSection[]>(`${BASE}/${courseId}/sections/reorder`, { order });
+    return data;
+  },
+
+  /** Lessons are created within a SECTION. */
+  async createLesson(sectionId: string, body: CreateLessonInput): Promise<TrainingLesson> {
+    const { data } = await axios.post<TrainingLesson>(`${SECTIONS_BASE}/${sectionId}/lessons`, body);
     return data;
   },
 
@@ -176,8 +221,9 @@ export const trainingApi = {
     await axios.delete(`${LESSONS_BASE}/${id}`);
   },
 
-  async reorderLessons(courseId: string, order: { id: string; position: number }[]): Promise<TrainingLesson[]> {
-    const { data } = await axios.patch<TrainingLesson[]>(`${BASE}/${courseId}/lessons/reorder`, { order });
+  /** Reorder lessons WITHIN a section. */
+  async reorderLessons(sectionId: string, order: { id: string; position: number }[]): Promise<TrainingLesson[]> {
+    const { data } = await axios.patch<TrainingLesson[]>(`${SECTIONS_BASE}/${sectionId}/lessons/reorder`, { order });
     return data;
   },
 

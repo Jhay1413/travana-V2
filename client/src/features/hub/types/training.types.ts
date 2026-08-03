@@ -29,11 +29,22 @@ export interface TrainingCourse {
   updated_at: string;
 }
 
+export interface TrainingSection {
+  id: string;
+  course_id: string;
+  title: string;
+  description: string | null;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export type LessonType = "video" | "graphics";
 
 export interface TrainingLesson {
   id: string;
   course_id: string;
+  section_id: string;
   title: string;
   description: string | null;
   type: LessonType;
@@ -62,9 +73,18 @@ export interface LessonWithAssets extends TrainingLesson {
   quiz_required: boolean;
 }
 
-/** Single cohesive course-read shape: course + its ordered lessons (+ each lesson's assets). */
-export interface CourseWithContent extends TrainingCourse {
+/** A section with its ordered lessons attached, plus its own quiz flags. */
+export interface SectionWithLessons extends TrainingSection {
   lessons: LessonWithAssets[];
+  /** Whether this section has its own quiz (end-of-section knowledge check). */
+  has_quiz: boolean;
+  /** Passing the section quiz is required to complete the course content (false when no quiz). */
+  quiz_required: boolean;
+}
+
+/** Single cohesive course-read shape: course + its ordered sections, each with its ordered lessons (+ assets). */
+export interface CourseWithContent extends TrainingCourse {
+  sections: SectionWithLessons[];
 }
 
 export interface TrainingEnrollment {
@@ -180,9 +200,21 @@ export interface QuizAttemptResult {
   results: QuizAttemptQuestionResult[];
 }
 
+/** Per-section quiz state for the learner (all-default when the section has no quiz). */
+export interface SectionProgress {
+  sectionId: string;
+  hasQuiz: boolean;
+  /** Passing the section quiz is required to complete the course content. */
+  quizRequired: boolean;
+  quizPassed: boolean;
+  bestScorePct: number | null;
+  attemptCount: number;
+}
+
 export interface MyCourseStatus {
   enrolled: boolean;
   lessonProgress: LessonProgress[];
+  sectionProgress: SectionProgress[];
   contentComplete: boolean;
   hasQuiz: boolean;
   quizPassed: boolean;
@@ -225,6 +257,18 @@ export interface CreateCourseInput {
 
 export type UpdateCourseInput = Partial<CreateCourseInput>;
 
+export interface CreateSectionInput {
+  title: string;
+  description?: string | null;
+  position?: number;
+}
+
+export type UpdateSectionInput = Partial<CreateSectionInput>;
+
+export interface ReorderSectionsInput {
+  order: { id: string; position: number }[];
+}
+
 export interface CreateLessonInput {
   title: string;
   description?: string | null;
@@ -235,7 +279,8 @@ export interface CreateLessonInput {
   videoDurationSec?: number | null;
 }
 
-export type UpdateLessonInput = Partial<CreateLessonInput>;
+/** `sectionId` moves the lesson to another section of the same course. */
+export type UpdateLessonInput = Partial<CreateLessonInput> & { sectionId?: string };
 
 export interface ReorderLessonsInput {
   order: { id: string; position: number }[];

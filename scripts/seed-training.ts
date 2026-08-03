@@ -2,6 +2,7 @@ import { like } from "drizzle-orm";
 import { db } from "../server/config/database";
 import {
   training_course,
+  training_section,
   training_lesson,
   training_lesson_asset,
   training_quiz,
@@ -285,12 +286,19 @@ async function main() {
       })
       .returning({ id: training_course.id });
 
+    // Each seed course gets one default section holding all its lessons.
+    const [section] = await db
+      .insert(training_section)
+      .values({ course_id: course.id, title: "Section 1", position: 0 })
+      .returning({ id: training_section.id });
+
     let position = 0;
     for (const l of c.lessons) {
       const [lesson] = await db
         .insert(training_lesson)
         .values({
           course_id: course.id,
+          section_id: section.id,
           title: l.title,
           description: l.description,
           type: l.type,

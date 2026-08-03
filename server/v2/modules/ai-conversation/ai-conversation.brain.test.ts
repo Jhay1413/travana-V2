@@ -4,6 +4,8 @@ import {
   buildRulesBlock,
   buildSystemPrompt,
   decideDeterministicRoute,
+  IMAGE_TRIAGE_MAX_BYTES,
+  IMAGE_TRIAGE_MAX_IMAGES,
   inferHolidayTypeFromText,
   isAcknowledgement,
   looksLikeActionableAdmin,
@@ -13,9 +15,11 @@ import {
   normalizeTurnSlots,
   parseBotRules,
   retrievedAudienceAllows,
+  selectImagesForTriage,
   shouldCreateEnquiryNow,
   shouldForceTicketNow,
   type BotRule,
+  type ImageAttachmentLike,
 } from "./ai-conversation.brain";
 import type { EnquirySlots, RetrievedContext } from "./ai-conversation.types";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
@@ -610,5 +614,50 @@ describe("buildRulesBlock", () => {
   it("returns null when nothing is left after filtering", () => {
     expect(buildRulesBlock(parseBotRules([{ text: "Admin only", audience: "admin" }]), "sales")).toBeNull();
     expect(buildRulesBlock([], "sales")).toBeNull();
+  });
+});
+
+describe("selectImagesForTriage (vision guardrails)", () => {
+  const att = (overrides: Partial<ImageAttachmentLike> = {}): ImageAttachmentLike => ({
+    buffer: Buffer.from("x"),
+    filename: "photo.jpg",
+    contentType: "image/jpeg",
+    size: 1024,
+    ...overrides,
+  });
+
+  it("keeps image/* attachments only — PDFs, videos, and unknown types are dropped", () => {
+    const kept = selectImagesForTriage([
+      att({ filename: "passport.jpg", contentType: "image/jpeg" }),
+      att({ filename: "invoice.pdf", contentType: "application/pdf" }),
+      att({ filename: "clip.mp4", contentType: "video/mp4" }),
+      att({ filename: "scan.png", contentType: "image/png" }),
+      att({ filename: "mystery.bin", contentType: "" }),
+    ]);
+    expect(kept.map((a) => a.filename)).toEqual(["passport.jpg", "scan.png"]);
+  });
+
+  it("is case-insensitive on the content type", () => {
+    expect(selectImagesForTriage([att({ contentType: "IMAGE/JPEG" })])).toHaveLength(1);
+  });
+
+  it("drops oversized and empty files", () => {
+    const kept = selectImagesForTriage([
+      att({ filename: "huge.jpg", size: IMAGE_TRIAGE_MAX_BYTES + 1 }),
+      att({ filename: "empty.jpg", size: 0 }),
+      att({ filename: "at-cap.jpg", size: IMAGE_TRIAGE_MAX_BYTES }),
+    ]);
+    expect(kept.map((a) => a.filename)).toEqual(["at-cap.jpg"]);
+  });
+
+  it("caps at IMAGE_TRIAGE_MAX_IMAGES, preserving arrival order", () => {
+    const many = Array.from({ length: IMAGE_TRIAGE_MAX_IMAGES + 2 }, (_, i) => att({ filename: `img-${i}.jpg` }));
+    const kept = selectImagesForTriage(many);
+    expect(kept).toHaveLength(IMAGE_TRIAGE_MAX_IMAGES);
+    expect(kept.map((a) => a.filename)).toEqual(many.slice(0, IMAGE_TRIAGE_MAX_IMAGES).map((a) => a.filename));
+  });
+
+  it("returns empty for no attachments (caller then behaves exactly as before)", () => {
+    expect(selectImagesForTriage([])).toEqual([]);
   });
 });

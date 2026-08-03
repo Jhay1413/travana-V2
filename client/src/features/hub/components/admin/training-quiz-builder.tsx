@@ -9,8 +9,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HubEmptyState } from "@/features/hub/components/hub-components";
-import { useQuiz, useLessonQuiz } from "@/features/hub/api/use-training-queries";
-import { useUpsertQuiz, useUpsertLessonQuiz } from "@/features/hub/api/use-training-admin-mutations";
+import { useQuiz, useLessonQuiz, useSectionQuiz } from "@/features/hub/api/use-training-queries";
+import { useUpsertQuiz, useUpsertLessonQuiz, useUpsertSectionQuiz } from "@/features/hub/api/use-training-admin-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { QuestionType, QuizQuestionView } from "@/features/hub/types/training.types";
@@ -19,6 +19,8 @@ interface TrainingQuizBuilderProps {
   courseId: string;
   /** When set, the builder targets this LESSON's quiz instead of the course final quiz. */
   lessonId?: string;
+  /** When set, the builder targets this SECTION's quiz instead of the course final quiz. */
+  sectionId?: string;
   /** Called after a successful save — e.g. to close a wrapping dialog. */
   onSaved?: () => void;
 }
@@ -100,15 +102,21 @@ function validateQuestions(questions: QuestionDraft[]): Map<string, string[]> {
  * >=2 non-empty choices, single = exactly 1 correct, multiple >=1 correct.
  * Save is disabled until valid.
  */
-export function TrainingQuizBuilder({ courseId, lessonId, onSaved }: TrainingQuizBuilderProps) {
-  // Exactly one of the two queries is enabled (both hooks always run — the
-  // disabled one gets an empty id, matching its `enabled: !!id` guard).
-  const courseQuiz = useQuiz(lessonId ? "" : courseId);
+export function TrainingQuizBuilder({ courseId, lessonId, sectionId, onSaved }: TrainingQuizBuilderProps) {
+  // Exactly one of the three queries is enabled (all hooks always run — the
+  // disabled ones get an empty id, matching their `enabled: !!id` guard).
+  const courseQuiz = useQuiz(lessonId || sectionId ? "" : courseId);
   const lessonQuiz = useLessonQuiz(lessonId ?? "");
-  const { data: quiz, isLoading } = lessonId ? lessonQuiz : courseQuiz;
+  const sectionQuiz = useSectionQuiz(sectionId ?? "");
+  const { data: quiz, isLoading } = lessonId ? lessonQuiz : sectionId ? sectionQuiz : courseQuiz;
   const upsertQuiz = useUpsertQuiz();
   const upsertLessonQuiz = useUpsertLessonQuiz();
-  const saving = lessonId ? upsertLessonQuiz.isPending : upsertQuiz.isPending;
+  const upsertSectionQuiz = useUpsertSectionQuiz();
+  const saving = lessonId
+    ? upsertLessonQuiz.isPending
+    : sectionId
+      ? upsertSectionQuiz.isPending
+      : upsertQuiz.isPending;
   const { toast } = useToast();
 
   const [title, setTitle] = useState("");
@@ -227,6 +235,8 @@ export function TrainingQuizBuilder({ courseId, lessonId, onSaved }: TrainingQui
     try {
       if (lessonId) {
         await upsertLessonQuiz.mutateAsync({ lessonId, courseId, ...payload });
+      } else if (sectionId) {
+        await upsertSectionQuiz.mutateAsync({ sectionId, courseId, ...payload });
       } else {
         await upsertQuiz.mutateAsync({ courseId, ...payload });
       }
@@ -257,12 +267,15 @@ export function TrainingQuizBuilder({ courseId, lessonId, onSaved }: TrainingQui
       <div className="flex items-center justify-between">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-            <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" /> {lessonId ? "Lesson quiz" : "Quiz"}
+            <HelpCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />{" "}
+            {lessonId ? "Lesson quiz" : sectionId ? "Section quiz" : "Quiz"}
           </h3>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             {lessonId
               ? "A knowledge check for this lesson — passing it marks the lesson complete for the learner. Uses the course passing score."
-              : "Publishing this course makes the quiz available to learners. The passing score is set above, in the course form."}
+              : sectionId
+                ? "An end-of-section knowledge check — unlocks once the section's lessons are done. Uses the course passing score."
+                : "Publishing this course makes the quiz available to learners. The passing score is set above, in the course form."}
           </p>
         </div>
         {questions.length > 0 && (
@@ -284,7 +297,9 @@ export function TrainingQuizBuilder({ courseId, lessonId, onSaved }: TrainingQui
             description={
               lessonId
                 ? "Add your first question to build this lesson's quiz."
-                : "Add your first question to build this course's quiz."
+                : sectionId
+                  ? "Add your first question to build this section's quiz."
+                  : "Add your first question to build this course's quiz."
             }
           />
           <div className="mt-4 flex justify-center">
@@ -316,13 +331,16 @@ export function TrainingQuizBuilder({ courseId, lessonId, onSaved }: TrainingQui
               </div>
               <Switch checked={shuffleQuestions} onCheckedChange={setShuffleQuestions} data-testid="switch-quiz-shuffle" />
             </div>
-            {lessonId && (
+            {(lessonId || sectionId) && (
               <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3 sm:col-span-2 dark:border-slate-800">
                 <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Required to complete lesson</p>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    {lessonId ? "Required to complete lesson" : "Required to complete course content"}
+                  </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    On: learners must pass this quiz to complete the lesson. Off: the quiz is an optional knowledge
-                    check — content progress alone completes the lesson.
+                    {lessonId
+                      ? "On: learners must pass this quiz to complete the lesson. Off: the quiz is an optional knowledge check — content progress alone completes the lesson."
+                      : "On: learners must pass this quiz to finish the section and move on. Off: the quiz is an optional knowledge check."}
                   </p>
                 </div>
                 <Switch checked={isRequired} onCheckedChange={setIsRequired} data-testid="switch-quiz-required" />

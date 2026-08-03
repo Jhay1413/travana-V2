@@ -55,5 +55,20 @@ export const submitLessonQuizAttemptValidator = z.object({
   body: attemptBody,
 });
 
+// Section-quiz variants: same bodies, the :id param is a section id instead.
+export const upsertSectionQuizValidator = z.object({
+  params: z.object({ id: z.string().uuid('Invalid section id') }),
+  body: upsertQuizValidator.shape.body,
+});
+
+export const quizSectionIdValidator = z.object({
+  params: z.object({ id: z.string().uuid('Invalid section id') }),
+});
+
+export const submitSectionQuizAttemptValidator = z.object({
+  params: z.object({ id: z.string().uuid('Invalid section id') }),
+  body: attemptBody,
+});
+
 export type UpsertQuizBody = z.infer<typeof upsertQuizValidator>['body'];
 export type SubmitQuizAttemptBody = z.infer<typeof submitQuizAttemptValidator>['body'];

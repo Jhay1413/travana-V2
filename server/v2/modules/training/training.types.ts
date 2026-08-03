@@ -1,6 +1,8 @@
 export type {
   TrainingCourse,
   InsertTrainingCourse,
+  TrainingSection,
+  InsertTrainingSection,
   TrainingLesson,
   InsertTrainingLesson,
   TrainingLessonAsset,
@@ -18,7 +20,7 @@ export type {
   TrainingCertificate,
   InsertTrainingCertificate,
 } from '@shared/schema';
-import type { TrainingLesson, TrainingLessonAsset, TrainingCourse } from '@shared/schema';
+import type { TrainingLesson, TrainingLessonAsset, TrainingCourse, TrainingSection } from '@shared/schema';
 
 export interface CreateCourseInput {
   title: string;
@@ -38,6 +40,21 @@ export type UpdateCourseInput = Partial<CreateCourseInput>;
 
 export type CourseListItem = import('@shared/schema').TrainingCourse;
 
+// === Sections ===
+
+export interface CreateSectionInput {
+  title: string;
+  description?: string | null;
+  position?: number;
+}
+
+export type UpdateSectionInput = Partial<CreateSectionInput>;
+
+export interface SectionReorderEntry {
+  id: string;
+  position: number;
+}
+
 // === Lessons & assets (Phase 2) ===
 
 export interface CreateLessonInput {
@@ -50,7 +67,8 @@ export interface CreateLessonInput {
   videoDurationSec?: number | null;
 }
 
-export type UpdateLessonInput = Partial<CreateLessonInput>;
+/** `sectionId` moves the lesson to another section of the same course. */
+export type UpdateLessonInput = Partial<CreateLessonInput> & { sectionId?: string };
 
 export interface LessonReorderEntry {
   id: string;
@@ -72,9 +90,18 @@ export interface LessonWithAssets extends TrainingLesson {
   quiz_required: boolean;
 }
 
-/** Single cohesive course-read shape: course + its ordered lessons (+ each lesson's assets). */
-export interface CourseWithContent extends TrainingCourse {
+/** A section with its ordered lessons attached, plus its own quiz flags. */
+export interface SectionWithLessons extends TrainingSection {
   lessons: LessonWithAssets[];
+  /** Whether this section has its own quiz (end-of-section knowledge check). */
+  has_quiz: boolean;
+  /** Passing the section quiz is required to complete the course content (false when no quiz). */
+  quiz_required: boolean;
+}
+
+/** Single cohesive course-read shape: course + its ordered sections, each with its ordered lessons (+ assets). */
+export interface CourseWithContent extends TrainingCourse {
+  sections: SectionWithLessons[];
 }
 
 // === Uploads (Phase 2) ===
@@ -116,9 +143,21 @@ export interface QuizCertificateView {
   issued_at: Date;
 }
 
+/** Per-section quiz state for the learner (all-default when the section has no quiz). */
+export interface SectionProgressStatus {
+  sectionId: string;
+  hasQuiz: boolean;
+  /** Passing the section quiz is required to complete the course content. */
+  quizRequired: boolean;
+  quizPassed: boolean;
+  bestScorePct: number | null;
+  attemptCount: number;
+}
+
 export interface MyCourseStatus {
   enrolled: boolean;
   lessonProgress: LessonProgressStatus[];
+  sectionProgress: SectionProgressStatus[];
   contentComplete: boolean;
   hasQuiz: boolean;
   quizPassed: boolean;

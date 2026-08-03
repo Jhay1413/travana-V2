@@ -2,7 +2,8 @@ import { randomBytes } from 'crypto';
 import { trainingQuizRepository, type QuizQuestionWithChoices, type QuizWithQuestions, type QuizTreeQuestionInput } from './training-quiz.repository';
 import { trainingProgressRepository } from './training-progress.repository';
 import { trainingLessonRepository } from './training-lesson.repository';
-import { getContentComplete, assertLessonUnlocked } from './training-progress.service';
+import { getSectionOrThrow } from './training-section.service';
+import { getContentComplete, assertLessonUnlocked, assertSectionQuizUnlocked } from './training-progress.service';
 import { trainingService, isAdminContext } from './training.service';
 import type { ScopeOrTrusted } from './training.repository';
 import { AppError } from '../../utils/error-handler';
@@ -139,9 +140,9 @@ export const trainingQuizService = {
     await trainingService.assertCourseEditable(courseId, scope);
 
     const { quiz, questions: savedQuestions } = await trainingQuizRepository.upsertQuizTree(
-      { courseId, lessonId: null },
-      // is_required is a lesson-quiz concept — the final quiz's "requiredness"
-      // is already expressed by course completion, so it stays false here.
+      { courseId, lessonId: null, sectionId: null },
+      // is_required is a lesson/section-quiz concept — the final quiz's
+      // "requiredness" is already expressed by course completion, so it stays false here.
       { title: input.title ?? null, shuffle_questions: input.shuffleQuestions ?? false, is_required: false },
       shapeQuestionTreeInput(input),
     );
@@ -159,7 +160,28 @@ export const trainingQuizService = {
     await trainingService.assertCourseEditable(lesson.course_id, scope);
 
     const { quiz, questions: savedQuestions } = await trainingQuizRepository.upsertQuizTree(
-      { courseId: lesson.course_id, lessonId: lesson.id },
+      { courseId: lesson.course_id, lessonId: lesson.id, sectionId: null },
+      {
+        title: input.title ?? null,
+        shuffle_questions: input.shuffleQuestions ?? false,
+        is_required: input.isRequired ?? false,
+      },
+      shapeQuestionTreeInput(input),
+    );
+
+    return shapeQuizView(quiz, savedQuestions, true);
+  },
+
+  /**
+   * Full replace-upsert of a SECTION's quiz (authoring, `platform_admin`
+   * only) — same validation and tree shape, keyed by section.
+   */
+  async upsertSectionQuiz(sectionId: string, input: UpsertQuizInput, scope: ScopeOrTrusted): Promise<QuizView> {
+    const section = await getSectionOrThrow(sectionId);
+    await trainingService.assertCourseEditable(section.course_id, scope);
+
+    const { quiz, questions: savedQuestions } = await trainingQuizRepository.upsertQuizTree(
+      { courseId: section.course_id, lessonId: null, sectionId: section.id },
       {
         title: input.title ?? null,
         shuffle_questions: input.shuffleQuestions ?? false,
@@ -194,6 +216,17 @@ export const trainingQuizService = {
     await trainingService.getCourse(lesson.course_id, scope);
 
     const quizData = await trainingQuizRepository.findQuizWithQuestionsByLessonId(lessonId);
+    if (!quizData) return { quiz: null, questions: [] };
+
+    return shapeQuizView(quizData.quiz, quizData.questions, isAdminContext(scope));
+  },
+
+  /** Role-aware read of a SECTION's quiz — same gating as `getQuiz`, via the section's course. */
+  async getSectionQuiz(sectionId: string, scope: ScopeOrTrusted): Promise<QuizView> {
+    const section = await getSectionOrThrow(sectionId);
+    await trainingService.getCourse(section.course_id, scope);
+
+    const quizData = await trainingQuizRepository.findQuizWithQuestionsBySectionId(sectionId);
     if (!quizData) return { quiz: null, questions: [] };
 
     return shapeQuizView(quizData.quiz, quizData.questions, isAdminContext(scope));
@@ -329,6 +362,61 @@ export const trainingQuizService = {
       courseCompleted: false,
       certificate: null,
       lessonCompleted: passed,
+      results,
+    };
+  },
+
+  /**
+   * Submit + server-side-grade a SECTION quiz attempt. Unlimited retakes.
+   * The section's lessons (and everything before the section) must be done
+   * first — passing a REQUIRED section quiz is part of content completion,
+   * but it never completes the course or issues a certificate; that stays
+   * with the course final quiz.
+   */
+  async submitSectionAttempt(sectionId: string, input: SubmitQuizInput, scope: Scope): Promise<QuizAttemptResult> {
+    if (!scope.userId) throw new AppError('User not found in scope', 401);
+
+    const section = await getSectionOrThrow(sectionId);
+    const course = await trainingService.getCourse(section.course_id, scope);
+
+    const quizData = await trainingQuizRepository.findQuizWithQuestionsBySectionId(sectionId);
+    if (!quizData || quizData.questions.length === 0) {
+      throw new AppError('This section has no quiz', 400);
+    }
+
+    const { enrollment } = await trainingProgressRepository.findOrCreateEnrollment({
+      course_id: section.course_id,
+      user_id: scope.userId,
+      // '' → null: org_id is a uuid column (see submitAttempt above).
+      org_id: scope.orgId || null,
+      status: 'in_progress',
+    });
+
+    // Sequential progression: everything before + this section's lessons first.
+    await assertSectionQuizUnlocked(section, enrollment.id);
+
+    const { scorePct, results, snapshot } = gradeAnswers(quizData, input);
+    const passed = scorePct >= course.passing_score;
+    const attemptNumber = (await trainingQuizRepository.getMaxAttemptNumber(enrollment.id, quizData.quiz.id)) + 1;
+
+    await trainingQuizRepository.createAttempt({
+      enrollment_id: enrollment.id,
+      quiz_id: quizData.quiz.id,
+      user_id: scope.userId,
+      attempt_number: attemptNumber,
+      score_pct: scorePct,
+      passed,
+      answers_snapshot: snapshot,
+      submitted_at: new Date(),
+    });
+
+    return {
+      attemptNumber,
+      scorePct,
+      passed,
+      passingScore: course.passing_score,
+      courseCompleted: false,
+      certificate: null,
       results,
     };
   },

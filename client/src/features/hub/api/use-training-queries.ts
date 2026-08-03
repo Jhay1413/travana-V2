@@ -20,6 +20,8 @@ export const trainingKeys = {
   quiz: (courseId: string) => [...trainingKeys.quizzes(), courseId] as const,
   lessonQuizzes: () => [...trainingKeys.all, "lesson-quiz"] as const,
   lessonQuiz: (lessonId: string) => [...trainingKeys.lessonQuizzes(), lessonId] as const,
+  sectionQuizzes: () => [...trainingKeys.all, "section-quiz"] as const,
+  sectionQuiz: (sectionId: string) => [...trainingKeys.sectionQuizzes(), sectionId] as const,
 };
 
 export function useTrainingCourses() {
@@ -83,5 +85,14 @@ export function useLessonQuiz(lessonId: string) {
     queryKey: trainingKeys.lessonQuiz(lessonId),
     queryFn: () => trainingApi.getLessonQuiz(lessonId),
     enabled: !!lessonId,
+  });
+}
+
+/** A SECTION's quiz — same role-aware shape as `useQuiz`, keyed by section id. */
+export function useSectionQuiz(sectionId: string) {
+  return useQuery<QuizView>({
+    queryKey: trainingKeys.sectionQuiz(sectionId),
+    queryFn: () => trainingApi.getSectionQuiz(sectionId),
+    enabled: !!sectionId,
   });
 }

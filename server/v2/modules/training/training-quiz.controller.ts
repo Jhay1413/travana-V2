@@ -52,4 +52,28 @@ export const trainingQuizController = {
     const result = await trainingQuizService.submitLessonAttempt(lessonId, req.body, scope);
     return successResponse(res, result, 'Attempt submitted successfully', 201);
   }),
+
+  // Authoring (platform_admin): full replace-upsert of a SECTION's quiz.
+  upsertSectionQuiz: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const sectionId = req.params.id as string;
+    const quiz = await trainingQuizService.upsertSectionQuiz(sectionId, req.body, scope);
+    return successResponse(res, quiz, 'Section quiz saved successfully');
+  }),
+
+  // Role-aware: admin gets is_correct (builder), learners never do.
+  getSectionQuiz: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const sectionId = req.params.id as string;
+    const quiz = await trainingQuizService.getSectionQuiz(sectionId, scope);
+    return successResponse(res, quiz, 'Section quiz retrieved successfully');
+  }),
+
+  // Learner: submit section-quiz answers; a required section quiz counts toward content completion.
+  submitSectionAttempt: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const sectionId = req.params.id as string;
+    const result = await trainingQuizService.submitSectionAttempt(sectionId, req.body, scope);
+    return successResponse(res, result, 'Attempt submitted successfully', 201);
+  }),
 };

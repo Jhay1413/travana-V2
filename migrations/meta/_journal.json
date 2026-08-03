@@ -260,6 +260,13 @@
       "when": 1785466884035,
       "tag": "0036_training_quiz_is_required",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1785732582589,
+      "tag": "0037_training_sections",
+      "breakpoints": true
     }
   ]
 }

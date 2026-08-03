@@ -104,6 +104,14 @@ function newestTimestamp(a: string | null | undefined, b: string | null | undefi
   return aTime >= bTime ? a! : b!;
 }
 
+// A snooze is only active while `snoozed_until` is in the future. Unparseable
+// timestamps count as not snoozed so the conversation stays visible in Open.
+function isSnoozeActive(snoozedUntil: string | null | undefined): boolean {
+  if (!snoozedUntil) return false;
+  const until = Date.parse(snoozedUntil);
+  return !Number.isNaN(until) && until > Date.now();
+}
+
 // Turns a SendSeven conversation into the UI model. Because only the list
 // endpoint drives the inbox, the thread is seeded with the single
 // `last_message`; the full history arrives via the messages API later.
@@ -135,8 +143,10 @@ export function toUiConversation(item: SsConversation): Conversation {
     assignee,
     unread: !!item.needs_reply,
     // Snooze is derived from `snoozed_until`, not from `status` — the provider
-    // keeps a snoozed conversation's status as "open".
-    snoozed: !!item.snoozed_until,
+    // keeps a snoozed conversation's status as "open". The provider also never
+    // clears an expired `snoozed_until`, so a snooze only counts while it is
+    // still in the future; expired snoozes fall back into Open.
+    snoozed: isSnoozeActive(item.snoozed_until),
     snoozedUntil: item.snoozed_until ?? null,
     preview: lastMessagePreview(item.last_message),
     lastActivityAt,

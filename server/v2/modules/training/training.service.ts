@@ -1,10 +1,11 @@
 import { trainingRepository, type ScopeOrTrusted } from './training.repository';
 import { trainingLessonRepository } from './training-lesson.repository';
+import { trainingSectionRepository } from './training-section.repository';
 import { trainingQuizRepository } from './training-quiz.repository';
 import { AppError } from '../../utils/error-handler';
 import type { Scope } from '../../utils/scope';
 import type { InsertTrainingCourse, TrainingCourse, TrainingLessonAsset } from '@shared/schema';
-import type { CreateCourseInput, UpdateCourseInput, CourseWithContent } from './training.types';
+import type { CreateCourseInput, UpdateCourseInput, CourseWithContent, LessonWithAssets } from './training.types';
 
 /**
  * Row-level visibility check, mirroring `buildTrainingVisibilityConds`:
@@ -105,18 +106,24 @@ export const trainingService = {
 
   /**
    * Single cohesive course-read shape for `GET /training/courses/:id`: the
-   * course row plus its ordered lessons, each with its ordered graphics
-   * assets attached (empty for video lessons). Visibility/publish gating is
-   * identical to `getCourse` since it's the same read path, just enriched.
+   * course row plus its ordered sections, each with its ordered lessons
+   * (each with its ordered graphics assets, empty for video lessons) and
+   * its own quiz flags. Visibility/publish gating is identical to
+   * `getCourse` since it's the same read path, just enriched.
    */
   async getCourseWithContent(id: string, scope: ScopeOrTrusted): Promise<CourseWithContent> {
     const course = await this.getCourse(id, scope);
-    const lessons = await trainingLessonRepository.listLessonsByCourseId(id);
-    const lessonIds = lessons.map((l) => l.id);
-    const assets = await trainingLessonRepository.listAssetsByLessonIds(lessonIds);
-    const lessonQuizzes = await trainingQuizRepository.listLessonQuizzesByCourseId(id);
+    const [sections, lessons, lessonQuizzes, sectionQuizzes] = await Promise.all([
+      trainingSectionRepository.listSectionsByCourseId(id),
+      trainingLessonRepository.listLessonsByCourseId(id),
+      trainingQuizRepository.listLessonQuizzesByCourseId(id),
+      trainingQuizRepository.listSectionQuizzesByCourseId(id),
+    ]);
+    const assets = await trainingLessonRepository.listAssetsByLessonIds(lessons.map((l) => l.id));
     const lessonIdsWithQuiz = new Set(lessonQuizzes.map((q) => q.lesson_id));
     const lessonIdsWithRequiredQuiz = new Set(lessonQuizzes.filter((q) => q.is_required).map((q) => q.lesson_id));
+    const sectionIdsWithQuiz = new Set(sectionQuizzes.map((q) => q.section_id));
+    const sectionIdsWithRequiredQuiz = new Set(sectionQuizzes.filter((q) => q.is_required).map((q) => q.section_id));
 
     const assetsByLesson = new Map<string, TrainingLessonAsset[]>();
     for (const asset of assets) {
@@ -125,13 +132,26 @@ export const trainingService = {
       assetsByLesson.set(asset.lesson_id, list);
     }
 
-    return {
-      ...course,
-      lessons: lessons.map((lesson) => ({
+    const lessonsBySection = new Map<string, LessonWithAssets[]>();
+    for (const lesson of lessons) {
+      const shaped: LessonWithAssets = {
         ...lesson,
         assets: lesson.type === 'graphics' ? assetsByLesson.get(lesson.id) ?? [] : [],
         has_quiz: lessonIdsWithQuiz.has(lesson.id),
         quiz_required: lessonIdsWithRequiredQuiz.has(lesson.id),
+      };
+      const list = lessonsBySection.get(lesson.section_id) ?? [];
+      list.push(shaped);
+      lessonsBySection.set(lesson.section_id, list);
+    }
+
+    return {
+      ...course,
+      sections: sections.map((section) => ({
+        ...section,
+        lessons: lessonsBySection.get(section.id) ?? [],
+        has_quiz: sectionIdsWithQuiz.has(section.id),
+        quiz_required: sectionIdsWithRequiredQuiz.has(section.id),
       })),
     };
   },

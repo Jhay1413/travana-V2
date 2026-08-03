@@ -6,6 +6,7 @@ import {
   buildPhoneConflictReply,
   buildTranscript,
   decideDeterministicRoute,
+  describeImageAttachments,
   generateBeneficiaryAsk,
   generateGeneralReply,
   generateTransitionReply,
@@ -103,6 +104,17 @@ interface ConversationContext {
   // the number in question so the next turn can tell a correction (new number)
   // from a confirmation (same number again).
   phoneConflictPhone?: string;
+  // Attachment refs (id + metadata, NEVER bytes) from message(s) sent BEFORE
+  // onboarding completed. A file can only be downloaded/actioned once the
+  // sender is identified (the download step needs a clientId, and the admin
+  // bot needs a client to ticket against), and the download step only ever
+  // looks at the CURRENT message — so a passport photo sent as the opening
+  // message would otherwise be lost by the time the customer's next message
+  // completes onboarding. The onboarding gate stashes the refs here; the
+  // first post-onboarding turn downloads them into the ticket flow and
+  // clears this (consume-once). Wiped with the rest of the context by the
+  // needsHuman/idle-resume resets, so it can never linger across a hand-off.
+  pendingAttachmentRefs?: Array<{ id: string; filename: string; contentType: string; size: number }>;
   // Set when the customer is enquiring on behalf of a named third party — the
   // enquiry is filed under this traveller, not the sender. Persisted across turns
   // so we keep asking for/resolving the traveller (and don't re-ask their name).
@@ -282,7 +294,16 @@ export const replyWorker = {
       // up once and reused below for the attachment-download step instead of a
       // second list.items.find() over the same (immutable) list.
       const currentMessage = list.items.find((m) => m.id === message.id);
-      const hasAttachments = (currentMessage?.attachments ?? []).some((a) => a?.id);
+      const currentAttachments = (currentMessage?.attachments ?? []).filter((a) => a?.id);
+      // Attachment refs remembered from earlier, PRE-onboarding messages (see
+      // pendingAttachmentRefs on ConversationContext). Counted as attachments
+      // for the routing decision below so the conversation stays deterministically
+      // on the admin route until the deferred document is actually collected and
+      // ticketed (the download step below consumes + clears them once clientId
+      // is resolved). Only ever set in the non-beneficiary onboarding flow, so
+      // this can't hijack a beneficiary enquiry's sales routing.
+      const rememberedAttachmentRefs = prevContext.pendingAttachmentRefs ?? [];
+      const hasAttachments = currentAttachments.length > 0 || rememberedAttachmentRefs.length > 0;
       // (3.2) A deterministic ACTIONABLE admin signal (complaint / verification
       // details) or a document attachment on THIS turn breaks OUT of
       // enquiryInFlight stickiness — a customer mid-enquiry who says "my existing
@@ -425,6 +446,26 @@ export const replyWorker = {
           prevContext.beneficiary = { name: cleanTravellerName(onboard.beneficiary?.fullName) };
         }
         if (!beneficiaryEnquiry) {
+        // Attachment deferral: a file on THIS pre-onboarding message can't be
+        // downloaded yet (no clientId to act for), and the download step below
+        // only ever reads the CURRENT message — so remember its id/metadata in
+        // the context. The turn that completes onboarding collects it into the
+        // ticket flow (see the download step), and hasAttachments above keeps
+        // the conversation on the admin route until then. Mutates prevContext
+        // so every context persist below (missing-details, phone-conflict)
+        // carries it without each write site needing to know.
+        if (currentAttachments.length) {
+          const priorRefs = prevContext.pendingAttachmentRefs ?? [];
+          const freshRefs = currentAttachments
+            .filter((a) => !priorRefs.some((r) => r.id === a.id))
+            .map((a) => ({ id: a.id, filename: a.filename, contentType: a.content_type, size: a.file_size }));
+          if (freshRefs.length) {
+            prevContext.pendingAttachmentRefs = [...priorRefs, ...freshRefs];
+            console.log(
+              `[sendseven-webhook] conv ${conversationId} deferring ${freshRefs.length} attachment(s) until onboarding completes (no clientId yet)`,
+            );
+          }
+        }
         // An admin matter (complaint, document, account query) — recognised by the
         // ROUTE (the classifier catches complaints like "my room is filthy" that
         // the keyword check misses) or the deterministic admin signal. Don't hand
@@ -454,7 +495,13 @@ export const replyWorker = {
                     adminActionable: prevContext.adminActionable || looksLikeActionableAdmin(latestText),
                   },
                 }
-              : {}),
+              : // Defensive: an attachment always forces route="admin" (so
+                // adminMatter above is true), but if that ever changes, the
+                // deferred refs stashed into prevContext must still be
+                // persisted or the file is lost.
+                prevContext.pendingAttachmentRefs?.length
+                ? { context: { ...prevContext } }
+                : {}),
           });
           return;
         }
@@ -513,14 +560,23 @@ export const replyWorker = {
       // ── Attachments (SendSeven only) ───────────────────────────────────
       // A customer can send a document (e.g. a passport photo) with no caption.
       // Attachments aren't in the text transcript, so pull them off the current
-      // message and download the bytes. They are NOT saved to the client's files
-      // — instead they're handed to the admin bot, which attaches them to the
-      // ticket it opens (staff can move them to the client record from there).
-      // Best-effort: a failed download never breaks the reply.
-      const currentAttachments = (currentMessage?.attachments ?? []).filter((a) => a?.id);
+      // message — PLUS any refs remembered from pre-onboarding messages (see
+      // pendingAttachmentRefs), now collectible because clientId is resolved —
+      // and download the bytes, oldest first. They are NOT saved to the client's
+      // files — instead they're handed to the admin bot, which attaches them to
+      // the ticket it opens (staff can move them to the client record from
+      // there). Best-effort: a failed download never breaks the reply.
+      // (currentAttachments computed up top, alongside the routing decision.)
+      const rememberedNow = clientId
+        ? rememberedAttachmentRefs.filter((r) => !currentAttachments.some((a) => a.id === r.id))
+        : [];
+      const toDownload = [
+        ...rememberedNow.map((r) => ({ id: r.id, filename: r.filename, content_type: r.contentType, file_size: r.size })),
+        ...currentAttachments,
+      ];
       const pendingAttachments: PendingAttachment[] = [];
-      if (currentAttachments.length && clientId) {
-        for (const att of currentAttachments) {
+      if (toDownload.length && clientId) {
+        for (const att of toDownload) {
           try {
             const dl = await messagesRepository.downloadAttachment(att.id);
             pendingAttachments.push({ buffer: dl.buffer, filename: att.filename, contentType: att.content_type, size: att.file_size });
@@ -529,8 +585,37 @@ export const replyWorker = {
           }
         }
       }
+      // Consume-once: the deferred refs have now been collected (or attempted —
+      // a persistently failing download must not force the admin route forever).
+      // Deleting from prevContext means whichever branch persists context next
+      // drops the marker; if this turn dies before any persist, the refs are
+      // still in the DB and a redelivery retries the collection. Read from
+      // prevContext (NOT the rememberedAttachmentRefs captured up top): when
+      // onboarding completed on THIS same message, the gate stashed refs for
+      // the current attachments AFTER that capture — they're already covered
+      // by the currentAttachments download above and must be cleared too.
+      if (prevContext.pendingAttachmentRefs?.length && clientId) {
+        delete prevContext.pendingAttachmentRefs;
+        if (rememberedNow.length) {
+          console.log(
+            `[sendseven-webhook] conv ${conversationId} collected ${rememberedNow.length} attachment(s) deferred from before onboarding`,
+          );
+        }
+      }
+      // Vision read (best-effort, ADDITIVE only): describe what any image
+      // attachment(s) show so the note below — and therefore the ticket the
+      // admin bot opens from it — carries real context ("passport photo,
+      // appears to be for J Smith") instead of just a filename. This enriches
+      // the note TEXT only; routing, claims, and the ticket flow are untouched,
+      // and a null (non-image files, oversized, vision call failed, or a
+      // non-vision model override) leaves the note exactly as it was before.
+      const imageDescription = pendingAttachments.length ? await describeImageAttachments(pendingAttachments, { orgId }) : null;
       const attachmentNote = pendingAttachments.length
         ? `The customer has just sent the following file(s) in their latest message: ${pendingAttachments.map((a) => a.filename).join(", ")}. ` +
+          (imageDescription
+            ? `AI-read summary of the image(s), UNVERIFIED — a colleague must still review the actual file(s): ${imageDescription} ` +
+              "Include these AI-read details in the ticket description so staff have context. "
+            : "") +
           "Treat this as a document submission: use open_ticket to log it for a colleague — the file(s) will be attached to that ticket automatically. Then confirm to the customer you've received and logged it. Do NOT claim to have checked or verified the document yourself."
         : undefined;
       if (pendingAttachments.length) {

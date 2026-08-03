@@ -1,5 +1,6 @@
 import { trainingLessonRepository } from './training-lesson.repository';
 import { trainingService } from './training.service';
+import { getSectionOrThrow } from './training-section.service';
 import type { ScopeOrTrusted } from './training.repository';
 import { AppError } from '../../utils/error-handler';
 import { uploadImageToS3, deleteImageByStoredUrl } from '../../utils/image-storage';
@@ -23,17 +24,19 @@ async function getLessonOrThrow(lessonId: string): Promise<TrainingLesson> {
 }
 
 export const trainingLessonService = {
-  async createLesson(courseId: string, input: CreateLessonInput, scope: ScopeOrTrusted): Promise<TrainingLesson> {
-    await trainingService.assertCourseEditable(courseId, scope);
+  async createLesson(sectionId: string, input: CreateLessonInput, scope: ScopeOrTrusted): Promise<TrainingLesson> {
+    const section = await getSectionOrThrow(sectionId);
+    await trainingService.assertCourseEditable(section.course_id, scope);
 
     if (input.type === 'video' && !input.videoUrl) {
       throw new AppError('videoUrl is required for video lessons', 400);
     }
 
-    const position = input.position ?? (await trainingLessonRepository.getNextLessonPosition(courseId));
+    const position = input.position ?? (await trainingLessonRepository.getNextLessonPosition(sectionId));
 
     const data: InsertTrainingLesson = {
-      course_id: courseId,
+      course_id: section.course_id,
+      section_id: sectionId,
       title: input.title,
       description: input.description ?? null,
       type: input.type,
@@ -57,6 +60,17 @@ export const trainingLessonService = {
     }
 
     const patch: Partial<InsertTrainingLesson> = {};
+    // Moving to another section: the target must belong to the same course.
+    if (input.sectionId !== undefined && input.sectionId !== lesson.section_id) {
+      const target = await getSectionOrThrow(input.sectionId);
+      if (target.course_id !== lesson.course_id) {
+        throw new AppError('Target section does not belong to this course', 400);
+      }
+      patch.section_id = input.sectionId;
+      if (input.position === undefined) {
+        patch.position = await trainingLessonRepository.getNextLessonPosition(input.sectionId);
+      }
+    }
     if (input.title !== undefined) patch.title = input.title;
     if (input.description !== undefined) patch.description = input.description ?? null;
     if (input.position !== undefined) patch.position = input.position;
@@ -76,20 +90,21 @@ export const trainingLessonService = {
     await trainingLessonRepository.deleteLesson(lessonId);
   },
 
-  /** Persist a new position for every lesson in `order`; all ids must belong to `courseId`. */
-  async reorderLessons(courseId: string, order: LessonReorderEntry[], scope: ScopeOrTrusted): Promise<TrainingLesson[]> {
-    await trainingService.assertCourseEditable(courseId, scope);
+  /** Persist a new position for every lesson in `order`; all ids must belong to `sectionId`. */
+  async reorderLessons(sectionId: string, order: LessonReorderEntry[], scope: ScopeOrTrusted): Promise<TrainingLesson[]> {
+    const section = await getSectionOrThrow(sectionId);
+    await trainingService.assertCourseEditable(section.course_id, scope);
 
-    const lessons = await trainingLessonRepository.listLessonsByCourseId(courseId);
+    const lessons = await trainingLessonRepository.listLessonsBySectionId(sectionId);
     const validIds = new Set(lessons.map((l) => l.id));
     for (const entry of order) {
       if (!validIds.has(entry.id)) {
-        throw new AppError(`Lesson ${entry.id} does not belong to this course`, 400);
+        throw new AppError(`Lesson ${entry.id} does not belong to this section`, 400);
       }
     }
 
     await trainingLessonRepository.reorderLessons(order);
-    return trainingLessonRepository.listLessonsByCourseId(courseId);
+    return trainingLessonRepository.listLessonsBySectionId(sectionId);
   },
 
   /** Add asset rows from already-known URLs (complements the direct multer upload below). */

@@ -1,5 +1,5 @@
 import { db } from '../../config/database';
-import { training_lesson, training_lesson_asset } from '@shared/schema';
+import { training_lesson, training_lesson_asset, training_section } from '@shared/schema';
 import type {
   TrainingLesson,
   InsertTrainingLesson,
@@ -32,21 +32,36 @@ export const trainingLessonRepository = {
     await db.delete(training_lesson).where(eq(training_lesson.id, id));
   },
 
-  /** Ordered lessons for a course — the shape returned to both learners and authors. */
+  /**
+   * Every lesson of a course in course order: sections by their position,
+   * then lessons by position within each section. This flat ordered list is
+   * what sequential progression walks.
+   */
   async listLessonsByCourseId(courseId: string): Promise<TrainingLesson[]> {
+    const rows = await db
+      .select({ lesson: training_lesson })
+      .from(training_lesson)
+      .innerJoin(training_section, eq(training_section.id, training_lesson.section_id))
+      .where(eq(training_lesson.course_id, courseId))
+      .orderBy(asc(training_section.position), asc(training_lesson.position));
+    return rows.map((r) => r.lesson);
+  },
+
+  /** Ordered lessons within a single section. */
+  async listLessonsBySectionId(sectionId: string): Promise<TrainingLesson[]> {
     return db
       .select()
       .from(training_lesson)
-      .where(eq(training_lesson.course_id, courseId))
+      .where(eq(training_lesson.section_id, sectionId))
       .orderBy(asc(training_lesson.position));
   },
 
-  /** Next append position for a new lesson within a course. */
-  async getNextLessonPosition(courseId: string): Promise<number> {
+  /** Next append position for a new lesson within a section. */
+  async getNextLessonPosition(sectionId: string): Promise<number> {
     const [row] = await db
       .select({ maxPos: sql<number>`coalesce(max(${training_lesson.position}), -1)` })
       .from(training_lesson)
-      .where(eq(training_lesson.course_id, courseId));
+      .where(eq(training_lesson.section_id, sectionId));
     return (row?.maxPos ?? -1) + 1;
   },
 

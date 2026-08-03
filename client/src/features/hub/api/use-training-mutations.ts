@@ -38,10 +38,19 @@ function recomputeContentComplete(
 ): boolean {
   const content = queryClient.getQueryData<CourseWithContent>(trainingKeys.detail(courseId));
   if (!content) return fallback;
-  const required = content.lessons.filter((l) => l.is_required);
+  const lessons = content.sections.flatMap((s) => s.lessons);
+  const required = lessons.filter((l) => l.is_required);
   if (required.length === 0) return false;
   const completedIds = new Set(lessonProgress.filter((p) => p.completed).map((p) => p.lessonId));
-  return required.every((l) => completedIds.has(l.id));
+  if (!required.every((l) => completedIds.has(l.id))) return false;
+  // Required section quizzes also gate content completion — only claim
+  // complete optimistically when the cached status says they're passed.
+  const status = queryClient.getQueryData<MyCourseStatus>(trainingKeys.myStatus(courseId));
+  const requiredSectionIds = content.sections.filter((s) => s.quiz_required).map((s) => s.id);
+  if (requiredSectionIds.length === 0) return true;
+  if (!status) return fallback;
+  const passedSectionIds = new Set(status.sectionProgress.filter((p) => p.quizPassed).map((p) => p.sectionId));
+  return requiredSectionIds.every((id) => passedSectionIds.has(id));
 }
 
 export function useUpdateLessonProgress() {
@@ -143,6 +152,22 @@ export function useSubmitLessonQuizAttempt() {
   return useMutation({
     mutationFn: ({ lessonId, answers }: { lessonId: string; courseId: string; answers: QuizAttemptAnswer[] }) =>
       trainingApi.submitLessonQuizAttempt(lessonId, answers),
+    onSuccess: (_data, { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.myStatus(courseId) });
+    },
+  });
+}
+
+/**
+ * Submit + server-side-grade a SECTION quiz attempt (unlimited retakes).
+ * Passing a required section quiz counts toward content completion, so
+ * `myStatus` (section quiz state, contentComplete) is refreshed on success.
+ */
+export function useSubmitSectionQuizAttempt() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sectionId, answers }: { sectionId: string; courseId: string; answers: QuizAttemptAnswer[] }) =>
+      trainingApi.submitSectionQuizAttempt(sectionId, answers),
     onSuccess: (_data, { courseId }) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.myStatus(courseId) });
     },

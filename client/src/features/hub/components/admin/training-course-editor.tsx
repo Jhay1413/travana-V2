@@ -19,6 +19,7 @@ import {
   useUpdateCourse,
   usePublishCourse,
   useArchiveCourse,
+  useCreateSection,
   useCreateLesson,
   useUploadAssets,
 } from "@/features/hub/api/use-training-admin-mutations";
@@ -98,6 +99,7 @@ export default function TrainingCourseEditor() {
   const updateCourse = useUpdateCourse();
   const publishCourse = usePublishCourse();
   const archiveCourse = useArchiveCourse();
+  const createSection = useCreateSection();
   const createLesson = useCreateLesson();
   const uploadAssets = useUploadAssets();
 
@@ -226,11 +228,14 @@ export default function TrainingCourseEditor() {
       return;
     }
 
-    // Create mode: course, then each draft lesson in order, then its
-    // graphics files (if any) once that lesson's id exists.
+    // Create mode: course, then a default first section, then each draft
+    // lesson in order inside it, then its graphics files (if any) once that
+    // lesson's id exists. More sections can be added in edit mode after.
     let created;
+    let firstSection;
     try {
       created = await createCourse.mutateAsync(payload);
+      firstSection = await createSection.mutateAsync({ courseId: created.id, title: "Section 1" });
     } catch {
       toast({ title: "Failed to create course", variant: "destructive" });
       return;
@@ -243,6 +248,7 @@ export default function TrainingCourseEditor() {
       const draft = draftLessons[i];
       try {
         const lesson = await createLesson.mutateAsync({
+          sectionId: firstSection.id,
           courseId: created.id,
           title: draft.title,
           description: draft.description || null,
@@ -547,8 +553,8 @@ export default function TrainingCourseEditor() {
                   <div>
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Quizzes</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Save the course first — you'll then be able to build its final quiz and a quiz for each
-                      lesson (via the lesson's Quiz button).
+                      Save the course first — you'll then be able to build its final quiz, plus a quiz for each
+                      section and each lesson (via their Quiz buttons).
                     </p>
                   </div>
                 </div>
@@ -560,7 +566,8 @@ export default function TrainingCourseEditor() {
                     <div>
                       <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Lessons</h3>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Add lessons now — they'll be created together with the course.
+                        Add lessons now — they'll be created together with the course, inside its first section.
+                        You can add more sections after saving.
                       </p>
                     </div>
                     <Button

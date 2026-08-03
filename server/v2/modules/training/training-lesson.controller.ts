@@ -8,8 +8,8 @@ import { AppError } from '../../utils/error-handler';
 export const trainingLessonController = {
   createLesson: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
-    const courseId = req.params.id as string;
-    const lesson = await trainingLessonService.createLesson(courseId, req.body, scope);
+    const sectionId = req.params.id as string;
+    const lesson = await trainingLessonService.createLesson(sectionId, req.body, scope);
     return successResponse(res, lesson, 'Lesson created successfully', 201);
   }),
 
@@ -29,8 +29,8 @@ export const trainingLessonController = {
 
   reorderLessons: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
-    const courseId = req.params.id as string;
-    const lessons = await trainingLessonService.reorderLessons(courseId, req.body.order, scope);
+    const sectionId = req.params.id as string;
+    const lessons = await trainingLessonService.reorderLessons(sectionId, req.body.order, scope);
     return successResponse(res, lessons, 'Lessons reordered successfully');
   }),
 

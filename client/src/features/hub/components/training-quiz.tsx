@@ -1,17 +1,21 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Award, CheckCircle2, Loader2, Lock, RotateCcw, XCircle } from "lucide-react";
+import { Award, CheckCircle2, HelpCircle, Loader2, Lock, RotateCcw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { HubBadge, HubEmptyState } from "@/features/hub/components/hub-components";
-import { useMyCourseStatus, useQuiz, useLessonQuiz } from "@/features/hub/api/use-training-queries";
-import { useSubmitQuizAttempt, useSubmitLessonQuizAttempt } from "@/features/hub/api/use-training-mutations";
+import { useMyCourseStatus, useQuiz, useLessonQuiz, useSectionQuiz } from "@/features/hub/api/use-training-queries";
+import {
+  useSubmitQuizAttempt,
+  useSubmitLessonQuizAttempt,
+  useSubmitSectionQuizAttempt,
+} from "@/features/hub/api/use-training-mutations";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import type { QuizAttemptResult, LessonWithAssets } from "@/features/hub/types/training.types";
+import type { QuizAttemptResult, LessonWithAssets, SectionWithLessons } from "@/features/hub/types/training.types";
 
 interface TrainingQuizProps {
   courseId: string;
@@ -193,10 +197,69 @@ export function TrainingLessonQuiz({ courseId, lesson }: TrainingLessonQuizProps
   );
 }
 
+interface TrainingSectionQuizProps {
+  courseId: string;
+  section: SectionWithLessons;
+  /** The learner hasn't finished the section's lessons (or a prior section) yet. */
+  locked: boolean;
+}
+
+/**
+ * Per-section quiz panel, rendered in the course sidebar under the section's
+ * lessons (only when `section.has_quiz`). Reads the section's quiz state from
+ * `useMyCourseStatus().sectionProgress` and opens the shared runner dialog
+ * targeted at the section. Passing a REQUIRED section quiz counts toward
+ * content completion.
+ */
+export function TrainingSectionQuiz({ courseId, section, locked }: TrainingSectionQuizProps) {
+  const { data: status } = useMyCourseStatus(courseId);
+  const [open, setOpen] = useState(false);
+
+  const sectionStatus = status?.sectionProgress.find((p) => p.sectionId === section.id);
+  const passed = sectionStatus?.quizPassed ?? false;
+  const attemptCount = sectionStatus?.attemptCount ?? 0;
+  const bestScorePct = sectionStatus?.bestScorePct ?? null;
+  const required = sectionStatus?.quizRequired ?? section.quiz_required;
+
+  return (
+    <div className="mt-1" data-testid={`panel-section-quiz-${section.id}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={locked && !passed}
+        title={locked && !passed ? "Finish this section's lessons to unlock its quiz" : undefined}
+        className={cn(
+          "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors",
+          locked && !passed
+            ? "cursor-not-allowed text-slate-400 opacity-60 dark:text-slate-600"
+            : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-800",
+        )}
+        data-testid={`button-take-section-quiz-${section.id}`}
+      >
+        {passed ? (
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+        ) : locked ? (
+          <Lock className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
+        ) : (
+          <HelpCircle className="h-4 w-4 shrink-0 text-blue-500" />
+        )}
+        <span className="line-clamp-1 flex-1">Section quiz</span>
+        {required && !passed && <HubBadge variant="amber">Required</HubBadge>}
+        {passed && bestScorePct !== null && <HubBadge variant="green">{bestScorePct}%</HubBadge>}
+        {!passed && attemptCount > 0 && bestScorePct !== null && <HubBadge>best {bestScorePct}%</HubBadge>}
+      </button>
+
+      <TrainingQuizRunnerDialog courseId={courseId} sectionId={section.id} open={open} onOpenChange={setOpen} />
+    </div>
+  );
+}
+
 interface TrainingQuizRunnerDialogProps {
   courseId: string;
   /** When set, the runner takes this LESSON's quiz instead of the course final quiz. */
   lessonId?: string;
+  /** When set, the runner takes this SECTION's quiz instead of the course final quiz. */
+  sectionId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -206,18 +269,25 @@ interface TrainingQuizRunnerDialogProps {
  * collects one answer set per question (radio for single, checkboxes for
  * multiple), submits for server-side grading, then swaps to a result screen
  * built entirely from the attempt's `results` (never from `isCorrect`).
- * Runs either the course final quiz or, with `lessonId`, a lesson's quiz.
- * Exported for the finished-lesson quiz prompt in `TrainingCourseView`.
+ * Runs the course final quiz, or — with `lessonId` / `sectionId` — a
+ * lesson's or section's quiz. Exported for the finished-lesson quiz prompt
+ * in `TrainingCourseView`.
  */
-export function TrainingQuizRunnerDialog({ courseId, lessonId, open, onOpenChange }: TrainingQuizRunnerDialogProps) {
-  // Exactly one of the two queries is enabled (both hooks always run — the
-  // disabled one gets an empty id, matching its `enabled: !!id` guard).
-  const courseQuizQuery = useQuiz(open && !lessonId ? courseId : "");
+export function TrainingQuizRunnerDialog({ courseId, lessonId, sectionId, open, onOpenChange }: TrainingQuizRunnerDialogProps) {
+  // Exactly one of the three queries is enabled (all hooks always run — the
+  // disabled ones get an empty id, matching their `enabled: !!id` guard).
+  const courseQuizQuery = useQuiz(open && !lessonId && !sectionId ? courseId : "");
   const lessonQuizQuery = useLessonQuiz(open && lessonId ? lessonId : "");
-  const { data: quiz, isLoading } = lessonId ? lessonQuizQuery : courseQuizQuery;
+  const sectionQuizQuery = useSectionQuiz(open && sectionId ? sectionId : "");
+  const { data: quiz, isLoading } = lessonId ? lessonQuizQuery : sectionId ? sectionQuizQuery : courseQuizQuery;
   const submitCourseAttempt = useSubmitQuizAttempt();
   const submitLessonAttempt = useSubmitLessonQuizAttempt();
-  const submitting = lessonId ? submitLessonAttempt.isPending : submitCourseAttempt.isPending;
+  const submitSectionAttempt = useSubmitSectionQuizAttempt();
+  const submitting = lessonId
+    ? submitLessonAttempt.isPending
+    : sectionId
+      ? submitSectionAttempt.isPending
+      : submitCourseAttempt.isPending;
   const { toast } = useToast();
 
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
@@ -270,7 +340,9 @@ export function TrainingQuizRunnerDialog({ courseId, lessonId, open, onOpenChang
     try {
       const data = lessonId
         ? await submitLessonAttempt.mutateAsync({ lessonId, courseId, answers: answerList })
-        : await submitCourseAttempt.mutateAsync({ courseId, answers: answerList });
+        : sectionId
+          ? await submitSectionAttempt.mutateAsync({ sectionId, courseId, answers: answerList })
+          : await submitCourseAttempt.mutateAsync({ courseId, answers: answerList });
       setResult(data);
     } catch (err) {
       toast({

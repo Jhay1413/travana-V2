@@ -65,12 +65,18 @@ async function loadQuestionTree(quizId: string): Promise<QuizQuestionWithChoices
 }
 
 export const trainingQuizRepository = {
-  /** The course-level "final" quiz row (`lesson_id IS NULL`) — never a lesson quiz. */
+  /** The course-level "final" quiz row (`lesson_id` AND `section_id` NULL) — never a lesson/section quiz. */
   async findQuizByCourseId(courseId: string): Promise<TrainingQuiz | undefined> {
     const [row] = await db
       .select()
       .from(training_quiz)
-      .where(and(eq(training_quiz.course_id, courseId), isNull(training_quiz.lesson_id)))
+      .where(
+        and(
+          eq(training_quiz.course_id, courseId),
+          isNull(training_quiz.lesson_id),
+          isNull(training_quiz.section_id),
+        ),
+      )
       .limit(1);
     return row;
   },
@@ -80,12 +86,25 @@ export const trainingQuizRepository = {
     return row;
   },
 
-  /** All per-lesson quiz rows of a course (excludes the final quiz). */
+  async findQuizBySectionId(sectionId: string): Promise<TrainingQuiz | undefined> {
+    const [row] = await db.select().from(training_quiz).where(eq(training_quiz.section_id, sectionId)).limit(1);
+    return row;
+  },
+
+  /** All per-lesson quiz rows of a course (excludes section and final quizzes). */
   async listLessonQuizzesByCourseId(courseId: string): Promise<TrainingQuiz[]> {
     return db
       .select()
       .from(training_quiz)
       .where(and(eq(training_quiz.course_id, courseId), isNotNull(training_quiz.lesson_id)));
+  },
+
+  /** All per-section quiz rows of a course (excludes lesson and final quizzes). */
+  async listSectionQuizzesByCourseId(courseId: string): Promise<TrainingQuiz[]> {
+    return db
+      .select()
+      .from(training_quiz)
+      .where(and(eq(training_quiz.course_id, courseId), isNotNull(training_quiz.section_id)));
   },
 
   /** Full final-quiz tree (quiz + ordered questions, each with its ordered choices) for a course. */
@@ -102,24 +121,37 @@ export const trainingQuizRepository = {
     return { quiz, questions: await loadQuestionTree(quiz.id) };
   },
 
+  /** Full quiz tree for a section's quiz. */
+  async findQuizWithQuestionsBySectionId(sectionId: string): Promise<QuizWithQuestions | undefined> {
+    const quiz = await this.findQuizBySectionId(sectionId);
+    if (!quiz) return undefined;
+    return { quiz, questions: await loadQuestionTree(quiz.id) };
+  },
+
   /**
    * Full replace-upsert in one transaction: upsert the `training_quiz` row —
-   * keyed by `lesson_id` when targeting a lesson quiz, else by `course_id`
-   * with `lesson_id IS NULL` (the course-level final quiz) — delete its
-   * existing questions (cascades choices), then insert the new
+   * keyed by `lesson_id` (lesson quiz) or `section_id` (section quiz) when
+   * set, else by `course_id` with both NULL (the course-level final quiz) —
+   * delete its existing questions (cascades choices), then insert the new
    * question/choice tree from the payload. Safe for historical attempts
    * because they store an `answers_snapshot` and only FK `quiz_id` — never a
    * question/choice id.
    */
   async upsertQuizTree(
-    target: { courseId: string; lessonId: string | null },
+    target: { courseId: string; lessonId: string | null; sectionId: string | null },
     quizPatch: { title: string | null; shuffle_questions: boolean; is_required: boolean },
     questions: QuizTreeQuestionInput[],
   ): Promise<QuizWithQuestions> {
     return db.transaction(async (tx) => {
       const matchCond = target.lessonId
         ? eq(training_quiz.lesson_id, target.lessonId)
-        : and(eq(training_quiz.course_id, target.courseId), isNull(training_quiz.lesson_id));
+        : target.sectionId
+          ? eq(training_quiz.section_id, target.sectionId)
+          : and(
+              eq(training_quiz.course_id, target.courseId),
+              isNull(training_quiz.lesson_id),
+              isNull(training_quiz.section_id),
+            );
 
       const [existing] = await tx.select().from(training_quiz).where(matchCond).limit(1);
 
@@ -141,6 +173,7 @@ export const trainingQuizRepository = {
           .values({
             course_id: target.courseId,
             lesson_id: target.lessonId,
+            section_id: target.sectionId,
             title: quizPatch.title,
             shuffle_questions: quizPatch.shuffle_questions,
             is_required: quizPatch.is_required,

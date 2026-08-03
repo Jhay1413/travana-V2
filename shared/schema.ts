@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, pgEnum, text, varchar, integer, bigint, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, uniqueIndex, vector, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, bigint, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, uniqueIndex, vector, check, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1725,8 +1725,9 @@ export type InsertTaskNew = z.infer<typeof insertTasksSchema>;
 
 // ============================================================
 // === Training / LMS ===
-// Udemy-style courses: lessons (video/graphics) + a quiz with a passing
-// score. `org_id IS NULL` on training_course means the course is global
+// Udemy-style courses: course → sections → lessons (video/graphics), with
+// quizzes attachable per lesson, per section, or course-level (the final
+// quiz). `org_id IS NULL` on training_course means the course is global
 // (visible to every tenant); see docs/training-lms-plan.md.
 // ============================================================
 
@@ -1753,12 +1754,30 @@ export const insertTrainingCourseSchema = createInsertSchema(training_course).om
 export type TrainingCourse = typeof training_course.$inferSelect;
 export type InsertTrainingCourse = z.infer<typeof insertTrainingCourseSchema>;
 
-export const training_lesson = pgTable('training_lesson', {
+export const training_section = pgTable('training_section', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   course_id: uuid("course_id").notNull().references(() => training_course.id, { onDelete: "cascade" }),
   title: varchar("title").notNull(),
   description: text("description"),
+  position: integer("position").notNull().default(0),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+  updated_at: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertTrainingSectionSchema = createInsertSchema(training_section).omit({ id: true, created_at: true, updated_at: true });
+export type TrainingSection = typeof training_section.$inferSelect;
+export type InsertTrainingSection = z.infer<typeof insertTrainingSectionSchema>;
+
+export const training_lesson = pgTable('training_lesson', {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  // course_id is denormalized (derivable via the section) so progress/quiz
+  // queries can stay keyed by course without an extra join.
+  course_id: uuid("course_id").notNull().references(() => training_course.id, { onDelete: "cascade" }),
+  section_id: uuid("section_id").notNull().references(() => training_section.id, { onDelete: "cascade" }),
+  title: varchar("title").notNull(),
+  description: text("description"),
   type: lesson_type_enum("type").notNull(),
+  // Ordering within the lesson's section (sections themselves order by their own position).
   position: integer("position").notNull().default(0),
   is_required: boolean("is_required").notNull().default(true),
   video_url: text("video_url"),
@@ -1786,20 +1805,29 @@ export type InsertTrainingLessonAsset = z.infer<typeof insertTrainingLessonAsset
 export const training_quiz = pgTable('training_quiz', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   course_id: uuid("course_id").notNull().references(() => training_course.id, { onDelete: "cascade" }),
-  // NULL = the course-level "final" quiz (at most one per course, enforced by
-  // the partial unique index below). Set = a per-lesson quiz (one per lesson).
+  // Quiz attachment point — at most one of lesson_id / section_id is set
+  // (CHECK below): lesson_id = a per-lesson quiz (one per lesson),
+  // section_id = a per-section quiz (one per section), both NULL = the
+  // course-level "final" quiz (at most one per course, via the partial
+  // unique index below).
   lesson_id: uuid("lesson_id").unique().references(() => training_lesson.id, { onDelete: "cascade" }),
+  section_id: uuid("section_id").unique().references(() => training_section.id, { onDelete: "cascade" }),
   title: varchar("title"),
   shuffle_questions: boolean("shuffle_questions").notNull().default(false),
-  // Lesson quizzes only: when true, content progress alone cannot complete the
-  // lesson — the learner must pass this quiz. Always false on final quizzes.
+  // Lesson/section quizzes only: when true, content progress alone cannot
+  // complete the lesson/section — the learner must pass this quiz. Always
+  // false on final quizzes.
   is_required: boolean("is_required").notNull().default(false),
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   course_final_quiz_unique: uniqueIndex('training_quiz_course_final_unique')
     .on(table.course_id)
-    .where(sql`${table.lesson_id} IS NULL`),
+    .where(sql`${table.lesson_id} IS NULL AND ${table.section_id} IS NULL`),
+  single_target_check: check(
+    'training_quiz_single_target_check',
+    sql`${table.lesson_id} IS NULL OR ${table.section_id} IS NULL`,
+  ),
 }));
 
 export const insertTrainingQuizSchema = createInsertSchema(training_quiz).omit({ id: true, created_at: true, updated_at: true });
