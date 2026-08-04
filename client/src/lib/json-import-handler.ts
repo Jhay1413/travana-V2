@@ -1,6 +1,7 @@
 import type { UseFormReturn } from "react-hook-form";
 import type { QueryClient } from "@tanstack/react-query";
 import type { JsonMappingResult } from "@/features/json-mapper/api/json-mapper.api";
+import { normalizeTransferType } from "@/features/quote/types/quote-form.types";
 
 type AirportRecord = { id: string; airport_name: string; airport_code?: string | null };
 type PackageTypeRecord = { id: string; name: string };
@@ -415,6 +416,12 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
     }
   }
 
+  // The loop above copies the raw JSON value, which may be missing OR a label
+  // that isn't one of the form's dropdown options (e.g. "Transfer included") —
+  // either would leave the select empty. Always set the normalized value:
+  // recognized types pass through, anything else becomes an explicit "None".
+  setValue("transferType", normalizeTransferType(result.fields.transferType) as never);
+
   if (idMapping.countryId) setValue("country", idMapping.countryId);
   if (idMapping.destinationId) setValue("destination", idMapping.destinationId);
   if (idMapping.resortId) setValue("resort", idMapping.resortId);
@@ -507,7 +514,10 @@ function handleFallbackJson(data: Record<string, any>, deps: JsonImportDeps): vo
   setIfPresent("checkInDate", toIsoDate(data.checkInDate || data.check_in_date || data.checkin));
   setIfPresent("checkInTime", data.checkInTime || data.check_in_time);
   setIfPresent("nights", data.nights || data.duration);
-  setIfPresent("transferType", data.transferType || data.transfer_type || data.transfers);
+  // Normalized so a JSON without a transfer type — or with one that isn't a
+  // dropdown option — resets the field to "None" instead of keeping the
+  // pre-import value or leaving the select empty.
+  setIfPresent("transferType", normalizeTransferType(data.transferType || data.transfer_type || data.transfers));
   setIfPresent("preBookedSeats", data.preBookedSeats || data.pre_booked_seats || data.seats);
   setIfPresent("flightMeals", data.flightMeals || data.flight_meals || data.meals);
   setIfPresent("outboundDepartDate", toIsoDate(data.flights?.outbound?.departDate || data.outbound?.date));
@@ -600,6 +610,9 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
   if (cruisePackage) setValue("packageType", cruisePackage.id);
 
   // Common quote/booking-level fields.
+  // No transfer type in the JSON — or one that isn't a dropdown option — means
+  // an explicit "None", not the pre-import value or an empty select.
+  setIfPresent("transferType", normalizeTransferType(data.transferType || data.transfer_type));
   setIfPresent("quoteTitle", data.quoteTitle || data.quote_title || data.title);
   setIfPresent("travelDate", toIsoDate(data.travelDate || data.travel_date || data.departureDate));
   setIfPresent("passengersAdults", data.passengers?.adults ?? data.adults);

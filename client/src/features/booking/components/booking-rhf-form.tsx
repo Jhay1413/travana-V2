@@ -19,6 +19,7 @@ import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/types";
 import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues, UpsellsFormValues } from "@/features/booking/types";
 import { QuoteExtrasSection as BookingExtrasSection } from "@/features/quote/components/quote-extras-section";
+import { TRANSFER_TYPES } from "@/features/quote/types/quote-form.types";
 import { BookingUpsellsSection } from "@/features/booking/components/BookingUpsellsSection";
 
 export { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/types";
@@ -56,6 +57,7 @@ import {
 } from "@/hooks/queries";
 import { useTags } from "@/features/tag/api/use-tag-queries";
 import { useToast } from "@/hooks/use-toast";
+import { summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
 import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
 import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
@@ -669,12 +671,25 @@ export function BookingRHFForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((values) => onSubmit(values, {
-        files: pendingFiles(imageItems),
-        urls: resolvedUrls(imageItems),
-        deletedImageIds,
-        items: imageItems,
-      }))} className="space-y-4">
+      <form onSubmit={form.handleSubmit(
+        (values) => onSubmit(values, {
+          files: pendingFiles(imageItems),
+          urls: resolvedUrls(imageItems),
+          deletedImageIds,
+          items: imageItems,
+        }),
+        // Without this, a failed validation makes the Save button appear to do
+        // nothing — the inline message can be scrolled out of view in this
+        // long dialog.
+        (errors) => {
+          toast({
+            title: "Can't save yet",
+            description: summarizeFormErrors(errors),
+            variant: "destructive",
+          });
+          scrollToFirstFormError();
+        },
+      )} className="space-y-4">
 
         <div className="flex items-center justify-end">
           <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
@@ -898,14 +913,7 @@ export function BookingRHFForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {[
-                        "Private Transfer",
-                        "Shared Transfer",
-                        "Seaplane",
-                        "Speedboat",
-                        "Self-drive",
-                        "None",
-                      ].map((t) => (
+                      {TRANSFER_TYPES.map((t) => (
                         <SelectItem key={t} value={t}>
                           {t}
                         </SelectItem>

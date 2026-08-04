@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DatePicker } from "@/components/ui/date-picker";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import type { QuoteFormValues } from "@/features/quote/types";
+import { TRANSFER_TYPES } from "@/features/quote/types/quote-form.types";
 
 export function QuoteTravelDetailsSection({ showCruiseStay = false }: { showCruiseStay?: boolean }) {
   const { control } = useFormContext<QuoteFormValues>();
@@ -56,7 +57,7 @@ export function QuoteTravelDetailsSection({ showCruiseStay = false }: { showCrui
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {["Private Transfer", "Shared Transfer", "Seaplane", "Speedboat", "Self-drive", "None"].map((t) => (
+                  {TRANSFER_TYPES.map((t) => (
                     <SelectItem key={t} value={t}>{t}</SelectItem>
                   ))}
                 </SelectContent>

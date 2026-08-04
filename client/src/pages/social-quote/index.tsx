@@ -44,6 +44,7 @@ import { useNeonClients } from "@/features/client/api/use-neon-client-queries";
 import { useCurrentUser } from "@/hooks/queries";
 import type { NeonClient } from "@/features/client/types/neon-client/neon-client.types";
 import type { EnrichedQuote } from "@/features/quote/types";
+import { normalizeTransferType } from "@/features/quote/types/quote-form.types";
 
 export default function SocialQuotePage() {
   const [, setLocation] = useLocation();
@@ -722,7 +723,7 @@ export default function SocialQuotePage() {
               passengersAdults: rawData.adult || 2,
               passengersChildren: rawData.child || 0,
               passengersInfants: rawData.infant || 0,
-              transferType: rawData.transfer_type || "",
+              transferType: normalizeTransferType(rawData.transfer_type),
               preBookedSeats: rawData.pre_booked_seats || "",
               flightMeals: rawData.flight_meals ? "Yes" : "",
               country: rawData.country_id || "",

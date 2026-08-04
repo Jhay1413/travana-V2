@@ -1,6 +1,27 @@
 import { z } from "zod";
 import type { FormImageItem } from "@/features/quote/lib/form-images";
 
+// The fixed transfer-type dropdown options shared by the quote and booking
+// forms. Anything hydrating `transferType` from outside the form (JSON import,
+// stored quotes/bookings) must pass through normalizeTransferType so a value
+// not on this list can never leave the select rendering empty.
+export const TRANSFER_TYPES = [
+  "Private Transfer",
+  "Shared Transfer",
+  "Seaplane",
+  "Speedboat",
+  "Self-drive",
+  "None",
+] as const;
+
+// Maps any incoming transfer-type value onto TRANSFER_TYPES (case-insensitive).
+// Unrecognized values — e.g. a scraped "Transfer included" — fall back to "None".
+export function normalizeTransferType(value: unknown): string {
+  if (typeof value !== "string") return "None";
+  const trimmed = value.trim();
+  return TRANSFER_TYPES.find((t) => t.toLowerCase() === trimmed.toLowerCase()) ?? "None";
+}
+
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
 
 export const flightLegSchema = z.object({
@@ -31,7 +52,9 @@ export const quoteFormSchema = z.object({
   passengersChildren: z.coerce.number().int().min(0).default(0),
   passengersInfants: z.coerce.number().int().min(0).default(0),
   childAges: z.array(z.coerce.number().int().min(0)).default([]),
-  transferType: z.string().default(""),
+  // "None" rather than empty, so a quote saved without picking a transfer
+  // stores an explicit "None" instead of no value.
+  transferType: z.string().default("None"),
   preBookedSeats: z.string().default(""),
   flightMeals: z.string().default("No"),
 
@@ -207,7 +230,7 @@ export const defaultQuoteFormValues: QuoteFormValues = {
   passengersChildren: 0,
   passengersInfants: 0,
   childAges: [],
-  transferType: "",
+  transferType: "None",
   preBookedSeats: "",
   flightMeals: "No",
   country: "",

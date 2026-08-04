@@ -33,6 +33,7 @@ export type { QuoteFormValues, FlightLegValue, QuoteRHFFormProps } from "@/featu
 import { Form } from "@/components/ui/form";
 import { useAirports, useTourOperators, usePackageTypes, lookupKeys } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
+import { summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
 
 
 // ─── Main Component ──────────────────────────────────────────────────────────
@@ -218,12 +219,25 @@ export function QuoteRHFForm({
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit((values) => onSubmit(values, {
-        files: pendingFiles(imageItems),
-        urls: resolvedUrls(imageItems),
-        deletedImageIds,
-        items: imageItems,
-      }))} className="space-y-4">
+      <form onSubmit={form.handleSubmit(
+        (values) => onSubmit(values, {
+          files: pendingFiles(imageItems),
+          urls: resolvedUrls(imageItems),
+          deletedImageIds,
+          items: imageItems,
+        }),
+        // Without this, a failed validation makes the Save button appear to do
+        // nothing — the inline message can be scrolled out of view in this
+        // long dialog.
+        (errors) => {
+          toast({
+            title: "Can't save yet",
+            description: summarizeFormErrors(errors),
+            variant: "destructive",
+          });
+          scrollToFirstFormError();
+        },
+      )} className="space-y-4">
 
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
         <QuoteImportRow onJsonUpload={handleJsonUpload} />

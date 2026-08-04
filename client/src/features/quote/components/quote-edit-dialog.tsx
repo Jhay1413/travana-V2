@@ -28,6 +28,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUpdateQuote, useUpdateTransaction } from "@/hooks/mutations";
 import { useReorderQuoteImages } from "@/features/quote/api/use-quote-image-mutations";
 import { useQuote } from "@/hooks/queries";
+import { normalizeTransferType } from "@/features/quote/types/quote-form.types";
 import { usePackageTypes } from "@/hooks/queries";
 import { uploadImagesDirect } from "@/features/quote/api/upload-images-direct";
 import { newImageUrls, orderedImageUrls, type FormImageItem } from "@/features/quote/lib/form-images";
@@ -194,7 +195,7 @@ function buildDefaultValues(quoteData: EnrichedQuote): QuoteFormValues {
     passengersChildren: quoteData.child || 0,
     passengersInfants: quoteData.infant || 0,
     childAges: (quoteData.passengers || []).filter((p: any) => p.type === "child").map((p: any) => p.age || 0),
-    transferType: quoteData.transfer_type || "",
+    transferType: normalizeTransferType(quoteData.transfer_type),
     preBookedSeats: quoteData.pre_booked_seats || "",
     flightMeals: quoteData.flight_meals ? "Yes" : "",
 

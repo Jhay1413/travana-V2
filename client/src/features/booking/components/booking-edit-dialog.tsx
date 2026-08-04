@@ -14,6 +14,7 @@ import { useReorderBookingImages } from "@/features/booking/api/use-booking-imag
 import { useBooking, usePackageTypes } from "@/hooks/queries";
 import { BookingRHFForm } from "./booking-rhf-form";
 import { defaultBookingFormValues, upsellsToFormValues } from "@/features/booking/types";
+import { normalizeTransferType } from "@/features/quote/types/quote-form.types";
 import type { BookingFormValues, BookingUpdateDialogProps, UpsellRecord } from "@/features/booking/types";
 import { orderedImageUrls, type FormImageItem } from "@/features/quote/lib/form-images";
 
@@ -81,7 +82,7 @@ function buildDefaultValues(bookingData: any): BookingFormValues {
     passengersChildren: bookingData.child || 0,
     passengersInfants: bookingData.infant || 0,
     childAges: (bookingData.passengers || []).filter((p: any) => p.type === "child").map((p: any) => p.age || 0),
-    transferType: bookingData.transfer_type || "",
+    transferType: normalizeTransferType(bookingData.transfer_type),
     preBookedSeats: bookingData.pre_booked_seats || "",
     flightMeals: bookingData.flight_meals ? "Yes" : "No",
 

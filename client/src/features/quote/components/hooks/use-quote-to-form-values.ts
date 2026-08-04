@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { normalizeTransferType } from "@/features/quote/types/quote-form.types";
 
 /**
  * Transforms a fetched quote into the field shape expected by the
@@ -49,7 +50,7 @@ export function useQuoteToFormValues(quoteData: any) {
       passengersChildren: quoteData.child || 0,
       passengersInfants: quoteData.infant || 0,
       childAges: childPassengers.map((p: any) => p.age || 0),
-      transferType: quoteData.transfer_type || "",
+      transferType: normalizeTransferType(quoteData.transfer_type),
       preBookedSeats: quoteData.pre_booked_seats || "",
       flightMeals: quoteData.flight_meals ? "Yes" : "No",
       country: quoteData.country_id || "",

@@ -688,7 +688,7 @@ function FlightsSection({ flights }: { flights: PublicQuoteData["flights"] }) {
 }
 
 function TransfersMealsSeatsSection({ quote }: { quote: PublicQuoteData }) {
-  const transferType = quote.transferType && quote.transferType !== "none" ? quote.transferType : null;
+  const transferType = quote.transferType && quote.transferType.toLowerCase() !== "none" ? quote.transferType : null;
 
   if (!transferType && !quote.flightMeals && !quote.preBookedSeats) return null;
 
