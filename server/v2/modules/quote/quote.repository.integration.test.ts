@@ -15,20 +15,24 @@ function scope(over: Record<string, unknown>) {
 const TRUSTED = { orgId: null } as const;
 
 let orgA: { id: string };
+let orgB: { id: string };
 let branchA1: { id: string };
 let branchA2: { id: string };
 let agentUser: { id: string };
 let txnA1: { id: string }; // branchA1
 let txnA2: { id: string }; // branchA2
+let txnB: { id: string }; // orgB
 
 beforeEach(async () => {
   await truncateAll();
   orgA = await makeOrg();
+  orgB = await makeOrg();
   branchA1 = await makeBranch(orgA.id);
   branchA2 = await makeBranch(orgA.id);
   agentUser = await makeUser();
   txnA1 = await makeTransaction({ user_id: agentUser.id, org_id: orgA.id, branch_id: branchA1.id });
   txnA2 = await makeTransaction({ user_id: agentUser.id, org_id: orgA.id, branch_id: branchA2.id });
+  txnB = await makeTransaction({ user_id: agentUser.id, org_id: orgB.id, branch_id: null });
 });
 
 describe("newQuoteRepository.findById — soft delete", () => {
@@ -44,13 +48,15 @@ describe("newQuoteRepository.findById — soft delete", () => {
 });
 
 describe("newQuoteRepository.quoteInScope", () => {
-  it("an agent sees a quote in its branch but not another branch", async () => {
+  it("an agent sees quotes anywhere in its org but not another org", async () => {
     const q1 = await makeQuote({ transaction_id: txnA1.id });
     const q2 = await makeQuote({ transaction_id: txnA2.id });
+    const qOtherOrg = await makeQuote({ transaction_id: txnB.id });
 
     const s = scope({ orgId: orgA.id, orgRole: "agent", branchId: branchA1.id });
     expect(await newQuoteRepository.quoteInScope(q1.id, s)).toBe(true);
-    expect(await newQuoteRepository.quoteInScope(q2.id, s)).toBe(false);
+    expect(await newQuoteRepository.quoteInScope(q2.id, s)).toBe(true); // other branch, same org
+    expect(await newQuoteRepository.quoteInScope(qOtherOrg.id, s)).toBe(false);
   });
 });
 
@@ -60,7 +66,7 @@ describe("newQuoteRepository.findByTransactionId — scope filtered", () => {
     await makeQuote({ transaction_id: txnA1.id });
 
     const inScope = scope({ orgId: orgA.id, orgRole: "agent", branchId: branchA1.id });
-    const outScope = scope({ orgId: orgA.id, orgRole: "agent", branchId: branchA2.id });
+    const outScope = scope({ orgId: orgB.id, orgRole: "agent", branchId: null }); // other org
 
     expect(await newQuoteRepository.findByTransactionId(txnA1.id, inScope)).toHaveLength(2);
     expect(await newQuoteRepository.findByTransactionId(txnA1.id, outScope)).toHaveLength(0);

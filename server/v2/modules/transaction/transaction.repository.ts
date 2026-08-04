@@ -4,6 +4,7 @@ import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, Insert
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
+import { buildTransactionRecordScopeConds } from "../../utils/scope-conditions";
 
 interface ConnectingLeg extends Partial<InsertQuoteFlight> {}
 interface BookingConnectingLeg extends Partial<InsertBookingFlight> {}
@@ -383,7 +384,9 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
 
 export const transactionRepository = {
   async findById(id: string, scope?: Scope): Promise<Transaction | undefined> {
-    const conds = [eq(transaction.id, id), ...buildTxnScopeConds(scope)];
+    // Record-level access: staff may open any deal in their org (no branch
+    // pinning); homeworkers only their own. See buildTransactionRecordScopeConds.
+    const conds = [eq(transaction.id, id), ...(scope ? buildTransactionRecordScopeConds(scope) : [])];
     const [result] = await db.select().from(transaction).where(and(...conds)).limit(1);
     return result;
   },
@@ -395,7 +398,12 @@ export const transactionRepository = {
     dateTo?: Date;
     branchOverride?: string;
   } = {}) {
-    const conditions: SQL[] = [...buildTxnScopeConds(scope, filters.branchOverride)];
+    // Client-details context (clientId present): staff see the client's FULL
+    // deal history org-wide; homeworkers only their own deals. All other list
+    // contexts keep the branch-pinned scoping.
+    const conditions: SQL[] = filters.clientId
+      ? (scope ? buildTransactionRecordScopeConds(scope) : [])
+      : [...buildTxnScopeConds(scope, filters.branchOverride)];
     if (filters.clientId) conditions.push(eq(transaction.client_id, filters.clientId));
     if (filters.agentId) conditions.push(eq(transaction.user_id, filters.agentId));
     if (filters.dateFrom) conditions.push(sql`${transaction.created_at} >= ${filters.dateFrom.toISOString()}`);

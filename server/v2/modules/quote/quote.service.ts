@@ -451,10 +451,16 @@ export const newQuoteService = {
     const sourceQuote = await newQuoteRepository.findById(sourceQuoteId);
     if (!sourceQuote) throw new AppError("Quote not found", 404);
 
+    // The duplicate dialog seeds its form with the source's image URLs, so a
+    // submitted `images` array is already the user's final gallery — kept
+    // source images included, removed ones absent. Merging the source's images
+    // back in would resurrect every removal, so the source gallery is only
+    // cloned when the caller sent no `images` field at all.
     const sourceImages = await quoteImageRepository.getByQuoteId(sourceQuoteId);
     const sourceImageUrls = sourceImages.map((image) => image.url).filter((url): url is string => typeof url === "string" && url.length > 0);
-    const requestedImageUrls = Array.isArray(data.images) ? data.images.filter((url): url is string => typeof url === "string" && url.length > 0) : [];
-    const mergedImages = [...sourceImageUrls, ...requestedImageUrls].filter((url, index, arr) => arr.indexOf(url) === index);
+    const images = Array.isArray(data.images)
+      ? data.images.filter((url): url is string => typeof url === "string" && url.length > 0)
+      : sourceImageUrls;
 
     const { id: _sourceId, date_created: _sourceCreatedAt, transaction_id: _ignoredTransactionId, quote_token: _ignoreToken, ...sourceInsertData } = sourceQuote;
     const sourceDetails = await newQuoteRepository.findWithDetails(sourceQuoteId);
@@ -476,7 +482,7 @@ export const newQuoteService = {
       // A duplicate is never primary and always starts as quoted.
       parent_quote_id: sourceQuoteId,
       quote_status: 'quoted',
-      images: mergedImages,
+      images,
       // Caller-supplied tags win, so a copy made through the quote dialog keeps
       // whatever the user edited there; otherwise inherit the source's.
       tags: data.tags ?? sourceDetails?.tags ?? [],

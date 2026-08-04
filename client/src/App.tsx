@@ -92,6 +92,9 @@ const ALL_ROLES: OrgRole[] = [
   "referral_agent",
 ];
 const STAFF_ROLES: OrgRole[] = ["platform_admin", "org_admin", "branch_manager", "agent", "homeworker"];
+// Client pages (client list/details + deal drill-downs) are also open to
+// social media managers, who get org-wide read access to client deal history.
+const CLIENT_VIEW_ROLES: OrgRole[] = [...STAFF_ROLES, "social_media_manager"];
 const MANAGER_ROLES: OrgRole[] = ["platform_admin", "org_admin", "branch_manager"];
 const ADMIN_ROLES: OrgRole[] = ["platform_admin", "org_admin"];
 const PLATFORM_ROLES: OrgRole[] = ["platform_admin"];
@@ -166,15 +169,15 @@ function AuthenticatedRouter() {
         <RoleRoute path="/tasks" allow={MANAGER_ROLES} component={TasksPage} />
         <RoleRoute path="/reports" allow={MANAGER_ROLES} component={ReportsPage} />
 
-        <RoleRoute path="/clients" allow={STAFF_ROLES} component={ClientsListPage} />
-        <RoleRoute path="/clients/all" allow={STAFF_ROLES} component={ClientsPage} />
-        <RoleRoute path="/clients/:clientId" allow={STAFF_ROLES} component={ClientPage} />
-        <RoleRoute path="/clients/:clientId/quotes/:quoteId" allow={STAFF_ROLES} component={QuotePage} />
-        <RoleRoute path="/quotes/:quoteId" allow={STAFF_ROLES} component={QuotePage} />
-        <RoleRoute path="/clients/:clientId/bookings/:quoteId" allow={STAFF_ROLES} component={BookingPage} />
-        <RoleRoute path="/bookings/:quoteId" allow={STAFF_ROLES} component={BookingPage} />
-        <RoleRoute path="/clients/:clientId/enquiries/:enquiryId" allow={STAFF_ROLES} component={EnquiryPage} />
-        <RoleRoute path="/enquiries/:enquiryId" allow={STAFF_ROLES} component={EnquiryPage} />
+        <RoleRoute path="/clients" allow={CLIENT_VIEW_ROLES} component={ClientsListPage} />
+        <RoleRoute path="/clients/all" allow={CLIENT_VIEW_ROLES} component={ClientsPage} />
+        <RoleRoute path="/clients/:clientId" allow={CLIENT_VIEW_ROLES} component={ClientPage} />
+        <RoleRoute path="/clients/:clientId/quotes/:quoteId" allow={CLIENT_VIEW_ROLES} component={QuotePage} />
+        <RoleRoute path="/quotes/:quoteId" allow={CLIENT_VIEW_ROLES} component={QuotePage} />
+        <RoleRoute path="/clients/:clientId/bookings/:quoteId" allow={CLIENT_VIEW_ROLES} component={BookingPage} />
+        <RoleRoute path="/bookings/:quoteId" allow={CLIENT_VIEW_ROLES} component={BookingPage} />
+        <RoleRoute path="/clients/:clientId/enquiries/:enquiryId" allow={CLIENT_VIEW_ROLES} component={EnquiryPage} />
+        <RoleRoute path="/enquiries/:enquiryId" allow={CLIENT_VIEW_ROLES} component={EnquiryPage} />
         <RoleRoute path="/pipeline" allow={STAFF_ROLES} component={PipelinePage} />
         <RoleRoute path="/opportunities" allow={STAFF_ROLES} component={OpportunitiesPage} />
         <RoleRoute path="/my-profile" allow={STAFF_ROLES} component={MyProfilePage} />

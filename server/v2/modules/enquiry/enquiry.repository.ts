@@ -8,7 +8,7 @@ import {
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
 import { eq, desc, sql, and, type SQL } from "drizzle-orm";
-import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export const enquiryTableRepository = {
   async findById(id: string): Promise<EnquiryTable | undefined> {
@@ -22,7 +22,7 @@ export const enquiryTableRepository = {
       .select({ id: enquiry_table.id })
       .from(enquiry_table)
       .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
-      .where(and(eq(enquiry_table.id, id), ...buildTransactionScopeConds(scope)))
+      .where(and(eq(enquiry_table.id, id), ...buildTransactionRecordScopeConds(scope)))
       .limit(1);
     return !!row;
   },
@@ -32,7 +32,7 @@ export const enquiryTableRepository = {
     const [row] = await db
       .select({ id: transaction.id })
       .from(transaction)
-      .where(and(eq(transaction.id, transactionId), ...buildTransactionScopeConds(scope)))
+      .where(and(eq(transaction.id, transactionId), ...buildTransactionRecordScopeConds(scope)))
       .limit(1);
     return !!row;
   },

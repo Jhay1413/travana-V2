@@ -41,6 +41,32 @@ export function buildTransactionScopeConds(scope: ScopeOrTrusted): SQL[] {
 }
 
 /**
+ * Record-level scope conditions on `transaction` — for opening a SPECIFIC deal
+ * (quote/enquiry/booking detail) or listing a specific client's full deal
+ * history (the client-details page).
+ *
+ * Policy: staff roles (org_admin, branch_manager, agent, social_media_manager)
+ * may see ALL of a client's deals within their org — no branch pinning.
+ * Homeworkers remain restricted to deals they own. Pipeline/dashboard/list
+ * queries must keep using `buildTransactionScopeConds`, which pins branch
+ * users to their branch.
+ */
+export function buildTransactionRecordScopeConds(scope: ScopeOrTrusted): SQL[] {
+  const conds: SQL[] = [];
+  if (scope.orgId === null) return conds; // trusted internal caller — no scoping
+  const s = scope as Scope;
+  if (s.orgRole === "platform_admin") return conds;
+
+  conds.push(eq(transaction.org_id, s.orgId));
+
+  if (s.orgRole === "homeworker" && s.userId) {
+    conds.push(eq(transaction.user_id, s.userId));
+  }
+
+  return conds;
+}
+
+/**
  * WHERE-clause fragments for any query that joins `transaction`. When a branchId is
  * present, scope by `transaction.branch_id`; otherwise scope by the client's orgId
  * (callers must also `innerJoin(clientTable)` — see `needsClientJoin`). Always

@@ -8,9 +8,11 @@ import {
   makeBooking, makeBoardBasis, makeBookingAccommodation,
 } from "../../test/factories";
 
-// Verifies the REAL scope SQL (buildTransactionScopeConds) against Postgres —
+// Verifies the REAL scope SQL (buildTransactionRecordScopeConds) against Postgres —
 // the part unit tests mock away. We seed two orgs, two branches, and several
 // transactions, then assert which ones each role can "see" via transactionInScope.
+// Record-level access is org-wide for staff roles (no branch pinning);
+// homeworkers are confined to transactions they own.
 
 function scope(over: Record<string, unknown>) {
   return { branchId: null, userId: null, orgRoles: [], ...over } as never;
@@ -56,11 +58,12 @@ describe("bookingRepository.transactionInScope — org_admin (org-wide)", () => 
   });
 });
 
-describe("bookingRepository.transactionInScope — agent (branch-confined)", () => {
-  it("sees transactions in its own branch only", async () => {
+describe("bookingRepository.transactionInScope — agent (org-wide record access)", () => {
+  it("sees transactions across branches within its org, but not other orgs", async () => {
     const s = scope({ orgId: orgA.id, orgRole: "agent", branchId: branchA1.id });
     expect(await bookingRepository.transactionInScope(txnA1.id, s)).toBe(true);
-    expect(await bookingRepository.transactionInScope(txnA2.id, s)).toBe(false); // other branch
+    expect(await bookingRepository.transactionInScope(txnA2.id, s)).toBe(true); // other branch, same org
+    expect(await bookingRepository.transactionInScope(txnB.id, s)).toBe(false); // other org
   });
 });
 
@@ -97,14 +100,14 @@ describe("bookingRepository.findByTransactionId", () => {
 });
 
 describe("bookingRepository.bookingInScope — booking joined through its transaction", () => {
-  it("an agent sees a booking in its own branch but not another branch or org", async () => {
+  it("an agent sees bookings anywhere in its org but not another org", async () => {
     const inBranch = await makeBooking({ transaction_id: txnA1.id }); // branchA1
     const otherBranch = await makeBooking({ transaction_id: txnA2.id }); // branchA2
     const otherOrg = await makeBooking({ transaction_id: txnB.id }); // orgB
 
     const s = scope({ orgId: orgA.id, orgRole: "agent", branchId: branchA1.id });
     expect(await bookingRepository.bookingInScope(inBranch.id, s)).toBe(true);
-    expect(await bookingRepository.bookingInScope(otherBranch.id, s)).toBe(false);
+    expect(await bookingRepository.bookingInScope(otherBranch.id, s)).toBe(true);
     expect(await bookingRepository.bookingInScope(otherOrg.id, s)).toBe(false);
   });
 });

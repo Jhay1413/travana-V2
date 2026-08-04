@@ -19,7 +19,7 @@ import type {
 } from "@shared/schema";
 import { eq, asc, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 import type { QuoteEmbeddingDetails } from "./quote-embedding";
 import { PORTAL_ACTIVE_WINDOW_DAYS, type PortalStatus } from "./quote.types";
 
@@ -112,7 +112,7 @@ export const newQuoteRepository = {
       .select({ id: quote.id })
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .where(and(eq(quote.id, id), ...buildTransactionScopeConds(scope)))
+      .where(and(eq(quote.id, id), ...buildTransactionRecordScopeConds(scope)))
       .limit(1);
     return !!row;
   },
@@ -122,7 +122,7 @@ export const newQuoteRepository = {
     const [row] = await db
       .select({ id: transaction.id })
       .from(transaction)
-      .where(and(eq(transaction.id, transactionId), ...buildTransactionScopeConds(scope)))
+      .where(and(eq(transaction.id, transactionId), ...buildTransactionRecordScopeConds(scope)))
       .limit(1);
     return !!row;
   },
@@ -180,7 +180,7 @@ export const newQuoteRepository = {
       .select({ quote })
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .where(and(eq(quote.transaction_id, transactionId), isNull(quote.deleted_at), ...buildTransactionScopeConds(scope)))
+      .where(and(eq(quote.transaction_id, transactionId), isNull(quote.deleted_at), ...buildTransactionRecordScopeConds(scope)))
       .orderBy(desc(quote.date_created));
     return rows.map((r) => r.quote);
   },

@@ -257,7 +257,7 @@ describe("newQuoteService.updateQuote — revive from lost", () => {
 });
 
 describe("newQuoteService.duplicateQuote", () => {
-  it("copies the source quote (merging images, flagging isQuoteCopy) and clones child ages", async () => {
+  it("copies the source quote (caller images win, flagging isQuoteCopy) and clones child ages", async () => {
     vi.mocked(newQuoteRepository.findById).mockResolvedValue({
       id: "src",
       transaction_id: "t1",
@@ -278,9 +278,51 @@ describe("newQuoteService.duplicateQuote", () => {
 
       const payload = createSpy.mock.calls[0][0] as Record<string, unknown>;
       expect(payload).toMatchObject({ transaction_id: "t1", isQuoteCopy: true, tags: ["tagA"] });
-      expect(payload.images).toEqual(["img1", "img2"]); // source + requested, deduped
+      // The dialog seeds the form with the source's images, so the submitted
+      // list is the final gallery — the source's images are NOT merged back in.
+      expect(payload.images).toEqual(["img2"]);
       // the source's child ages are cloned onto the new quote
       expect(newQuoteRepository.replaceChildPassengers).toHaveBeenCalledWith("newQ", "quote", [5]);
+    } finally {
+      createSpy.mockRestore();
+    }
+  });
+
+  it("clones the source's images when the caller sends no images field", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "src", transaction_id: "t1" } as never);
+    vi.mocked(quoteImageRepository.getByQuoteId).mockResolvedValue([{ url: "img1" }] as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({
+      transfers: [], carHires: [], attractionTickets: [], loungePasses: [], airportParkings: [], accommodations: [],
+      passengers: [],
+      tags: [],
+    } as never);
+    const createSpy = vi.spyOn(newQuoteService, "createQuote").mockResolvedValue({ id: "newQ" } as never);
+
+    try {
+      await newQuoteService.duplicateQuote("src", {} as never, TRUSTED);
+
+      const payload = createSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload.images).toEqual(["img1"]);
+    } finally {
+      createSpy.mockRestore();
+    }
+  });
+
+  it("removes all images when the caller sends an empty images array", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "src", transaction_id: "t1" } as never);
+    vi.mocked(quoteImageRepository.getByQuoteId).mockResolvedValue([{ url: "img1" }] as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({
+      transfers: [], carHires: [], attractionTickets: [], loungePasses: [], airportParkings: [], accommodations: [],
+      passengers: [],
+      tags: [],
+    } as never);
+    const createSpy = vi.spyOn(newQuoteService, "createQuote").mockResolvedValue({ id: "newQ" } as never);
+
+    try {
+      await newQuoteService.duplicateQuote("src", { images: [] } as never, TRUSTED);
+
+      const payload = createSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload.images).toEqual([]);
     } finally {
       createSpy.mockRestore();
     }

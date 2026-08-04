@@ -335,8 +335,12 @@ export function QuoteCreateDialog({
       // ages server-side, then applies these form values on top. Plain create
       // would silently drop all of that, because the form never loads extras.
       if (duplicateFromQuoteId) {
+        // Always send `images`, even empty: the form was seeded with the
+        // source's gallery, so this list is the user's final choice. An absent
+        // field tells the server "no opinion" and it clones the source's
+        // images — which would undo removing every image in the form.
         duplicateQuote.mutate(
-          { id: duplicateFromQuoteId, data: json },
+          { id: duplicateFromQuoteId, data: { ...json, images: imageUrls } },
           {
             onSuccess: (newQuote) => {
               toast({ title: "Quote copied", description: "The copy has been created." });

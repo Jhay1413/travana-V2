@@ -16,7 +16,7 @@ import type {
 } from "@shared/schema";
 import { eq, asc, desc, sql, and, inArray, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 function toDateOrNull(value: unknown): Date | null {
   if (value == null) return null;
@@ -61,7 +61,7 @@ export const bookingRepository = {
   },
 
   async bookingInScope(id: string, scope: ScopeOrTrusted): Promise<boolean> {
-    const scopeConds = buildTransactionScopeConds(scope);
+    const scopeConds = buildTransactionRecordScopeConds(scope);
     const [row] = await db
       .select({ id: booking.id })
       .from(booking)
@@ -72,7 +72,7 @@ export const bookingRepository = {
   },
 
   async transactionInScope(transactionId: string, scope: ScopeOrTrusted): Promise<boolean> {
-    const scopeConds = buildTransactionScopeConds(scope);
+    const scopeConds = buildTransactionRecordScopeConds(scope);
     const [row] = await db
       .select({ id: transaction.id })
       .from(transaction)

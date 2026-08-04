@@ -82,11 +82,14 @@ export const transactionController = {
       return Number.isNaN(d.getTime()) ? undefined : d;
     };
 
-    // Authorization is handled in the repository via scope conditions:
+    // Authorization is handled in the repository via scope conditions.
+    // Without clientId (pipeline/dashboard lists):
     //   - branch_manager / agent → pinned to scope.branchId
     //   - homeworker            → pinned to scope.userId
     //   - org_admin             → branchOverride optional, confined to org
     //   - platform_admin        → branchOverride optional, no org confinement
+    // With clientId (client-details view): staff roles (incl. social_media_manager)
+    // see the client's full deal history org-wide; homeworkers still only their own.
     // Filters below are additive — agentId + date range now work together.
     const transactions = await transactionService.listTransactions(scope, {
       clientId: asString(clientId),
