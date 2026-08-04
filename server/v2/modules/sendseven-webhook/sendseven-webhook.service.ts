@@ -332,7 +332,7 @@ export const sendsevenWebhookService = {
   // so in-flight state is cleared exactly like the old pause.
   async disableAi(orgId: string, conversationId: string): Promise<ConversationAiState> {
     await conversationStateRepository.ensure(conversationId, orgId, null);
-    await conversationStateRepository.setNeedsHuman(conversationId, orgId, "manual_disable");
+    await conversationStateRepository.setNeedsHuman(conversationId, orgId);
     await conversationStateRepository.setAiOverride(conversationId, orgId, "disabled");
     publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
     return this.getAiState(orgId, conversationId);

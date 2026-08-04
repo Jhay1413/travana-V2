@@ -6,4 +6,5 @@ vite.config.ts.*
 *.tar.gz
 *.env
 # Local browser-session/profile data (huge, contains cookies/credentials)
+# easyJet trade-portal scraper browser profile
 .easyjet-session/

@@ -3,7 +3,8 @@ import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
+import { handleJsonUpload as handleJsonUploadUtil, handleJsonData, type JsonImportDeps } from "@/lib/json-import-handler";
+import { useEasyJetImport } from "@/features/quote/api/use-easyjet-import";
 import {
   existingImageItem,
   pendingFiles,
@@ -192,7 +193,9 @@ export function QuoteRHFForm({
   }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── JSON upload ───────────────────────────────────────────────────────────
-  const handleJsonUpload = (file: File) => {
+  // Shared by the file-based JSON import and the easyJet URL import: stage the
+  // current images for deletion and build the deps object the importer needs.
+  const prepareJsonImport = (): JsonImportDeps => {
     // Clear all existing images and stage them for deletion before importing new ones
     setDeletedImageIds((prev) => [
       ...prev,
@@ -201,7 +204,7 @@ export function QuoteRHFForm({
     // Drop saved + picked-file entries; the importer repopulates the URL ones.
     setImageItems((prev) => prev.filter((i) => i.kind === "url"));
 
-    handleJsonUploadUtil(file, {
+    return {
       form,
       airportsData,
       packageTypesData,
@@ -211,9 +214,35 @@ export function QuoteRHFForm({
       setImageUrls: setImageUrlsFromJson,
       skipLodgeResetRef,
       fallbackFieldMapper: (data, setIfPresent) => {
-        setIfPresent("quoteLink", data.quoteLink || data.quote_link || data.link);
+        setIfPresent("quoteLink", data.quoteLink || data.quote_link || data.link || data.source_url);
       },
-    });
+    };
+  };
+
+  const handleJsonUpload = (file: File) => {
+    handleJsonUploadUtil(file, prepareJsonImport());
+  };
+
+  // ── Supplier URL import ───────────────────────────────────────────────────
+  // The user pastes a deal link and picks a configured supplier; the server
+  // scrapes it with that supplier's stored credentials.
+  const supplierImport = useEasyJetImport();
+  const handleSupplierImport = (url: string, supplierKey: string) => {
+    supplierImport.mutate(
+      { url, supplierKey },
+      {
+        onSuccess: (scraped) => {
+          void handleJsonData(scraped as Record<string, any>, prepareJsonImport());
+        },
+        onError: (error) => {
+          toast({
+            title: "Import failed",
+            description: error instanceof Error ? error.message : "Could not fetch the deal from the supplier.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -240,7 +269,11 @@ export function QuoteRHFForm({
       )} className="space-y-4">
 
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
-        <QuoteImportRow onJsonUpload={handleJsonUpload} />
+        <QuoteImportRow
+          onJsonUpload={handleJsonUpload}
+          onSupplierImport={handleSupplierImport}
+          supplierImportPending={supplierImport.isPending}
+        />
 
         {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
         <QuoteOverviewSection />
