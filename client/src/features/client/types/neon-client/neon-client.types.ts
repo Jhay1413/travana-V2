@@ -18,6 +18,9 @@ export interface NeonClient {
   post_code: string | null;
   avatarUrl: string | null;
   badge: string | null;
+  // Opt-in for the SendSeven AI auto-reply on conversations linked to this
+  // client (default false — the bot stays silent until an agent enables it).
+  aiReplyEnabled: boolean;
   createdAt: string;
   referrerId: string | null;
   referredByClientId: string | null;

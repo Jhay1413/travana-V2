@@ -189,6 +189,12 @@ export const clientTable = pgTable("client_table", {
   post_code: varchar(),
   avatarUrl: varchar(),
   badge: varchar(),
+  // Per-client opt-in for the SendSeven AI auto-reply: the bot only replies in
+  // a conversation when it is linked to a client with this ON (or the
+  // conversation itself carries an explicit agent override — see
+  // sendseven_conversation_state.ai_override). Defaults OFF: new/unlinked
+  // conversations get no AI until an agent opts them in.
+  aiReplyEnabled: boolean("ai_reply_enabled").notNull().default(false),
   portalPin: varchar("portal_pin"),
   // True when portalPin is a system-seeded default (e.g. from a quote SMS) that
   // the client must replace on first portal entry.
@@ -306,6 +312,36 @@ export const tour_operator = pgTable('tour_operator_table', {
 });
 export type TourOperatorLookup = typeof tour_operator.$inferSelect;
 export type InsertTourOperatorLookup = typeof tour_operator.$inferInsert;
+
+// Per-organization, per-supplier scraper configuration. Each row lets one org
+// scrape one supplier (easyJet, TUI, …): login credentials (encrypted via
+// utils/encryption) plus a `config` JSON that drives the config-driven scraper
+// engine (adapter type, browser/proxy, auth selectors, API endpoints).
+export const supplier_scraper = pgTable('supplier_scraper', {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  org_id: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  // Optional link to the tour_operator catalog row (commission, display name).
+  tour_operator_id: uuid("tour_operator_id").references(() => tour_operator.id, { onDelete: "set null" }),
+  // Stable identifier used to match a pasted URL to this config (e.g. "easyjet").
+  supplier_key: varchar("supplier_key").notNull(),
+  supplier_name: varchar("supplier_name").notNull(),
+  // Which code adapter interprets the config (see scraper-engine.types.ts).
+  adapter_type: varchar("adapter_type").notNull().default('easyjet'),
+  // Encrypted JSON: { username, password, apiKey }.
+  encrypted_credentials: text("encrypted_credentials"),
+  // ScraperConfig JSON (browser, auth, fetch, deepLink) minus credentials.
+  config: jsonb("config").default(sql`'{}'`),
+  is_active: boolean("is_active").notNull().default(true),
+  created_by_user_id: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at").notNull().defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  // One config per supplier per org.
+  unique("uq_supplier_scraper_org_supplier").on(table.org_id, table.supplier_key),
+  index("idx_supplier_scraper_org").on(table.org_id),
+]);
+export type SupplierScraper = typeof supplier_scraper.$inferSelect;
+export type InsertSupplierScraper = typeof supplier_scraper.$inferInsert;
 
 export const package_type = pgTable('package_type_table', {
   id: uuid()
@@ -2084,6 +2120,11 @@ export const sendsevenConversationState = pgTable("sendseven_conversation_state"
   // Set when a human takes over; once true the AI stays silent (§8).
   needsHuman: boolean("needs_human").notNull().default(false),
   handledByHumanAt: timestamp("handled_by_human_at"),
+  // Per-conversation agent override for the AI opt-in gate:
+  //   null       → follow the linked client's aiReplyEnabled (default OFF)
+  //   "enabled"  → AI replies here regardless of the client flag
+  //   "disabled" → AI never replies here regardless of the client flag
+  aiOverride: text("ai_override"),
   context: jsonb("context"), // rolling recent messages / running summary (§13)
   lastAiReplyAt: timestamp("last_ai_reply_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

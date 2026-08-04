@@ -39,6 +39,15 @@ export function AiStatusControl({ conversationId }: { conversationId: string }) 
   }
 
   const isActive = aiState.aiActive;
+  // Distinguish "paused because an agent is handling it" (was on, human took
+  // over) from plain "off" (default — not opted in, or explicitly disabled).
+  const statusLabel = isActive
+    ? aiState.source === "client"
+      ? "AI active — client opt-in"
+      : "AI active"
+    : aiState.needsHuman && aiState.source !== "default"
+      ? "AI paused — agent handling"
+      : "AI off";
 
   return (
     <div className="flex items-center gap-1.5" data-testid="conversation-ai-status">
@@ -52,13 +61,13 @@ export function AiStatusControl({ conversationId }: { conversationId: string }) 
         data-testid="conversation-ai-status-badge"
       >
         <span className={cn("h-1.5 w-1.5 rounded-full", isActive ? "bg-emerald-500" : "bg-amber-500")} />
-        {isActive ? "AI active" : "AI paused — agent handling"}
+        {statusLabel}
       </span>
       <button
         type="button"
         onClick={onToggle}
         disabled={pending}
-        title={isActive ? "Pause the AI for this conversation" : "Resume AI replies for this conversation"}
+        title={isActive ? "Turn the AI off for this conversation" : "Turn the AI on for this conversation (overrides the client default)"}
         className="flex items-center gap-1.5 rounded-xl border border-black/8 px-3 py-1.5 text-xs font-medium text-black/70 transition hover:bg-black/[0.03] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/8 dark:text-white/70 dark:hover:bg-white/[0.04]"
         data-testid="conversation-ai-status-toggle"
       >
@@ -69,7 +78,7 @@ export function AiStatusControl({ conversationId }: { conversationId: string }) 
         ) : (
           <Bot className="h-3.5 w-3.5" />
         )}
-        {isActive ? "Pause AI" : "Resume AI"}
+        {isActive ? "Turn off AI" : "Turn on AI"}
       </button>
     </div>
   );

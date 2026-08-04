@@ -37,4 +37,10 @@ export interface ConversationAiState {
   needsHuman: boolean;
   handledByHumanAt: string | null;
   updatedAt: string | null;
+  // Where the effective on/off comes from: an explicit per-conversation agent
+  // override, the linked client's aiReplyEnabled flag, or the default (off —
+  // no client linked / client not opted in).
+  source: "override" | "client" | "default";
+  // The linked client's own opt-in flag (false when no client is linked).
+  clientAiEnabled: boolean;
 }

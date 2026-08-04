@@ -217,6 +217,7 @@ const ORG_ADMIN_NAV: NavConfig = [
     items: [
       { path: "/agency/templates", label: "Templates", icon: FileText },
       { path: "/agency/texts", label: "Texts", icon: Type },
+      { path: "/agency/supplier-scrapers", label: "Supplier Scrapers", icon: Link2 },
       { path: "/agency/audit", label: "Audit Log", icon: Activity },
     ],
   },

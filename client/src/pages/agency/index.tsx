@@ -14,6 +14,7 @@ import AgencyDataPage from "./data";
 import AgencyTextsPage from "./texts";
 import AgencyAuditPage from "./audit";
 import AgencyTourOperatorsPage from "./tour-operators";
+import AgencySupplierScrapersPage from "./supplier-scrapers";
 
 export default function AgencyPage() {
   return (
@@ -35,6 +36,7 @@ export default function AgencyPage() {
       <Route path="/agency/texts" component={AgencyTextsPage} />
       <Route path="/agency/audit" component={AgencyAuditPage} />
       <Route path="/agency/tour-operators" component={AgencyTourOperatorsPage} />
+      <Route path="/agency/supplier-scrapers" component={AgencySupplierScrapersPage} />
       <Route component={() => <Redirect to="/agency/profile" />} />
     </Switch>
   );

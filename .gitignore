@@ -5,3 +5,5 @@ server/public
 vite.config.ts.*
 *.tar.gz
 *.env
+# easyJet trade-portal scraper browser profile
+.easyjet-session/

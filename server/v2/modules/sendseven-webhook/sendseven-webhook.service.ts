@@ -6,7 +6,9 @@ import { runWithSendSevenConfigAsync, sendSevenRequest, type SendSevenConfig } f
 import { conversationIntegrationRepository } from "../conversation-integration/conversation-integration.repository";
 import { conversationIntegrationService } from "../conversation-integration/conversation-integration.service";
 import { realtimeService } from "../../realtime/realtime.service";
+import { neonClientService } from "../neon-client/neon-client.service";
 import { conversationStateRepository } from "./conversation-state.repository";
+import { systemScope } from "./identity.service";
 import { replyWorker } from "./reply-worker.service";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
 import type { ConversationAiState, SsWebhookEndpointCreated, SsWebhookEvent } from "./sendseven-webhook.types";
@@ -42,14 +44,21 @@ async function pruneEndpoints(cfg: SendSevenConfig, orgId: string): Promise<numb
   return targets.length;
 }
 
-// Maps a (possibly absent) state row to the AI-state API shape. No row yet =
-// the AI has never been paused on this conversation, so it's active.
-function toAiState(row: SendsevenConversationState | null): ConversationAiState {
+// Maps a (possibly absent) state row + the linked client's opt-in flag to the
+// AI-state API shape. DEFAULT-OFF model: with no row (or no override and no
+// opted-in client) the AI is NOT active — the bot only replies where an agent
+// opted in, per-conversation or per-client. needsHuman still pauses an
+// otherwise-active conversation (human takeover).
+function toAiState(row: SendsevenConversationState | null, clientAiEnabled: boolean): ConversationAiState {
+  const override = (row?.aiOverride ?? null) as "enabled" | "disabled" | null;
+  const optedIn = override === "enabled" || (override !== "disabled" && clientAiEnabled);
   return {
-    aiActive: !row?.needsHuman,
+    aiActive: optedIn && !row?.needsHuman,
     needsHuman: !!row?.needsHuman,
     handledByHumanAt: row?.handledByHumanAt ? row.handledByHumanAt.toISOString() : null,
     updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
+    source: override ? "override" : clientAiEnabled ? "client" : "default",
+    clientAiEnabled,
   };
 }
 
@@ -294,21 +303,37 @@ export const sendsevenWebhookService = {
 
   async getAiState(orgId: string, conversationId: string): Promise<ConversationAiState> {
     const row = await conversationStateRepository.getState(conversationId, orgId);
-    return toAiState(row);
+    return toAiState(row, await this.clientAiEnabled(orgId, row));
   },
 
-  // Manual re-enable: clean-slate clear (see conversationStateRepository.clearNeedsHuman).
+  // The linked client's own AI opt-in flag — false when the conversation has
+  // no linked client (or the lookup fails). Kept private-ish (used by
+  // getAiState); the reply worker does its own equivalent check inline.
+  async clientAiEnabled(orgId: string, row: SendsevenConversationState | null): Promise<boolean> {
+    if (!row?.clientId) return false;
+    const client = await neonClientService.getNeonClientById(row.clientId, systemScope(orgId)).catch(() => null);
+    return !!client?.aiReplyEnabled;
+  },
+
+  // Manual enable: an explicit per-conversation override — the AI replies
+  // here even if the linked client isn't opted in (or no client is linked
+  // yet). Also clean-slate clears any hand-off state (see
+  // conversationStateRepository.clearNeedsHuman).
   async enableAi(orgId: string, conversationId: string): Promise<ConversationAiState> {
+    await conversationStateRepository.ensure(conversationId, orgId, null);
     await conversationStateRepository.clearNeedsHuman(conversationId, orgId);
+    await conversationStateRepository.setAiOverride(conversationId, orgId, "enabled");
     publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: false });
     return this.getAiState(orgId, conversationId);
   },
 
-  // Manual pause: ensure a state row exists (a conversation the AI has never
-  // touched yet has none) before setting needsHuman.
+  // Manual disable: an explicit per-conversation override — the AI never
+  // replies here even if the linked client IS opted in. needsHuman is set too
+  // so in-flight state is cleared exactly like the old pause.
   async disableAi(orgId: string, conversationId: string): Promise<ConversationAiState> {
     await conversationStateRepository.ensure(conversationId, orgId, null);
     await conversationStateRepository.setNeedsHuman(conversationId, orgId);
+    await conversationStateRepository.setAiOverride(conversationId, orgId, "disabled");
     publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
     return this.getAiState(orgId, conversationId);
   },

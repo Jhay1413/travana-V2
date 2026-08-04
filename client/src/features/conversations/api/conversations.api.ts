@@ -89,13 +89,19 @@ export interface SsBadgeCounts {
   is_multi_agent: boolean;
 }
 
-// Per-conversation AI auto-reply state: whether the AI is actively replying,
-// or paused (e.g. a human took over the thread).
+// Per-conversation AI auto-reply state. DEFAULT-OFF model: the AI only
+// replies where an agent opted in — via a per-conversation override (the
+// inbox toggle) or the linked client's aiReplyEnabled flag. needsHuman still
+// pauses an otherwise-active conversation (human takeover).
 export interface ConversationAiState {
   aiActive: boolean;
   needsHuman: boolean;
   handledByHumanAt: string | null;
   updatedAt: string | null;
+  // Where the effective on/off comes from: "override" (agent set it on this
+  // conversation), "client" (linked client's flag), or "default" (off).
+  source: "override" | "client" | "default";
+  clientAiEnabled: boolean;
 }
 
 // ─── Request / response payloads ──────────────────────────────────────────────

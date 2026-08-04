@@ -171,6 +171,22 @@ export default function ClientPage() {
     );
   }
 
+  function handleToggleAiReply(enabled: boolean) {
+    editForm.updateNeonClientMutation.mutate(
+      { id: clientId, data: { aiReplyEnabled: enabled } },
+      {
+        onSuccess: () =>
+          toast({
+            title: enabled ? "AI auto-reply enabled" : "AI auto-reply disabled",
+            description: enabled
+              ? "The AI will now reply automatically in this client's conversations."
+              : "The AI will stay silent in this client's conversations.",
+          }),
+        onError: () => toast({ title: "Failed to update AI auto-reply", variant: "destructive" }),
+      },
+    );
+  }
+
   const transactions = useMemo(() => transactionsData || [], [transactionsData]);
   const quotes = useMemo(() => transactions.flatMap((t: Transaction) => t.quotes || []), [transactions]);
   const enquiries = useMemo(
@@ -261,8 +277,10 @@ export default function ClientPage() {
                 phone={clientData?.phoneNumber}
                 badge={clientData?.badge}
                 isFavorited={isFavorited}
+                aiReplyEnabled={!!clientData?.aiReplyEnabled}
                 onToggleFavorite={handleToggleClientPin}
                 onChangeBadge={handleChangeClientBadge}
+                onToggleAiReply={handleToggleAiReply}
               />
 
               <div className="mt-3 border-t border-black/10 pt-3">

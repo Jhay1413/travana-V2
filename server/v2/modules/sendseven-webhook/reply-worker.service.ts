@@ -224,6 +224,30 @@ export const replyWorker = {
     }
     const knownClient = !!clientId;
 
+    // ── AI opt-in gate (default OFF) ─────────────────────────────────────
+    // The bot only participates in a conversation an agent has opted in:
+    // either this conversation carries an explicit override ("enabled" /
+    // "disabled" — the inbox toggle), or it is linked to a client whose
+    // aiReplyEnabled flag is ON. Everything else — including unknown
+    // contacts — stays silent. The webhook still feeds the realtime inbox
+    // either way (process() published before calling us).
+    const aiOverride = state.aiOverride ?? null;
+    if (aiOverride === "disabled") {
+      console.log(`[sendseven-webhook] conv ${conversationId} AI override=disabled — staying silent`);
+      return;
+    }
+    // Fetched once here (the gate needs the client's aiReplyEnabled) and
+    // reused for the AI turn below — it used to be part of the parallel
+    // batch inside runWithSendSevenConfigAsync.
+    const client = clientId ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : null;
+    if (aiOverride !== "enabled" && !client?.aiReplyEnabled) {
+      console.log(
+        `[sendseven-webhook] conv ${conversationId} not opted in to AI (override=none client=${clientId ?? "none"} ` +
+          `clientAi=${client ? String(!!client.aiReplyEnabled) : "n/a"}) — staying silent`,
+      );
+      return;
+    }
+
     const cfg = await conversationIntegrationService.resolveConfig(orgId);
     if (!cfg) {
       console.warn(`[sendseven-webhook] org ${orgId} has no resolvable SendSeven config — skipping reply.`);
@@ -236,13 +260,12 @@ export const replyWorker = {
     await runWithSendSevenConfigAsync(cfg, async () => {
       // messagesRepository.list() needs the SendSeven config bound above, so it
       // can't join a Promise.all outside runWithSendSevenConfigAsync — but
-      // there's no data dependency between it and botConfig/kb/client, so fold
-      // all four fetches into one parallel batch here instead of resolving the
-      // trio first and then awaiting the message list separately.
-      const [botConfig, kb, client, list] = await Promise.all([
+      // there's no data dependency between it and botConfig/kb, so fold the
+      // fetches into one parallel batch here. (The client record was already
+      // fetched by the opt-in gate above.)
+      const [botConfig, kb, list] = await Promise.all([
         botConfigRepository.findByOrg(orgId),
         knowledgeBaseRepository.list(orgId),
-        clientId ? neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : Promise.resolve(null),
         messagesRepository.list({ conversationId, page: 1, pageSize: HISTORY_LIMIT }),
       ]);
       // Only feed the AI messages from THIS session (since our state row began), so

@@ -72,6 +72,16 @@ export const conversationStateRepository = {
       .where(and(eq(sendsevenConversationState.conversationId, conversationId), eq(sendsevenConversationState.orgId, orgId)));
   },
 
+  // Sets the per-conversation AI override ("enabled" | "disabled" | null =
+  // follow the linked client's aiReplyEnabled). Org-scoped: a manual toggle
+  // can never reach another org's row.
+  async setAiOverride(conversationId: string, orgId: string, override: "enabled" | "disabled" | null): Promise<void> {
+    await db
+      .update(sendsevenConversationState)
+      .set({ aiOverride: override, updatedAt: new Date() })
+      .where(and(eq(sendsevenConversationState.conversationId, conversationId), eq(sendsevenConversationState.orgId, orgId)));
+  },
+
   // Org-scoped read for the AI-state API — a manual toggle/status check must
   // never leak or touch another org's conversation state.
   async getState(conversationId: string, orgId: string): Promise<SendsevenConversationState | null> {

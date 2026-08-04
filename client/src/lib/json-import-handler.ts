@@ -792,6 +792,42 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
   }
 }
 
+// Data-level entry point: dispatches an already-parsed JSON object through the
+// cruise / scraper / fallback import paths. Used by the file upload below and
+// by URL-based imports (e.g. the easyJet trade-portal scraper), which receive
+// the object from the API rather than a file.
+export async function handleJsonData(record: Record<string, any>, deps: JsonImportDeps): Promise<void> {
+  const { toast } = deps;
+
+  if (isCruiseFormat(record)) {
+    try {
+      await handleCruiseJson(record, deps);
+    } catch (error) {
+      toast({
+        title: "Error processing cruise JSON",
+        description: error instanceof Error ? error.message : "Failed to map cruise values.",
+        variant: "destructive",
+      });
+    }
+    return;
+  }
+
+  if (isScraperFormat(record)) {
+    try {
+      await handleScraperJson(record, deps);
+    } catch (error) {
+      toast({
+        title: "Error processing JSON",
+        description: error instanceof Error ? error.message : "Failed to map values.",
+        variant: "destructive",
+      });
+    }
+    return;
+  }
+
+  handleFallbackJson(record, deps);
+}
+
 export function handleJsonUpload(file: File, deps: JsonImportDeps): void {
   const { toast } = deps;
 
@@ -837,35 +873,7 @@ export function handleJsonUpload(file: File, deps: JsonImportDeps): void {
       return;
     }
 
-    const record = data as Record<string, any>;
-
-    if (isCruiseFormat(record)) {
-      try {
-        await handleCruiseJson(record, deps);
-      } catch (error) {
-        toast({
-          title: "Error processing cruise JSON",
-          description: error instanceof Error ? error.message : "Failed to map cruise values.",
-          variant: "destructive",
-        });
-      }
-      return;
-    }
-
-    if (isScraperFormat(record)) {
-      try {
-        await handleScraperJson(record, deps);
-      } catch (error) {
-        toast({
-          title: "Error processing JSON",
-          description: error instanceof Error ? error.message : "Failed to map values.",
-          variant: "destructive",
-        });
-      }
-      return;
-    }
-
-    handleFallbackJson(record, deps);
+    await handleJsonData(data as Record<string, any>, deps);
   };
 
   reader.onerror = () => {
