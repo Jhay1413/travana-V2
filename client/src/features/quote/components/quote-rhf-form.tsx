@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Loader2 } from "lucide-react";
 import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -219,8 +220,17 @@ export function QuoteRHFForm({
     };
   };
 
-  const handleJsonUpload = (file: File) => {
-    handleJsonUploadUtil(file, prepareJsonImport());
+  // True while a JSON file or supplier-URL import is running — drives the
+  // blurred loading overlay over the whole form.
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleJsonUpload = async (file: File) => {
+    setIsImporting(true);
+    try {
+      await handleJsonUploadUtil(file, prepareJsonImport());
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   // ── Supplier URL import ───────────────────────────────────────────────────
@@ -228,13 +238,19 @@ export function QuoteRHFForm({
   // scrapes it with that supplier's stored credentials.
   const supplierImport = useEasyJetImport();
   const handleSupplierImport = (url: string, supplierKey: string) => {
+    setIsImporting(true);
     supplierImport.mutate(
       { url, supplierKey },
       {
-        onSuccess: (scraped) => {
-          void handleJsonData(scraped as Record<string, any>, prepareJsonImport());
+        onSuccess: async (scraped) => {
+          try {
+            await handleJsonData(scraped as Record<string, any>, prepareJsonImport());
+          } finally {
+            setIsImporting(false);
+          }
         },
         onError: (error) => {
+          setIsImporting(false);
           toast({
             title: "Import failed",
             description: error instanceof Error ? error.message : "Could not fetch the deal from the supplier.",
@@ -266,7 +282,21 @@ export function QuoteRHFForm({
           });
           scrollToFirstFormError();
         },
-      )} className="space-y-4">
+      )} className="relative space-y-4">
+
+        {/* ── IMPORT LOADER (blurs the form while a JSON/URL import runs) ───── */}
+        {isImporting && (
+          <div
+            className="absolute inset-0 z-50 rounded-xl bg-background/60 backdrop-blur-sm"
+            aria-busy="true"
+            aria-live="polite"
+          >
+            <div className="sticky top-[40vh] mx-auto flex w-fit flex-col items-center gap-3">
+              <Loader2 className="h-9 w-9 animate-spin text-primary" />
+              <p className="text-sm font-medium text-foreground">Importing your deal…</p>
+            </div>
+          </div>
+        )}
 
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
         <QuoteImportRow

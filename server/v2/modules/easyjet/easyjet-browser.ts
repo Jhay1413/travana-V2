@@ -140,6 +140,89 @@ async function closeBrowser(browser: Browser): Promise<void> {
   }
 }
 
+// ─── Warm browser pool ───────────────────────────────────────────────────────
+// Connecting a fresh remote browser (create Steel session + CDP connect) costs
+// ~10-15s EVERY scrape. The pool keeps a connected browser per supplier alive
+// and reuses it, so back-to-back scrapes skip the reconnect — and, because the
+// browser keeps its cookies in memory, they usually skip login too. Remote
+// sessions are capped (Steel/Browserless), so a pooled browser is only reused
+// within a SAFE window (cap minus one scrape's worst case) and evicted after —
+// this mainly speeds up bursts of imports. Disable with SCRAPER_BROWSER_POOL=false.
+const POOL_ENABLED = process.env.SCRAPER_BROWSER_POOL !== 'false';
+interface PoolEntry {
+  browser: Browser;
+  expiresAt: number;
+}
+const idleBrowsers = new Map<string, PoolEntry[]>();
+const browserExpiry = new WeakMap<Browser, number>();
+
+function poolKey(ctx: EasyJetScrapeContext): string {
+  return `${ctx.browser.backend}::${ctx.queueKey || ctx.fetch.originPrefix || 'global'}`;
+}
+
+// Acquires a browser: a warm one from the pool when available (alive + not near
+// its session-cap expiry), else a freshly launched one tagged with its safe
+// reuse deadline.
+async function acquireBrowser(ctx: EasyJetScrapeContext): Promise<Browser> {
+  if (POOL_ENABLED) {
+    const list = idleBrowsers.get(poolKey(ctx));
+    while (list && list.length) {
+      const e = list.pop() as PoolEntry;
+      if (Date.now() < e.expiresAt && e.browser.connected) {
+        log('reusing warm browser from pool');
+        return e.browser;
+      }
+      await closeBrowser(e.browser); // expired or dead — drop it
+    }
+  }
+  log('connecting browser…');
+  const browser = await launchBrowser(ctx);
+  // Local Chrome has no session cap; remote sessions do. Reserve one WARM scrape's
+  // worst case (~55s: no connect/login, just nav + render) so a reused session
+  // won't die mid-scrape. For the pool to actually help, the session cap should
+  // comfortably exceed a scrape — raise SCRAPER_SESSION_TIMEOUT_MS if needed.
+  const cap = ctx.browser.backend === 'local' ? 30 * 60_000 : ctx.browser.sessionTimeoutMs || 60_000;
+  browserExpiry.set(browser, Date.now() + Math.max(0, cap - 55_000));
+  return browser;
+}
+
+// Returns a browser to the pool after a SUCCESSFUL scrape (if it still has safe
+// life left), or closes it. A failed scrape always closes — a bad session
+// shouldn't be reused, and a retry wants a fresh egress IP anyway.
+async function releaseBrowser(ctx: EasyJetScrapeContext, browser: Browser, ok: boolean): Promise<void> {
+  const expiresAt = browserExpiry.get(browser) ?? 0;
+  const maxIdle = Math.max(1, ctx.browser.maxConcurrent ?? 1);
+  if (!POOL_ENABLED || !ok || Date.now() >= expiresAt || !browser.connected) {
+    await closeBrowser(browser);
+    return;
+  }
+  try {
+    // Leave a single clean blank tab (drop our response/request listeners so they
+    // don't accumulate across reuses); close any others to free memory.
+    const pages = await browser.pages();
+    for (let i = 1; i < pages.length; i++) {
+      pages[i].removeAllListeners('response');
+      pages[i].removeAllListeners('request');
+      await pages[i].close().catch(() => undefined);
+    }
+    if (pages[0]) {
+      pages[0].removeAllListeners('response');
+      pages[0].removeAllListeners('request');
+      await pages[0].goto('about:blank').catch(() => undefined);
+    }
+  } catch {
+    await closeBrowser(browser);
+    return;
+  }
+  const list = idleBrowsers.get(poolKey(ctx)) ?? [];
+  if (list.length < maxIdle) {
+    list.push({ browser, expiresAt });
+    idleBrowsers.set(poolKey(ctx), list);
+  } else {
+    await closeBrowser(browser);
+  }
+}
+
 // Turns a raw WebSocket/puppeteer connect rejection (often a ws ErrorEvent, not
 // an Error) into a clean, actionable AppError instead of a giant object dump.
 function toConnectError(e: unknown, label: string): AppError {
@@ -509,6 +592,7 @@ async function fetchFromPage(page: Page, url: string): Promise<{ status: number;
   }, url);
 }
 
+
 // ─── Per-supplier concurrency gate ───────────────────────────────────────────
 // Scrapes for the SAME supplier run up to its configured concurrency (default 1,
 // raise with browser.maxConcurrent / SCRAPER_MAX_CONCURRENT); DIFFERENT
@@ -665,19 +749,21 @@ export function fetchOffers(deepLinkUrl: string, apiUrl: string, ctx: EasyJetScr
       let lastErr: unknown;
       for (let attempt = 1; attempt <= t.maxAttempts; attempt++) {
         let browser: Browser | null = null;
+        let ok = false;
         try {
-          log(`connecting browser… (attempt ${attempt}/${t.maxAttempts})`);
-          browser = await launchBrowser(ctx);
-          return await scrapeOnce(browser, deepLinkUrl, apiUrl, ctx, t.nav);
+          log(`browser (attempt ${attempt}/${t.maxAttempts})…`);
+          browser = await acquireBrowser(ctx);
+          const result = await scrapeOnce(browser, deepLinkUrl, apiUrl, ctx, t.nav);
+          ok = true;
+          return result;
         } catch (err) {
           lastErr = err;
           log(`attempt ${attempt}/${t.maxAttempts} failed:`, err instanceof Error ? err.message : err);
           if (err instanceof AppError && err.statusCode === 503) throw err; // missing creds — won't fix by retry
         } finally {
-          // Always drop the browser: remote sessions are single-use here, and a
-          // fresh connect on retry gets a new egress IP (Browserless sticky
-          // proxy / a brand-new Steel session).
-          if (browser) await closeBrowser(browser);
+          // Success → return to the warm pool; failure → close (a retry wants a
+          // fresh egress IP / clean session anyway).
+          if (browser) await releaseBrowser(ctx, browser, ok);
         }
       }
       throw lastErr;
@@ -887,9 +973,10 @@ export function scrapeViaDom<T>(
       let lastErr: unknown;
       for (let attempt = 1; attempt <= t.maxAttempts; attempt++) {
         let browser: Browser | null = null;
+        let ok = false;
         try {
-          log(`connecting browser… (attempt ${attempt}/${t.maxAttempts})`);
-          browser = await launchBrowser(ctx);
+          log(`browser (attempt ${attempt}/${t.maxAttempts})…`);
+          browser = await acquireBrowser(ctx);
           const pages = await browser.pages();
           const page = pages[0] ?? (await browser.newPage());
 
@@ -936,33 +1023,78 @@ export function scrapeViaDom<T>(
             } catch {
               /* use as configured */
             }
-            log('login-first: opening configured login page', loginUrl);
-            await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: t.nav }).catch(() => undefined);
 
-            // Learn the login field selectors from THIS page if we don't have
-            // them yet — so the user only supplies the login URL, never the form.
-            if (!isLoginConfigured(ctx) && opts?.learnLogin) {
-              const looksLogin =
-                (await page.$('input[type="password"]').then(Boolean).catch(() => false)) ||
-                /login|sign-?in|auth/i.test(page.url());
-              if (looksLogin) {
-                log('login-first: learning login selectors from the login page…');
-                const loginHtml = await page
-                  .evaluate(() => (document.querySelector('form')?.outerHTML || document.body?.innerHTML || '').slice(0, 12_000))
-                  .catch(() => '');
-                if (loginHtml) {
-                  const learned = await opts.learnLogin(loginHtml, page.url());
-                  ctx.auth = { ...ctx.auth, ...learned };
+            // Navigate to the deal target: the param-less property page for the
+            // price API, else the full deal URL.
+            const gotoTarget = async (): Promise<void> => {
+              if (opts?.navigateBase) {
+                let base = deepLinkUrl;
+                try {
+                  const u = new URL(deepLinkUrl);
+                  base = u.origin + u.pathname;
+                } catch {
+                  /* use as-is */
                 }
+                await page.goto(base, { waitUntil: 'domcontentloaded', timeout: t.nav }).catch(() => undefined);
+                log('on property page (login-first), url=', page.url());
+                await new Promise((r) => setTimeout(r, 2_500));
+              } else {
+                await page.goto(deepLinkUrl, { waitUntil: 'domcontentloaded', timeout: t.nav }).catch(() => undefined);
+                log('after deal navigation (login-first), url=', page.url());
+              }
+            };
+            const onLoginForm = (timeout: number): Promise<boolean> =>
+              ctx.auth.passwordSelector
+                ? page.waitForSelector(ctx.auth.passwordSelector, { timeout }).then(Boolean).catch(() => false)
+                : Promise.resolve(false);
+
+            const haveSession = Array.isArray(ctx.sessionCookies) && ctx.sessionCookies.length > 0;
+
+            // FAST PATH: with a restored session, go straight to the deal and skip
+            // the login page entirely. Only if the deal bounces us to a login form
+            // do we fall back to authenticating.
+            let authed = false;
+            if (haveSession && isLoginConfigured(ctx)) {
+              await gotoTarget();
+              if (await onLoginForm(2_000)) {
+                log('login-first: saved session expired — logging in');
+              } else {
+                authed = true;
+                log('login-first: valid session — skipped the login page');
               }
             }
 
-            if (isLoginConfigured(ctx)) {
-              const formPresent = await page
-                .waitForSelector(ctx.auth.passwordSelector, { timeout: 6_000 })
-                .then(Boolean)
-                .catch(() => false);
-              if (formPresent) {
+            // LOGIN PATH: no session, or the session was stale. Open the login
+            // page, learn selectors if needed, authenticate, then go to the deal.
+            if (!authed) {
+              log('login-first: opening configured login page', loginUrl);
+              await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: t.nav }).catch(() => undefined);
+
+              // Learn the login field selectors from THIS page if we don't have
+              // them yet — so the user only supplies the login URL, never the form.
+              if (!isLoginConfigured(ctx) && opts?.learnLogin) {
+                const looksLogin =
+                  (await page.$('input[type="password"]').then(Boolean).catch(() => false)) ||
+                  /login|sign-?in|auth/i.test(page.url());
+                if (looksLogin) {
+                  log('login-first: learning login selectors from the login page…');
+                  const loginHtml = await page
+                    .evaluate(() => (document.querySelector('form')?.outerHTML || document.body?.innerHTML || '').slice(0, 12_000))
+                    .catch(() => '');
+                  if (loginHtml) {
+                    const learned = await opts.learnLogin(loginHtml, page.url());
+                    ctx.auth = { ...ctx.auth, ...learned };
+                  }
+                }
+              }
+
+              if (!isLoginConfigured(ctx)) {
+                throw new AppError(
+                  'Could not find a login form at the configured login URL — check the Login page URL (it should open the page with the username/password fields).',
+                  502,
+                );
+              }
+              if (await onLoginForm(6_000)) {
                 await page.waitForSelector(ctx.auth.formSelector, { timeout: t.nav }).catch(() => undefined);
                 await submitLogin(page, ctx, t.nav);
                 if (ctx.persistSession) {
@@ -973,31 +1105,13 @@ export function scrapeViaDom<T>(
                   }
                 }
               } else {
-                log('login-first: no login form shown — assuming the restored session is still valid');
+                log('login-first: no login form shown — assuming already authenticated');
               }
-            } else {
-              throw new AppError(
-                'Could not find a login form at the configured login URL — check the Login page URL (it should open the page with the username/password fields).',
-                502,
-              );
+              await gotoTarget();
             }
 
-            // Now go to the deal itself (param-less property page for the price
-            // API, else the full deal URL).
-            if (opts?.navigateBase) {
-              let base = deepLinkUrl;
-              try {
-                const u = new URL(deepLinkUrl);
-                base = u.origin + u.pathname;
-              } catch {
-                /* use as-is */
-              }
-              await page.goto(base, { waitUntil: 'domcontentloaded', timeout: t.nav }).catch(() => undefined);
-              log('on property page (login-first), url=', page.url());
-              await new Promise((r) => setTimeout(r, 2_500));
-            } else {
-              await page.goto(deepLinkUrl, { waitUntil: 'domcontentloaded', timeout: t.nav }).catch(() => undefined);
-              log('after deal navigation (login-first), url=', page.url());
+            // Guards (full-deal path only): make sure we actually landed on the deal.
+            if (!opts?.navigateBase) {
               const stillLogin = await page.$(ctx.auth.passwordSelector).then(Boolean).catch(() => false);
               if (stillLogin) {
                 throw new AppError(
@@ -1022,7 +1136,9 @@ export function scrapeViaDom<T>(
 
             log('extracting from rendered page…');
             const livePage = await resolveLivePage(page);
-            return await extract(livePage, apiJson, apiUrl);
+            const out = await extract(livePage, apiJson, apiUrl);
+            ok = true;
+            return out;
           }
 
           // ─── Deal-first mode (default) ───────────────────────────────────
@@ -1158,13 +1274,15 @@ export function scrapeViaDom<T>(
           if (!opts?.navigateBase && !(await isAlive(livePage))) {
             livePage = await reloadDealInFreshTab(page, deepLinkUrl, t.nav);
           }
-          return await extract(livePage, apiJson, apiUrl);
+          const out = await extract(livePage, apiJson, apiUrl);
+          ok = true;
+          return out;
         } catch (err) {
           lastErr = err;
           log(`attempt ${attempt}/${t.maxAttempts} failed:`, err instanceof Error ? err.message : err);
           if (err instanceof AppError && err.statusCode === 503) throw err;
         } finally {
-          if (browser) await closeBrowser(browser);
+          if (browser) await releaseBrowser(ctx, browser, ok);
         }
       }
       throw lastErr;
