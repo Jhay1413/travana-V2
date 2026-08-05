@@ -50,7 +50,8 @@ export const messagesController = {
 
   // POST /api/v1/messages/internal-notes
   createInternalNote: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await messagesService.createInternalNote(req.body ?? {}), "Note created", 201);
+    const { orgId } = getScope(req);
+    return successResponse(res, await messagesService.createInternalNote(orgId, req.body ?? {}), "Note created", 201);
   }),
 
   // GET /api/v1/messages/mention-users

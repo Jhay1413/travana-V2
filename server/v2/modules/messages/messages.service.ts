@@ -42,7 +42,21 @@ export const messagesService = {
     return sent;
   },
 
-  createInternalNote: (body: Record<string, unknown>) => messagesRepository.createInternalNote(body),
+  // Internal notes never reach the customer, but the other agents' open thread
+  // should still show them live — reuse message.sent since the client reacts to
+  // it by refetching exactly what a note changes (thread + list preview).
+  async createInternalNote(orgId: string, body: Record<string, unknown>): Promise<SsMessage> {
+    const created = await messagesRepository.createInternalNote(body);
+    const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : created.conversation_id;
+    if (orgId && conversationId) {
+      try {
+        realtimeService.publish(orgId, { type: "message.sent", conversationId });
+      } catch (err) {
+        console.warn(`[messages] realtime publish failed for conv ${conversationId} after internal note:`, err);
+      }
+    }
+    return created;
+  },
   mentionUsers: () => messagesRepository.mentionUsers(),
   react: (id: string, body: unknown) => messagesRepository.react(id, body),
   removeReaction: (id: string, body: unknown) => messagesRepository.removeReaction(id, body),
