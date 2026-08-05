@@ -495,6 +495,44 @@ export const scraperService = {
     return resolved;
   },
 
+  // Builds a ResolvedScraper from a row, wiring persistConfig so an adapter can
+  // save config it learns on the first run. Accumulates: a run that learns BOTH
+  // login selectors and an extraction spec persists each over the latest merged
+  // config (not the original), so neither clobbers the other.
+  toResolved(row: SupplierScraper, orgId: string): ResolvedScraper {
+    let latest = ((row.config as ScraperConfig) ?? {}) as ScraperConfig;
+    // Restore any saved login session (decrypt; ignore if unreadable/corrupt).
+    let sessionCookies: unknown[] | undefined;
+    if (row.session_state) {
+      try {
+        const parsed = JSON.parse(decrypt(row.session_state));
+        if (Array.isArray(parsed) && parsed.length > 0) sessionCookies = parsed;
+      } catch {
+        /* stale/undecryptable session — ignore, a fresh login will replace it */
+      }
+    }
+    const resolved: ResolvedScraper = {
+      supplierKey: row.supplier_key,
+      supplierName: row.supplier_name,
+      config: latest,
+      credentials: decryptCredentials(row),
+      sessionCookies,
+      persistConfig: async (patch) => {
+        latest = { ...latest, ...patch };
+        resolved.config = latest;
+        await scraperRepository.update(row.id, orgId, { config: latest });
+      },
+      persistSession: async (cookies) => {
+        const hasCookies = Array.isArray(cookies) && cookies.length > 0;
+        await scraperRepository.update(row.id, orgId, {
+          session_state: hasCookies ? encrypt(JSON.stringify(cookies)) : null,
+          session_saved_at: hasCookies ? new Date() : null,
+        });
+      },
+    };
+    return resolved;
+  },
+
   // Resolves a specific supplier the user chose from the dropdown.
   async resolveByKey(supplierKey: string, scope: Scope): Promise<ResolvedScraper> {
     const row = await scraperRepository.findBySupplierKey(supplierKey);
