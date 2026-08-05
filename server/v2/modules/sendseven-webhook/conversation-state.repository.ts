@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../../config/database";
 import { sendsevenConversationState, type SendsevenConversationState } from "@shared/schema";
+import type { HandoffReason } from "./sendseven-webhook.types";
 
 // Repository: our per-thread AI memory (sendseven_conversation_state), keyed by
 // the SendSeven conversation id.
@@ -37,17 +38,27 @@ export const conversationStateRepository = {
   // Clears the rolling `context` too (lastReply + any transient AI-flow flags
   // like groupedAskSent/availabilityTaskId) — a human owns the thread now, so
   // stale flags must not leak into a later AI turn (e.g. after a manual
-  // hand-back before the 1h idle-resume would have cleared them itself).
+  // hand-back before the idle-resume would have cleared them itself). The only
+  // context that survives is `handoffReason` (why the hand-off happened),
+  // which the reply worker's resume gate reads to decide between a sticky
+  // hand-off (human-owned) and the idle auto-resume (AI-caused) — omitting
+  // `reason` leaves context null, which the gate treats as "human_reply"
+  // (fail safe: stay silent).
   // `orgId` is optional to preserve existing conversationId-only callers
   // (the webhook's own human-takeover detection, which only ever knows the
   // conversation's own org) — pass it whenever the caller has it (e.g. a
   // manual API toggle) so the write can never cross into another org's row.
-  async setNeedsHuman(conversationId: string, orgId?: string): Promise<void> {
+  async setNeedsHuman(conversationId: string, orgId?: string, reason?: HandoffReason): Promise<void> {
     const conds = [eq(sendsevenConversationState.conversationId, conversationId)];
     if (orgId) conds.push(eq(sendsevenConversationState.orgId, orgId));
     await db
       .update(sendsevenConversationState)
-      .set({ needsHuman: true, handledByHumanAt: new Date(), context: null, updatedAt: new Date() })
+      .set({
+        needsHuman: true,
+        handledByHumanAt: new Date(),
+        context: reason ? { handoffReason: reason } : null,
+        updatedAt: new Date(),
+      })
       .where(and(...conds));
   },
 
@@ -69,6 +80,16 @@ export const conversationStateRepository = {
         context: null,
         updatedAt: new Date(),
       })
+      .where(and(eq(sendsevenConversationState.conversationId, conversationId), eq(sendsevenConversationState.orgId, orgId)));
+  },
+
+  // Sets the per-conversation AI override ("enabled" | "disabled" | null =
+  // follow the linked client's aiReplyEnabled). Org-scoped: a manual toggle
+  // can never reach another org's row.
+  async setAiOverride(conversationId: string, orgId: string, override: "enabled" | "disabled" | null): Promise<void> {
+    await db
+      .update(sendsevenConversationState)
+      .set({ aiOverride: override, updatedAt: new Date() })
       .where(and(eq(sendsevenConversationState.conversationId, conversationId), eq(sendsevenConversationState.orgId, orgId)));
   },
 

@@ -76,7 +76,9 @@ vi.mock("../messages/messages.repository", () => ({
 }));
 
 vi.mock("../neon-client/neon-client.service", () => ({
-  neonClientService: { getNeonClientById: vi.fn(async () => null) },
+  // Default: the linked client IS opted in to AI auto-reply — the gate is
+  // default-OFF, so most driver tests need an opted-in client to proceed.
+  neonClientService: { getNeonClientById: vi.fn(async () => ({ id: "known-client-1", aiReplyEnabled: true })) },
 }));
 
 vi.mock("./conversation-state.repository", () => ({
@@ -127,7 +129,9 @@ import { decideDeterministicRoute, generateTurn } from "../ai-conversation/ai-co
 import { classifyConversationRoute } from "../ai-conversation/conversation-router";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
+import { conversationIntegrationRepository } from "../conversation-integration/conversation-integration.repository";
 import { messagesRepository } from "../messages/messages.repository";
+import { neonClientService } from "../neon-client/neon-client.service";
 import { adminAgent } from "./admin-agent.service";
 import type { SsWebhookEvent } from "./sendseven-webhook.types";
 import type { SendsevenConversationState } from "@shared/schema";
@@ -212,6 +216,7 @@ function makeState(overrides: Partial<SendsevenConversationState> = {}): Sendsev
     enquiryId: null,
     needsHuman: false,
     handledByHumanAt: null,
+    aiOverride: null,
     context: null,
     lastAiReplyAt: null,
     createdAt: new Date("2026-07-20T00:00:00Z"),
@@ -227,6 +232,13 @@ beforeEach(() => {
   vi.mocked(conversationStateRepository.update).mockResolvedValue(undefined);
   vi.mocked(conversationStateRepository.claimStatusTransition).mockResolvedValue(true);
   vi.mocked(classifyConversationRoute).mockResolvedValue("general");
+  // clearAllMocks keeps implementations — reset mocks that earlier tests
+  // replace (the redelivery tests' claimed-set closure, the send-mode
+  // override) so they can't leak into later tests.
+  vi.mocked(sendsevenWebhookRepository.claimReplyTurn).mockResolvedValue(true);
+  vi.mocked(sendsevenWebhookRepository.claimAdminTurn).mockResolvedValue(true);
+  vi.mocked(neonClientService.getNeonClientById).mockResolvedValue({ id: "known-client-1", aiReplyEnabled: true } as never);
+  vi.mocked(conversationIntegrationRepository.findByOrg).mockResolvedValue({ autoReplyMode: "draft" } as never);
 });
 
 describe("handleInbound — general-route reply claim (Fix 1a)", () => {
@@ -296,7 +308,7 @@ describe("handleInbound — single generateTurn call on new-lead onboarding (Fix
     // Unknown contact: no prior state row, and the state ensure() returns a
     // row with no linked client yet.
     vi.mocked(conversationStateRepository.find).mockResolvedValue(null);
-    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null }));
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null, aiOverride: "enabled" }));
 
     vi.mocked(generateTurn).mockResolvedValue({
       hand_off: false,
@@ -334,7 +346,7 @@ describe("handleInbound — pre-onboarding attachment deferral", () => {
     // Attachments deterministically force the admin route (mirrors the real
     // decideDeterministicRoute).
     vi.mocked(decideDeterministicRoute).mockReturnValueOnce("admin" as never);
-    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null }));
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null, aiOverride: "enabled" }));
     vi.mocked(messagesRepository.list).mockResolvedValue({
       items: [
         {
@@ -378,6 +390,9 @@ describe("handleInbound — pre-onboarding attachment deferral", () => {
     vi.mocked(conversationStateRepository.ensure).mockResolvedValue(
       makeState({
         clientId: null,
+        // Under the default-OFF gate, a pre-onboarding document flow only
+        // runs where an agent enabled the conversation.
+        aiOverride: "enabled",
         context: { domain: "admin", adminActionable: true, pendingAttachmentRefs: [STORED_PASSPORT_REF] } as never,
       }),
     );
@@ -413,5 +428,118 @@ describe("handleInbound — pre-onboarding attachment deferral", () => {
     const finalCtx = updates[updates.length - 1][1].context as { pendingAttachmentRefs?: unknown; ticketOpened?: boolean };
     expect(finalCtx.pendingAttachmentRefs).toBeUndefined();
     expect(finalCtx.ticketOpened).toBe(true);
+  });
+});
+
+// ── Hand-off resume gate (handoffReason) ────────────────────────────────────
+// Human-owned hand-offs are STICKY: the AI never auto-resumes a conversation a
+// real agent replied in (or manually disabled), no matter how long it idles —
+// only an inbox re-enable brings it back. AI-caused hand-offs (wound down /
+// enquiry completed) auto-resume after RESUME_AFTER_MS (7 days) of inactivity,
+// with a clean slate.
+describe("handleInbound — hand-off resume gate", () => {
+  const DAYS = 24 * 60 * 60 * 1000;
+
+  it("stays silent forever on a human-reply hand-off, even after weeks of idle", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({ needsHuman: true, context: { handoffReason: "human_reply" } as never, updatedAt: new Date(Date.now() - 30 * DAYS) }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.send).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+    // No clean-slate resume write either — the hand-off state is untouched.
+    expect(conversationStateRepository.update).not.toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ needsHuman: false }),
+    );
+  });
+
+  it("treats a hand-off with no recorded reason (pre-existing rows) as human-owned — stays silent", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({ needsHuman: true, context: null, updatedAt: new Date(Date.now() - 30 * DAYS) }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("stays silent on an AI-caused hand-off that is still inside the resume window", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({ needsHuman: true, context: { handoffReason: "ai_wound_down" } as never, updatedAt: new Date(Date.now() - 2 * DAYS) }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("resumes with a clean slate on an AI-caused hand-off after the resume window", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({ needsHuman: true, context: { handoffReason: "enquiry_scheduled" } as never, updatedAt: new Date(Date.now() - 8 * DAYS) }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    // Clean-slate reset persisted before processing…
+    expect(conversationStateRepository.update).toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ needsHuman: false, enquiryStatus: null, enquirySlots: {}, enquiryId: null, context: null }),
+    );
+    // …and the turn then processed normally (general route, draft mode → note).
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── AI opt-in gate (default OFF) ────────────────────────────────────────────
+// The bot only replies where an agent opted in: a per-conversation override
+// or a linked client with aiReplyEnabled. Everything else stays silent.
+describe("handleInbound — AI opt-in gate", () => {
+  it("stays silent for an unknown contact with no override (the default)", async () => {
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null }));
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.send).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("stays silent when the linked client is NOT opted in", async () => {
+    vi.mocked(neonClientService.getNeonClientById).mockResolvedValueOnce({ id: "known-client-1", aiReplyEnabled: false } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("stays silent when the conversation override is 'disabled', even for an opted-in client", async () => {
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ aiOverride: "disabled" }));
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("replies when the linked client IS opted in (default mock)", async () => {
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+    // general route (classify mock) → one draft note.
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("replies for an unknown contact when the conversation override is 'enabled'", async () => {
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null, aiOverride: "enabled" }));
+    vi.mocked(classifyConversationRoute).mockResolvedValue("general");
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
   });
 });

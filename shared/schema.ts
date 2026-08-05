@@ -189,6 +189,12 @@ export const clientTable = pgTable("client_table", {
   post_code: varchar(),
   avatarUrl: varchar(),
   badge: varchar(),
+  // Per-client opt-in for the SendSeven AI auto-reply: the bot only replies in
+  // a conversation when it is linked to a client with this ON (or the
+  // conversation itself carries an explicit agent override — see
+  // sendseven_conversation_state.ai_override). Defaults OFF: new/unlinked
+  // conversations get no AI until an agent opts them in.
+  aiReplyEnabled: boolean("ai_reply_enabled").notNull().default(false),
   portalPin: varchar("portal_pin"),
   // True when portalPin is a system-seeded default (e.g. from a quote SMS) that
   // the client must replace on first portal entry.
@@ -2084,6 +2090,11 @@ export const sendsevenConversationState = pgTable("sendseven_conversation_state"
   // Set when a human takes over; once true the AI stays silent (§8).
   needsHuman: boolean("needs_human").notNull().default(false),
   handledByHumanAt: timestamp("handled_by_human_at"),
+  // Per-conversation agent override for the AI opt-in gate:
+  //   null       → follow the linked client's aiReplyEnabled (default OFF)
+  //   "enabled"  → AI replies here regardless of the client flag
+  //   "disabled" → AI never replies here regardless of the client flag
+  aiOverride: text("ai_override"),
   context: jsonb("context"), // rolling recent messages / running summary (§13)
   lastAiReplyAt: timestamp("last_ai_reply_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

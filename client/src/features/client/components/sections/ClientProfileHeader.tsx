@@ -1,4 +1,4 @@
-import { ChevronDown, Phone, Pin, PinOff } from "lucide-react";
+import { Bot, BotOff, ChevronDown, Phone, Pin, PinOff } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,8 +36,13 @@ interface ClientProfileHeaderProps {
   phone?: string | null;
   badge?: string | null;
   isFavorited: boolean;
+  // Opt-in for the SendSeven AI auto-reply on this client's conversations
+  // (default OFF — the bot stays silent until an agent enables it here or
+  // per-conversation from the inbox).
+  aiReplyEnabled: boolean;
   onToggleFavorite: () => void;
   onChangeBadge: (badge: string | null) => void;
+  onToggleAiReply: (enabled: boolean) => void;
 }
 
 export function ClientProfileHeader({
@@ -45,8 +50,10 @@ export function ClientProfileHeader({
   phone,
   badge,
   isFavorited,
+  aiReplyEnabled,
   onToggleFavorite,
   onChangeBadge,
+  onToggleAiReply,
 }: ClientProfileHeaderProps) {
   return (
     <div className="mb-4" data-testid="section-client-profile-header">
@@ -108,6 +115,26 @@ export function ClientProfileHeader({
           ) : (
             <PinOff className="h-3.5 w-3.5" />
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onToggleAiReply(!aiReplyEnabled)}
+          aria-pressed={aiReplyEnabled}
+          title={
+            aiReplyEnabled
+              ? "AI auto-reply is ON for this client's conversations — click to turn off"
+              : "AI auto-reply is OFF for this client's conversations — click to turn on"
+          }
+          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition hover:brightness-95 ${
+            aiReplyEnabled
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-black/10 bg-black/[0.03] text-black/50"
+          }`}
+          data-testid="button-client-ai-reply"
+        >
+          {aiReplyEnabled ? <Bot className="h-3.5 w-3.5" /> : <BotOff className="h-3.5 w-3.5" />}
+          {aiReplyEnabled ? "AI replies on" : "AI replies off"}
         </button>
       </div>
 

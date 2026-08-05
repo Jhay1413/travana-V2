@@ -53,7 +53,7 @@ import { usageService } from "../usage/usage.service";
 import { adminAgent } from "./admin-agent.service";
 import type { PendingAttachment } from "./admin-data.service";
 import type { AiTurn, EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
-import type { SsWebhookEvent } from "./sendseven-webhook.types";
+import type { HandoffReason, SsWebhookEvent } from "./sendseven-webhook.types";
 import type { SendsevenConversationState } from "@shared/schema";
 
 // Transient flags/context we keep on `sendseven_conversation_state.context`
@@ -61,6 +61,13 @@ import type { SendsevenConversationState } from "@shared/schema";
 // flow. No schema columns needed.
 interface ConversationContext {
   lastReply?: string;
+  // Why this conversation was handed off (needsHuman=true) — written by every
+  // hand-off site (setNeedsHuman + the direct update() writes below). The
+  // resume gate in handleInbound reads it: human-owned reasons make the
+  // hand-off sticky (silent until an agent re-enables the AI from the inbox);
+  // AI-caused reasons allow the idle auto-resume. Absent on rows written
+  // before this existed → treated as "human_reply" (fail safe: stay silent).
+  handoffReason?: HandoffReason;
   // LEGACY: was set once we'd sent the ONE grouped follow-up for whatever
   // enquiry fields were still missing (the customer's next reply would then
   // create the enquiry). No longer SET by this driver — the enquiry is now
@@ -152,7 +159,12 @@ interface ConversationContext {
 // reply (§8). Human replies (untagged) trigger the hand-off.
 const AI_META = { source: "travana-ai" };
 const HISTORY_LIMIT = 20;
-const RESUME_AFTER_MS = 60 * 60 * 1000; // AI re-engages after 1h of no activity
+// AI re-engages after this much inactivity — but ONLY on AI-caused hand-offs
+// ("ai_wound_down" / "enquiry_scheduled"). A hand-off caused by a real human
+// (agent replied, conversation assigned, manual disable) is sticky and never
+// auto-resumes — an agent re-enables the AI from the inbox. 7 days so the
+// auto-resume only fires on genuinely abandoned threads, not mid-deal lulls.
+const RESUME_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 const FALLBACK_REPLY = "Thanks for your message — one of our advisors will be in touch shortly.";
 // Inbound message_types that carry a file even when there's no text caption — so
 // a bare passport photo isn't dropped by the text-only gate.
@@ -184,12 +196,26 @@ export const replyWorker = {
 
     const state = await conversationStateRepository.ensure(conversationId, orgId, contactId);
 
-    // Handed to a human (asked for an agent, or an enquiry was logged): the AI stays
-    // silent — UNLESS the conversation has been idle for over an hour, in which case
-    // it re-engages with a clean slate.
+    // Handed to a human: what happens next depends on WHY (handoffReason).
+    // Human-owned hand-offs (a real agent replied / was assigned / manually
+    // disabled the AI) are STICKY — the AI stays silent no matter how long the
+    // conversation idles, so it can never barge into (or duplicate the enquiry
+    // of) a slow-burn deal an agent is working across days. An agent brings it
+    // back with the inbox toggle (enableAi). Only AI-caused hand-offs
+    // (wound down / enquiry completed) auto-resume, and only after
+    // RESUME_AFTER_MS of inactivity, with a clean slate.
     if (prior?.needsHuman) {
+      const handoffReason = (prior.context as ConversationContext | null)?.handoffReason ?? "human_reply";
+      if (handoffReason === "human_reply" || handoffReason === "manual_disable") {
+        console.log(
+          `[sendseven-webhook] conv ${conversationId} handed to human (reason=${handoffReason}) — sticky, staying silent until re-enabled`,
+        );
+        return;
+      }
       if (inactiveMs < RESUME_AFTER_MS) {
-        console.log(`[sendseven-webhook] conv ${conversationId} handed to human (active ${Math.round(inactiveMs / 1000)}s ago) — staying silent`);
+        console.log(
+          `[sendseven-webhook] conv ${conversationId} handed off (reason=${handoffReason}, active ${Math.round(inactiveMs / 1000)}s ago) — staying silent`,
+        );
         return;
       }
       console.log(`[sendseven-webhook] conv ${conversationId} idle ${Math.round(inactiveMs / 60000)}m — AI re-engaging`);
@@ -224,6 +250,30 @@ export const replyWorker = {
     }
     const knownClient = !!clientId;
 
+    // ── AI opt-in gate (default OFF) ─────────────────────────────────────
+    // The bot only participates in a conversation an agent has opted in:
+    // either this conversation carries an explicit override ("enabled" /
+    // "disabled" — the inbox toggle), or it is linked to a client whose
+    // aiReplyEnabled flag is ON. Everything else — including unknown
+    // contacts — stays silent. The webhook still feeds the realtime inbox
+    // either way (process() published before calling us).
+    const aiOverride = state.aiOverride ?? null;
+    if (aiOverride === "disabled") {
+      console.log(`[sendseven-webhook] conv ${conversationId} AI override=disabled — staying silent`);
+      return;
+    }
+    // Fetched once here (the gate needs the client's aiReplyEnabled) and
+    // reused for the AI turn below — it used to be part of the parallel
+    // batch inside runWithSendSevenConfigAsync.
+    const client = clientId ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : null;
+    if (aiOverride !== "enabled" && !client?.aiReplyEnabled) {
+      console.log(
+        `[sendseven-webhook] conv ${conversationId} not opted in to AI (override=none client=${clientId ?? "none"} ` +
+          `clientAi=${client ? String(!!client.aiReplyEnabled) : "n/a"}) — staying silent`,
+      );
+      return;
+    }
+
     const cfg = await conversationIntegrationService.resolveConfig(orgId);
     if (!cfg) {
       console.warn(`[sendseven-webhook] org ${orgId} has no resolvable SendSeven config — skipping reply.`);
@@ -236,13 +286,12 @@ export const replyWorker = {
     await runWithSendSevenConfigAsync(cfg, async () => {
       // messagesRepository.list() needs the SendSeven config bound above, so it
       // can't join a Promise.all outside runWithSendSevenConfigAsync — but
-      // there's no data dependency between it and botConfig/kb/client, so fold
-      // all four fetches into one parallel batch here instead of resolving the
-      // trio first and then awaiting the message list separately.
-      const [botConfig, kb, client, list] = await Promise.all([
+      // there's no data dependency between it and botConfig/kb, so fold the
+      // fetches into one parallel batch here. (The client record was already
+      // fetched by the opt-in gate above.)
+      const [botConfig, kb, list] = await Promise.all([
         botConfigRepository.findByOrg(orgId),
         knowledgeBaseRepository.list(orgId),
-        clientId ? neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : Promise.resolve(null),
         messagesRepository.list({ conversationId, page: 1, pageSize: HISTORY_LIMIT }),
       ]);
       // Only feed the AI messages from THIS session (since our state row began), so
@@ -276,7 +325,12 @@ export const replyWorker = {
       const sawAdminIntent = prevContext.domain === "admin" || isAdminAsk;
 
       const doHandoff = async (reply: string) => {
-        await conversationStateRepository.setNeedsHuman(conversationId);
+        // "ai_wound_down": the AI took itself out (customer asked for a person,
+        // out of scope, or an internal failure) — a human is EXPECTED to pick
+        // this up, and once they reply the message.sent detection overwrites
+        // the reason with the sticky "human_reply". Until then the idle
+        // auto-resume stays available so an unanswered thread isn't dead forever.
+        await conversationStateRepository.setNeedsHuman(conversationId, undefined, "ai_wound_down");
         await messagesRepository.createInternalNote({
           conversation_id: conversationId,
           text: "🤖 AI handed this conversation to a human (customer asked for a person / out of scope).",
@@ -1077,7 +1131,7 @@ export const replyWorker = {
           needsHuman: true,
           handledByHumanAt: new Date(),
           lastAiReplyAt: new Date(),
-          context: { lastReply: confirmReply, availabilityTaskId: taskId },
+          context: { lastReply: confirmReply, availabilityTaskId: taskId, handoffReason: "enquiry_scheduled" },
         });
         await sendReply(orgId, conversationId, message.channel_id, confirmReply, mode, false);
         return;
@@ -1205,6 +1259,7 @@ export const replyWorker = {
         }
         update.needsHuman = true;
         update.handledByHumanAt = new Date();
+        update.context = { ...prevContext, lastReply: turn.reply, handoffReason: "ai_wound_down" };
         console.log(`[sendseven-webhook] conv ${conversationId} wound down (repeat=${wouldRepeat} ack=${customerAcked} status=${enquiryStatus}) — going silent`);
         await conversationStateRepository.update(conversationId, update);
         return;
