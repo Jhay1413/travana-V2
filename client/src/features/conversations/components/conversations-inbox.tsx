@@ -75,7 +75,7 @@ import {
   useUnsnoozeConversation,
 } from "../api/use-conversations-mutations";
 import { useMessages, useSendMessage, useCreateInternalNote, useUploadAttachment } from "../api/use-messages";
-import { MAX_ATTACHMENT_BYTES } from "../api/messages.api";
+import { MAX_ATTACHMENT_BYTES, messageTypeForContentType } from "../api/messages.api";
 import { useConversationsRealtimeState } from "./conversations-realtime-provider";
 import { useInboxes } from "../api/use-inboxes";
 import type { SsInbox } from "../api/inboxes.api";
@@ -322,12 +322,16 @@ interface PendingAttachment {
   file: File;
   status: "uploading" | "ready" | "error";
   id?: string;
+  // MIME type as validated by SendSeven at upload (magic-byte checked), which
+  // decides the message_type of the send; file.type is only the fallback.
+  contentType?: string;
   error?: string;
 }
 
 export interface ComposerAttachments {
   ids: string[];
   filenames: string[];
+  contentTypes: string[];
 }
 
 function formatBytes(bytes: number): string {
@@ -368,7 +372,9 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
       uploadAttachment.mutate(file, {
         onSuccess: (uploaded) =>
           setAttachments((prev) =>
-            prev.map((a) => (a.key === key ? { ...a, status: "ready", id: uploaded.id } : a)),
+            prev.map((a) =>
+              a.key === key ? { ...a, status: "ready", id: uploaded.id, contentType: uploaded.content_type } : a,
+            ),
           ),
         onError: (err: Error) =>
           setAttachments((prev) =>
@@ -405,7 +411,11 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
       trimmed,
       mode,
       ready.length > 0
-        ? { ids: ready.map((a) => a.id as string), filenames: ready.map((a) => a.file.name) }
+        ? {
+            ids: ready.map((a) => a.id as string),
+            filenames: ready.map((a) => a.file.name),
+            contentTypes: ready.map((a) => a.contentType ?? a.file.type),
+          }
         : undefined,
     );
     setText("");
@@ -802,9 +812,12 @@ export default function ConversationsInbox() {
       sendMessage.mutate(
         {
           conversation_id: convId,
-          // SendSeven infers the media type from the attachment itself; the
-          // message type stays "text" and carries the optional caption.
-          message_type: "text",
+          // SendSeven media sends must declare the media kind (image/video/
+          // audio/document) as the message_type — "text" carries plain text
+          // only. Derived from the first attachment: SendSeven delivers one
+          // attachment per message downstream, so the first decides. `text`
+          // still rides along as the caption.
+          message_type: hasFiles ? messageTypeForContentType(attachments!.contentTypes[0] ?? "") : "text",
           text: body,
           ...(hasFiles
             ? { attachments: attachments!.ids, attachment_filenames: attachments!.filenames }
