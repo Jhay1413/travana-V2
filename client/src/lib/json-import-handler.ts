@@ -340,17 +340,15 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
     data.hot_tub !== undefined ||
     data.pets !== undefined
   );
-  const currentPackageType = form.getValues("packageType");
-  const currentPackageName =
-    packageTypesData?.find((p) => p.id === currentPackageType)?.name || currentPackageType;
-  const isCurrentFormLodge = currentPackageName === "Hot Tub Break";
   const tourOp = (data.tour_operator || result.fields.tourOperator || "").toLowerCase().trim();
   const lodgeTourOperators = [
     "hoseasons", "haven", "parkdean", "park dean", "butlins",
     "center parcs", "centre parcs", "away resorts", "park holidays",
   ];
   const isLodgeTourOperator = lodgeTourOperators.some((op) => tourOp.includes(op));
-  const isLodgeQuote = hasLodgeFieldsInJson || isCurrentFormLodge || isLodgeTourOperator;
+  // Decide from the INCOMING scrape only — never from the form's current type, or
+  // importing a package holiday after a lodge would stay stuck on Hot Tub Break.
+  const isLodgeQuote = hasLodgeFieldsInJson || isLodgeTourOperator;
 
   const lodgeParkName = data.lodge_park_name || data.resort || result.fields.resort || "";
   const lodgeCodeVal = data.lodge_code || data.cottage_id || null;
@@ -456,6 +454,11 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
     if (idMapping.parkId) {
       queryClient.invalidateQueries({ queryKey: lookupKeys.lodges(idMapping.parkId as string) });
     }
+  } else {
+    // Not a lodge → this is a package holiday. Switch the form's type explicitly
+    // so importing a package after a Hot Tub Break doesn't stay stuck on it.
+    const packageHoliday = packageTypesData?.find((p) => p.name === "Package Holiday");
+    if (packageHoliday) setValue("packageType", packageHoliday.id);
   }
 
   setValue(
@@ -828,61 +831,71 @@ export async function handleJsonData(record: Record<string, any>, deps: JsonImpo
   handleFallbackJson(record, deps);
 }
 
-export function handleJsonUpload(file: File, deps: JsonImportDeps): void {
+// Returns a Promise that resolves once the import finishes (or fails), so the
+// caller can show a loading state for the whole file-import flow.
+export function handleJsonUpload(file: File, deps: JsonImportDeps): Promise<void> {
   const { toast } = deps;
 
   if (file.size === 0) {
     toast({ title: "Empty file", description: "The selected file is empty.", variant: "destructive" });
-    return;
+    return Promise.resolve();
   }
 
   const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
   if (file.size > MAX_SIZE) {
     toast({ title: "File too large", description: "JSON file must be under 5 MB.", variant: "destructive" });
-    return;
+    return Promise.resolve();
   }
 
-  const reader = new FileReader();
+  return new Promise<void>((resolve) => {
+    const reader = new FileReader();
 
-  reader.onload = async (ev) => {
-    const content = ev.target?.result;
+    reader.onload = async (ev) => {
+      try {
+        const content = ev.target?.result;
 
-    if (typeof content !== "string" || content.trim() === "") {
-      toast({ title: "Empty file", description: "The file appears to be empty.", variant: "destructive" });
-      return;
-    }
+        if (typeof content !== "string" || content.trim() === "") {
+          toast({ title: "Empty file", description: "The file appears to be empty.", variant: "destructive" });
+          return;
+        }
 
-    let data: unknown;
-    try {
-      data = JSON.parse(content);
-    } catch (err) {
-      toast({
-        title: "Invalid JSON",
-        description: err instanceof Error ? err.message : "Could not parse the file as JSON.",
-        variant: "destructive",
-      });
-      return;
-    }
+        let data: unknown;
+        try {
+          data = JSON.parse(content);
+        } catch (err) {
+          toast({
+            title: "Invalid JSON",
+            description: err instanceof Error ? err.message : "Could not parse the file as JSON.",
+            variant: "destructive",
+          });
+          return;
+        }
 
-    if (data === null || typeof data !== "object" || Array.isArray(data)) {
-      toast({
-        title: "Invalid JSON format",
-        description: "JSON must be an object (e.g. { ... }), not an array or plain value.",
-        variant: "destructive",
-      });
-      return;
-    }
+        if (data === null || typeof data !== "object" || Array.isArray(data)) {
+          toast({
+            title: "Invalid JSON format",
+            description: "JSON must be an object (e.g. { ... }), not an array or plain value.",
+            variant: "destructive",
+          });
+          return;
+        }
 
-    await handleJsonData(data as Record<string, any>, deps);
-  };
+        await handleJsonData(data as Record<string, any>, deps);
+      } finally {
+        resolve();
+      }
+    };
 
-  reader.onerror = () => {
-    toast({ title: "Error reading file", description: "Could not read the file.", variant: "destructive" });
-  };
+    reader.onerror = () => {
+      toast({ title: "Error reading file", description: "Could not read the file.", variant: "destructive" });
+      resolve();
+    };
 
-  reader.onabort = () => {
-    toast({ title: "File read cancelled", description: "The file read was aborted.", variant: "destructive" });
-  };
+    reader.onabort = () => {
+      toast({ title: "File read cancelled", description: "The file read was aborted.", variant: "destructive" });
+      resolve();
+    };
 
-  reader.readAsText(file);
+    reader.readAsText(file);
+  });
 }

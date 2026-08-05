@@ -275,6 +275,35 @@ function parseFlightModal(text: string | undefined, homeNameHint: string): Parse
   return { destName, destCode, homeName, outDepart, outArrive, retDepart, retArrive };
 }
 
+// Reliable fallbacks read straight from the deal URL when the page text didn't
+// yield a value — generic (any supplier), since dates and lodge codes are almost
+// always in the URL even when the rendered text/regex is inconsistent.
+function dateFromUrl(url: string): string {
+  try {
+    const params = new URL(url).searchParams;
+    for (const key of ['start', 'date', 'when', 'traveldate', 'travel_date', 'checkin', 'arrival', 'depart']) {
+      const v = params.get(key) ?? params.get(key.toUpperCase());
+      if (v) {
+        const d = parseDate(v);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+      }
+    }
+  } catch {
+    /* not a URL */
+  }
+  return '';
+}
+function lodgeCodeFromUrl(url: string): string {
+  try {
+    const last = new URL(url).pathname.split('/').filter(Boolean).pop() || '';
+    const m = last.match(/([a-z]{2,3}\d{3,})$/i); // e.g. "…-lp33338" → "lp33338"
+    if (m) return m[1];
+  } catch {
+    /* not a URL */
+  }
+  return '';
+}
+
 function addNights(isoDate: string, nights: number): string {
   if (!isoDate || !nights) return isoDate;
   const d = new Date(`${isoDate}T00:00:00Z`);
@@ -314,7 +343,9 @@ export function runExtractionSpec(
 
   const adults = nbr(f.adults) || 2;
   const nights = nbr(f.no_of_nights);
-  const travelDate = str(f.travel_date);
+  // Prefer the extracted date; fall back to the deal URL (reliable) when the
+  // page text didn't yield one, so travel_date is consistent.
+  const travelDate = str(f.travel_date) || dateFromUrl(ctx.url);
   const pricePerPerson = nbr(f.price_per_person);
   const total = nbr(f.sales_price) || pricePerPerson * adults;
   const departureName = str(f.departure_airport_name);
@@ -449,10 +480,14 @@ export function runExtractionSpec(
   const isLodge =
     !!str(f.lodge_type) || !!str(f.lodge_code) || !!str(f.lodge_park_name) || !!str(f.cottage_id) || truthy(f.hot_tub);
   if (isLodge) {
+    // lodge_code is almost always the trailing code in the deal URL path (e.g.
+    // "…-lp33338"); fall back to it so the code is saved even when the page text
+    // didn't expose it — otherwise the created lodge has no code.
+    const lodgeCode = str(f.lodge_code) || str(f.cottage_id) || lodgeCodeFromUrl(ctx.url);
     result.lodge_type = str(f.lodge_type);
-    result.lodge_code = str(f.lodge_code);
+    result.lodge_code = lodgeCode;
     result.lodge_park_name = str(f.lodge_park_name) || str(f.resort);
-    result.cottage_id = str(f.cottage_id);
+    result.cottage_id = str(f.cottage_id) || lodgeCode;
     result.hot_tub = truthy(f.hot_tub);
     result.pets = nbr(f.pets);
   }
