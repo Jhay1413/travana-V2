@@ -36,6 +36,7 @@ import {
   Mail,
   MapPin,
   CalendarDays,
+  FlaskConical,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ import { ChannelsDialog } from "./channels-dialog";
 import { ClientLinkSection, contactLinkMatch, formatClientDate, composeClientAddress } from "./client-link-section";
 import { GenerateEnquiryButton } from "./generate-enquiry-button";
 import { AiStatusControl } from "./ai-status-control";
+import { TestAiModal } from "./test-ai-modal";
 import {
   DayDivider,
   MessageBubble,
@@ -75,7 +77,7 @@ import {
   useUnsnoozeConversation,
 } from "../api/use-conversations-mutations";
 import { useMessages, useSendMessage, useCreateInternalNote, useUploadAttachment } from "../api/use-messages";
-import { MAX_ATTACHMENT_BYTES } from "../api/messages.api";
+import { MAX_ATTACHMENT_BYTES, messageTypeForContentType } from "../api/messages.api";
 import { useConversationsRealtimeState } from "./conversations-realtime-provider";
 import { useInboxes } from "../api/use-inboxes";
 import type { SsInbox } from "../api/inboxes.api";
@@ -322,12 +324,16 @@ interface PendingAttachment {
   file: File;
   status: "uploading" | "ready" | "error";
   id?: string;
+  // MIME type as validated by SendSeven at upload (magic-byte checked), which
+  // decides the message_type of the send; file.type is only the fallback.
+  contentType?: string;
   error?: string;
 }
 
 export interface ComposerAttachments {
   ids: string[];
   filenames: string[];
+  contentTypes: string[];
 }
 
 function formatBytes(bytes: number): string {
@@ -368,7 +374,9 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
       uploadAttachment.mutate(file, {
         onSuccess: (uploaded) =>
           setAttachments((prev) =>
-            prev.map((a) => (a.key === key ? { ...a, status: "ready", id: uploaded.id } : a)),
+            prev.map((a) =>
+              a.key === key ? { ...a, status: "ready", id: uploaded.id, contentType: uploaded.content_type } : a,
+            ),
           ),
         onError: (err: Error) =>
           setAttachments((prev) =>
@@ -405,7 +413,11 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
       trimmed,
       mode,
       ready.length > 0
-        ? { ids: ready.map((a) => a.id as string), filenames: ready.map((a) => a.file.name) }
+        ? {
+            ids: ready.map((a) => a.id as string),
+            filenames: ready.map((a) => a.file.name),
+            contentTypes: ready.map((a) => a.contentType ?? a.file.type),
+          }
         : undefined,
     );
     setText("");
@@ -632,6 +644,7 @@ export default function ConversationsInbox() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>({});
   const [channelsOpen, setChannelsOpen] = useState(false);
+  const [testAiOpen, setTestAiOpen] = useState(false);
   const [inboxId, setInboxId] = useState<string | null>(null); // null = All Messages
   // Conversation id → ISO timestamp of when the user last opened it. Clears the
   // unread dot locally the instant a conversation is opened, without waiting on
@@ -640,6 +653,8 @@ export default function ConversationsInbox() {
 
   const { orgRole } = useRole();
   const canManageChannels = orgRole === "org_admin" || orgRole === "branch_manager" || orgRole === "platform_admin";
+  // Same roles as the AI test-flow gate (server-enforced too).
+  const canTestAi = orgRole === "org_admin" || orgRole === "platform_admin";
 
   // The SSE connection is owned app-wide by ConversationsRealtimeProvider (it
   // also raises the new-message toast); read its state rather than opening a
@@ -802,9 +817,12 @@ export default function ConversationsInbox() {
       sendMessage.mutate(
         {
           conversation_id: convId,
-          // SendSeven infers the media type from the attachment itself; the
-          // message type stays "text" and carries the optional caption.
-          message_type: "text",
+          // SendSeven media sends must declare the media kind (image/video/
+          // audio/document) as the message_type — "text" carries plain text
+          // only. Derived from the first attachment: SendSeven delivers one
+          // attachment per message downstream, so the first decides. `text`
+          // still rides along as the caption.
+          message_type: hasFiles ? messageTypeForContentType(attachments!.contentTypes[0] ?? "") : "text",
           text: body,
           ...(hasFiles
             ? { attachments: attachments!.ids, attachment_filenames: attachments!.filenames }
@@ -1121,6 +1139,7 @@ export default function ConversationsInbox() {
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <AiStatusControl conversationId={selected.id} />
+                {canTestAi && <HeaderAction icon={FlaskConical} label="Test AI" onClick={() => setTestAiOpen(true)} />}
                 {selected.snoozed ? (
                   <HeaderAction icon={AlarmClockOff} label="Unsnooze" onClick={unsnooze} />
                 ) : (
@@ -1218,6 +1237,9 @@ export default function ConversationsInbox() {
       )}
 
       {canManageChannels && <ChannelsDialog open={channelsOpen} onOpenChange={setChannelsOpen} />}
+      {canTestAi && selected && (
+        <TestAiModal conversationId={selected.id} open={testAiOpen} onOpenChange={setTestAiOpen} />
+      )}
     </section>
   );
 }

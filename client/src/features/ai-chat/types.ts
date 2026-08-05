@@ -21,6 +21,16 @@ export interface CreateSessionResponse {
   sessionId: string;
 }
 
+// POST /api/v2/internal-chat/sessions/fork-from-conversation response `data` —
+// a test_flow session pre-seeded from a real SendSeven conversation.
+export interface ForkSessionResponse {
+  sessionId: string;
+  seededMessages: number;
+  // The LIVE conversation is currently handed off to a human — the sandbox
+  // still replies, but the tester should know the real AI would stay silent.
+  realNeedsHuman: boolean;
+}
+
 // POST /api/v2/internal-chat/sessions/:id/messages either returns the
 // persisted assistant message (200) or, for a `test_flow` session (not wired
 // up yet server-side), a 501 `{ success: false, reply }` — surfaced here as a

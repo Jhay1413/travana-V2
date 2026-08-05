@@ -207,8 +207,7 @@ export async function sendSevenUpload<T>(
   }
 
   const form = new FormData();
-  // Field name is `file` per the upload contract; sending it under any other
-  // name is rejected with a 422.
+ 
   form.append("file", new Blob([file.buffer], { type: file.contentType }), file.filename);
 
   let res: globalThis.Response;

@@ -113,6 +113,17 @@ export interface SsAttachmentUpload {
  *  file fails instantly instead of after uploading 50MB+ to be rejected. */
 export const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 
+/** SendSeven media sends must declare the media kind on the message itself —
+ *  image/video/audio/document per their supported-media-types table; "text" is
+ *  plain text only. Anything that isn't image/video/audio ships as "document",
+ *  SendSeven's generic file bucket. */
+export function messageTypeForContentType(contentType: string): MessageType {
+  if (contentType.startsWith("image/")) return "image";
+  if (contentType.startsWith("video/")) return "video";
+  if (contentType.startsWith("audio/")) return "audio";
+  return "document";
+}
+
 export const messagesApi = {
   list: async (query: ListMessagesQuery): Promise<SsMessageList> => {
     const { data } = await axiosClient.get<SsMessageList>(BASE, {

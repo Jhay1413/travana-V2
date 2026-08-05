@@ -92,7 +92,11 @@ Rules:
 - transfer_type must map to one of: Private Transfer, Shared Transfer, None. Use "map" and a "fallback":"None".
 - Prefer from:"url" with urlSegment for country/destination/resort when the URL path encodes them.
 - Only include a field if you can actually find it on THIS page. Escape backslashes for JSON (\\d, \\s).
-- Regexes run case-insensitively. Keep them specific to the labels visible on the page.
+- Regexes run case-insensitively. Anchor them to the LABELS visible on the page — never to this page's VALUES.
+- GENERALITY (critical): the spec is saved and reused for EVERY future deal on this supplier's site — this page is only ONE example. A rule whose regex is this page's literal value (e.g. board_basis "Half Board", room_type "Standard Double or Twin room", or a place name like "(salou)") extracts NOTHING on the next deal and is WRONG. Every rule must CAPTURE whatever value appears:
+  - board_basis: match the whole canonical vocabulary, e.g. "(All Inclusive Plus|All Inclusive|Half Board Plus|Half Board|Full Board Plus|Full Board|Bed and Breakfast|Self Catering|Room Only)".
+  - room_type: capture the variable room phrase near its label or price line (e.g. "([\\w ]+(?:room|apartment|suite|studio|villa))"), not this page's exact room name.
+  - from "url" with urlSegment: the segment POSITION carries the meaning — capture it generically with "([^/?#]+)" (or omit the regex entirely to take the whole segment). Never pin it to this page's slug.
 - FLIGHT TIMES: package pages often show only the departure airport in the visible text and hide the exact flight times + destination airport behind a popup opened by a control such as "Compare airport, dates & prices" or "Flight details". If you see such a control's text on the page, set "flightModalTrigger" to a regex matching that control's visible label (e.g. "compare airport" ). The scraper will click it and read the times — you do NOT write regexes for the times themselves.
 - A field's "from" may be "images": the rule's regex then runs over the list of the page's image URLs (one per line). Use this only when a value (e.g. a destination airport code) appears solely in image filenames.`;
 

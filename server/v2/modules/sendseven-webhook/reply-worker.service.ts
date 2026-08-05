@@ -188,6 +188,10 @@ export const replyWorker = {
     if (!hasText && !isMediaMessage) return;
 
     const contactId = message.contact_id ?? contact?.id ?? null;
+    // The sender's SendSeven contact/display name — lets the AI address an
+    // UNLINKED contact by name (unverified; the brain ignores it once a CRM
+    // client record is in play, and onboarding still collects full details).
+    const contactName = contact?.name?.trim() || null;
 
     // Inactivity is measured from the LAST time we touched the conversation, taken
     // BEFORE ensure() bumps updatedAt for this message.
@@ -508,7 +512,7 @@ export const replyWorker = {
         // a second, duplicate customer-facing reply. Losing the claim (or no
         // message id to claim on) returns silently, same as the admin path.
         if (!(await claimReply(conversationId, orgId, message.id))) return;
-        const reply = await generateGeneralReply(botConfig, kb, transcript, client);
+        const reply = await generateGeneralReply(botConfig, kb, transcript, client, undefined, contactName);
         try {
           await sendReply(orgId, conversationId, message.channel_id, reply, mode, false);
         } catch (err) {
@@ -577,7 +581,7 @@ export const replyWorker = {
       // ONLY (no email). If both arrive (even in the same message), create + link
       // and FALL THROUGH to process the enquiry in the same turn.
       if (!knownClient) {
-        const onboard = await generateTurn(botConfig, kb, null, transcriptForAi, enquiryStatus, priorSlots, false, retrieved);
+        const onboard = await generateTurn(botConfig, kb, null, transcriptForAi, enquiryStatus, priorSlots, false, retrieved, undefined, contactName);
         console.log(
           `[sendseven-webhook] conv=${conversationId} onboarding (unknown contact) mode=${mode} handoff=${onboard.hand_off} ` +
             `adminIntent=${sawAdminIntent} hasName=${!!onboard.client?.fullName} hasPhone=${!!onboard.client?.phone} ` +
@@ -906,7 +910,7 @@ export const replyWorker = {
       // NeonClient's name (a personalization nicety, not used for
       // extraction/correctness) — an acceptable trade-off to avoid the
       // redundant LLM call and the slot-discarding bug it caused.
-      const turn = firstTurn ?? (await generateTurn(botConfig, kb, clientRecord, transcriptForAi, enquiryStatus, priorSlots, true, retrieved));
+      const turn = firstTurn ?? (await generateTurn(botConfig, kb, clientRecord, transcriptForAi, enquiryStatus, priorSlots, true, retrieved, undefined, contactName));
       console.log(
         `[sendseven-webhook] conv=${conversationId} known=${knownClient} mode=${mode} intent=${turn.intent} ` +
           `handoff=${turn.hand_off} status=${enquiryStatus}`,

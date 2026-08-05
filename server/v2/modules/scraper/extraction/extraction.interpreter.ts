@@ -304,6 +304,76 @@ function lodgeCodeFromUrl(url: string): string {
   return '';
 }
 
+// ── Supplier-agnostic fallbacks for overfitted specs ─────────────────────────
+// Spec field rules are AI-generated from ONE example deal, and a bad generation
+// can pin a rule to that example's literal value (a board_basis regex that just
+// says "Half Board" matches nothing on a Self Catering deal). These fallbacks
+// only run when the spec produced nothing, so a good spec always wins.
+
+// The board-basis vocabulary is industry-standard — scan the page text for it
+// directly. The EARLIEST match in the text wins (the deal summary renders
+// before footer/filter links); on a tie the longer phrase wins so
+// "All Inclusive Plus" isn't reported as "All Inclusive".
+const BOARD_BASIS_VOCAB = [
+  'All Inclusive Plus', 'All Inclusive', 'Half Board Plus', 'Half Board',
+  'Full Board Plus', 'Full Board', 'Bed and Breakfast', 'Bed & Breakfast',
+  'Self Catering', 'Self-Catering', 'Room Only',
+] as const;
+const BOARD_BASIS_CANONICAL: Record<string, string> = {
+  'Bed & Breakfast': 'Bed and Breakfast',
+  'Self-Catering': 'Self Catering',
+};
+function boardBasisFromText(pageText: string): string {
+  let best: { index: number; term: string } | null = null;
+  for (const term of BOARD_BASIS_VOCAB) {
+    const index = pageText.toLowerCase().indexOf(term.toLowerCase());
+    if (index === -1) continue;
+    if (!best || index < best.index || (index === best.index && term.length > best.term.length)) {
+      best = { index, term };
+    }
+  }
+  return best ? (BOARD_BASIS_CANONICAL[best.term] ?? best.term) : '';
+}
+
+// Party size from the deal URL. Jet2-style room tokens ("r2c9r2c10" = a room of
+// 2 adults + a child aged 9, a room of 2 adults + a child aged 10): adults are
+// summed across rooms and each c-token is ONE child (its number is the AGE, not
+// a count). Plain adults/children params are the generic fallback.
+function occupancyFromUrl(url: string): { adults: number; children: number } | null {
+  try {
+    const params = new URL(url).searchParams;
+    const occ = params.get('occupancy');
+    if (occ && /^(?:r\d+(?:c\d+)*)+$/i.test(occ)) {
+      let adults = 0;
+      let children = 0;
+      for (const m of occ.matchAll(/r(\d+)/gi)) adults += Number(m[1]);
+      for (const _m of occ.matchAll(/c\d+/gi)) children += 1;
+      if (adults > 0) return { adults, children };
+    }
+    const adults = Number(params.get('adults') ?? params.get('ad'));
+    if (Number.isFinite(adults) && adults > 0) {
+      const children = Number(params.get('children') ?? params.get('ch')) || 0;
+      return { adults, children };
+    }
+  } catch {
+    /* not a URL */
+  }
+  return null;
+}
+
+function nightsFromUrl(url: string): number {
+  try {
+    const params = new URL(url).searchParams;
+    for (const key of ['duration', 'nights', 'los', 'no_of_nights']) {
+      const v = Number(params.get(key));
+      if (Number.isFinite(v) && v > 0 && v < 100) return v;
+    }
+  } catch {
+    /* not a URL */
+  }
+  return 0;
+}
+
 function addNights(isoDate: string, nights: number): string {
   if (!isoDate || !nights) return isoDate;
   const d = new Date(`${isoDate}T00:00:00Z`);
@@ -341,8 +411,11 @@ export function runExtractionSpec(
     f[key] = resolveField(rule, c);
   }
 
-  const adults = nbr(f.adults) || 2;
-  const nights = nbr(f.no_of_nights);
+  // Party size / duration: the URL is authoritative when the spec's text rules
+  // missed (the deal URL almost always carries occupancy + duration params).
+  const occupancy = occupancyFromUrl(ctx.url);
+  const adults = nbr(f.adults) || occupancy?.adults || 2;
+  const nights = nbr(f.no_of_nights) || nightsFromUrl(ctx.url);
   // Prefer the extracted date; fall back to the deal URL (reliable) when the
   // page text didn't yield one, so travel_date is consistent.
   const travelDate = str(f.travel_date) || dateFromUrl(ctx.url);
@@ -414,7 +487,7 @@ export function runExtractionSpec(
     travel_date: travelDate,
     no_of_nights: nights,
     adults,
-    children: nbr(f.children),
+    children: nbr(f.children) || occupancy?.children || 0,
     infants: nbr(f.infants),
     sales_price: total,
     price_per_person: pricePerPerson,
@@ -427,7 +500,7 @@ export function runExtractionSpec(
     destination: str(f.destination),
     resort: str(f.resort),
     accommodation: str(f.accommodation),
-    board_basis: str(f.board_basis),
+    board_basis: str(f.board_basis) || boardBasisFromText(text),
     room_type: str(f.room_type),
     check_in_date_time: travelDate,
     transfer_type: transferType,
