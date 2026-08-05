@@ -194,9 +194,19 @@ export const jsonMapperService = {
           } else if (a.resort) { warnings.push('Cannot create resort without destination'); }
 
           if (rId) {
-            const na = await jsonMapperRepository.createAccommodation(accName, rId);
-            aId = na.id;
-            warnings.push(`Created new accommodation: "${accName}"`);
+            // The global lookup above only accepts an EXACT name match. Now
+            // that the JSON's own resort is resolved, retry within it — that
+            // safely catches near-name catalog rows there (e.g. "Cala Nova
+            // Apartments" for "Cala Nova") without adopting a look-alike hotel
+            // from another resort, before falling back to creating the row.
+            const inResort = await jsonMapperRepository.findAccommodationByName(accName, rId);
+            if (inResort) {
+              aId = inResort.id;
+            } else {
+              const na = await jsonMapperRepository.createAccommodation(accName, rId);
+              aId = na.id;
+              warnings.push(`Created new accommodation: "${accName}"`);
+            }
           } else { warnings.push('Cannot create accommodation without resort'); }
 
           return { accommodationId: aId, countryId: cId, destinationId: dId, resortId: rId };

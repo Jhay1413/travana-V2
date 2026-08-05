@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -67,7 +68,7 @@ import {
 import { useContactLink } from "../api/use-contact-link";
 import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
-import { useConversations, useConversationBadgeCounts, unreadBadgeCount } from "../api/use-conversations-queries";
+import { conversationsKeys, useConversations, useConversationBadgeCounts, unreadBadgeCount } from "../api/use-conversations-queries";
 import {
   useMarkConversationRead,
   useSnoozeConversation,
@@ -664,6 +665,7 @@ export default function ConversationsInbox() {
   const { data: badges } = useConversationBadgeCounts();
   // Same rule as the sidebar nav badge — see unreadBadgeCount.
   const unreadCount = unreadBadgeCount(badges);
+  const qc = useQueryClient();
   const snoozeMutation = useSnoozeConversation();
   const unsnoozeMutation = useUnsnoozeConversation();
   const markReadMutation = useMarkConversationRead();
@@ -822,24 +824,71 @@ export default function ConversationsInbox() {
     { label: "Next week", hours: 24 * 7 },
   ];
 
+  // Drop the optimistic snoozed override so server data rules again. Leaving it
+  // in place would keep overriding every future refetch — e.g. hiding from Open
+  // a conversation the provider already reopened because the client replied
+  // (reopen_on_message), until a full page reload wiped the state.
+  const clearSnoozeOverride = (convId: string) =>
+    setOverlay((prev) => {
+      const cur = prev[convId];
+      if (!cur || cur.snoozed === undefined) return prev;
+      return { ...prev, [convId]: { extraMessages: cur.extraMessages } };
+    });
+
+  // Await the refetch before clearing so the row doesn't flash back into the
+  // old tab in the gap between mutation success and fresh list data. On error,
+  // clear immediately — that reverts the optimistic move.
+  const settleSnoozeOverride = (convId: string) => ({
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: conversationsKeys.all });
+      clearSnoozeOverride(convId);
+    },
+    onError: () => clearSnoozeOverride(convId),
+  });
+
   const snoozeFor = (hours: number) => {
     if (!selected) return;
+    const convId = selected.id;
     const until = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
     // Optimistically mark it snoozed so it leaves the Open list immediately.
     setOverlay((prev) => {
-      const cur = prev[selected.id] ?? { extraMessages: [] };
-      return { ...prev, [selected.id]: { ...cur, snoozed: true } };
+      const cur = prev[convId] ?? { extraMessages: [] };
+      return { ...prev, [convId]: { ...cur, snoozed: true } };
     });
-    snoozeMutation.mutate({ id: selected.id, body: { snoozed_until: until, reopen_on_message: true } });
+    snoozeMutation.mutate(
+      { id: convId, body: { snoozed_until: until, reopen_on_message: true } },
+      settleSnoozeOverride(convId),
+    );
   };
 
   const unsnooze = () => {
     if (!selected) return;
+    const convId = selected.id;
     setOverlay((prev) => {
-      const cur = prev[selected.id] ?? { extraMessages: [] };
-      return { ...prev, [selected.id]: { ...cur, snoozed: false } };
+      const cur = prev[convId] ?? { extraMessages: [] };
+      return { ...prev, [convId]: { ...cur, snoozed: false } };
     });
-    unsnoozeMutation.mutate(selected.id);
+    unsnoozeMutation.mutate(convId, settleSnoozeOverride(convId));
+  };
+
+  // "Close conversation" — SendSeven's close endpoint isn't in our list scope,
+  // so closing is modelled as a year-long snooze (the API caps snoozed_until
+  // only to "must be in the future", and reopen_on_message still pulls the
+  // thread back to Open if the client ever writes again). An internal note
+  // stamps when it was closed so the thread carries an audit trail.
+  const closeConversation = () => {
+    if (!selected) return;
+    const closedAt = new Date().toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    // Note first, while the conversation is still the selection — snoozeFor
+    // optimistically drops it out of the Open list, which moves the selection.
+    handleSend(`Close conversation from: ${closedAt}`, "note");
+    snoozeFor(24 * 365);
   };
 
   // Group the thread's messages by day for the date dividers.
@@ -1096,6 +1145,14 @@ export default function ConversationsInbox() {
                           {preset.label}
                         </DropdownMenuItem>
                       ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={closeConversation}
+                        data-testid="conversation-snooze-close"
+                      >
+                        <XIcon className="mr-1.5 h-3.5 w-3.5" />
+                        Close conversation
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}

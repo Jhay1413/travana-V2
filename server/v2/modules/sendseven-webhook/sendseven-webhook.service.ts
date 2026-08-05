@@ -272,7 +272,7 @@ export const sendsevenWebhookService = {
         if (aiEnabled) {
           console.log(`[sendseven-webhook] human reply detected on conv ${conversationId} → handing off to human`);
           await conversationStateRepository.ensure(conversationId, orgId, m.contact_id ?? null);
-          await conversationStateRepository.setNeedsHuman(conversationId);
+          await conversationStateRepository.setNeedsHuman(conversationId, undefined, "human_reply");
           publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
         }
       }
@@ -285,7 +285,7 @@ export const sendsevenWebhookService = {
       const assigned = conv?.assigned_user ?? conv?.assigned_user_id;
       if (aiEnabled && assigned && conv?.id) {
         await conversationStateRepository.ensure(conv.id, orgId, null);
-        await conversationStateRepository.setNeedsHuman(conv.id);
+        await conversationStateRepository.setNeedsHuman(conv.id, undefined, "human_reply");
         publishRealtime(orgId, { type: "ai-state.changed", conversationId: conv.id, needsHuman: true });
       }
       if (conv?.id) publishRealtime(orgId, { type: "conversation.updated", conversationId: conv.id });
@@ -332,7 +332,7 @@ export const sendsevenWebhookService = {
   // so in-flight state is cleared exactly like the old pause.
   async disableAi(orgId: string, conversationId: string): Promise<ConversationAiState> {
     await conversationStateRepository.ensure(conversationId, orgId, null);
-    await conversationStateRepository.setNeedsHuman(conversationId, orgId);
+    await conversationStateRepository.setNeedsHuman(conversationId, orgId, "manual_disable");
     await conversationStateRepository.setAiOverride(conversationId, orgId, "disabled");
     publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
     return this.getAiState(orgId, conversationId);
@@ -346,7 +346,7 @@ export const sendsevenWebhookService = {
   // sending the actual message.
   async pauseAiForStaffReply(orgId: string, conversationId: string): Promise<void> {
     await conversationStateRepository.ensure(conversationId, orgId, null);
-    await conversationStateRepository.setNeedsHuman(conversationId, orgId);
+    await conversationStateRepository.setNeedsHuman(conversationId, orgId, "human_reply");
     publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
   },
 };

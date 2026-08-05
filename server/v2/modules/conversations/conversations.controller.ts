@@ -65,7 +65,8 @@ export const conversationsController = {
 
   // POST /api/v1/conversations/bulk-close
   bulkClose: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await conversationsService.bulkClose(req.body), "Conversations closed");
+    const { orgId } = getScope(req);
+    return successResponse(res, await conversationsService.bulkClose(orgId, req.body), "Conversations closed");
   }),
 
   // POST /api/v1/conversations/initiate
@@ -90,47 +91,54 @@ export const conversationsController = {
 
   // PATCH /api/v1/conversations/:conversation_id
   update: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await conversationsService.update(requireParam(req, "conversation_id"), req.body ?? {}), "Conversation updated");
+    const { orgId } = getScope(req);
+    return successResponse(res, await conversationsService.update(orgId, requireParam(req, "conversation_id"), req.body ?? {}), "Conversation updated");
   }),
 
   // POST /api/v1/conversations/:conversation_id/assign/:user_id
   assign: asyncHandler(async (req: Request, res: Response) => {
+    const { orgId } = getScope(req);
     return successResponse(
       res,
-      await conversationsService.assign(requireParam(req, "conversation_id"), requireParam(req, "user_id")),
+      await conversationsService.assign(orgId, requireParam(req, "conversation_id"), requireParam(req, "user_id")),
       "Conversation assigned",
     );
   }),
 
   // POST /api/v1/conversations/:conversation_id/close
   close: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await conversationsService.close(requireParam(req, "conversation_id"), req.body ?? {}), "Conversation closed");
+    const { orgId } = getScope(req);
+    return successResponse(res, await conversationsService.close(orgId, requireParam(req, "conversation_id"), req.body ?? {}), "Conversation closed");
   }),
 
   // POST /api/v1/conversations/:conversation_id/reopen
   reopen: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await conversationsService.reopen(requireParam(req, "conversation_id")), "Conversation reopened");
+    const { orgId } = getScope(req);
+    return successResponse(res, await conversationsService.reopen(orgId, requireParam(req, "conversation_id")), "Conversation reopened");
   }),
 
   // POST /api/v1/conversations/:conversation_id/snooze
   snooze: asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as { snoozed_until?: string; reopen_on_message?: boolean };
     if (!body?.snoozed_until) throw new AppError("snoozed_until is required", 400);
+    const { orgId } = getScope(req);
     return successResponse(
       res,
-      await conversationsService.snooze(requireParam(req, "conversation_id"), { snoozed_until: body.snoozed_until, reopen_on_message: body.reopen_on_message }),
+      await conversationsService.snooze(orgId, requireParam(req, "conversation_id"), { snoozed_until: body.snoozed_until, reopen_on_message: body.reopen_on_message }),
       "Conversation snoozed",
     );
   }),
 
   // DELETE /api/v1/conversations/:conversation_id/snooze
   unsnooze: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await conversationsService.unsnooze(requireParam(req, "conversation_id")), "Snooze cleared");
+    const { orgId } = getScope(req);
+    return successResponse(res, await conversationsService.unsnooze(orgId, requireParam(req, "conversation_id")), "Snooze cleared");
   }),
 
   // POST /api/v1/conversations/:conversation_id/merge
   merge: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await conversationsService.merge(requireParam(req, "conversation_id"), req.body), "Conversations merged");
+    const { orgId } = getScope(req);
+    return successResponse(res, await conversationsService.merge(orgId, requireParam(req, "conversation_id"), req.body), "Conversations merged");
   }),
 
   // POST /api/v1/conversations/:conversation_id/summarize

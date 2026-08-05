@@ -1,35 +1,69 @@
 import { db } from '../../config/database';
 import { country, destination, resorts, accomodation_list, board_basis, tour_operator, airport, room_type, lodges, park } from '@shared/schema';
-import { ilike, and, eq } from 'drizzle-orm';
+import { ilike, and, eq, type SQL } from 'drizzle-orm';
+
+// ILIKE treats %, _ and \ as pattern syntax; escape them so a name like
+// "100% Beach Resort" is matched literally.
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+// Exact (case-insensitive) match first, contains-match only as a fallback.
+// A plain `%name%` lookup let any catalog row CONTAINING the search string win
+// — "Cala Nova" resolved to "Fiesta Cala Nova Hotel", a different hotel.
+// ILIKE without wildcards is case-insensitive equality.
+async function exactThenContains<T>(run: (pattern: string) => Promise<T[]>, name: string): Promise<T | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const [exact] = await run(escapeLike(trimmed));
+  if (exact) return exact;
+  const [contains] = await run(`%${escapeLike(trimmed)}%`);
+  return contains ?? null;
+}
 
 export const jsonMapperRepository = {
   async findCountryByName(name: string) {
     if (!name) return null;
-    const [row] = await db.select().from(country).where(ilike(country.country_name, `%${name}%`)).limit(1);
-    return row || null;
+    return exactThenContains((p) => db.select().from(country).where(ilike(country.country_name, p)).limit(1), name);
   },
 
   async findDestinationByName(name: string, countryId?: string) {
     if (!name) return null;
-    const conditions: any[] = [ilike(destination.name, `%${name}%`)];
-    if (countryId) conditions.push(eq(destination.country_id, countryId));
-    const [row] = await db.select().from(destination).where(and(...conditions)).limit(1);
-    return row || null;
+    return exactThenContains((p) => {
+      const conditions: SQL[] = [ilike(destination.name, p)];
+      if (countryId) conditions.push(eq(destination.country_id, countryId));
+      return db.select().from(destination).where(and(...conditions)).limit(1);
+    }, name);
   },
 
   async findResortByName(name: string, destinationId?: string) {
     if (!name) return null;
-    const conditions: any[] = [ilike(resorts.name, `%${name}%`)];
-    if (destinationId) conditions.push(eq(resorts.destination_id, destinationId));
-    const [row] = await db.select().from(resorts).where(and(...conditions)).limit(1);
-    return row || null;
+    return exactThenContains((p) => {
+      const conditions: SQL[] = [ilike(resorts.name, p)];
+      if (destinationId) conditions.push(eq(resorts.destination_id, destinationId));
+      return db.select().from(resorts).where(and(...conditions)).limit(1);
+    }, name);
   },
 
   async findAccommodationByName(name: string, resortId?: string) {
     if (!name) return null;
-    const conditions: any[] = [ilike(accomodation_list.name, `%${name}%`)];
-    if (resortId) conditions.push(eq(accomodation_list.resorts_id, resortId));
-    const [row] = await db.select().from(accomodation_list).where(and(...conditions)).limit(1);
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const exactConditions: SQL[] = [ilike(accomodation_list.name, escapeLike(trimmed))];
+    if (resortId) exactConditions.push(eq(accomodation_list.resorts_id, resortId));
+    const [exact] = await db.select().from(accomodation_list).where(and(...exactConditions)).limit(1);
+    if (exact) return exact;
+    // Contains-fallback ONLY inside a known resort: "Cala Nova" may reasonably
+    // find "Cala Nova Apartments" in the same resort, but a global contains
+    // match can adopt a look-alike hotel anywhere in the world — and the
+    // import then inherits that hotel's entire resort/destination/country
+    // chain (see getHierarchyFromAccommodation).
+    if (!resortId) return null;
+    const [row] = await db
+      .select()
+      .from(accomodation_list)
+      .where(and(ilike(accomodation_list.name, `%${escapeLike(trimmed)}%`), eq(accomodation_list.resorts_id, resortId)))
+      .limit(1);
     return row || null;
   },
 
@@ -47,14 +81,12 @@ export const jsonMapperRepository = {
 
   async findBoardBasisByType(typeName: string) {
     if (!typeName) return null;
-    const [row] = await db.select().from(board_basis).where(ilike(board_basis.type, `%${typeName}%`)).limit(1);
-    return row || null;
+    return exactThenContains((p) => db.select().from(board_basis).where(ilike(board_basis.type, p)).limit(1), typeName);
   },
 
   async findTourOperatorByName(name: string) {
     if (!name) return null;
-    const [row] = await db.select().from(tour_operator).where(ilike(tour_operator.name, `%${name}%`)).limit(1);
-    return row || null;
+    return exactThenContains((p) => db.select().from(tour_operator).where(ilike(tour_operator.name, p)).limit(1), name);
   },
 
   async findAirportByCodeOrName(codeOrName: string) {
@@ -62,32 +94,28 @@ export const jsonMapperRepository = {
     const normalized = codeOrName.toUpperCase().trim();
     const [codeRow] = await db.select().from(airport).where(eq(airport.airport_code, normalized)).limit(1);
     if (codeRow) return codeRow;
-    const [nameRow] = await db.select().from(airport).where(ilike(airport.airport_name, `%${codeOrName}%`)).limit(1);
-    return nameRow || null;
+    return exactThenContains((p) => db.select().from(airport).where(ilike(airport.airport_name, p)).limit(1), codeOrName);
   },
 
   async findRoomTypeByName(name: string) {
     if (!name) return null;
-    const [row] = await db.select().from(room_type).where(ilike(room_type.name, `%${name}%`)).limit(1);
-    return row || null;
+    return exactThenContains((p) => db.select().from(room_type).where(ilike(room_type.name, p)).limit(1), name);
   },
 
   async findLodgeByCode(code: string) {
     if (!code) return null;
-    const [row] = await db.select().from(lodges).where(ilike(lodges.lodge_code, code.trim())).limit(1);
+    const [row] = await db.select().from(lodges).where(ilike(lodges.lodge_code, escapeLike(code.trim()))).limit(1);
     return row || null;
   },
 
   async findLodgeByName(name: string) {
     if (!name) return null;
-    const [row] = await db.select().from(lodges).where(ilike(lodges.lodge_name, `%${name.trim()}%`)).limit(1);
-    return row || null;
+    return exactThenContains((p) => db.select().from(lodges).where(ilike(lodges.lodge_name, p)).limit(1), name);
   },
 
   async findParkByName(name: string) {
     if (!name) return null;
-    const [row] = await db.select().from(park).where(ilike(park.name, `%${name.trim()}%`)).limit(1);
-    return row || null;
+    return exactThenContains((p) => db.select().from(park).where(ilike(park.name, p)).limit(1), name);
   },
 
   async findParkByCode(code: string) {

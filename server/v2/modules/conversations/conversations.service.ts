@@ -1,6 +1,22 @@
 import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
+import { realtimeService } from "../../realtime/realtime.service";
 import { conversationsRepository } from "./conversations.repository";
 import type { ListConversationsParams } from "./conversations.types";
+
+// Fans a state change out to every agent in the org over SSE so their inbox
+// lists move in realtime (snooze/close/assign/etc. done by one agent update the
+// others' screens). Best-effort: a publish failure must never fail the write
+// the user is waiting on. SendSeven's conversation.updated webhook echo also
+// covers some of these, but not reliably for API-driven changes — this is the
+// synchronous path, the webhook stays the backstop.
+function publishUpdated(orgId: string, conversationId: string): void {
+  if (!orgId || !conversationId) return;
+  try {
+    realtimeService.publish(orgId, { type: "conversation.updated", conversationId });
+  } catch (err) {
+    console.warn(`[conversations] realtime publish failed for conv ${conversationId}:`, err);
+  }
+}
 
 // Service layer. SendSeven is the source of truth for conversation state, so
 // this is thin orchestration over the repository. Client-side code owns the
@@ -25,14 +41,41 @@ export const conversationsService = {
   transcriptStatus: (id: string, jobId: string) => conversationsRepository.transcriptStatus(id, jobId),
 
   create: (body: unknown) => conversationsRepository.create(body),
-  update: (id: string, body: Record<string, unknown>) => conversationsRepository.update(id, body),
-  assign: (id: string, userId: string) => conversationsRepository.assign(id, userId),
-  close: (id: string, body: unknown) => conversationsRepository.close(id, body),
-  reopen: (id: string) => conversationsRepository.reopen(id),
-  snooze: (id: string, body: { snoozed_until: string; reopen_on_message?: boolean }) =>
-    conversationsRepository.snooze(id, body),
-  unsnooze: (id: string) => conversationsRepository.unsnooze(id),
-  merge: (id: string, body: unknown) => conversationsRepository.merge(id, body),
+  async update(orgId: string, id: string, body: Record<string, unknown>) {
+    const result = await conversationsRepository.update(id, body);
+    publishUpdated(orgId, id);
+    return result;
+  },
+  async assign(orgId: string, id: string, userId: string) {
+    const result = await conversationsRepository.assign(id, userId);
+    publishUpdated(orgId, id);
+    return result;
+  },
+  async close(orgId: string, id: string, body: unknown) {
+    const result = await conversationsRepository.close(id, body);
+    publishUpdated(orgId, id);
+    return result;
+  },
+  async reopen(orgId: string, id: string) {
+    const result = await conversationsRepository.reopen(id);
+    publishUpdated(orgId, id);
+    return result;
+  },
+  async snooze(orgId: string, id: string, body: { snoozed_until: string; reopen_on_message?: boolean }) {
+    const result = await conversationsRepository.snooze(id, body);
+    publishUpdated(orgId, id);
+    return result;
+  },
+  async unsnooze(orgId: string, id: string) {
+    const result = await conversationsRepository.unsnooze(id);
+    publishUpdated(orgId, id);
+    return result;
+  },
+  async merge(orgId: string, id: string, body: unknown) {
+    const result = await conversationsRepository.merge(id, body);
+    publishUpdated(orgId, id);
+    return result;
+  },
   summarize: (id: string) => conversationsRepository.summarize(id),
   transcriptExport: (id: string, body: unknown) => conversationsRepository.transcriptExport(id, body),
   switchChannel: (id: string, body: unknown) => conversationsRepository.switchChannel(id, body),
@@ -43,7 +86,14 @@ export const conversationsService = {
   enableAi: (orgId: string, id: string) => sendsevenWebhookService.enableAi(orgId, id),
   disableAi: (orgId: string, id: string) => sendsevenWebhookService.disableAi(orgId, id),
 
-  bulkClose: (body: unknown) => conversationsRepository.bulkClose(body),
+  async bulkClose(orgId: string, body: unknown) {
+    const result = await conversationsRepository.bulkClose(body);
+    const ids = (body as { conversation_ids?: unknown })?.conversation_ids;
+    if (Array.isArray(ids)) {
+      for (const id of ids) if (typeof id === "string") publishUpdated(orgId, id);
+    }
+    return result;
+  },
   searchSimilar: (body: unknown) => conversationsRepository.searchSimilar(body),
   initiate: (body: unknown) => conversationsRepository.initiate(body),
   checkExisting: (body: unknown) => conversationsRepository.checkExisting(body),

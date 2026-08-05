@@ -29,6 +29,15 @@ export interface SsWebhookEndpointCreated {
   message?: string;
 }
 
+// Why a conversation was handed off to a human (needsHuman=true) — persisted in
+// the conversation state's `context` jsonb and read by the reply worker's
+// resume gate. Human-owned reasons ("human_reply", "manual_disable") make the
+// hand-off STICKY: the AI stays silent until an agent re-enables it from the
+// inbox. AI-caused reasons ("ai_wound_down", "enquiry_scheduled") allow the
+// idle auto-resume. Rows written before this existed have no reason and are
+// treated as "human_reply" (fail safe: stay silent).
+export type HandoffReason = "human_reply" | "manual_disable" | "ai_wound_down" | "enquiry_scheduled";
+
 // Per-conversation AI enable/disable/status surface (conversations module's
 // ai-state endpoints). `aiActive` is the inverse of `needsHuman` — exposed
 // this way so callers don't have to reason about the double-negative.

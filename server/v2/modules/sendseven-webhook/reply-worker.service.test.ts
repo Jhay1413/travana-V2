@@ -431,6 +431,71 @@ describe("handleInbound — pre-onboarding attachment deferral", () => {
   });
 });
 
+// ── Hand-off resume gate (handoffReason) ────────────────────────────────────
+// Human-owned hand-offs are STICKY: the AI never auto-resumes a conversation a
+// real agent replied in (or manually disabled), no matter how long it idles —
+// only an inbox re-enable brings it back. AI-caused hand-offs (wound down /
+// enquiry completed) auto-resume after RESUME_AFTER_MS (7 days) of inactivity,
+// with a clean slate.
+describe("handleInbound — hand-off resume gate", () => {
+  const DAYS = 24 * 60 * 60 * 1000;
+
+  it("stays silent forever on a human-reply hand-off, even after weeks of idle", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({ needsHuman: true, context: { handoffReason: "human_reply" } as never, updatedAt: new Date(Date.now() - 30 * DAYS) }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.send).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+    // No clean-slate resume write either — the hand-off state is untouched.
+    expect(conversationStateRepository.update).not.toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ needsHuman: false }),
+    );
+  });
+
+  it("treats a hand-off with no recorded reason (pre-existing rows) as human-owned — stays silent", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({ needsHuman: true, context: null, updatedAt: new Date(Date.now() - 30 * DAYS) }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("stays silent on an AI-caused hand-off that is still inside the resume window", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({ needsHuman: true, context: { handoffReason: "ai_wound_down" } as never, updatedAt: new Date(Date.now() - 2 * DAYS) }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("resumes with a clean slate on an AI-caused hand-off after the resume window", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({ needsHuman: true, context: { handoffReason: "enquiry_scheduled" } as never, updatedAt: new Date(Date.now() - 8 * DAYS) }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    // Clean-slate reset persisted before processing…
+    expect(conversationStateRepository.update).toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ needsHuman: false, enquiryStatus: null, enquirySlots: {}, enquiryId: null, context: null }),
+    );
+    // …and the turn then processed normally (general route, draft mode → note).
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ── AI opt-in gate (default OFF) ────────────────────────────────────────────
 // The bot only replies where an agent opted in: a per-conversation override
 // or a linked client with aiReplyEnabled. Everything else stays silent.
