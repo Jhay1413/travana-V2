@@ -5,19 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateSupplierScraper, useUpdateSupplierScraper } from "../api/use-supplier-scrapers";
 import type { SupplierScraper } from "../types";
-
-// Preset suppliers with a known code adapter. Selecting one seeds supplierKey /
-// name / adapterType; the server fills default config for the key on create.
-const KNOWN_SUPPLIERS = [{ key: "easyjet", name: "easyJet holidays", adapterType: "easyjet" }];
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editing: SupplierScraper | null;
+}
+
+// Stable key suggestion from a free-text name: lowercase alphanumerics only.
+function slugify(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
@@ -26,9 +26,14 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
   const updateMutation = useUpdateSupplierScraper();
   const isEdit = !!editing;
 
-  const [supplierKey, setSupplierKey] = useState("easyjet");
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierKey, setSupplierKey] = useState("");
+  const [keyTouched, setKeyTouched] = useState(false);
+  const [requiresLogin, setRequiresLogin] = useState(false);
+  const [loginUrl, setLoginUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [abtaNumber, setAbtaNumber] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [configText, setConfigText] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -37,9 +42,19 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
   // Reset the form whenever the dialog opens for a new target.
   useEffect(() => {
     if (!open) return;
-    setSupplierKey(editing?.supplierKey ?? "easyjet");
+    const auth = (editing?.config as { auth?: Record<string, unknown> } | undefined)?.auth;
+    const authType = auth?.type as string | undefined;
+    setSupplierName(editing?.supplierName ?? "");
+    setSupplierKey(editing?.supplierKey ?? "");
+    setKeyTouched(false);
+    // On edit, infer the toggle from the stored auth type (or from having creds).
+    setRequiresLogin(
+      editing ? (authType ? authType !== "none" : editing.credentials.hasPassword) : false,
+    );
+    setLoginUrl((auth?.loginUrl as string) ?? "");
     setUsername("");
     setPassword("");
+    setAbtaNumber("");
     setIsActive(editing?.isActive ?? true);
     setConfigText(editing ? JSON.stringify(editing.config ?? {}, null, 2) : "");
     setShowAdvanced(false);
@@ -48,12 +63,24 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
 
   const saving = createMutation.isPending || updateMutation.isPending;
 
+  const handleNameChange = (value: string) => {
+    setSupplierName(value);
+    // Auto-suggest the key from the name until the user edits the key directly.
+    if (!isEdit && !keyTouched) setSupplierKey(slugify(value));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setConfigError(null);
 
-    // Parse the advanced config JSON if the user edited it.
-    let config: Record<string, unknown> | undefined;
+    if (!isEdit && (!supplierName.trim() || !supplierKey.trim())) {
+      toast({ title: "Name and key are required", variant: "destructive" });
+      return;
+    }
+
+    // Start from the advanced JSON (if edited), then overlay the login settings
+    // the toggle drives so the two never fight.
+    let config: Record<string, unknown> = {};
     if (showAdvanced && configText.trim()) {
       try {
         config = JSON.parse(configText);
@@ -63,11 +90,31 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
       }
     }
 
-    // Send only credential fields the user actually entered — blank means
-    // "leave unchanged" on edit.
-    const credentials: { username?: string; password?: string } = {};
-    if (username.trim()) credentials.username = username.trim();
-    if (password) credentials.password = password;
+    const auth: Record<string, unknown> = { ...((config.auth as Record<string, unknown>) ?? {}) };
+    if (requiresLogin) {
+      // Keep an existing form type (keycloak-form) if set; else basic-form.
+      auth.type = auth.type && auth.type !== "none" ? auth.type : "basic-form";
+      if (loginUrl.trim()) {
+        auth.loginUrl = loginUrl.trim();
+        // A login URL means "log in there first, then open the deal" — the fix
+        // for portals whose deal link lands on a home/search page, not login.
+        // The scraper learns the form's fields from that page automatically.
+        auth.loginFirst = true;
+      }
+    } else {
+      // No login: mark it explicitly so the scraper reads the page directly and
+      // never asks for credentials.
+      auth.type = "none";
+    }
+    config.auth = auth;
+
+    // Credentials only matter when login is required; blank = "leave unchanged".
+    const credentials: { username?: string; password?: string; abtaNumber?: string } = {};
+    if (requiresLogin) {
+      if (username.trim()) credentials.username = username.trim();
+      if (password) credentials.password = password;
+      if (abtaNumber.trim()) credentials.abtaNumber = abtaNumber.trim();
+    }
 
     const onSuccess = () => {
       toast({ title: isEdit ? "Scraper updated" : "Scraper added" });
@@ -83,16 +130,14 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
 
     if (isEdit && editing) {
       updateMutation.mutate(
-        { id: editing.id, input: { isActive, config, credentials } },
+        { id: editing.id, input: { supplierName: supplierName.trim() || undefined, isActive, config, credentials } },
         { onSuccess, onError },
       );
     } else {
-      const preset = KNOWN_SUPPLIERS.find((s) => s.key === supplierKey);
       createMutation.mutate(
         {
-          supplierKey,
-          supplierName: preset?.name,
-          adapterType: preset?.adapterType,
+          supplierKey: supplierKey.trim(),
+          supplierName: supplierName.trim(),
           isActive,
           config,
           credentials,
@@ -109,44 +154,91 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
           <DialogTitle>{isEdit ? `Edit ${editing?.supplierName}` : "Add supplier scraper"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          {!isEdit && (
-            <div className="space-y-1.5">
-              <Label>Supplier</Label>
-              <Select value={supplierKey} onValueChange={setSupplierKey}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a supplier" />
-                </SelectTrigger>
-                <SelectContent>
-                  {KNOWN_SUPPLIERS.map((s) => (
-                    <SelectItem key={s.key} value={s.key}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
           <div className="space-y-1.5">
-            <Label>Username / email</Label>
+            <Label>Supplier name</Label>
             <Input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder={editing?.credentials.hasUsername ? "•••••• (unchanged)" : "trade portal login"}
+              value={supplierName}
+              onChange={(e) => handleNameChange(e.target.value)}
+              placeholder="e.g. Jet2holidays"
               autoComplete="off"
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Password</Label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={editing?.credentials.hasPassword ? "•••••• (unchanged)" : "trade portal password"}
-              autoComplete="new-password"
-            />
+          {!isEdit && (
+            <div className="space-y-1.5">
+              <Label>Key</Label>
+              <Input
+                value={supplierKey}
+                onChange={(e) => {
+                  setKeyTouched(true);
+                  setSupplierKey(slugify(e.target.value));
+                }}
+                placeholder="e.g. jet2"
+                autoComplete="off"
+              />
+              <p className="text-xs text-muted-foreground">
+                A short, unique id used internally (letters/numbers only). Auto-filled from the name.
+              </p>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between rounded-xl border px-3 py-2">
+            <div>
+              <div className="text-sm font-medium">Requires login</div>
+              <div className="text-xs text-muted-foreground">
+                Turn on for trade portals that need credentials. Off = public site, scraped directly.
+              </div>
+            </div>
+            <Switch checked={requiresLogin} onCheckedChange={setRequiresLogin} />
           </div>
+
+          {requiresLogin && (
+            <div className="space-y-4 rounded-xl border border-dashed p-3">
+              <div className="space-y-1.5">
+                <Label>Login page URL</Label>
+                <Input
+                  value={loginUrl}
+                  onChange={(e) => setLoginUrl(e.target.value)}
+                  placeholder="https://…/login"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The page with the username/password fields. We open it, work out the fields automatically, log in, then open the deal.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Username / email</Label>
+                <Input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder={editing?.credentials.hasUsername ? "•••••• (unchanged)" : "trade portal login"}
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={editing?.credentials.hasPassword ? "•••••• (unchanged)" : "trade portal password"}
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Agent ref / ABTA / extra ID <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Input
+                  value={abtaNumber}
+                  onChange={(e) => setAbtaNumber(e.target.value)}
+                  placeholder={editing?.credentials.hasAbtaNumber ? "•••••• (unchanged)" : "a 3rd login field, if the portal has one"}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center justify-between rounded-xl border px-3 py-2">
             <div>

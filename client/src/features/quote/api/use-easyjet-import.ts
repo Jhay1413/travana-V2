@@ -23,9 +23,10 @@ export const easyjetImportApi = {
     const { data } = await axiosClient.post<
       { success?: boolean; data?: Record<string, unknown> } | Record<string, unknown>
     >("/api/v2/scrapers/scrape", input, {
-      // A cold browser session (full Keycloak login) takes ~30s, and the server
-      // may retry once through a fresh cloud session on transient proxy slowness.
-      timeout: 120_000,
+      // A cold browser session + heavy portal login (Jet2) runs ~80s, and the
+      // server may retry once through a fresh cloud session when a bot-challenge
+      // detaches the first one — so allow for two attempts (server deadline 175s).
+      timeout: 185_000,
     });
     const payload = (data as { data?: Record<string, unknown> })?.data ?? data;
     return payload as Record<string, unknown>;

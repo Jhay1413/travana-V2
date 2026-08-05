@@ -281,6 +281,13 @@
       "when": 1785849933676,
       "tag": "0039_thin_slayback",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785904606781,
+      "tag": "0040_supplier_scraper_session",
+      "breakpoints": true
     }
   ]
 }

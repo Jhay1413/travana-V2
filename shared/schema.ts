@@ -331,6 +331,12 @@ export const supplier_scraper = pgTable('supplier_scraper', {
   encrypted_credentials: text("encrypted_credentials"),
   // ScraperConfig JSON (browser, auth, fetch, deepLink) minus credentials.
   config: jsonb("config").default(sql`'{}'`),
+  // Encrypted JSON array of the browser cookies captured after a successful
+  // login, so later scrapes can restore the session and skip the (slow) login.
+  // Self-healing: if restored cookies have expired the scraper logs in again and
+  // overwrites this. Encrypted because these are live session tokens.
+  session_state: text("session_state"),
+  session_saved_at: timestamp("session_saved_at"),
   is_active: boolean("is_active").notNull().default(true),
   created_by_user_id: text("created_by_user_id").references(() => user.id, { onDelete: "set null" }),
   created_at: timestamp("created_at").notNull().defaultNow(),
