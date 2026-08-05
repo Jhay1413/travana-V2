@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validate } from "../../middlewares/validation.middleware";
 import { chatAttachmentUpload, internalChatController as c } from "./internal-chat.controller";
-import { createSessionValidator, postMessageValidator, listMessagesValidator } from "./internal-chat.validator";
+import { createSessionValidator, forkSessionValidator, postMessageValidator, listMessagesValidator } from "./internal-chat.validator";
 
 const router = Router();
 
@@ -11,6 +11,9 @@ const router = Router();
 // internal-chat.service.ts createSession).
 
 router.post("/sessions", validate(createSessionValidator), c.createSession);
+// Fork a real SendSeven conversation into a sandboxed test_flow session
+// (role-gated in the service, like test_flow session creation).
+router.post("/sessions/fork-from-conversation", validate(forkSessionValidator), c.forkFromConversation);
 // chatAttachmentUpload only engages on multipart requests (test-flow image
 // attachments) — plain JSON messages pass straight through it unchanged.
 router.post("/sessions/:id/messages", chatAttachmentUpload.array("attachments", 3), validate(postMessageValidator), c.postMessage);

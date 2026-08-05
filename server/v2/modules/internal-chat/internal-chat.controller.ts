@@ -42,6 +42,17 @@ export const internalChatController = {
     return successResponse(res, { sessionId: session.id }, "Session created", 201);
   }),
 
+  // POST /api/v2/internal-chat/sessions/fork-from-conversation
+  // Forks a real SendSeven conversation into a test_flow session so staff can
+  // preview the AI's next replies by chatting as the client (sandboxed — the
+  // real conversation and customer are never touched).
+  forkFromConversation: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const { conversationId } = req.body as { conversationId: string };
+    const result = await internalChatService.forkFromConversation(scope, conversationId);
+    return successResponse(res, result, "Test session forked", 201);
+  }),
+
   // POST /api/v2/internal-chat/sessions/:id/messages
   // Accepts plain JSON ({text}) or multipart ("text" field + up to 3 image
   // files under "attachments") — multer only engages on multipart requests,

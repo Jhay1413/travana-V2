@@ -23,6 +23,10 @@ export interface CreateMessageInput {
   sessionId: string;
   role: ChatMessageRole;
   content: string;
+  // Original timestamp override — used when seeding a session forked from a
+  // live SendSeven conversation, so the copied transcript keeps its real
+  // order/times. Defaults to now() for normal chat turns.
+  createdAt?: Date;
 }
 
 export const internalChatRepository = {
@@ -87,7 +91,12 @@ export const internalChatRepository = {
   async createMessage(input: CreateMessageInput): Promise<InternalChatMessage> {
     const [row] = await db
       .insert(internalChatMessage)
-      .values({ sessionId: input.sessionId, role: input.role, content: input.content })
+      .values({
+        sessionId: input.sessionId,
+        role: input.role,
+        content: input.content,
+        ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+      })
       .returning();
     return row;
   },

@@ -1,6 +1,6 @@
 import axiosClient from "@/api/client/axios-client";
 import { API_V2 } from "@/api/endpoints";
-import type { ChatMessage, ChatMode, CreateSessionResponse, PostMessageResult } from "../types";
+import type { ChatMessage, ChatMode, CreateSessionResponse, ForkSessionResponse, PostMessageResult } from "../types";
 
 const BASE = `${API_V2}/internal-chat`;
 
@@ -21,6 +21,13 @@ function isTestFlowPendingError(err: unknown): err is ChatApiError & { data: { r
 export const internalChatApi = {
   createSession: async (mode: ChatMode): Promise<CreateSessionResponse> => {
     const { data } = await axiosClient.post<CreateSessionResponse>(`${BASE}/sessions`, { mode });
+    return data;
+  },
+
+  // Fork a real SendSeven conversation into a sandboxed test_flow session
+  // (transcript + safe AI state copied server-side). org_admin/platform_admin only.
+  forkFromConversation: async (conversationId: string): Promise<ForkSessionResponse> => {
+    const { data } = await axiosClient.post<ForkSessionResponse>(`${BASE}/sessions/fork-from-conversation`, { conversationId });
     return data;
   },
 

@@ -59,6 +59,11 @@ import type { InternalChatMessage, InternalChatSession } from "@shared/schema";
 // purpose as reply-worker's ConversationContext.
 interface ConversationContext {
   lastReply?: string;
+  // The real conversation's SendSeven contact/display name — seeded by the
+  // fork service (internal-chat-fork.service.ts) so a forked sandbox can
+  // address the customer by name even when no CRM client is linked. Unverified;
+  // the brain ignores it once a client record is in play.
+  contactName?: string;
   // LEGACY — no longer SET by this driver (the enquiry is now created
   // immediately once the core fields complete), only READ for backward
   // compat with a session that started under the old flow. Mirrors
@@ -406,11 +411,14 @@ export const internalChatTestflowService = {
     // needed, so this skips both the onboarding gate and the enquiry bot's
     // slot-filling entirely.
     if (route === "general") {
-      const reply = await generateGeneralReply(botConfig, kb, transcript, existingClient, {
-        orgId,
-        feature: "staff_chat_test",
-        userId: scope.userId ?? undefined,
-      });
+      const reply = await generateGeneralReply(
+        botConfig,
+        kb,
+        transcript,
+        existingClient,
+        { orgId, feature: "staff_chat_test", userId: scope.userId ?? undefined },
+        prevContext.contactName,
+      );
       await internalChatRepository.updateSession(session.id, orgId, {
         intent: "other",
         context: { ...prevContext, lastReply: reply },
@@ -450,11 +458,18 @@ export const internalChatTestflowService = {
     // name + phone ONLY (no email), then create/reuse the test client and
     // fall through to process the enquiry turn in the same call.
     if (!knownClient) {
-      const onboard = await generateTurn(botConfig, kb, null, transcriptForAi, enquiryStatus, priorSlots, false, retrieved, {
-        orgId,
-        feature: "staff_chat_test",
-        userId: scope.userId ?? undefined,
-      });
+      const onboard = await generateTurn(
+        botConfig,
+        kb,
+        null,
+        transcriptForAi,
+        enquiryStatus,
+        priorSlots,
+        false,
+        retrieved,
+        { orgId, feature: "staff_chat_test", userId: scope.userId ?? undefined },
+        prevContext.contactName,
+      );
       console.log(
         `[internal-chat-testflow] session=${session.id} onboarding (unknown contact) handoff=${onboard.hand_off} ` +
           `hasName=${!!onboard.client?.fullName} hasPhone=${!!onboard.client?.phone} onBehalf=${!!onboard.beneficiary?.onBehalf}`,
@@ -671,11 +686,18 @@ export const internalChatTestflowService = {
     // generateTurn call — mirrors reply-worker.
     const turn =
       firstTurn ??
-      (await generateTurn(botConfig, kb, clientRecord, transcriptForAi, enquiryStatus, priorSlots, true, retrieved, {
-        orgId,
-        feature: "staff_chat_test",
-        userId: scope.userId ?? undefined,
-      }));
+      (await generateTurn(
+        botConfig,
+        kb,
+        clientRecord,
+        transcriptForAi,
+        enquiryStatus,
+        priorSlots,
+        true,
+        retrieved,
+        { orgId, feature: "staff_chat_test", userId: scope.userId ?? undefined },
+        prevContext.contactName,
+      ));
 
     if (turn.hand_off) {
       const replyMessage = await doHandoff(prevContext, turn.reply);
@@ -871,7 +893,7 @@ export const internalChatTestflowService = {
       }
       await internalChatRepository.updateSession(session.id, orgId, {
         needsHuman: true,
-        context: { lastReply: confirmReply, availabilityTaskId: taskId },
+        context: { lastReply: confirmReply, availabilityTaskId: taskId, contactName: prevContext.contactName },
       });
       const replyMessage = await persistReply(confirmReply);
       return { replyMessage };
@@ -908,6 +930,10 @@ export const internalChatTestflowService = {
         const created = await resolveAndCreateEnquiry(orgId, enquiryClientId, mergedSlots, {
           summary,
           missingFields: missingBeforeCreate,
+          // Test-flow enquiries are synthetic — tag the transaction is_test so
+          // they never pollute real reporting (this flag existed for exactly
+          // this driver but was never passed).
+          isTest: true,
         });
         enquiryId = created.enquiryId;
         ownerUserId = created.ownerUserId;
@@ -937,7 +963,7 @@ export const internalChatTestflowService = {
         enquiryId,
         enquirySlots: {},
         needsHuman: false, // stays live to ask for a callback time
-        context: { lastReply: askTimeReply, groupedAskSent: false, enquiryOwnerUserId: ownerUserId ?? undefined, onBehalfOfName },
+        context: { lastReply: askTimeReply, groupedAskSent: false, enquiryOwnerUserId: ownerUserId ?? undefined, onBehalfOfName, contactName: prevContext.contactName },
       });
       const replyMessage = await persistReply(askTimeReply);
       return { replyMessage };

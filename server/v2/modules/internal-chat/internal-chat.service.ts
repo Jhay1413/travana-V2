@@ -25,6 +25,7 @@ import {
   type PipelinePeriod,
 } from "./internal-chat-analytics.service";
 import { internalChatClientsService, type ClientRecordType } from "./internal-chat-clients.service";
+import { forkSessionFromConversation, type ForkSessionResult } from "./internal-chat-fork.service";
 import { internalChatTestflowService } from "./internal-chat-testflow.service";
 import type { PendingAttachment } from "../sendseven-webhook/admin-data.service";
 
@@ -536,6 +537,14 @@ export const internalChatService = {
       throw new AppError("Only an org admin can start a test flow session", 403);
     }
     return internalChatRepository.createSession({ orgId: scope.orgId, userId: scope.userId, mode });
+  },
+
+  // Forks a real SendSeven conversation into a test_flow session (transcript +
+  // safe state copied, client cloned as a TEST twin) so staff can preview the
+  // AI's next replies by chatting as the client. Role-gated inside (same
+  // org_admin/platform_admin gate as test_flow createSession).
+  async forkFromConversation(scope: Scope, conversationId: string): Promise<ForkSessionResult> {
+    return forkSessionFromConversation(scope, conversationId);
   },
 
   // Loads the session, 404ing if it doesn't exist OR belongs to another org —

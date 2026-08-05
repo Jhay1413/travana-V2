@@ -13,6 +13,14 @@ export function useCreateSession() {
   });
 }
 
+// Fork a real SendSeven conversation into a sandboxed test session — used by
+// the conversations inbox's "Test AI" modal.
+export function useForkSession() {
+  return useMutation({
+    mutationFn: (conversationId: string) => internalChatApi.forkFromConversation(conversationId),
+  });
+}
+
 // The widget renders from LOCAL state (optimistic user message + appended
 // reply), so we deliberately do NOT invalidate/refetch the transcript on
 // success — refetching mid-conversation was what made the user's own message

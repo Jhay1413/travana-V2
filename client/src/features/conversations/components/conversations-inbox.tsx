@@ -36,6 +36,7 @@ import {
   Mail,
   MapPin,
   CalendarDays,
+  FlaskConical,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ import { ChannelsDialog } from "./channels-dialog";
 import { ClientLinkSection, contactLinkMatch, formatClientDate, composeClientAddress } from "./client-link-section";
 import { GenerateEnquiryButton } from "./generate-enquiry-button";
 import { AiStatusControl } from "./ai-status-control";
+import { TestAiModal } from "./test-ai-modal";
 import {
   DayDivider,
   MessageBubble,
@@ -642,6 +644,7 @@ export default function ConversationsInbox() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>({});
   const [channelsOpen, setChannelsOpen] = useState(false);
+  const [testAiOpen, setTestAiOpen] = useState(false);
   const [inboxId, setInboxId] = useState<string | null>(null); // null = All Messages
   // Conversation id → ISO timestamp of when the user last opened it. Clears the
   // unread dot locally the instant a conversation is opened, without waiting on
@@ -650,6 +653,8 @@ export default function ConversationsInbox() {
 
   const { orgRole } = useRole();
   const canManageChannels = orgRole === "org_admin" || orgRole === "branch_manager" || orgRole === "platform_admin";
+  // Same roles as the AI test-flow gate (server-enforced too).
+  const canTestAi = orgRole === "org_admin" || orgRole === "platform_admin";
 
   // The SSE connection is owned app-wide by ConversationsRealtimeProvider (it
   // also raises the new-message toast); read its state rather than opening a
@@ -1134,6 +1139,7 @@ export default function ConversationsInbox() {
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 <AiStatusControl conversationId={selected.id} />
+                {canTestAi && <HeaderAction icon={FlaskConical} label="Test AI" onClick={() => setTestAiOpen(true)} />}
                 {selected.snoozed ? (
                   <HeaderAction icon={AlarmClockOff} label="Unsnooze" onClick={unsnooze} />
                 ) : (
@@ -1231,6 +1237,9 @@ export default function ConversationsInbox() {
       )}
 
       {canManageChannels && <ChannelsDialog open={channelsOpen} onOpenChange={setChannelsOpen} />}
+      {canTestAi && selected && (
+        <TestAiModal conversationId={selected.id} open={testAiOpen} onOpenChange={setTestAiOpen} />
+      )}
     </section>
   );
 }
