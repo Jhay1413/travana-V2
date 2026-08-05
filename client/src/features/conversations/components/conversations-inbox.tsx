@@ -871,6 +871,26 @@ export default function ConversationsInbox() {
     unsnoozeMutation.mutate(convId, settleSnoozeOverride(convId));
   };
 
+  // "Close conversation" — SendSeven's close endpoint isn't in our list scope,
+  // so closing is modelled as a year-long snooze (the API caps snoozed_until
+  // only to "must be in the future", and reopen_on_message still pulls the
+  // thread back to Open if the client ever writes again). An internal note
+  // stamps when it was closed so the thread carries an audit trail.
+  const closeConversation = () => {
+    if (!selected) return;
+    const closedAt = new Date().toLocaleString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    // Note first, while the conversation is still the selection — snoozeFor
+    // optimistically drops it out of the Open list, which moves the selection.
+    handleSend(`Close conversation from: ${closedAt}`, "note");
+    snoozeFor(24 * 365);
+  };
+
   // Group the thread's messages by day for the date dividers.
   const grouped = useMemo(
     () => (selected ? groupMessagesByDay(threadMessages) : []),
@@ -1125,6 +1145,14 @@ export default function ConversationsInbox() {
                           {preset.label}
                         </DropdownMenuItem>
                       ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={closeConversation}
+                        data-testid="conversation-snooze-close"
+                      >
+                        <XIcon className="mr-1.5 h-3.5 w-3.5" />
+                        Close conversation
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
