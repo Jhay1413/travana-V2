@@ -29,7 +29,7 @@
     "db:seed-org-tour-operators": "tsx --env-file-if-exists=.env scripts/seed-org-tour-operators.ts",
     "db:seed-model-pricing": "tsx --env-file-if-exists=.env scripts/seed-model-pricing.ts",
     "db:seed-training": "tsx --env-file-if-exists=.env scripts/seed-training.ts",
-    "db:seed-easyjet-scraper": "tsx --env-file-if-exists=.env scripts/seed-easyjet-scraper.ts",
+    "scraper:generate-spec": "tsx --env-file-if-exists=.env scripts/generate-extraction-spec.ts",
     "db:backfill-quote-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-quote-embeddings.ts",
     "db:backfill-kb-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-kb-embeddings.ts"
   },

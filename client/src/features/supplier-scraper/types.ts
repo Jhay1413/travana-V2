@@ -5,6 +5,7 @@ export interface SupplierScraperCredentialsState {
   hasUsername: boolean;
   hasPassword: boolean;
   hasApiKey: boolean;
+  hasAbtaNumber: boolean;
 }
 
 export interface SupplierScraper {
@@ -28,5 +29,5 @@ export interface UpsertSupplierScraperInput {
   isActive?: boolean;
   config?: Record<string, unknown>;
   // Send only fields you want to change; "" clears a stored credential.
-  credentials?: { username?: string; password?: string; apiKey?: string };
+  credentials?: { username?: string; password?: string; apiKey?: string; abtaNumber?: string };
 }

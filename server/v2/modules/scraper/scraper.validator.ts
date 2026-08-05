@@ -5,6 +5,7 @@ const credentialsSchema = z
     username: z.string().optional(),
     password: z.string().optional(),
     apiKey: z.string().optional(),
+    abtaNumber: z.string().optional(),
   })
   .optional();
 
@@ -16,7 +17,7 @@ export const createScraperValidator = z.object({
   body: z.object({
     supplierKey: z.string().min(1, 'supplierKey is required'),
     supplierName: z.string().optional(),
-    adapterType: z.enum(['easyjet']).optional(),
+    adapterType: z.enum(['easyjet', 'dom', 'jet2']).optional(),
     tourOperatorId: z.string().uuid().nullable().optional(),
     isActive: z.boolean().optional(),
     config: configSchema,
@@ -29,7 +30,7 @@ export const createScraperValidator = z.object({
 export const updateScraperValidator = z.object({
   body: z.object({
     supplierName: z.string().optional(),
-    adapterType: z.enum(['easyjet']).optional(),
+    adapterType: z.enum(['easyjet', 'dom', 'jet2']).optional(),
     tourOperatorId: z.string().uuid().nullable().optional(),
     isActive: z.boolean().optional(),
     config: configSchema,

@@ -3,7 +3,7 @@ import { encrypt, decrypt } from '../../utils/encryption';
 import type { Scope } from '../../utils/scope';
 import { scraperRepository } from './scraper.repository';
 import { getAdapter } from './adapters';
-import { SUPPLIER_DEFAULTS } from './scraper-defaults';
+import { loginConfigAiService } from './extraction/extraction-ai.service';
 import { easyjetService } from '../easyjet/easyjet.service';
 import type {
   ResolvedScraper,
@@ -23,7 +23,7 @@ export interface SupplierScraperView {
   isActive: boolean;
   tourOperatorId: string | null;
   config: ScraperConfig;
-  credentials: { hasUsername: boolean; hasPassword: boolean; hasApiKey: boolean };
+  credentials: { hasUsername: boolean; hasPassword: boolean; hasApiKey: boolean; hasAbtaNumber: boolean };
   createdAt: Date;
   updatedAt: Date | null;
 }
@@ -43,6 +43,37 @@ export interface UpsertSupplierScraperInput {
 function requireOrg(scope: Scope): string {
   if (!scope.orgId) throw new AppError('An organization context is required for supplier scrapers', 403);
   return scope.orgId;
+}
+
+// When the user pastes a login form (auth.loginFormHtml) but hasn't supplied the
+// CSS selectors, derive them from the HTML via AI once, at save time — so the
+// login is ready to run and the user never hand-writes selectors. No-op for
+// no-login suppliers or when selectors are already present.
+async function ensureLoginSelectors(config: ScraperConfig): Promise<void> {
+  const auth = config.auth;
+  if (!auth || auth.type === 'none') return;
+  if (!auth.loginFormHtml) return;
+  if (auth.usernameSelector && auth.passwordSelector) return;
+  const sel = await loginConfigAiService.generateFromHtml(auth.loginFormHtml, auth.loginUrl);
+  let identityHost = auth.identityHost;
+  if (!identityHost && auth.loginUrl) {
+    try {
+      identityHost = new URL(auth.loginUrl).pathname;
+    } catch {
+      /* leave as-is */
+    }
+  }
+  config.auth = {
+    ...auth,
+    usernameSelector: auth.usernameSelector || sel.usernameSelector,
+    passwordSelector: auth.passwordSelector || sel.passwordSelector,
+    submitSelector: auth.submitSelector || sel.submitSelector,
+    abtaSelector: auth.abtaSelector || sel.abtaSelector,
+    formSelector: auth.formSelector || sel.formSelector,
+    errorSelector: auth.errorSelector || sel.errorSelector,
+    uppercaseCredentials: auth.uppercaseCredentials ?? sel.uppercaseCredentials,
+    identityHost,
+  };
 }
 
 function decryptCredentials(row: SupplierScraper): ScraperCredentials {
@@ -68,6 +99,7 @@ function toView(row: SupplierScraper): SupplierScraperView {
       hasUsername: !!creds.username,
       hasPassword: !!creds.password,
       hasApiKey: !!creds.apiKey,
+      hasAbtaNumber: !!creds.abtaNumber,
     },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -91,18 +123,23 @@ export const scraperService = {
     const existing = await scraperRepository.findBySupplierKey(orgId, input.supplierKey);
     if (existing) throw new AppError(`A scraper for "${input.supplierKey}" already exists for this organization`, 409);
 
-    const defaults = SUPPLIER_DEFAULTS[input.supplierKey];
-    const config: ScraperConfig = {
-      ...(defaults?.config ?? ({} as ScraperConfig)),
-      ...(input.config as ScraperConfig | undefined),
-    };
+    // No supplier presets: a new scraper self-configures. It starts from whatever
+    // config the caller supplies (usually empty) and the DOM adapter learns its
+    // login selectors + extraction spec on the first run.
+    const config: ScraperConfig = { ...((input.config as ScraperConfig | undefined) ?? ({} as ScraperConfig)) };
+    // New suppliers default to the generic config-driven DOM adapter (which
+    // self-learns login + extraction). easyJet's API adapter is opt-in only.
+    const adapterType = input.adapterType || config.adapterType || 'dom';
+    config.adapterType = adapterType;
+    // Turn a pasted login form into selectors so login is ready on the first run.
+    await ensureLoginSelectors(config);
     const creds = input.credentials ?? {};
 
     const row = await scraperRepository.create({
       org_id: orgId,
       supplier_key: input.supplierKey,
-      supplier_name: input.supplierName || defaults?.supplierName || input.supplierKey,
-      adapter_type: input.adapterType || config.adapterType || 'easyjet',
+      supplier_name: input.supplierName || input.supplierKey,
+      adapter_type: adapterType,
       tour_operator_id: input.tourOperatorId ?? null,
       is_active: input.isActive ?? true,
       config,
@@ -125,12 +162,19 @@ export const scraperService = {
     if (input.tourOperatorId !== undefined) patch.tour_operator_id = input.tourOperatorId;
     if (input.isActive !== undefined) patch.is_active = input.isActive;
     if (input.config !== undefined) {
-      patch.config = { ...(existing.config as ScraperConfig), ...(input.config as ScraperConfig) };
+      const merged = { ...(existing.config as ScraperConfig), ...(input.config as ScraperConfig) };
+      // Merge auth deeply so a newly-pasted login form doesn't drop other auth
+      // settings, then derive selectors from any new form HTML.
+      if (input.config.auth || (existing.config as ScraperConfig)?.auth) {
+        merged.auth = { ...((existing.config as ScraperConfig)?.auth ?? {}), ...(input.config.auth ?? {}) } as ScraperConfig['auth'];
+      }
+      await ensureLoginSelectors(merged);
+      patch.config = merged;
     }
     if (input.credentials !== undefined) {
       const current = decryptCredentials(existing);
       const merged: ScraperCredentials = { ...current };
-      for (const key of ['username', 'password', 'apiKey'] as const) {
+      for (const key of ['username', 'password', 'apiKey', 'abtaNumber'] as const) {
         if (input.credentials[key] !== undefined) merged[key] = input.credentials[key];
       }
       patch.encrypted_credentials = encrypt(JSON.stringify(merged));
@@ -148,18 +192,51 @@ export const scraperService = {
     await scraperRepository.remove(id, orgId);
   },
 
+  // Builds a ResolvedScraper from a row, wiring persistConfig so an adapter can
+  // save config it learns on the first run. Accumulates: a run that learns BOTH
+  // login selectors and an extraction spec persists each over the latest merged
+  // config (not the original), so neither clobbers the other.
+  toResolved(row: SupplierScraper, orgId: string): ResolvedScraper {
+    let latest = ((row.config as ScraperConfig) ?? {}) as ScraperConfig;
+    // Restore any saved login session (decrypt; ignore if unreadable/corrupt).
+    let sessionCookies: unknown[] | undefined;
+    if (row.session_state) {
+      try {
+        const parsed = JSON.parse(decrypt(row.session_state));
+        if (Array.isArray(parsed) && parsed.length > 0) sessionCookies = parsed;
+      } catch {
+        /* stale/undecryptable session — ignore, a fresh login will replace it */
+      }
+    }
+    const resolved: ResolvedScraper = {
+      supplierKey: row.supplier_key,
+      supplierName: row.supplier_name,
+      config: latest,
+      credentials: decryptCredentials(row),
+      sessionCookies,
+      persistConfig: async (patch) => {
+        latest = { ...latest, ...patch };
+        resolved.config = latest;
+        await scraperRepository.update(row.id, orgId, { config: latest });
+      },
+      persistSession: async (cookies) => {
+        const hasCookies = Array.isArray(cookies) && cookies.length > 0;
+        await scraperRepository.update(row.id, orgId, {
+          session_state: hasCookies ? encrypt(JSON.stringify(cookies)) : null,
+          session_saved_at: hasCookies ? new Date() : null,
+        });
+      },
+    };
+    return resolved;
+  },
+
   // Resolves a specific supplier the user chose from the dropdown.
   async resolveByKey(supplierKey: string, scope: Scope): Promise<ResolvedScraper> {
     const orgId = requireOrg(scope);
     const row = await scraperRepository.findBySupplierKey(orgId, supplierKey);
     if (!row) throw new AppError(`No supplier scraper "${supplierKey}" for this organization`, 404);
     if (!row.is_active) throw new AppError(`Supplier scraper "${row.supplier_name}" is disabled`, 400);
-    return {
-      supplierKey: row.supplier_key,
-      supplierName: row.supplier_name,
-      config: row.config as ScraperConfig,
-      credentials: decryptCredentials(row),
-    };
+    return this.toResolved(row, orgId);
   },
 
   // Finds the org's active scraper whose deep-link pattern matches the URL.
@@ -189,12 +266,7 @@ export const scraperService = {
       );
     }
 
-    return {
-      supplierKey: match.supplier_key,
-      supplierName: match.supplier_name,
-      config: match.config as ScraperConfig,
-      credentials: decryptCredentials(match),
-    };
+    return this.toResolved(match, orgId);
   },
 
   // Resolves the supplier for the URL, then runs its adapter. Falls back to the
@@ -225,7 +297,9 @@ export const scraperService = {
       throw err;
     }
 
-    const adapter = getAdapter((resolved.config.adapterType || 'easyjet') as ScraperAdapterType);
+    // Default to the generic DOM adapter — easyJet's API adapter is a special
+    // case used only when adapterType is explicitly 'easyjet'.
+    const adapter = getAdapter((resolved.config.adapterType || 'dom') as ScraperAdapterType);
     if (!adapter) {
       throw new AppError(`No scraper adapter registered for type "${resolved.config.adapterType}"`, 500);
     }
