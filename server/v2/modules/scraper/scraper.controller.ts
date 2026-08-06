@@ -118,4 +118,31 @@ export const scraperController = {
     const result = await scraperService.savePicks(req.body, scope, scope.userId ?? undefined);
     return successResponse(res, result, 'Field picks saved to the extraction spec');
   }),
+
+  // Marks an AI-generated extraction spec reviewed (or sends it back for
+  // review). Does not gate importing — see scraperService.approveSpec.
+  approveSpec: asyncHandler(async (req: Request, res: Response) => {
+    const approve = req.body?.approve !== false;
+    const data = await scraperService.approveSpec(String(req.params.id), getScope(req), approve);
+    return successResponse(res, data, approve ? 'Extraction spec approved' : 'Extraction spec flagged for review');
+  }),
+
+  // Manual capture path: the user's own (already logged-in) browser posts the
+  // rendered deal page. The supplier is worked out from the captured URL, and an
+  // unrecognised site gets a supplier created for it, so the response says what
+  // happened — a new supplier and its fresh spec both want reviewing.
+  importPage: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const result = await scraperService.importFromPage(req.body, scope, scope.userId ?? undefined);
+    const message = result.created
+      ? `Created supplier "${result.supplierName}" from this page and generated its extraction spec — approve it in Supplier Scrapers.`
+      : result.specRestored
+        ? `Reused the saved extraction spec for "${result.supplierName}" — nothing was regenerated.`
+        : result.specGenerated
+        ? `Learned an extraction spec for "${result.supplierName}" from this page — approve it in Supplier Scrapers.`
+        : result.specNeedsReview
+          ? `Imported from ${result.supplierName} using an UNAPPROVED extraction spec — check the fields, then approve it in Supplier Scrapers.`
+          : `Imported deal from ${result.supplierName}`;
+    return successResponse(res, result.quote, message);
+  }),
 };
