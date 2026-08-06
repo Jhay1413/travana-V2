@@ -7,6 +7,7 @@ import { knowledgeBaseRepository } from "../knowledge-base/knowledge-base.reposi
 import { messagesRepository } from "../messages/messages.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { conversationStateRepository } from "./conversation-state.repository";
+import { hydrateDealReplyContext, type DealRef } from "./deal-context.service";
 import { systemScope } from "./identity.service";
 import type { EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
 
@@ -81,7 +82,14 @@ export async function suggestAiReply(orgId: string, conversationId: string, user
           .catch(() => [] as RetrievedMatch[])
       : Promise.resolve([] as RetrievedMatch[]),
   ]);
-  const retrieved: RetrievedContext = { kb: kbMatches, quotes: quoteMatches };
+  // Pinned Facebook deal: read the live bot's pin (context.dealRef) and
+  // hydrate it read-only, so the suggestion can quote the same posted deal
+  // details the bot would. No pinning happens here — this path stays
+  // side-effect-free — so a conversation the bot never processed simply has
+  // no deal block.
+  const dealRef = (state?.context as { dealRef?: DealRef } | null)?.dealRef ?? null;
+  const deal = dealRef ? await hydrateDealReplyContext(dealRef) : null;
+  const retrieved: RetrievedContext = { kb: kbMatches, quotes: quoteMatches, deal };
 
   const turn = await generateTurn(
     botConfig,

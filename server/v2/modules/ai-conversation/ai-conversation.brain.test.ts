@@ -294,24 +294,22 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
       "travel dates",
       "number of nights",
       "number of passengers",
-      "budget",
     ]);
   });
 
-  it("returns [] once every package core field is filled", () => {
+  it("returns [] once every package core field is filled — budget is deliberately NOT core", () => {
     const slots: EnquirySlots = {
       destinations: ["Benidorm"],
       travelDate: "2026-09-01",
       nights: 7,
       adults: 2,
-      budget: "1500",
     };
     expect(missingCoreFieldsFor(slots)).toEqual([]);
   });
 
   it("reports only the still-missing package core fields", () => {
     const slots: EnquirySlots = { destinations: ["Benidorm"], nights: 7 };
-    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of passengers", "budget"]);
+    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of passengers"]);
   });
 
   it("uses cruise labels for a cruise holidayType", () => {
@@ -321,7 +319,6 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
       "travel dates",
       "number of nights",
       "number of passengers",
-      "budget",
     ]);
   });
 
@@ -329,7 +326,7 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
     const slots: EnquirySlots = { holidayType: "Hot Tub Break", adults: 2 };
     // adults being set must NOT satisfy the hot-tub core party-size check —
     // only `guests` counts.
-    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of nights", "number of guests", "budget"]);
+    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of nights", "number of guests"]);
 
     const filled: EnquirySlots = {
       holidayType: "Hot Tub Break",
@@ -730,5 +727,86 @@ describe("effectiveAttachmentKind (customer's words vs vision verdict)", () => {
     expect(looksLikeDocumentMention("the paperwork you asked for")).toBe(true);
     expect(looksLikeDocumentMention("we want a week in Tenerife")).toBe(false);
     expect(looksLikeDocumentMention("I'd love that")).toBe(false);
+  });
+});
+
+describe("buildSystemPrompt (pinned Facebook-deal block)", () => {
+  const deal = {
+    title: "All Inclusive Tunisia",
+    travelDate: "2026-10-29",
+    nights: 7,
+    boardBasis: "All Inclusive",
+    departureAirport: "Manchester",
+    price: "from £299.00 per person",
+    hotelName: "Hotel Marhaba Palace",
+    resort: "Port El Kantaoui",
+    destination: "Sousse",
+    country: "Tunisia",
+    resortSummary: null,
+    flights: [
+      {
+        direction: "outbound",
+        flightNumber: "LS893",
+        from: "Manchester (MAN)",
+        to: "Enfidha (NBE)",
+        departs: "2026-10-29T07:05:00.000Z",
+        arrives: "2026-10-29T11:40:00.000Z",
+      },
+    ],
+  };
+
+  it("renders the deal's public details — hotel, posted price, flight times — when a deal is pinned", () => {
+    const prompt = buildSystemPrompt(null, [], null, true, { kb: [], quotes: [], deal });
+    expect(prompt).toContain("THE DEAL THE CUSTOMER IS ASKING ABOUT");
+    expect(prompt).toContain("- Deal title: All Inclusive Tunisia");
+    expect(prompt).toContain("- Hotel: Hotel Marhaba Palace");
+    expect(prompt).toContain("- Posted price: from £299.00 per person");
+    expect(prompt).toContain("- Destination: Port El Kantaoui, Sousse, Tunisia");
+    expect(prompt).toContain("Outbound flight, LS893, Manchester (MAN) → Enfidha (NBE), departs 2026-10-29 07:05, arrives 2026-10-29 11:40");
+    // The carve-out from the static never-name-hotels/prices rules must ride
+    // along, plus the honesty rule for unlisted details (child ages).
+    expect(prompt).toContain("EXCEPTION to the pricing/hotel rules above");
+    expect(prompt).toContain("ask THEM for their children's ages");
+  });
+
+  it("omits the block entirely when no deal is pinned", () => {
+    expect(buildSystemPrompt(null, [], null, true, { kb: [], quotes: [] })).not.toContain(
+      "THE DEAL THE CUSTOMER IS ASKING ABOUT",
+    );
+    expect(buildSystemPrompt(null, [], null, true)).not.toContain("THE DEAL THE CUSTOMER IS ASKING ABOUT");
+  });
+
+  it("keeps the deal block in the dynamic tail (after the static agency-rules content)", () => {
+    const prompt = buildSystemPrompt(null, [], null, true, { kb: [], quotes: [], deal });
+    const staticIdx = prompt.indexOf("Never quote firm prices");
+    const dealIdx = prompt.indexOf("THE DEAL THE CUSTOMER IS ASKING ABOUT");
+    expect(staticIdx).toBeGreaterThan(-1);
+    expect(dealIdx).toBeGreaterThan(staticIdx);
+  });
+});
+
+describe("buildSystemPrompt (asking-style guardrails)", () => {
+  it("forbids proactively asking for or suggesting a budget", () => {
+    const prompt = buildSystemPrompt(null, [], null, true);
+    expect(prompt).toContain("NEVER ask for, suggest, or hint at a budget");
+    // Budget must not appear in the proactive-ask priority order.
+    expect(prompt).toContain(
+      "then party size (adults for Package/Cruise, guests for Hot Tub) — everything else is handled later",
+    );
+  });
+
+  it("treats a stated party (e.g. \"4 adults\") as final — no children follow-up", () => {
+    const prompt = buildSystemPrompt(null, [], null, true);
+    expect(prompt).toContain("PARTY SIZE IS ANSWERED THE MOMENT THEY STATE WHO'S TRAVELLING");
+    expect(prompt).toContain("NEVER follow up asking whether children or infants are also coming");
+  });
+
+  it("keeps budget out of the agency-rule core-field scope", () => {
+    const botConfig = {
+      orgId: "org-1",
+      rules: [{ text: "ask three questions per message", audience: "general" }],
+    } as unknown as OrgBotConfig;
+    const prompt = buildSystemPrompt(botConfig, [], null, true);
+    expect(prompt).toContain("destination, dates, nights, party size — never budget");
   });
 });

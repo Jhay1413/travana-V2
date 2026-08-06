@@ -52,6 +52,13 @@ import {
 import { taskService } from "../task/task.service";
 import { usageService } from "../usage/usage.service";
 import { adminAgent } from "./admin-agent.service";
+import {
+  DEAL_MATCH_MAX_DISTANCE,
+  hydrateDealReplyContext,
+  pickDealMatch,
+  seedSlotsFromDeal,
+  type DealRef,
+} from "./deal-context.service";
 import type { PendingAttachment } from "./admin-data.service";
 import type { AiTurn, EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
 import type { HandoffReason, SsWebhookEvent } from "./sendseven-webhook.types";
@@ -147,6 +154,13 @@ interface ConversationContext {
     kind?: "document" | "holiday_info" | "other";
     description?: string;
   }>;
+  // The Facebook-posted deal this conversation is about, pinned once (vector
+  // match on the customer's message today; Phase 3 adds marker/meta pinning of
+  // agent outreach) and hydrated live on every sales turn so the AI can quote
+  // the posted details back. Never overwritten once set — the enquiry-create /
+  // hand-off / reset paths build fresh contexts, which clears it naturally
+  // when the deal has served its purpose.
+  dealRef?: DealRef;
   // Set when the customer is enquiring on behalf of a named third party — the
   // enquiry is filed under this traveller, not the sender. Persisted across turns
   // so we keep asking for/resolving the traveller (and don't re-ask their name).
@@ -569,7 +583,7 @@ export const replyWorker = {
       if (route === "sales") {
         const enquiryish = enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
         const kbOverflow = kbExceedsBudget(kb);
-        const [kbMatches, quoteMatches] = await Promise.all([
+        const [kbMatches, quoteMatches, dealMatches] = await Promise.all([
           kbOverflow
             // audience: "sales" pushes the audience filter into SQL so top-k
             // returns eligible rows only (admin-audience KB can't crowd out
@@ -588,8 +602,46 @@ export const replyWorker = {
                 limit: 4,
               })
             : Promise.resolve([] as RetrievedMatch[]),
+          // Posted-deal detection — only until a deal is pinned (a pin is
+          // never overwritten), and NOT behind the enquiryish gate: the whole
+          // point is the customer's FIRST message ("more info on the Tunisia
+          // holiday on the 29th October please"), which arrives with no
+          // enquiry in flight. Deliberately not gated to social channels
+          // either — a customer who saw the Facebook post may message on any
+          // channel, and the strict distance cutoff does the real gating.
+          !prevContext.dealRef
+            ? aiEmbeddingsService.retrieve({
+                orgId,
+                sourceType: "deal",
+                query: imageInfoNote ? `${latestText} ${imageInfoNote}` : latestText,
+                limit: 3,
+                maxDistance: DEAL_MATCH_MAX_DISTANCE,
+              })
+            : Promise.resolve([] as RetrievedMatch[]),
         ]);
-        retrieved = { kb: kbMatches, quotes: quoteMatches };
+        if (!prevContext.dealRef) {
+          const pinned = pickDealMatch(dealMatches);
+          if (pinned) {
+            // Mutating prevContext (like holidayImageInfo above) means every
+            // later `...prevContext` context persist carries the pin.
+            prevContext.dealRef = pinned;
+            console.log(
+              `[deal-context] conv=${conversationId} pinned deal=${pinned.travelDealId} "${pinned.title}" ` +
+                `source=${pinned.source} distance=${pinned.distance?.toFixed(3) ?? "n/a"}`,
+            );
+          }
+        }
+        // Hydrated fresh every turn (cheap: two small queries) so the AI
+        // always quotes CURRENT hotel/flight detail, never the embedding's
+        // snapshot.
+        const deal = prevContext.dealRef ? await hydrateDealReplyContext(prevContext.dealRef) : null;
+        // Seed the deal's facts into the slots IN CODE (mutates priorSlots —
+        // blank fields only, customer-stated values always win): the model is
+        // unreliable at copying them itself, and without this the created
+        // enquiry lacked the deal's airport/nights/board basis. Every persist
+        // below flows from priorSlots (mergeSlots), so the seed sticks.
+        if (deal) seedSlotsFromDeal(priorSlots, deal);
+        retrieved = { kb: kbMatches, quotes: quoteMatches, deal };
       }
 
       // Carries the onboarding turn's AiTurn forward when this SAME message

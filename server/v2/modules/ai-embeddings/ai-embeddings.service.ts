@@ -8,7 +8,9 @@ import { aiEmbeddingsRepository, type EmbeddingMatch, type RetrievalAudience } f
 export type { RetrievalAudience } from "./ai-embeddings.repository";
 export { DEFAULT_MAX_COSINE_DISTANCE } from "./ai-embeddings.repository";
 
-export type EmbeddingSourceType = "knowledge" | "quote";
+// "deal" = a travel_deal posted to Facebook — customer-facing (price included),
+// unlike "quote" embeddings which are internal-only reference material.
+export type EmbeddingSourceType = "knowledge" | "quote" | "deal";
 
 export interface SyncSourceInput {
   orgId: string;

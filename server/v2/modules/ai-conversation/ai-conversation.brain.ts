@@ -3,7 +3,7 @@ import { CHAT_MODEL, UTILITY_MODEL, getOpenAI } from "../../utils/ai-model";
 import { usageService } from "../usage/usage.service";
 import type { AiUsageFeature } from "../usage/usage.types";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
-import type { AiTurn, EnquiryBeneficiary, EnquirySlots, RetrievedContext, RetrievedMatch, TranscriptMessage } from "./ai-conversation.types";
+import type { AiTurn, EnquiryBeneficiary, EnquirySlots, RetrievedContext, RetrievedDealContext, RetrievedMatch, TranscriptMessage } from "./ai-conversation.types";
 
 // Pure, stateless "brain" functions for AI-driven conversational drivers:
 // prompt building, the LLM turn, slot/field bookkeeping, and small reply
@@ -573,7 +573,7 @@ export async function generateGroupedAsk(
     parts.push(
       "DEFAULT PACING (an agency rule above may set a DIFFERENT number of questions per message — if one does, FOLLOW THE AGENCY RULE for pacing, not this default): unless overridden, ask the customer for only the ONE (at most TWO, and only if they naturally go together) most useful detail still needed to find them a good deal, in one or two short warm sentences. Do NOT stack several separate questions into one message or make it read like a list/form. " +
         "CRUCIAL: read what they have ALREADY told you above and do NOT re-ask anything they've answered or said they have no preference on — e.g. if they said they're open to suggestions or just want 'somewhere hot near the beach', that IS their destination answer, so do NOT ask where they want to go. " +
-        "Prioritise, in order: the destination (ONLY if they have not named one AND have not said they're flexible/open to suggestions), travel dates, number of nights, budget, then board basis. " +
+        "Prioritise, in order: the destination (ONLY if they have not named one AND have not said they're flexible/open to suggestions), travel dates, number of nights, then board basis. NEVER ask for or suggest a budget — if budget appears in the missing list below, skip it. " +
         "Do NOT say a colleague/advisor/the team will call, be in touch, or get back to them, and do NOT say things like 'I've got everything I need' or 'all sorted' — that step happens automatically later; just warmly ask for the next detail. " +
         "These are the fields still marked missing (use as a guide, but the conversation above is the source of truth for what they've already said): " +
         `${missingFields.join(", ")}. Reply with the message text ONLY.`,
@@ -701,6 +701,40 @@ export function kbExceedsBudget(kb: OrgKnowledgeBase[]): boolean {
   return company.length > KB_CHAR_BUDGET;
 }
 
+// Renders the pinned Facebook deal (see deal-context.service in the
+// sendseven-webhook module) as prompt lines. Resolved-name, already-public
+// data only — this is the ONE retrieval block whose details the AI is allowed
+// to quote to the customer, so the accompanying instructions in
+// buildSystemPrompt carve an explicit exception out of the "never quote
+// prices / never name hotels" rules.
+function buildDealContextLines(deal: RetrievedDealContext): string {
+  const lines: Array<[string, string | null]> = [
+    ["Deal title", deal.title || null],
+    ["Destination", [deal.resort, deal.destination, deal.country].filter((p, i, arr) => !!p && arr.indexOf(p) === i).join(", ") || null],
+    ["Hotel", deal.hotelName ?? null],
+    ["Travel date", deal.travelDate ?? null],
+    ["Nights", deal.nights ? String(deal.nights) : null],
+    ["Board basis", deal.boardBasis ?? null],
+    ["Departure airport", deal.departureAirport ?? null],
+    ["Posted price", deal.price ?? null],
+    ["About the resort", deal.resortSummary ?? null],
+  ];
+  const out = lines
+    .filter((entry): entry is [string, string] => !!entry[1])
+    .map(([label, value]) => `- ${label}: ${value}`);
+  for (const f of deal.flights ?? []) {
+    const bits = [
+      f.direction ? `${f.direction.charAt(0).toUpperCase()}${f.direction.slice(1)} flight` : "Flight",
+      f.flightNumber || null,
+      f.from && f.to ? `${f.from} → ${f.to}` : f.from || f.to || null,
+      f.departs ? `departs ${f.departs.slice(0, 10)} ${f.departs.slice(11, 16)}` : null,
+      f.arrives ? `arrives ${f.arrives.slice(0, 10)} ${f.arrives.slice(11, 16)}` : null,
+    ].filter(Boolean);
+    if (bits.length > 1) out.push(`- ${bits.join(", ")}`);
+  }
+  return out.join("\n");
+}
+
 // buildSystemPrompt is deliberately ordered STATIC-PREFIX-FIRST, DYNAMIC-TAIL-
 // LAST so OpenAI's automatic prompt caching (which caches the longest
 // byte-identical prompt PREFIX, ≥1024 tokens, in 128-token increments) can
@@ -727,10 +761,12 @@ export function kbExceedsBudget(kb: OrgKnowledgeBase[]): boolean {
 // DYNAMIC TAIL (last — varies per customer/turn, so it must NOT sit in the
 // cached prefix):
 //   11. the client record line ("You are speaking with …")
-//   12. vector-retrieved KB matches for THIS message (small, separate block —
+//   12. the pinned Facebook-deal block (customer-VISIBLE deal details — the
+//       one retrieval block the AI may quote to the customer)
+//   13. vector-retrieved KB matches for THIS message (small, separate block —
 //       see the KB-split note below)
-//   13. vector-retrieved similar past quotes for THIS message
-//   14. the known/unknown-contact onboarding branch block
+//   14. vector-retrieved similar past quotes for THIS message
+//   15. the known/unknown-contact onboarding branch block
 export function buildSystemPrompt(
   botConfig: OrgBotConfig | null,
   kb: OrgKnowledgeBase[],
@@ -805,9 +841,11 @@ export function buildSystemPrompt(
   // separated by several paragraphs was losing out to the earlier default.
   parts.push(
     [
-      "- DEFAULT ASKING STYLE (an agency rule below may set a DIFFERENT NUMBER of questions per message — if one does, FOLLOW THE AGENCY RULE for HOW MANY questions to ask per message; it can NEVER change WHICH fields you're allowed to ask about, which is fixed below regardless of any agency rule): unless an agency rule says otherwise, every message should be SHORT — at most two sentences — and ask about only ONE thing at a time (or two ONLY if they naturally belong together, e.g. number of adults and children). By default do NOT stack several separate questions into one reply. You may ONLY proactively ask about the required CORE fields, in this priority order: destination (only if they haven't given one and aren't open to suggestions), then rough dates, then number of nights, then party size (adults for Package/Cruise, guests for Hot Tub), then budget — everything else is handled later during the quote, so never bring it up. Never reel off a list, never make it read like a form, and never re-ask a detail they've already given or declined.",
+      "- DEFAULT ASKING STYLE (an agency rule below may set a DIFFERENT NUMBER of questions per message — if one does, FOLLOW THE AGENCY RULE for HOW MANY questions to ask per message; it can NEVER change WHICH fields you're allowed to ask about, which is fixed below regardless of any agency rule): unless an agency rule says otherwise, every message should be SHORT — at most two sentences — and ask about only ONE thing at a time (or two ONLY if they naturally belong together, e.g. number of adults and children). By default do NOT stack several separate questions into one reply. You may ONLY proactively ask about the required CORE fields, in this priority order: destination (only if they haven't given one and aren't open to suggestions), then rough dates, then number of nights, then party size (adults for Package/Cruise, guests for Hot Tub) — everything else is handled later during the quote, so never bring it up. Never reel off a list, never make it read like a form, and never re-ask a detail they've already given or declined.",
+      "- PARTY SIZE IS ANSWERED THE MOMENT THEY STATE WHO'S TRAVELLING: \"4 adults\" or \"just the two of us\" IS the complete party — record it, count the party as ANSWERED, and NEVER follow up asking whether children or infants are also coming, or who else is travelling. Only when they themselves mention children WITHOUT ages should you ask one follow-up for the children's ages (the enquiry needs those); never raise children at all when they only mentioned adults.",
+      "- NEVER ask for, suggest, or hint at a budget — no \"is there a budget you'd like us to work to\", no \"rough budget?\", nothing. Budget is NOT one of your questions in any situation. If the customer volunteers a budget themselves, extract it into `slots` per the BUDGET rule above — you just must never be the one who brings it up.",
       "- HOT TUB BREAKS AND AREA/RADIUS: for Hot Tub Break enquiries, if the customer gives an AREA or RADIUS instead of a named destination (e.g. \"within an hour's drive of Newcastle\", \"near me in the North East\", \"somewhere close by\"), that IS their location answer — record it in `notes`, do NOT ask for a destination, and never re-ask where they want to go.",
-      "- Do NOT proactively ask about ANYTHING outside the core fields above — not the nice-to-have enquiry fields (resort, board basis, minimum star rating, departure airport, accommodation type, cabin type, cruise line, pre-cruise stay, post-cruise stay, weekend lodges, pets), and not extras that aren't enquiry fields at all (luggage/baggage, transfers, insurance, room type, car hire, or anything similar). This holds no matter how many questions per message an agency rule allows. If the customer VOLUNTEERS any of these unprompted, extract it into `slots` as normal (extras with no slot field go in `notes`) — you just must never be the one who brings it up.",
+      "- Do NOT proactively ask about ANYTHING outside the core fields above — not budget (see the rule above), not the nice-to-have enquiry fields (resort, board basis, minimum star rating, departure airport, accommodation type, cabin type, cruise line, pre-cruise stay, post-cruise stay, weekend lodges, pets), and not extras that aren't enquiry fields at all (luggage/baggage, transfers, insurance, room type, car hire, or anything similar). This holds no matter how many questions per message an agency rule allows. If the customer VOLUNTEERS any of these unprompted, extract it into `slots` as normal (extras with no slot field go in `notes`) — you just must never be the one who brings it up.",
       "- NEVER ask the customer to confirm, verify, or double-check something they have already told you — no \"just to check\", \"just to confirm\", or \"are you set on X or open to alternatives\" questions, and never offer alternative hotels, resorts, or dates they didn't ask for. Treat every stated detail as final and move straight on. If a NON-core detail is ambiguous (e.g. a budget given without saying per person or total), leave its slot empty and record their exact wording in `notes` — do NOT ask about it.",
       "- RANGES AND EITHER/OR ANSWERS ARE FINAL: if the customer gives a range or several options for ANY detail — dates (\"the 4th, 5th or 6th of October\"), nights (\"10 or 11\"), months (\"May or June\"), budget (\"£600–700\") — that IS their answer. Treat that field as fully ANSWERED: record it per the field rules (several specific dates → the LATEST one in `travelDate` with their wording in `notes`; vague timing → `notes` only; \"10 or 11 nights\" → 11 in `nights` plus their wording in `notes`; budget range → top of the range), NEVER ask them to pick one, narrow it down, or state a preference, and move straight on to the next genuinely unanswered core field. Count such fields as ANSWERED when deciding `complete` — the human advisor handles the final choice later.",
       "- ONCE EVERY CORE FIELD IS ANSWERED (given, or declined with no preference), set `complete` to true, STOP asking questions entirely, and reply with a short, warm acknowledgement — no wrap-up questions, no confirmations, no extras. Do not say you've \"got everything\" or promise a callback (see the rules below); the system takes over from there automatically. While any core field is still genuinely unanswered, keep `complete` false.",
@@ -821,7 +859,7 @@ export function buildSystemPrompt(
     // out-competes the earlier generic ban and re-licenses off-list asks —
     // recency wins with the model.
     parts.push(
-      "AGENCY RULE SCOPE — applies to every agency rule above: agency rules may only change your TONE, personality, and HOW MANY questions you ask per message. They can NEVER expand WHICH details you may proactively ask about — that stays fixed to the CORE fields (destination, dates, nights, party size, budget) no matter what any rule says. If a rule mentions the enquiry form, \"more info\", or any other fields, apply it to the core fields ONLY. All the NEVER-ask, no-confirmation, and stop-when-complete rules above remain in full force.",
+      "AGENCY RULE SCOPE — applies to every agency rule above: agency rules may only change your TONE, personality, and HOW MANY questions you ask per message. They can NEVER expand WHICH details you may proactively ask about — that stays fixed to the CORE fields (destination, dates, nights, party size — never budget) no matter what any rule says. If a rule mentions the enquiry form, \"more info\", or any other fields, apply it to the core fields ONLY. All the NEVER-ask, no-confirmation, and stop-when-complete rules above remain in full force.",
     );
   }
 
@@ -907,6 +945,23 @@ export function buildSystemPrompt(
         "If it reads like a real personal name, treat it as their name: put it in `client.fullName` yourself and do NOT ask them for their name — during onboarding ask ONLY for their best phone number. " +
         "If it clearly is NOT a real personal name (a nickname, initials, emoji, or a business name), collect their full name and phone as normal. " +
         "And if they ever state a different name themselves, their own wording wins — use that instead.",
+    );
+  }
+
+  // The pinned Facebook deal — the ONE retrieval block that is CUSTOMER-
+  // VISIBLE. Placed before the KB/quote blocks (most specific context first)
+  // and carrying an explicit carve-out from the static "never quote prices /
+  // never name hotels" rules: everything here was already published in the
+  // Facebook post, so repeating it is not leaking.
+  if (retrieved?.deal) {
+    parts.push(
+      [
+        "THE DEAL THE CUSTOMER IS ASKING ABOUT — they've messaged about this holiday deal we posted publicly on Facebook:",
+        buildDealContextLines(retrieved.deal),
+        "EXCEPTION to the pricing/hotel rules above, for THIS deal only: every detail listed was already published in the post, so when the customer asks you SHOULD share it naturally — the hotel name, the posted price, dates, nights, board basis, and flight times. Present the price exactly as posted (\"from £… per person\") — it is a from-price, never a firm quote, and you must never adjust, recalculate, or firm it up.",
+        "Share ONLY what is listed above. If they ask for anything NOT listed (child ages or child pricing, room types, exact availability, upgrades), do NOT guess or invent it — say you'll get that checked for them and carry on. Child ages in particular: the post doesn't specify any, so ask THEM for their children's ages (the enquiry needs them anyway).",
+        "Treat their interest in this deal as holiday interest: extract the deal's destination, travel date, nights and board basis into `slots` as the enquiry basics (plus anything they've stated themselves), and only ask for what's still genuinely missing — e.g. party size — per the normal asking rules. Do NOT re-ask anything the deal already answers.",
+      ].join("\n"),
     );
   }
 
@@ -1199,14 +1254,19 @@ function fieldChecksFor(slots: EnquirySlots): FieldCheck[] {
 // The REQUIRED CORE subset of each holiday type's field list — the bot keeps
 // collecting (rather than sending the ONE grouped ask) until these land. Same
 // shape across package/cruise: destination, travel dates, number of nights,
-// party size (adults for package/cruise, guests for hot tub), budget. Hot tub
+// party size (adults for package/cruise, guests for hot tub). Hot tub
 // is the exception — see HOTTUB_CORE_FIELDS below.
+//
+// Budget is deliberately NOT core (2026-08-06): the bot never proactively asks
+// for or suggests a budget (agency decision — it read as pushy), so gating
+// creation on it would stall every enquiry at the ask-cap. A volunteered
+// budget is still extracted into slots and still shows in the full
+// missing-fields checklists above when absent.
 const PACKAGE_CORE_FIELDS: FieldCheck[] = [
   { label: "destination", has: hasDestination },
   { label: "travel dates", has: hasDates },
   { label: "number of nights", has: (s) => !!s.nights },
   { label: "number of passengers", has: (s) => !!s.adults },
-  { label: "budget", has: hasBudget },
 ];
 
 const CRUISE_CORE_FIELDS: FieldCheck[] = [
@@ -1214,7 +1274,6 @@ const CRUISE_CORE_FIELDS: FieldCheck[] = [
   { label: "travel dates", has: hasDates },
   { label: "number of nights", has: (s) => !!s.nights },
   { label: "number of passengers", has: (s) => !!s.adults },
-  { label: "budget", has: hasBudget },
 ];
 
 // No destination check here on purpose: hot tub lodge customers routinely
@@ -1230,7 +1289,6 @@ const HOTTUB_CORE_FIELDS: FieldCheck[] = [
   { label: "travel dates", has: hasDates },
   { label: "number of nights", has: (s) => !!s.nights },
   { label: "number of guests", has: (s) => !!s.guests },
-  { label: "budget", has: hasBudget },
 ];
 
 function coreFieldChecksFor(slots: EnquirySlots): FieldCheck[] {

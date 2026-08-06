@@ -83,9 +83,42 @@ export interface RetrievedMatch {
   distance: number;
 }
 
+// One leg of the pinned deal's flights, resolved names + times — rendered into
+// the prompt so the AI can answer "what are the flight times?" for a posted deal.
+export interface RetrievedDealFlight {
+  direction?: string | null; // quote_flights.flight_type (e.g. "outbound")
+  flightNumber?: string | null;
+  from?: string | null;
+  to?: string | null;
+  departs?: string | null; // ISO datetime
+  arrives?: string | null; // ISO datetime
+}
+
+// The Facebook-posted deal this conversation is about (pinned on
+// sendseven_conversation_state.context.dealRef, hydrated live each turn).
+// PUBLIC content — unlike `quotes` below, which are internal-only reference,
+// the AI is allowed to surface these details: they were published in the post.
+export interface RetrievedDealContext {
+  title: string;
+  travelDate?: string | null;
+  nights?: number | null;
+  boardBasis?: string | null;
+  departureAirport?: string | null;
+  price?: string | null; // as posted, "from" pricing
+  hotelName?: string | null;
+  resort?: string | null;
+  destination?: string | null;
+  country?: string | null;
+  resortSummary?: string | null;
+  flights?: RetrievedDealFlight[];
+}
+
 export interface RetrievedContext {
   kb: RetrievedMatch[];
   quotes: RetrievedMatch[];
+  // Present when the conversation has a pinned Facebook deal (see
+  // deal-context.service in the sendseven-webhook module).
+  deal?: RetrievedDealContext | null;
 }
 
 // Minimal shape buildTranscript needs from a transport-specific message type

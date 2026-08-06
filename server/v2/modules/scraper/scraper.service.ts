@@ -25,9 +25,8 @@ export interface SupplierScraperView {
   tourOperatorId: string | null;
   config: ScraperConfig;
   credentials: { hasUsername: boolean; hasPassword: boolean; hasApiKey: boolean; hasAbtaNumber: boolean };
-  // True when a credentials blob exists but can't be decrypted with this
-  // environment's key. The four flags above all read false in that case, so
-  // without this the UI would show "no credentials set" for a row that has some.
+  // True when a stored credentials blob exists but cannot be decrypted with the
+  // current EMAIL_ENCRYPTION_KEY. Reported, never fatal.
   credentialsUnreadable: boolean;
   createdAt: Date;
   updatedAt: Date | null;
@@ -133,26 +132,20 @@ async function ensureLoginSelectors(config: ScraperConfig): Promise<void> {
   };
 }
 
-// Credentials that won't decrypt are reported as ABSENT, not fatal. A blob
-// encrypted under a different EMAIL_ENCRYPTION_KEY (another environment, a
-// rotated key) is unreadable, but the capture flow never uses credentials at
-// all — the agent is already signed in to the supplier in their own browser —
-// so a stale blob must not block an import that never needed it. The automated
-// /scrape path still fails clearly at login, which is where it's actionable.
-function decryptCredentials(row: SupplierScraper): {
-  credentials: ScraperCredentials;
-  unreadable: boolean;
-} {
+// Credentials that can't be decrypted are reported as ABSENT, never as a fatal
+// error. They're only meaningful to the automated /scrape path; the capture
+// flow doesn't use them at all — the agent is already signed in to the supplier
+// in their own browser — so a stale blob (a rotated EMAIL_ENCRYPTION_KEY, a
+// config copied between environments) must not stop an import that never needed
+// them. The path that DOES need credentials fails at login with a message about
+// the credentials, which is where the problem is actionable.
+function decryptCredentials(row: SupplierScraper): { credentials: ScraperCredentials; unreadable: boolean } {
   if (!row.encrypted_credentials) return { credentials: {}, unreadable: false };
   try {
-    return {
-      credentials: JSON.parse(decrypt(row.encrypted_credentials)) as ScraperCredentials,
-      unreadable: false,
-    };
+    return { credentials: JSON.parse(decrypt(row.encrypted_credentials)) as ScraperCredentials, unreadable: false };
   } catch {
     console.warn(
-      `[scraper] credentials for "${row.supplier_key}" could not be decrypted ` +
-        `(wrong EMAIL_ENCRYPTION_KEY, or encrypted in another environment) — treating them as unset`,
+      `[scraper] credentials for "${row.supplier_key}" could not be decrypted (rotated EMAIL_ENCRYPTION_KEY, or a config copied between environments) — treating them as unset`,
     );
     return { credentials: {}, unreadable: true };
   }
@@ -243,9 +236,7 @@ export const scraperService = {
       patch.config = merged;
     }
     if (input.credentials !== undefined) {
-      // An unreadable blob starts from empty, so saving new credentials
-      // replaces it outright instead of being permanently blocked by it.
-      const { credentials: current } = decryptCredentials(existing);
+      const current = decryptCredentials(existing).credentials;
       const merged: ScraperCredentials = { ...current };
       for (const key of ['username', 'password', 'apiKey', 'abtaNumber'] as const) {
         if (input.credentials[key] !== undefined) merged[key] = input.credentials[key];

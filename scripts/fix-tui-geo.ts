@@ -14,8 +14,7 @@
 // 2. THE REGEXES ASSUME A COMMA. They were learned from "IN PRAGUE, CZECH
 //    REPUBLIC" and require "IN <CITY>, <COUNTRY>". TUI prints only "IN
 //    MALDIVES" when the destination IS the country, so nothing matched at all.
-//    Country now treats the city half as optional and uncaptured, so group 1 is
-//    the country either way.
+//    Made the ", <COUNTRY>" half optional and moved country to group 2.
 //
 // Also: resort took group 0 (the WHOLE match), so even Prague imported a resort
 // literally named "IN PRAGUE, CZECH REPUBLIC"; and accommodation was anchored

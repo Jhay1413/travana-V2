@@ -705,6 +705,47 @@ export const newQuoteRepository = {
       .returning({ id: quote.id });
   },
 
+  /** Lean projection for the AI's Facebook-deal reply context: the flight legs
+   *  (with resolved airport names + times) and accommodation rows (hotel,
+   *  board basis, resort chain) of a deal's quote. Deliberately NOT
+   *  findWithDetails — that fans out 12 queries (transfers, cruises,
+   *  passengers, images…) this per-turn path doesn't need. */
+  async findDealReplyContext(quoteId: string) {
+    const [flights, accommodations] = await Promise.all([
+      db
+        .select({
+          flight_number: quote_flights.flight_number,
+          flight_type: quote_flights.flight_type,
+          departure_date_time: quote_flights.departure_date_time,
+          arrival_date_time: quote_flights.arrival_date_time,
+          departing_airport_name: departAirport.airport_name,
+          arrival_airport_name: arriveAirport.airport_name,
+        })
+        .from(quote_flights)
+        .leftJoin(departAirport, eq(quote_flights.departing_airport_id, departAirport.id))
+        .leftJoin(arriveAirport, eq(quote_flights.arrival_airport_id, arriveAirport.id))
+        .where(eq(quote_flights.quote_id, quoteId))
+        .orderBy(quote_flights.leg_order),
+      db
+        .select({
+          accomodation_name: accomodation_list.name,
+          board_basis_name: board_basis.type,
+          is_primary: quote_accomodation.is_primary,
+          resort_name: resorts.name,
+          destination_name: destination.name,
+          country_name: country.country_name,
+        })
+        .from(quote_accomodation)
+        .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+        .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+        .leftJoin(destination, eq(resorts.destination_id, destination.id))
+        .leftJoin(country, eq(destination.country_id, country.id))
+        .leftJoin(board_basis, eq(quote_accomodation.board_basis_id, board_basis.id))
+        .where(eq(quote_accomodation.quote_id, quoteId)),
+    ]);
+    return { flights, accommodations };
+  },
+
   async findWithDetails(id: string) {
     const [q] = await db
       .select({

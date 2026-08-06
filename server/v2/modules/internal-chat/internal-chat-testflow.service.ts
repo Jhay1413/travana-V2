@@ -33,6 +33,13 @@ import { knowledgeBaseRepository } from "../knowledge-base/knowledge-base.reposi
 import { neonClientService } from "../neon-client/neon-client.service";
 import { adminAgent } from "../sendseven-webhook/admin-agent.service";
 import type { PendingAttachment } from "../sendseven-webhook/admin-data.service";
+import {
+  DEAL_MATCH_MAX_DISTANCE,
+  hydrateDealReplyContext,
+  pickDealMatch,
+  seedSlotsFromDeal,
+  type DealRef,
+} from "../sendseven-webhook/deal-context.service";
 import { resolveAndCreateEnquiry } from "../sendseven-webhook/enquiry-auto-create.service";
 import {
   extractPhoneNumber,
@@ -98,6 +105,11 @@ interface ConversationContext {
   // automatically when the enquiry is created / the session hands off (those
   // branches build a fresh context). Mirrors reply-worker.
   holidayImageInfo?: string;
+  // The Facebook-posted deal this test session is about — pinned by the same
+  // vector match as the live worker and hydrated live on every sales turn, so
+  // the sandbox reproduces the posted-deal reply behaviour (including from a
+  // screenshot of the post). Mirrors reply-worker's ConversationContext.
+  dealRef?: DealRef;
   // A DOCUMENT sent BEFORE the tester was identified (mirrors reply-worker's
   // pendingAttachmentRefs): the test chat has no message store to re-download
   // from, so the bytes are held in-process (deferredAttachmentBytes, TTL'd)
@@ -438,15 +450,43 @@ export const internalChatTestflowService = {
       const enquiryish =
         enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
       const kbOverflow = kbExceedsBudget(kb);
-      const [kbMatches, quoteMatches] = await Promise.all([
+      const [kbMatches, quoteMatches, dealMatches] = await Promise.all([
         kbOverflow
           ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: imageInfoNote ? `${userText} ${imageInfoNote}` : userText, limit: 3, audience: "sales" })
           : Promise.resolve([] as RetrievedMatch[]),
         enquiryish
           ? aiEmbeddingsService.retrieve({ orgId, sourceType: "quote", query: `${imageInfoNote ? `${userText} ${imageInfoNote}` : userText} ${JSON.stringify(priorSlots)}`, limit: 4 })
           : Promise.resolve([] as RetrievedMatch[]),
+        // Posted-deal detection — same gating as reply-worker: only until a
+        // deal is pinned, never behind the enquiryish gate (the point is the
+        // first message / first screenshot).
+        !prevContext.dealRef
+          ? aiEmbeddingsService.retrieve({
+              orgId,
+              sourceType: "deal",
+              query: imageInfoNote ? `${userText} ${imageInfoNote}` : userText,
+              limit: 3,
+              maxDistance: DEAL_MATCH_MAX_DISTANCE,
+            })
+          : Promise.resolve([] as RetrievedMatch[]),
       ]);
-      retrieved = { kb: kbMatches, quotes: quoteMatches };
+      if (!prevContext.dealRef) {
+        const pinned = pickDealMatch(dealMatches);
+        if (pinned) {
+          // Mutating prevContext (like holidayImageInfo above) means every
+          // later context persist carries the pin. Mirrors reply-worker.
+          prevContext.dealRef = pinned;
+          console.log(
+            `[internal-chat-testflow] session=${session.id} pinned deal=${pinned.travelDealId} "${pinned.title}" ` +
+              `source=${pinned.source} distance=${pinned.distance?.toFixed(3) ?? "n/a"}`,
+          );
+        }
+      }
+      const deal = prevContext.dealRef ? await hydrateDealReplyContext(prevContext.dealRef) : null;
+      // Seed the deal's facts into the slots in code (blank fields only,
+      // customer-stated values win) — mirrors reply-worker; see there.
+      if (deal) seedSlotsFromDeal(priorSlots, deal);
+      retrieved = { kb: kbMatches, quotes: quoteMatches, deal };
     }
 
     // When onboarding completes in this same message, its turn is reused by

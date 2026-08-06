@@ -32,7 +32,8 @@
     "db:seed-training": "tsx --env-file-if-exists=.env scripts/seed-training.ts",
     "scraper:generate-spec": "tsx --env-file-if-exists=.env scripts/generate-extraction-spec.ts",
     "db:backfill-quote-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-quote-embeddings.ts",
-    "db:backfill-kb-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-kb-embeddings.ts"
+    "db:backfill-kb-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-kb-embeddings.ts",
+    "db:backfill-deal-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-deal-embeddings.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1019.0",

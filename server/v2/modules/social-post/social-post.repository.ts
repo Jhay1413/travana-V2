@@ -13,7 +13,7 @@ import {
 } from "@shared/schema";
 import type { TravelDeal, InsertTravelDeal } from "@shared/schema";
 import type { OrganizationBranding } from "./social-post.types";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 export const socialPostRepository = {
   async create(data: InsertTravelDeal): Promise<TravelDeal> {
@@ -77,6 +77,33 @@ export const socialPostRepository = {
       .where(eq(quote.id, quoteId))
       .limit(1);
     return row?.orgId ?? null;
+  },
+
+  /** Batch, org-agnostic projection of SCHEDULED deals for the embeddings
+   *  backfill script. "Scheduled" = onlySocialsId set (same definition the
+   *  social-posts board uses). Requires a non-null transaction.org_id since
+   *  ai_embeddings rows must be org-scoped, and excludes test transactions.
+   *  Ordered by created_at for stable paging. */
+  async findScheduledDealEmbeddingRows(
+    offset: number,
+    limit: number,
+  ): Promise<Array<{ deal: TravelDeal; orgId: string }>> {
+    const rows = await db
+      .select({ deal: travel_deal, orgId: transaction.org_id })
+      .from(travel_deal)
+      .innerJoin(quote, eq(travel_deal.quote_id, quote.id))
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(
+        and(
+          isNotNull(travel_deal.onlySocialsId),
+          eq(transaction.is_test, false),
+          isNotNull(transaction.org_id),
+        ),
+      )
+      .orderBy(travel_deal.created_at, travel_deal.id)
+      .limit(limit)
+      .offset(offset);
+    return rows.map((r) => ({ deal: r.deal, orgId: r.orgId as string }));
   },
 
   async findOrganizationBrandingById(orgId: string): Promise<OrganizationBranding | null> {

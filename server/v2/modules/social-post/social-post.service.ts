@@ -13,6 +13,8 @@ import {
   fetchOnlySocialsPost,
 } from "../../utils/only-socials";
 import { s3KeyFromStoredUrl, presignImageKey } from "../../utils/image-storage";
+import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
+import { buildDealEmbeddingText, buildDealEmbeddingMetadata } from "./deal-embedding";
 import type { TravelDeal } from "@shared/schema";
 import type {
   OnlySocialsMediaUploadResponse,
@@ -23,6 +25,34 @@ import type {
 import type { Scope } from "../../utils/scope";
 
 type ScopeOrTrusted = Scope | { orgId: null };
+
+// Best-effort vector-store sync for a POSTED deal (fire-and-forget, mirrors
+// quote.service#syncFreeQuoteEmbedding): a schedule/reschedule/edit must never
+// fail because embedding did. Skips silently when the quote's transaction has
+// no org — ai_embeddings rows must be org-scoped.
+function syncDealEmbedding(deal: TravelDeal): void {
+  void (async () => {
+    try {
+      const orgId = await socialPostRepository.findOrgIdForQuote(deal.quote_id);
+      if (!orgId) return;
+      await aiEmbeddingsService.syncSource({
+        orgId,
+        sourceType: "deal",
+        sourceId: deal.id,
+        content: buildDealEmbeddingText(deal),
+        metadata: buildDealEmbeddingMetadata(deal),
+      });
+    } catch (err) {
+      console.warn(`[deal-embedding] sync failed (deal=${deal.id}):`, err instanceof Error ? err.message : err);
+    }
+  })();
+}
+
+// Keyed on the deal id alone (globally unique) so cleanup works even when the
+// org can't be resolved — an unscheduled deal must not linger as AI context.
+function removeDealEmbedding(dealId: string): void {
+  void aiEmbeddingsService.removeSourceById("deal", dealId);
+}
 
 function effectiveOrgId(scope: ScopeOrTrusted): string | null {
   if (scope.orgId === null) return null;
@@ -472,7 +502,10 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
   async updateTravelDeal(id: string, data: Partial<TravelDeal>, scope: ScopeOrTrusted): Promise<TravelDeal> {
     await assertDealInScope(id, scope);
-    return await socialPostRepository.update(id, data);
+    const updated = await socialPostRepository.update(id, data);
+    // Only posted deals live in the vector store; keep the row fresh on edits.
+    if (updated.onlySocialsId) syncDealEmbedding(updated);
+    return updated;
   },
 
   async schedulePost(
@@ -506,6 +539,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     });
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
     console.log(`[SocialPost][timing] schedulePost DONE id=${id} total=${Date.now() - t0}ms`);
+    syncDealEmbedding(updated);
     return updated;
   },
 
@@ -546,6 +580,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     });
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
     console.log(`[SocialPost][timing] reschedulePost DONE id=${id} total=${Date.now() - t0}ms`);
+    syncDealEmbedding(updated);
     return updated;
   },
 
@@ -555,10 +590,12 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
     await deleteOnlySocialsPost(deal.onlySocialsId);
 
-    return await socialPostRepository.update(id, {
+    const updated = await socialPostRepository.update(id, {
       onlySocialsId: null,
       postSchedule: null,
     });
+    removeDealEmbedding(id);
+    return updated;
   },
 
   async uploadMedia(files: Express.Multer.File[]): Promise<OnlySocialsMediaUploadResponse[]> {
