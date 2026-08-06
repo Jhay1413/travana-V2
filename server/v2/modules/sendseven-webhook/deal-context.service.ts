@@ -516,6 +516,7 @@ export interface DealCandidateInfo {
   travelDate?: string | null;
   nights?: number | null;
   price?: string | null;
+  hotelName?: string | null;
   distance: number;
 }
 
@@ -535,6 +536,7 @@ export function pickDealCandidates(matches: RetrievedMatch[], limit = 3): DealCa
       travelDate: typeof meta.travelDate === "string" ? meta.travelDate : null,
       nights: typeof meta.nights === "number" ? meta.nights : null,
       price: typeof meta.price === "string" ? meta.price : null,
+      hotelName: c.hotelName,
       distance: c.distance,
     });
     if (out.length >= limit) break;
