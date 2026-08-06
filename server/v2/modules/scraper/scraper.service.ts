@@ -499,7 +499,7 @@ export const scraperService = {
   // save config it learns on the first run. Accumulates: a run that learns BOTH
   // login selectors and an extraction spec persists each over the latest merged
   // config (not the original), so neither clobbers the other.
-  toResolved(row: SupplierScraper, orgId: string): ResolvedScraper {
+  toResolved(row: SupplierScraper): ResolvedScraper {
     let latest = ((row.config as ScraperConfig) ?? {}) as ScraperConfig;
     // Restore any saved login session (decrypt; ignore if unreadable/corrupt).
     let sessionCookies: unknown[] | undefined;
@@ -520,11 +520,11 @@ export const scraperService = {
       persistConfig: async (patch) => {
         latest = { ...latest, ...patch };
         resolved.config = latest;
-        await scraperRepository.update(row.id, orgId, { config: latest });
+        await scraperRepository.update(row.id, { config: latest });
       },
       persistSession: async (cookies) => {
         const hasCookies = Array.isArray(cookies) && cookies.length > 0;
-        await scraperRepository.update(row.id, orgId, {
+        await scraperRepository.update(row.id, {
           session_state: hasCookies ? encrypt(JSON.stringify(cookies)) : null,
           session_saved_at: hasCookies ? new Date() : null,
         });
