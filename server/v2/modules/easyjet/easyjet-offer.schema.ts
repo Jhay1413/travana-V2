@@ -70,6 +70,9 @@ const offerSchema = z
     date: z.string(),
     stay: z.number(),
     price: z.number(),
+    // The package price with the (locally-paid) tourist tax stripped out —
+    // this is what the agent actually sells, so it feeds sales_price.
+    priceExcludingTouristTax: z.number().optional(),
     pricePP: z.number().optional().default(0),
     touristTax: z.number().optional().default(0),
     currency: z.object({ code: z.string() }).passthrough().optional(),

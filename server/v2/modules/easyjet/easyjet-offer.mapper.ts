@@ -96,7 +96,10 @@ export function mapOfferToScrapedQuote(data: OffersResponse, sourceUrl: string):
     adults: unit.occupation?.adults ?? 2,
     children: unit.occupation?.children ?? 0,
     infants: unit.occupation?.infants ?? 0,
-    sales_price: offer.price,
+    // Tourist tax is paid locally by the client, so the selling price excludes
+    // it when the API breaks it out; `price` (tax-inclusive) is the fallback
+    // for older payloads that don't.
+    sales_price: offer.priceExcludingTouristTax ?? offer.price,
     price_per_person: offer.pricePP,
     currency: offer.currency?.code || unit.currency?.code || 'GBP',
     discount: unit.discount ?? 0,

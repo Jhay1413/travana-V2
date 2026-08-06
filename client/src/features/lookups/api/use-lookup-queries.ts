@@ -14,6 +14,7 @@ export const lookupKeys = {
   destinations: (countryId?: string) => ["lookup", "destinations", countryId] as const,
   allDestinations: ["lookup", "destinations", "all"] as const,
   destinationSearch: (search: string, countryId?: string) => ["lookup", "destinations", "search", search, countryId] as const,
+  byIds: (kind: string, ids: string[]) => ["lookup", kind, "by-ids", ...ids] as const,
   resorts: (destinationId?: string, countryId?: string) => ["lookup", "resorts", destinationId, countryId] as const,
   allResorts: ["lookup", "resorts", "all"] as const,
   accommodations: (resortId?: string) => ["lookup", "accommodations", resortId] as const,
@@ -130,6 +131,40 @@ export function useDestinationSearch(search: string, countryId?: string) {
     queryKey: lookupKeys.destinationSearch(search, countryId),
     queryFn: () => lookupApi.getDestinations(countryId, search || undefined, 10),
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+// Search-backed selects only hold a page of options, so a value chosen earlier
+// — or written by an import — is usually not among them, and a select cannot
+// render an option it does not have. These fetch the selected rows by id so the
+// caller can merge them into its options and the value always displays.
+export function useDestinationsByIds(ids: (string | undefined | null)[]) {
+  const clean = Array.from(new Set(ids.filter((i): i is string => !!i)));
+  return useQuery({
+    queryKey: lookupKeys.byIds("destinations", clean),
+    queryFn: () => lookupApi.getDestinations(undefined, undefined, undefined, clean),
+    enabled: clean.length > 0,
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useResortsByIds(ids: (string | undefined | null)[]) {
+  const clean = Array.from(new Set(ids.filter((i): i is string => !!i)));
+  return useQuery({
+    queryKey: lookupKeys.byIds("resorts", clean),
+    queryFn: () => lookupApi.getResorts(undefined, undefined, undefined, undefined, clean),
+    enabled: clean.length > 0,
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
+export function useAccommodationsByIds(ids: (string | undefined | null)[]) {
+  const clean = Array.from(new Set(ids.filter((i): i is string => !!i)));
+  return useQuery({
+    queryKey: lookupKeys.byIds("accommodations", clean),
+    queryFn: () => lookupApi.getAccommodations(undefined, undefined, undefined, undefined, undefined, clean),
+    enabled: clean.length > 0,
+    staleTime: 1000 * 60 * 30,
   });
 }
 

@@ -11,8 +11,20 @@ import type { ExtractionSpec } from './extraction.types';
 // so a single null can't fail the whole spec.
 const nullToUndef = (v: unknown): unknown => (v === null ? undefined : v);
 
+// The interpreter tries a rule's jsonPath FIRST and only then falls back to the
+// named source, so a rule that reads the API JSON still needs a valid `from` for
+// its fallback. The AI regularly invents "json"/"api"/"apiJson" for those rules;
+// rejecting them threw away the entire spec over a field that would have worked.
+// Normalise instead — anything unrecognised becomes "text".
+const SOURCES = ['text', 'title', 'url', 'images'] as const;
+const normaliseFrom = (v: unknown): unknown => {
+  if (typeof v !== 'string') return 'text';
+  const s = v.trim().toLowerCase();
+  return (SOURCES as readonly string[]).includes(s) ? s : 'text';
+};
+
 const fieldRuleSchema = z.object({
-  from: z.preprocess((v) => v ?? 'text', z.enum(['text', 'title', 'url', 'images'])),
+  from: z.preprocess(normaliseFrom, z.enum(SOURCES)),
   jsonPath: z.preprocess(nullToUndef, z.string().optional()),
   regex: z.preprocess(nullToUndef, z.string().optional()),
   group: z.preprocess(nullToUndef, z.number().int().optional()),
@@ -86,6 +98,7 @@ Output ONLY a JSON object with this shape:
 
 Rules:
 - from "text" = the page innerText, "title" = page title, "url" = the deep-link URL (use urlSegment to pick a path segment, 0-indexed).
+- "from" MUST be exactly one of: "text", "title", "url", "images". There is no "json" source — to read the API JSON you add a "jsonPath" and leave "from" as the DOM fallback (usually "text"). jsonPath is always tried FIRST when present.
 - If an API JSON is provided, prefer it for a field by adding "jsonPath" (dot/bracket path, e.g. "offers[0].price"). The interpreter tries jsonPath first and falls back to the regex on the DOM — so give BOTH a jsonPath (from the API) AND a regex (from the DOM) when the field appears in both. This is how API data and DOM data merge.
 - Use transform "number" for prices/counts (strips £ and commas), "date" for dates (any of "06 Sep 2026", "06-09-2026", ISO — the interpreter normalises to YYYY-MM-DD), "titleCase" for URL slugs.
 - board_basis must map to one of: All Inclusive, All Inclusive Plus, Half Board, Half Board Plus, Full Board, Full Board Plus, Bed and Breakfast, Self Catering, Room Only.
@@ -95,7 +108,7 @@ Rules:
 - Regexes run case-insensitively. Anchor them to the LABELS visible on the page — never to this page's VALUES.
 - GENERALITY (critical): the spec is saved and reused for EVERY future deal on this supplier's site — this page is only ONE example. A rule whose regex is this page's literal value (e.g. board_basis "Half Board", room_type "Standard Double or Twin room", or a place name like "(salou)") extracts NOTHING on the next deal and is WRONG. Every rule must CAPTURE whatever value appears:
   - board_basis: match the whole canonical vocabulary, e.g. "(All Inclusive Plus|All Inclusive|Half Board Plus|Half Board|Full Board Plus|Full Board|Bed and Breakfast|Self Catering|Room Only)".
-  - room_type: capture the variable room phrase near its label or price line (e.g. "([\\w ]+(?:room|apartment|suite|studio|villa))"), not this page's exact room name.
+  - room_type: anchor on the STRUCTURAL marker beside the name — the "ROOM 1" heading above it, or the "Sleeps:"/occupancy line below it — and capture that whole line, e.g. "ROOM\\s*\\d+\\s*\\n+\\s*([^\\n]+)" or "\\n([^\\n]+)\\n+\\s*Sleeps:". Do NOT key on the words room/suite/apartment/villa: rules run CASE-INSENSITIVELY, so such a rule also matches those words inside ordinary prose — a rule like "([\\w ]+(?:room|suite))" happily captured the caption "Best room choice according to your selected duration and dates". The same warning applies to any field whose value is a proper noun on its own line (accommodation, resort): anchor on the neighbouring label, never on a word that also occurs in body text.
   - from "url" with urlSegment: the segment POSITION carries the meaning — capture it generically with "([^/?#]+)" (or omit the regex entirely to take the whole segment). Never pin it to this page's slug.
 - FLIGHT TIMES: package pages often show only the departure airport in the visible text and hide the exact flight times + destination airport behind a popup opened by a control such as "Compare airport, dates & prices" or "Flight details". If you see such a control's text on the page, set "flightModalTrigger" to a regex matching that control's visible label (e.g. "compare airport" ). The scraper will click it and read the times — you do NOT write regexes for the times themselves.
 - A field's "from" may be "images": the rule's regex then runs over the list of the page's image URLs (one per line). Use this only when a value (e.g. a destination airport code) appears solely in image filenames.`;

@@ -10,6 +10,9 @@ import {
   useDestinationSearch,
   useResortSearch,
   useAccommodationSearch,
+  useDestinationsByIds,
+  useResortsByIds,
+  useAccommodationsByIds,
   useBoardBasis,
   useRoomTypes,
 } from "@/hooks/queries";
@@ -26,6 +29,7 @@ export function QuoteDestinationAccomSection() {
   const country = useWatch({ control, name: "country" });
   const destination = useWatch({ control, name: "destination" });
   const resort = useWatch({ control, name: "resort" });
+  const accommodationId = useWatch({ control, name: "accommodationId" });
 
   const [destSearch, setDestSearch] = useState("");
   const [destLabel, setDestLabel] = useState("");
@@ -54,6 +58,23 @@ export function QuoteDestinationAccomSection() {
     !resort ? destination || undefined : undefined,
     !resort && !destination ? country || undefined : undefined,
   );
+  // These selects are search-backed and return a page at a time, so a value set
+  // by an import (or chosen before a filter changed) is usually NOT in the
+  // current results — and a select renders nothing for an option it lacks.
+  // Fetch the selected rows by id and merge them in, so the value always shows.
+  const { data: selectedDestinations } = useDestinationsByIds([destination]);
+  const { data: selectedResorts } = useResortsByIds([resort]);
+  const { data: selectedAccommodations } = useAccommodationsByIds([accommodationId]);
+
+  const withSelected = <T extends { id: string; name: string }>(
+    list: T[] | undefined,
+    selected: T[] | undefined,
+  ): { value: string; label: string }[] => {
+    const seen = new Set((list ?? []).map((i) => i.id));
+    const merged = [...(list ?? []), ...(selected ?? []).filter((i) => !seen.has(i.id))];
+    return merged.map((i) => ({ value: i.id, label: i.name }));
+  };
+
   const { data: boardBasisData } = useBoardBasis();
   const { data: roomTypeData } = useRoomTypes();
 
@@ -99,10 +120,7 @@ export function QuoteDestinationAccomSection() {
               <FormLabel className="text-xs font-medium text-black/60">Destination</FormLabel>
               <FormControl>
                 <SearchableSelect
-                  options={(destinationsData || []).map((d: { id: string; name: string }) => ({
-                    value: d.id,
-                    label: d.name,
-                  }))}
+                  options={withSelected(destinationsData, selectedDestinations)}
                   value={field.value ?? ""}
                   onValueChange={(value) => {
                     const label = (destinationsData || []).find((d) => d.id === value)?.name || "";
@@ -138,10 +156,7 @@ export function QuoteDestinationAccomSection() {
               <FormLabel className="text-xs font-medium text-black/60">Resort</FormLabel>
               <FormControl>
                 <SearchableSelect
-                  options={(resortsData || []).map((r: { id: string; name: string }) => ({
-                    value: r.id,
-                    label: r.name,
-                  }))}
+                  options={withSelected(resortsData, selectedResorts)}
                   value={field.value ?? ""}
                   selectedLabel={resortLabel}
                   onSearch={setResortSearch}
@@ -182,10 +197,7 @@ export function QuoteDestinationAccomSection() {
               <FormLabel className="text-xs font-medium text-black/60">Accommodation</FormLabel>
               <FormControl>
                 <SearchableSelect
-                  options={(accommodationsData || []).map((a: { id: string; name: string }) => ({
-                    value: a.id,
-                    label: a.name,
-                  }))}
+                  options={withSelected(accommodationsData, selectedAccommodations)}
                   value={field.value ?? ""}
                   selectedLabel={accomLabel}
                   onSearch={setAccomSearch}

@@ -1,75 +1,68 @@
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
-import { Loader2, Upload } from "lucide-react";
+import { ClipboardPaste, Loader2, Upload } from "lucide-react";
 import { FormField } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSupplierScrapers } from "@/features/supplier-scraper";
 import type { QuoteFormValues } from "@/features/quote/types";
+import { QuotePageCaptureDialog } from "./QuotePageCaptureDialog";
+import { parseCapture, type CapturedPage } from "@/features/quote/api/use-page-capture-import";
 
 interface QuoteImportRowProps {
   onJsonUpload: (file: File) => void;
-  // Scrape a supplier deal: (url, supplierKey) from the dropdown below.
-  onSupplierImport?: (url: string, supplierKey: string) => void;
-  supplierImportPending?: boolean;
+  // Import from a page the agent captured in their own browser (bookmarklet).
+  onPageCaptureImport?: (capture: CapturedPage, supplierKey: string) => void;
+  pageCapturePending?: boolean;
 }
 
-export function QuoteImportRow({ onJsonUpload, onSupplierImport, supplierImportPending }: QuoteImportRowProps) {
+export function QuoteImportRow({
+  onJsonUpload,
+  onPageCaptureImport,
+  pageCapturePending,
+}: QuoteImportRowProps) {
   const { control } = useFormContext<QuoteFormValues>();
-  const { data: scrapers, isLoading } = useSupplierScrapers();
-  const [url, setUrl] = useState("");
-  const [supplierKey, setSupplierKey] = useState("");
+  const { data: scrapers } = useSupplierScrapers();
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [clipboardText, setClipboardText] = useState("");
 
   // Only suppliers that are configured and enabled can be scraped.
   const active = (scrapers ?? []).filter((s) => s.isActive);
 
-  const canImport = !supplierImportPending && !!url.trim() && !!supplierKey;
-  const submit = () => {
-    if (canImport && onSupplierImport) onSupplierImport(url.trim(), supplierKey);
+  // The capture dialog resolves the supplier from the captured link, and creates
+  // one for an unrecognised site — so it needs no supplier configured up front.
+  // The list is only offered as an override.
+
+  // The bookmarklet already put the capture on the clipboard, so read it here
+  // and import straight away — pasting it into a box first is a step that adds
+  // nothing. The supplier is worked out from the captured URL server-side, so
+  // there is nothing else to ask for.
+  //
+  // Reading the clipboard needs permission and isn't available in every browser
+  // (Firefox has no readText outside extensions), so any failure — blocked,
+  // unsupported, or the clipboard holding something that isn't a capture —
+  // falls back to the paste dialog rather than dead-ending.
+  const captureFromClipboard = async () => {
+    if (!onPageCaptureImport) return;
+    let raw = "";
+    try {
+      raw = await navigator.clipboard.readText();
+    } catch {
+      setClipboardText(""); // clipboard unreadable — offer the paste box empty
+      setCaptureOpen(true);
+      return;
+    }
+    try {
+      onPageCaptureImport(parseCapture(raw), "");
+    } catch {
+      // Read fine, but it isn't a capture. Hand the text to the dialog so the
+      // user can see what was actually on the clipboard.
+      setClipboardText(raw);
+      setCaptureOpen(true);
+    }
   };
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
-      {onSupplierImport && (
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <Input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            placeholder="Paste supplier deal link…"
-            disabled={supplierImportPending}
-            className="h-8 min-w-[200px] flex-1 rounded-xl border-black/10 bg-white/70 text-xs"
-          />
-          <Select value={supplierKey} onValueChange={setSupplierKey} disabled={supplierImportPending || isLoading}>
-            <SelectTrigger className="h-8 w-[170px] rounded-xl border-black/10 bg-white/70 text-xs">
-              <SelectValue placeholder={isLoading ? "Loading…" : active.length ? "Supplier" : "No suppliers"} />
-            </SelectTrigger>
-            <SelectContent>
-              {active.map((s) => (
-                <SelectItem key={s.id} value={s.supplierKey}>
-                  {s.supplierName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!canImport}
-            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {supplierImportPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-            {supplierImportPending ? "Importing…" : "Import"}
-          </button>
-        </div>
-      )}
       <FormField
         control={control}
         name="not_for_social"
@@ -80,6 +73,35 @@ export function QuoteImportRow({ onJsonUpload, onSupplierImport, supplierImportP
           </label>
         )}
       />
+      {onPageCaptureImport && (
+        <>
+          <button
+            type="button"
+            onClick={captureFromClipboard}
+            disabled={pageCapturePending}
+            title="Import the deal page you captured with the bookmarklet"
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]"
+          >
+            {pageCapturePending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ClipboardPaste className="h-3.5 w-3.5" />
+            )}
+            {pageCapturePending ? "Importing…" : "Import Deal"}
+          </button>
+          <QuotePageCaptureDialog
+            open={captureOpen}
+            onOpenChange={setCaptureOpen}
+            suppliers={active}
+            pending={pageCapturePending}
+            initialValue={clipboardText}
+            onImport={(capture, key) => {
+              onPageCaptureImport(capture, key);
+              setCaptureOpen(false);
+            }}
+          />
+        </>
+      )}
       <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
         <Upload className="h-3.5 w-3.5" />
         Import JSON

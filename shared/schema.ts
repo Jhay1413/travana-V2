@@ -317,9 +317,12 @@ export type InsertTourOperatorLookup = typeof tour_operator.$inferInsert;
 // scrape one supplier (easyJet, TUI, …): login credentials (encrypted via
 // utils/encryption) plus a `config` JSON that drives the config-driven scraper
 // engine (adapter type, browser/proxy, auth selectors, API endpoints).
+// PLATFORM-WIDE, deliberately not org-scoped: a supplier's extraction spec
+// describes how to read that portal's pages, which is identical for every
+// agency. Scoping it per-org meant the same spec was re-learned, re-broken and
+// re-fixed once per tenant.
 export const supplier_scraper = pgTable('supplier_scraper', {
   id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
-  org_id: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
   // Optional link to the tour_operator catalog row (commission, display name).
   tour_operator_id: uuid("tour_operator_id").references(() => tour_operator.id, { onDelete: "set null" }),
   // Stable identifier used to match a pasted URL to this config (e.g. "easyjet").
@@ -342,12 +345,36 @@ export const supplier_scraper = pgTable('supplier_scraper', {
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
 }, (table) => [
-  // One config per supplier per org.
-  unique("uq_supplier_scraper_org_supplier").on(table.org_id, table.supplier_key),
-  index("idx_supplier_scraper_org").on(table.org_id),
+  // One config per supplier, platform-wide.
+  unique("uq_supplier_scraper_supplier_key").on(table.supplier_key),
 ]);
 export type SupplierScraper = typeof supplier_scraper.$inferSelect;
 export type InsertSupplierScraper = typeof supplier_scraper.$inferInsert;
+
+// Reviewed extraction specs, kept OUTSIDE supplier_scraper so they survive that
+// row being deleted. A spec is AI-generated from one captured page and then
+// corrected by hand — expensive, easily-lost work. Deleting a supplier and
+// re-capturing it used to discard all of that and ask the AI again, which
+// reliably reproduced the same overfitted rules. Archived by HOST rather than
+// supplier_key so a portal recreated under a different key still finds its spec.
+export const supplier_spec_archive = pgTable('supplier_spec_archive', {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  // The deepLink hostIncludes this spec was written for, e.g. "easyjet.com".
+  host_includes: varchar("host_includes").notNull(),
+  // Kept for display; not used for matching.
+  supplier_key: varchar("supplier_key").notNull(),
+  // The ExtractionSpec itself.
+  extraction: jsonb("extraction").notNull(),
+  // Whether a human had approved it. An approved spec is restored silently; an
+  // unapproved one is restored still flagged for review.
+  approved: boolean("approved").notNull().default(false),
+  archived_at: timestamp("archived_at").notNull().defaultNow(),
+}, (table) => [
+  // One archived spec per host, platform-wide — re-archiving replaces it.
+  unique("uq_supplier_spec_archive_host").on(table.host_includes),
+]);
+export type SupplierSpecArchive = typeof supplier_spec_archive.$inferSelect;
+export type InsertSupplierSpecArchive = typeof supplier_spec_archive.$inferInsert;
 
 export const package_type = pgTable('package_type_table', {
   id: uuid()
@@ -2052,6 +2079,13 @@ export const sendsevenIntegrations = pgTable("sendseven_integrations", {
   webhookSecret: text("webhook_secret"),
   autoReplyEnabled: boolean("auto_reply_enabled").notNull().default(false),
   autoReplyMode: text("auto_reply_mode").notNull().default("draft"), // 'draft' | 'send'
+  // When auto-reply was last switched ON (stamped on the off→on transition
+  // only). Drives the "AI on by default for NEW conversations" gate: a
+  // conversation whose SendSeven created_at is after this moment gets the AI
+  // automatically; older conversations need the per-conversation/client
+  // opt-in. Null = never enabled (or enabled before this column existed —
+  // fail-closed, no default-on until the next re-enable stamps it).
+  autoReplyEnabledAt: timestamp("auto_reply_enabled_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

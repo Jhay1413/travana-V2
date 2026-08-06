@@ -9,6 +9,7 @@ import { neonClientService } from "../neon-client/neon-client.service";
 import { conversationStateRepository } from "../sendseven-webhook/conversation-state.repository";
 import { clientDisplayName, systemScope } from "../sendseven-webhook/identity.service";
 import { createNewTestClient, resolveOrCreateTestClient } from "./internal-chat-identity.service";
+import { internalChatTestflowService } from "./internal-chat-testflow.service";
 import { internalChatRepository } from "./internal-chat.repository";
 import type { SsMessage } from "../messages/messages.types";
 
@@ -72,6 +73,10 @@ export interface ForkSessionResult {
   // sandbox ignores it (see header comment), but the tester should know the
   // real AI would stay silent right now.
   realNeedsHuman: boolean;
+  // True when the conversation ended on a CUSTOMER message and the sandbox
+  // therefore answered it immediately on open (see the auto-turn below), so
+  // the tester lands on the AI's reply to that message without retyping it.
+  autoReplied: boolean;
 }
 
 export async function forkSessionFromConversation(scope: Scope, conversationId: string): Promise<ForkSessionResult> {
@@ -122,6 +127,16 @@ export async function forkSessionFromConversation(scope: Scope, conversationId: 
     .filter((m) => !m.created_at || new Date(m.created_at).getTime() >= since)
     .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
 
+  // If the conversation ends on a CUSTOMER message, that message is exactly
+  // what the tester wants answered — so hold it back from the seeded history
+  // and feed it to the driver as this session's first turn (below). The driver
+  // persists it itself, so the transcript ends up identical either way — it
+  // just also produces the AI's reply to it. Nothing is held back when the
+  // last message is ours (agent/AI): there'd be nothing new to answer.
+  const endsWithCustomer = seedable.length > 0 && seedable[seedable.length - 1]!.direction === "inbound";
+  const triggerText = endsWithCustomer ? seedable[seedable.length - 1]!.text!.trim() : null;
+  const history = endsWithCustomer ? seedable.slice(0, -1) : seedable;
+
   // Clone the linked client into a TEST twin (or run as an unknown contact
   // when there's no linked client / the clone fails — the sandbox then
   // exercises the onboarding gate, which is also representative).
@@ -158,20 +173,23 @@ export async function forkSessionFromConversation(scope: Scope, conversationId: 
     }
   }
   if (contactName) seededContext.contactName = contactName;
-  await internalChatRepository.updateSession(session.id, orgId, {
-    clientId: cloneClientId,
-    // enquiryId is deliberately NOT copied: without it, the sandbox's
-    // awaiting_availability step confirms but skips the (real-record)
-    // callback-task write — same reply, no side effect.
-    enquiryStatus: state?.enquiryStatus ?? null,
-    enquirySlots: state?.enquirySlots ?? null,
-    context: Object.keys(seededContext).length ? seededContext : null,
-  });
+  // Keep the UPDATED row — the auto-turn below reads clientId/context/enquiry
+  // state off the session object it's handed, not from the DB.
+  const seededSession =
+    (await internalChatRepository.updateSession(session.id, orgId, {
+      clientId: cloneClientId,
+      // enquiryId is deliberately NOT copied: without it, the sandbox's
+      // awaiting_availability step confirms but skips the (real-record)
+      // callback-task write — same reply, no side effect.
+      enquiryStatus: state?.enquiryStatus ?? null,
+      enquirySlots: state?.enquirySlots ?? null,
+      context: Object.keys(seededContext).length ? seededContext : null,
+    })) ?? session;
 
   // Seed the transcript with original timestamps so order (and the driver's
   // recency window) match reality. Sequential inserts keep insertion order as
   // a tiebreaker for same-ms rows.
-  for (const m of seedable) {
+  for (const m of history) {
     await internalChatRepository.createMessage({
       sessionId: session.id,
       role: m.direction === "outbound" ? "assistant" : "user",
@@ -188,9 +206,30 @@ export async function forkSessionFromConversation(scope: Scope, conversationId: 
     content: `Forked from SendSeven conversation ${conversationId} for AI testing (${seedable.length} messages seeded).`,
   });
 
+  // Auto-turn: the conversation ended on a customer message, so answer it now
+  // — the tester opens the modal already looking at the AI's reply to it,
+  // instead of having to retype what the customer just said. Best-effort: a
+  // failed turn (e.g. the AI service is down) must still hand back a usable
+  // session, so the tester can carry on typing as the client.
+  let autoReplied = false;
+  if (triggerText) {
+    try {
+      await internalChatTestflowService.runTestFlowTurn(seededSession, triggerText, scope);
+      autoReplied = true;
+    } catch (err) {
+      console.error(`[internal-chat-fork] conv ${conversationId} auto-turn failed:`, err instanceof Error ? err.message : err);
+      // Persist the customer's message anyway so the seeded transcript still
+      // ends where the real one does (the driver never got that far).
+      await internalChatRepository
+        .createMessage({ sessionId: session.id, role: "user", content: triggerText })
+        .catch(() => undefined);
+    }
+  }
+
   console.log(
     `[internal-chat-fork] conv ${conversationId} → test session ${session.id} ` +
-      `(org ${orgId}, ${seedable.length} messages, clone=${cloneClientId ?? "none"}, status=${state?.enquiryStatus ?? "none"}, realNeedsHuman=${!!state?.needsHuman})`,
+      `(org ${orgId}, ${seedable.length} messages, clone=${cloneClientId ?? "none"}, status=${state?.enquiryStatus ?? "none"}, ` +
+      `realNeedsHuman=${!!state?.needsHuman}, autoReplied=${autoReplied})`,
   );
-  return { sessionId: session.id, seededMessages: seedable.length, realNeedsHuman: !!state?.needsHuman };
+  return { sessionId: session.id, seededMessages: seedable.length, realNeedsHuman: !!state?.needsHuman, autoReplied };
 }

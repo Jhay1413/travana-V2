@@ -38,6 +38,7 @@ import {
   Trash2,
   TrendingUp,
   Trophy,
+  Wrench,
   Type,
   UserCircle,
   Users,
@@ -82,6 +83,7 @@ const AGENT_NAV: NavConfig = [
       { path: "/conversations", label: "Inbox", icon: Inbox, badge: "conversations" },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/opportunities", label: "Opportunities", icon: Target },
+      { path: "/tools", label: "Tools", icon: Wrench },
     ],
   },
 ];
@@ -101,6 +103,7 @@ const BRANCH_MANAGER_NAV: NavConfig = [
       { path: "/branch/targets", label: "Targets", icon: Target },
       { path: "/hr", label: "HR", icon: HeartHandshake },
       { path: "/hr-v2", label: "HR V2", icon: HeartHandshake },
+      { path: "/tools", label: "Tools", icon: Wrench },
     ],
   },
 ];
@@ -177,6 +180,7 @@ const ORG_ADMIN_NAV: NavConfig = [
     id: "overview",
     items: [
       { path: "/agency/overview", label: "Admin Dashboard", icon: LayoutGrid },
+      { path: "/tools", label: "Tools", icon: Wrench },
     ],
   },
   {

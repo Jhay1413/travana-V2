@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pencil, Plus, ServerCog, Trash2 } from "lucide-react";
+import { FileSearch, Pencil, Plus, ServerCog, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,7 @@ import {
   useSupplierScrapers,
   useDeleteSupplierScraper,
   SupplierScraperDialog,
+  SupplierSpecReviewDialog,
   type SupplierScraper,
 } from "@/features/supplier-scraper";
 
@@ -28,6 +29,7 @@ export default function AgencySupplierScrapersPage() {
   const [editing, setEditing] = useState<SupplierScraper | null>(null);
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<SupplierScraper | null>(null);
+  const [reviewing, setReviewing] = useState<SupplierScraper | null>(null);
 
   const list = data ?? [];
 
@@ -79,17 +81,18 @@ export default function AgencySupplierScrapersPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-3xl border border-black/10 bg-white dark:border-white/10 dark:bg-white/5">
-          <div className="grid grid-cols-[1fr_120px_120px_88px] gap-3 border-b border-black/5 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-black/50 dark:border-white/10 dark:text-white/50">
+          <div className="grid grid-cols-[1fr_120px_120px_130px_88px] gap-3 border-b border-black/5 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-black/50 dark:border-white/10 dark:text-white/50">
             <div>Supplier</div>
             <div>Credentials</div>
             <div>Status</div>
+            <div>Spec</div>
             <div className="text-right">Actions</div>
           </div>
           <div className="divide-y divide-black/5 dark:divide-white/5">
             {list.map((row) => (
               <div
                 key={row.id}
-                className="grid grid-cols-[1fr_120px_120px_88px] items-center gap-3 px-4 py-3"
+                className="grid grid-cols-[1fr_120px_120px_130px_88px] items-center gap-3 px-4 py-3"
                 data-testid={`row-supplier-scraper-${row.id}`}
               >
                 <div className="min-w-0">
@@ -118,7 +121,37 @@ export default function AgencySupplierScrapersPage() {
                     <span className="text-black/40 dark:text-white/40">Disabled</span>
                   )}
                 </div>
+                <div className="text-xs">
+                  {(() => {
+                    const cfg = row.config as { extraction?: unknown; specNeedsReview?: boolean };
+                    if (!cfg?.extraction) return <span className="text-black/30 dark:text-white/30">None</span>;
+                    return cfg.specNeedsReview ? (
+                      <button
+                        onClick={() => setReviewing(row)}
+                        className="rounded-full bg-amber-500/15 px-2 py-0.5 font-medium text-amber-700 hover:bg-amber-500/25 dark:text-amber-300"
+                        title="AI-generated from one page — review and approve"
+                      >
+                        Needs review
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setReviewing(row)}
+                        className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-700 hover:bg-emerald-500/25 dark:text-emerald-300"
+                        title="View the approved extraction spec"
+                      >
+                        Approved
+                      </button>
+                    );
+                  })()}
+                </div>
                 <div className="flex justify-end gap-1">
+                  <button
+                    onClick={() => setReviewing(row)}
+                    className="rounded-lg p-1.5 text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+                    title="Review extraction spec"
+                  >
+                    <FileSearch className="h-3.5 w-3.5" />
+                  </button>
                   <button
                     onClick={() => {
                       setCreating(false);
@@ -142,6 +175,8 @@ export default function AgencySupplierScrapersPage() {
           </div>
         </div>
       )}
+
+      <SupplierSpecReviewDialog scraper={reviewing} onOpenChange={(open) => !open && setReviewing(null)} />
 
       <SupplierScraperDialog
         open={creating || !!editing}

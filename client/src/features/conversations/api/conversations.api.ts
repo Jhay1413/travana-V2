@@ -379,6 +379,11 @@ export const conversationsApi = {
     const { data } = await axiosClient.get<ConversationAiState>(`${BASE}/${id}/ai-state`);
     return data;
   },
+  // On-demand composer suggestion — returns text only, changes nothing server-side.
+  aiSuggestReply: async (id: string): Promise<{ suggestion: string }> => {
+    const { data } = await axiosClient.post<{ suggestion: string }>(`${BASE}/${id}/ai-suggest-reply`);
+    return data;
+  },
 
   // Writes — single conversation
   create: async (body: ConversationCreate): Promise<SsConversation> => {

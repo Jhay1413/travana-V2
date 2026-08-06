@@ -18,7 +18,6 @@ import { useEnquiry } from "@/features/enquiry/api/use-enquiry-queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { AddAirportModal } from "@/features/lookups/components/lookups/add-airport-modal";
-import { getDepartureAirportOptions } from "@/lib/uk-airports";
 
 const FLEXIBILITY_OPTIONS = [
   "Exact Date",
@@ -591,10 +590,11 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
     });
   };
 
-  // Departure airport options: always the UK departure airport list.
-  const airportOptions = getDepartureAirportOptions(airportsData);
-  // Dropdown stays the curated UK list, but resolve chip labels from the full
-  // airport set so any selected airport (incl. ones added inline) displays.
+  // Every airport, so an imported or hand-picked departure is always selectable.
+  const airportOptions = (airportsData || []).map((a) => ({
+    value: a.id,
+    label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
+  }));
   const airportLabels = (airportsData || []).reduce<Record<string, string>>((acc, a) => {
     acc[a.id] = `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`;
     return acc;

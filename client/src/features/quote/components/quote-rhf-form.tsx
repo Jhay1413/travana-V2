@@ -5,7 +5,7 @@ import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { handleJsonUpload as handleJsonUploadUtil, handleJsonData, type JsonImportDeps } from "@/lib/json-import-handler";
-import { useEasyJetImport } from "@/features/quote/api/use-easyjet-import";
+import { usePageCaptureImport, type CapturedPage } from "@/features/quote/api/use-page-capture-import";
 import {
   existingImageItem,
   pendingFiles,
@@ -233,18 +233,23 @@ export function QuoteRHFForm({
     }
   };
 
-  // ── Supplier URL import ───────────────────────────────────────────────────
-  // The user pastes a deal link and picks a configured supplier; the server
-  // scrapes it with that supplier's stored credentials.
-  const supplierImport = useEasyJetImport();
-  const handleSupplierImport = (url: string, supplierKey: string) => {
+  // ── Captured-page import ──────────────────────────────────────────────────
+  // For credentialed suppliers the agent captures the deal page in their own
+  // (already logged-in) browser via the bookmarklet; the server only interprets
+  // it. No stored credentials, no headless browser, no bot protection to clear.
+  const pageCaptureImport = usePageCaptureImport();
+  const handlePageCaptureImport = (capture: CapturedPage, supplierKey: string) => {
     setIsImporting(true);
-    supplierImport.mutate(
-      { url, supplierKey },
+    pageCaptureImport.mutate(
+      // Omit the key entirely when auto-detecting, rather than sending "".
+      supplierKey ? { ...capture, supplierKey } : capture,
       {
-        onSuccess: async (scraped) => {
+        onSuccess: async (result) => {
           try {
-            await handleJsonData(scraped as Record<string, any>, prepareJsonImport());
+            await handleJsonData(result.quote as Record<string, any>, prepareJsonImport());
+            // Surfaces "created supplier X / learned its spec — review it", so a
+            // newly auto-configured supplier doesn't go unnoticed.
+            if (result.message) toast({ title: "Imported", description: result.message });
           } finally {
             setIsImporting(false);
           }
@@ -253,7 +258,8 @@ export function QuoteRHFForm({
           setIsImporting(false);
           toast({
             title: "Import failed",
-            description: error instanceof Error ? error.message : "Could not fetch the deal from the supplier.",
+            description:
+              error instanceof Error ? error.message : "Could not read the captured page.",
             variant: "destructive",
           });
         },
@@ -301,8 +307,8 @@ export function QuoteRHFForm({
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
         <QuoteImportRow
           onJsonUpload={handleJsonUpload}
-          onSupplierImport={handleSupplierImport}
-          supplierImportPending={supplierImport.isPending}
+          onPageCaptureImport={handlePageCaptureImport}
+          pageCapturePending={pageCaptureImport.isPending}
         />
 
         {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}

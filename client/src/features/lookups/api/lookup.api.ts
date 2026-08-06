@@ -128,16 +128,18 @@ export const lookupApi = {
     const { data } = await axios.get<LookupCountry[]>("/api/v2/lookup/countries");
     return data;
   },
-  getDestinations: async (countryId?: string, search?: string, limit?: number): Promise<LookupDestination[]> => {
+  getDestinations: async (countryId?: string, search?: string, limit?: number, ids?: string[]): Promise<LookupDestination[]> => {
     const params: Record<string, any> = {};
+    if (ids?.length) params.ids = ids.join(",");
     if (countryId) params.countryId = countryId;
     if (search) params.search = search;
     if (limit) params.limit = limit;
     const { data } = await axios.get<LookupDestination[]>("/api/v2/lookup/destinations", { params });
     return data;
   },
-  getResorts: async (destinationId?: string, countryId?: string, search?: string, limit?: number): Promise<LookupResort[]> => {
+  getResorts: async (destinationId?: string, countryId?: string, search?: string, limit?: number, ids?: string[]): Promise<LookupResort[]> => {
     const params: Record<string, any> = {};
+    if (ids?.length) params.ids = ids.join(",");
     if (destinationId) params.destinationId = destinationId;
     if (countryId) params.countryId = countryId;
     if (search) params.search = search;
@@ -145,8 +147,9 @@ export const lookupApi = {
     const { data } = await axios.get<LookupResort[]>("/api/v2/lookup/resorts", { params });
     return data;
   },
-  getAccommodations: async (resortId?: string, destinationId?: string, countryId?: string, search?: string, limit?: number): Promise<LookupAccommodation[]> => {
+  getAccommodations: async (resortId?: string, destinationId?: string, countryId?: string, search?: string, limit?: number, ids?: string[]): Promise<LookupAccommodation[]> => {
     const params: Record<string, any> = {};
+    if (ids?.length) params.ids = ids.join(",");
     if (resortId) params.resortId = resortId;
     if (destinationId) params.destinationId = destinationId;
     if (countryId) params.countryId = countryId;

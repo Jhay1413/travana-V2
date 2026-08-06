@@ -1,4 +1,13 @@
 import { Router, Request, Response } from 'express';
+
+// ?ids=a,b — fetch specific rows so a selected value can always be shown, even
+// when it falls outside the current search window.
+function idsParam(req: Request): string[] | undefined {
+  const raw = req.query.ids as string | undefined;
+  if (!raw) return undefined;
+  const ids = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  return ids.length ? ids : undefined;
+}
 import { lookupService } from './lookup.service';
 
 const router = Router();
@@ -15,6 +24,7 @@ router.get('/countries', async (_req: Request, res: Response) => {
 router.get('/destinations', async (req: Request, res: Response) => {
   try {
     const rows = await lookupService.getDestinations({
+      ids: idsParam(req),
       countryId: req.query.countryId as string | undefined,
       search: req.query.search as string | undefined,
       limit: (req.query.limit as string) ? parseInt(req.query.limit as string) : undefined,
@@ -28,6 +38,7 @@ router.get('/destinations', async (req: Request, res: Response) => {
 router.get('/resorts', async (req: Request, res: Response) => {
   try {
     const rows = await lookupService.getResorts({
+      ids: idsParam(req),
       destinationId: req.query.destinationId as string | undefined,
       countryId: req.query.countryId as string | undefined,
       search: req.query.search as string | undefined,
@@ -42,6 +53,7 @@ router.get('/resorts', async (req: Request, res: Response) => {
 router.get('/accommodations', async (req: Request, res: Response) => {
   try {
     const rows = await lookupService.getAccommodations({
+      ids: idsParam(req),
       resortId: req.query.resortId as string | undefined,
       destinationId: req.query.destinationId as string | undefined,
       countryId: req.query.countryId as string | undefined,

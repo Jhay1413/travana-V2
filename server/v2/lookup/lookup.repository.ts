@@ -17,14 +17,22 @@ import {
   cruise_ship,
   cruise_itenary,
 } from '@shared/schema';
-import { eq, ilike, and, gte, sql } from 'drizzle-orm';
+import { eq, ilike, and, gte, inArray, sql } from 'drizzle-orm';
 
 export const lookupRepository = {
   async getCountries() {
     return db.select().from(country).orderBy(country.country_name);
   },
 
-  async getDestinations(opts: { countryId?: string; search?: string; limit?: number }) {
+  // `ids` fetches specific rows and OVERRIDES every other filter. These lookups
+  // are search-with-a-limit, so a value selected earlier (or set by an import)
+  // is usually outside the current window — a select cannot display an option
+  // it does not have, which leaves a correct value looking blank. Callers pass
+  // the selected id here to pull it in alongside the search results.
+  async getDestinations(opts: { countryId?: string; search?: string; limit?: number; ids?: string[] }) {
+    if (opts.ids?.length) {
+      return db.select().from(destination).where(inArray(destination.id, opts.ids));
+    }
     const conditions = [
       ...(opts.countryId ? [eq(destination.country_id, opts.countryId)] : []),
       ...(opts.search ? [ilike(destination.name, `%${opts.search}%`)] : []),
@@ -39,7 +47,7 @@ export const lookupRepository = {
     return ordered;
   },
 
-  async getResorts(opts: { destinationId?: string; countryId?: string; search?: string; limit?: number }) {
+  async getResorts(opts: { destinationId?: string; countryId?: string; search?: string; limit?: number; ids?: string[] }) {
     const conditions = [
       ...(opts.destinationId ? [eq(resorts.destination_id, opts.destinationId)] : []),
       ...(opts.countryId ? [eq(destination.country_id, opts.countryId)] : []),
@@ -57,6 +65,8 @@ export const lookupRepository = {
       .from(resorts)
       .leftJoin(destination, eq(resorts.destination_id, destination.id));
 
+    if (opts.ids?.length) return query.where(inArray(resorts.id, opts.ids));
+
     if (conditions.length === 1) query = query.where(conditions[0]) as any;
     else if (conditions.length > 1) query = query.where(and(...conditions)) as any;
 
@@ -65,7 +75,7 @@ export const lookupRepository = {
     return finalQuery;
   },
 
-  async getAccommodations(opts: { resortId?: string; destinationId?: string; countryId?: string; search?: string; limit?: number }) {
+  async getAccommodations(opts: { resortId?: string; destinationId?: string; countryId?: string; search?: string; limit?: number; ids?: string[] }) {
     const conditions = [
       ...(opts.resortId ? [eq(accomodation_list.resorts_id, opts.resortId)] : []),
       ...(opts.destinationId ? [eq(resorts.destination_id, opts.destinationId)] : []),
@@ -88,6 +98,8 @@ export const lookupRepository = {
       .from(accomodation_list)
       .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
       .leftJoin(destination, eq(resorts.destination_id, destination.id));
+
+    if (opts.ids?.length) return query.where(inArray(accomodation_list.id, opts.ids));
 
     if (conditions.length === 1) query = query.where(conditions[0]) as any;
     else if (conditions.length > 1) query = query.where(and(...conditions)) as any;

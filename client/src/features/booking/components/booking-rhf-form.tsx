@@ -15,7 +15,6 @@ import {
   urlImageItem,
   type FormImageItem,
 } from "@/features/quote/lib/form-images";
-import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/types";
 import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues, UpsellsFormValues } from "@/features/booking/types";
 import { QuoteExtrasSection as BookingExtrasSection } from "@/features/quote/components/quote-extras-section";
@@ -526,10 +525,6 @@ export function BookingRHFForm({
           label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
         })
       ),
-    [airportsData]
-  );
-  const departureAirportOptions = useMemo(
-    () => getDepartureAirportOptions(airportsData),
     [airportsData]
   );
 
@@ -1682,7 +1677,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={departureAirportOptions}
+                        options={airportOptions}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                         placeholder="Select airport..."

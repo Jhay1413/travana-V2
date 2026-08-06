@@ -1,6 +1,13 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../../config/database";
 import { sendsevenIntegrations, type SendsevenIntegration } from "@shared/schema";
+
+// Stamps auto_reply_enabled_at on the off→on transition only (or when it was
+// never stamped, e.g. rows enabled before the column existed): re-saving an
+// already-enabled toggle must NOT move the "new conversation" cutoff forward,
+// but each genuine re-enable starts a fresh window — conversations from the
+// off period stay opt-in-only. SQL CASE so the check+write is atomic.
+const stampEnabledAt = sql`CASE WHEN ${sendsevenIntegrations.autoReplyEnabled} = false OR ${sendsevenIntegrations.autoReplyEnabledAt} IS NULL THEN now() ELSE ${sendsevenIntegrations.autoReplyEnabledAt} END`;
 
 // Repository: DB access for a per-org SendSeven integration (one row per org).
 
@@ -80,6 +87,7 @@ export const conversationIntegrationRepository = {
         webhookEndpointId: data.webhookEndpointId,
         webhookSecret: data.webhookSecret,
         ...(data.autoReplyEnabled === undefined ? {} : { autoReplyEnabled: data.autoReplyEnabled }),
+        ...(data.autoReplyEnabled === true ? { autoReplyEnabledAt: stampEnabledAt } : {}),
         ...(data.autoReplyMode ? { autoReplyMode: data.autoReplyMode } : {}),
         updatedAt: new Date(),
       })
@@ -93,7 +101,11 @@ export const conversationIntegrationRepository = {
   async setAutoReplyEnabled(orgId: string, enabled: boolean): Promise<void> {
     await db
       .update(sendsevenIntegrations)
-      .set({ autoReplyEnabled: enabled, updatedAt: new Date() })
+      .set({
+        autoReplyEnabled: enabled,
+        ...(enabled ? { autoReplyEnabledAt: stampEnabledAt } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(sendsevenIntegrations.orgId, orgId));
   },
 

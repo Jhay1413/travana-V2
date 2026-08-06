@@ -584,6 +584,31 @@ async function captureOffersFromPage(
   }
 }
 
+// Detects a bot-protection interstitial (Akamai edge deny, "Pardon our
+// interruption", human-verification walls) so we never mistake it for a real
+// page. Generic — keyed on the block wording, not any supplier.
+export function looksBotBlocked(title: string, text: string): boolean {
+  const t = `${title}\n${text}`.slice(0, 2000);
+  if (t.trim().length > 1500) return false; // real pages are long; block pages are tiny
+  return (
+    (/access denied/i.test(t) && /edgesuite\.net|permission to access|reference #/i.test(t)) ||
+    /pardon our interruption/i.test(t) ||
+    /unusual traffic from your (computer )?network/i.test(t) ||
+    /verify you are (a )?human|are you a human|please enable (js|javascript) and cookies/i.test(t)
+  );
+}
+
+// Cheap snapshot of whatever the page currently is, for diagnosing "we're not
+// where we think we are" failures.
+async function describePage(page: Page): Promise<{ url: string; title: string; textLen: number; text: string }> {
+  return page
+    .evaluate(() => {
+      const text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+      return { url: location.href, title: document.title, textLen: text.length, text: text.slice(0, 400) };
+    })
+    .catch((e) => ({ url: page.url(), title: '', textLen: 0, text: `read-failed: ${e instanceof Error ? e.message : e}` }));
+}
+
 // Fallback: fire the API call from inside the page context.
 async function fetchFromPage(page: Page, url: string): Promise<{ status: number; body: string }> {
   return page.evaluate(async (target: string) => {
@@ -710,18 +735,28 @@ async function scrapeOnce(
 
   // Fallback: in-page fetch of the reconstructed API URL.
   log('interception yielded nothing; trying in-page fetch fallback…');
+  // The SPA firing no offers call at all usually means the page we're sitting on
+  // isn't the hotel page — most often a bot-protection interstitial. Snapshot it
+  // so the failure below names a cause instead of guessing at one.
+  const landed = await describePage(page);
+  log('page state at deep link:', landed);
+
   let result = await fetchFromPage(page, apiUrl);
-  log('fallback fetch status', result.status);
+  log('fallback fetch status', result.status, '| body:', result.body.slice(0, 300).replace(/\s+/g, ' '));
   if (result.status === 401 || result.status === 403) {
     await ensureLoggedIn(page, ctx, navTimeout);
     result = await fetchFromPage(page, apiUrl);
-    log('fallback fetch status after re-login', result.status);
+    log('fallback fetch status after re-login', result.status, '| body:', result.body.slice(0, 300).replace(/\s+/g, ' '));
   }
 
   if (result.status === 401 || result.status === 403) {
+    const blocked = looksBotBlocked(landed.title, landed.text) || looksBotBlocked('', result.body);
     throw new AppError(
-      'Supplier portal rejected the request after automated re-login (bot check). ' +
-        'A residential proxy (Browserless proxy=residential) is usually required to get past it.',
+      `Supplier portal rejected the offers API with HTTP ${result.status} after automated re-login` +
+        (blocked ? ' — the response is a bot-protection page (edge deny / human check), not an API error.' : '.') +
+        ` Egress: ${ctx.browser.backend}${ctx.browser.proxy ? ` via ${ctx.browser.proxy}` : ''}. ` +
+        'This is an IP/fingerprint decision at the CDN edge: a GB residential proxy is normally required. ' +
+        `Landed on "${landed.title || '(no title)'}" (${landed.url}).`,
       502,
     );
   }

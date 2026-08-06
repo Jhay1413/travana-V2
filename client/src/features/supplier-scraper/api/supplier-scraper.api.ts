@@ -24,6 +24,12 @@ export const supplierScraperApi = {
     const { data } = await axiosClient.patch(`${BASE}/${id}`, input);
     return unwrap<SupplierScraper>(data);
   },
+  // Marks the AI-generated extraction spec reviewed. Importing is never blocked
+  // by this — the flag only distinguishes a checked spec from an unchecked one.
+  approveSpec: async (id: string, approve: boolean): Promise<SupplierScraper> => {
+    const { data } = await axiosClient.post(`${BASE}/${id}/approve-spec`, { approve });
+    return unwrap<SupplierScraper>(data);
+  },
   remove: async (id: string): Promise<void> => {
     await axiosClient.delete(`${BASE}/${id}`);
   },

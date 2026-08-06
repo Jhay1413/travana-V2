@@ -1,4 +1,6 @@
 import { AppError } from '../../utils/error-handler';
+import { applyScalarOverrides } from '../scraper/extraction/extraction.interpreter';
+import type { ExtractionSpec } from '../scraper/extraction/extraction.types';
 import { parseEasyJetDeepLink, buildOffersApiUrl } from './easyjet-link.parser';
 import { offersResponseSchema } from './easyjet-offer.schema';
 import { mapOfferToScrapedQuote } from './easyjet-offer.mapper';
@@ -18,6 +20,11 @@ export const easyjetService = {
   async scrapeQuoteFromLink(
     input: ScrapeRequestBody,
     ctx: EasyJetScrapeContext = buildDefaultContext(),
+    // Optional config-stored spec (supplier_scraper.config.extraction): its
+    // scalar rules are applied OVER the code mapper's output, so field-level
+    // tweaks (e.g. which API price feeds sales_price) are config edits, not
+    // code deploys. Structured arrays stay code-mapped.
+    extraction?: ExtractionSpec,
   ): Promise<ScrapedQuoteJson> {
     const params = parseEasyJetDeepLink(input.url, {
       adults: input.adults,
@@ -42,6 +49,7 @@ export const easyjetService = {
       );
     }
 
-    return mapOfferToScrapedQuote(parsed.data, input.url);
+    const quote = mapOfferToScrapedQuote(parsed.data, input.url);
+    return applyScalarOverrides(quote, extraction, { url: input.url, apiJson: raw });
   },
 };

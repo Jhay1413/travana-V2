@@ -35,6 +35,8 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
   const [password, setPassword] = useState("");
   const [abtaNumber, setAbtaNumber] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const [hasApi, setHasApi] = useState(false);
+  const [apiPath, setApiPath] = useState("");
   const [configText, setConfigText] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -42,7 +44,8 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
   // Reset the form whenever the dialog opens for a new target.
   useEffect(() => {
     if (!open) return;
-    const auth = (editing?.config as { auth?: Record<string, unknown> } | undefined)?.auth;
+    const cfg = editing?.config as { auth?: Record<string, unknown>; fetch?: Record<string, unknown> } | undefined;
+    const auth = cfg?.auth;
     const authType = auth?.type as string | undefined;
     setSupplierName(editing?.supplierName ?? "");
     setSupplierKey(editing?.supplierKey ?? "");
@@ -56,6 +59,9 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
     setPassword("");
     setAbtaNumber("");
     setIsActive(editing?.isActive ?? true);
+    const storedApiPath = (cfg?.fetch?.apiPath as string) ?? "";
+    setHasApi(!!storedApiPath);
+    setApiPath(storedApiPath);
     setConfigText(editing ? JSON.stringify(editing.config ?? {}, null, 2) : "");
     setShowAdvanced(false);
     setConfigError(null);
@@ -107,6 +113,16 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
       auth.type = "none";
     }
     config.auth = auth;
+
+    // Data-API endpoint: stored as fetch.apiPath. During a scrape the browser
+    // intercepts responses whose URL contains this path; the captured JSON is
+    // preferred over page text for field extraction (and the AI writes
+    // jsonPath rules against it when the spec is first generated).
+    const fetchCfg: Record<string, unknown> = { ...((config.fetch as Record<string, unknown>) ?? {}) };
+    if (hasApi && apiPath.trim()) fetchCfg.apiPath = apiPath.trim();
+    else delete fetchCfg.apiPath;
+    if (Object.keys(fetchCfg).length > 0) config.fetch = fetchCfg;
+    else delete config.fetch;
 
     // Credentials only matter when login is required; blank = "leave unchanged".
     const credentials: { username?: string; password?: string; abtaNumber?: string } = {};
@@ -237,6 +253,34 @@ export function SupplierScraperDialog({ open, onOpenChange, editing }: Props) {
                   autoComplete="off"
                 />
               </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between rounded-xl border px-3 py-2">
+            <div>
+              <div className="text-sm font-medium">Has a data API</div>
+              <div className="text-xs text-muted-foreground">
+                Turn on if the supplier's deal page loads its data from a JSON endpoint — extraction then prefers the API over reading page text.
+              </div>
+            </div>
+            <Switch checked={hasApi} onCheckedChange={setHasApi} data-testid="scraper-has-api" />
+          </div>
+
+          {hasApi && (
+            <div className="space-y-1.5 rounded-xl border border-dashed p-3">
+              <Label>API endpoint path</Label>
+              <Input
+                value={apiPath}
+                onChange={(e) => setApiPath(e.target.value)}
+                placeholder="e.g. /holidays/_api/v1.0/hotel/offers"
+                autoComplete="off"
+                data-testid="scraper-api-path"
+              />
+              <p className="text-xs text-muted-foreground">
+                Part of the endpoint's URL path. While the deal page loads, the scraper captures the JSON this endpoint
+                returns and uses it as the primary data source — page text only fills the gaps. Find it in the browser's
+                Network tab (an XHR returning the price/offer data).
+              </p>
             </div>
           )}
 

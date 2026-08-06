@@ -5,15 +5,15 @@ export const lookupService = {
     return lookupRepository.getCountries();
   },
 
-  async getDestinations(opts: { countryId?: string; search?: string; limit?: number }) {
+  async getDestinations(opts: { countryId?: string; search?: string; limit?: number; ids?: string[] }) {
     return lookupRepository.getDestinations(opts);
   },
 
-  async getResorts(opts: { destinationId?: string; countryId?: string; search?: string; limit?: number }) {
+  async getResorts(opts: { destinationId?: string; countryId?: string; search?: string; limit?: number; ids?: string[] }) {
     return lookupRepository.getResorts(opts);
   },
 
-  async getAccommodations(opts: { resortId?: string; destinationId?: string; countryId?: string; search?: string; limit?: number }) {
+  async getAccommodations(opts: { resortId?: string; destinationId?: string; countryId?: string; search?: string; limit?: number; ids?: string[] }) {
     return lookupRepository.getAccommodations(opts);
   },
 

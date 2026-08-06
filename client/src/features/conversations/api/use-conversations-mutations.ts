@@ -199,3 +199,11 @@ export function useDisableConversationAi() {
     onSuccess: (state, id) => qc.setQueryData(conversationsKeys.aiState(id), state),
   });
 }
+
+// On-demand "AI reply" composer suggestion — no cache to touch (nothing changes
+// server-side); the composer puts the returned text into the reply box.
+export function useAiSuggestReply() {
+  return useMutation({
+    mutationFn: (id: string) => conversationsApi.aiSuggestReply(id),
+  });
+}
