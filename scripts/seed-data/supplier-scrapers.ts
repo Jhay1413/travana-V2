@@ -784,14 +784,17 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           },
           "resort": {
             "from": "text",
-            "group": 0,
-            "regex": "IN [A-Z ]+, [A-Z ]+"
+            "group": 1,
+            "regex": "IN ([A-Z ]+?),",
+            "jsonPath": "packageData.accommodation.locationMap.RESORT",
+            "transform": "titleCase"
           },
           "country": {
             "from": "text",
             "group": 1,
-            "regex": "IN [A-Z ]+, ([A-Z ]+)",
-            "jsonPath": "packageData.locationMap.COUNTRY"
+            "regex": "IN (?:[A-Z ]+?,\\s*)?([A-Z ]+)",
+            "jsonPath": "packageData.accommodation.locationMap.COUNTRY",
+            "transform": "titleCase"
           },
           "infants": {
             "from": "text",
@@ -826,8 +829,9 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "destination": {
             "from": "text",
             "group": 1,
-            "regex": "IN ([A-Z ]+), [A-Z ]+",
-            "jsonPath": "packageData.locationMap.DESTINATION"
+            "regex": "IN ([A-Z ]+?),",
+            "jsonPath": "packageData.accommodation.locationMap.DESTINATION",
+            "transform": "titleCase"
           },
           "sales_price": {
             "from": "text",
@@ -867,7 +871,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "accommodation": {
             "from": "text",
             "group": 1,
-            "regex": "^(.*?)\\s*\\n\\s*IN [A-Z ]+, [A-Z ]+",
+            "regex": "\\n([^\\n]+)\\n+\\s*IN [A-Z][A-Z ]*",
             "jsonPath": "packageData.accommodation.name"
           },
           "transfer_type": {

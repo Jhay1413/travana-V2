@@ -657,3 +657,48 @@ describe("flight times from spec fields", () => {
     expect(out.arrival_date_time).toBe("2026-09-06T09:15");
   });
 });
+
+// Regression: a TUI Maldives deal imported with Country, Destination, Resort and
+// Accommodation ALL blank. The form resolves the four as a chain, so a hole in
+// the middle orphans everything under it — a resort cannot be created without a
+// destination, nor a hotel without a resort. Portals legitimately publish fewer
+// than four levels, so the interpreter carries the nearest level above downward.
+describe("geo hierarchy", () => {
+  const geoSpec = (): ExtractionSpec =>
+    ({
+      version: 1,
+      fields: {
+        country: { from: "text", regex: "IN (?:[A-Z ]+?,\s*)?([A-Z ]+)", group: 1, transform: "titleCase" },
+        destination: { from: "text", regex: "IN ([A-Z ]+?),", group: 1, transform: "titleCase" },
+        resort: { from: "text", regex: "IN ([A-Z ]+?),", group: 1, transform: "titleCase" },
+      },
+    }) as ExtractionSpec;
+
+  const run = (text: string) =>
+    runExtractionSpec(geoSpec(), { title: "TUI", text, url: "https://retailagents.tui.co.uk/retail/x", images: [] }, "x");
+
+  it("reads city and country when the page prints both", () => {
+    const q = run("\nPlaza Prague Hotel\n\nIN PRAGUE, CZECH REPUBLIC\n");
+    expect(q.country).toBe("Czech Republic");
+    expect(q.destination).toBe("Prague");
+  });
+
+  it("fills the gap when the destination IS the country", () => {
+    // TUI prints a bare "IN MALDIVES" — no city, no comma.
+    const q = run("\nBandos Maldives\n\nIN MALDIVES\n");
+    expect(q.country).toBe("Maldives");
+    expect(q.destination).toBe("Maldives"); // carried down from country
+    expect(q.resort).toBe("Maldives"); // carried down from destination
+  });
+
+  it("carries destination into an absent resort", () => {
+    // A city break has a destination but no resort.
+    const q = run("\nPlaza Prague Hotel\n\nIN PRAGUE, CZECH REPUBLIC\n");
+    expect(q.resort).toBe("Prague");
+  });
+
+  it("leaves every level empty when the page says nothing", () => {
+    const q = run("\nSome Hotel\n\nno location line here\n");
+    expect([q.country, q.destination, q.resort]).toEqual(["", "", ""]);
+  });
+});

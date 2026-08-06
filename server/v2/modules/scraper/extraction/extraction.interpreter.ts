@@ -892,6 +892,17 @@ export function runExtractionSpec(
   const arrivalCode = str(f.arrival_airport);
   const transferType = str(f.transfer_type) || 'None';
 
+  // Geo hierarchy. The form resolves Country > Destination > Resort >
+  // Accommodation as a chain, so a hole in the middle orphans everything below
+  // it — a resort cannot be created without a destination, nor a hotel without
+  // a resort. Portals legitimately publish fewer than four levels: an island
+  // nation is a country with no separate destination ("IN MALDIVES"), and a
+  // city break has no resort. Carry the nearest level above down into the gap
+  // so the hotel still lands somewhere, rather than dropping it.
+  const country = str(f.country);
+  const destination = str(f.destination) || country;
+  const resort = str(f.resort) || destination;
+
   // Luggage from a repeated pattern, e.g. "(2) 22kg baggage".
   const luggage: string[] = [];
   if (spec.luggageRegex) {
@@ -987,9 +998,9 @@ export function runExtractionSpec(
     tourist_tax_total: nbr(f.tourist_tax_total),
     promotion_code: str(f.promotion_code),
     promotion_discount: nbr(f.promotion_discount),
-    country: str(f.country),
-    destination: str(f.destination),
-    resort: str(f.resort),
+    country,
+    destination,
+    resort,
     accommodation: str(f.accommodation),
     board_basis: str(f.board_basis) || boardBasisFromText(text),
     room_type: str(f.room_type),
