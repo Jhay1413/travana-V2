@@ -13,7 +13,7 @@ import {
 } from "@shared/schema";
 import type { TravelDeal, InsertTravelDeal } from "@shared/schema";
 import type { OrganizationBranding } from "./social-post.types";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 export const socialPostRepository = {
   async create(data: InsertTravelDeal): Promise<TravelDeal> {
@@ -83,13 +83,28 @@ export const socialPostRepository = {
    *  backfill script. "Scheduled" = onlySocialsId set (same definition the
    *  social-posts board uses). Requires a non-null transaction.org_id since
    *  ai_embeddings rows must be org-scoped, and excludes test transactions.
-   *  Ordered by created_at for stable paging. */
+   *  Includes the quote's primary hotel name (scalar subquery — a join would
+   *  duplicate rows for multi-accommodation quotes). Ordered by created_at
+   *  for stable paging. */
   async findScheduledDealEmbeddingRows(
     offset: number,
     limit: number,
-  ): Promise<Array<{ deal: TravelDeal; orgId: string }>> {
+  ): Promise<Array<{ deal: TravelDeal; orgId: string; hotelName: string | null }>> {
     const rows = await db
-      .select({ deal: travel_deal, orgId: transaction.org_id })
+      .select({
+        deal: travel_deal,
+        orgId: transaction.org_id,
+        // Table objects interpolated (NOT hand-written names) so the real DB
+        // table names resolve — e.g. accomodation_list lives in the DB as
+        // "accomodation_list_table".
+        hotelName: sql<string | null>`(
+          SELECT al.name FROM ${quote_accomodation} qa
+          LEFT JOIN ${accomodation_list} al ON qa.accomodation_id = al.id
+          WHERE qa.quote_id = ${travel_deal.quote_id}
+          ORDER BY qa.is_primary DESC NULLS LAST
+          LIMIT 1
+        )`,
+      })
       .from(travel_deal)
       .innerJoin(quote, eq(travel_deal.quote_id, quote.id))
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
@@ -103,7 +118,19 @@ export const socialPostRepository = {
       .orderBy(travel_deal.created_at, travel_deal.id)
       .limit(limit)
       .offset(offset);
-    return rows.map((r) => ({ deal: r.deal, orgId: r.orgId as string }));
+    return rows.map((r) => ({ deal: r.deal, orgId: r.orgId as string, hotelName: r.hotelName ?? null }));
+  },
+
+  /** The quote's primary accommodation name, for the deal-embedding sync hook. */
+  async findPrimaryAccommodationNameForQuote(quoteId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ name: accomodation_list.name })
+      .from(quote_accomodation)
+      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+      .where(eq(quote_accomodation.quote_id, quoteId))
+      .orderBy(desc(quote_accomodation.is_primary))
+      .limit(1);
+    return row?.name ?? null;
   },
 
   async findOrganizationBrandingById(orgId: string): Promise<OrganizationBranding | null> {

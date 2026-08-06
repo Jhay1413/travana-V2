@@ -819,13 +819,15 @@ describe("buildSystemPrompt (pinned Facebook-deal block)", () => {
       kb: [],
       quotes: [],
       dealCandidates: [
-        { title: "All Inclusive Tunisia", travelDate: "2026-10-29", nights: 7, price: "299.00" },
+        { title: "All Inclusive Tunisia", travelDate: "2026-10-29", nights: 7, price: "299.00", hotelName: "Marhaba Palace" },
         { title: "Tunisia Half Board", travelDate: "2026-11-14", nights: 7, price: "249.00" },
       ],
     });
     expect(prompt).toContain("POSSIBLE FACEBOOK DEAL");
-    expect(prompt).toContain('- "All Inclusive Tunisia" (travel 2026-10-29, 7 nights, from £299.00)');
+    expect(prompt).toContain('- "All Inclusive Tunisia" (hotel Marhaba Palace, travel 2026-10-29, 7 nights, from £299.00)');
     expect(prompt).toContain('- "Tunisia Half Board"');
+    // Titles must be offered verbatim — never invented from customer wording.
+    expect(prompt).toContain("NEVER invent a deal name");
     // Identification blocks the rest of the flow (except onboarding).
     expect(prompt).toContain("IDENTIFYING THE POST COMES FIRST");
     expect(prompt).toContain("do NOT move on to collecting dates, nights, party size");

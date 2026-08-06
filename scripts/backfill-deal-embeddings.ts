@@ -33,7 +33,7 @@ async function main() {
     const embeddableRows: typeof rows = [];
     const embeddableTexts: string[] = [];
     for (const row of rows) {
-      const text = buildDealEmbeddingText(row.deal);
+      const text = buildDealEmbeddingText(row.deal, { hotelName: row.hotelName });
       if (text.trim()) {
         embeddableRows.push(row);
         embeddableTexts.push(text);
@@ -51,7 +51,7 @@ async function main() {
           sourceType: "deal",
           sourceId: row.deal.id,
           content: embeddableTexts[i],
-          metadata: buildDealEmbeddingMetadata(row.deal),
+          metadata: buildDealEmbeddingMetadata(row.deal, { hotelName: row.hotelName }),
           embedding: vectors[i],
         });
         totalEmbedded++;

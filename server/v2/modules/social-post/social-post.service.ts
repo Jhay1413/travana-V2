@@ -33,14 +33,17 @@ type ScopeOrTrusted = Scope | { orgId: null };
 function syncDealEmbedding(deal: TravelDeal): void {
   void (async () => {
     try {
-      const orgId = await socialPostRepository.findOrgIdForQuote(deal.quote_id);
+      const [orgId, hotelName] = await Promise.all([
+        socialPostRepository.findOrgIdForQuote(deal.quote_id),
+        socialPostRepository.findPrimaryAccommodationNameForQuote(deal.quote_id),
+      ]);
       if (!orgId) return;
       await aiEmbeddingsService.syncSource({
         orgId,
         sourceType: "deal",
         sourceId: deal.id,
-        content: buildDealEmbeddingText(deal),
-        metadata: buildDealEmbeddingMetadata(deal),
+        content: buildDealEmbeddingText(deal, { hotelName }),
+        metadata: buildDealEmbeddingMetadata(deal, { hotelName }),
       });
     } catch (err) {
       console.warn(`[deal-embedding] sync failed (deal=${deal.id}):`, err instanceof Error ? err.message : err);

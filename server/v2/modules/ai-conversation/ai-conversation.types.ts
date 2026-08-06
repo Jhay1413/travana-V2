@@ -134,6 +134,7 @@ export interface RetrievedContext {
     travelDate?: string | null;
     nights?: number | null;
     price?: string | null;
+    hotelName?: string | null;
   }>;
 }
 

@@ -53,6 +53,7 @@ interface DealCandidate {
   title: string;
   travelDate: string | null;
   price: string | null;
+  hotelName: string | null;
   postScheduleMs: number;
   distance: number;
 }
@@ -69,6 +70,7 @@ function parseCandidate(match: RetrievedMatch): DealCandidate | null {
     title: typeof meta.title === "string" ? meta.title : "",
     travelDate: typeof meta.travelDate === "string" ? meta.travelDate : null,
     price: typeof meta.price === "string" ? meta.price : null,
+    hotelName: typeof meta.hotelName === "string" ? meta.hotelName : null,
     postScheduleMs: Number.isNaN(postSchedule) ? 0 : postSchedule,
     distance: match.distance,
   };
@@ -116,11 +118,20 @@ function priceAppearsIn(q: string, price: string): boolean {
 }
 
 // A distinctive fact from the post appearing verbatim in the query: the exact
-// travel date or the exact posted price. Nights deliberately excluded — "4
-// nights" is shared by too many deals to identify one.
+// travel date, the exact posted price, or the hotel name (customers often
+// remember the hotel better than the post — "the one at the Taormina").
+// Nights deliberately excluded — "4 nights" is shared by too many deals to
+// identify one.
 function strongSignalHit(c: DealCandidate, q: string): boolean {
   if (c.price && priceAppearsIn(q, c.price)) return true;
   if (c.travelDate && dateVariants(c.travelDate).some((v) => q.includes(v))) return true;
+  if (c.hotelName) {
+    const h = c.hotelName.trim().toLowerCase().replace(/\s+/g, " ");
+    // Also match without a leading "Hotel " so "the taormina" hits "Hotel
+    // Taormina". Length floor keeps generic short names from over-matching.
+    const core = h.replace(/^hotel\s+/, "");
+    if ((h.length >= 5 && q.includes(h)) || (core.length >= 5 && core !== h && q.includes(core))) return true;
+  }
   return false;
 }
 
@@ -189,6 +200,7 @@ export interface DealCandidateInfo {
   travelDate?: string | null;
   nights?: number | null;
   price?: string | null;
+  hotelName?: string | null;
   distance: number;
 }
 
@@ -208,6 +220,7 @@ export function pickDealCandidates(matches: RetrievedMatch[], limit = 3): DealCa
       travelDate: typeof meta.travelDate === "string" ? meta.travelDate : null,
       nights: typeof meta.nights === "number" ? meta.nights : null,
       price: typeof meta.price === "string" ? meta.price : null,
+      hotelName: c.hotelName,
       distance: c.distance,
     });
     if (out.length >= limit) break;

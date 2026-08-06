@@ -981,6 +981,7 @@ export function buildSystemPrompt(
     const candidateLines = retrieved.dealCandidates
       .map((c) => {
         const bits = [
+          c.hotelName ? `hotel ${c.hotelName}` : null,
           c.travelDate ? `travel ${c.travelDate}` : null,
           c.nights ? `${c.nights} nights` : null,
           c.price ? `from £${c.price}` : null,
@@ -992,7 +993,7 @@ export function buildSystemPrompt(
       [
         "POSSIBLE FACEBOOK DEAL — the customer seems to be referring to a holiday deal we posted on Facebook, but it is NOT certain which of these (if any) they mean:",
         candidateLines,
-        "Do NOT state, assume, or hint at any of these details as fact yet — the deal is unidentified. IDENTIFYING THE POST COMES FIRST: apart from onboarding (name/phone, which still takes precedence), do NOT move on to collecting dates, nights, party size, budget or anything else until they've told you which post it was, or made clear they don't know/don't mind (then just continue the normal flow). Your identifying question is ONE short natural question offering the candidate title(s) as a simple choice (e.g. \"was it our All Inclusive Tunisia or the Tunisia Half Board deal you spotted?\"). NEVER ask the customer to recall or quote the post — no \"do you remember what the post said\" or similar; if they don't recognise the titles, ask ONE concrete detail instead (which month it was travelling, or the price shown). If you're still collecting their name/phone, finish that first and ask the identifying question in your NEXT reply — even if they've also asked something else, identify the post before answering it. Once they confirm which post it was, the full details are loaded for you automatically — never guess them in the meantime, and keep extracting anything else they say into `slots` as normal.",
+        "Do NOT state, assume, or hint at any of these details as fact yet — the deal is unidentified. IDENTIFYING THE POST COMES FIRST: apart from onboarding (name/phone, which still takes precedence), do NOT move on to collecting dates, nights, party size, budget or anything else until they've told you which post it was, or made clear they don't know/don't mind (then just continue the normal flow). Your identifying question is ONE short natural question offering the candidate title(s) as a simple choice (e.g. \"was it our All Inclusive Tunisia or the Tunisia Half Board deal you spotted?\"). Use ONLY the titles listed above, EXACTLY as written — NEVER invent a deal name, and NEVER turn something the customer said (a hotel name, a month, a price) into a made-up deal title; a hotel/detail the customer mentions matches a candidate only if that candidate's line above shows it. NEVER ask the customer to recall or quote the post — no \"do you remember what the post said\" or similar; if they don't recognise the titles, ask ONE concrete detail instead (which month it was travelling, or the price shown). If you're still collecting their name/phone, finish that first and ask the identifying question in your NEXT reply — even if they've also asked something else, identify the post before answering it. Once they confirm which post it was, the full details are loaded for you automatically — never guess them in the meantime, and keep extracting anything else they say into `slots` as normal.",
       ].join("\n"),
     );
   }

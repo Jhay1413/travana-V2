@@ -42,12 +42,20 @@ function formatTravelDateLine(value: string | null | undefined): string | null {
   return `${iso} (${human})`;
 }
 
+// Facts resolved from the deal's QUOTE (not on the travel_deal row itself) that
+// belong in the embedding — customers often remember the hotel better than the
+// post's title ("the one at the Taormina").
+export interface DealEmbeddingExtras {
+  hotelName?: string | null;
+}
+
 /** Build the human-readable text blob for embedding. All public caption data —
  *  price included. Empty/missing fields are skipped cleanly. */
-export function buildDealEmbeddingText(deal: TravelDeal): string {
+export function buildDealEmbeddingText(deal: TravelDeal, extras?: DealEmbeddingExtras): string {
   const lines: Array<[string, string | null]> = [
     ["Title", deal.title || null],
     ["Subtitle", deal.subtitle || null],
+    ["Hotel", extras?.hotelName || null],
     ["Travel date", formatTravelDateLine(deal.travelDate)],
     ["Nights", deal.nights ? String(deal.nights) : null],
     ["Board basis", deal.boardBasis || null],
@@ -66,7 +74,7 @@ export function buildDealEmbeddingText(deal: TravelDeal): string {
 
 /** Structured metadata for pinning/filtering: ids to hydrate live quote detail
  *  from (hotel, flight times), plus the post schedule for recency ranking. */
-export function buildDealEmbeddingMetadata(deal: TravelDeal): Record<string, unknown> {
+export function buildDealEmbeddingMetadata(deal: TravelDeal, extras?: DealEmbeddingExtras): Record<string, unknown> {
   return {
     travelDealId: deal.id,
     quoteId: deal.quote_id,
@@ -76,5 +84,6 @@ export function buildDealEmbeddingMetadata(deal: TravelDeal): Record<string, unk
     nights: deal.nights ?? null,
     price: deal.price ?? null,
     title: deal.title,
+    hotelName: extras?.hotelName ?? null,
   };
 }

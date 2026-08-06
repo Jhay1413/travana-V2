@@ -25,6 +25,13 @@ function makeDeal(overrides: Partial<TravelDeal> = {}): TravelDeal {
 }
 
 describe("buildDealEmbeddingText", () => {
+  it("includes the hotel name when provided (resolved from the quote, not the deal row)", () => {
+    const text = buildDealEmbeddingText(makeDeal(), { hotelName: "Hotel Marhaba Palace" });
+    expect(text).toContain("Hotel: Hotel Marhaba Palace");
+    const meta = buildDealEmbeddingMetadata(makeDeal(), { hotelName: "Hotel Marhaba Palace" });
+    expect(meta.hotelName).toBe("Hotel Marhaba Palace");
+  });
+
   it("includes the public caption fields, price, and a human-readable travel date", () => {
     const text = buildDealEmbeddingText(makeDeal());
     expect(text).toContain("Title: All Inclusive Tunisia");
@@ -73,6 +80,7 @@ describe("buildDealEmbeddingMetadata", () => {
       nights: 7,
       price: "299.00",
       title: "All Inclusive Tunisia",
+      hotelName: null,
     });
   });
 

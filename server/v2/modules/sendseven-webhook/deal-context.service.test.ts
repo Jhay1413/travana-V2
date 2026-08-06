@@ -118,6 +118,18 @@ describe("pickDealMatch", () => {
     ];
     expect(pickDealMatch(matches, "the 12th april one")).toBeNull();
   });
+
+  it("field rescue: pins on the hotel name, including without the 'Hotel' prefix", () => {
+    // Real observed failure: "the hotel was taormina" identified nothing.
+    const matches = [
+      match(0.478, { travelDealId: "late", quoteId: "q-l", title: "Late Rome Deal", hotelName: "Hotel Colosseum" }),
+      match(0.524, { travelDealId: "spring", quoteId: "q-s", title: "Spring Time in Rome", hotelName: "Hotel Taormina" }),
+    ];
+    expect(pickDealMatch(matches, "i only remembered the hotel was taormina and its for rome")?.travelDealId).toBe(
+      "spring",
+    );
+    expect(pickDealMatch(matches, "it was at the hotel colosseum")?.travelDealId).toBe("late");
+  });
 });
 
 describe("pickDealCandidates", () => {
