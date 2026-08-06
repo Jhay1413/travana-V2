@@ -25,6 +25,10 @@ export interface SupplierScraperView {
   tourOperatorId: string | null;
   config: ScraperConfig;
   credentials: { hasUsername: boolean; hasPassword: boolean; hasApiKey: boolean; hasAbtaNumber: boolean };
+  // True when a credentials blob exists but can't be decrypted with this
+  // environment's key. The four flags above all read false in that case, so
+  // without this the UI would show "no credentials set" for a row that has some.
+  credentialsUnreadable: boolean;
   createdAt: Date;
   updatedAt: Date | null;
 }
@@ -129,17 +133,33 @@ async function ensureLoginSelectors(config: ScraperConfig): Promise<void> {
   };
 }
 
-function decryptCredentials(row: SupplierScraper): ScraperCredentials {
-  if (!row.encrypted_credentials) return {};
+// Credentials that won't decrypt are reported as ABSENT, not fatal. A blob
+// encrypted under a different EMAIL_ENCRYPTION_KEY (another environment, a
+// rotated key) is unreadable, but the capture flow never uses credentials at
+// all — the agent is already signed in to the supplier in their own browser —
+// so a stale blob must not block an import that never needed it. The automated
+// /scrape path still fails clearly at login, which is where it's actionable.
+function decryptCredentials(row: SupplierScraper): {
+  credentials: ScraperCredentials;
+  unreadable: boolean;
+} {
+  if (!row.encrypted_credentials) return { credentials: {}, unreadable: false };
   try {
-    return JSON.parse(decrypt(row.encrypted_credentials)) as ScraperCredentials;
+    return {
+      credentials: JSON.parse(decrypt(row.encrypted_credentials)) as ScraperCredentials,
+      unreadable: false,
+    };
   } catch {
-    throw new AppError('Stored supplier credentials could not be decrypted (wrong EMAIL_ENCRYPTION_KEY?)', 500);
+    console.warn(
+      `[scraper] credentials for "${row.supplier_key}" could not be decrypted ` +
+        `(wrong EMAIL_ENCRYPTION_KEY, or encrypted in another environment) — treating them as unset`,
+    );
+    return { credentials: {}, unreadable: true };
   }
 }
 
 function toView(row: SupplierScraper): SupplierScraperView {
-  const creds = decryptCredentials(row);
+  const { credentials: creds, unreadable } = decryptCredentials(row);
   return {
     id: row.id,
     supplierKey: row.supplier_key,
@@ -154,6 +174,7 @@ function toView(row: SupplierScraper): SupplierScraperView {
       hasApiKey: !!creds.apiKey,
       hasAbtaNumber: !!creds.abtaNumber,
     },
+    credentialsUnreadable: unreadable,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -222,7 +243,9 @@ export const scraperService = {
       patch.config = merged;
     }
     if (input.credentials !== undefined) {
-      const current = decryptCredentials(existing);
+      // An unreadable blob starts from empty, so saving new credentials
+      // replaces it outright instead of being permanently blocked by it.
+      const { credentials: current } = decryptCredentials(existing);
       const merged: ScraperCredentials = { ...current };
       for (const key of ['username', 'password', 'apiKey', 'abtaNumber'] as const) {
         if (input.credentials[key] !== undefined) merged[key] = input.credentials[key];
@@ -304,7 +327,7 @@ export const scraperService = {
       supplierKey: row.supplier_key,
       supplierName: row.supplier_name,
       config: latest,
-      credentials: decryptCredentials(row),
+      credentials: decryptCredentials(row).credentials,
       sessionCookies,
       persistConfig: async (patch) => {
         latest = { ...latest, ...patch };

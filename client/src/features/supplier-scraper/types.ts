@@ -17,6 +17,9 @@ export interface SupplierScraper {
   tourOperatorId: string | null;
   config: Record<string, unknown>;
   credentials: SupplierScraperCredentialsState;
+  // A credentials blob exists but this environment's key can't read it, so
+  // every flag above reads false. Distinguishes that from "none set".
+  credentialsUnreadable: boolean;
   createdAt: string;
   updatedAt: string | null;
 }
