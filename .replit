@@ -124,7 +124,7 @@ integrations = ["javascript_log_in_with_replit:2.0.0"]
 
 [userenv.shared]
 NEON_DATABASE_URL = "postgresql://neondb_owner:npg_MwKDhW0ZcLO5@ep-jolly-fog-abmqr60u-pooler.eu-west-2.aws.neon.tech/neondb?sslmode=require"
-EMAIL_ENCRYPTION_KEY = "travanaEmail2026"
+EMAIL_ENCRYPTION_KEY = "bd16dab55aba0b0ea175ba85378243b069e8e763b43b318a94e67771b70d83b2"
 FACEBOOK_VERIFY_TOKEN = "travelhub_fb_verify_2026"
 BASE_URL = "https://travel-command-center.replit.app"
 FACEBOOK_PAGE_TOKEN = "EAAU1IoCFPUMBRAZCL3nRTTCddewqoRjW5pWhDm1PWxKVhvGPoBPKJrPg1KIGPacZBWjSCOfbvrO7uXZAT1DrlKSxZB8miynK4RavlLhCCrPGdp6GkETWL7KhwOuz3CvntR2cjAl7hyv6jNzWBUU04JZBtVM8O1n26ZAKPudRADt19MBZBVXk5ZChek4kvvZBYqegjtEuhMePy7RA1K57BuCcjlriti9oWKBL6fBm39w6CSpZCIc6RgQDN8EV2JZC6qE8zYPpX7ZAffoia5UNsmEG9fd89gZDZD"
