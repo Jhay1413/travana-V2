@@ -352,7 +352,6 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
       "travel dates",
       "number of nights",
       "number of passengers",
-      "budget",
     ]);
   });
 
@@ -381,14 +380,13 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
       travelDate: "2026-09-01",
       nights: 7,
       adults: 2,
-      budget: "1500",
     };
     expect(missingCoreFieldsFor(slots)).toEqual([]);
   });
 
   it("reports only the still-missing package core fields", () => {
     const slots: EnquirySlots = { destinations: ["Benidorm"], nights: 7 };
-    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of passengers", "budget"]);
+    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of passengers"]);
   });
 
   it("uses cruise labels for a cruise holidayType", () => {
@@ -398,7 +396,6 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
       "travel dates",
       "number of nights",
       "number of passengers",
-      "budget",
     ]);
   });
 
