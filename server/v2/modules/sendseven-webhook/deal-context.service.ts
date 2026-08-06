@@ -462,6 +462,95 @@ function ukDateTime(iso: string): string {
   return `${date} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
 }
 
+/** Pick the deal to pin from vector matches.
+ *
+ *  1. TITLE RESCUE (deterministic, beats distance): if exactly ONE deal's full
+ *     title appears verbatim (case-insensitive) in the query text — the
+ *     customer named it, or a screenshot's extracted text contains it — that
+ *     IS the deal. Distance ranking is unreliable between sibling posts
+ *     (observed: a "Spring Time in Rome" screenshot scored 0.461, ranked
+ *     BEHIND "Late Rome Deal"@0.443); a verbatim title is not.
+ *  2. Otherwise only matches within the strict pin cutoff qualify (retrieval
+ *     runs at the wider candidate cutoff); closest wins, near-ties resolved
+ *     by most recent post. */
+export function pickDealMatch(matches: RetrievedMatch[], queryText?: string): DealRef | null {
+  const all = matches.map(parseCandidate).filter((c): c is DealCandidate => c !== null);
+  if (all.length === 0) return null;
+
+  if (queryText?.trim()) {
+    const q = queryText.toLowerCase().replace(/\s+/g, " ");
+    const titleHits = all.filter((c) => {
+      const t = c.title.trim().toLowerCase().replace(/\s+/g, " ");
+      // Very short titles substring-match too easily ("rome" would hit every
+      // Rome message) — require some substance before trusting the rescue.
+      return t.length >= 6 && q.includes(t);
+    });
+    if (new Set(titleHits.map((c) => c.travelDealId)).size === 1) {
+      return toDealRef([...titleHits].sort((a, b) => a.distance - b.distance)[0]);
+    }
+    // 1b. FIELD RESCUE: no (unique) title in the text, but exactly one deal's
+    // distinctive facts — its exact travel date or posted price — appear in
+    // it. A screenshot's extracted fields carry these even when the headline
+    // is stylised or cropped, and they identify sibling posts far better than
+    // embedding distance does.
+    const fieldHits = all.filter((c) => strongSignalHit(c, q));
+    if (new Set(fieldHits.map((c) => c.travelDealId)).size === 1) {
+      return toDealRef([...fieldHits].sort((a, b) => a.distance - b.distance)[0]);
+    }
+  }
+
+  const candidates = all.filter((c) => c.distance <= DEAL_MATCH_MAX_DISTANCE);
+  if (candidates.length === 0) return null;
+  const best = Math.min(...candidates.map((c) => c.distance));
+  const winner = candidates
+    .filter((c) => c.distance - best <= NEAR_TIE_DISTANCE)
+    .sort((a, b) => b.postScheduleMs - a.postScheduleMs)[0];
+  return toDealRef(winner);
+}
+
+// What the candidates prompt block shows per possible deal — enough for the
+// customer to recognise which post they saw (title/date/nights/price), pulled
+// from embedding metadata so no DB hit happens before a real pin.
+export interface DealCandidateInfo {
+  title: string;
+  travelDate?: string | null;
+  nights?: number | null;
+  price?: string | null;
+  distance: number;
+}
+
+/** The possible-but-unconfirmed deals to offer when nothing pinned: every
+ *  parseable match (retrieval already capped at DEAL_CANDIDATE_MAX_DISTANCE),
+ *  closest first, deduped by deal. Call only when pickDealMatch returned null. */
+export function pickDealCandidates(matches: RetrievedMatch[], limit = 3): DealCandidateInfo[] {
+  const seen = new Set<string>();
+  const out: DealCandidateInfo[] = [];
+  for (const match of [...matches].sort((a, b) => a.distance - b.distance)) {
+    const c = parseCandidate(match);
+    if (!c || seen.has(c.travelDealId)) continue;
+    seen.add(c.travelDealId);
+    const meta = (match.metadata ?? {}) as Record<string, unknown>;
+    out.push({
+      title: c.title,
+      travelDate: typeof meta.travelDate === "string" ? meta.travelDate : null,
+      nights: typeof meta.nights === "number" ? meta.nights : null,
+      price: typeof meta.price === "string" ? meta.price : null,
+      distance: c.distance,
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+// "2027-04-12T07:05:00.000Z" → "12/04/2027 07:05" — UK-format date+time for
+// the agent-facing Post reference note.
+function ukDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const date = `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+  return `${date} ${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+
 // True for the slot values seedSlotsFromDeal treats as "not yet answered".
 function isBlank(value: unknown): boolean {
   if (value == null) return true;
@@ -694,6 +783,75 @@ export async function resolveDealTurn(input: {
     }
   }
   return { pinnedNow, deal, dealCandidates, repinned, externalDealMention: external };
+}
+
+export interface DealTurnResolution {
+  // Set ONLY when this turn pinned a new deal — the caller persists it onto
+  // its conversation context (each driver has its own context store).
+  pinnedNow: DealRef | null;
+  deal: RetrievedDealContext | null;
+  dealCandidates?: RetrievedContext["dealCandidates"];
+}
+
+/** The complete per-turn deal step, shared by BOTH drivers (reply-worker and
+ *  internal-chat-testflow) so the live bot and the Test AI sandbox cannot
+ *  drift: retrieval at the candidate cutoff (only while unpinned), pinning
+ *  (title rescue → field rescue → strict distance), candidate collection,
+ *  live hydration, the tweak-check flag, and slot seeding (mutates `slots`).
+ *
+ *  Drivers differ ONLY in how they assemble `query` (their message stores
+ *  differ) and in persisting the returned pin / consuming the tweak check —
+ *  both driver-side, both one line. */
+export async function resolveDealTurn(input: {
+  orgId: string;
+  // Log prefix, e.g. "conv=<id>" (live) or "session=<id>" (test flow).
+  logLabel: string;
+  existingRef?: DealRef;
+  checkAsked?: boolean;
+  query: string;
+  slots: EnquirySlots;
+}): Promise<DealTurnResolution> {
+  const { orgId, logLabel, existingRef, checkAsked, query, slots } = input;
+  let ref = existingRef ?? null;
+  let pinnedNow: DealRef | null = null;
+  let dealCandidates: DealTurnResolution["dealCandidates"];
+
+  if (!ref) {
+    const matches = await aiEmbeddingsService.retrieve({
+      orgId,
+      sourceType: "deal",
+      query,
+      limit: 3,
+      maxDistance: DEAL_CANDIDATE_MAX_DISTANCE,
+    });
+    const pinned = pickDealMatch(matches, query);
+    if (pinned) {
+      ref = pinned;
+      pinnedNow = pinned;
+      console.log(
+        `[deal-context] ${logLabel} pinned deal=${pinned.travelDealId} "${pinned.title}" ` +
+          `source=${pinned.source} distance=${pinned.distance?.toFixed(3) ?? "n/a"}`,
+      );
+    } else {
+      const candidates = pickDealCandidates(matches);
+      if (candidates.length) {
+        dealCandidates = candidates.map(({ distance: _d, ...c }) => c);
+        console.log(
+          `[deal-context] ${logLabel} deal candidates offered: ` +
+            candidates.map((c) => `"${c.title}"@${c.distance.toFixed(3)}`).join(", "),
+        );
+      }
+    }
+  }
+
+  // Hydrated fresh every turn (cheap: two small queries) so the AI always
+  // quotes CURRENT hotel/flight detail, never the embedding's snapshot.
+  const deal = ref ? await hydrateDealReplyContext(ref) : null;
+  if (deal) {
+    deal.tweakCheckPending = !checkAsked;
+    seedSlotsFromDeal(slots, deal);
+  }
+  return { pinnedNow, deal, dealCandidates };
 }
 
 /** Load the pinned deal's live details (posted caption fields + the quote's
