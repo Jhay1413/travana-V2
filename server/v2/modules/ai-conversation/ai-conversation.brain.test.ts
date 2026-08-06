@@ -798,7 +798,10 @@ describe("buildSystemPrompt (pinned Facebook-deal block)", () => {
     // No booking presumption in the phrasing.
     expect(prompt).toContain("NEVER as if they've already decided to book");
     expect(prompt).toContain('Do NOT phrase it as "would you like it"');
-    // Answer-only-what-asked: no spec dump, no volunteered price.
+    // Answer-what-asked: specific → one detail; general "more details" → the
+    // key posted details; price never volunteered either way.
+    expect(prompt).toContain("ANSWER WHAT THEY ASKED");
+    expect(prompt).toContain("a GENERAL request for details");
     expect(prompt).toContain("Do NOT recite the deal's other details");
     expect(prompt).toContain("NEVER volunteer the price");
     expect(prompt).not.toContain("do NOT ask again whether they want any changes");
