@@ -1,0 +1,1 @@
+ALTER TABLE "sendseven_integrations" ADD COLUMN "auto_reply_enabled_at" timestamp;

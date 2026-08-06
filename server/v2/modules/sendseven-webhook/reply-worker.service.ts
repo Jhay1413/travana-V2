@@ -1,4 +1,5 @@
-import { runWithSendSevenConfigAsync } from "../../utils/sendseven";
+import { runWithSendSevenConfigAsync, type SendSevenConfig } from "../../utils/sendseven";
+import { conversationsRepository } from "../conversations/conversations.repository";
 import { realtimeService } from "../../realtime/realtime.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import {
@@ -61,6 +62,12 @@ import type { SendsevenConversationState } from "@shared/schema";
 // flow. No schema columns needed.
 interface ConversationContext {
   lastReply?: string;
+  // Cached verdict of the "default-on for new conversations" gate: whether
+  // this conversation's SendSeven created_at is after the org's
+  // autoReplyEnabledAt. Written once (first message that needed the check) so
+  // the SendSeven conversation lookup doesn't run per message. Absent =
+  // never checked (or context was reset — the next check just re-fetches).
+  newConversation?: boolean;
   // Why this conversation was handed off (needsHuman=true) — written by every
   // hand-off site (setNeedsHuman + the direct update() writes below). The
   // resume gate in handleInbound reads it: human-owned reasons make the
@@ -254,13 +261,19 @@ export const replyWorker = {
     }
     const knownClient = !!clientId;
 
-    // ── AI opt-in gate (default OFF) ─────────────────────────────────────
-    // The bot only participates in a conversation an agent has opted in:
-    // either this conversation carries an explicit override ("enabled" /
-    // "disabled" — the inbox toggle), or it is linked to a client whose
-    // aiReplyEnabled flag is ON. Everything else — including unknown
-    // contacts — stays silent. The webhook still feeds the realtime inbox
-    // either way (process() published before calling us).
+    // ── AI opt-in gate ───────────────────────────────────────────────────
+    // The bot participates when any of these hold, checked cheapest-first:
+    //   1. this conversation carries an explicit "enabled" override (the
+    //      inbox toggle),
+    //   2. it is linked to a client whose aiReplyEnabled flag is ON,
+    //   3. DEFAULT-ON FOR NEW CONVERSATIONS: the org's auto-reply was
+    //      switched on before this conversation was CREATED in SendSeven —
+    //      James's policy: "when we turn it on, it starts on new
+    //      conversations coming in; leave existing ones". Pre-existing
+    //      conversations stay opt-in-only.
+    // An explicit "disabled" override always wins; everything else stays
+    // silent. The webhook still feeds the realtime inbox either way
+    // (process() published before calling us).
     const aiOverride = state.aiOverride ?? null;
     if (aiOverride === "disabled") {
       console.log(`[sendseven-webhook] conv ${conversationId} AI override=disabled — staying silent`);
@@ -270,21 +283,30 @@ export const replyWorker = {
     // reused for the AI turn below — it used to be part of the parallel
     // batch inside runWithSendSevenConfigAsync.
     const client = clientId ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : null;
-    if (aiOverride !== "enabled" && !client?.aiReplyEnabled) {
-      console.log(
-        `[sendseven-webhook] conv ${conversationId} not opted in to AI (override=none client=${clientId ?? "none"} ` +
-          `clientAi=${client ? String(!!client.aiReplyEnabled) : "n/a"}) — staying silent`,
-      );
-      return;
-    }
+    let optedIn = aiOverride === "enabled" || !!client?.aiReplyEnabled;
 
+    // cfg + integration are resolved BEFORE the final opt-in verdict now: the
+    // default-on check needs the enable timestamp and (on first sight) a
+    // SendSeven conversation lookup.
     const cfg = await conversationIntegrationService.resolveConfig(orgId);
     if (!cfg) {
       console.warn(`[sendseven-webhook] org ${orgId} has no resolvable SendSeven config — skipping reply.`);
       return;
     }
-
     const integration = await conversationIntegrationRepository.findByOrg(orgId);
+
+    if (!optedIn && integration?.autoReplyEnabledAt) {
+      optedIn = await isNewConversationDefaultOn(cfg, conversationId, state, integration.autoReplyEnabledAt);
+      if (optedIn) console.log(`[sendseven-webhook] conv ${conversationId} default-on (new conversation) — AI participating`);
+    }
+    if (!optedIn) {
+      console.log(
+        `[sendseven-webhook] conv ${conversationId} not opted in to AI (override=none client=${clientId ?? "none"} ` +
+          `clientAi=${client ? String(!!client.aiReplyEnabled) : "n/a"} enabledAt=${integration?.autoReplyEnabledAt ? "set" : "none"}) — staying silent`,
+      );
+      return;
+    }
+
     const mode = integration?.autoReplyMode ?? "draft";
 
     await runWithSendSevenConfigAsync(cfg, async () => {
@@ -1299,6 +1321,41 @@ function redactPhone(phone?: string | null): string {
   if (!digits) return "?";
   const visible = digits.slice(-4);
   return `${"*".repeat(Math.max(digits.length - visible.length, 0))}${visible}`;
+}
+
+// Decides the "default-on for new conversations" branch of the opt-in gate: is
+// this conversation NEWER than the org's auto-reply enable time? Uses the
+// conversation's own SendSeven created_at — NOT our state row's createdAt:
+// state rows only start existing once the bot is on, so by that measure every
+// conversation (old or new) would look "new" on its first message. The verdict
+// is cached on the conversation state's context so the SendSeven lookup runs
+// once per conversation, not per message. FAIL-CLOSED: a failed/unreadable
+// lookup means NOT new (stay silent) and is deliberately NOT cached, so a
+// transient API error retries on the next message instead of permanently
+// muting a genuinely new lead.
+async function isNewConversationDefaultOn(
+  cfg: SendSevenConfig,
+  conversationId: string,
+  state: SendsevenConversationState,
+  enabledAt: Date,
+): Promise<boolean> {
+  const ctx = (state.context as ConversationContext | null) ?? {};
+  if (typeof ctx.newConversation === "boolean") return ctx.newConversation;
+
+  const conv = await runWithSendSevenConfigAsync(cfg, () => conversationsRepository.getById(conversationId)).catch(() => null);
+  const rawCreatedAt = (conv as { created_at?: unknown } | null)?.created_at;
+  const createdAtMs = typeof rawCreatedAt === "string" ? new Date(rawCreatedAt).getTime() : NaN;
+  if (!Number.isFinite(createdAtMs)) {
+    console.warn(`[sendseven-webhook] conv ${conversationId} default-on check: no readable created_at — failing closed (silent)`);
+    return false;
+  }
+  const isNew = createdAtMs >= new Date(enabledAt).getTime();
+  // Cache the definitive verdict; keep the in-memory state in sync so later
+  // context writes this turn (which spread the context) don't drop it.
+  const nextContext: ConversationContext = { ...ctx, newConversation: isNew };
+  await conversationStateRepository.update(conversationId, { context: nextContext });
+  state.context = nextContext;
+  return isNew;
 }
 
 // Atomically claims the right to send a reply for THIS inbound message on the

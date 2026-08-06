@@ -29,6 +29,9 @@ export interface ForkSessionResponse {
   // The LIVE conversation is currently handed off to a human — the sandbox
   // still replies, but the tester should know the real AI would stay silent.
   realNeedsHuman: boolean;
+  // The conversation ended on a customer message, so the sandbox already
+  // answered it — the seeded transcript ends with the AI's reply.
+  autoReplied: boolean;
 }
 
 // POST /api/v2/internal-chat/sessions/:id/messages either returns the

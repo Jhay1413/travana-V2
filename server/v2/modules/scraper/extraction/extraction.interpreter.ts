@@ -14,28 +14,56 @@ function titleCaseSlug(s: string): string {
   return s
     .split(/[-\s]+/)
     .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    // Lower-case the tail so SHOUTED page text ("IN PRAGUE, CZECH REPUBLIC")
+    // title-cases properly, not just URL slugs. A word that is ALREADY mixed
+    // case is left alone, so "easyJet" or "McCarthy" survive.
+    .map((w) => {
+      const body = w === w.toUpperCase() ? w.slice(1).toLowerCase() : w.slice(1);
+      return w.charAt(0).toUpperCase() + body;
+    })
     .join(' ');
 }
 
 // Parse common date shapes into YYYY-MM-DD: "06 Sep 2026", "Sun 06 Sep 2026",
 // "06-09-2026", "2026-09-06".
 function parseDate(raw: string): string {
-  const s = raw.trim();
+  // Drop ordinal suffixes ("14th Aug 2026") before matching — portals write
+  // dates both ways and the day-month-year pattern below expects a bare number.
+  const s = raw.trim().replace(/(\d{1,2})(st|nd|rd|th)\b/gi, '$1');
   let m = /(\d{4})-(\d{2})-(\d{2})/.exec(s);
   if (m) return `${m[1]}-${m[2]}-${m[3]}`;
   m = /(\d{1,2})[-/](\d{1,2})[-/](\d{4})/.exec(s);
   if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   m = /(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})/.exec(s);
   if (m) return `${m[3]}-${MONTHS[m[2].toLowerCase()] ?? '01'}-${m[1].padStart(2, '0')}`;
+  // Compact 8-digit dates with no separators, as analytics blobs often carry
+  // them (Jet2's dataLayer writes "06092026"). Disambiguated by whether the
+  // leading four digits are a plausible year.
+  m = /^(\d{8})$/.exec(s);
+  if (m) {
+    const d = m[1];
+    const lead = Number(d.slice(0, 4));
+    return lead >= 1900 && lead <= 2100
+      ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` // YYYYMMDD
+      : `${d.slice(4, 8)}-${d.slice(2, 4)}-${d.slice(0, 2)}`; // DDMMYYYY
+  }
   return s;
 }
 
 function applyTransform(value: string, transform?: FieldTransform): string | number {
   const v = (value ?? '').trim();
   switch (transform) {
-    case 'number':
-      return Number(v.replace(/[^\d.]/g, '')) || 0;
+    case 'number': {
+      // A value counts as a number only if it IS one — optionally wrapped in a
+      // currency symbol or a trailing unit — not merely because it contains
+      // digits. Stripping every non-digit turns an occupancy string like
+      // "A:02 C:00 I:00" into 20000, and a composite value silently becomes a
+      // plausible-looking number. Returning 0 here is deliberate: isEmpty(0) is
+      // true, so the rule falls through to its regex/DOM source instead.
+      const cleaned = v.replace(/,/g, '');
+      const m = /^[^\d-]*(-?\d+(?:\.\d+)?)[^\d]*$/.exec(cleaned);
+      return m ? Number(m[1]) : 0;
+    }
     case 'date':
       return parseDate(v);
     case 'titleCase':
@@ -116,10 +144,58 @@ function resolveField(
     const re = safeRegex(rule.regex);
     const m = re ? re.exec(source) : null;
     value = m ? (m[rule.group ?? 1] ?? '') : '';
+  } else if (rule.from !== 'url') {
+    // No regex and no URL segment to take: there is nothing to select WITH, so
+    // the whole page innerText/title would otherwise land in the field. That
+    // happens whenever a jsonPath rule misses — the AI writes jsonPath-only
+    // rules and the DOM fallback has no pattern — and a whole page dumped into
+    // "accommodation" is far worse than an empty value.
+    value = '';
   }
   const out = finalize(value, rule);
   if (isEmpty(out) && rule.fallback != null) return rule.fallback;
   return out;
+}
+
+/**
+ * Applies a spec's scalar field rules ON TOP of an already-mapped quote —
+ * the config-override path for CODE-based adapters (easyjet): the structured
+ * mapping (flights/transfers/images) stays in code, but any scalar field can
+ * be re-pointed from the supplier's stored config without a deploy, e.g.
+ *   fields: { sales_price: { jsonPath: "offers[0].priceExcludingTouristTax", transform: "number" } }
+ * Rules that resolve to nothing leave the mapped value untouched, and only
+ * keys that exist on the quote as scalars are overridable — a rule can't
+ * replace a structured array or invent new fields.
+ */
+export function applyScalarOverrides(
+  base: ScrapedQuoteJson,
+  spec: Pick<ExtractionSpec, 'constants' | 'fields'> | undefined,
+  ctx: { url: string; apiJson?: unknown; title?: string; text?: string },
+): ScrapedQuoteJson {
+  if (!spec || (!spec.fields && !spec.constants)) return base;
+  const record = base as unknown as Record<string, unknown>;
+  const isOverridableKey = (key: string): boolean => {
+    if (!(key in record)) return false;
+    const cur = record[key];
+    return cur === null || ['string', 'number', 'boolean'].includes(typeof cur);
+  };
+  // Keep the base field's numeric type: resolveField stringifies jsonPath hits
+  // unless the rule declares transform "number", and a config author will
+  // forget that more often than not.
+  const coerce = (key: string, v: string | number): string | number =>
+    typeof record[key] === 'number' && typeof v === 'string' ? Number(v.replace(/[^\d.-]/g, '')) || 0 : v;
+
+  const out: Record<string, unknown> = { ...record };
+  const resolveCtx = { title: ctx.title ?? '', text: ctx.text ?? '', url: ctx.url, apiJson: ctx.apiJson };
+  for (const [key, value] of Object.entries(spec.constants ?? {})) {
+    if (isOverridableKey(key) && value !== '' && value != null) out[key] = coerce(key, value);
+  }
+  for (const [key, rule] of Object.entries(spec.fields ?? {})) {
+    if (!isOverridableKey(key)) continue;
+    const value = resolveField(rule, resolveCtx);
+    if (!isEmpty(value)) out[key] = coerce(key, value);
+  }
+  return out as unknown as ScrapedQuoteJson;
 }
 
 function str(v: unknown): string {
@@ -143,6 +219,74 @@ function imageBase(src: string): string {
   return src.split('?')[0].replace(/:[^/:]*$/, '');
 }
 
+// Image URLs carried in the operator's booking JSON. A rendered gallery is
+// LAZY-LOADED — TUI ships 35 slides but only the first handful hold a real src,
+// the rest being "image coming soon" placeholders until scrolled — so the <img>
+// list is always a partial view. The JSON lists them outright. Collected by
+// shape (an absolute URL ending in an image extension) and then passed through
+// the same chrome/off-site filters as the DOM images, so logos and map tiles
+// are rejected identically. SVGs are skipped: at this level they are brand
+// marks and airline logos, never photography.
+function imagesFromJson(apiJson: unknown): string[] {
+  const found: string[] = [];
+  const IMAGE_URL = /^https?:\/\/[^\s"']+\.(?:jpe?g|png|webp|avif)(?:\?|$)/i;
+  const visit = (node: unknown, depth: number): void => {
+    if (node == null || depth > 8 || found.length > 200) return;
+    if (typeof node === 'string') {
+      if (IMAGE_URL.test(node)) found.push(node);
+      return;
+    }
+    if (Array.isArray(node)) {
+      for (const v of node) visit(v, depth + 1);
+      return;
+    }
+    if (typeof node === 'object') for (const v of Object.values(node as Json)) visit(v, depth + 1);
+  };
+  visit(apiJson, 0);
+  return found;
+}
+
+// How wide a resizer was asked to render this image. Used to keep the LARGEST
+// variant when the same photo appears at several sizes — a page routinely
+// renders a 232px thumbnail and a 1080px hero of one picture, and shipping the
+// thumbnail to a quote looks broken.
+function widthHint(src: string): number {
+  const m = /[?&](?:w|wid|width)=(\d{2,5})\b/i.exec(src);
+  return m ? Number(m[1]) : 0;
+}
+
+// Resolves a possibly-relative <img> src against the page it came from. Portals
+// emit both forms in the same gallery, and a relative one must not be discarded
+// just because it can't be parsed on its own.
+function absolutiseImage(src: string, pageUrl: string): string {
+  try {
+    return new URL(src, pageUrl || undefined).href;
+  } catch {
+    return '';
+  }
+}
+
+// Many sites serve every image through their own optimiser
+// (…/_next/image?url=<real>, Cloudinary, imgix, Sitecore …). That puts the whole
+// page — hotel photography AND brand/marketing tiles — on ONE host, which
+// defeats grouping by host. The real origin is the wrapped URL, so unwrap it
+// when a query parameter holds an absolute URL. Used for GROUPING and DEDUPING
+// only: the rendered proxy URL is what gets returned, since that is the form the
+// page actually loaded successfully.
+const PROXY_PARAMS = ['url', 'u', 'src', 'image', 'imageUrl'];
+function imageOrigin(absSrc: string): string {
+  try {
+    const parsed = new URL(absSrc);
+    for (const key of PROXY_PARAMS) {
+      const inner = parsed.searchParams.get(key);
+      if (inner && /^https?:\/\//i.test(inner)) return new URL(inner).href;
+    }
+    return absSrc;
+  } catch {
+    return absSrc;
+  }
+}
+
 // Selects the property gallery from every captured <img>. Images aren't in
 // innerText, so they're captured separately (CapturedImage[]) and chosen here —
 // by the spec's imageUrlIncludes when set, else by the dominant image-CDN host.
@@ -150,11 +294,22 @@ function imageBase(src: string): string {
 function selectGalleryImages(
   images: { src: string; w?: number; h?: number }[] | undefined,
   spec: ExtractionSpec,
+  pageUrl: string,
 ): string[] {
   if (!images || images.length === 0) return [];
   // Third-party widgets (reviews, maps, social) are never the property gallery.
   const EXCLUDE = /tripadvisor|tacdn|googleapis|gstatic|feefo|facebook|twitter|doubleclick|recaptcha/i;
-  const cleaned = images.map((i) => i.src).filter((s) => s && !s.startsWith('data:') && !EXCLUDE.test(s));
+  // Site furniture: logos, UI icons, flags, pictograms, "image coming soon"
+  // placeholders and anything under a static-asset path. These outnumber the
+  // real photography on some portals, so counting images per host picks the
+  // chrome instead of the gallery unless they're removed first.
+  const CHROME =
+    /logo|sprite|placeholder|pictogram|badge|\bflag\b|coming[-_]soon|[-_]icon|\/icons?\/|\/static-images\/|\/_ui\/|\/assets\/|\/-\/media\//i;
+  // Resolve relative srcs up front — a gallery routinely mixes both forms, and
+  // dropping the relative half loses most of the photography.
+  const cleaned = images
+    .map((i) => (i.src && !i.src.startsWith('data:') ? absolutiseImage(i.src, pageUrl) : ''))
+    .filter((s) => s && !EXCLUDE.test(s));
   if (cleaned.length === 0) return [];
 
   let pool: string[];
@@ -163,43 +318,74 @@ function selectGalleryImages(
   if (byInclude.length) {
     pool = byInclude;
   } else {
-    // Auto-detect: the gallery is the host with the most DISTINCT photos, after
-    // dropping site chrome (logos/icons/promos under a CMS "/-/media/" path that
-    // aren't served by an image resizer).
-    const byHost = new Map<string, Set<string>>();
-    for (const s of cleaned) {
-      if (/logo|sprite|placeholder|\/-\/media\//i.test(s) && !/\/is\/image\//i.test(s)) continue;
-      let host = '';
+    // Drop site chrome first, then decide. An image resizer path (/is/image/)
+    // always carries real photography, so it survives the chrome filter.
+    const photos = cleaned.filter((s) => !CHROME.test(s) || /\/is\/image\//i.test(s));
+
+    // Property galleries are served from a DIFFERENT origin than the page —
+    // a photo CDN or media bucket (media.jet2.com, cdn.images.tui, an S3
+    // bucket behind the site's own image proxy) — while brand and UI assets
+    // come from the site itself. That separation is a far better signal than
+    // sheer count, which a portal's own furniture can win outright.
+    const pageHost = (() => {
       try {
-        host = new URL(s).host;
+        return new URL(pageUrl).host;
       } catch {
-        continue;
+        return '';
       }
-      if (!byHost.has(host)) byHost.set(host, new Set());
-      byHost.get(host)!.add(imageBase(s));
+    })();
+    const originHost = (s: string): string => {
+      try {
+        return new URL(imageOrigin(s)).host;
+      } catch {
+        return '';
+      }
+    };
+    const offSite = photos.filter((s) => {
+      const h = originHost(s);
+      return h && h !== pageHost;
+    });
+
+    if (offSite.length) {
+      pool = offSite;
+    } else {
+      // Self-hosted gallery: fall back to the origin host with the most
+      // DISTINCT photos.
+      const byHost = new Map<string, Set<string>>();
+      for (const s of photos) {
+        const host = originHost(s);
+        if (!host) continue;
+        if (!byHost.has(host)) byHost.set(host, new Set());
+        byHost.get(host)!.add(imageBase(imageOrigin(s)));
+      }
+      let bestHost = '';
+      let bestCount = 0;
+      for (const [host, set] of byHost) if (set.size > bestCount) [bestHost, bestCount] = [host, set.size];
+      pool = bestHost ? photos.filter((s) => originHost(s) === bestHost) : [];
     }
-    let bestHost = '';
-    let bestCount = 0;
-    for (const [host, set] of byHost) if (set.size > bestCount) [bestHost, bestCount] = [host, set.size];
-    pool = bestHost
-      ? cleaned.filter((s) => {
-          try {
-            return new URL(s).host === bestHost;
-          } catch {
-            return false;
-          }
-        })
-      : [];
   }
 
-  // Dedupe by base image (order preserved), request a sensible size from resizers.
-  const seen = new Set<string>();
-  const hotelImages: string[] = [];
+  // Dedupe by the ORIGIN base image (first-seen order preserved) so one photo
+  // rendered at several sizes counts once — keeping the WIDEST variant, since
+  // the same picture routinely appears as both a thumbnail and a hero.
+  const byBase = new Map<string, string>();
+  const order: string[] = [];
   for (const s of pool) {
-    const base = imageBase(s);
-    if (seen.has(base)) continue;
-    seen.add(base);
-    hotelImages.push(/\/is\/image\//i.test(base) ? `${base}?wid=1200` : base);
+    const base = imageBase(imageOrigin(s));
+    const current = byBase.get(base);
+    if (current === undefined) {
+      byBase.set(base, s);
+      order.push(base);
+    } else if (widthHint(s) > widthHint(current)) {
+      byBase.set(base, s);
+    }
+  }
+
+  const hotelImages: string[] = [];
+  for (const base of order) {
+    const chosen = byBase.get(base) as string;
+    const rendered = imageBase(chosen);
+    hotelImages.push(/\/is\/image\//i.test(rendered) ? `${rendered}?wid=1200` : chosen);
     if (hotelImages.length >= 25) break;
   }
   return hotelImages;
@@ -223,6 +409,10 @@ interface ParsedFlightModal {
   outArrive: string;
   retDepart: string;
   retArrive: string;
+  // Only the stacked-itinerary format (parseFlightList) carries these.
+  homeCode?: string;
+  outFlightNo?: string;
+  retFlightNo?: string;
 }
 function combineDateTime(datePart: string, time: string): string {
   const iso = parseDate(datePart);
@@ -273,6 +463,273 @@ function parseFlightModal(text: string | undefined, homeNameHint: string): Parse
     }
   }
   return { destName, destCode, homeName, outDepart, outArrive, retDepart, retArrive };
+}
+
+// Second flight convention: a STACKED ITINERARY printed in the page's own text
+// rather than behind a "Depart:/Arrive:" modal. Each leg renders as one value
+// per line:
+//   Fri 14th Aug 2026
+//   EZY2051
+//   17:00            ← departs
+//   23:25            ← arrives
+//   Manchester
+//   (MAN)
+//   Rhodes, Diagoras
+//   (RHO)
+// Keyed on that SHAPE — a date, a flight code, two times, then two
+// name/(CODE) airport pairs — not on any supplier's wording, so any portal
+// laying flights out this way is read without new configuration. The first
+// match is the outbound leg and the second the return.
+const FLIGHT_LEG_RE = new RegExp(
+  [
+    String.raw`(?:^|\n)[^\S\n]*(?:[A-Za-z]{3,9},?[^\S\n]+)?`, // optional weekday
+    String.raw`(\d{1,2}(?:st|nd|rd|th)?[^\S\n]+[A-Za-z]{3,9}[^\S\n]+\d{4})[^\S\n]*\n`, // date
+    String.raw`[^\S\n]*([A-Z]{1,3}[^\S\n]?\d{1,4}[A-Z]?)[^\S\n]*\n`, // flight number
+    String.raw`[^\S\n]*(\d{1,2}:\d{2})[^\S\n]*\n`, // depart time
+    String.raw`[^\S\n]*(\d{1,2}:\d{2})[^\S\n]*\n`, // arrive time
+    String.raw`[^\S\n]*([^\n()]+?)[^\S\n]*\n[^\S\n]*\(([A-Z]{3})\)[^\S\n]*\n`, // from name + code
+    String.raw`[^\S\n]*([^\n()]+?)[^\S\n]*\n[^\S\n]*\(([A-Z]{3})\)`, // to name + code
+  ].join(''),
+  'g',
+);
+
+function parseFlightList(text: string | undefined): ParsedFlightModal | null {
+  if (!text) return null;
+  FLIGHT_LEG_RE.lastIndex = 0;
+  const legs = [...text.matchAll(FLIGHT_LEG_RE)];
+  if (legs.length === 0) return null;
+
+  const leg = (i: number) => {
+    const m = legs[i];
+    if (!m) return null;
+    const [, date, flightNo, dep, arr, fromName, fromCode, toName, toCode] = m;
+    return {
+      depart: combineDateTime(date, dep),
+      // Only one date is printed per leg, so an after-midnight arrival carries
+      // its departure date — that is all the page actually states.
+      arrive: combineDateTime(date, arr),
+      flightNo: flightNo.replace(/\s+/g, ''),
+      fromName: fromName.trim(),
+      fromCode,
+      toName: toName.trim(),
+      toCode,
+    };
+  };
+
+  const out = leg(0);
+  const ret = leg(1);
+  if (!out) return null;
+
+  return {
+    homeName: out.fromName,
+    homeCode: out.fromCode,
+    destName: out.toName,
+    destCode: out.toCode,
+    outDepart: out.depart,
+    outArrive: out.arrive,
+    retDepart: ret?.depart ?? '',
+    retArrive: ret?.arrive ?? '',
+    outFlightNo: out.flightNo,
+    retFlightNo: ret?.flightNo ?? '',
+  };
+}
+
+// Third flight convention: OUT/RTN leg cards, where each leg is a labelled
+// block holding a date, two times, and two airport name + bare CODE pairs:
+//   OUT   Sun 30 Aug 2026
+//   06:00   Direct  1h 50m   08:50
+//   London Stansted  STN     Prague  PRG
+//   Ryanair
+// Rather than assume a fixed line order (portals reflow these cards freely),
+// each block is SCANNED: first date wins, the first two times are depart/arrive,
+// and the first and last airport codes are origin and destination.
+const LEG_LABELS = /\b(OUT|RTN|OUTBOUND|INBOUND|RETURN|DEPARTING|RETURNING)\b/g;
+// Words that look like airport codes but aren't — leg labels and common card
+// furniture. Anything else in caps of exactly three letters is treated as IATA.
+const NOT_A_CODE = /^(OUT|RTN|VAT|ATO|TBC|N\/A)$/;
+
+function scanFlightBlock(block: string): {
+  depart: string;
+  arrive: string;
+  fromName: string;
+  fromCode: string;
+  toName: string;
+  toCode: string;
+} | null {
+  const date = /(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\s+\d{4})/.exec(block)?.[1] ?? '';
+  const times = [...block.matchAll(/\b(\d{1,2}:\d{2})\b/g)].map((m) => m[1]);
+  if (!date || times.length < 2) return null;
+
+  // Airport codes with the line they sit on, so the name can be read from the
+  // same line or the one above (both layouts occur).
+  const lines = block.split('\n').map((l) => l.trim());
+  const codes: { code: string; name: string }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    for (const m of lines[i].matchAll(/\b([A-Z]{3})\b/g)) {
+      if (NOT_A_CODE.test(m[1])) continue;
+      const sameLine = lines[i].replace(m[1], '').trim();
+      const name = sameLine || lines[i - 1] || '';
+      codes.push({ code: m[1], name: name.replace(/\s{2,}/g, ' ').trim() });
+    }
+  }
+  if (codes.length < 2) return null;
+
+  const from = codes[0];
+  const to = codes[codes.length - 1];
+  return {
+    depart: combineDateTime(date, times[0]),
+    arrive: combineDateTime(date, times[1]),
+    fromName: from.name,
+    fromCode: from.code,
+    toName: to.name,
+    toCode: to.code,
+  };
+}
+
+function parseFlightLegCards(text: string | undefined): ParsedFlightModal | null {
+  if (!text) return null;
+  LEG_LABELS.lastIndex = 0;
+  const marks = [...text.matchAll(LEG_LABELS)];
+  if (marks.length < 1) return null;
+
+  // A leg block runs from its label to the next label (or a bounded tail).
+  const blocks: string[] = [];
+  for (let i = 0; i < marks.length && blocks.length < 2; i++) {
+    const start = marks[i].index ?? 0;
+    const end = marks[i + 1]?.index ?? Math.min(text.length, start + 600);
+    blocks.push(text.slice(start, end));
+  }
+
+  const out = scanFlightBlock(blocks[0] ?? '');
+  if (!out) return null;
+  const ret = blocks[1] ? scanFlightBlock(blocks[1]) : null;
+
+  return {
+    homeName: out.fromName,
+    homeCode: out.fromCode,
+    destName: out.toName,
+    destCode: out.toCode,
+    outDepart: out.depart,
+    outArrive: out.arrive,
+    retDepart: ret?.depart ?? '',
+    retArrive: ret?.arrive ?? '',
+  };
+}
+
+// ─── Flights from the operator's own booking JSON ────────────────────────────
+// Best source by a distance: operators embed the booking record as JSON in the
+// page, so the legs arrive already structured — no shadow DOM, no collapsed
+// panels, no prose to regex. Keyed on SHAPE, not on any supplier: find arrays
+// held under an outbound/inbound-ish key whose entries carry an airport pair
+// and a time, then read each leg through a list of the field names operators
+// actually use. Both of TUI's own shapes (itinerary.outbounds[] with string
+// airports, flightViewData[].outboundSectors[] with {code,name} objects) parse
+// through the same code.
+const OUTBOUND_KEY = /^(outbounds?|outboundsectors?|outboundflights?|outboundlegs?|departures?)$/i;
+const INBOUND_KEY = /^(inbounds?|inboundsectors?|inboundflights?|inboundlegs?|returns?|returnsectors?)$/i;
+
+type Json = Record<string, unknown>;
+
+function asRecord(v: unknown): Json | null {
+  return v && typeof v === 'object' && !Array.isArray(v) ? (v as Json) : null;
+}
+
+// Reads a value by trying several key spellings, case-insensitively.
+function pick(obj: Json | null, names: string[]): unknown {
+  if (!obj) return undefined;
+  const lower = new Map(Object.keys(obj).map((k) => [k.toLowerCase(), k]));
+  for (const n of names) {
+    const key = lower.get(n.toLowerCase());
+    if (key !== undefined && obj[key] != null && obj[key] !== '') return obj[key];
+  }
+  return undefined;
+}
+
+// An airport is written either as a string name beside a separate code field,
+// or as a nested { code, name } object.
+function airportFrom(leg: Json, kind: 'departure' | 'arrival'): { code: string; name: string } {
+  const base = kind === 'departure' ? ['departureAirport', 'departAirport', 'origin', 'from'] : ['arrivalAirport', 'arriveAirport', 'destination', 'to'];
+  const codeKeys = base.map((b) => `${b}Code`).concat(kind === 'departure' ? ['departAirportCode'] : ['arrivalAirportCode']);
+  const nameKeys = base.map((b) => `${b}Name`);
+
+  const raw = pick(leg, base);
+  const nested = asRecord(raw);
+  const code = String(pick(leg, codeKeys) ?? (nested ? pick(nested, ['code', 'iata']) : '') ?? '').trim();
+  const name = String(
+    pick(leg, nameKeys) ?? (nested ? pick(nested, ['name']) : typeof raw === 'string' ? raw : '') ?? '',
+  ).trim();
+  return { code: /^[A-Z]{3}$/i.test(code) ? code.toUpperCase() : '', name };
+}
+
+// "0600" / "6:00" / "06:00" → "06:00".
+function normaliseTime(v: unknown): string {
+  const s = String(v ?? '').trim();
+  let m = /^(\d{1,2}):(\d{2})$/.exec(s);
+  if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
+  m = /^(\d{2})(\d{2})$/.exec(s);
+  if (m) return `${m[1]}:${m[2]}`;
+  return '';
+}
+
+function legFromJson(leg: Json): { depart: string; arrive: string; flightNo: string; from: { code: string; name: string }; to: { code: string; name: string } } | null {
+  const sched = asRecord(pick(leg, ['schedule', 'times', 'timings'])) ?? leg;
+  const depDate = String(pick(sched, ['departureDate', 'departDate', 'formattedDepartureDate', 'commonDepartureDate']) ?? '');
+  const arrDate = String(pick(sched, ['arrivalDate', 'formattedArrivalDate', 'commonArrivalDate']) ?? depDate);
+  const depTime = normaliseTime(pick(sched, ['formattedDepartureTime', 'depTime', 'departureTime']));
+  const arrTime = normaliseTime(pick(sched, ['formattedArrivalTime', 'arrTime', 'arrivalTime']));
+  if (!depDate || !depTime) return null;
+
+  const carrier = asRecord(pick(leg, ['carrier', 'airline', 'operatingCarrier']));
+  const flightNo = String(pick(leg, ['flightNumber', 'flightNo']) ?? (carrier ? pick(carrier, ['flightNumber', 'flightNo']) : '') ?? '').trim();
+
+  return {
+    depart: combineDateTime(depDate, depTime),
+    arrive: arrTime ? combineDateTime(arrDate, arrTime) : '',
+    flightNo,
+    from: airportFrom(leg, 'departure'),
+    to: airportFrom(leg, 'arrival'),
+  };
+}
+
+function parseFlightsFromJson(apiJson: unknown): ParsedFlightModal | null {
+  if (!apiJson || typeof apiJson !== 'object') return null;
+  let out: ReturnType<typeof legFromJson> = null;
+  let ret: ReturnType<typeof legFromJson> = null;
+
+  const visit = (node: unknown, depth: number): void => {
+    if (!node || typeof node !== 'object' || depth > 8 || (out && ret)) return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item, depth + 1);
+      return;
+    }
+    for (const [key, value] of Object.entries(node as Json)) {
+      if (Array.isArray(value) && value.length) {
+        const first = asRecord(value[0]);
+        if (first) {
+          if (!out && OUTBOUND_KEY.test(key)) out = legFromJson(first) ?? out;
+          else if (!ret && INBOUND_KEY.test(key)) ret = legFromJson(first) ?? ret;
+        }
+      }
+      visit(value, depth + 1);
+    }
+  };
+  visit(apiJson, 0);
+
+  const o = out as ReturnType<typeof legFromJson>;
+  const r = ret as ReturnType<typeof legFromJson>;
+  if (!o) return null;
+  return {
+    homeName: o.from.name,
+    homeCode: o.from.code,
+    destName: o.to.name,
+    destCode: o.to.code,
+    outDepart: o.depart,
+    outArrive: o.arrive,
+    retDepart: r?.depart ?? '',
+    retArrive: r?.arrive ?? '',
+    outFlightNo: o.flightNo,
+    retFlightNo: r?.flightNo ?? '',
+  };
 }
 
 // Reliable fallbacks read straight from the deal URL when the page text didn't
@@ -400,7 +857,13 @@ export function runExtractionSpec(
   scrapedAt: string,
 ): ScrapedQuoteJson {
   const text = (ctx.text || '').slice(0, 40_000);
-  const hotelImages = selectGalleryImages(ctx.images, spec);
+  // Booking-JSON images first: they're the complete list, whereas the rendered
+  // <img> set is whatever lazy-loading happened to have reached.
+  const hotelImages = selectGalleryImages(
+    [...imagesFromJson(ctx.apiJson).map((src) => ({ src })), ...(ctx.images ?? [])],
+    spec,
+    ctx.url,
+  );
   // Image URLs, joined, so a spec field rule can read them (from: 'images') —
   // e.g. a destination code that only appears in image filenames.
   const imagesText = (ctx.images ?? []).map((i) => i.src).join('\n');
@@ -455,27 +918,55 @@ export function runExtractionSpec(
   // Prefer a flight-details modal (real times + destination name/code) when one
   // was captured; otherwise fall back to home name (page) + destination code
   // (image) with date-only times.
-  const modal = parseFlightModal(ctx.flightsText, departureName);
+  // Two conventions, both supplier-neutral: a "Depart:/Arrive:" details modal
+  // (Jet2-shaped), else a stacked itinerary printed in the page's own text
+  // (easyJet-shaped). The modal wins when present because it is unambiguous;
+  // the list is searched in the modal text first, then the page body, since
+  // some portals render the itinerary inline with no modal at all.
+  // The operator's own booking JSON wins outright when the page carries one:
+  // it is already structured, so nothing is inferred. The text layouts below
+  // remain for pages that embed no such record.
+  const modal =
+    parseFlightsFromJson(ctx.apiJson) ??
+    parseFlightModal(ctx.flightsText, departureName) ??
+    parseFlightList(ctx.flightsText) ??
+    parseFlightList(text) ??
+    parseFlightLegCards(ctx.flightsText) ??
+    parseFlightLegCards(text);
   const returnDate = addNights(travelDate, nights);
   const destName = modal?.destName || arrivalName;
   const destCode = modal?.destCode || arrivalCode;
   const homeName = modal?.homeName || departureName;
+  const homeCode = departureCode || modal?.homeCode || '';
+
+  // Last resort for times: SPEC FIELDS holding a bare "HH:MM". Some portals
+  // never render an itinerary but do publish the departure times in their
+  // analytics blob as loose values (Jet2's dataLayer keeps them in
+  // dimension19/dimension20), which no itinerary parser can recognise. Naming
+  // them as ordinary fields lets a spec point a jsonPath at them — config, not
+  // another supplier-specific branch in here. Only used when the parsers above
+  // found nothing, since a real itinerary is always better.
+  const withTime = (date: string, field: string): string => {
+    const t = normaliseTime(str(f[field]));
+    return date && t ? `${date}T${t}` : date;
+  };
+
   const flights: ScrapedFlightJson[] =
     homeName || destCode || destName
       ? [
           {
-            flight_number: '', flight_type: 'outbound',
-            departing_airport: departureCode, departing_airport_name: homeName,
-            departure_date_time: modal?.outDepart || travelDate,
+            flight_number: modal?.outFlightNo ?? str(f.outbound_flight_number), flight_type: 'outbound',
+            departing_airport: homeCode, departing_airport_name: homeName,
+            departure_date_time: modal?.outDepart || withTime(travelDate, 'outbound_depart_time'),
             arrival_airport: destCode, arrival_airport_name: destName,
-            arrival_date_time: modal?.outArrive || travelDate,
+            arrival_date_time: modal?.outArrive || withTime(travelDate, 'outbound_arrive_time'),
           },
           {
-            flight_number: '', flight_type: 'return',
+            flight_number: modal?.retFlightNo ?? str(f.inbound_flight_number), flight_type: 'return',
             departing_airport: destCode, departing_airport_name: destName,
-            departure_date_time: modal?.retDepart || returnDate,
-            arrival_airport: departureCode, arrival_airport_name: homeName,
-            arrival_date_time: modal?.retArrive || returnDate,
+            departure_date_time: modal?.retDepart || withTime(returnDate, 'inbound_depart_time'),
+            arrival_airport: homeCode, arrival_airport_name: homeName,
+            arrival_date_time: modal?.retArrive || withTime(returnDate, 'inbound_arrive_time'),
           },
         ]
       : [];

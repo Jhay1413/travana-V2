@@ -10,7 +10,10 @@ export type FieldSource = 'text' | 'title' | 'url' | 'images';
 export type FieldTransform = 'number' | 'date' | 'titleCase' | 'trim' | 'lower' | 'upper';
 
 export interface FieldRule {
-  from: FieldSource; // where to read: page innerText, page title, or the deep-link URL
+  // Where to read: page innerText (default), page title, or the deep-link URL.
+  // Optional so a pure-API override rule can be just { jsonPath: "…" } — e.g.
+  // the easyjet adapter's config overrides, where there is no captured DOM.
+  from?: FieldSource;
   // API-first: if the page's captured API JSON has this value, use it. Dot/bracket
   // path e.g. "offers[0].price". If it's absent/empty, the regex below (on the
   // DOM) is used as the fallback — this is how API data and DOM data merge.

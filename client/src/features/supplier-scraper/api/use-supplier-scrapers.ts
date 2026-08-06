@@ -30,6 +30,15 @@ export function useUpdateSupplierScraper() {
   });
 }
 
+export function useApproveSupplierSpec() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
+      supplierScraperApi.approveSpec(id, approve),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: supplierScraperKeys.all }),
+  });
+}
+
 export function useDeleteSupplierScraper() {
   const queryClient = useQueryClient();
   return useMutation({

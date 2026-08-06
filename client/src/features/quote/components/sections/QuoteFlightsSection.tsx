@@ -8,7 +8,6 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { AddAirportModal } from "@/features/lookups/components/lookups/add-airport-modal";
 import { useAirports } from "@/hooks/queries";
-import { getDepartureAirportOptions } from "@/lib/uk-airports";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import type { QuoteFormValues, FlightLegValue } from "@/features/quote/types";
 
@@ -199,7 +198,6 @@ export function QuoteFlightsSection() {
       label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
     }),
   );
-  const departureAirportOptions = getDepartureAirportOptions(airportsData);
 
   const { fields: outboundLegs, append: appendOutbound, remove: removeOutbound } = useFieldArray({
     control,
@@ -223,7 +221,7 @@ export function QuoteFlightsSection() {
             <FormItem>
               <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
               <FormControl>
-                <SearchableSelect options={departureAirportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport..." />
+                <AirportSelectField options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} defaultCountryId={countryId} />
               </FormControl>
               <FormMessage />
             </FormItem>

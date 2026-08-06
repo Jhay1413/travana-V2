@@ -105,6 +105,10 @@ vi.mock("./enquiry-auto-create.service", () => ({
   resolveAndCreateEnquiry: vi.fn(async () => ({ enquiryId: "enq-1", ownerUserId: "user-1" })),
 }));
 
+vi.mock("../conversations/conversations.repository", () => ({
+  conversationsRepository: { getById: vi.fn(async () => ({ id: "conv-1", created_at: "2026-08-05T00:00:00Z" })) },
+}));
+
 vi.mock("./identity.service", () => ({
   createNewClientAndLink: vi.fn(async () => "new-client-id"),
   extractPhoneNumber: vi.fn(() => null),
@@ -125,6 +129,7 @@ vi.mock("./admin-agent.service", () => ({
 }));
 
 import { cleanTravellerName, replyWorker } from "./reply-worker.service";
+import { conversationsRepository } from "../conversations/conversations.repository";
 import { decideDeterministicRoute, generateTurn } from "../ai-conversation/ai-conversation.brain";
 import { classifyConversationRoute } from "../ai-conversation/conversation-router";
 import { conversationStateRepository } from "./conversation-state.repository";
@@ -493,6 +498,84 @@ describe("handleInbound — hand-off resume gate", () => {
     );
     // …and the turn then processed normally (general route, draft mode → note).
     expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Default-on for NEW conversations ────────────────────────────────────────
+// James's policy: once the org's auto-reply is switched on (autoReplyEnabledAt
+// stamped), conversations CREATED in SendSeven after that moment get the AI
+// automatically — no per-conversation/client opt-in. Pre-existing conversations
+// stay opt-in-only, and an unreadable conversation lookup fails closed.
+describe("handleInbound — default-on for new conversations", () => {
+  const ENABLED_AT = new Date("2026-08-01T00:00:00Z");
+
+  beforeEach(() => {
+    // Not opted in classically: no override, no linked client.
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null }));
+    vi.mocked(conversationIntegrationRepository.findByOrg).mockResolvedValue({
+      autoReplyMode: "draft",
+      autoReplyEnabledAt: ENABLED_AT,
+    } as never);
+  });
+
+  it("participates when the conversation was created AFTER auto-reply was enabled, and caches the verdict", async () => {
+    vi.mocked(conversationsRepository.getById).mockResolvedValue({ id: "conv-1", created_at: "2026-08-05T00:00:00Z" } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    // general route (classify mock) in draft mode → one suggested-reply note.
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+    expect(conversationStateRepository.update).toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ context: expect.objectContaining({ newConversation: true }) }),
+    );
+  });
+
+  it("stays silent for a conversation created BEFORE auto-reply was enabled", async () => {
+    vi.mocked(conversationsRepository.getById).mockResolvedValue({ id: "conv-1", created_at: "2026-07-20T00:00:00Z" } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(generateTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+    // The negative verdict IS cached (it's definitive, not an error).
+    expect(conversationStateRepository.update).toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ context: expect.objectContaining({ newConversation: false }) }),
+    );
+  });
+
+  it("fails closed (silent, uncached) when the conversation lookup fails", async () => {
+    vi.mocked(conversationsRepository.getById).mockRejectedValue(new Error("SendSeven down"));
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+    // No cache write — the next message retries the lookup.
+    expect(conversationStateRepository.update).not.toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ context: expect.objectContaining({ newConversation: expect.anything() }) }),
+    );
+  });
+
+  it("uses the cached verdict without re-fetching the conversation", async () => {
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(
+      makeState({ clientId: null, context: { newConversation: true } as never }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(conversationsRepository.getById).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT default-on when autoReplyEnabledAt is missing (pre-column rows / never enabled)", async () => {
+    vi.mocked(conversationIntegrationRepository.findByOrg).mockResolvedValue({ autoReplyMode: "draft" } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(conversationsRepository.getById).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
   });
 });
 

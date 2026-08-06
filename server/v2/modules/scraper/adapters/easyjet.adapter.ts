@@ -58,6 +58,13 @@ export const easyjetAdapter: ScraperAdapter = {
   type: 'easyjet',
   async scrape(deepLinkUrl, resolved, occupancy): Promise<ScrapedQuoteJson> {
     const ctx = buildContext(resolved);
-    return easyjetService.scrapeQuoteFromLink({ url: deepLinkUrl, ...occupancy }, ctx);
+    // config.extraction (when present) lets scalar fields be re-pointed at the
+    // offers API from the DB config — no deploy for tweaks like "sales_price
+    // comes from offers[0].priceExcludingTouristTax".
+    return easyjetService.scrapeQuoteFromLink(
+      { url: deepLinkUrl, ...occupancy },
+      ctx,
+      resolved.config.extraction,
+    );
   },
 };

@@ -122,6 +122,15 @@ export interface ScraperConfig {
   // For the 'dom' adapter: when set, the deal is priced via an authed JSON API
   // keyed by a property-page id (Hoseasons) instead of by scraping the DOM.
   priceApi?: PriceApiConfig;
+  // Created automatically from a captured page (see importFromPage): no login is
+  // configured, so capture is the only way to import it until someone adds one.
+  // Exempts the supplier from the "credentialed suppliers only" capture rule.
+  captureOnly?: boolean;
+  // The extraction spec was AI-generated from a SINGLE page and hasn't been
+  // reviewed. Specs learned this way are routinely overfitted to that one deal
+  // (a literal board basis, one hotel's name, one airport code), so this marks
+  // them for a human read. Cleared by editing the supplier config.
+  specNeedsReview?: boolean;
 }
 
 // A config resolved for a specific org + supplier, ready to run: parsed config

@@ -28,7 +28,7 @@ export { useTourOperators, tourOperatorKeys } from "@/features/tour-operator/api
 export { useAirports, useAirportsByCountries, airportKeys } from "@/features/airport/api/use-airport-queries";
 export { useAllTasks, useAllTasksExtended, useTasks, useUserTasks, taskKeys } from "@/features/tasks/api/use-task-queries";
 export { useTags, useSearchTags, tagKeys } from "@/features/tag/api/use-tag-queries";
-export { usePackageTypes, useCountries, useDestinations, useDestinationSearch, useResorts, useResortSearch, useAccommodations, useAccommodationSearch, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, useAccommodationImages, useLodgeImages, useCruiseLines, useShips, useCruiseItineraries, lookupKeys } from "@/features/lookups/api/use-lookup-queries";
+export { usePackageTypes, useCountries, useDestinations, useDestinationSearch, useDestinationsByIds, useResortsByIds, useAccommodationsByIds, useResorts, useResortSearch, useAccommodations, useAccommodationSearch, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, useAccommodationImages, useLodgeImages, useCruiseLines, useShips, useCruiseItineraries, lookupKeys } from "@/features/lookups/api/use-lookup-queries";
 export { useChatConversations, useChatMessages, chatKeys } from "@/features/chat/api/use-chat-queries";
 export { useSharedEmailAccount, useEmailAccounts, useEmailMessages, useEmailMessage, emailKeys } from "@/features/email/api/use-email-queries";
 export { useFacebookPages, useFacebookConversations, useFacebookMessages, facebookKeys } from "@/features/social/api/use-facebook-queries";

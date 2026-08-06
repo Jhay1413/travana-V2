@@ -37,6 +37,7 @@ import {
   MapPin,
   CalendarDays,
   FlaskConical,
+  Sparkles,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,6 +73,7 @@ import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
 import { conversationsKeys, useConversations, useConversationBadgeCounts, unreadBadgeCount } from "../api/use-conversations-queries";
 import {
+  useAiSuggestReply,
   useMarkConversationRead,
   useSnoozeConversation,
   useUnsnoozeConversation,
@@ -350,7 +352,24 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadAttachment = useUploadAttachment();
+  const aiSuggest = useAiSuggestReply();
   const { toast } = useToast();
+
+  // "AI reply": fetch a one-off suggestion (server-side it's read-only — no
+  // state changes, nothing sent) and drop it into the reply box for the agent
+  // to edit and send themselves.
+  const suggestReply = () => {
+    if (aiSuggest.isPending) return;
+    aiSuggest.mutate(conversation.id, {
+      onSuccess: ({ suggestion }) => {
+        setMode("reply");
+        setText(suggestion);
+        requestAnimationFrame(() => textareaRef.current?.focus());
+      },
+      onError: (err) =>
+        toast({ title: "Couldn't generate a reply", description: (err as Error).message, variant: "destructive" }),
+    });
+  };
 
   const uploading = attachments.some((a) => a.status === "uploading");
   const ready = attachments.filter((a) => a.status === "ready" && a.id);
@@ -440,6 +459,15 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
           <Bot className="h-3.5 w-3.5" /> Router-Bot <ChevronDown className="h-3 w-3" />
         </button>
         <GenerateEnquiryButton conversation={conversation} />
+        <button
+          onClick={suggestReply}
+          disabled={aiSuggest.isPending || sending}
+          title="Have the AI draft a reply — it lands in the box for you to edit and send"
+          data-testid="composer-ai-suggest"
+          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-black/60 hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:text-white/60 dark:hover:bg-white/5"
+        >
+          {aiSuggest.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} AI reply
+        </button>
         <button className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/5">
           <Languages className="h-3.5 w-3.5" /> Translate
         </button>

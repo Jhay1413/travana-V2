@@ -1,4 +1,5 @@
 import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
+import { suggestAiReply } from "../sendseven-webhook/suggest-reply.service";
 import { realtimeService } from "../../realtime/realtime.service";
 import { conversationsRepository } from "./conversations.repository";
 import type { ListConversationsParams } from "./conversations.types";
@@ -85,6 +86,8 @@ export const conversationsService = {
   getAiState: (orgId: string, id: string) => sendsevenWebhookService.getAiState(orgId, id),
   enableAi: (orgId: string, id: string) => sendsevenWebhookService.enableAi(orgId, id),
   disableAi: (orgId: string, id: string) => sendsevenWebhookService.disableAi(orgId, id),
+  // On-demand composer suggestion — side-effect-free, see suggest-reply.service.
+  suggestReply: (orgId: string, id: string, userId?: string | null) => suggestAiReply(orgId, id, userId),
 
   async bulkClose(orgId: string, body: unknown) {
     const result = await conversationsRepository.bulkClose(body);

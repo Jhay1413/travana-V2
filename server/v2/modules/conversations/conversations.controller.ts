@@ -220,6 +220,16 @@ export const conversationsController = {
     );
   }),
 
+  // POST /api/v2/conversations/:conversation_id/ai-suggest-reply
+  // On-demand "AI reply" for the composer: returns suggested text only —
+  // nothing is sent, stored, or changed. Available to any staff member with
+  // conversation access (it's an agent writing aid, not an admin control).
+  aiSuggestReply: asyncHandler(async (req: Request, res: Response) => {
+    const { orgId, userId } = getScope(req);
+    const suggestion = await conversationsService.suggestReply(orgId, requireParam(req, "conversation_id"), userId);
+    return successResponse(res, { suggestion }, "Suggestion generated");
+  }),
+
   // POST /api/v2/conversations/:conversation_id/ai-state/enable
   aiEnable: asyncHandler(async (req: Request, res: Response) => {
     const { orgId } = getScope(req);

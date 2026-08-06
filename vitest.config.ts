@@ -5,7 +5,9 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    include: ["server/**/*.test.ts", "shared/**/*.test.ts"],
+    // Client tests cover pure logic only (parsers/mappers), so the node
+    // environment above is enough — no jsdom needed.
+    include: ["server/**/*.test.ts", "shared/**/*.test.ts", "client/**/*.test.ts"],
     // Integration tests need a live Postgres — run them via `npm run test:integration`.
     exclude: ["**/node_modules/**", "**/*.integration.test.ts"],
   },

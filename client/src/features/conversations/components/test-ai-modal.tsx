@@ -146,7 +146,7 @@ export function TestAiModal({
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 px-4 py-4 dark:bg-slate-950/40">
           {fork.isPending || (!sessionId && !forkError) ? (
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Copying the conversation into a test session…
+              <Loader2 className="h-4 w-4 animate-spin" /> Copying the conversation and generating the AI's reply…
             </div>
           ) : forkError ? (
             <div className="px-2 py-8 text-center text-sm text-destructive">{forkError}</div>

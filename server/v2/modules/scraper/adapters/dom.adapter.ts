@@ -1,5 +1,5 @@
 import { AppError } from '../../../utils/error-handler';
-import { scrapeViaDom, captureRenderedDom, captureFlightModal } from '../../easyjet/easyjet-browser';
+import { scrapeViaDom, captureRenderedDom, captureFlightModal, looksBotBlocked } from '../../easyjet/easyjet-browser';
 import {
   buildDefaultContext,
   resolveBackend,
@@ -40,20 +40,6 @@ function makeLearnLogin(resolved: ResolvedScraper) {
     }
     return authPatch;
   };
-}
-
-// Detects a bot-protection interstitial (Akamai edge deny, "Pardon our
-// interruption", human-verification walls) so we never mistake it for the deal
-// page. Generic — keyed on the block wording, not any supplier.
-function looksBotBlocked(title: string, text: string): boolean {
-  const t = `${title}\n${text}`.slice(0, 2000);
-  if (t.trim().length > 1500) return false; // real deal pages are long; block pages are tiny
-  return (
-    (/access denied/i.test(t) && /edgesuite\.net|permission to access|reference #/i.test(t)) ||
-    /pardon our interruption/i.test(t) ||
-    /unusual traffic from your (computer )?network/i.test(t) ||
-    /verify you are (a )?human|are you a human|please enable (js|javascript) and cookies/i.test(t)
-  );
 }
 
 // Builds the browser context straight from the stored config (DOM suppliers

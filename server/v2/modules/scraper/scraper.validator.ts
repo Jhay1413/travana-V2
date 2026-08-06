@@ -40,6 +40,33 @@ export const updateScraperValidator = z.object({
   params: z.object({ id: z.string().uuid('Invalid id') }),
 });
 
+// Manual page import: the user's OWN browser captures the rendered deal page
+// (bookmarklet/extension) and posts it here, so credentialed suppliers work
+// without the server driving a headless browser at all. `text` is a whole
+// page's innerText, so it is capped generously rather than tightly.
+export const importPageValidator = z.object({
+  body: z.object({
+    url: z.string().url('url must be a valid URL'),
+    title: z.string().max(1_000).optional().default(''),
+    text: z.string().min(1, 'text is required').max(500_000),
+    // Rendered <img> sources, used for the hotel gallery.
+    images: z.array(z.string()).max(400).optional(),
+    // Text of a flight-details modal, when the user opened one before capturing.
+    flightsText: z.string().max(50_000).optional(),
+    // Any JSON the page exposed (e.g. an embedded state blob) — optional, the
+    // spec prefers it via jsonPath when present.
+    apiJson: z.unknown().optional(),
+    // Optional override. Empty means "work the supplier out from the URL",
+    // which is the normal path — so an empty string is valid, not a violation.
+    supplierKey: z.string().optional(),
+    adults: z.number().int().min(1).max(9).optional(),
+    children: z.number().int().min(0).max(9).optional(),
+    infants: z.number().int().min(0).max(9).optional(),
+  }),
+  query: z.object({}).passthrough(),
+  params: z.object({}).passthrough(),
+});
+
 export const scrapeValidator = z.object({
   body: z.object({
     url: z.string().url('url must be a valid URL'),
