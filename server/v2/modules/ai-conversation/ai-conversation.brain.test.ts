@@ -783,6 +783,69 @@ describe("buildSystemPrompt (pinned Facebook-deal block)", () => {
     expect(staticIdx).toBeGreaterThan(-1);
     expect(dealIdx).toBeGreaterThan(staticIdx);
   });
+
+  it("includes the combined recap + tweaks + party check while tweakCheckPending", () => {
+    const prompt = buildSystemPrompt(null, [], null, true, {
+      kb: [],
+      quotes: [],
+      deal: { ...deal, tweakCheckPending: true },
+    });
+    expect(prompt).toContain("ONE-TIME DEAL CHECK");
+    // Single-question form: as-posted-or-tweaks ONLY — the party question is
+    // deliberately deferred to a later turn.
+    expect(prompt).toContain("ask ONE question only");
+    expect(prompt).toContain("who's travelling comes on a LATER turn");
+    // No booking presumption in the phrasing.
+    expect(prompt).toContain("NEVER as if they've already decided to book");
+    expect(prompt).toContain('Do NOT phrase it as "would you like it"');
+    // Answer-only-what-asked: no spec dump, no volunteered price.
+    expect(prompt).toContain("Do NOT recite the deal's other details");
+    expect(prompt).toContain("NEVER volunteer the price");
+    expect(prompt).not.toContain("do NOT ask again whether they want any changes");
+  });
+
+  it("switches to the never-ask-again line once the check has been consumed", () => {
+    const prompt = buildSystemPrompt(null, [], null, true, {
+      kb: [],
+      quotes: [],
+      deal: { ...deal, tweakCheckPending: false },
+    });
+    expect(prompt).not.toContain("ONE-TIME DEAL CHECK");
+    expect(prompt).toContain("do NOT ask again whether they want any changes");
+  });
+
+  it("renders the which-post-did-you-see block when there are candidates but no pin", () => {
+    const prompt = buildSystemPrompt(null, [], null, true, {
+      kb: [],
+      quotes: [],
+      dealCandidates: [
+        { title: "All Inclusive Tunisia", travelDate: "2026-10-29", nights: 7, price: "299.00" },
+        { title: "Tunisia Half Board", travelDate: "2026-11-14", nights: 7, price: "249.00" },
+      ],
+    });
+    expect(prompt).toContain("POSSIBLE FACEBOOK DEAL");
+    expect(prompt).toContain('- "All Inclusive Tunisia" (travel 2026-10-29, 7 nights, from £299.00)');
+    expect(prompt).toContain('- "Tunisia Half Board"');
+    // Identification blocks the rest of the flow (except onboarding).
+    expect(prompt).toContain("IDENTIFYING THE POST COMES FIRST");
+    expect(prompt).toContain("do NOT move on to collecting dates, nights, party size");
+    // Offer titles as a choice; never ask the customer to recall the post.
+    expect(prompt).toContain("NEVER ask the customer to recall or quote the post");
+    // Candidates are never treated as the pinned deal.
+    expect(prompt).not.toContain("THE DEAL THE CUSTOMER IS ASKING ABOUT");
+  });
+
+  it("suppresses the candidates block when a deal IS pinned", () => {
+    const prompt = buildSystemPrompt(null, [], null, true, {
+      kb: [],
+      quotes: [],
+      deal,
+      dealCandidates: [{ title: "Should Not Appear" }],
+    });
+    expect(prompt).toContain("THE DEAL THE CUSTOMER IS ASKING ABOUT");
+    expect(prompt).not.toContain("POSSIBLE FACEBOOK DEAL");
+    expect(prompt).not.toContain("Should Not Appear");
+  });
 });
 
 describe("buildSystemPrompt (asking-style guardrails)", () => {

@@ -33,13 +33,7 @@ import { knowledgeBaseRepository } from "../knowledge-base/knowledge-base.reposi
 import { neonClientService } from "../neon-client/neon-client.service";
 import { adminAgent } from "../sendseven-webhook/admin-agent.service";
 import type { PendingAttachment } from "../sendseven-webhook/admin-data.service";
-import {
-  DEAL_MATCH_MAX_DISTANCE,
-  hydrateDealReplyContext,
-  pickDealMatch,
-  seedSlotsFromDeal,
-  type DealRef,
-} from "../sendseven-webhook/deal-context.service";
+import { resolveDealTurn, type DealRef } from "../sendseven-webhook/deal-context.service";
 import { resolveAndCreateEnquiry } from "../sendseven-webhook/enquiry-auto-create.service";
 import {
   extractPhoneNumber,
@@ -110,6 +104,9 @@ interface ConversationContext {
   // the sandbox reproduces the posted-deal reply behaviour (including from a
   // screenshot of the post). Mirrors reply-worker's ConversationContext.
   dealRef?: DealRef;
+  // True once the one-time "as posted, or any tweaks?" deal check has been put
+  // to the tester. Mirrors reply-worker's ConversationContext.
+  dealCheckAsked?: boolean;
   // A DOCUMENT sent BEFORE the tester was identified (mirrors reply-worker's
   // pendingAttachmentRefs): the test chat has no message store to re-download
   // from, so the bytes are held in-process (deferredAttachmentBytes, TTL'd)
@@ -450,43 +447,47 @@ export const internalChatTestflowService = {
       const enquiryish =
         enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
       const kbOverflow = kbExceedsBudget(kb);
-      const [kbMatches, quoteMatches, dealMatches] = await Promise.all([
+      // Last two tester messages + image details — also fed verbatim to
+      // pickDealMatch's title rescue. Mirrors reply-worker's dealQuery.
+      const dealQuery = !prevContext.dealRef
+        ? [
+            [...recent]
+              .sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime())
+              .filter((m) => m.role === "user" && m.content?.trim())
+              .map((m) => m.content.trim())
+              // The current message was already inserted before the recent
+              // fetch — drop it, keep the one before.
+              .slice(0, -1)
+              .pop() ?? "",
+            userText,
+            imageInfoNote ?? "",
+          ]
+            .filter(Boolean)
+            .join(" ")
+        : "";
+      const [kbMatches, quoteMatches, dealTurn] = await Promise.all([
         kbOverflow
           ? aiEmbeddingsService.retrieve({ orgId, sourceType: "knowledge", query: imageInfoNote ? `${userText} ${imageInfoNote}` : userText, limit: 3, audience: "sales" })
           : Promise.resolve([] as RetrievedMatch[]),
         enquiryish
           ? aiEmbeddingsService.retrieve({ orgId, sourceType: "quote", query: `${imageInfoNote ? `${userText} ${imageInfoNote}` : userText} ${JSON.stringify(priorSlots)}`, limit: 4 })
           : Promise.resolve([] as RetrievedMatch[]),
-        // Posted-deal detection — same gating as reply-worker: only until a
-        // deal is pinned, never behind the enquiryish gate (the point is the
-        // first message / first screenshot).
-        !prevContext.dealRef
-          ? aiEmbeddingsService.retrieve({
-              orgId,
-              sourceType: "deal",
-              query: imageInfoNote ? `${userText} ${imageInfoNote}` : userText,
-              limit: 3,
-              maxDistance: DEAL_MATCH_MAX_DISTANCE,
-            })
-          : Promise.resolve([] as RetrievedMatch[]),
+        // Posted-deal detection — the ENTIRE step (retrieval while unpinned,
+        // title/field/distance pinning, candidates, hydration, tweak flag,
+        // slot seeding — mutates priorSlots) is resolveDealTurn, SHARED with
+        // reply-worker so the sandbox and the live bot cannot drift.
+        resolveDealTurn({
+          orgId,
+          logLabel: `session=${session.id}`,
+          existingRef: prevContext.dealRef,
+          checkAsked: prevContext.dealCheckAsked,
+          query: dealQuery,
+          slots: priorSlots,
+        }),
       ]);
-      if (!prevContext.dealRef) {
-        const pinned = pickDealMatch(dealMatches);
-        if (pinned) {
-          // Mutating prevContext (like holidayImageInfo above) means every
-          // later context persist carries the pin. Mirrors reply-worker.
-          prevContext.dealRef = pinned;
-          console.log(
-            `[internal-chat-testflow] session=${session.id} pinned deal=${pinned.travelDealId} "${pinned.title}" ` +
-              `source=${pinned.source} distance=${pinned.distance?.toFixed(3) ?? "n/a"}`,
-          );
-        }
-      }
-      const deal = prevContext.dealRef ? await hydrateDealReplyContext(prevContext.dealRef) : null;
-      // Seed the deal's facts into the slots in code (blank fields only,
-      // customer-stated values win) — mirrors reply-worker; see there.
-      if (deal) seedSlotsFromDeal(priorSlots, deal);
-      retrieved = { kb: kbMatches, quotes: quoteMatches, deal };
+      // Mutation → persisted by every later context spread. Mirrors reply-worker.
+      if (dealTurn.pinnedNow) prevContext.dealRef = dealTurn.pinnedNow;
+      retrieved = { kb: kbMatches, quotes: quoteMatches, deal: dealTurn.deal, dealCandidates: dealTurn.dealCandidates };
     }
 
     // When onboarding completes in this same message, its turn is reused by
@@ -738,6 +739,10 @@ export const internalChatTestflowService = {
         { orgId, feature: "staff_chat_test", userId: scope.userId ?? undefined },
         prevContext.contactName,
       ));
+
+    // The one-time deal tweak-check was in this turn's prompt — consume it so
+    // it's never asked twice. Mirrors reply-worker.
+    if (retrieved.deal?.tweakCheckPending) prevContext.dealCheckAsked = true;
 
     if (turn.hand_off) {
       const replyMessage = await doHandoff(prevContext, turn.reply);

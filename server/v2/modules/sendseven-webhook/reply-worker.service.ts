@@ -52,13 +52,7 @@ import {
 import { taskService } from "../task/task.service";
 import { usageService } from "../usage/usage.service";
 import { adminAgent } from "./admin-agent.service";
-import {
-  DEAL_MATCH_MAX_DISTANCE,
-  hydrateDealReplyContext,
-  pickDealMatch,
-  seedSlotsFromDeal,
-  type DealRef,
-} from "./deal-context.service";
+import { resolveDealTurn, type DealRef } from "./deal-context.service";
 import type { PendingAttachment } from "./admin-data.service";
 import type { AiTurn, EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
 import type { HandoffReason, SsWebhookEvent } from "./sendseven-webhook.types";
@@ -161,6 +155,11 @@ interface ConversationContext {
   // hand-off / reset paths build fresh contexts, which clears it naturally
   // when the deal has served its purpose.
   dealRef?: DealRef;
+  // True once the one-time "as posted, or any tweaks?" deal check has been put
+  // to the customer (set on the first sales turn whose prompt carried the
+  // pending instruction). Read into RetrievedDealContext.tweakCheckPending so
+  // the brain knows whether to ask; never asked twice.
+  dealCheckAsked?: boolean;
   // Set when the customer is enquiring on behalf of a named third party — the
   // enquiry is filed under this traveller, not the sender. Persisted across turns
   // so we keep asking for/resolving the traveller (and don't re-ask their name).
@@ -583,7 +582,25 @@ export const replyWorker = {
       if (route === "sales") {
         const enquiryish = enquiryStatus === "collecting" || enquiryStatus === "awaiting_availability" || priorSubstantive;
         const kbOverflow = kbExceedsBudget(kb);
-        const [kbMatches, quoteMatches, dealMatches] = await Promise.all([
+        // The deal query spans the LAST TWO customer messages (+ any image
+        // details): the confirming reply to a which-deal question ("yes the
+        // all inclusive one") is too thin alone, but together with the message
+        // that first mentioned the deal it pins. Also reused verbatim by
+        // pickDealMatch's deterministic title rescue.
+        const dealQuery = !prevContext.dealRef
+          ? [
+              [...recent]
+                .sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""))
+                .filter((m) => m.direction === "inbound" && m.id !== message.id && m.text?.trim())
+                .map((m) => (m.text as string).trim())
+                .pop() ?? "",
+              latestText,
+              imageInfoNote ?? "",
+            ]
+              .filter(Boolean)
+              .join(" ")
+          : "";
+        const [kbMatches, quoteMatches, dealTurn] = await Promise.all([
           kbOverflow
             // audience: "sales" pushes the audience filter into SQL so top-k
             // returns eligible rows only (admin-audience KB can't crowd out
@@ -602,46 +619,27 @@ export const replyWorker = {
                 limit: 4,
               })
             : Promise.resolve([] as RetrievedMatch[]),
-          // Posted-deal detection — only until a deal is pinned (a pin is
-          // never overwritten), and NOT behind the enquiryish gate: the whole
-          // point is the customer's FIRST message ("more info on the Tunisia
-          // holiday on the 29th October please"), which arrives with no
-          // enquiry in flight. Deliberately not gated to social channels
-          // either — a customer who saw the Facebook post may message on any
-          // channel, and the strict distance cutoff does the real gating.
-          !prevContext.dealRef
-            ? aiEmbeddingsService.retrieve({
-                orgId,
-                sourceType: "deal",
-                query: imageInfoNote ? `${latestText} ${imageInfoNote}` : latestText,
-                limit: 3,
-                maxDistance: DEAL_MATCH_MAX_DISTANCE,
-              })
-            : Promise.resolve([] as RetrievedMatch[]),
+          // Posted-deal detection — the ENTIRE step (retrieval while
+          // unpinned, title/field/distance pinning, candidates, hydration,
+          // the tweak-check flag, slot seeding — mutates priorSlots) lives in
+          // resolveDealTurn, SHARED with internal-chat-testflow so the live
+          // bot and the Test AI sandbox cannot drift. Not behind the
+          // enquiryish gate (the point is the customer's FIRST message) and
+          // not gated to social channels (a customer who saw the post may
+          // message on any channel; the distance cutoffs do the real gating).
+          resolveDealTurn({
+            orgId,
+            logLabel: `conv=${conversationId}`,
+            existingRef: prevContext.dealRef,
+            checkAsked: prevContext.dealCheckAsked,
+            query: dealQuery,
+            slots: priorSlots,
+          }),
         ]);
-        if (!prevContext.dealRef) {
-          const pinned = pickDealMatch(dealMatches);
-          if (pinned) {
-            // Mutating prevContext (like holidayImageInfo above) means every
-            // later `...prevContext` context persist carries the pin.
-            prevContext.dealRef = pinned;
-            console.log(
-              `[deal-context] conv=${conversationId} pinned deal=${pinned.travelDealId} "${pinned.title}" ` +
-                `source=${pinned.source} distance=${pinned.distance?.toFixed(3) ?? "n/a"}`,
-            );
-          }
-        }
-        // Hydrated fresh every turn (cheap: two small queries) so the AI
-        // always quotes CURRENT hotel/flight detail, never the embedding's
-        // snapshot.
-        const deal = prevContext.dealRef ? await hydrateDealReplyContext(prevContext.dealRef) : null;
-        // Seed the deal's facts into the slots IN CODE (mutates priorSlots —
-        // blank fields only, customer-stated values always win): the model is
-        // unreliable at copying them itself, and without this the created
-        // enquiry lacked the deal's airport/nights/board basis. Every persist
-        // below flows from priorSlots (mergeSlots), so the seed sticks.
-        if (deal) seedSlotsFromDeal(priorSlots, deal);
-        retrieved = { kb: kbMatches, quotes: quoteMatches, deal };
+        // Mutating prevContext (like holidayImageInfo above) means every
+        // later `...prevContext` context persist carries the pin.
+        if (dealTurn.pinnedNow) prevContext.dealRef = dealTurn.pinnedNow;
+        retrieved = { kb: kbMatches, quotes: quoteMatches, deal: dealTurn.deal, dealCandidates: dealTurn.dealCandidates };
       }
 
       // Carries the onboarding turn's AiTurn forward when this SAME message
@@ -989,6 +987,11 @@ export const replyWorker = {
         `[sendseven-webhook] conv=${conversationId} known=${knownClient} mode=${mode} intent=${turn.intent} ` +
           `handoff=${turn.hand_off} status=${enquiryStatus}`,
       );
+      // The one-time deal tweak-check: this sales turn's prompt carried the
+      // pending instruction (identity resolved, model had its chance to ask),
+      // so consume it — mutation persists via every later `...prevContext`
+      // spread, and the next turn's prompt switches to the never-ask-again line.
+      if (retrieved.deal?.tweakCheckPending) prevContext.dealCheckAsked = true;
 
       if (turn.hand_off) return doHandoff(turn.reply);
 

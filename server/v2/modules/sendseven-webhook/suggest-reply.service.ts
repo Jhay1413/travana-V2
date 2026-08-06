@@ -86,9 +86,11 @@ export async function suggestAiReply(orgId: string, conversationId: string, user
   // hydrate it read-only, so the suggestion can quote the same posted deal
   // details the bot would. No pinning happens here — this path stays
   // side-effect-free — so a conversation the bot never processed simply has
-  // no deal block.
-  const dealRef = (state?.context as { dealRef?: DealRef } | null)?.dealRef ?? null;
-  const deal = dealRef ? await hydrateDealReplyContext(dealRef) : null;
+  // no deal block. tweakCheckPending is read from the live bot's flag but
+  // never consumed here (a suggestion isn't necessarily sent).
+  const stateCtx = (state?.context as { dealRef?: DealRef; dealCheckAsked?: boolean } | null) ?? null;
+  const deal = stateCtx?.dealRef ? await hydrateDealReplyContext(stateCtx.dealRef) : null;
+  if (deal) deal.tweakCheckPending = !stateCtx?.dealCheckAsked;
   const retrieved: RetrievedContext = { kb: kbMatches, quotes: quoteMatches, deal };
 
   const turn = await generateTurn(

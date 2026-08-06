@@ -227,7 +227,16 @@ export async function resolveAndCreateEnquiry(
   if (str(slots.notes)) noteParts.push(str(slots.notes));
   if (unmapped.length) noteParts.push(`To confirm with the customer: ${unmapped.join("; ")}`);
   if (extras?.missingFields?.length) noteParts.push(`Additional fields still needed: ${extras.missingFields.join("; ")}`);
-  const notes = noteParts.join("\n\n") || undefined;
+  // The enquiry note is shown by the client's rich-text (WYSIWYG) note viewer,
+  // which renders HTML — agent-typed notes are stored as HTML, and plain-text
+  // newlines collapse into one run-on blob there. So assemble this note as
+  // simple HTML: one <p> per section, <br> for the lines within a section
+  // (e.g. the Post reference bullets), text escaped so a deal title with
+  // <, > or & can't inject markup.
+  const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const notes = noteParts.length
+    ? noteParts.map((part) => `<p>${escapeHtml(part).replace(/\n/g, "<br>")}</p>`).join("")
+    : undefined;
 
   const nights = toInt(slots.nights);
 

@@ -99,6 +99,11 @@ export interface RetrievedDealFlight {
 // PUBLIC content — unlike `quotes` below, which are internal-only reference,
 // the AI is allowed to surface these details: they were published in the post.
 export interface RetrievedDealContext {
+  // True while the one-time "as posted, or any tweaks?" check hasn't happened
+  // yet for this conversation — the driver computes it from
+  // context.dealCheckAsked and flips that flag after the first sales turn
+  // that had the chance to ask. Presentation-only; not persisted itself.
+  tweakCheckPending?: boolean;
   title: string;
   travelDate?: string | null;
   nights?: number | null;
@@ -110,6 +115,7 @@ export interface RetrievedDealContext {
   destination?: string | null;
   country?: string | null;
   resortSummary?: string | null;
+  luggageTransfers?: string | null;
   flights?: RetrievedDealFlight[];
 }
 
@@ -119,6 +125,16 @@ export interface RetrievedContext {
   // Present when the conversation has a pinned Facebook deal (see
   // deal-context.service in the sendseven-webhook module).
   deal?: RetrievedDealContext | null;
+  // Possible-but-unconfirmed posted deals ("i saw a deal for tunisia…") —
+  // set only when NO deal is pinned. The brain offers these titles and asks
+  // which post the customer saw; their answer makes the next turn's vector
+  // search pin it. Never seeded or stated as fact.
+  dealCandidates?: Array<{
+    title: string;
+    travelDate?: string | null;
+    nights?: number | null;
+    price?: string | null;
+  }>;
 }
 
 // Minimal shape buildTranscript needs from a transport-specific message type
