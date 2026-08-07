@@ -160,6 +160,11 @@ interface ConversationContext {
   // pending instruction). Read into RetrievedDealContext.tweakCheckPending so
   // the brain knows whether to ask; never asked twice.
   dealCheckAsked?: boolean;
+  // Sticky: this conversation is about ANOTHER operator's quote (they named a
+  // competitor, sent their screenshot, or asked us to beat a price). Kept for
+  // the rest of the enquiry so later turns — a name, a party size — can't lose
+  // the context and let one of our deals be pinned onto it.
+  externalDealMention?: boolean;
   // Set when the customer is enquiring on behalf of a named third party — the
   // enquiry is filed under this traveller, not the sender. Persisted across turns
   // so we keep asking for/resolving the traveller (and don't re-ask their name).
@@ -632,14 +637,25 @@ export const replyWorker = {
             logLabel: `conv=${conversationId}`,
             existingRef: prevContext.dealRef,
             checkAsked: prevContext.dealCheckAsked,
+            externalSticky: prevContext.externalDealMention,
             query: dealQuery,
             slots: priorSlots,
           }),
         ]);
         // Mutating prevContext (like holidayImageInfo above) means every
-        // later `...prevContext` context persist carries the pin.
+        // later `...prevContext` context persist carries the pin. A CORRECTED
+        // pin also re-arms the one-time check — it's a different holiday now.
         if (dealTurn.pinnedNow) prevContext.dealRef = dealTurn.pinnedNow;
-        retrieved = { kb: kbMatches, quotes: quoteMatches, deal: dealTurn.deal, dealCandidates: dealTurn.dealCandidates };
+        if (dealTurn.repinned) delete prevContext.dealCheckAsked;
+        // Sticks for the rest of the enquiry — see externalDealMention above.
+        if (dealTurn.externalDealMention) prevContext.externalDealMention = true;
+        retrieved = {
+          kb: kbMatches,
+          quotes: quoteMatches,
+          deal: dealTurn.deal,
+          dealCandidates: dealTurn.dealCandidates,
+          externalDealMention: dealTurn.externalDealMention,
+        };
       }
 
       // Carries the onboarding turn's AiTurn forward when this SAME message
@@ -987,11 +1003,13 @@ export const replyWorker = {
         `[sendseven-webhook] conv=${conversationId} known=${knownClient} mode=${mode} intent=${turn.intent} ` +
           `handoff=${turn.hand_off} status=${enquiryStatus}`,
       );
-      // The one-time deal tweak-check: this sales turn's prompt carried the
-      // pending instruction (identity resolved, model had its chance to ask),
-      // so consume it — mutation persists via every later `...prevContext`
-      // spread, and the next turn's prompt switches to the never-ask-again line.
-      if (retrieved.deal?.tweakCheckPending) prevContext.dealCheckAsked = true;
+      // The one-time deal tweak-check: consume it only when THIS turn could
+      // actually have asked it — i.e. a real sales turn. `firstTurn` means we
+      // are reusing the ONBOARDING turn (name+phone arrived in the same
+      // message as the deal question), and that prompt explicitly defers the
+      // check to the next reply; consuming it here would burn the check
+      // without ever asking it.
+      if (retrieved.deal?.tweakCheckPending && !firstTurn) prevContext.dealCheckAsked = true;
 
       if (turn.hand_off) return doHandoff(turn.reply);
 
@@ -1138,7 +1156,9 @@ export const replyWorker = {
 
       // Required-CORE gate: while any of these are missing (and the ask-cap
       // hasn't been hit), keep collecting naturally instead of creating.
-      const coreMissing = missingCoreFieldsFor(mergedSlots);
+      // A pinned deal drops budget from the core set — its price is already
+      // published, so the bot never chases a number the post answers.
+      const coreMissing = missingCoreFieldsFor(mergedSlots, { dealPinned: !!retrieved.deal });
       const askCount = prevContext.askCount ?? 0;
 
       // Create trigger, computed up here so we can log the full decision state

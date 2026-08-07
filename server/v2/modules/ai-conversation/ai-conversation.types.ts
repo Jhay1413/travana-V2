@@ -136,6 +136,10 @@ export interface RetrievedContext {
     price?: string | null;
     hotelName?: string | null;
   }>;
+  // True when the customer is referring to ANOTHER travel company's advert
+  // (named brand or a screenshot of their page). No deal of ours is pinned or
+  // offered; the brain uses this to avoid passing our deals off as theirs.
+  externalDealMention?: boolean;
 }
 
 // Minimal shape buildTranscript needs from a transport-specific message type

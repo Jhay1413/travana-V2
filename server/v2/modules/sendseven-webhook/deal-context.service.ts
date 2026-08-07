@@ -28,6 +28,11 @@ export interface DealRef {
   source: "vector" | "marker" | "meta";
   matchedAt: string;
   distance?: number;
+  // Slot keys THIS deal seeded (see seedSlotsFromDeal). Recorded so a re-pin
+  // can un-seed them: without this, correcting the pin would leave the wrong
+  // deal's date/nights/airport behind, and the new deal (which only fills
+  // BLANK slots) could never replace them.
+  seededKeys?: string[];
 }
 
 // Auto-pin cutoff. Pinning the WRONG deal and confidently quoting its
@@ -117,14 +122,65 @@ function priceAppearsIn(q: string, price: string): boolean {
   return new RegExp(`(?<!\\d)${whole}(?:\\.\\d{2})?(?!\\d)`).test(q);
 }
 
-// A distinctive fact from the post appearing verbatim in the query: the exact
-// travel date, the exact posted price, or the hotel name (customers often
-// remember the hotel better than the post — "the one at the Taormina").
-// Nights deliberately excluded — "4 nights" is shared by too many deals to
-// identify one.
-function strongSignalHit(c: DealCandidate, q: string): boolean {
-  if (c.price && priceAppearsIn(q, c.price)) return true;
-  if (c.travelDate && dateVariants(c.travelDate).some((v) => q.includes(v))) return true;
+// Evidence the customer is referring to something they SAW (a post, an advert,
+// an image they've sent), rather than just stating their own travel plans.
+// Gates the date/price rescue below: "we want Rome on 12 April" happens to
+// contain a deal's exact travel date, but pinning that deal — and quoting its
+// hotel and price at someone who never saw the advert — is presumptuous.
+const POST_REFERENCE_RE =
+  /\b(saw|seen|spotted|post|posted|posting|advert|advertisement|ad|ads|facebook|fb|insta|instagram|social|screenshot|picture|photo|image|story|reel|page)\b/i;
+
+export function hasPostReferenceSignal(text: string): boolean {
+  return POST_REFERENCE_RE.test(text ?? "");
+}
+
+// Other travel brands a customer may name as the SOURCE of the deal they saw
+// ("saw this on TUI", a Jet2 screenshot). We sell some of these as operators,
+// so the brand alone means nothing — it's the brand as the PLACE they saw it
+// that matters, which is why the ownership cue below overrides it.
+// Spaces are optional throughout so the bare domain form matches too — a
+// screenshot's footer says "firstchoice.co.uk", not "First Choice".
+const EXTERNAL_BRAND_RE =
+  /\b(tui|jet ?2|easy ?jet|on ?the ?beach|love ?holidays|expedia|booking\.com|last ?minute|travel ?republic|thomas ?cook|first ?choice|hays ?travel|virgin ?holidays|british ?airways|ba holidays|ryanair|wizz ?air|sky ?scanner|trivago|kayak|trip ?advisor|secret ?escapes|travel ?zoo|ice ?lolly|holiday ?pirates|holiday ?hypermarket|teletext ?holidays|travel ?supermarket|sun ?master|olympic ?holidays|mercury ?holidays|broadway ?travel|centre ?parcs|butlins|haven ?holidays)\b/i;
+// Cues that the customer is talking about OUR post after all ("saw your post",
+// "on your page") — these win, so "is your TUI deal still on?" still pins.
+// A few words are allowed between the possessive and the noun so the brand can
+// sit in the middle ("your TUI deal", "your all inclusive offer").
+const OURS_CUE_RE =
+  /\b(your|yours|you)\s+(?:[\w'-]+\s+){0,3}(post|posts|posted|page|ad|advert|advertisement|deal|deals|offer|offers|facebook|insta|instagram|story|site|website)\b/i;
+
+// "can you beat this?", "price match?" — asking us to beat or match a price is
+// itself proof the quote is someone else's; nobody asks us to undercut our own
+// advert. Far more robust than brand-spotting, which a typo defeats (observed:
+// "can you bet this one from tin?" — both "beat" and "TUI" misspelt). Hence
+// "bet"/"beet" are accepted as the near-universal typo for "beat", but only
+// right after "can/could/will you", never as bare words.
+const PRICE_MATCH_RE =
+  /\b(?:can|could|will|would|do|any chance)\s+(?:you|u|ya|yous)\s+(?:[\w'-]+\s+){0,2}(beat|bet|beet|match|undercut)\b|\bprice[- ]?match\b|\b(beat|match)\s+(this|that|it|these|them|the price|their price|this price|this quote|that quote)\b/i;
+
+/** True when the customer is pointing at ANOTHER company's quote rather than
+ *  one of our posts — either they named the company, or they asked us to beat
+ *  or match it. Suppresses deal pinning and candidate offers: matching their
+ *  TUI screenshot to a similar deal of ours and then quoting our hotel and
+ *  price as if it were the one they saw would be plainly wrong. They can still
+ *  be helped — it just becomes an ordinary enquiry.
+ *
+ *  An explicit reference to US always wins ("saw your Rome deal, can you beat
+ *  £369?" is our deal plus a discount request, not a rival quote). */
+export function mentionsExternalSource(text: string): boolean {
+  const t = text ?? "";
+  if (!EXTERNAL_BRAND_RE.test(t) && !PRICE_MATCH_RE.test(t)) return false;
+  return !OURS_CUE_RE.test(t);
+}
+
+// A distinctive fact from the post appearing verbatim in the query: the hotel
+// name, or (only with a post reference — see above) the exact travel date or
+// posted price. A hotel name is not something a customer says by accident, so
+// it needs no gate; a date or a price very much is. Nights deliberately
+// excluded entirely — "4 nights" is shared by too many deals to identify one.
+function strongSignalHit(c: DealCandidate, q: string, postSignal: boolean): boolean {
+  if (postSignal && c.price && priceAppearsIn(q, c.price)) return true;
+  if (postSignal && c.travelDate && dateVariants(c.travelDate).some((v) => q.includes(v))) return true;
   if (c.hotelName) {
     const h = c.hotelName.trim().toLowerCase().replace(/\s+/g, " ");
     // Also match without a leading "Hotel " so "the taormina" hits "Hotel
@@ -157,32 +213,51 @@ function toDealRef(winner: DealCandidate): DealRef {
  *  2. Otherwise only matches within the strict pin cutoff qualify (retrieval
  *     runs at the wider candidate cutoff); closest wins, near-ties resolved
  *     by most recent post. */
-export function pickDealMatch(matches: RetrievedMatch[], queryText?: string): DealRef | null {
+/** The DETERMINISTIC half of the matcher — an identifying fact the customer
+ *  actually typed (or a screenshot carried), never a similarity guess:
+ *
+ *  1. TITLE RESCUE: exactly ONE deal's full title appears verbatim in the
+ *     text. Distance ranking is unreliable between sibling posts (observed: a
+ *     "Spring Time in Rome" screenshot scored 0.461, ranked BEHIND "Late Rome
+ *     Deal"@0.443); a verbatim title is not.
+ *  2. FIELD RESCUE: exactly one deal's hotel — or, when the message references
+ *     a post/advert/image at all, its exact travel date or posted price.
+ *
+ *  Returns null when nothing matches or when several deals tie (ambiguous →
+ *  ask the customer). This is also the ONLY thing allowed to REPLACE an
+ *  existing pin: see resolveDealTurn. */
+export function pickDeterministicDealMatch(matches: RetrievedMatch[], queryText?: string): DealRef | null {
+  if (!queryText?.trim()) return null;
   const all = matches.map(parseCandidate).filter((c): c is DealCandidate => c !== null);
   if (all.length === 0) return null;
 
-  if (queryText?.trim()) {
-    const q = queryText.toLowerCase().replace(/\s+/g, " ");
-    const titleHits = all.filter((c) => {
-      const t = c.title.trim().toLowerCase().replace(/\s+/g, " ");
-      // Very short titles substring-match too easily ("rome" would hit every
-      // Rome message) — require some substance before trusting the rescue.
-      return t.length >= 6 && q.includes(t);
-    });
-    if (new Set(titleHits.map((c) => c.travelDealId)).size === 1) {
-      return toDealRef([...titleHits].sort((a, b) => a.distance - b.distance)[0]);
-    }
-    // 1b. FIELD RESCUE: no (unique) title in the text, but exactly one deal's
-    // distinctive facts — its exact travel date or posted price — appear in
-    // it. A screenshot's extracted fields carry these even when the headline
-    // is stylised or cropped, and they identify sibling posts far better than
-    // embedding distance does.
-    const fieldHits = all.filter((c) => strongSignalHit(c, q));
-    if (new Set(fieldHits.map((c) => c.travelDealId)).size === 1) {
-      return toDealRef([...fieldHits].sort((a, b) => a.distance - b.distance)[0]);
-    }
+  const q = queryText.toLowerCase().replace(/\s+/g, " ");
+  const titleHits = all.filter((c) => {
+    const t = c.title.trim().toLowerCase().replace(/\s+/g, " ");
+    // Very short titles substring-match too easily ("rome" would hit every
+    // Rome message) — require some substance before trusting the rescue.
+    return t.length >= 6 && q.includes(t);
+  });
+  if (new Set(titleHits.map((c) => c.travelDealId)).size === 1) {
+    return toDealRef([...titleHits].sort((a, b) => a.distance - b.distance)[0]);
   }
 
+  const postSignal = hasPostReferenceSignal(queryText);
+  const fieldHits = all.filter((c) => strongSignalHit(c, q, postSignal));
+  if (new Set(fieldHits.map((c) => c.travelDealId)).size === 1) {
+    return toDealRef([...fieldHits].sort((a, b) => a.distance - b.distance)[0]);
+  }
+  return null;
+}
+
+/** Pick the deal to pin: a deterministic match if there is one, otherwise the
+ *  closest vector match within the strict pin cutoff (retrieval itself runs at
+ *  the wider candidate cutoff), near-ties resolved by most recent post. */
+export function pickDealMatch(matches: RetrievedMatch[], queryText?: string): DealRef | null {
+  const deterministic = pickDeterministicDealMatch(matches, queryText);
+  if (deterministic) return deterministic;
+
+  const all = matches.map(parseCandidate).filter((c): c is DealCandidate => c !== null);
   const candidates = all.filter((c) => c.distance <= DEAL_MATCH_MAX_DISTANCE);
   if (candidates.length === 0) return null;
   const best = Math.min(...candidates.map((c) => c.distance));
@@ -256,9 +331,13 @@ function isBlank(value: unknown): boolean {
  *  themselves always wins, and later customer corrections still override via
  *  the normal mergeSlots(prior, turn) path. Idempotent, so calling it every
  *  sales turn while a deal is pinned is safe. */
-export function seedSlotsFromDeal(slots: EnquirySlots, deal: RetrievedDealContext): void {
+export function seedSlotsFromDeal(slots: EnquirySlots, deal: RetrievedDealContext): string[] {
+  const seeded: string[] = [];
   const fill = <K extends keyof EnquirySlots>(key: K, value: EnquirySlots[K] | null | undefined) => {
-    if (!isBlank(value) && isBlank(slots[key])) slots[key] = value as EnquirySlots[K];
+    if (!isBlank(value) && isBlank(slots[key])) {
+      slots[key] = value as EnquirySlots[K];
+      seeded.push(key as string);
+    }
   };
   fill("enquiryTitle", deal.title);
   fill("destinations", deal.destination ? [deal.destination] : null);
@@ -298,14 +377,47 @@ export function seedSlotsFromDeal(slots: EnquirySlots, deal: RetrievedDealContex
     const dealNote = detailLines.length ? `${marker}\n${detailLines.join("\n")}` : marker;
     slots.notes = slots.notes?.trim() ? `${slots.notes.trim()}\n\n${dealNote}` : dealNote;
   }
+  return seeded;
+}
+
+/** Undo a previous deal's seeding, IN PLACE — used when the customer corrects
+ *  which post they meant. Clears only the slots THAT deal filled (tracked on
+ *  the ref, so anything the customer stated themselves is untouched) and drops
+ *  its "Post reference" note block. Without this the corrected pin would be
+ *  cosmetic: the new deal only fills BLANK slots, so the wrong deal's date,
+ *  nights and airport would survive onto the enquiry. */
+export function unseedSlotsFromDeal(slots: EnquirySlots, ref: DealRef): void {
+  for (const key of ref.seededKeys ?? []) {
+    delete (slots as Record<string, unknown>)[key];
+  }
+  const marker = `Post reference: "${ref.title}"`;
+  if (slots.notes?.includes(marker)) {
+    // The note is stored as blank-line-separated blocks; drop the whole block
+    // that starts with this deal's marker line.
+    const kept = slots.notes
+      .split(/\n{2,}/)
+      .filter((block) => !block.trimStart().startsWith(marker))
+      .join("\n\n")
+      .trim();
+    slots.notes = kept || undefined;
+  }
 }
 
 export interface DealTurnResolution {
-  // Set ONLY when this turn pinned a new deal — the caller persists it onto
-  // its conversation context (each driver has its own context store).
+  // Set ONLY when this turn pinned a deal (first pin OR a correction) — the
+  // caller persists it onto its conversation context (each driver has its own
+  // context store).
   pinnedNow: DealRef | null;
   deal: RetrievedDealContext | null;
   dealCandidates?: RetrievedContext["dealCandidates"];
+  // True when this turn REPLACED an existing pin: the caller must also clear
+  // its "deal check already asked" flag, since the check is owed again for
+  // the newly-identified deal.
+  repinned?: boolean;
+  // True when the customer referenced ANOTHER operator's advert — no deal was
+  // pinned or offered, and the brain is told not to pass any of ours off as
+  // the one they saw.
+  externalDealMention?: boolean;
 }
 
 /** The complete per-turn deal step, shared by BOTH drivers (reply-worker and
@@ -323,22 +435,41 @@ export async function resolveDealTurn(input: {
   logLabel: string;
   existingRef?: DealRef;
   checkAsked?: boolean;
+  // Sticky verdict from an EARLIER turn of this conversation: they showed us a
+  // rival's quote. Later turns ("jhon, 09356162084", "4 adults") carry no brand
+  // or price-match wording of their own, so without this the suppression would
+  // lapse and a stray similarity match could pin one of our deals onto their
+  // competitor enquiry — observed with a firstchoice.co.uk screenshot.
+  externalSticky?: boolean;
   query: string;
   slots: EnquirySlots;
 }): Promise<DealTurnResolution> {
-  const { orgId, logLabel, existingRef, checkAsked, query, slots } = input;
+  const { orgId, logLabel, existingRef, checkAsked, externalSticky, query, slots } = input;
   let ref = existingRef ?? null;
   let pinnedNow: DealRef | null = null;
+  let repinned = false;
   let dealCandidates: DealTurnResolution["dealCandidates"];
 
-  if (!ref) {
-    const matches = await aiEmbeddingsService.retrieve({
-      orgId,
-      sourceType: "deal",
-      query,
-      limit: 3,
-      maxDistance: DEAL_CANDIDATE_MAX_DISTANCE,
-    });
+  const matches = await aiEmbeddingsService.retrieve({
+    orgId,
+    sourceType: "deal",
+    query,
+    limit: 3,
+    maxDistance: DEAL_CANDIDATE_MAX_DISTANCE,
+  });
+
+  // Another operator's advert (named brand, or a screenshot of their page):
+  // never pin ours to it and never offer our titles as "was it this one?".
+  // Only gates a FIRST pin — an existing pin stands (they may be asking who
+  // the operator on our own deal is).
+  const external = !ref && (externalSticky || mentionsExternalSource(query));
+  if (external) {
+    console.log(
+      `[deal-context] ${logLabel} external operator referenced${externalSticky ? " (sticky)" : ""} — not pinning any of our deals`,
+    );
+  }
+
+  if (!ref && !external) {
     const pinned = pickDealMatch(matches, query);
     if (pinned) {
       ref = pinned;
@@ -357,16 +488,37 @@ export async function resolveDealTurn(input: {
         );
       }
     }
+  } else if (ref) {
+    // ALREADY PINNED — allow a correction ("no, it was the spring one"), but
+    // only from a DETERMINISTIC match: an identifying fact the customer
+    // actually gave. Distance must never move an existing pin, or ordinary
+    // chatter would drift the conversation onto whichever deal looked closest
+    // this turn. Un-seed the old deal first so its date/nights/airport don't
+    // survive onto the enquiry (the new deal only fills BLANK slots).
+    const corrected = pickDeterministicDealMatch(matches, query);
+    if (corrected && corrected.travelDealId !== ref.travelDealId) {
+      console.log(
+        `[deal-context] ${logLabel} re-pinned deal=${corrected.travelDealId} "${corrected.title}" ` +
+          `(was ${ref.travelDealId} "${ref.title}")`,
+      );
+      unseedSlotsFromDeal(slots, ref);
+      ref = corrected;
+      pinnedNow = corrected;
+      repinned = true;
+    }
   }
 
   // Hydrated fresh every turn (cheap: two small queries) so the AI always
   // quotes CURRENT hotel/flight detail, never the embedding's snapshot.
   const deal = ref ? await hydrateDealReplyContext(ref) : null;
   if (deal) {
-    deal.tweakCheckPending = !checkAsked;
-    seedSlotsFromDeal(slots, deal);
+    // A corrected pin is a different holiday, so the "as posted or any
+    // tweaks?" check is owed again on the new deal.
+    deal.tweakCheckPending = repinned || !checkAsked;
+    const seededKeys = seedSlotsFromDeal(slots, deal);
+    if (pinnedNow) pinnedNow.seededKeys = seededKeys;
   }
-  return { pinnedNow, deal, dealCandidates };
+  return { pinnedNow, deal, dealCandidates, repinned, externalDealMention: external };
 }
 
 /** Load the pinned deal's live details (posted caption fields + the quote's

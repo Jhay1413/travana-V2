@@ -107,6 +107,8 @@ interface ConversationContext {
   // True once the one-time "as posted, or any tweaks?" deal check has been put
   // to the tester. Mirrors reply-worker's ConversationContext.
   dealCheckAsked?: boolean;
+  // Sticky "this is a rival's quote" verdict — mirrors reply-worker.
+  externalDealMention?: boolean;
   // A DOCUMENT sent BEFORE the tester was identified (mirrors reply-worker's
   // pendingAttachmentRefs): the test chat has no message store to re-download
   // from, so the bytes are held in-process (deferredAttachmentBytes, TTL'd)
@@ -481,13 +483,23 @@ export const internalChatTestflowService = {
           logLabel: `session=${session.id}`,
           existingRef: prevContext.dealRef,
           checkAsked: prevContext.dealCheckAsked,
+          externalSticky: prevContext.externalDealMention,
           query: dealQuery,
           slots: priorSlots,
         }),
       ]);
-      // Mutation → persisted by every later context spread. Mirrors reply-worker.
+      // Mutation → persisted by every later context spread. A corrected pin
+      // re-arms the one-time check. Mirrors reply-worker.
       if (dealTurn.pinnedNow) prevContext.dealRef = dealTurn.pinnedNow;
-      retrieved = { kb: kbMatches, quotes: quoteMatches, deal: dealTurn.deal, dealCandidates: dealTurn.dealCandidates };
+      if (dealTurn.repinned) delete prevContext.dealCheckAsked;
+      if (dealTurn.externalDealMention) prevContext.externalDealMention = true;
+      retrieved = {
+        kb: kbMatches,
+        quotes: quoteMatches,
+        deal: dealTurn.deal,
+        dealCandidates: dealTurn.dealCandidates,
+        externalDealMention: dealTurn.externalDealMention,
+      };
     }
 
     // When onboarding completes in this same message, its turn is reused by
@@ -740,9 +752,10 @@ export const internalChatTestflowService = {
         prevContext.contactName,
       ));
 
-    // The one-time deal tweak-check was in this turn's prompt — consume it so
-    // it's never asked twice. Mirrors reply-worker.
-    if (retrieved.deal?.tweakCheckPending) prevContext.dealCheckAsked = true;
+    // Consume the one-time deal check only on a REAL sales turn — `firstTurn`
+    // means we're reusing the onboarding turn, whose prompt defers the check
+    // to the next reply. Mirrors reply-worker.
+    if (retrieved.deal?.tweakCheckPending && !firstTurn) prevContext.dealCheckAsked = true;
 
     if (turn.hand_off) {
       const replyMessage = await doHandoff(prevContext, turn.reply);
@@ -867,7 +880,9 @@ export const internalChatTestflowService = {
     // slot KEYS only (never the raw values — destination/notes/etc. can carry
     // customer PII) so this stays useful for debugging state transitions
     // without dumping personal data into the log stream. Mirrors reply-worker.
-    const coreMissing = missingCoreFieldsFor(mergedSlots);
+    // A pinned deal drops budget from the core set (its price is published) —
+    // mirrors reply-worker.
+    const coreMissing = missingCoreFieldsFor(mergedSlots, { dealPinned: !!retrieved.deal });
     const askCount = prevContext.askCount ?? 0;
 
     // Create trigger — fires on THIS SAME TURN once we're treating this as an

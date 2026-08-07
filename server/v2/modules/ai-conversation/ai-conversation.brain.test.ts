@@ -294,22 +294,43 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
       "travel dates",
       "number of nights",
       "number of passengers",
+      "budget",
     ]);
   });
 
-  it("returns [] once every package core field is filled — budget is deliberately NOT core", () => {
+  it("drops budget from the core set when the enquiry came from one of our posted deals", () => {
+    const slots: EnquirySlots = {};
+    expect(missingCoreFieldsFor(slots, { dealPinned: true })).toEqual([
+      "destination",
+      "travel dates",
+      "number of nights",
+      "number of passengers",
+    ]);
+    // …so a deal-sourced enquiry completes without ever chasing a budget.
+    const filled: EnquirySlots = {
+      destinations: ["Rome"],
+      travelDate: "2027-04-12",
+      nights: 4,
+      adults: 2,
+    };
+    expect(missingCoreFieldsFor(filled, { dealPinned: true })).toEqual([]);
+    expect(missingCoreFieldsFor(filled)).toEqual(["budget"]);
+  });
+
+  it("returns [] once every package core field is filled", () => {
     const slots: EnquirySlots = {
       destinations: ["Benidorm"],
       travelDate: "2026-09-01",
       nights: 7,
       adults: 2,
+      budget: "1500",
     };
     expect(missingCoreFieldsFor(slots)).toEqual([]);
   });
 
   it("reports only the still-missing package core fields", () => {
     const slots: EnquirySlots = { destinations: ["Benidorm"], nights: 7 };
-    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of passengers"]);
+    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of passengers", "budget"]);
   });
 
   it("uses cruise labels for a cruise holidayType", () => {
@@ -319,6 +340,7 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
       "travel dates",
       "number of nights",
       "number of passengers",
+      "budget",
     ]);
   });
 
@@ -326,7 +348,12 @@ describe("missingCoreFieldsFor (required-core gate)", () => {
     const slots: EnquirySlots = { holidayType: "Hot Tub Break", adults: 2 };
     // adults being set must NOT satisfy the hot-tub core party-size check —
     // only `guests` counts.
-    expect(missingCoreFieldsFor(slots)).toEqual(["travel dates", "number of nights", "number of guests"]);
+    expect(missingCoreFieldsFor(slots)).toEqual([
+      "travel dates",
+      "number of nights",
+      "number of guests",
+      "budget",
+    ]);
 
     const filled: EnquirySlots = {
       holidayType: "Hot Tub Break",
@@ -840,6 +867,19 @@ describe("buildSystemPrompt (pinned Facebook-deal block)", () => {
     expect(prompt).not.toContain("THE DEAL THE CUSTOMER IS ASKING ABOUT");
   });
 
+  it("tells the AI not to claim another company's advert as ours", () => {
+    const prompt = buildSystemPrompt(null, [], null, true, { kb: [], quotes: [], externalDealMention: true });
+    expect(prompt).toContain("ANOTHER COMPANY'S DEAL");
+    expect(prompt).toContain("Do NOT claim it as ours");
+    // The rival's price is what the advisor has to beat — captured in notes,
+    // never mistaken for the customer's own budget.
+    expect(prompt).toContain("PRICE TO BEAT");
+    expect(prompt).toContain("Do NOT put that figure in `budget`");
+    // Neither of our own deal blocks may appear alongside it.
+    expect(prompt).not.toContain("THE DEAL THE CUSTOMER IS ASKING ABOUT");
+    expect(prompt).not.toContain("POSSIBLE FACEBOOK DEAL");
+  });
+
   it("suppresses the candidates block when a deal IS pinned", () => {
     const prompt = buildSystemPrompt(null, [], null, true, {
       kb: [],
@@ -854,13 +894,21 @@ describe("buildSystemPrompt (pinned Facebook-deal block)", () => {
 });
 
 describe("buildSystemPrompt (asking-style guardrails)", () => {
-  it("forbids proactively asking for or suggesting a budget", () => {
-    const prompt = buildSystemPrompt(null, [], null, true);
-    expect(prompt).toContain("NEVER ask for, suggest, or hint at a budget");
-    // Budget must not appear in the proactive-ask priority order.
+  it("forbids asking for a budget when the enquiry came from one of our posted deals", () => {
+    const deal = { title: "Spring Time in Rome", price: "from £369.00 per person" };
+    const prompt = buildSystemPrompt(null, [], null, true, { kb: [], quotes: [], deal });
+    expect(prompt).toContain("NEVER ask for, suggest, or hint at a budget in THIS conversation");
+    // Budget must not appear in the proactive-ask priority order either.
     expect(prompt).toContain(
       "then party size (adults for Package/Cruise, guests for Hot Tub) — everything else is handled later",
     );
+  });
+
+  it("DOES allow a light budget question when no deal of ours is pinned", () => {
+    const prompt = buildSystemPrompt(null, [], null, true);
+    expect(prompt).toContain("BUDGET: once the other core details are in, you MAY ask once for a rough budget");
+    expect(prompt).toContain("then party size (adults for Package/Cruise, guests for Hot Tub), then budget");
+    expect(prompt).not.toContain("NEVER ask for, suggest, or hint at a budget in THIS conversation");
   });
 
   it("treats a stated party (e.g. \"4 adults\") as final — no children follow-up", () => {
@@ -869,12 +917,18 @@ describe("buildSystemPrompt (asking-style guardrails)", () => {
     expect(prompt).toContain("NEVER follow up asking whether children or infants are also coming");
   });
 
-  it("keeps budget out of the agency-rule core-field scope", () => {
+  it("keeps budget out of the agency-rule core-field scope while a deal is pinned", () => {
     const botConfig = {
       orgId: "org-1",
       rules: [{ text: "ask three questions per message", audience: "general" }],
     } as unknown as OrgBotConfig;
-    const prompt = buildSystemPrompt(botConfig, [], null, true);
-    expect(prompt).toContain("destination, dates, nights, party size — never budget");
+    const pinned = buildSystemPrompt(botConfig, [], null, true, {
+      kb: [],
+      quotes: [],
+      deal: { title: "Spring Time in Rome" },
+    });
+    expect(pinned).toContain("destination, dates, nights, party size — never budget in this conversation");
+    // Without a pinned deal budget is a legitimate core ask again.
+    expect(buildSystemPrompt(botConfig, [], null, true)).toContain("destination, dates, nights, party size, budget");
   });
 });

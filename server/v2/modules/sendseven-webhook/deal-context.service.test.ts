@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { pickDealCandidates, pickDealMatch, seedSlotsFromDeal } from "./deal-context.service";
+import {
+  mentionsExternalSource,
+  pickDealCandidates,
+  pickDealMatch,
+  pickDeterministicDealMatch,
+  seedSlotsFromDeal,
+  unseedSlotsFromDeal,
+} from "./deal-context.service";
 import type { EnquirySlots, RetrievedDealContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
 
 function match(
@@ -91,24 +98,44 @@ describe("pickDealMatch", () => {
     expect(pickDealMatch(matches, "any deals for rome?")).toBeNull();
   });
 
-  it("field rescue: pins on the deal's exact travel date appearing in the text (screenshot fields)", () => {
+  it("field rescue: pins on the deal's exact travel date when the message references a post", () => {
     const matches = [
       match(0.443, { travelDealId: "late", quoteId: "q-l", title: "Late Rome Deal", travelDate: "2026-11-20" }),
       match(0.461, { travelDealId: "spring", quoteId: "q-s", title: "Spring Rome", travelDate: "2027-04-12" }),
     ];
-    // Vision-extracted note style ("travel date: 12 April 2027") and human style both hit.
-    expect(pickDealMatch(matches, "title: spring escape. travel date: 12 april 2027. price: £369 per person")?.travelDealId).toBe("spring");
-    expect(pickDealMatch(matches, "the one on the 12th april please")?.travelDealId).toBe("spring");
+    // Vision-extracted screenshot text (mentions "image") and a human "saw the post" both qualify.
+    expect(
+      pickDealMatch(matches, "details from the image i've sent: travel date: 12 april 2027, price: £369")?.travelDealId,
+    ).toBe("spring");
+    expect(pickDealMatch(matches, "saw the one on the 12th april, is it still on?")?.travelDealId).toBe("spring");
   });
 
-  it("field rescue: pins on the posted price appearing as a standalone number", () => {
+  it("field rescue: does NOT pin on a date alone when the customer never mentions a post", () => {
+    const matches = [
+      match(0.45, { travelDealId: "spring", quoteId: "q-s", title: "Spring Rome", travelDate: "2027-04-12" }),
+    ];
+    // A plain enquiry that happens to share the deal's travel date must not
+    // start quoting that deal's hotel/price at the customer.
+    expect(pickDealMatch(matches, "can you do rome for us on 12 april, 5 nights?")).toBeNull();
+  });
+
+  it("field rescue: pins on the posted price only alongside a post reference", () => {
     const matches = [
       match(0.45, { travelDealId: "a", quoteId: "qa", title: "Deal A", price: "369.00" }),
       match(0.46, { travelDealId: "b", quoteId: "qb", title: "Deal B", price: "249.00" }),
     ];
-    expect(pickDealMatch(matches, "it was £369 per person i think")?.travelDealId).toBe("a");
-    // Digit-boundary guard: the price digits inside a phone number must not hit.
-    expect(pickDealMatch(matches, "jhon, 0913692084")).toBeNull();
+    expect(pickDealMatch(matches, "the advert said £369 per person i think")?.travelDealId).toBe("a");
+    // A bare budget figure is not evidence they saw a post.
+    expect(pickDealMatch(matches, "our budget is about 369 each")).toBeNull();
+    // Digit-boundary guard: price digits inside a phone number must not hit.
+    expect(pickDealMatch(matches, "saw your post — jhon, 0913692084")).toBeNull();
+  });
+
+  it("hotel rescue needs no post reference — a hotel name is never said by accident", () => {
+    const matches = [
+      match(0.5, { travelDealId: "spring", quoteId: "q-s", title: "Spring Rome", hotelName: "Hotel Taormina" }),
+    ];
+    expect(pickDealMatch(matches, "is the taormina still available?")?.travelDealId).toBe("spring");
   });
 
   it("field rescue: stays ambiguous when both deals share the matching fact", () => {
@@ -117,6 +144,15 @@ describe("pickDealMatch", () => {
       match(0.46, { travelDealId: "b", quoteId: "qb", title: "Deal B", travelDate: "2027-04-12" }),
     ];
     expect(pickDealMatch(matches, "the 12th april one")).toBeNull();
+  });
+
+  it("pickDeterministicDealMatch returns only identified matches, never a distance guess", () => {
+    // Well inside the pin cutoff, but nothing identifying in the text.
+    const close = [match(0.1, { travelDealId: "a", quoteId: "qa", title: "Spring Time in Rome" })];
+    expect(pickDealMatch(close, "hi there")?.travelDealId).toBe("a");
+    expect(pickDeterministicDealMatch(close, "hi there")).toBeNull();
+    // Named outright → deterministic.
+    expect(pickDeterministicDealMatch(close, "the spring time in rome one")?.travelDealId).toBe("a");
   });
 
   it("field rescue: pins on the hotel name, including without the 'Hotel' prefix", () => {
@@ -249,6 +285,16 @@ describe("seedSlotsFromDeal", () => {
     expect(slots.notes?.startsWith("wants a quiet hotel")).toBe(true);
   });
 
+  it("reports the keys it seeded, so a re-pin can undo exactly those", () => {
+    const slots: EnquirySlots = { nights: 7 };
+    const seeded = seedSlotsFromDeal(slots, deal);
+    // nights was the customer's own — not seeded, so never un-seeded later.
+    expect(seeded).not.toContain("nights");
+    expect(seeded).toEqual(
+      expect.arrayContaining(["enquiryTitle", "destinations", "travelDate", "departureAirports", "boardBasis"]),
+    );
+  });
+
   it("skips absent deal fields without writing empties", () => {
     const slots: EnquirySlots = {};
     seedSlotsFromDeal(slots, { title: "Bare Deal" });
@@ -257,5 +303,131 @@ describe("seedSlotsFromDeal", () => {
     expect(slots.nights).toBeUndefined();
     expect(slots.enquiryTitle).toBe("Bare Deal");
     expect(slots.notes).toBe('Post reference: "Bare Deal"');
+  });
+});
+
+describe("mentionsExternalSource (another operator's advert)", () => {
+  it("detects a named competitor as the source of the deal", () => {
+    expect(mentionsExternalSource("i saw a deal on TUI for tenerife")).toBe(true);
+    expect(mentionsExternalSource("saw this on jet2 last night")).toBe(true);
+    expect(mentionsExternalSource("found it on loveholidays, can you match it?")).toBe(true);
+    expect(mentionsExternalSource("source: TUI. destination: Rome. price: £399")).toBe(true);
+  });
+
+  it("handles the real price-match case, text and screenshot alike", () => {
+    expect(mentionsExternalSource("hiya can you beat quotes from first choice?x")).toBe(true);
+    // A screenshot's footer carries the bare domain, not the spaced brand name.
+    expect(
+      mentionsExternalSource("title: SunClub Salou. source: firstchoice.co.uk. price: £266pp. 3 nights"),
+    ).toBe(true);
+    expect(mentionsExternalSource("found this on loveholidays.com")).toBe(true);
+  });
+
+  it("catches a beat/match request even when the brand is misspelt", () => {
+    // Real message: both "beat" and "TUI" typo'd — brand-spotting alone fails,
+    // but asking us to beat a quote is itself proof it isn't ours.
+    expect(mentionsExternalSource("can you bet this one from tin?")).toBe(true);
+    expect(mentionsExternalSource("can you beat this?")).toBe(true);
+    expect(mentionsExternalSource("any chance you can match that quote")).toBe(true);
+    expect(mentionsExternalSource("do you price match?")).toBe(true);
+  });
+
+  it("does not treat a discount request on OUR OWN deal as external", () => {
+    expect(mentionsExternalSource("saw your rome post — can you beat £369?")).toBe(false);
+  });
+
+  it("ignores 'bet' used as an ordinary word", () => {
+    expect(mentionsExternalSource("i bet that sells out fast!")).toBe(false);
+    expect(mentionsExternalSource("you bet")).toBe(false);
+  });
+
+  it("does NOT fire when they are clearly talking about OUR post", () => {
+    // We sell these operators, so the brand alone means nothing.
+    expect(mentionsExternalSource("is your TUI deal still available?")).toBe(false);
+    expect(mentionsExternalSource("saw your post — is it a jet2 flight?")).toBe(false);
+  });
+
+  it("stays quiet for ordinary messages", () => {
+    expect(mentionsExternalSource("saw your rome post, can you do other dates?")).toBe(false);
+    expect(mentionsExternalSource("")).toBe(false);
+  });
+});
+
+describe("unseedSlotsFromDeal (correcting a wrong pin)", () => {
+  const wrongDeal: RetrievedDealContext = {
+    title: "Late Rome Deal",
+    travelDate: "2026-11-20",
+    nights: 3,
+    departureAirport: "Gatwick",
+    destination: "Rome",
+    hotelName: "Hotel Colosseum",
+    price: "from £199.00 per person",
+  };
+
+  it("removes exactly what that deal seeded, leaving the customer's own answers", () => {
+    const slots: EnquirySlots = { adults: 4, notes: "wants a quiet hotel" };
+    const seededKeys = seedSlotsFromDeal(slots, wrongDeal);
+    expect(slots.travelDate).toBe("2026-11-20");
+
+    unseedSlotsFromDeal(slots, {
+      travelDealId: "late",
+      quoteId: "q-l",
+      title: wrongDeal.title,
+      source: "vector",
+      matchedAt: "2026-08-06T00:00:00.000Z",
+      seededKeys,
+    });
+
+    expect(slots.travelDate).toBeUndefined();
+    expect(slots.nights).toBeUndefined();
+    expect(slots.departureAirports).toBeUndefined();
+    expect(slots.enquiryTitle).toBeUndefined();
+    // Customer-stated values and their own note survive.
+    expect(slots.adults).toBe(4);
+    expect(slots.notes).toBe("wants a quiet hotel");
+  });
+
+  it("drops only the old deal's Post reference block, keeping any other blocks", () => {
+    const slots: EnquirySlots = {};
+    const seededKeys = seedSlotsFromDeal(slots, wrongDeal);
+    slots.notes = `${slots.notes}\n\nSomething else the agent needs`;
+
+    unseedSlotsFromDeal(slots, {
+      travelDealId: "late",
+      quoteId: "q-l",
+      title: wrongDeal.title,
+      source: "vector",
+      matchedAt: "2026-08-06T00:00:00.000Z",
+      seededKeys,
+    });
+
+    expect(slots.notes).toBe("Something else the agent needs");
+    expect(slots.notes).not.toContain("Late Rome Deal");
+  });
+
+  it("leaves the corrected deal free to seed its own values afterwards", () => {
+    const slots: EnquirySlots = {};
+    const seededKeys = seedSlotsFromDeal(slots, wrongDeal);
+    unseedSlotsFromDeal(slots, {
+      travelDealId: "late",
+      quoteId: "q-l",
+      title: wrongDeal.title,
+      source: "vector",
+      matchedAt: "2026-08-06T00:00:00.000Z",
+      seededKeys,
+    });
+    seedSlotsFromDeal(slots, {
+      title: "Spring Time in Rome",
+      travelDate: "2027-04-12",
+      nights: 4,
+      departureAirport: "Newcastle",
+      hotelName: "Hotel Taormina",
+    });
+
+    expect(slots.travelDate).toBe("2027-04-12");
+    expect(slots.nights).toBe(4);
+    expect(slots.departureAirports).toEqual(["Newcastle"]);
+    expect(slots.notes).toContain('Post reference: "Spring Time in Rome"');
+    expect(slots.notes).not.toContain("Late Rome Deal");
   });
 });
