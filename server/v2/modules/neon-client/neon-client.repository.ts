@@ -1,6 +1,14 @@
 import { db } from "../../config/database";
-import { clientTable, transaction, type NeonClient, type InsertClientTable } from "@shared/schema";
-import { eq, desc, sql, count, or, and, ilike, getTableColumns, type SQL } from "drizzle-orm";
+import {
+  clientTable,
+  transaction,
+  enquiry_table,
+  quote,
+  booking,
+  type NeonClient,
+  type InsertClientTable,
+} from "@shared/schema";
+import { eq, desc, asc, sql, count, or, and, ilike, inArray, getTableColumns, type SQL } from "drizzle-orm";
 import type { Scope } from "../../utils/scope";
 import { phoneDigitsCondition } from "../../utils/phone-search";
 import { clientNameCondition } from "../../utils/client-name-search";
@@ -27,6 +35,54 @@ function buildClientScopeConds(scope?: Scope): SQL[] {
 
 // Merged (soft-archived) duplicates are hidden from list/search views.
 const activeOnly = eq(clientTable.status, "active");
+
+// Name matching is shared with the global header search (see clientNameCondition)
+// — previously findPaginated OR-ed each word across firstName and surename
+// independently, so "John Smith" returned every John AND every Smith and the
+// actual John Smith could fall past the page limit.
+function buildClientSearchClause(search?: string): SQL | undefined {
+  if (!search) return undefined;
+  const phoneDigits = phoneDigitsCondition(clientTable.phoneNumber, search);
+  const nameCondition = clientNameCondition(clientTable.firstName, clientTable.surename, search);
+  return or(
+    ...(nameCondition ? [nameCondition] : []),
+    ilike(clientTable.email, `%${search}%`),
+    ilike(clientTable.phoneNumber, `%${search}%`),
+    ...(phoneDigits ? [phoneDigits] : []),
+    ilike(clientTable.city, `%${search}%`),
+    ilike(clientTable.country, `%${search}%`),
+  );
+}
+
+// Duplicate-detection key: the LAST 9 DIGITS of the stored phone number.
+// Grouping on the whole digit string would file "07968215588" and
+// "+447968215588" as different people — the single most common way one client
+// ends up stored twice. Nine digits stays specific (a full UK subscriber
+// number) while absorbing the 0 / +44 prefix difference. Numbers carrying
+// fewer than 9 digits are excluded outright: a short key would collide across
+// unrelated clients and report duplicates that aren't.
+const PHONE_KEY_LENGTH = 9;
+const phoneKeyLength = sql.raw(String(PHONE_KEY_LENGTH));
+const phoneDigitsExpr = sql`regexp_replace(COALESCE(${clientTable.phoneNumber}, ''), '[^0-9]', '', 'g')`;
+const phoneKeyExpr = sql`right(${phoneDigitsExpr}, ${phoneKeyLength})`;
+const phoneKeyUsable = sql`length(${phoneDigitsExpr}) >= ${phoneKeyLength}`;
+
+export type DuplicatePhoneGroupRow = {
+  phoneKey: string;
+  clientCount: number;
+  samplePhone: string;
+  clientNames: string;
+};
+
+export type ClientDealCounts = {
+  // Nullable because `transaction.client_id` is — the inArray filter means it
+  // never actually comes back null here.
+  clientId: string | null;
+  enquiryCount: number;
+  quoteCount: number;
+  bookingCount: number;
+  lastActivityAt: Date | null;
+};
 
 export const neonClientRepository = {
   async findById(id: string, scope?: Scope): Promise<NeonClient | undefined> {
@@ -88,23 +144,7 @@ export const neonClientRepository = {
   async findPaginated(page: number, limit: number, search?: string, scope?: Scope): Promise<{ clients: NeonClient[]; total: number }> {
     const offset = (page - 1) * limit;
 
-    // Name matching is shared with the global header search (see
-    // clientNameCondition) — previously this OR-ed each word across firstName
-    // and surename independently, so "John Smith" returned every John AND every
-    // Smith and the actual John Smith could fall past the page limit. That's why
-    // the Link-client dialog appeared to find nothing the header search found.
-    const phoneDigits = search ? phoneDigitsCondition(clientTable.phoneNumber, search) : null;
-    const nameCondition = clientNameCondition(clientTable.firstName, clientTable.surename, search);
-    const searchClause = search
-      ? or(
-          ...(nameCondition ? [nameCondition] : []),
-          ilike(clientTable.email, `%${search}%`),
-          ilike(clientTable.phoneNumber, `%${search}%`),
-          ...(phoneDigits ? [phoneDigits] : []),
-          ilike(clientTable.city, `%${search}%`),
-          ilike(clientTable.country, `%${search}%`),
-        )
-      : undefined;
+    const searchClause = buildClientSearchClause(search);
 
     const scopeConds = buildClientScopeConds(scope);
     const allConds: SQL[] = [...scopeConds, activeOnly];
@@ -139,6 +179,108 @@ export const neonClientRepository = {
     ]);
 
     return { clients, total: totalResult[0]?.total ?? 0 };
+  },
+
+  // One row per phone number that more than one active client shares. Only the
+  // group key and a summary come back — the clients themselves are fetched
+  // per-group by findByPhoneKey when the user opens one, so the list page stays
+  // cheap however many duplicates exist.
+  //
+  // Ordered SMALLEST group first, deliberately. A pair of records on one number
+  // is nearly always one person entered twice; a number carrying dozens of
+  // unrelated names is a shop/placeholder number (live data has 56 different
+  // clients on the office landline) where merging would be destructive. Putting
+  // the big groups last keeps the genuinely mergeable cases on page one.
+  async findDuplicatePhoneGroups(
+    page: number,
+    limit: number,
+    search: string | undefined,
+    scope?: Scope,
+  ): Promise<{ groups: DuplicatePhoneGroupRow[]; total: number }> {
+    const offset = (page - 1) * limit;
+    const whereClause = and(...buildClientScopeConds(scope), activeOnly, phoneKeyUsable);
+
+    // The search filter is applied in HAVING via bool_or, NOT in WHERE:
+    // filtering rows before the GROUP BY would drop a group's non-matching
+    // members, shrinking its count — and a two-client group where only one
+    // member matched would fall below `count(*) > 1` and vanish entirely.
+    // bool_or keeps every group whole and simply keeps the ones where at least
+    // one member matches.
+    const searchClause = buildClientSearchClause(search);
+    const duplicatesOnly = sql`count(*) > 1`;
+    const havingClause = searchClause
+      ? and(duplicatesOnly, sql`bool_or(${searchClause})`)
+      : duplicatesOnly;
+
+    const groupsQuery = db
+      .select({
+        phoneKey: sql<string>`${phoneKeyExpr}`.as("phone_key"),
+        clientCount: sql<number>`count(*)::int`.as("client_count"),
+        // A representative of the raw stored formats, for display — the key
+        // itself is digits-only and unreadable as a phone number.
+        samplePhone: sql<string>`min(${clientTable.phoneNumber})`.as("sample_phone"),
+        clientNames: sql<string>`string_agg(trim(concat(${clientTable.firstName}, ' ', ${clientTable.surename})), ', ')`.as("client_names"),
+      })
+      .from(clientTable)
+      .where(whereClause)
+      .groupBy(phoneKeyExpr)
+      .having(havingClause);
+
+    const totalSubquery = db
+      .select({ phoneKey: sql<string>`${phoneKeyExpr}`.as("phone_key") })
+      .from(clientTable)
+      .where(whereClause)
+      .groupBy(phoneKeyExpr)
+      .having(havingClause)
+      .as("duplicate_groups");
+
+    const [groups, totalResult] = await Promise.all([
+      groupsQuery
+        .orderBy(asc(sql`count(*)`), sql`${phoneKeyExpr}`)
+        .limit(limit)
+        .offset(offset),
+      db.select({ total: count() }).from(totalSubquery),
+    ]);
+
+    return { groups, total: totalResult[0]?.total ?? 0 };
+  },
+
+  // Every active client sharing one duplicate-phone key, oldest first (the
+  // original record is usually the one worth keeping, so it leads).
+  async findByPhoneKey(phoneKey: string, scope?: Scope): Promise<NeonClient[]> {
+    const conds: SQL[] = [
+      ...buildClientScopeConds(scope),
+      activeOnly,
+      phoneKeyUsable,
+      sql`${phoneKeyExpr} = ${phoneKey}`,
+    ];
+    return db.select().from(clientTable).where(and(...conds)).orderBy(asc(clientTable.createdAt));
+  },
+
+  // Enquiry / quote / booking volume + last activity per client. All three hang
+  // off `transaction.client_id`, so one grouped query covers them — this is what
+  // tells the user which of the duplicates is the real record.
+  //
+  // COUNT(DISTINCT ...) is load-bearing, not defensive: a transaction can carry
+  // several quotes, so joining all three tables at once fans out into a cross
+  // product and a plain count(*) would multiply the enquiry and booking totals
+  // by the number of quotes.
+  async countDealsByClientIds(clientIds: string[]): Promise<ClientDealCounts[]> {
+    if (clientIds.length === 0) return [];
+    return db
+      .select({
+        clientId: transaction.client_id,
+        enquiryCount: sql<number>`count(distinct ${enquiry_table.id})::int`,
+        quoteCount: sql<number>`count(distinct ${quote.id})::int`,
+        bookingCount: sql<number>`count(distinct ${booking.id})::int`,
+        lastActivityAt: sql<Date | null>`max(${transaction.created_at})`,
+      })
+      .from(transaction)
+      .leftJoin(enquiry_table, eq(enquiry_table.transaction_id, transaction.id))
+      .leftJoin(quote, eq(quote.transaction_id, transaction.id))
+      .leftJoin(booking, eq(booking.transaction_id, transaction.id))
+      .where(inArray(transaction.client_id, clientIds))
+      .groupBy(transaction.client_id);
   },
 
   // Finds active clients whose email or phone matches the given values — used to

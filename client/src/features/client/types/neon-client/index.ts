@@ -63,3 +63,43 @@ export interface PaginatedNeonClients {
   limit: number;
   totalPages: number;
 }
+
+/**
+ * One phone number shared by two or more active clients. `phoneKey` is the
+ * server's normalized grouping key (the last 9 digits) — pass it back to fetch
+ * the group; show `samplePhone` to the user instead, it keeps the original
+ * formatting.
+ */
+export interface DuplicatePhoneGroup {
+  phoneKey: string;
+  clientCount: number;
+  samplePhone: string;
+  clientNames: string;
+}
+
+export interface PaginatedDuplicatePhoneGroups {
+  groups: DuplicatePhoneGroup[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface DuplicateGroupClient extends NeonClient {
+  enquiryCount: number;
+  quoteCount: number;
+  bookingCount: number;
+  lastActivityAt: string | null;
+}
+
+export interface DuplicatePhoneGroupDetail {
+  phoneKey: string;
+  /** Server-sorted: most bookings first, so `clients[0]` is the likeliest real record. */
+  clients: DuplicateGroupClient[];
+}
+
+export interface MergeDuplicatesResult {
+  target: NeonClient;
+  mergedIds: string[];
+  failed: Array<{ id: string; error: string }>;
+}

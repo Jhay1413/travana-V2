@@ -40,6 +40,7 @@ const BranchOverviewPage = lazy(() => import("@/pages/branch-overview"));
 const OrganizationOverviewPage = lazy(() => import("@/pages/organization-overview"));
 const ClientsPage = lazy(() => import("@/pages/clients"));
 const ClientsListPage = lazy(() => import("@/pages/clients-list"));
+const ClientDuplicatesPage = lazy(() => import("@/pages/client-duplicates"));
 const ClientPage = lazy(() => import("@/pages/client"));
 const QuotePage = lazy(() => import("@/pages/quote"));
 const EnquiryPage = lazy(() => import("@/pages/enquiry"));
@@ -162,6 +163,9 @@ function AuthenticatedRouter() {
         <RoleRoute path="/tools" allow={STAFF_ROLES} component={ToolsPage} />
         <RoleRoute path="/settings/bot" allow={ADMIN_ROLES} component={BotSettingsPage} />
         <RoleRoute path="/settings/knowledge-base" allow={ADMIN_ROLES} component={KnowledgeBasePage} />
+        {/* Must stay above the '/settings/:tableSlug' catch-all below — Switch
+            takes the first match, so the param route would swallow it. */}
+        <RoleRoute path="/settings/client-duplicates" allow={ADMIN_ROLES} component={ClientDuplicatesPage} />
         <RoleRoute path="/settings/:tableSlug" allow={ADMIN_ROLES} component={SettingsLookupPage} />
         <RoleRoute path="/hr" allow={MANAGER_ROLES} component={HrPage} />
         <RoleRoute path="/hr-v2" allow={MANAGER_ROLES} component={HrV2Page} />

@@ -31,3 +31,16 @@ export const mergeNeonClientValidator = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z.object({ targetId: z.string().uuid() }),
 });
+
+// The duplicate-group key is the last 9 digits of a phone number (see
+// PHONE_KEY_LENGTH in the repository) — digits only, never a formatted number.
+export const duplicatePhoneGroupValidator = z.object({
+  params: z.object({ phoneKey: z.string().regex(/^\d{9}$/, 'Phone key must be 9 digits') }),
+});
+
+export const mergeDuplicateGroupValidator = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({
+    sourceIds: z.array(z.string().uuid()).min(1, 'At least one duplicate client is required'),
+  }),
+});

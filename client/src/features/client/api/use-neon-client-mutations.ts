@@ -47,3 +47,17 @@ export function useMergeNeonClients() {
     },
   });
 }
+
+/** Fold a whole duplicate-phone group into the chosen main client in one request. */
+export function useMergeDuplicateClients() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ targetId, sourceIds }: { targetId: string; sourceIds: string[] }) =>
+      neonClientApi.mergeDuplicates(targetId, sourceIds),
+    // Same reasoning as useMergeNeonClients: too many query keys are affected
+    // to enumerate, and the duplicate list itself must shrink.
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  });
+}

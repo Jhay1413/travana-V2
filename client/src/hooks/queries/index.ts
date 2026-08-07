@@ -1,6 +1,12 @@
 export { useCurrentUser, authKeys } from "./use-auth-queries";
 export { useClients, useClient, clientKeys } from "@/features/client/api/use-client-queries";
-export { useNeonClients, useNeonClient, neonClientKeys } from "@/features/client/api/use-neon-client-queries";
+export {
+  useNeonClients,
+  useNeonClient,
+  useDuplicatePhoneGroups,
+  useDuplicatePhoneGroup,
+  neonClientKeys,
+} from "@/features/client/api/use-neon-client-queries";
 export { useTransactions, usePipelineTransactions, usePipelineColumn, useTransaction, useTransactionStats, useExpiringQuotes, transactionKeys } from "@/features/transaction/api/use-transaction-queries";
 export { useQuotes, useQuote, useRecentQuoteEngagement, quoteKeys } from "@/features/quote/api/use-quote-queries";
 export { useBookings, useBooking, useBookingByTransaction, bookingKeys } from "@/features/booking/api/use-booking-queries";

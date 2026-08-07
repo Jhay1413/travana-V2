@@ -45,4 +45,24 @@ export const neonClientController = {
     const client = await neonClientService.mergeClients(sourceId, targetId, getScope(req));
     return successResponse(res, client, 'Clients merged successfully');
   }),
+
+  listDuplicatePhoneGroups: asyncHandler(async (req: Request, res: Response) => {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const search = (req.query.search as string) || undefined;
+    const result = await neonClientService.listDuplicatePhoneGroups(page, limit, search, getScope(req));
+    return successResponse(res, result, 'Duplicate phone numbers retrieved successfully');
+  }),
+
+  getDuplicatePhoneGroup: asyncHandler(async (req: Request, res: Response) => {
+    const result = await neonClientService.getDuplicatePhoneGroup(req.params.phoneKey as string, getScope(req));
+    return successResponse(res, result, 'Duplicate clients retrieved successfully');
+  }),
+
+  mergeDuplicateGroup: asyncHandler(async (req: Request, res: Response) => {
+    const targetId = req.params.id as string;
+    const { sourceIds } = req.body as { sourceIds: string[] };
+    const result = await neonClientService.mergeDuplicatesInto(targetId, sourceIds, getScope(req));
+    return successResponse(res, result, `${result.mergedIds.length} duplicate client(s) merged successfully`);
+  }),
 };

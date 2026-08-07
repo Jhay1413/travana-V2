@@ -1,5 +1,13 @@
 import axiosClient from "@/api/client/axios-client";
-import type { NeonClient, NeonClientImportRow, ImportResult, PaginatedNeonClients } from "@/features/client/types/neon-client";
+import type {
+  NeonClient,
+  NeonClientImportRow,
+  ImportResult,
+  PaginatedNeonClients,
+  PaginatedDuplicatePhoneGroups,
+  DuplicatePhoneGroupDetail,
+  MergeDuplicatesResult,
+} from "@/features/client/types/neon-client";
 
 export const neonClientApi = {
   getAll: async (params?: { page?: number; limit?: number; search?: string }): Promise<PaginatedNeonClients> => {
@@ -31,6 +39,36 @@ export const neonClientApi = {
   // the surviving client; the source is soft-archived server-side.
   merge: async (sourceId: string, targetId: string): Promise<NeonClient> => {
     const { data } = await axiosClient.post<NeonClient>(`/api/v2/neon-clients/${sourceId}/merge`, { targetId });
+    return data;
+  },
+
+  // Phone numbers held by more than one active client, one row per number.
+  getDuplicatePhoneGroups: async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<PaginatedDuplicatePhoneGroups> => {
+    const { data } = await axiosClient.get<PaginatedDuplicatePhoneGroups>(
+      "/api/v2/neon-clients/duplicates/phone",
+      { params },
+    );
+    return data;
+  },
+
+  getDuplicatePhoneGroup: async (phoneKey: string): Promise<DuplicatePhoneGroupDetail> => {
+    const { data } = await axiosClient.get<DuplicatePhoneGroupDetail>(
+      `/api/v2/neon-clients/duplicates/phone/${phoneKey}`,
+    );
+    return data;
+  },
+
+  // Fold a whole duplicate group into one survivor. `targetId` is the main
+  // client the user chose to keep; every id in `sourceIds` is archived into it.
+  mergeDuplicates: async (targetId: string, sourceIds: string[]): Promise<MergeDuplicatesResult> => {
+    const { data } = await axiosClient.post<MergeDuplicatesResult>(
+      `/api/v2/neon-clients/${targetId}/merge-duplicates`,
+      { sourceIds },
+    );
     return data;
   },
 };
