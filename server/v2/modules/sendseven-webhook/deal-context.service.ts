@@ -477,28 +477,33 @@ export function pickDealMatch(matches: RetrievedMatch[], queryText?: string): De
   const all = matches.map(parseCandidate).filter((c): c is DealCandidate => c !== null);
   if (all.length === 0) return null;
 
-  if (queryText?.trim()) {
-    const q = queryText.toLowerCase().replace(/\s+/g, " ");
-    const titleHits = all.filter((c) => {
-      const t = c.title.trim().toLowerCase().replace(/\s+/g, " ");
-      // Very short titles substring-match too easily ("rome" would hit every
-      // Rome message) — require some substance before trusting the rescue.
-      return t.length >= 6 && q.includes(t);
-    });
-    if (new Set(titleHits.map((c) => c.travelDealId)).size === 1) {
-      return toDealRef([...titleHits].sort((a, b) => a.distance - b.distance)[0]);
-    }
-    // 1b. FIELD RESCUE: no (unique) title in the text, but exactly one deal's
-    // distinctive facts — its exact travel date or posted price — appear in
-    // it. A screenshot's extracted fields carry these even when the headline
-    // is stylised or cropped, and they identify sibling posts far better than
-    // embedding distance does.
-    const fieldHits = all.filter((c) => strongSignalHit(c, q));
-    if (new Set(fieldHits.map((c) => c.travelDealId)).size === 1) {
-      return toDealRef([...fieldHits].sort((a, b) => a.distance - b.distance)[0]);
-    }
+  const q = queryText.toLowerCase().replace(/\s+/g, " ");
+  const titleHits = all.filter((c) => {
+    const t = c.title.trim().toLowerCase().replace(/\s+/g, " ");
+    // Very short titles substring-match too easily ("rome" would hit every
+    // Rome message) — require some substance before trusting the rescue.
+    return t.length >= 6 && q.includes(t);
+  });
+  if (new Set(titleHits.map((c) => c.travelDealId)).size === 1) {
+    return toDealRef([...titleHits].sort((a, b) => a.distance - b.distance)[0]);
   }
 
+  const postSignal = hasPostReferenceSignal(queryText);
+  const fieldHits = all.filter((c) => strongSignalHit(c, q, postSignal));
+  if (new Set(fieldHits.map((c) => c.travelDealId)).size === 1) {
+    return toDealRef([...fieldHits].sort((a, b) => a.distance - b.distance)[0]);
+  }
+  return null;
+}
+
+/** Pick the deal to pin: a deterministic match if there is one, otherwise the
+ *  closest vector match within the strict pin cutoff (retrieval itself runs at
+ *  the wider candidate cutoff), near-ties resolved by most recent post. */
+export function pickDealMatch(matches: RetrievedMatch[], queryText?: string): DealRef | null {
+  const deterministic = pickDeterministicDealMatch(matches, queryText);
+  if (deterministic) return deterministic;
+
+  const all = matches.map(parseCandidate).filter((c): c is DealCandidate => c !== null);
   const candidates = all.filter((c) => c.distance <= DEAL_MATCH_MAX_DISTANCE);
   if (candidates.length === 0) return null;
   const best = Math.min(...candidates.map((c) => c.distance));
@@ -788,11 +793,20 @@ export async function resolveDealTurn(input: {
 }
 
 export interface DealTurnResolution {
-  // Set ONLY when this turn pinned a new deal — the caller persists it onto
-  // its conversation context (each driver has its own context store).
+  // Set ONLY when this turn pinned a deal (first pin OR a correction) — the
+  // caller persists it onto its conversation context (each driver has its own
+  // context store).
   pinnedNow: DealRef | null;
   deal: RetrievedDealContext | null;
   dealCandidates?: RetrievedContext["dealCandidates"];
+  // True when this turn REPLACED an existing pin: the caller must also clear
+  // its "deal check already asked" flag, since the check is owed again for
+  // the newly-identified deal.
+  repinned?: boolean;
+  // True when the customer referenced ANOTHER operator's advert — no deal was
+  // pinned or offered, and the brain is told not to pass any of ours off as
+  // the one they saw.
+  externalDealMention?: boolean;
 }
 
 /** The complete per-turn deal step, shared by BOTH drivers (reply-worker and
@@ -810,22 +824,41 @@ export async function resolveDealTurn(input: {
   logLabel: string;
   existingRef?: DealRef;
   checkAsked?: boolean;
+  // Sticky verdict from an EARLIER turn of this conversation: they showed us a
+  // rival's quote. Later turns ("jhon, 09356162084", "4 adults") carry no brand
+  // or price-match wording of their own, so without this the suppression would
+  // lapse and a stray similarity match could pin one of our deals onto their
+  // competitor enquiry — observed with a firstchoice.co.uk screenshot.
+  externalSticky?: boolean;
   query: string;
   slots: EnquirySlots;
 }): Promise<DealTurnResolution> {
-  const { orgId, logLabel, existingRef, checkAsked, query, slots } = input;
+  const { orgId, logLabel, existingRef, checkAsked, externalSticky, query, slots } = input;
   let ref = existingRef ?? null;
   let pinnedNow: DealRef | null = null;
+  let repinned = false;
   let dealCandidates: DealTurnResolution["dealCandidates"];
 
-  if (!ref) {
-    const matches = await aiEmbeddingsService.retrieve({
-      orgId,
-      sourceType: "deal",
-      query,
-      limit: 3,
-      maxDistance: DEAL_CANDIDATE_MAX_DISTANCE,
-    });
+  const matches = await aiEmbeddingsService.retrieve({
+    orgId,
+    sourceType: "deal",
+    query,
+    limit: 3,
+    maxDistance: DEAL_CANDIDATE_MAX_DISTANCE,
+  });
+
+  // Another operator's advert (named brand, or a screenshot of their page):
+  // never pin ours to it and never offer our titles as "was it this one?".
+  // Only gates a FIRST pin — an existing pin stands (they may be asking who
+  // the operator on our own deal is).
+  const external = !ref && (externalSticky || mentionsExternalSource(query));
+  if (external) {
+    console.log(
+      `[deal-context] ${logLabel} external operator referenced${externalSticky ? " (sticky)" : ""} — not pinning any of our deals`,
+    );
+  }
+
+  if (!ref && !external) {
     const pinned = pickDealMatch(matches, query);
     if (pinned) {
       ref = pinned;
@@ -844,16 +877,37 @@ export async function resolveDealTurn(input: {
         );
       }
     }
+  } else if (ref) {
+    // ALREADY PINNED — allow a correction ("no, it was the spring one"), but
+    // only from a DETERMINISTIC match: an identifying fact the customer
+    // actually gave. Distance must never move an existing pin, or ordinary
+    // chatter would drift the conversation onto whichever deal looked closest
+    // this turn. Un-seed the old deal first so its date/nights/airport don't
+    // survive onto the enquiry (the new deal only fills BLANK slots).
+    const corrected = pickDeterministicDealMatch(matches, query);
+    if (corrected && corrected.travelDealId !== ref.travelDealId) {
+      console.log(
+        `[deal-context] ${logLabel} re-pinned deal=${corrected.travelDealId} "${corrected.title}" ` +
+          `(was ${ref.travelDealId} "${ref.title}")`,
+      );
+      unseedSlotsFromDeal(slots, ref);
+      ref = corrected;
+      pinnedNow = corrected;
+      repinned = true;
+    }
   }
 
   // Hydrated fresh every turn (cheap: two small queries) so the AI always
   // quotes CURRENT hotel/flight detail, never the embedding's snapshot.
   const deal = ref ? await hydrateDealReplyContext(ref) : null;
   if (deal) {
-    deal.tweakCheckPending = !checkAsked;
-    seedSlotsFromDeal(slots, deal);
+    // A corrected pin is a different holiday, so the "as posted or any
+    // tweaks?" check is owed again on the new deal.
+    deal.tweakCheckPending = repinned || !checkAsked;
+    const seededKeys = seedSlotsFromDeal(slots, deal);
+    if (pinnedNow) pinnedNow.seededKeys = seededKeys;
   }
-  return { pinnedNow, deal, dealCandidates };
+  return { pinnedNow, deal, dealCandidates, repinned, externalDealMention: external };
 }
 
 /** Load the pinned deal's live details (posted caption fields + the quote's
