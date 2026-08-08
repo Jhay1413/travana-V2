@@ -1,7 +1,6 @@
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import {
   buildEnquirySummary,
-  buildPhoneConflictReply,
   buildTranscript,
   decideDeterministicRoute,
   effectiveAttachmentKind,
@@ -37,13 +36,11 @@ import { resolveDealTurn, type DealRef } from "../sendseven-webhook/deal-context
 import { resolveAndCreateEnquiry } from "../sendseven-webhook/enquiry-auto-create.service";
 import {
   extractPhoneNumber,
-  insertClient,
   resolveOrCreateByDetails,
-  samePhoneNumber,
   systemScope,
 } from "../sendseven-webhook/identity.service";
 import { taskService } from "../task/task.service";
-import { createNewTestClient, resolveOrCreateTestClient } from "./internal-chat-identity.service";
+import { resolveOrCreateTestClient } from "./internal-chat-identity.service";
 import { internalChatRepository } from "./internal-chat.repository";
 import type { Scope } from "../../utils/scope";
 import type { InternalChatMessage, InternalChatSession } from "@shared/schema";
@@ -88,10 +85,10 @@ interface ConversationContext {
   // Admin loop control — see reply-worker's ConversationContext.
   adminAsked?: boolean;
   adminActionable?: boolean;
-  // The tester's own number that clashed with a differently-named client — we've
-  // asked them to confirm it. Lets the next turn tell a correction (new number)
-  // from a confirmation (same number again). Mirrors reply-worker.
-  phoneConflictPhone?: string;
+  // Names of existing clients already holding a phone number given in this
+  // session. Rides along to the enquiry note for staff; never shown in-chat.
+  // Mirrors reply-worker.
+  duplicatePhoneNames?: string[];
   // Accumulated details read (vision triage) from holiday_info image(s) the
   // tester sent — persisted so they stay in the AI's view on EVERY collecting
   // turn, not just the turn the image arrived (a field the model doesn't
@@ -123,7 +120,6 @@ interface ConversationContext {
     name?: string;
     phone?: string;
     clientId?: string;
-    phoneConflictPhone?: string;
   };
 }
 
@@ -579,41 +575,20 @@ export const internalChatTestflowService = {
           return { replyMessage };
         }
 
-        // Phone ↔ name allocation (mirrors reply-worker). If the number is already
-        // on file under a DIFFERENT client's name we asked them to confirm it last
-        // turn (phoneConflictPhone). Standing by the SAME number = confirmation
-        // it's genuinely theirs → register a NEW client under the name they gave,
-        // never fold them into the other client's record. A different number means
-        // they corrected it → re-resolve below.
-        const pendingConflictPhone = prevContext.phoneConflictPhone;
-        if (pendingConflictPhone && samePhoneNumber(pendingConflictPhone, phone)) {
-          clientId = await createNewTestClient(orgId, scope.userId, { fullName: full, phone });
-          delete prevContext.phoneConflictPhone;
-          await internalChatRepository.updateSession(session.id, orgId, { clientId, context: { ...prevContext } });
-          console.log(`[internal-chat-testflow] session ${session.id} phone confirmed after clash — created new client ${clientId}`);
-        } else {
-          const resolution = await resolveOrCreateTestClient(orgId, scope.userId, { fullName: full, phone });
-          if (resolution.status === "phone_conflict") {
-            const confirmReply = buildPhoneConflictReply();
-            await internalChatRepository.updateSession(session.id, orgId, {
-              context: {
-                ...prevContext,
-                ...(adminMatter ? { domain: "admin" as const } : {}),
-                lastReply: confirmReply,
-                phoneConflictPhone: phone,
-              },
-            });
-            console.log(
-              `[internal-chat-testflow] session ${session.id} phone clash — number belongs to ${resolution.existingNames.length} existing client(s); asked to confirm`,
-            );
-            const replyMessage = await persistReply(confirmReply);
-            return { replyMessage };
-          }
-          clientId = resolution.clientId;
-          delete prevContext.phoneConflictPhone;
-          await internalChatRepository.updateSession(session.id, orgId, { clientId, context: { ...prevContext } });
-          console.log(`[internal-chat-testflow] session ${session.id} linked client ${clientId} (collected details)`);
+        // Phone ↔ name allocation (mirrors reply-worker). A number already on
+        // file under a DIFFERENT client's name creates a NEW client under the
+        // name given and carries on — the customer is never asked to justify
+        // their own number. The clash is recorded for staff on the enquiry note.
+        const resolution = await resolveOrCreateTestClient(orgId, scope.userId, { fullName: full, phone });
+        clientId = resolution.clientId;
+        if (resolution.duplicatePhoneNames?.length) {
+          prevContext.duplicatePhoneNames = resolution.duplicatePhoneNames;
+          console.log(
+            `[internal-chat-testflow] session ${session.id} phone clash — number also on file for ${resolution.duplicatePhoneNames.length} client(s); created ${clientId} and flagged for review`,
+          );
         }
+        await internalChatRepository.updateSession(session.id, orgId, { clientId, context: { ...prevContext } });
+        console.log(`[internal-chat-testflow] session ${session.id} linked client ${clientId} (collected details)`);
         // Onboarding resolved name+phone with no early return — the sales
         // section below reuses this turn's reply/slots/intent instead of
         // calling generateTurn again (mirrors reply-worker).
@@ -828,28 +803,16 @@ export const internalChatTestflowService = {
         // DB failure here must not fall through as a silent no-reply turn —
         // hand off instead, mirroring the enquiry-create hardening below.
         try {
-          const pendingBenConflict = benCtx?.phoneConflictPhone;
-          if (pendingBenConflict && samePhoneNumber(pendingBenConflict, travellerPhone)) {
-            benClientId = await insertClient(orgId, { fullName: travellerName, phone: travellerPhone });
-          } else {
-            const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
-            if (resolution.status === "phone_conflict") {
-              const confirmReply = buildPhoneConflictReply(travellerName);
-              await internalChatRepository.updateSession(session.id, orgId, {
-                intent: "enquiry",
-                enquiryStatus: "collecting",
-                enquirySlots: mergedSlots,
-                context: {
-                  ...prevContext,
-                  lastReply: confirmReply,
-                  beneficiary: { name: travellerName, phone: travellerPhone, phoneConflictPhone: travellerPhone },
-                },
-              });
-              console.log(`[internal-chat-testflow] session ${session.id} beneficiary phone clash — number belongs to ${resolution.existingNames.length} existing client(s); asked to confirm`);
-              const replyMessage = await persistReply(confirmReply);
-              return { replyMessage };
-            }
-            benClientId = resolution.clientId;
+          // Same rule as the sender's own number above: a clash is a note for
+          // staff, never a question to the customer.
+          const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
+          benClientId = resolution.clientId;
+          if (resolution.duplicatePhoneNames?.length) {
+            prevContext.duplicatePhoneNames = [
+              ...(prevContext.duplicatePhoneNames ?? []),
+              ...resolution.duplicatePhoneNames,
+            ];
+            console.log(`[internal-chat-testflow] session ${session.id} beneficiary phone clash — number also on file for ${resolution.duplicatePhoneNames.length} client(s); created ${benClientId} and flagged for review`);
           }
         } catch (err) {
           console.error(`[internal-chat-testflow] session ${session.id} beneficiary resolve/insert THREW:`, err);
@@ -994,6 +957,7 @@ export const internalChatTestflowService = {
           // they never pollute real reporting (this flag existed for exactly
           // this driver but was never passed).
           isTest: true,
+          duplicatePhoneNames: prevContext.duplicatePhoneNames,
         });
         enquiryId = created.enquiryId;
         ownerUserId = created.ownerUserId;

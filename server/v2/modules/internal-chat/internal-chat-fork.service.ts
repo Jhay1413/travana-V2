@@ -8,7 +8,7 @@ import { messagesRepository } from "../messages/messages.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { conversationStateRepository } from "../sendseven-webhook/conversation-state.repository";
 import { clientDisplayName, systemScope } from "../sendseven-webhook/identity.service";
-import { createNewTestClient, resolveOrCreateTestClient } from "./internal-chat-identity.service";
+import { resolveOrCreateTestClient } from "./internal-chat-identity.service";
 import { internalChatTestflowService } from "./internal-chat-testflow.service";
 import { internalChatRepository } from "./internal-chat.repository";
 import type { SsMessage } from "../messages/messages.types";
@@ -147,11 +147,10 @@ export async function forkSessionFromConversation(scope: Scope, conversationId: 
       const fullName = clientDisplayName(real) || "Test Client";
       const phone = syntheticPhone(conversationId);
       try {
+        // A clash on the synthetic number already resolves to a fresh test
+        // client, so there is nothing extra to do here.
         const resolution = await resolveOrCreateTestClient(orgId, scope.userId, { fullName, phone });
-        cloneClientId =
-          resolution.status === "phone_conflict"
-            ? await createNewTestClient(orgId, scope.userId, { fullName, phone })
-            : resolution.clientId;
+        cloneClientId = resolution.clientId;
       } catch (err) {
         console.error(`[internal-chat-fork] conv ${conversationId} test-twin clone failed (continuing as unknown contact):`, err);
       }

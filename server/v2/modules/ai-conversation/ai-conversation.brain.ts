@@ -1456,21 +1456,13 @@ export function hasSubstantiveSignal(slots: EnquirySlots): boolean {
   );
 }
 
-// Onboarding phone-number clash: the number the customer gave is already on file
-// under one or more OTHER clients whose names don't match the one they gave. Ask
-// them to confirm the number (or send the right one) rather than silently
-// attaching them to someone else's record. `subjectName` names the person the
-// number is meant to be for — omitted for the sender themselves, or e.g. "James"
-// when they're enquiring on someone else's behalf. Never discloses the names of
-// the other clients the number is already registered under — that would leak
-// other clients' PII to whoever typed the number.
-export function buildPhoneConflictReply(subjectName?: string): string {
-  const subject = subjectName?.trim();
-  if (!subject) {
-    return "Thanks! Just to double-check — that number is already registered on our system. Could you confirm it's definitely the right number for you, or pop me the correct one so I can find you?";
-  }
-  return `Thanks! Just to double-check — that number is already registered on our system. Could you confirm it's definitely the right number for ${subject}, or pop me the correct one so I can find them?`;
-}
+// NOTE: there is deliberately no reply for an onboarding phone-number clash.
+// Telling a customer their number is "already registered" reads as an
+// accusation, discloses who is in the CRM, and stalls a live sales conversation
+// over data hygiene — and since standing by the number simply created a new
+// client anyway, the round-trip bought nothing. A clash now resolves silently to
+// a new client and is raised with staff on the enquiry note instead. See
+// resolveOrCreateByDetails in sendseven-webhook/identity.service.ts.
 
 export function buildGroupedAskReply(missing: string[]): string {
   if (!missing.length) {

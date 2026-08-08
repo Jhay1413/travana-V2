@@ -104,6 +104,10 @@ export interface EnquiryCreateExtras {
   // by the internal test-flow driver so its synthetic runs never pollute real
   // reporting. Defaults to false, matching all existing (SendSeven) callers.
   isTest?: boolean;
+  // Names of existing clients who already hold the phone number(s) given in this
+  // conversation. The AI deliberately never raises this with the customer, so
+  // the enquiry note is where an agent finds out a duplicate may need merging.
+  duplicatePhoneNames?: string[];
 }
 
 export interface EnquiryCreateResult {
@@ -227,6 +231,13 @@ export async function resolveAndCreateEnquiry(
   if (str(slots.notes)) noteParts.push(str(slots.notes));
   if (unmapped.length) noteParts.push(`To confirm with the customer: ${unmapped.join("; ")}`);
   if (extras?.missingFields?.length) noteParts.push(`Additional fields still needed: ${extras.missingFields.join("; ")}`);
+  // Deliberately last so it reads as a closing action for the agent.
+  if (extras?.duplicatePhoneNames?.length) {
+    const names = Array.from(new Set(extras.duplicatePhoneNames));
+    noteParts.push(
+      `⚠️ Possible duplicate: that phone number is also on file for ${names.join(", ")}. A new client record was created — please check and merge if it's the same person.`,
+    );
+  }
   // The enquiry note is shown by the client's rich-text (WYSIWYG) note viewer,
   // which renders HTML — agent-typed notes are stored as HTML, and plain-text
   // newlines collapse into one run-on blob there. So assemble this note as

@@ -17,7 +17,6 @@ import {
   extractPhoneNumber,
   resolveClientForOnboarding,
   resolveOrCreateByDetails,
-  samePhoneNumber,
 } from "./identity.service";
 import { contactLinkRepository } from "../contact-link/contact-link.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
@@ -45,13 +44,32 @@ describe("resolveClientForOnboarding", () => {
     expect(contactLinkRepository.link).toHaveBeenCalledWith(ORG, CONTACT, "new-client", null);
   });
 
-  it("flags a conflict when the number belongs to a differently-named client", async () => {
+  it("creates and links a separate client when the number belongs to a differently-named client", async () => {
     vi.mocked(neonClientService.findMatches).mockResolvedValue([client("c-james", "James", "Bouy")] as never);
 
     const res = await resolveClientForOnboarding(ORG, CONTACT, { fullName: "John", phone: "09356162084" });
 
-    expect(res).toEqual({ status: "phone_conflict", existingNames: ["James Bouy"] });
-    expect(contactLinkRepository.link).not.toHaveBeenCalled();
+    // Never folded into James's record — a NEW client, with the clash reported
+    // for staff rather than raised with the customer.
+    expect(res).toEqual({ status: "resolved", clientId: "new-client", duplicatePhoneNames: ["James Bouy"] });
+    expect(neonClientService.createNeonClient).toHaveBeenCalledOnce();
+    expect(contactLinkRepository.link).toHaveBeenCalledWith(ORG, CONTACT, "new-client", null);
+  });
+
+  it("treats a near-miss name as a different person rather than fuzzy-matching", async () => {
+    vi.mocked(neonClientService.findMatches).mockResolvedValue([client("c-james", "James", "Bouy")] as never);
+
+    const res = await resolveClientForOnboarding(ORG, CONTACT, { fullName: "jimmy Buoy", phone: "07809130133" });
+
+    expect(res).toEqual({ status: "resolved", clientId: "new-client", duplicatePhoneNames: ["James Bouy"] });
+  });
+
+  it("matches a client whose full name was imported into the first-name field", async () => {
+    vi.mocked(neonClientService.findMatches).mockResolvedValue([client("c-jb", "Jimmy Buoy", "—")] as never);
+
+    const res = await resolveClientForOnboarding(ORG, CONTACT, { fullName: "Jimmy Buoy", phone: "07809130133" });
+
+    expect(res).toEqual({ status: "resolved", clientId: "c-jb" });
     expect(neonClientService.createNeonClient).not.toHaveBeenCalled();
   });
 
@@ -83,10 +101,10 @@ describe("resolveClientForOnboarding", () => {
 
     const res = await resolveClientForOnboarding(ORG, CONTACT, { fullName: "John Doe", phone: "07123456789" });
 
-    expect(res).toEqual({ status: "phone_conflict", existingNames: ["John Smith"] });
+    expect(res).toEqual({ status: "resolved", clientId: "new-client", duplicatePhoneNames: ["John Smith"] });
   });
 
-  it("lists every distinct name when several conflicting clients share the number", async () => {
+  it("lists every distinct name when several clients share the number", async () => {
     vi.mocked(neonClientService.findMatches).mockResolvedValue([
       client("c-james", "James", "Bouy"),
       client("c-myra", "Myra", "Cruz"),
@@ -94,7 +112,7 @@ describe("resolveClientForOnboarding", () => {
 
     const res = await resolveClientForOnboarding(ORG, CONTACT, { fullName: "John", phone: "09356162084" });
 
-    expect(res).toEqual({ status: "phone_conflict", existingNames: ["James Bouy", "Myra Cruz"] });
+    expect(res).toEqual({ status: "resolved", clientId: "new-client", duplicatePhoneNames: ["James Bouy", "Myra Cruz"] });
   });
 });
 
@@ -119,12 +137,13 @@ describe("resolveOrCreateByDetails (no contact link)", () => {
     expect(neonClientService.createNeonClient).not.toHaveBeenCalled();
   });
 
-  it("reports a phone conflict for the traveller too", async () => {
+  it("reports the clash for the traveller too, without linking a contact", async () => {
     vi.mocked(neonClientService.findMatches).mockResolvedValue([client("c-x", "Someone", "Else")] as never);
 
     const res = await resolveOrCreateByDetails(ORG, { fullName: "James", phone: "09355152084" });
 
-    expect(res).toEqual({ status: "phone_conflict", existingNames: ["Someone Else"] });
+    expect(res).toEqual({ status: "resolved", clientId: "new-client", duplicatePhoneNames: ["Someone Else"] });
+    expect(contactLinkRepository.link).not.toHaveBeenCalled();
   });
 });
 
@@ -166,14 +185,3 @@ describe("extractPhoneNumber", () => {
   });
 });
 
-describe("samePhoneNumber", () => {
-  it("matches on the last 8 digits ignoring formatting", () => {
-    expect(samePhoneNumber("09356162084", "+63 935 616 2084")).toBe(true);
-    expect(samePhoneNumber("09356162084", "09766273715")).toBe(false);
-  });
-
-  it("returns false for too-short or empty input", () => {
-    expect(samePhoneNumber("", "09356162084")).toBe(false);
-    expect(samePhoneNumber("123", "123")).toBe(false);
-  });
-});

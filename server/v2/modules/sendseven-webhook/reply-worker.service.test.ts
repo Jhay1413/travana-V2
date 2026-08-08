@@ -20,7 +20,6 @@ vi.mock("../ai-embeddings/ai-embeddings.service", () => ({
 
 vi.mock("../ai-conversation/ai-conversation.brain", () => ({
   buildEnquirySummary: vi.fn(() => "summary"),
-  buildPhoneConflictReply: vi.fn(() => "Can you confirm that number's yours?"),
   buildTranscript: vi.fn((_messages: unknown, latest: string) => `Customer: ${latest}`),
   decideDeterministicRoute: vi.fn(() => "classify"),
   // Mirrors the real fail-safe: no triage → document.
@@ -110,13 +109,10 @@ vi.mock("../conversations/conversations.repository", () => ({
 }));
 
 vi.mock("./identity.service", () => ({
-  createNewClientAndLink: vi.fn(async () => "new-client-id"),
   extractPhoneNumber: vi.fn(() => null),
-  insertClient: vi.fn(async () => "new-client-id"),
   resolveClientForOnboarding: vi.fn(async () => ({ status: "resolved", clientId: "new-client-id" })),
   resolveExistingClient: vi.fn(async () => null),
   resolveOrCreateByDetails: vi.fn(async () => ({ status: "resolved", clientId: "new-client-id" })),
-  samePhoneNumber: vi.fn(() => false),
   systemScope: vi.fn((orgId: string) => ({ orgId, branchId: null, orgRole: "org_admin", orgRoles: ["org_admin"], userId: null })),
 }));
 

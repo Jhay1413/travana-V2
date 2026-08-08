@@ -1,4 +1,4 @@
-import { insertClient, resolveOrCreateByDetails, type OnboardingResolution } from "../sendseven-webhook/identity.service";
+import { resolveOrCreateByDetails, type OnboardingResolution } from "../sendseven-webhook/identity.service";
 import type { InsertClientTable } from "@shared/schema";
 
 // Identity resolution for the internal test-flow driver (Goal B). Unlike the
@@ -25,23 +25,14 @@ function testClientColumns(orgId: string, staffUserId: string | null): Partial<I
 }
 
 // Name-aware find-or-create for the test flow: picks the client on that number
-// whose NAME matches, reports a phone_conflict when the number belongs only to
-// differently-named clients, else creates a new synthetic TEST client owned by
-// the staff member running the test.
+// whose NAME matches, else creates a new synthetic TEST client owned by the
+// staff member running the test. A number already held by a differently-named
+// client yields a fresh client too, reported via `duplicatePhoneNames` — see
+// resolveOrCreateByDetails.
 export async function resolveOrCreateTestClient(
   orgId: string,
   staffUserId: string | null,
   details: TestClientDetails,
 ): Promise<OnboardingResolution> {
   return resolveOrCreateByDetails(orgId, details, testClientColumns(orgId, staffUserId));
-}
-
-// Forces a NEW synthetic client even though the number matches someone else —
-// used once the tester confirms the clashing number really is theirs.
-export async function createNewTestClient(
-  orgId: string,
-  staffUserId: string | null,
-  details: TestClientDetails,
-): Promise<string> {
-  return insertClient(orgId, details, testClientColumns(orgId, staffUserId));
 }

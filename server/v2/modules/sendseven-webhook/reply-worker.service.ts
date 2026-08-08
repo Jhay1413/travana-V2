@@ -4,7 +4,6 @@ import { realtimeService } from "../../realtime/realtime.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import {
   buildEnquirySummary,
-  buildPhoneConflictReply,
   buildTranscript,
   decideDeterministicRoute,
   effectiveAttachmentKind,
@@ -40,13 +39,10 @@ import { conversationStateRepository } from "./conversation-state.repository";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
 import { resolveAndCreateEnquiry } from "./enquiry-auto-create.service";
 import {
-  createNewClientAndLink,
   extractPhoneNumber,
-  insertClient,
   resolveClientForOnboarding,
   resolveExistingClient,
   resolveOrCreateByDetails,
-  samePhoneNumber,
   systemScope,
 } from "./identity.service";
 import { taskService } from "../task/task.service";
@@ -116,11 +112,11 @@ interface ConversationContext {
   // document / details submission) that needs a ticket — gates the force so a
   // read-only admin Q&A never gets a ticket forced on it.
   adminActionable?: boolean;
-  // Set during onboarding when the phone number the customer gave is already on
-  // file under a DIFFERENT client's name — we've asked them to confirm it. Holds
-  // the number in question so the next turn can tell a correction (new number)
-  // from a confirmation (same number again).
-  phoneConflictPhone?: string;
+  // Names of existing clients who already hold the phone number given during
+  // onboarding (for the sender, the traveller, or both). A fresh client was
+  // created rather than reusing theirs; these names ride along to the enquiry
+  // note so an agent can verify and merge. Never shown to the customer.
+  duplicatePhoneNames?: string[];
   // Accumulated details read (vision triage) from holiday_info image(s) the
   // customer sent — persisted so they stay in the AI's view on EVERY
   // collecting turn, not just the turn the image arrived (a field the model
@@ -175,8 +171,6 @@ interface ConversationContext {
     phone?: string;
     // The resolved/created client id for the traveller (once we have their phone).
     clientId?: string;
-    // Mirrors phoneConflictPhone but for the traveller's number clash.
-    phoneConflictPhone?: string;
   };
 }
 
@@ -764,42 +758,22 @@ export const replyWorker = {
           });
           return;
         }
-        // Phone ↔ name allocation. If the number is already on file under a
-        // DIFFERENT client's name we asked the customer to confirm it last turn
-        // (phoneConflictPhone). If they're standing by the SAME number, take that
-        // as confirmation it's genuinely theirs and register them as a NEW client
-        // under the name they gave — never fold them into the other client's
-        // record. A different number means they corrected it → re-resolve below.
-        const pendingConflictPhone = prevContext.phoneConflictPhone;
-        if (pendingConflictPhone && samePhoneNumber(pendingConflictPhone, phone)) {
-          clientId = await createNewClientAndLink(orgId, contactId, { fullName: full, phone, email: null });
-          delete prevContext.phoneConflictPhone;
-          await conversationStateRepository.update(conversationId, { clientId, context: { ...prevContext } });
-          console.log(`[sendseven-webhook] conv ${conversationId} phone confirmed after clash — created new client ${clientId}`);
-        } else {
-          const resolution = await resolveClientForOnboarding(orgId, contactId, { fullName: full, phone, email: null });
-          if (resolution.status === "phone_conflict") {
-            const confirmReply = buildPhoneConflictReply();
-            await sendReply(orgId, conversationId, message.channel_id, confirmReply, mode, false);
-            await conversationStateRepository.update(conversationId, {
-              lastAiReplyAt: new Date(),
-              context: {
-                ...prevContext,
-                ...(sawAdminIntent ? { domain: "admin" as const } : {}),
-                phoneConflictPhone: phone,
-                lastReply: confirmReply,
-              },
-            });
-            console.log(
-              `[sendseven-webhook] conv ${conversationId} phone clash — number belongs to ${resolution.existingNames.length} existing client(s); asked to confirm`,
-            );
-            return;
-          }
-          clientId = resolution.clientId;
-          delete prevContext.phoneConflictPhone;
-          await conversationStateRepository.update(conversationId, { clientId, context: { ...prevContext } });
-          console.log(`[sendseven-webhook] Linked client ${clientId} for conv ${conversationId} (collected details)`);
+        // Phone ↔ name allocation. A number already on file under a DIFFERENT
+        // client's name resolves to a NEW client under the name they gave (never
+        // folded into the other person's record) and the conversation carries on
+        // as normal. The customer is NOT asked to justify their own number —
+        // that stalls a live sales conversation and discloses who is in the CRM.
+        // The clash is recorded for staff on the enquiry note instead.
+        const resolution = await resolveClientForOnboarding(orgId, contactId, { fullName: full, phone, email: null });
+        clientId = resolution.clientId;
+        if (resolution.duplicatePhoneNames?.length) {
+          prevContext.duplicatePhoneNames = resolution.duplicatePhoneNames;
+          console.log(
+            `[sendseven-webhook] conv ${conversationId} phone clash — number also on file for ${resolution.duplicatePhoneNames.length} client(s); created ${clientId} and flagged for review`,
+          );
         }
+        await conversationStateRepository.update(conversationId, { clientId, context: { ...prevContext } });
+        console.log(`[sendseven-webhook] Linked client ${clientId} for conv ${conversationId} (collected details)`);
         // Onboarding completed (name+phone resolved) on THIS message, with no
         // early return above — the sales section below reuses this turn's
         // reply/slots/intent instead of calling generateTurn again (Fix 2:
@@ -1094,32 +1068,18 @@ export const replyWorker = {
           // failure here must not fall through as a silent no-reply turn — hand
           // off instead, mirroring the enquiry-create hardening below.
           try {
-            const pendingBenConflict = benCtx?.phoneConflictPhone;
-            if (pendingBenConflict && samePhoneNumber(pendingBenConflict, travellerPhone)) {
-              benClientId = await insertClient(orgId, { fullName: travellerName, phone: travellerPhone });
-              console.log(`[sendseven-webhook] conv ${conversationId} beneficiary phone confirmed after clash — created client ${benClientId} for ${travellerName}`);
-            } else {
-              const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
-              if (resolution.status === "phone_conflict") {
-                const confirmReply = buildPhoneConflictReply(travellerName);
-                await sendReply(orgId, conversationId, message.channel_id, confirmReply, mode, false);
-                await conversationStateRepository.update(conversationId, {
-                  intent: "enquiry",
-                  enquiryStatus: "collecting",
-                  enquirySlots: mergedSlots,
-                  lastAiReplyAt: new Date(),
-                  context: {
-                    ...prevContext,
-                    lastReply: confirmReply,
-                    beneficiary: { name: travellerName, phone: travellerPhone, phoneConflictPhone: travellerPhone },
-                  },
-                });
-                console.log(
-                  `[sendseven-webhook] conv ${conversationId} beneficiary phone clash — number belongs to ${resolution.existingNames.length} existing client(s); asked to confirm`,
-                );
-                return;
-              }
-              benClientId = resolution.clientId;
+            // Same rule as the sender's own number above: a clash never becomes
+            // a question to the customer, it becomes a note for staff.
+            const resolution = await resolveOrCreateByDetails(orgId, { fullName: travellerName, phone: travellerPhone });
+            benClientId = resolution.clientId;
+            if (resolution.duplicatePhoneNames?.length) {
+              prevContext.duplicatePhoneNames = [
+                ...(prevContext.duplicatePhoneNames ?? []),
+                ...resolution.duplicatePhoneNames,
+              ];
+              console.log(
+                `[sendseven-webhook] conv ${conversationId} beneficiary phone clash — number also on file for ${resolution.duplicatePhoneNames.length} client(s); created ${benClientId} and flagged for review`,
+              );
             }
           } catch (err) {
             console.error(`[sendseven-webhook] conv ${conversationId} beneficiary resolve/insert THREW:`, err);
@@ -1270,6 +1230,7 @@ export const replyWorker = {
           const created = await resolveAndCreateEnquiry(orgId, enquiryClientId, mergedSlots, {
             summary,
             missingFields: missingBeforeCreate,
+            duplicatePhoneNames: prevContext.duplicatePhoneNames,
           });
           enquiryId = created.enquiryId;
           ownerUserId = created.ownerUserId;

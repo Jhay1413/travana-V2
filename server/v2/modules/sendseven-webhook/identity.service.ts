@@ -34,16 +34,6 @@ export async function resolveExistingClient(orgId: string, contact: WebhookConta
   return null;
 }
 
-// Digits-only comparison on the last 8 digits — the same tail the client
-// repository matches on. Lets the worker tell whether a customer corrected the
-// number they gave or is standing by the one that conflicted.
-export function samePhoneNumber(a: string | null | undefined, b: string | null | undefined): boolean {
-  const da = (a ?? "").replace(/\D/g, "");
-  const db = (b ?? "").replace(/\D/g, "");
-  if (da.length < 7 || db.length < 7) return false;
-  return da.slice(-8) === db.slice(-8);
-}
-
 // Pulls the first phone-number-looking token out of free text. Used to capture a
 // traveller's number from a plain reply ("his number is 09355152084") without
 // depending on the model to echo it back in a structured field every turn.
@@ -70,14 +60,34 @@ function normalizeNameToken(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/[^a-z]/g, "");
 }
 
+// Every whitespace-separated word across the given name parts, normalized. Each
+// FIELD is split, not just taken whole: plenty of client records were imported
+// with the full name sitting in `firstName` ("Jimmy Buoy") and the "—"
+// placeholder in `surename`, and treating that as one token made it impossible
+// to ever match the two words the customer types.
+function nameTokens(...parts: Array<string | null | undefined>): Set<string> {
+  const out = new Set<string>();
+  for (const part of parts) {
+    for (const word of (part ?? "").split(/\s+/)) {
+      const norm = normalizeNameToken(word);
+      if (norm) out.add(norm);
+    }
+  }
+  return out;
+}
+
 // True when the name the customer typed is consistent with a client record:
 // EVERY token they gave must appear in the client's first/surname. So "John"
 // matches "John Smith", and "John Smith" matches "John Smith", but "John Doe"
 // does NOT match "John Smith" — this guards against linking two different Johns.
+//
+// Deliberately EXACT, not fuzzy: "jimmy" does not match "James", nor "Buoy"
+// "Bouy". A near miss makes a separate client (flagged for an agent to merge)
+// rather than risking attaching someone to a stranger's record and history.
 function nameMatchesClient(providedName: string, client: NeonClient): boolean {
-  const tokens = providedName.trim().split(/\s+/).map(normalizeNameToken).filter(Boolean);
+  const tokens = [...nameTokens(providedName)];
   if (!tokens.length) return false;
-  const clientTokens = new Set([normalizeNameToken(client.firstName), normalizeNameToken(client.surename)].filter(Boolean));
+  const clientTokens = nameTokens(client.firstName, client.surename);
   if (!clientTokens.size) return false;
   return tokens.every((t) => clientTokens.has(t));
 }
@@ -90,12 +100,21 @@ export function clientDisplayName(client: Pick<NeonClient, "title" | "firstName"
 }
 
 // Outcome of resolving the name + phone a customer gave during onboarding.
-export type OnboardingResolution =
-  | { status: "resolved"; clientId: string }
-  // The phone is already on file for one or more OTHER clients and none of them
-  // share the name the customer gave — surface the names so the worker can ask
-  // the customer to confirm the number rather than hijacking someone's record.
-  | { status: "phone_conflict"; existingNames: string[] };
+// Always resolves to a client — a phone clash is never a dead end.
+export interface OnboardingResolution {
+  status: "resolved";
+  clientId: string;
+  // Display names of the OTHER clients already holding this phone number. When
+  // non-empty, `clientId` is a BRAND-NEW client created under the name the
+  // customer gave — we never fold them into someone else's record on a phone
+  // match alone.
+  //
+  // This is an INTERNAL signal only. The customer is never told their number
+  // was recognised: it reads as an accusation, it discloses who is in the CRM,
+  // and it stalls a live sales conversation over data hygiene. Callers surface
+  // it to staff instead (see the enquiry note) so an agent can verify and merge.
+  duplicatePhoneNames?: string[];
+}
 
 // Creates a brand-new client from the given details, WITHOUT linking a contact or
 // matching an existing record. The building block for the link/no-link variants.
@@ -125,8 +144,13 @@ export async function insertClient(
 // contact link (the resolved person may not be the one messaging — e.g. a
 // traveller someone is enquiring for):
 //   • one phone shared by several clients → pick the one whose name matches;
-//   • phone on file under a different name only → phone_conflict (ask to confirm);
+//   • phone on file under a different name only → create a NEW client under the
+//     name they gave and report the clash in `duplicatePhoneNames` for staff;
 //   • no match at all → create a new client under the name they gave.
+//
+// Households and businesses genuinely share numbers, and names get typed as
+// nicknames or misspelled, so a phone match with no name match is far more often
+// a new-but-related person than a mistake worth interrogating the customer over.
 export async function resolveOrCreateByDetails(
   orgId: string,
   details: { fullName: string; phone: string; email?: string | null },
@@ -134,14 +158,17 @@ export async function resolveOrCreateByDetails(
 ): Promise<OnboardingResolution> {
   const matches = await neonClientService.findMatches({ phone: details.phone, email: details.email }, systemScope(orgId));
 
-  if (matches.length > 0) {
-    const named = matches.find((m) => nameMatchesClient(details.fullName, m));
-    if (named) return { status: "resolved", clientId: named.id };
-    const existingNames = Array.from(new Set(matches.map((m) => clientDisplayName(m))));
-    return { status: "phone_conflict", existingNames };
-  }
+  const named = matches.find((m) => nameMatchesClient(details.fullName, m));
+  if (named) return { status: "resolved", clientId: named.id };
 
-  return { status: "resolved", clientId: await insertClient(orgId, details, extra) };
+  const clientId = await insertClient(orgId, details, extra);
+  if (matches.length === 0) return { status: "resolved", clientId };
+
+  return {
+    status: "resolved",
+    clientId,
+    duplicatePhoneNames: Array.from(new Set(matches.map((m) => clientDisplayName(m)))),
+  };
 }
 
 // Resolves the client for a just-onboarded contact from the name + phone the AI
@@ -154,22 +181,6 @@ export async function resolveClientForOnboarding(
   details: { fullName: string; phone: string; email?: string | null },
 ): Promise<OnboardingResolution> {
   const resolution = await resolveOrCreateByDetails(orgId, details);
-  if (resolution.status === "resolved") {
-    await contactLinkRepository.link(orgId, contactId, resolution.clientId, null);
-  }
+  await contactLinkRepository.link(orgId, contactId, resolution.clientId, null);
   return resolution;
-}
-
-// Forces creation of a NEW client from the given details and links it, WITHOUT
-// folding the customer into any existing phone/email match. Used once a customer
-// has confirmed a shared/reused number is genuinely theirs — we must not attach
-// them to the other client's record.
-export async function createNewClientAndLink(
-  orgId: string,
-  contactId: string,
-  details: { fullName: string; phone: string; email?: string | null },
-): Promise<string> {
-  const clientId = await insertClient(orgId, details);
-  await contactLinkRepository.link(orgId, contactId, clientId, null);
-  return clientId;
 }

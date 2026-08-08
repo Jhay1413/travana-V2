@@ -35,7 +35,6 @@ vi.mock("../sendseven-webhook/identity.service", () => ({
 
 vi.mock("./internal-chat-identity.service", () => ({
   resolveOrCreateTestClient: vi.fn(async () => ({ status: "resolved", clientId: "test-twin-1" })),
-  createNewTestClient: vi.fn(async () => "test-twin-2"),
 }));
 
 vi.mock("./internal-chat-testflow.service", () => ({
