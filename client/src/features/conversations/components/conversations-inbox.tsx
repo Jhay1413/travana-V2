@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -142,10 +142,14 @@ function ConversationRow({
   conversation,
   active,
   onClick,
+  draftPreview,
 }: {
   conversation: Conversation;
   active: boolean;
   onClick: () => void;
+  // Unsent text left behind in this thread's composer. Takes over the preview
+  // line while it's set — see draftTags for when it clears.
+  draftPreview?: string;
 }) {
   return (
     <button
@@ -174,10 +178,19 @@ function ConversationRow({
           </span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
-          <span className="flex min-w-0 items-center gap-1 text-xs text-black/55 dark:text-white/55">
-            <ArrowUpRight className="h-3 w-3 flex-shrink-0 text-black/30 dark:text-white/30" />
-            <span className="truncate">{conversation.preview}</span>
-          </span>
+          {draftPreview ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-xs" data-testid={`conversation-draft-${conversation.id}`}>
+              <span className="flex-shrink-0 rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                Draft
+              </span>
+              <span className="truncate text-black/55 dark:text-white/55">{draftPreview}</span>
+            </span>
+          ) : (
+            <span className="flex min-w-0 items-center gap-1 text-xs text-black/55 dark:text-white/55">
+              <ArrowUpRight className="h-3 w-3 flex-shrink-0 text-black/30 dark:text-white/30" />
+              <span className="truncate">{conversation.preview}</span>
+            </span>
+          )}
           {conversation.assignee ? (
             <span className="flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-black/45 dark:text-white/45 bg-black/[0.04] dark:bg-white/[0.06]">
               {conversation.assignee}
@@ -344,9 +357,31 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function Composer({ onSend, sending, conversation }: { onSend: (body: string, mode: "reply" | "note", attachments?: ComposerAttachments) => void; sending?: boolean; conversation: Conversation }) {
-  const [mode, setMode] = useState<"reply" | "note">("reply");
-  const [text, setText] = useState("");
+// Unsent composer content, stashed per conversation while the user is elsewhere.
+// The mode rides along with the text: a half-written internal note must not come
+// back as a customer reply.
+export interface ComposerDraft {
+  text: string;
+  mode: "reply" | "note";
+}
+
+function Composer({
+  onSend,
+  sending,
+  conversation,
+  draft,
+  onDraftChange,
+}: {
+  onSend: (body: string, mode: "reply" | "note", attachments?: ComposerAttachments) => void;
+  sending?: boolean;
+  conversation: Conversation;
+  draft?: ComposerDraft;
+  onDraftChange?: (conversationId: string, draft: ComposerDraft) => void;
+}) {
+  // Seeded once per mount — the caller keys this component by conversation id,
+  // so switching threads remounts it with that thread's own draft.
+  const [mode, setMode] = useState<"reply" | "note">(draft?.mode ?? "reply");
+  const [text, setText] = useState(draft?.text ?? "");
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -442,6 +477,23 @@ function Composer({ onSend, sending, conversation }: { onSend: (body: string, mo
     setText("");
     setAttachments([]);
   };
+
+  // Report every edit up so it survives this component being unmounted on a
+  // conversation switch. Covers all the paths that touch `text` — typing, emoji
+  // insert, AI suggest, and the clear on send (which stores an empty draft, i.e.
+  // discards it).
+  //
+  // The mount pass is deliberately skipped: seeding the box from a saved draft
+  // is not the user editing it, and merely opening a thread must not count as
+  // resuming work on the draft (which is what retires the list's Draft tag).
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!restored.current) {
+      restored.current = true;
+      return;
+    }
+    onDraftChange?.(conversation.id, { text, mode });
+  }, [text, mode, conversation.id, onDraftChange]);
 
   // Auto-grow the composer up to a max height as the message spans more lines,
   // shrinking back down (e.g. after send resets `text`).
@@ -678,6 +730,17 @@ export default function ConversationsInbox() {
   // unread dot locally the instant a conversation is opened, without waiting on
   // (or depending on) SendSeven accepting the mark-read PATCH.
   const [seenAt, setSeenAt] = useState<Record<string, string>>({});
+  // Conversation id → unsent composer content. A ref rather than state: it is
+  // read only when the composer mounts, so recording every keystroke here must
+  // not re-render the whole inbox. Session-scoped — drafts do not survive a
+  // page reload.
+  const draftsRef = useRef<Record<string, ComposerDraft>>({});
+  // Conversation id → the draft text shown as a "Draft" tag in the list. This
+  // is state (the list must re-render) but it only flips on two rare events, so
+  // it never churns per keystroke: a tag appears when the user navigates away
+  // from a thread with unsent text, and retires when they resume typing in it
+  // or the draft empties out.
+  const [draftTags, setDraftTags] = useState<Record<string, string>>({});
 
   const { orgRole } = useRole();
   const canManageChannels = orgRole === "org_admin" || orgRole === "branch_manager" || orgRole === "platform_admin";
@@ -777,6 +840,33 @@ export default function ConversationsInbox() {
     () => conversations.find((c) => c.id === selectedId) ?? null,
     [conversations, selectedId],
   );
+
+  // Tag the thread the user just left if they walked away mid-sentence. Done on
+  // the way out rather than while typing so the open thread never labels itself.
+  const prevSelectedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const left = prevSelectedRef.current;
+    prevSelectedRef.current = selectedId;
+    if (!left || left === selectedId) return;
+    const text = draftsRef.current[left]?.text;
+    if (!text) return;
+    setDraftTags((tags) => (tags[left] === text ? tags : { ...tags, [left]: text }));
+  }, [selectedId]);
+
+  // Record the draft and retire the tag once the user picks the thread back up.
+  // Stable identity (empty deps) so the composer's reporting effect only fires
+  // on real edits — see the `restored` guard there.
+  const handleDraftChange = useCallback((conversationId: string, draft: ComposerDraft) => {
+    if (draft.text) draftsRef.current[conversationId] = draft;
+    else delete draftsRef.current[conversationId];
+
+    setDraftTags((tags) => {
+      if (!(conversationId in tags)) return tags;
+      const next = { ...tags };
+      delete next[conversationId];
+      return next;
+    });
+  }, []);
 
   // Stamp "seen" the moment a conversation is opened (covers both the row
   // onClick and any auto-selection path above) so the unread dot clears
@@ -1117,7 +1207,13 @@ export default function ConversationsInbox() {
             </div>
           ) : (
             filtered.map((c) => (
-              <ConversationRow key={c.id} conversation={c} active={c.id === selectedId} onClick={() => setSelectedId(c.id)} />
+              <ConversationRow
+                key={c.id}
+                conversation={c}
+                active={c.id === selectedId}
+                onClick={() => setSelectedId(c.id)}
+                draftPreview={draftTags[c.id]}
+              />
             ))
           )}
         </div>
@@ -1244,7 +1340,18 @@ export default function ConversationsInbox() {
               )}
             </div>
 
-            <Composer onSend={handleSend} sending={sendMessage.isPending || createNote.isPending} conversation={selected} />
+            {/* Keyed by conversation: switching threads unmounts the composer, so
+                no typed text, staged attachment, or reply/note mode can ever leak
+                into a message addressed to a different contact. The draft map
+                below is what carries the text back when you return. */}
+            <Composer
+              key={selected.id}
+              onSend={handleSend}
+              sending={sendMessage.isPending || createNote.isPending}
+              conversation={selected}
+              draft={draftsRef.current[selected.id]}
+              onDraftChange={handleDraftChange}
+            />
           </>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-black/30 dark:text-white/30">

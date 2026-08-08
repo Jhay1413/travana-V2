@@ -66,8 +66,10 @@ function bookingToRow(b: BookingWithJoins): QuoteRowCardData {
   };
 }
 
-const LOST_STATUSES = ["LOST", "ARCHIVED", "INACTIVE", "EXPIRED"];
-const FINAL_STATUSES = ["WON", ...LOST_STATUSES];
+// quote_status_enum is lowercase ('quoted' | 'in_play' | 'lost' | 'archived')
+// since migration 0014. There is no WON status — a deal is won when its
+// transaction reaches 'on_booking', which the In-Play filter checks separately.
+const LOST_STATUSES = ["lost", "archived"];
 
 /**
  * Computes the In-Play / Won (Bookings) / Lost groups from raw quotes,
@@ -88,17 +90,17 @@ export function useClientQuoteGroups(
 
     const inPlayRows = quotes
       .filter((q) => {
-        if (q.quote_status && FINAL_STATUSES.includes(q.quote_status)) return false;
+        if (q.quote_status && LOST_STATUSES.includes(q.quote_status)) return false;
         if (transactionStatusMap.get(q.transaction_id) === "on_booking") return false;
         return true;
       })
-      .map((q) => quoteToRow(q, "NEW_LEAD"));
+      .map((q) => quoteToRow(q, "quoted"));
 
     const wonRows = bookings.map(bookingToRow);
 
     const lostRows = quotes
       .filter((q) => q.quote_status && LOST_STATUSES.includes(q.quote_status))
-      .map((q) => quoteToRow(q, "LOST"));
+      .map((q) => quoteToRow(q, "lost"));
 
     const groups: Array<{ id: QuoteGroup["id"]; title: string; rows: QuoteRowCardData[] }> = [
       { id: "in-play", title: "In Play", rows: inPlayRows },
@@ -130,7 +132,7 @@ export function useClientQuoteGroups(
           // already represented by the parent booking row).
           const related = quotes
             .filter((q) => q.transaction_id === main.transactionId && q.quote_status !== "WON")
-            .map((q) => ({ ...quoteToRow(q, "NEW_LEAD"), isBooking: false }));
+            .map((q) => ({ ...quoteToRow(q, "quoted"), isBooking: false }));
 
           if (related.length > 0) {
             items.push({ type: "toggle", parentId: main.id, count: related.length, label: "quote" });

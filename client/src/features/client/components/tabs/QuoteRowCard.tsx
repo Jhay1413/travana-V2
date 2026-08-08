@@ -121,7 +121,7 @@ export function QuoteRowCard({
                     <span className="text-black/25">•</span>
                     <span
                       className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
-                        q.status === "LOST"
+                        q.status === "lost"
                           ? "border-rose-500/25 bg-rose-500/10 text-rose-700"
                           : "border-black/10 bg-white/70 text-black/60"
                       }`}

@@ -280,7 +280,7 @@ export function ClientOverviewTab({
             <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
               <span className="text-xs text-black/60">In Play value</span>
               <span className="text-xs font-semibold text-black/85" data-testid="overview-inplay-value">
-                {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status && !["WON", "LOST", "ARCHIVED", "INACTIVE", "EXPIRED"].includes(q.quote_status)).reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
+                {currency.format(quotes.filter((q: QuoteWithJoins) => q.quote_status && !["lost", "archived"].includes(q.quote_status)).reduce((sum: number, q: QuoteWithJoins) => sum + parseFloat(q.sales_price || "0"), 0))}
               </span>
             </div>
             <div className="flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
