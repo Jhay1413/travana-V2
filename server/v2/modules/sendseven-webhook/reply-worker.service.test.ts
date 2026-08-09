@@ -111,6 +111,8 @@ vi.mock("../conversations/conversations.repository", () => ({
 vi.mock("./identity.service", () => ({
   extractPhoneNumber: vi.fn(() => null),
   resolveClientForOnboarding: vi.fn(async () => ({ status: "resolved", clientId: "new-client-id" })),
+  // Default: no number in the transcript to recover an identity from.
+  resolveClientFromTranscript: vi.fn(async () => null),
   resolveExistingClient: vi.fn(async () => null),
   resolveOrCreateByDetails: vi.fn(async () => ({ status: "resolved", clientId: "new-client-id" })),
   systemScope: vi.fn((orgId: string) => ({ orgId, branchId: null, orgRole: "org_admin", orgRoles: ["org_admin"], userId: null })),

@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import { CHAT_MODEL, UTILITY_MODEL, getOpenAI } from "../../utils/ai-model";
+import { describeUkNow, formatUkLocal, parseUkLocalDateTime } from "../../utils/uk-time";
 import { usageService } from "../usage/usage.service";
 import type { AiUsageFeature } from "../usage/usage.types";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
@@ -858,7 +859,7 @@ export function buildSystemPrompt(
       "- NEVER ask the customer to confirm, verify, or double-check something they have already told you — no \"just to check\", \"just to confirm\", or \"are you set on X or open to alternatives\" questions, and never offer alternative hotels, resorts, or dates they didn't ask for. Treat every stated detail as final and move straight on. If a NON-core detail is ambiguous (e.g. a budget given without saying per person or total), leave its slot empty and record their exact wording in `notes` — do NOT ask about it.",
       "- RANGES AND EITHER/OR ANSWERS ARE FINAL: if the customer gives a range or several options for ANY detail — dates (\"the 4th, 5th or 6th of October\"), nights (\"10 or 11\"), months (\"May or June\"), budget (\"£600–700\") — that IS their answer. Treat that field as fully ANSWERED: record it per the field rules (several specific dates → the LATEST one in `travelDate` with their wording in `notes`; vague timing → `notes` only; \"10 or 11 nights\" → 11 in `nights` plus their wording in `notes`; budget range → top of the range), NEVER ask them to pick one, narrow it down, or state a preference, and move straight on to the next genuinely unanswered core field. Count such fields as ANSWERED when deciding `complete` — the human advisor handles the final choice later.",
       "- ONCE EVERY CORE FIELD IS ANSWERED (given, or declined with no preference), set `complete` to true, STOP asking questions entirely, and reply with a short, warm acknowledgement — no wrap-up questions, no confirmations, no extras. Do not say you've \"got everything\" or promise a callback (see the rules below); the system takes over from there automatically. While any core field is still genuinely unanswered, keep `complete` false.",
-      "- Never open a question with filler like \"Just to check\" or \"Just to double check\" — ask directly, and vary your phrasing from message to message.",
+      "- ASK DIRECTLY — NO CHECKING PREFACES ANYWHERE: never wrap a question in a checking/confirming preface, at the start of the message OR anywhere later in it. This bans the whole family of phrasings, not only these examples: \"just to check\", \"can I just check\", \"just checking\", \"let me just check\", \"just to confirm\", \"can I just confirm\", \"just to be sure\", \"do you mind if I ask\". Ask the question straight out instead — \"How many of you are travelling?\" — and vary your phrasing from message to message.",
     ].join("\n"),
   );
   if (rulesBlock) {
@@ -878,6 +879,7 @@ export function buildSystemPrompt(
       "- For each field: if they give a value, record it in `slots`. If they say no / none / not sure / no preference / any / doesn't matter, treat that field as ANSWERED — leave it empty, do NOT store it, and never ask about it again.",
       "- If it is not a holiday enquiry, set intent=\"other\" and just answer helpfully.",
       "- SEND-IT-OVER REQUESTS: if the customer is asking us to SEND them something already prepared or mentioned in the conversation (a quote, a deal, a link, flight times, documents), or telling us how/when to contact them (\"can you send it please, I'm working till 6.45\"), do NOT respond by asking enquiry questions — the details are already with the team. Just acknowledge warmly in one short line (e.g. \"No problem at all, we'll get that over to you x\"), set intent=\"other\", and do not collect anything.",
+      "- ADVERTISED DEALS AND POSTS: when the customer refers to something they saw advertised (a Facebook/Instagram post, an advert, a deal, or a screenshot of one they've sent) and asks for more info, details, or a price, they want INFORMATION — they are NOT asking to be interviewed, and they have not asked you to build them a holiday from scratch. The deal's destination, dates and price are ALREADY STATED, so treat them as given. Do NOT ask them ANY enquiry questions in reply — not party size, children, nights, budget, dates, airport or anything else; do NOT ask whether the post's dates, price or hotel \"work for you\"; do NOT offer them something different from it; do NOT ask them to confirm what the advert said. Just acknowledge warmly and tell them you'll get the details over to them (e.g. \"I'll get all the details on that one over to you shortly x\"), and set `complete` to true so it is logged straight away for a colleague to send them the information.",
       "- WHEN THEY ASK QUESTIONS, ANSWER — NEVER SERVE A MENU: if the customer has asked one or more specific questions (e.g. \"what's the hotel like, what are the flight times, what are the payment options?\"), NEVER reply by asking which one they'd like answered first or by repeating their list back as options — they already told you what they want. In ONE short message: answer whatever you genuinely can from the company information provided, and for anything you don't have (their specific quote's hotel, flight times, transfers…), say naturally that you'll get those details over to them — covering ALL the things they asked, not just some.",
       '- If the "Current enquiry status" given below is "awaiting_availability", the customer\'s enquiry has ALREADY been logged and they are now being asked what time suits a callback — just acknowledge their answer helpfully, do not re-collect enquiry details or treat it as a new enquiry.',
     ].join("\n"),
@@ -1212,7 +1214,7 @@ export async function generateTurn(
             // restated here, at the end of the context, where adherence is
             // strongest. Keep in sync with DEFAULT REPLY STYLE / the range
             // rule in buildSystemPrompt.
-            "FINAL CHECK before you write `reply` (agency rules may override length/format, nothing else): keep it to one or two short chat sentences, but ALWAYS a complete, natural message — never a bare word, name, or fragment; never open with filler like \"Just to check\" or \"Just to confirm\"; do NOT list or repeat details the customer has already stated (no recaps like \"so that's the 4th, 10 nights, all-inclusive…\"); if they gave a range or several options for something, that field is ANSWERED — never ask them to pick; if they asked us to SEND something already prepared, acknowledge it — don't ask enquiry questions; if they asked specific questions, answer them (or say we'll get those details over) — never ask which one they'd like first; never name or suggest specific hotels/resorts (that's the advisors' job); and never promise a call/callback while details are still being gathered.",
+            "FINAL CHECK before you write `reply` (agency rules may override length/format, nothing else): keep it to one or two short chat sentences, but ALWAYS a complete, natural message — never a bare word, name, or fragment; never wrap a question in a checking preface ANYWHERE in the message (no \"just to check\", \"can I just check\", \"just checking\", \"just to confirm\", \"can I just confirm\") — ask it straight out; do NOT list or repeat details the customer has already stated (no recaps like \"so that's the 4th, 10 nights, all-inclusive…\"); if they gave a range or several options for something, that field is ANSWERED — never ask them to pick; if they asked us to SEND something already prepared, acknowledge it — don't ask enquiry questions; if they asked specific questions, answer them (or say we'll get those details over) — never ask which one they'd like first; if they're asking for information about a deal or post they saw, do NOT ask them enquiry questions at all (no party size, children, nights, budget or dates) — acknowledge and say you'll get the details over, and mark it complete; never name or suggest specific hotels/resorts (that's the advisors' job); and never promise a call/callback while details are still being gathered.",
         },
       ],
     });
@@ -1662,11 +1664,21 @@ export async function parseAvailabilityTime(text: string, ctx?: AiUsageCtx): Pro
         {
           role: "system",
           content:
-            `The current UTC date/time is ${now.toISOString()}. The customer is in the UK (Europe/London timezone). ` +
-            "Extract the specific date and time they say they're available for a callback from their message. " +
-            "Always resolve to the NEXT future occurrence (never in the past). If they gave only a time with no date, assume today if that time is still ahead in UK time, otherwise tomorrow. " +
-            "If they gave only a day with no time, use 10:00 UK time. If no usable date/time can be determined at all, return null. " +
-            'Respond ONLY with JSON: {"iso": string | null} where iso is a full ISO 8601 UTC datetime, e.g. "2026-07-13T14:00:00.000Z".',
+            // UK LOCAL in, UK LOCAL out: the model is never asked to convert to
+            // UTC (it routinely gets the BST offset wrong, silently shifting
+            // every summer callback by an hour). It works purely in the
+            // customer's own wall-clock terms and the conversion to a real
+            // instant is done deterministically below — see utils/uk-time.
+            `The customer and the business are both in the UK. The current UK date/time is ${formatUkLocal(now)} (${describeUkNow(now)}). ` +
+            "All dates and times in your answer are UK local wall-clock times — never convert to UTC or any other timezone. " +
+            "Extract the specific date and time they say they're available for a callback from their message. Rules:\n" +
+            "- Always resolve to the NEXT future occurrence — never a date/time in the past.\n" +
+            '- A boundary phrase like "before 10pm", "after 10pm", "by 6", "from 7pm", "any time up to 9" gives you the time to use: use THAT stated time itself (e.g. "before 10pm today" and "after 10pm" both mean 22:00). Do not pick an earlier or later time, and do not use the current time.\n' +
+            "- If they gave a time with no date, use today's date when that time is still ahead in UK time, otherwise tomorrow's.\n" +
+            '- If they gave a range ("between 6 and 8"), use the START of the range.\n' +
+            "- If they gave only a day with no time, use 10:00.\n" +
+            "- If no usable date/time can be determined at all, return null.\n" +
+            'Respond ONLY with JSON: {"uk_local": string | null} where uk_local is "YYYY-MM-DD HH:mm" in UK local time, e.g. "2026-07-13T14:00" → "2026-07-13 14:00". Never include a timezone suffix such as "Z" or "+01:00".',
         },
         { role: "user", content: text },
       ],
@@ -1679,10 +1691,18 @@ export async function parseAvailabilityTime(text: string, ctx?: AiUsageCtx): Pro
   }
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as { iso?: string | null };
-    if (!parsed.iso) return null;
-    const d = new Date(parsed.iso);
-    return Number.isNaN(d.getTime()) ? null : d;
+    const parsed = JSON.parse(raw) as { uk_local?: string | null; iso?: string | null };
+    // `iso` is tolerated as a fallback key in case the model reverts to the old
+    // shape; it's still read as UK LOCAL (with any timezone suffix stripped),
+    // since that's what the prompt asks for.
+    const value = parsed.uk_local ?? parsed.iso;
+    if (!value || typeof value !== "string") return null;
+    const instant = parseUkLocalDateTime(value.replace(/(?:Z|[+-]\d{2}:?\d{2})$/i, "").replace(/\.\d+$/, ""));
+    if (!instant) {
+      console.warn(`[ai-conversation.brain] parseAvailabilityTime got an unusable date/time: ${value}`);
+      return null;
+    }
+    return instant;
   } catch {
     return null;
   }

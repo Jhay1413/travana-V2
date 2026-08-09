@@ -41,6 +41,7 @@ import { resolveAndCreateEnquiry } from "./enquiry-auto-create.service";
 import {
   extractPhoneNumber,
   resolveClientForOnboarding,
+  resolveClientFromTranscript,
   resolveExistingClient,
   resolveOrCreateByDetails,
   systemScope,
@@ -271,7 +272,9 @@ export const replyWorker = {
       });
       if (clientId) await conversationStateRepository.update(conversationId, { clientId });
     }
-    const knownClient = !!clientId;
+    // May be upgraded below by the transcript identity recovery (which needs the
+    // message history, so it can only run once the SendSeven config is bound).
+    let knownClient = !!clientId;
 
     // ── AI opt-in gate ───────────────────────────────────────────────────
     // The bot participates when any of these hold, checked cheapest-first:
@@ -294,7 +297,7 @@ export const replyWorker = {
     // Fetched once here (the gate needs the client's aiReplyEnabled) and
     // reused for the AI turn below — it used to be part of the parallel
     // batch inside runWithSendSevenConfigAsync.
-    const client = clientId ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : null;
+    let client = clientId ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null) : null;
     let optedIn = aiOverride === "enabled" || !!client?.aiReplyEnabled;
 
     // cfg + integration are resolved BEFORE the final opt-in verdict now: the
@@ -339,6 +342,28 @@ export const replyWorker = {
       const recent = list.items.filter((m) => !m.created_at || new Date(m.created_at).getTime() >= since);
       const latestText = message.text?.trim() ?? "";
       const transcript = buildTranscript(recent, latestText);
+
+      // ── Transcript identity recovery ────────────────────────────────────
+      // Still no CRM link, but the customer may already have TYPED their
+      // number earlier in this conversation — typically while a human agent
+      // was handling it, before the AI ever saw the thread. Link to whoever
+      // already holds that number instead of asking them for it again.
+      // Scans the WHOLE fetched history (not the post-state-row window
+      // `recent` used for the AI transcript) precisely because the number was
+      // usually given before our state row existed. Best-effort: any failure
+      // just falls through to the normal onboarding ask.
+      if (!clientId) {
+        const recovered = await resolveClientFromTranscript(orgId, contactId, list.items).catch(() => null);
+        if (recovered) {
+          clientId = recovered.clientId;
+          knownClient = true;
+          client = await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null);
+          await conversationStateRepository.update(conversationId, { clientId });
+          console.log(
+            `[sendseven-webhook] conv ${conversationId} linked client ${clientId} from a number already in the conversation (${redactPhone(recovered.phone)}) — not re-asking`,
+          );
+        }
+      }
 
       // A conversation can hold several enquiries. Once one is fully wrapped up
       // (scheduled), start the next from a clean slate (empty slots, no status)

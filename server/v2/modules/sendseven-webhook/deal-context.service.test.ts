@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  explicitDatesIn,
   mentionsExternalSource,
   pickDealCandidates,
   pickDealMatch,
@@ -429,5 +430,69 @@ describe("unseedSlotsFromDeal (correcting a wrong pin)", () => {
     expect(slots.departureAirports).toEqual(["Newcastle"]);
     expect(slots.notes).toContain('Post reference: "Spring Time in Rome"');
     expect(slots.notes).not.toContain("Late Rome Deal");
+  });
+});
+
+// Sibling-post confusion — the Kos/Crete incident. A screenshot of our
+// "ALL INCLUSIVE IN GREECE — Wed 14 Oct 2026 — £742.50pp" Kos post pinned a
+// DIFFERENT Greek all-inclusive deal (Crete, Apr 2027, £861pp) purely on
+// similarity, and the bot then quoted that hotel and price to the customer.
+describe("explicitDatesIn", () => {
+  it("reads dated facts a screenshot carries, in every common shape", () => {
+    expect([...explicitDatesIn("Wed 14 Oct 2026")]).toEqual(["2026-10-14"]);
+    expect([...explicitDatesIn("departs 14/10/2026")]).toEqual(["2026-10-14"]);
+    expect([...explicitDatesIn("2026-10-14")]).toEqual(["2026-10-14"]);
+    expect([...explicitDatesIn("14th October 2026")]).toEqual(["2026-10-14"]);
+    expect([...explicitDatesIn("October 14, 2026")]).toEqual(["2026-10-14"]);
+  });
+
+  it("ignores a date with no year — that's usually the customer's own preference", () => {
+    expect(explicitDatesIn("can we go 12 April instead?").size).toBe(0);
+    expect(explicitDatesIn("sometime in october").size).toBe(0);
+  });
+
+  it("ignores impossible dates", () => {
+    expect(explicitDatesIn("31/02/2026").size).toBe(0);
+  });
+});
+
+describe("pickDealMatch — sibling posts ruled out by the customer's dated facts", () => {
+  const dealMatch = (over: Record<string, unknown>, distance: number) => ({
+    sourceId: String(over.travelDealId),
+    content: "",
+    distance,
+    metadata: { quoteId: "q1", ...over },
+  });
+
+  it("does NOT pin a similar deal whose travel date the screenshot contradicts", () => {
+    const query = "saw this posted on your facebook, can you give me more info please. ALL INCLUSIVE IN GREECE, Wed 14 Oct 2026, 7 nights, Newcastle, from £742.50pp";
+    const crete = dealMatch({ travelDealId: "d-crete", title: "Holiday Deal", travelDate: "2027-04-09", price: "861.00", hotelName: "Stella Blue Seaside Resort" }, 0.28);
+
+    expect(pickDealMatch([crete], query)).toBeNull();
+    // …and it isn't offered as a "was it this one?" candidate either.
+    expect(pickDealCandidates([crete], 3, query)).toEqual([]);
+  });
+
+  it("still pins the deal whose date the screenshot MATCHES", () => {
+    const query = "saw this on your facebook — ALL INCLUSIVE IN GREECE, Wed 14 Oct 2026, from £742.50pp";
+    const kos = dealMatch({ travelDealId: "d-kos", title: "Greece Beachfront", travelDate: "2026-10-14", price: "742.50" }, 0.30);
+    const crete = dealMatch({ travelDealId: "d-crete", title: "Holiday Deal", travelDate: "2027-04-09", price: "861.00" }, 0.26);
+
+    // Crete is the CLOSER vector match, but its date is ruled out.
+    expect(pickDealMatch([kos, crete], query)?.travelDealId).toBe("d-kos");
+  });
+
+  it("leaves ordinary (undated) mentions pinning exactly as before", () => {
+    const query = "saw your all inclusive greece deal on facebook, any info?";
+    const crete = dealMatch({ travelDealId: "d-crete", title: "Holiday Deal", travelDate: "2027-04-09" }, 0.28);
+
+    expect(pickDealMatch([crete], query)?.travelDealId).toBe("d-crete");
+  });
+
+  it("a verbatim hotel name still wins over a date mismatch (stronger evidence)", () => {
+    const query = "is the Stella Blue Seaside Resort one still available for 14/10/2026?";
+    const crete = dealMatch({ travelDealId: "d-crete", title: "Holiday Deal", travelDate: "2027-04-09", hotelName: "Stella Blue Seaside Resort" }, 0.55);
+
+    expect(pickDealMatch([crete], query)?.travelDealId).toBe("d-crete");
   });
 });

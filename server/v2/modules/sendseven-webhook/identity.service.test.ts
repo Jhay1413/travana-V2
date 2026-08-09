@@ -16,6 +16,7 @@ vi.mock("../neon-client/neon-client.service", () => ({
 import {
   extractPhoneNumber,
   resolveClientForOnboarding,
+  resolveClientFromTranscript,
   resolveOrCreateByDetails,
 } from "./identity.service";
 import { contactLinkRepository } from "../contact-link/contact-link.repository";
@@ -185,3 +186,60 @@ describe("extractPhoneNumber", () => {
   });
 });
 
+
+// Identity recovery from the chat history: the conversation has no CRM link,
+// but the customer already typed their number earlier (usually while a human
+// agent was handling the thread), so the bot must NOT ask for it again.
+describe("resolveClientFromTranscript", () => {
+  const msg = (direction: string, text: string, created_at: string) => ({ direction, text, created_at });
+
+  it("links to the client holding a number the CUSTOMER typed earlier", async () => {
+    vi.mocked(neonClientService.findMatches).mockResolvedValue([client("c-linda", "Linda", "Gerrett")] as never);
+
+    const result = await resolveClientFromTranscript(ORG, CONTACT, [
+      msg("inbound", "Hi, looking for Tenerife", "2026-08-01T10:00:00Z"),
+      msg("inbound", "my number is 07586305909", "2026-08-01T10:01:00Z"),
+    ]);
+
+    expect(result).toEqual({ clientId: "c-linda", phone: "07586305909" });
+    expect(neonClientService.findMatches).toHaveBeenCalledWith({ phone: "07586305909" }, expect.objectContaining({ orgId: ORG }));
+    // The SendSeven contact is linked too, so later turns resolve instantly.
+    expect(contactLinkRepository.link).toHaveBeenCalledWith(ORG, CONTACT, "c-linda", null);
+  });
+
+  it("IGNORES numbers in our OWN outbound messages (they carry the agency's number)", async () => {
+    vi.mocked(neonClientService.findMatches).mockResolvedValue([client("c-someone", "Some", "One")] as never);
+
+    const result = await resolveClientFromTranscript(ORG, CONTACT, [
+      msg("outbound", "Please call me back on 0191 594 7999", "2026-08-01T10:00:00Z"),
+      msg("inbound", "ok thanks", "2026-08-01T10:01:00Z"),
+    ]);
+
+    expect(result).toBeNull();
+    expect(neonClientService.findMatches).not.toHaveBeenCalled();
+    expect(contactLinkRepository.link).not.toHaveBeenCalled();
+  });
+
+  it("prefers the most recently stated number and skips ones matching no client", async () => {
+    vi.mocked(neonClientService.findMatches)
+      .mockResolvedValueOnce([] as never) // newest number is unknown to the CRM
+      .mockResolvedValueOnce([client("c-old", "Old", "Number")] as never);
+
+    const result = await resolveClientFromTranscript(ORG, CONTACT, [
+      msg("inbound", "my old number 07000000001", "2026-08-01T10:00:00Z"),
+      msg("inbound", "actually use 07999999999", "2026-08-01T10:05:00Z"),
+    ]);
+
+    expect(vi.mocked(neonClientService.findMatches).mock.calls[0][0]).toEqual({ phone: "07999999999" });
+    expect(result?.clientId).toBe("c-old");
+  });
+
+  it("returns null when the conversation holds no usable number", async () => {
+    const result = await resolveClientFromTranscript(ORG, CONTACT, [
+      msg("inbound", "10 or 11 nights, budget 1000", "2026-08-01T10:00:00Z"),
+    ]);
+
+    expect(result).toBeNull();
+    expect(neonClientService.findMatches).not.toHaveBeenCalled();
+  });
+});

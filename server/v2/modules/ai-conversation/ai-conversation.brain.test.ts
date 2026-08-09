@@ -572,8 +572,13 @@ describe("buildSystemPrompt (prompt-caching prefix/tail ordering)", () => {
     expect(prompt).toContain("never offer alternative hotels, resorts, or dates");
     // budgetType must not be interrogated when the customer didn't state it.
     expect(prompt).toContain('leave `budgetType` empty and do NOT ask');
-    // No "Just to check" filler openers.
-    expect(prompt).toContain('Never open a question with filler like "Just to check"');
+    // No checking prefaces — banned as a FAMILY of phrasings and at ANY
+    // position, not just the literal "Just to check" opening a message: the
+    // model complied with the old narrow wording by writing "Thanks Jhon,
+    // …Can I just check how many people…" mid-message.
+    expect(prompt).toContain("NO CHECKING PREFACES ANYWHERE");
+    expect(prompt).toContain("can I just check");
+    expect(prompt).toContain("at the start of the message OR anywhere later in it");
   });
 
   it("reasserts the core-fields-only scope AFTER the agency rules block so a configured rule cannot re-license off-list asks", () => {

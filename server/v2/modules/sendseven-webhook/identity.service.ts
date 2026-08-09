@@ -56,6 +56,62 @@ export function extractPhoneNumber(text: string): string | null {
   return null;
 }
 
+// Last-resort identity recovery: the conversation has no CRM link, but the
+// customer already TYPED their phone number earlier in the chat — commonly
+// while a human agent was handling it, before the AI ever saw the thread. We
+// link to whichever client already holds that number, so the bot never asks
+// again for a number it has already been given.
+//
+// Scans INBOUND (customer) messages ONLY, and this is load-bearing: our own
+// outbound messages routinely contain the AGENCY's number ("call me back on
+// 0191 594 7999"), and matching on that would attach the conversation to
+// whichever client happens to hold the office number.
+//
+// Newest-first so the most recently stated number wins, and a number matching
+// no client is skipped (rather than aborting) so an older, known number is
+// still found. Returns null when nothing usable is present — the caller then
+// falls back to the normal onboarding ask.
+export async function resolveClientFromTranscript(
+  orgId: string,
+  contactId: string | null,
+  messages: Array<{ direction?: string; text?: string | null; created_at?: string | null }>,
+): Promise<{ clientId: string; phone: string } | null> {
+  const inbound = messages
+    .filter((m) => m.direction === "inbound" && m.text?.trim())
+    .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""))
+    .reverse();
+
+  const tried = new Set<string>();
+  for (const message of inbound) {
+    const phone = extractPhoneNumber(message.text ?? "");
+    if (!phone) continue;
+    const key = phone.replace(/\D/g, "");
+    if (tried.has(key)) continue;
+    tried.add(key);
+
+    let matches: NeonClient[] = [];
+    try {
+      matches = await neonClientService.findMatches({ phone }, systemScope(orgId));
+    } catch (err) {
+      console.error(`[identity] phone lookup failed while recovering identity from the transcript:`, err);
+      continue;
+    }
+    if (!matches.length) continue;
+    // Link the SendSeven contact too, so later turns resolve instantly via the
+    // link rather than re-scanning the transcript. Best-effort: we already know
+    // the client, so a failed link must not lose that.
+    if (contactId) {
+      try {
+        await contactLinkRepository.link(orgId, contactId, matches[0].id, null);
+      } catch (err) {
+        console.error(`[identity] contact link failed after recovering identity from the transcript:`, err);
+      }
+    }
+    return { clientId: matches[0].id, phone };
+  }
+  return null;
+}
+
 function normalizeNameToken(s: string | null | undefined): string {
   return (s ?? "").toLowerCase().replace(/[^a-z]/g, "");
 }

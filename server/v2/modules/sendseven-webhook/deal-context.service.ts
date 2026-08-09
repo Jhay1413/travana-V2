@@ -191,6 +191,65 @@ function strongSignalHit(c: DealCandidate, q: string, postSignal: boolean): bool
   return false;
 }
 
+const MONTH_PATTERN = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
+
+function isoFrom(year: number, month: number, day: number): string | null {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (Number.isNaN(d.getTime()) || d.getUTCDate() !== day || d.getUTCMonth() !== month - 1) return null;
+  return d.toISOString().slice(0, 10);
+}
+
+/** Explicit calendar dates in the text, as yyyy-mm-dd — "14/10/2026",
+ *  "2026-10-14", "14 Oct 2026", "14th October 2026", "October 14 2026".
+ *
+ *  A four-digit YEAR is required on purpose. A bare "12 April" is routinely
+ *  the customer's OWN preference ("saw your Rome deal — can we go 12 April
+ *  instead?"), whereas a full dated line is what a screenshot's extracted text
+ *  carries ("Wed 14 Oct 2026"). Only the latter is safe to treat as a fact
+ *  about which post they're holding. */
+export function explicitDatesIn(text: string): Set<string> {
+  const q = (text ?? "").toLowerCase();
+  const out = new Set<string>();
+  const add = (iso: string | null) => {
+    if (iso) out.add(iso);
+  };
+
+  for (const m of q.matchAll(/\b(\d{4})-(\d{2})-(\d{2})\b/g)) {
+    add(isoFrom(Number(m[1]), Number(m[2]), Number(m[3])));
+  }
+  // dd/mm/yyyy (UK order — the format our own notes and adverts use).
+  for (const m of q.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g)) {
+    add(isoFrom(Number(m[3]), Number(m[2]), Number(m[1])));
+  }
+  for (const m of q.matchAll(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${MONTH_PATTERN})[a-z]*\\.?,?\\s+(\\d{4})\\b`, "g"))) {
+    add(isoFrom(Number(m[3]), MONTH_NAMES_LOWER.findIndex((n) => n.startsWith(m[2])) + 1, Number(m[1])));
+  }
+  for (const m of q.matchAll(new RegExp(`\\b(${MONTH_PATTERN})[a-z]*\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b`, "g"))) {
+    add(isoFrom(Number(m[3]), MONTH_NAMES_LOWER.findIndex((n) => n.startsWith(m[1])) + 1, Number(m[2])));
+  }
+  return out;
+}
+
+/** True when the text carries explicit dated facts that this deal CONTRADICTS.
+ *
+ *  Guards the similarity fallback only. A screenshot of an advert carries its
+ *  own travel date, and two of our posts can be near-identical in wording —
+ *  observed: a Kos "ALL INCLUSIVE IN GREECE, Wed 14 Oct 2026, £742.50pp"
+ *  screenshot pinned a CRETE deal (also Greece, also all-inclusive, also from
+ *  Newcastle) dated Apr 2027 at £861pp, and the bot then quoted that hotel and
+ *  price to the customer. Similarity cannot tell sibling posts apart; a date
+ *  can. When the customer's text states dated facts and none of them is this
+ *  deal's travel date, it is not the deal they are looking at. */
+export function contradictsStatedDate(candidate: { travelDate: string | null }, queryText: string): boolean {
+  if (!candidate.travelDate) return false;
+  const stated = explicitDatesIn(queryText);
+  if (stated.size === 0) return false;
+  const dealDate = new Date(candidate.travelDate);
+  if (Number.isNaN(dealDate.getTime())) return false;
+  return !stated.has(dealDate.toISOString().slice(0, 10));
+}
+
 function toDealRef(winner: DealCandidate): DealRef {
   return {
     travelDealId: winner.travelDealId,
@@ -258,7 +317,13 @@ export function pickDealMatch(matches: RetrievedMatch[], queryText?: string): De
   if (deterministic) return deterministic;
 
   const all = matches.map(parseCandidate).filter((c): c is DealCandidate => c !== null);
-  const candidates = all.filter((c) => c.distance <= DEAL_MATCH_MAX_DISTANCE);
+  const candidates = all
+    .filter((c) => c.distance <= DEAL_MATCH_MAX_DISTANCE)
+    // Never let SIMILARITY alone pin a deal whose travel date the customer's
+    // own text contradicts — see contradictsStatedDate. Deliberately applied
+    // here and not to the deterministic path above: a verbatim title or hotel
+    // name is stronger evidence than a date mismatch.
+    .filter((c) => !contradictsStatedDate(c, queryText ?? ""));
   if (candidates.length === 0) return null;
   const best = Math.min(...candidates.map((c) => c.distance));
   const winner = candidates
@@ -282,12 +347,16 @@ export interface DealCandidateInfo {
 /** The possible-but-unconfirmed deals to offer when nothing pinned: every
  *  parseable match (retrieval already capped at DEAL_CANDIDATE_MAX_DISTANCE),
  *  closest first, deduped by deal. Call only when pickDealMatch returned null. */
-export function pickDealCandidates(matches: RetrievedMatch[], limit = 3): DealCandidateInfo[] {
+export function pickDealCandidates(matches: RetrievedMatch[], limit = 3, queryText?: string): DealCandidateInfo[] {
   const seen = new Set<string>();
   const out: DealCandidateInfo[] = [];
   for (const match of [...matches].sort((a, b) => a.distance - b.distance)) {
     const c = parseCandidate(match);
     if (!c || seen.has(c.travelDealId)) continue;
+    // Don't even ask "was it this one?" about a deal the customer's own dated
+    // facts rule out — offering the Crete post to someone holding the Kos one
+    // is noise at best and misleading at worst.
+    if (queryText && contradictsStatedDate(c, queryText)) continue;
     seen.add(c.travelDealId);
     const meta = (match.metadata ?? {}) as Record<string, unknown>;
     out.push({
@@ -454,7 +523,14 @@ export async function resolveDealTurn(input: {
     orgId,
     sourceType: "deal",
     query,
-    limit: 3,
+    // Wider than the 3 we ever OFFER as candidates: the deterministic rescues
+    // (verbatim title / hotel / exact date / posted price) can only ever fire
+    // on a deal that made it into this pool, and an agency posting several
+    // near-identical adverts — "all inclusive Greece from Newcastle" in Kos
+    // AND Crete — can easily push the RIGHT one past the third slot on
+    // similarity while its exact date sits in the customer's screenshot.
+    // Ranking is unchanged; only the pool the exact-fact checks can see.
+    limit: 10,
     maxDistance: DEAL_CANDIDATE_MAX_DISTANCE,
   });
 
@@ -479,7 +555,7 @@ export async function resolveDealTurn(input: {
           `source=${pinned.source} distance=${pinned.distance?.toFixed(3) ?? "n/a"}`,
       );
     } else {
-      const candidates = pickDealCandidates(matches);
+      const candidates = pickDealCandidates(matches, 3, query);
       if (candidates.length) {
         dealCandidates = candidates.map(({ distance: _d, ...c }) => c);
         console.log(
