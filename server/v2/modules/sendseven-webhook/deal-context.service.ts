@@ -504,7 +504,13 @@ export function pickDealMatch(matches: RetrievedMatch[], queryText?: string): De
   if (deterministic) return deterministic;
 
   const all = matches.map(parseCandidate).filter((c): c is DealCandidate => c !== null);
-  const candidates = all.filter((c) => c.distance <= DEAL_MATCH_MAX_DISTANCE);
+  const candidates = all
+    .filter((c) => c.distance <= DEAL_MATCH_MAX_DISTANCE)
+    // Never let SIMILARITY alone pin a deal whose travel date the customer's
+    // own text contradicts — see contradictsStatedDate. Deliberately applied
+    // here and not to the deterministic path above: a verbatim title or hotel
+    // name is stronger evidence than a date mismatch.
+    .filter((c) => !contradictsStatedDate(c, queryText ?? ""));
   if (candidates.length === 0) return null;
   const best = Math.min(...candidates.map((c) => c.distance));
   const winner = candidates
@@ -528,12 +534,16 @@ export interface DealCandidateInfo {
 /** The possible-but-unconfirmed deals to offer when nothing pinned: every
  *  parseable match (retrieval already capped at DEAL_CANDIDATE_MAX_DISTANCE),
  *  closest first, deduped by deal. Call only when pickDealMatch returned null. */
-export function pickDealCandidates(matches: RetrievedMatch[], limit = 3): DealCandidateInfo[] {
+export function pickDealCandidates(matches: RetrievedMatch[], limit = 3, queryText?: string): DealCandidateInfo[] {
   const seen = new Set<string>();
   const out: DealCandidateInfo[] = [];
   for (const match of [...matches].sort((a, b) => a.distance - b.distance)) {
     const c = parseCandidate(match);
     if (!c || seen.has(c.travelDealId)) continue;
+    // Don't even ask "was it this one?" about a deal the customer's own dated
+    // facts rule out — offering the Crete post to someone holding the Kos one
+    // is noise at best and misleading at worst.
+    if (queryText && contradictsStatedDate(c, queryText)) continue;
     seen.add(c.travelDealId);
     const meta = (match.metadata ?? {}) as Record<string, unknown>;
     out.push({
@@ -868,7 +878,7 @@ export async function resolveDealTurn(input: {
           `source=${pinned.source} distance=${pinned.distance?.toFixed(3) ?? "n/a"}`,
       );
     } else {
-      const candidates = pickDealCandidates(matches);
+      const candidates = pickDealCandidates(matches, 3, query);
       if (candidates.length) {
         dealCandidates = candidates.map(({ distance: _d, ...c }) => c);
         console.log(
