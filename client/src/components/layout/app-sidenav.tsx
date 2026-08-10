@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { useRoles } from "@/hooks/use-role";
 import { useCurrentUser, useUnreadNotifications, useCurrentOrganization } from "@/hooks/queries";
 import { getNavForRoles, isNavItem, type NavBadgeKey, type NavItem, type NavSection } from "@/config/nav";
-import { useTicketsByUser } from "@/features/tickets";
+import { useTicketsByUser, countMyActiveTickets } from "@/features/tickets";
 // Imported from the module rather than the feature barrel on purpose: the
 // barrel re-exports ConversationsInbox, and since the sidebar lives in the main
 // bundle (not a lazy route) that pulled the whole inbox in with it — +221KB on
@@ -343,18 +343,19 @@ function SidenavInner({
     ).length;
   }, [hubUnreadNotifs]);
 
-  // Count of open tickets allocated to the current agent, shown as a badge on
-  // the "Tickets" nav item. The endpoint also returns tickets the user created,
-  // so filter to ones assigned to them and exclude resolved/closed.
+  // Count of open tickets the current agent is on, shown as a badge on the
+  // "Tickets" nav item. countMyActiveTickets is the same predicate the tickets
+  // page applies for its default "Me / Active" view, so this number and that
+  // list can't disagree — see features/tickets/lib/ticket-filters.
+  //
+  // The endpoint returns `assignedTo = me OR userId = me`, which is exactly the
+  // superset the predicate narrows, so counting here matches counting the page's
+  // org-wide fetch.
   const { data: assignedTickets } = useTicketsByUser(currentUser?.id || "");
-  const ticketCount = useMemo(() => {
-    if (!Array.isArray(assignedTickets) || !currentUser?.id) return 0;
-    return assignedTickets.filter((t) => {
-      if (t.assignedTo !== currentUser.id) return false;
-      const s = (t.status || "").toLowerCase();
-      return s !== "resolved" && s !== "closed";
-    }).length;
-  }, [assignedTickets, currentUser?.id]);
+  const ticketCount = useMemo(
+    () => countMyActiveTickets(assignedTickets, currentUser?.id),
+    [assignedTickets, currentUser?.id],
+  );
   // Conversations awaiting a reply, shown as a badge on the "Inbox" nav
   // item. Shares unreadBadgeCount with the inbox's own header badge so the two
   // can never disagree.

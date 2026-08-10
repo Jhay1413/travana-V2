@@ -69,6 +69,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { attachmentApi } from "@/api";
 import { RichTextEditor, RichTextDisplay } from "@/components/shared/rich-text-editor";
+import { isActiveTicket, isMyTicket } from "@/features/tickets";
 import type { Ticket } from "@/features/tickets/types";
 import type { TicketReply } from "@/features/reply/types";
 import type { User as ApiUser } from "@/features/user/types";
@@ -1014,18 +1015,19 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
     return tickets?.filter((ticket) => {
       const matchesQuery = query === "" || ticket.subject.toLowerCase().includes(query.toLowerCase()) || ticket.description?.toLowerCase().includes(query.toLowerCase());
       const matchesType = typeFilter === "all" || ticket.type === typeFilter;
+      // "active" and "me" come from features/tickets/lib/ticket-filters, which
+      // the sidebar badge counts with too — the two used to define "mine"
+      // differently and disagree on screen.
       const matchesStatus = statusTab === "all"
         ? true
         : statusTab === "active"
-          ? ticket.status !== "Resolved" && ticket.status !== "Closed"
+          ? isActiveTicket(ticket)
           : ticket.status === statusTab;
       const matchesPriority = priorityFilter === "all" || ticket.priority === priorityFilter;
       const myId = currentUser?.id;
       let matchesAgent = true;
       if (agentFilter === "me") {
-        const assignedToMe = ticket.assignedTo === myId || (!ticket.assignedTo && ticket.userId === myId);
-        const iCreatedAndReassigned = ticket.userId === myId && ticket.assignedTo && ticket.assignedTo !== myId && (ticket.replyCount || 0) > 0;
-        matchesAgent = assignedToMe || !!iCreatedAndReassigned;
+        matchesAgent = isMyTicket(ticket, myId);
       } else if (agentFilter !== "all") {
         matchesAgent = ticket.assignedTo === agentFilter || ticket.userId === agentFilter;
       }
