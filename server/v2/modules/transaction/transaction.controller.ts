@@ -57,6 +57,15 @@ function normalizeQuote(data: any) {
   return normalized;
 }
 
+// travel_date is a raw `date` column — a malformed string reaches Postgres and
+// comes back as a 22008 driver error (a 500 the agent can do nothing with).
+// Reject only what is definitely unparseable; formats Postgres itself accepts
+// still pass through untouched.
+function isUnparseableDate(value: unknown): boolean {
+  if (typeof value !== "string" || value.trim() === "") return false;
+  return Number.isNaN(new Date(value).getTime());
+}
+
 function normalizeBooking(data: any) {
   const normalized = { ...data };
   if (!normalized.hays_ref) normalized.hays_ref = "";
@@ -161,6 +170,9 @@ export const transactionController = {
       if (!quote.holiday_type_id || !quote.travel_date) {
         return res.status(400).json({ success: false, error: "Quote requires holiday_type_id and travel_date" });
       }
+      if (isUnparseableDate(quote.travel_date)) {
+        return res.status(400).json({ success: false, error: `Quote travel_date is not a valid date: ${quote.travel_date}` });
+      }
       const normalizedQuote = normalizeQuote(quote);
       const result = await transactionService.createTransactionWithQuote(transactionData, normalizedQuote, scope);
       return successResponse(res, result, "Transaction with quote created successfully", 201);
@@ -169,6 +181,9 @@ export const transactionController = {
     if (booking) {
       if (!booking.holiday_type_id || !booking.travel_date) {
         return res.status(400).json({ success: false, error: "Booking requires holiday_type_id and travel_date" });
+      }
+      if (isUnparseableDate(booking.travel_date)) {
+        return res.status(400).json({ success: false, error: `Booking travel_date is not a valid date: ${booking.travel_date}` });
       }
       const normalizedBooking = normalizeBooking(booking);
       const result = await transactionService.createTransactionWithBooking(transactionData, normalizedBooking, scope);

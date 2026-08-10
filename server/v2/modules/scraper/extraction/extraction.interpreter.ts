@@ -37,17 +37,32 @@ function parseDate(raw: string): string {
   m = /(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})/.exec(s);
   if (m) return `${m[3]}-${MONTHS[m[2].toLowerCase()] ?? '01'}-${m[1].padStart(2, '0')}`;
   // Compact 8-digit dates with no separators, as analytics blobs often carry
-  // them (Jet2's dataLayer writes "06092026"). Disambiguated by whether the
-  // leading four digits are a plausible year.
+  // them (Jet2's dataLayer writes "06092026"). A plausible-looking leading year
+  // is NOT enough to call it YYYYMMDD: "19092026" (19 Sep 2026) leads with
+  // "1909" and would read as month 20 — which reached the DB as travel_date
+  // "1909-20-26" and blew up the insert. Pick the ordering that is an actual
+  // calendar date instead; only one of the two ever can be.
   m = /^(\d{8})$/.exec(s);
   if (m) {
     const d = m[1];
-    const lead = Number(d.slice(0, 4));
-    return lead >= 1900 && lead <= 2100
-      ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}` // YYYYMMDD
-      : `${d.slice(4, 8)}-${d.slice(2, 4)}-${d.slice(0, 2)}`; // DDMMYYYY
+    const asYmd = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`; // YYYYMMDD
+    const asDmy = `${d.slice(4, 8)}-${d.slice(2, 4)}-${d.slice(0, 2)}`; // DDMMYYYY
+    if (isCalendarDate(asYmd)) return asYmd;
+    if (isCalendarDate(asDmy)) return asDmy;
+    return s;
   }
   return s;
+}
+
+// True only for a real YYYY-MM-DD day in a plausible year — "2026-02-30" and
+// "1909-20-26" both fail, so neither can be handed on as a date.
+function isCalendarDate(iso: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return false;
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (year < 1900 || year > 2100) return false;
+  const d = new Date(Date.UTC(year, month - 1, day));
+  return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day;
 }
 
 function applyTransform(value: string, transform?: FieldTransform): string | number {
@@ -215,8 +230,96 @@ function truthy(v: unknown): boolean {
 // Strips the size/variant modifiers so the same photo at different sizes dedupes
 // to one URL: drops the query string and a trailing ":variant" on the last path
 // segment (e.g. ".../REU_..._05:Product-Web--2048-x-1365?w=223" → ".../..._05").
+// This is the RENDERABLE base — still a working URL — so it is what gets emitted.
 function imageBase(src: string): string {
   return src.split('?')[0].replace(/:[^/:]*$/, '');
+}
+
+// Size variants written into the PATH rather than the query. Suppliers split
+// three ways here: a query parameter (TUI's "?w=1080"), a preset appended to the
+// last segment (Scene7's ":Product-Web--2048-x-1365"), or a path segment /
+// filename suffix (easyJet publishes each photo as {large, medium, small}, which
+// renders as ".../large/x.jpg" or ".../x_large.jpg"). imageBase only handles the
+// first two, so path-encoded variants of one photo used to survive deduping and
+// the gallery came back with every picture two or three times over.
+//
+// Matched by VOCABULARY, never by "a segment that looks numeric" — an id path
+// like /hotels/12345/ must not be mistaken for a size and merge two hotels'
+// galleries into one.
+const SIZE_WORDS: Record<string, number> = {
+  tiny: 100, mini: 100, thumb: 150, thumbs: 150, thumbnail: 150, thumbnails: 150,
+  xxs: 120, xs: 200, preview: 250, small: 400, sm: 400, s: 400,
+  medium: 800, med: 800, md: 800, m: 800,
+  large: 1600, lg: 1600, l: 1600, xl: 2000, xxl: 2400,
+  hero: 2000, full: 2400, orig: 3000, original: 3000,
+};
+// Explicit dimensions in a path segment: "800x600", "w_1200", "h600", "1200w".
+const SIZE_DIMS = /^(?:(\d{2,5})x\d{2,5}|[whq]_(\d{2,5})|(\d{2,5})[wh])$/i;
+
+// The width a path token asks for, or 0 when it isn't a size token at all.
+function pathSizeHint(token: string): number {
+  const word = SIZE_WORDS[token.toLowerCase()];
+  if (word) return word;
+  const dims = SIZE_DIMS.exec(token);
+  return dims ? Number(dims[1] ?? dims[2] ?? dims[3]) : 0;
+}
+
+// How wide this URL asks for the photo, from wherever the size is encoded.
+// Used to keep the LARGEST variant of a photo — a page routinely renders a 232px
+// thumbnail and a 1080px hero of one picture, and shipping the thumbnail to a
+// quote looks broken.
+function sizeHint(src: string): number {
+  const fromQuery = widthHint(src);
+  if (fromQuery) return fromQuery;
+  let best = 0;
+  for (const token of variantTokens(src)) best = Math.max(best, pathSizeHint(token));
+  return best;
+}
+
+// The size tokens carried in a URL's path: whole segments ("/large/") and
+// trailing filename modifiers ("x_large.jpg", "x-800x600.jpg", "x@2x.jpg").
+function variantTokens(src: string): string[] {
+  const tokens: string[] = [];
+  let path: string[];
+  try {
+    path = new URL(src).pathname.split('/').filter(Boolean);
+  } catch {
+    return tokens;
+  }
+  path.forEach((seg, i) => {
+    const isLast = i === path.length - 1;
+    if (!isLast) {
+      if (pathSizeHint(seg)) tokens.push(seg);
+      return;
+    }
+    // Filename: read modifiers off the stem, keeping the extension out of it.
+    const stem = seg.replace(/\.[a-z0-9]{2,5}$/i, '');
+    for (const part of stem.split(/[-_@]/).slice(1)) {
+      if (pathSizeHint(part) || /^\d(?:\.\d)?x$/i.test(part)) tokens.push(part);
+    }
+  });
+  return tokens;
+}
+
+// The identity of the PHOTO, independent of which size variant this URL points
+// at. Grouping/deduping only — never emitted, because stripping the size tokens
+// usually leaves a path that 404s. The URL kept for a group is the widest
+// variant that was actually seen.
+function imageKey(src: string): string {
+  const base = imageBase(src);
+  const tokens = variantTokens(src);
+  if (tokens.length === 0) return base;
+  let key = base;
+  for (const token of tokens) {
+    key = key
+      .replace(new RegExp(`/${escapeRe(token)}/`, 'i'), '/')
+      .replace(new RegExp(`[-_@]${escapeRe(token)}(?=\\.[a-z0-9]{2,5}$|$)`, 'i'), '');
+  }
+  return key;
+}
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // Image URLs carried in the operator's booking JSON. A rendered gallery is
@@ -246,10 +349,8 @@ function imagesFromJson(apiJson: unknown): string[] {
   return found;
 }
 
-// How wide a resizer was asked to render this image. Used to keep the LARGEST
-// variant when the same photo appears at several sizes — a page routinely
-// renders a 232px thumbnail and a 1080px hero of one picture, and shipping the
-// thumbnail to a quote looks broken.
+// How wide a resizer was asked to render this image, when the size rides in the
+// query string. Path-encoded sizes go through pathSizeHint; sizeHint reads both.
 function widthHint(src: string): number {
   const m = /[?&](?:w|wid|width)=(\d{2,5})\b/i.exec(src);
   return m ? Number(m[1]) : 0;
@@ -356,7 +457,7 @@ function selectGalleryImages(
         const host = originHost(s);
         if (!host) continue;
         if (!byHost.has(host)) byHost.set(host, new Set());
-        byHost.get(host)!.add(imageBase(imageOrigin(s)));
+        byHost.get(host)!.add(imageKey(imageOrigin(s)));
       }
       let bestHost = '';
       let bestCount = 0;
@@ -365,18 +466,19 @@ function selectGalleryImages(
     }
   }
 
-  // Dedupe by the ORIGIN base image (first-seen order preserved) so one photo
+  // Dedupe by the ORIGIN photo (first-seen order preserved) so one picture
   // rendered at several sizes counts once — keeping the WIDEST variant, since
-  // the same picture routinely appears as both a thumbnail and a hero.
+  // the same picture routinely appears as both a thumbnail and a hero, whether
+  // the size is written in the query or in the path.
   const byBase = new Map<string, string>();
   const order: string[] = [];
   for (const s of pool) {
-    const base = imageBase(imageOrigin(s));
+    const base = imageKey(imageOrigin(s));
     const current = byBase.get(base);
     if (current === undefined) {
       byBase.set(base, s);
       order.push(base);
-    } else if (widthHint(s) > widthHint(current)) {
+    } else if (sizeHint(s) > sizeHint(current)) {
       byBase.set(base, s);
     }
   }

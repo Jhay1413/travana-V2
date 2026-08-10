@@ -5,6 +5,7 @@ import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
 import { conversationsKeys } from "../api/use-conversations-queries";
 import { useConversationsRealtime } from "../api/use-conversations-realtime";
+import { ticketKeys } from "@/features/tickets";
 import type { SsConversation, SsConversationList } from "../api/conversations.api";
 
 // Owns the single app-wide SSE connection and turns inbound messages into a
@@ -82,7 +83,18 @@ export function ConversationsRealtimeProvider({ children }: { children: ReactNod
     [qc, toast, navigate],
   );
 
-  const { connected } = useConversationsRealtime({ onMessagesReceived: handleMessagesReceived });
+  // Invalidate the WHOLE ticket tree, not just one list: the sidebar badge reads
+  // ticketKeys.byUser(me) while the tickets page reads ticketKeys.list(), and a
+  // ticket raised by another agent can land in either. Anything narrower has to
+  // guess which cached slices a change belongs to.
+  const handleTicketsStale = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ticketKeys.all });
+  }, [qc]);
+
+  const { connected } = useConversationsRealtime({
+    onMessagesReceived: handleMessagesReceived,
+    onTicketsStale: handleTicketsStale,
+  });
   const value = useMemo(() => ({ connected }), [connected]);
 
   return (

@@ -249,6 +249,41 @@ describe("gallery selection behind an image proxy", () => {
     expect(q.hotel_images.filter((s) => s.startsWith("https://")).length).toBe(4);
     expect(q.hotel_images.some((s) => s.includes("GRRH0107_148"))).toBe(true);
   });
+
+  // Regression: easyJet's booking JSON publishes every photo three times over —
+  // {large, medium, small} — and writes the size as a PATH segment (…/Small/…),
+  // not a query parameter. Deduping on the query string alone let all three
+  // through, so the quote form's image picker showed each picture 2-3 times.
+  // Only easyJet tripped this: the other portals size via "?w=" or a ":preset".
+  describe("one photo published at several sizes", () => {
+    const s3 = (size: string, n: string) =>
+      `https://ejh-web-prod-images.s3-eu-west-1.amazonaws.com/GRRH0107_am/${size}/GRRH0107_${n}.jpg`;
+    const apiJson = {
+      hotel: {
+        images: [
+          { large: s3("Large", "100"), medium: s3("Medium", "100"), small: s3("Small", "100") },
+          { large: s3("Large", "127"), medium: s3("Medium", "127"), small: s3("Small", "127") },
+        ],
+      },
+      // The room gallery repeats hotel photography, at whatever size it holds.
+      offers: [{ accom: { unit: [{ roomType: { images: [{ medium: s3("Medium", "100") }] } }] } }],
+    };
+    const gallery = () =>
+      runExtractionSpec(spec, { title: "", text: "x".repeat(300), url: PAGE, apiJson }, "x").hotel_images;
+
+    it("counts each photo once", () => {
+      expect(gallery()).toHaveLength(2);
+    });
+
+    it("keeps the largest variant of each", () => {
+      expect(gallery().every((s) => s.includes("/Large/"))).toBe(true);
+    });
+
+    it("still tells genuinely different photos apart", () => {
+      const names = gallery().map((s) => s.slice(s.lastIndexOf("/") + 1));
+      expect(new Set(names).size).toBe(2);
+    });
+  });
 });
 
 // titleCase is applied to both URL slugs and SHOUTED page text.
@@ -585,6 +620,18 @@ describe("compact date parsing", () => {
 
   it("reads YYYYMMDD, told apart by a plausible leading year", () => {
     expect(run("20260906")).toBe("2026-09-06");
+  });
+
+  // "1909"/"2009" look like years, but 19 Sep / 20 Sep is what they are — the
+  // YYYYMMDD reading would give month 20 and the DB rejects it.
+  it("reads DDMMYYYY whose leading digits look like a year", () => {
+    expect(run("19092026")).toBe("2026-09-19");
+    expect(run("20092026")).toBe("2026-09-20");
+    expect(run("19122026")).toBe("2026-12-19");
+  });
+
+  it("leaves 8 digits that are no date either way alone", () => {
+    expect(run("99999999")).toBe("99999999");
   });
 
   it("still reads the separated forms", () => {

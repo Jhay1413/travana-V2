@@ -67,6 +67,30 @@ describe("realtimeController.stream — org-scoped event delivery", () => {
 
     req.emit("close");
   });
+
+  // ticket.changed carries a ticketId instead of a conversationId — the frame is
+  // built from the event object generically, so a second payload shape must ride
+  // the same stream without the controller learning about it.
+  it("delivers a ticket event, org-scoped like every other event", async () => {
+    const req = makeReq({ orgId: "org-tickets", user: { authType: "password", userId: "user-tickets" } });
+    const res = makeRes();
+
+    await realtimeController.stream(req as never, res as never, vi.fn());
+    res.write.mockClear();
+
+    eventBus.publish("org-tickets", { type: "ticket.changed", ticketId: "ticket-1" });
+
+    expect(res.write).toHaveBeenCalledWith(
+      'event: ticket.changed\ndata: {"type":"ticket.changed","ticketId":"ticket-1"}\n\n',
+    );
+
+    res.write.mockClear();
+    eventBus.publish("org-different", { type: "ticket.changed", ticketId: "ticket-2" });
+
+    expect(res.write).not.toHaveBeenCalled();
+
+    req.emit("close");
+  });
 });
 
 describe("realtimeController.stream — close cleanup", () => {

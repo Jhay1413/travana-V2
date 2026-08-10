@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
 import {
   ChevronLeft,
@@ -55,8 +55,18 @@ export default function SocialQuotePage() {
 
   // This page only ever renders quotes (isBooking=false), so narrow the
   // quote|booking union the hook returns to EnrichedQuote.
-  const { quote, rawData: rawDataUnion, isLoading, error, primaryImage, galleryImages } = useQuoteData(quoteId, "", false);
+  const { quote, rawData: rawDataUnion, isLoading, error, images, primaryImage, galleryImages } = useQuoteData(quoteId, "", false);
   const rawData = rawDataUnion as EnrichedQuote | undefined;
+
+  // Seeds the copy dialog's image picker. Copying a social deal into a client
+  // quote goes through create-with-transaction, which clones nothing server
+  // side — so unless the deal's gallery is handed to the form the new quote is
+  // created with no images at all. Stored order is display order (position 0 is
+  // the main photo), so it is preserved as-is.
+  const dealImageUrls = useMemo(
+    () => images.map((img: { url: string }) => img.url).filter(Boolean),
+    [images],
+  );
 
   const discounts = parseFloat(rawData?.discounts || "0");
   const serviceCharge = parseFloat(rawData?.service_charge || "0");
@@ -712,6 +722,7 @@ export default function SocialQuotePage() {
             clientId={selectedClient.id}
             userId={currentUser?.id || ""}
             markAsCopy={false}
+            initialImages={dealImageUrls}
             initialValues={{
               packageType: rawData.holiday_type_id || "",
               quoteTitle: rawData.title || "",

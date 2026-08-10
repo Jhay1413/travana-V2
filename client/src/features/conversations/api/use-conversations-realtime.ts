@@ -19,7 +19,7 @@ const MESSAGE_DEBOUNCE_MS = 250;
 // backoff is added.
 const FALLBACK_POLL_MS = 45_000;
 
-const REALTIME_EVENT_TYPES = [
+const CONVERSATION_EVENT_TYPES = [
   "message.received",
   "message.sent",
   "conversation.updated",
@@ -27,7 +27,7 @@ const REALTIME_EVENT_TYPES = [
 ] as const;
 
 interface RealtimeEventPayload {
-  type: (typeof REALTIME_EVENT_TYPES)[number];
+  type: (typeof CONVERSATION_EVENT_TYPES)[number];
   conversationId: string;
   needsHuman?: boolean;
 }
@@ -56,6 +56,16 @@ export interface ConversationsRealtimeOptions {
    * of ten messages produces one call with the affected ids, not ten calls.
    */
   onMessagesReceived?: (conversationIds: string[]) => void;
+  /**
+   * Fired when cached ticket data may no longer be current — on a `ticket.changed`
+   * event, and on every (re)connect, since anything that happened while the
+   * stream was down was never delivered.
+   *
+   * A callback rather than an invalidation in here: this hook owns the app's one
+   * EventSource, but tickets are another feature's data and their query keys are
+   * not this module's to know. The caller decides what to re-fetch.
+   */
+  onTicketsStale?: () => void;
 }
 
 // Opens ONE shared EventSource and maps the server's thin SSE events to
@@ -73,12 +83,17 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
   const receivedConversationIds = useRef<Set<string>>(new Set());
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Held in a ref so a caller passing an inline arrow doesn't re-run the effect
+  // Held in refs so a caller passing an inline arrow doesn't re-run the effect
   // that owns the EventSource on every render.
   const onMessagesReceivedRef = useRef(options.onMessagesReceived);
   useEffect(() => {
     onMessagesReceivedRef.current = options.onMessagesReceived;
   }, [options.onMessagesReceived]);
+
+  const onTicketsStaleRef = useRef(options.onTicketsStale);
+  useEffect(() => {
+    onTicketsStaleRef.current = options.onTicketsStale;
+  }, [options.onTicketsStale]);
 
   const flushMessageInvalidations = useCallback(() => {
     debounceTimer.current = null;
@@ -106,10 +121,13 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
   );
 
   // Broad resync used on (re)connect — no Last-Event-ID replay in v1, REST is
-  // the recovery path (per plan decision #3).
+  // the recovery path (per plan decision #3). Tickets ride along: events raised
+  // while the stream was down are simply gone, so the reconnect is the only
+  // chance to notice them.
   const resync = useCallback(() => {
     qc.invalidateQueries({ queryKey: conversationsKeys.all });
     qc.invalidateQueries({ queryKey: messagesKeys.all });
+    onTicketsStaleRef.current?.();
   }, [qc]);
 
   useEffect(() => {
@@ -146,6 +164,12 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
         const payload = parsePayload(raw.data);
         if (!payload) return;
         qc.invalidateQueries({ queryKey: conversationsKeys.aiState(payload.conversationId) });
+      });
+      // Carries a ticketId, not a conversationId, so it deliberately skips
+      // parsePayload. The id isn't read: the consumer re-fetches every ticket
+      // query, which is what a badge over a filtered list needs anyway.
+      source.addEventListener("ticket.changed", () => {
+        onTicketsStaleRef.current?.();
       });
     };
 
