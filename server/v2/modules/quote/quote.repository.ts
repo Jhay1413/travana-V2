@@ -396,10 +396,21 @@ export const newQuoteRepository = {
         only_socials_id: travel_deal.onlySocialsId,
         post_schedule: travel_deal.postSchedule,
 
-        // Image data
+        // Image data — the quote's own gallery. Preferred over the shared
+        // library fallbacks below; see the resolution comment further down.
         image_id: quoteImages.id,
         image_url: quoteImages.url,
         image_is_primary: quoteImages.isPrimary,
+        // Fallback: this quote's own legacy image storage (owner_id = quote id).
+        // Mirrors findWithDetails(), which falls back to deal_images when the
+        // quote has no quote_images rows. owner_id is text, quote.id is uuid.
+        deal_image_url: sql<string | null>`(
+          SELECT di.image_url
+          FROM deal_images di
+          WHERE di.owner_id = ${quote.id}::text
+          ORDER BY di."isPrimary" DESC NULLS LAST
+          LIMIT 1
+        )`,
         // Fallback: primary image from the primary accommodation
         accommodation_image_url: sql<string | null>`(
           SELECT ai.image_url
@@ -480,7 +491,18 @@ export const newQuoteRepository = {
           : [])
       ))
 
-      .orderBy(desc(quote.date_created), desc(quoteImages.isPrimary));
+      // Rows for one quote are a cross product (flights × images), and only the
+      // FIRST row that carries an image populates the card — so the quote's
+      // primary image has to sort first. Plain desc() puts NULLs first in
+      // Postgres, which would let an unflagged image outrank the primary, hence
+      // the explicit NULLS LAST; position/id break the remaining ties the same
+      // way findWithDetails() orders the gallery.
+      .orderBy(
+        desc(quote.date_created),
+        sql`${quoteImages.isPrimary} DESC NULLS LAST`,
+        asc(quoteImages.position),
+        asc(quoteImages.id),
+      );
 
     // Group results by quote ID
     const quoteMap = new Map<string, any>();
@@ -537,9 +559,29 @@ export const newQuoteRepository = {
         });
       }
 
-      // Add image: accommodation > lodge > direct quote image
+      // Add image: the quote's OWN gallery first (quote_images, then its legacy
+      // deal_images), and only then the shared accommodation/lodge libraries.
+      // This is the same precedence findWithDetails() uses, and the two must
+      // agree: uploads are copied into those libraries on save
+      // (quote.service saveImagesToAccommodation/saveImagesToLodge) as separate
+      // rows with their own ids, so deleting an image from the quote removes
+      // only the quote_images row — the library copy survives. Reading the
+      // library first meant a deleted image kept showing on the social-post
+      // card while the quote's edit view showed it gone.
       if (existingQuote.images.length === 0) {
-        if (row.accommodation_image_url) {
+        if (row.image_id) {
+          existingQuote.images.push({
+            id: row.image_id,
+            image_url: row.image_url,
+            isPrimary: row.image_is_primary,
+          });
+        } else if (row.deal_image_url) {
+          existingQuote.images.push({
+            id: 'deal',
+            image_url: row.deal_image_url,
+            isPrimary: true,
+          });
+        } else if (row.accommodation_image_url) {
           existingQuote.images.push({
             id: 'accom',
             image_url: row.accommodation_image_url,
@@ -550,12 +592,6 @@ export const newQuoteRepository = {
             id: 'lodge',
             image_url: row.lodge_image_url,
             isPrimary: true,
-          });
-        } else if (row.image_id) {
-          existingQuote.images.push({
-            id: row.image_id,
-            image_url: row.image_url,
-            isPrimary: row.image_is_primary,
           });
         }
       }
