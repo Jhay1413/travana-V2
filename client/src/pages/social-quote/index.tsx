@@ -726,6 +726,9 @@ export default function SocialQuotePage() {
             initialValues={{
               packageType: rawData.holiday_type_id || "",
               quoteTitle: rawData.title || "",
+              // The supplier link the post was built from — the client's copy is
+              // worked from the same page, so it has to come across too.
+              quoteLink: ('quote_ref' in rawData && rawData.quote_ref) || "",
               leadSource: rawData.lead_source || "",
               status: rawData.quote_status || "draft",
               tourOperatorId: rawData.main_tour_operator_id || "",

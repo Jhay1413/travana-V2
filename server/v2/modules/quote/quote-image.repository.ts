@@ -127,6 +127,14 @@ export const quoteImageRepository = {
    * wants before the new images exist as rows, so it has URLs but no ids —
    * matching on URL lets one call set positions for both freshly-inserted and
    * already-saved images. URLs not belonging to this quote simply match nothing.
+   *
+   * The first URL also becomes the primary image. This path is only ever used by
+   * the quote form, whose picker states "the first image is used as the main
+   * photo" and expresses "set as main" as a move to the front — without this the
+   * flag would keep pointing at whatever was primary when the quote was created,
+   * and readers that sort on isPrimary (the social-post cards) would keep showing
+   * the old image. The Arrange dialog reorders by id instead and has its own
+   * explicit primary control, so its ordering deliberately leaves the flag alone.
    */
   async reorderByUrl(quoteId: string, imageUrls: string[]): Promise<void> {
     if (imageUrls.length === 0) return;
@@ -137,6 +145,29 @@ export const quoteImageRepository = {
           .set({ position: index })
           .where(and(eq(quoteImages.quoteId, quoteId), eq(quoteImages.url, url)));
       }
+
+      // Resolve the new primary to a single row id first: the same URL can appear
+      // on more than one row, and a URL from the shared accommodation/lodge
+      // libraries has no row here at all — in which case the existing primary is
+      // left untouched rather than cleared, which would leave the quote with none.
+      const [newPrimary] = await tx
+        .select({ id: quoteImages.id })
+        .from(quoteImages)
+        .where(and(eq(quoteImages.quoteId, quoteId), eq(quoteImages.url, imageUrls[0])))
+        .orderBy(asc(quoteImages.id))
+        .limit(1);
+
+      if (!newPrimary) return;
+
+      await tx
+        .update(quoteImages)
+        .set({ isPrimary: false })
+        .where(and(eq(quoteImages.quoteId, quoteId), eq(quoteImages.isPrimary, true)));
+
+      await tx
+        .update(quoteImages)
+        .set({ isPrimary: true })
+        .where(eq(quoteImages.id, newPrimary.id));
     });
   },
 
