@@ -72,6 +72,10 @@ export interface ScrapedQuoteJson {
   destination: string;
   resort: string;
   accommodation: string;
+  // Headline for the quote — the portal's own deal heading (a marketing
+  // strapline on some, the hotel name on others). Optional: it falls back to
+  // `accommodation`, and captures from a pre-v7 bookmarklet carry no headings.
+  quote_title?: string;
   board_basis: string;
   room_type: string;
   check_in_date_time: string;

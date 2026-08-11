@@ -16,9 +16,10 @@
   // Bump on every change. Shown in the capture alert so it's obvious which
   // version is actually installed in the bookmarks bar — an old bookmarklet
   // silently producing old-shaped captures is otherwise impossible to spot.
-  var VERSION = 'v5';
+  var VERSION = 'v7';
   var MAX_TEXT = 400000;
   var MAX_IMAGES = 300;
+  var MAX_HEADINGS = 12;
   // Booking records are big. Scan generously and only cap what we actually send.
   var MAX_JSON = 2000000;
 
@@ -61,6 +62,20 @@
   // the deep text and returns a bounded slice of it.
   function hiddenFlightsText() {
     var all = deepText(document.body);
+
+    // A flight-details panel that IS in the DOM but is closed — the common case,
+    // because agents capture without opening "Compare airport, dates & prices"
+    // first and modalText() only sees what is actually rendered. deepText reads
+    // hidden nodes, which is the whole reason this fallback exists, so the panel
+    // is found either way. Anchored on the outbound heading and only accepted
+    // when a "Depart:" follows inside the window, which is precisely the shape
+    // the server's modal parser consumes — a heading alone is not enough.
+    var out = /\b(?:going out|going there)\b/i.exec(all);
+    if (out) {
+      var region = all.slice(out.index, out.index + 6000);
+      if (/Depart:/i.test(region)) return region;
+    }
+
     var i = all.search(/\byour flights\b|\bflights?\s+(?:details|available)\b/i);
     if (i < 0) {
       var m = /\b(?:OUT|RTN|OUTBOUND|INBOUND)\b[\s\S]{0,120}?\d{1,2}:\d{2}/.exec(all);
@@ -123,6 +138,32 @@
     return null;
   }
 
+  // The page's own headings, in document order.
+  //
+  // The deal's headline — the hotel name, or the marketing strapline portals
+  // print beside it — is always an <h1>/<h2>, but in body innerText it is just
+  // another line among thousands with nothing around it to anchor a regex to.
+  // A spec rule reading THIS short ordered list can pick "the first heading" or
+  // "the second heading" positionally, which is stable, instead of trying to
+  // pattern-match arbitrary marketing prose out of the whole page.
+  //
+  // Kept deliberately small and text-only: headings are for identifying the
+  // deal, not for carrying content.
+  function headings() {
+    var out = [];
+    var seen = {};
+    var nodes = document.querySelectorAll('h1, h2');
+    for (var i = 0; i < nodes.length && out.length < MAX_HEADINGS; i++) {
+      // textContent, not innerText: a heading inside a collapsed or not-yet-
+      // scrolled section still identifies the deal, and reading it costs nothing.
+      var t = (nodes[i].textContent || '').replace(/\s+/g, ' ').trim();
+      if (!t || t.length > 200 || seen[t]) continue;
+      seen[t] = 1;
+      out.push(t);
+    }
+    return out;
+  }
+
   // Text of an open flight-details / itinerary modal, if the user opened one —
   // real flight times usually live there rather than in the page's own text.
   function modalText() {
@@ -163,6 +204,8 @@
     title: document.title,
     text: (document.body ? document.body.innerText || '' : '').slice(0, MAX_TEXT),
     images: images,
+    // Ordered h1/h2 text — the deal's headline, addressable by position.
+    headings: headings(),
     // An open modal wins; otherwise fall back to the itinerary hidden inside a
     // collapsed panel.
     flightsText: modalText() || hiddenFlightsText(),

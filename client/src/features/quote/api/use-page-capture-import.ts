@@ -10,6 +10,10 @@ export interface CapturedPage {
   title?: string;
   text: string;
   images?: string[];
+  // The page's h1/h2 text in document order. The deal's headline lives here —
+  // in body text it's an unanchorable line, but a spec rule can address this
+  // list positionally.
+  headings?: string[];
   flightsText?: string;
   // The operator's embedded booking record, when the page carries one. This is
   // the best source by far — flights, images and prices already structured —
@@ -46,6 +50,9 @@ export function parseCapture(raw: string): CapturedPage {
     title: typeof c.title === "string" ? c.title : "",
     text: c.text,
     images: Array.isArray(c.images) ? c.images.filter((s): s is string => typeof s === "string") : undefined,
+    // Absent from captures made with a pre-v7 bookmarklet — optional, so an old
+    // one still imports, just without a title.
+    headings: Array.isArray(c.headings) ? c.headings.filter((s): s is string => typeof s === "string") : undefined,
     flightsText: typeof c.flightsText === "string" && c.flightsText ? c.flightsText : undefined,
     apiJson: c.apiJson ?? undefined,
   };

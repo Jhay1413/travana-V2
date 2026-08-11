@@ -54,6 +54,9 @@ export interface ImportPageInput {
   title?: string;
   text: string;
   images?: string[];
+  // Ordered h1/h2 text — where the deal's headline is addressable. Absent on
+  // captures from a pre-v7 bookmarklet.
+  headings?: string[];
   flightsText?: string;
   apiJson?: unknown;
   supplierKey?: string;
@@ -539,7 +542,7 @@ export const scraperService = {
     if (!spec) {
       specGenerated = true;
       spec = await extractionAiService.generateSpecFromDom(
-        { title, text: input.text, url: input.url, apiJson: input.apiJson },
+        { title, text: input.text, url: input.url, apiJson: input.apiJson, headings: input.headings },
         resolved.supplierName,
       );
       // A freshly-learned spec is derived from ONE page, so it can be overfitted
@@ -550,7 +553,15 @@ export const scraperService = {
 
     const quote = runExtractionSpec(
       spec,
-      { title, text: input.text, url: input.url, apiJson: input.apiJson, images, flightsText: input.flightsText },
+      {
+        title,
+        text: input.text,
+        url: input.url,
+        apiJson: input.apiJson,
+        images,
+        headings: input.headings,
+        flightsText: input.flightsText,
+      },
       new Date().toISOString(),
     );
     // Occupancy from the quote form overrides whatever was parsed, when provided.

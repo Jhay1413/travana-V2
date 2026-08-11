@@ -213,6 +213,67 @@ describe("flight legs", () => {
     const q = runExtractionSpec(spec, { title: "", text: "No flights here", url: "https://x.test/d" }, "2026-01-01T00:00:00Z");
     expect(q.flights).toEqual([]);
   });
+
+  // Jet2 again, but captured while the panel was CLOSED. Nothing is rendered, so
+  // innerText degrades to textContent and the deep-text walker emits one line per
+  // text node — the <h3> holding "Newcastle <svg/> Reus (Barcelona South) REU"
+  // arrives as TWO lines. Agents capture without opening the panel most of the
+  // time, so this is the common shape, not the exotic one.
+  const JET2_MODAL_CLOSED = [
+    "Flight Information",
+    "Going Out",
+    "Newcastle",
+    "Reus (Barcelona South) REU",
+    "Depart: Sun 06 Sep 2026 at 16:30",
+    "Arrive: Sun 06 Sep 2026 at 20:15",
+    "Flight duration: 2 hrs 45 mins",
+    "Coming Back",
+    "Reus (Barcelona South) REU",
+    "Newcastle",
+    "Depart: Sat 12 Sep 2026 at 11:10",
+    "Arrive: Sat 12 Sep 2026 at 12:55",
+    "Flight duration: 2 hrs 45 mins",
+  ].join("\n");
+
+  it("reads the same flights when the airport pair is split across two lines", () => {
+    const q = runExtractionSpec(
+      spec,
+      { title: "", text: "Return flights Newcastle", url: "https://x.test/d", flightsText: JET2_MODAL_CLOSED },
+      "2026-01-01T00:00:00Z",
+    );
+    const [out, ret] = q.flights;
+    expect(out.departing_airport_name).toBe("Newcastle");
+    expect(out.arrival_airport).toBe("REU");
+    // The point of the fix: the destination NAME, not the bare code.
+    expect(out.arrival_airport_name).toBe("Reus (Barcelona South)");
+    expect(out.departure_date_time).toBe("2026-09-06T16:30");
+    expect(out.arrival_date_time).toBe("2026-09-06T20:15");
+    expect(ret.departure_date_time).toBe("2026-09-12T11:10");
+    expect(ret.arrival_date_time).toBe("2026-09-12T12:55");
+  });
+
+  // The two-line join must not fire on a portal whose second line is something
+  // else entirely — it is only allowed to recover an airport code the first line
+  // genuinely lacked.
+  it("ignores a second line that carries no airport code", () => {
+    const withNoise = [
+      "Going Out",
+      "Newcastle  Reus (Barcelona South) REU",
+      "Operated by a partner airline",
+      "Depart: Sun 06 Sep 2026 at 16:30",
+      "Arrive: Sun 06 Sep 2026 at 20:15",
+      "Coming Back",
+      "Depart: Sat 12 Sep 2026 at 11:10",
+      "Arrive: Sat 12 Sep 2026 at 12:55",
+    ].join("\n");
+    const q = runExtractionSpec(
+      spec,
+      { title: "", text: "Return flights Newcastle", url: "https://x.test/d", flightsText: withNoise },
+      "2026-01-01T00:00:00Z",
+    );
+    expect(q.flights[0].arrival_airport_name).toBe("Reus (Barcelona South)");
+    expect(q.flights[0].departing_airport_name).toBe("Newcastle");
+  });
 });
 
 // Galleries served through the site's own image optimiser: every photo shares

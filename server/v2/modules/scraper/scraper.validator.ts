@@ -51,6 +51,9 @@ export const importPageValidator = z.object({
     text: z.string().min(1, 'text is required').max(500_000),
     // Rendered <img> sources, used for the hotel gallery.
     images: z.array(z.string()).max(400).optional(),
+    // The page's h1/h2 text in document order, for the deal's headline. Short by
+    // construction (the bookmarklet caps it), so the bounds are tight.
+    headings: z.array(z.string().max(200)).max(20).optional(),
     // Text of a flight-details modal, when the user opened one before capturing.
     flightsText: z.string().max(50_000).optional(),
     // Any JSON the page exposed (e.g. an embedded state blob) — optional, the

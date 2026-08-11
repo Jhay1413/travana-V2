@@ -6,11 +6,14 @@
 // only runs regexes/transforms the spec declares, so a new supplier is added by
 // config alone and a compromised spec can't run arbitrary code.
 
-export type FieldSource = 'text' | 'title' | 'url' | 'images';
+export type FieldSource = 'text' | 'title' | 'url' | 'images' | 'headings';
 export type FieldTransform = 'number' | 'date' | 'titleCase' | 'trim' | 'lower' | 'upper';
 
 export interface FieldRule {
-  // Where to read: page innerText (default), page title, or the deep-link URL.
+  // Where to read: page innerText (default), page title, the deep-link URL, the
+  // captured image URLs, or the page's h1/h2 headings (one per line, document
+  // order — anchor a rule with ^ + a line count rather than by wording, since a
+  // headline is arbitrary prose).
   // Optional so a pure-API override rule can be just { jsonPath: "…" } — e.g.
   // the easyjet adapter's config overrides, where there is no captured DOM.
   from?: FieldSource;

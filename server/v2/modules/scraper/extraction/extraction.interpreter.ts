@@ -127,7 +127,7 @@ function isEmpty(v: string | number): boolean {
 
 function resolveField(
   rule: FieldRule,
-  ctx: { title: string; text: string; url: string; apiJson?: unknown; imagesText?: string },
+  ctx: { title: string; text: string; url: string; apiJson?: unknown; imagesText?: string; headingsText?: string },
 ): string | number {
   // 1. API first: if the captured API JSON has this value, use it.
   if (rule.jsonPath && ctx.apiJson != null) {
@@ -142,6 +142,7 @@ function resolveField(
   let source: string;
   if (rule.from === 'title') source = ctx.title;
   else if (rule.from === 'images') source = ctx.imagesText ?? '';
+  else if (rule.from === 'headings') source = ctx.headingsText ?? '';
   else if (rule.from === 'url') {
     if (rule.urlSegment != null) {
       let segs: string[] = [];
@@ -538,15 +539,29 @@ function parseFlightModal(text: string | undefined, homeNameHint: string): Parse
   const retArrive = legTime(retText, 'Arrive');
   if (!outDepart && !retDepart) return null;
 
-  // The airport line is the first content line of the outbound section that isn't
-  // the header or a Depart/Arrive/duration label.
-  let airportLine = '';
+  // The airport pair is the first content line(s) of the outbound section that
+  // aren't the header or a Depart/Arrive/duration label.
+  //
+  // Normally ONE line — portals put both airports in a single heading separated
+  // by an inline icon, and a capture of the RENDERED panel collapses that to
+  // "Newcastle  Reus (Barcelona South) REU". But a panel captured while CLOSED
+  // has no rendered text: innerText degrades to textContent and the deep-text
+  // walker emits one line per text node, so the pair arrives split in two. Take
+  // up to two lines and rejoin them with the double space the splitter below
+  // keys on — but only when that actually recovers an airport code the first
+  // line lacked, so a portal whose second line is something else is untouched.
+  const contentLines: string[] = [];
   for (const raw of outText.split('\n')) {
     const l = raw.trim();
     if (!l || /going out|going there|outbound/i.test(l)) continue;
     if (/flight duration|depart:|arrive:/i.test(l)) break;
-    airportLine = l;
-    break;
+    contentLines.push(l);
+    if (contentLines.length === 2) break;
+  }
+  const IATA = /\b[A-Z]{3}\b/;
+  let airportLine = contentLines[0] ?? '';
+  if (contentLines.length === 2 && !IATA.test(airportLine) && IATA.test(contentLines[1])) {
+    airportLine = `${contentLines[0]}  ${contentLines[1]}`;
   }
   let destName = '';
   let destCode = '';
@@ -954,6 +969,7 @@ export function runExtractionSpec(
     url: string;
     apiJson?: unknown;
     images?: { src: string; w?: number; h?: number }[];
+    headings?: string[]; // the page's h1/h2 text, document order
     flightsText?: string; // text of a flight-details modal, if one was opened
   },
   scrapedAt: string,
@@ -969,7 +985,10 @@ export function runExtractionSpec(
   // Image URLs, joined, so a spec field rule can read them (from: 'images') —
   // e.g. a destination code that only appears in image filenames.
   const imagesText = (ctx.images ?? []).map((i) => i.src).join('\n');
-  const c = { ...ctx, text, imagesText };
+  // Headings, one per line in document order, for from: 'headings' rules. The
+  // deal's headline is here; in the page body it is an unanchorable line.
+  const headingsText = (ctx.headings ?? []).join('\n');
+  const c = { ...ctx, text, imagesText, headingsText };
 
   const f: Record<string, string | number> = { ...(spec.constants ?? {}) };
   for (const [key, rule] of Object.entries(spec.fields ?? {})) {
@@ -1104,6 +1123,11 @@ export function runExtractionSpec(
     destination,
     resort,
     accommodation: str(f.accommodation),
+    // The portal's own headline for the deal. Falls back to the hotel name,
+    // which is what most portals put in that heading anyway — so a supplier
+    // whose spec has no quote_title rule still gets a titled quote instead of a
+    // blank one.
+    quote_title: str(f.quote_title) || str(f.accommodation),
     board_basis: str(f.board_basis) || boardBasisFromText(text),
     room_type: str(f.room_type),
     check_in_date_time: travelDate,

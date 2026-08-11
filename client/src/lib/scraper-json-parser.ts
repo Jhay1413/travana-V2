@@ -48,6 +48,7 @@ export interface ScraperJson {
   destination?: string;
   resort?: string;
   accommodation?: string;
+  quote_title?: string;
   board_basis?: string;
   room_type?: string;
   room_description?: string;
@@ -232,6 +233,11 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
       destination: data.destination || hotel?.destination || "",
       resort: data.resort || hotel?.resort || "",
       accommodation: data.accommodation || hotel?.accommodation || "",
+      // The scraper import never populated the quote's title — only the cruise
+      // and generic-fallback importers did — so every scraped quote arrived
+      // untitled. The portal's deal heading is the natural title; the server
+      // already falls back to the hotel name when a supplier has no rule for it.
+      quoteTitle: data.quote_title || data.accommodation || hotel?.accommodation || "",
       boardBasis: data.board_basis || data.board_basis_name || hotel?.board_basis || "",
       roomType: data.room_type || hotel?.room_type || "",
       checkInDate: checkInDate,

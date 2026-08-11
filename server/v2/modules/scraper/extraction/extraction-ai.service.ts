@@ -58,7 +58,7 @@ const specSchema = z.object({
 const COMMON_FIELDS = [
   'adults', 'children', 'infants', 'no_of_nights', 'travel_date',
   'price_per_person', 'sales_price', 'tourist_tax_total', 'currency',
-  'tour_operator', 'country', 'destination', 'resort',
+  'tour_operator', 'country', 'destination', 'resort', 'quote_title',
 ];
 const PACKAGE_HOLIDAY_FIELDS = [
   'accommodation', 'board_basis', 'room_type', 'departure_airport_name',
@@ -97,8 +97,9 @@ Output ONLY a JSON object with this shape:
 }
 
 Rules:
-- from "text" = the page innerText, "title" = page title, "url" = the deep-link URL (use urlSegment to pick a path segment, 0-indexed).
-- "from" MUST be exactly one of: "text", "title", "url", "images". There is no "json" source — to read the API JSON you add a "jsonPath" and leave "from" as the DOM fallback (usually "text"). jsonPath is always tried FIRST when present.
+- from "text" = the page innerText, "title" = page title, "url" = the deep-link URL (use urlSegment to pick a path segment, 0-indexed), "headings" = the page's h1/h2 text, ONE PER LINE in document order.
+- "from" MUST be exactly one of: "text", "title", "url", "images", "headings". There is no "json" source — to read the API JSON you add a "jsonPath" and leave "from" as the DOM fallback (usually "text"). jsonPath is always tried FIRST when present.
+- quote_title is the deal's HEADLINE as the portal writes it — the hotel name on most portals, a marketing strapline on some (e.g. "Five-star escape nestled near the Mediterranean Sea"). It is almost always an h1/h2, so read it with from "headings" and anchor it BY POSITION, not by wording: "^([^\\n]+)" takes the first heading, "^[^\\n]*\\n([^\\n]+)" the second, and so on. Never pin it to this page's literal words — the next deal's headline is different text. You are given the headings list; count the lines to find which position holds the deal's headline and write the rule for that position. Omit quote_title if no heading holds it — the interpreter then falls back to the hotel name.
 - If an API JSON is provided, prefer it for a field by adding "jsonPath" (dot/bracket path, e.g. "offers[0].price"). The interpreter tries jsonPath first and falls back to the regex on the DOM — so give BOTH a jsonPath (from the API) AND a regex (from the DOM) when the field appears in both. This is how API data and DOM data merge.
 - Use transform "number" for prices/counts (strips £ and commas), "date" for dates (any of "06 Sep 2026", "06-09-2026", ISO — the interpreter normalises to YYYY-MM-DD), "titleCase" for URL slugs.
 - board_basis must map to one of: All Inclusive, All Inclusive Plus, Half Board, Half Board Plus, Full Board, Full Board Plus, Bed and Breakfast, Self Catering, Room Only.
@@ -185,11 +186,17 @@ export const loginConfigAiService = {
 
 export const extractionAiService = {
   async generateSpecFromDom(
-    dom: { title: string; text: string; url: string; apiJson?: unknown },
+    dom: { title: string; text: string; url: string; apiJson?: unknown; headings?: string[] },
     supplierName?: string,
   ): Promise<ExtractionSpec> {
     const openai = getOpenAI();
     const clipped = dom.text.length > 16_000 ? dom.text.slice(0, 16_000) : dom.text;
+    // Numbered so the AI can count positions and write a positional quote_title
+    // rule. Absent on captures from a pre-v7 bookmarklet — the block is then
+    // omitted entirely and the interpreter's hotel-name fallback applies.
+    const headingsBlock = dom.headings?.length
+      ? `\n\nPage headings (h1/h2), in document order — line 1 is the first:\n"""\n${dom.headings.join('\n')}\n"""`
+      : '';
     // Include the captured API JSON (truncated) so the AI can prefer jsonPath.
     let apiBlock = '';
     if (dom.apiJson != null) {
@@ -206,7 +213,7 @@ export const extractionAiService = {
         { role: 'system', content: SYSTEM_PROMPT },
         {
           role: 'user',
-          content: `Supplier: ${supplierName ?? '(unknown)'}\nPage title: ${dom.title}\nDeep-link URL: ${dom.url}\n\nPage innerText:\n"""\n${clipped}\n"""${apiBlock}`,
+          content: `Supplier: ${supplierName ?? '(unknown)'}\nPage title: ${dom.title}\nDeep-link URL: ${dom.url}\n\nPage innerText:\n"""\n${clipped}\n"""${headingsBlock}${apiBlock}`,
         },
       ],
     });

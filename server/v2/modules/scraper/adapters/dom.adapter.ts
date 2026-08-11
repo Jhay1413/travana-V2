@@ -178,7 +178,7 @@ export const domAdapter: ScraperAdapter = {
       let spec = existingSpec;
       if (!spec) {
         spec = await extractionAiService.generateSpecFromDom(
-          { title: snap.title, text: snap.text, url: deepLinkUrl, apiJson },
+          { title: snap.title, text: snap.text, url: deepLinkUrl, apiJson, headings: snap.headings },
           resolved.supplierName,
         );
         if (resolved.persistConfig) await resolved.persistConfig({ extraction: spec });
@@ -194,7 +194,7 @@ export const domAdapter: ScraperAdapter = {
       // the modal text feeds real flight times — neither is in innerText.
       const quote = runExtractionSpec(
         spec,
-        { title: snap.title, text: snap.text, url: deepLinkUrl, apiJson, images: snap.images, flightsText },
+        { title: snap.title, text: snap.text, url: deepLinkUrl, apiJson, images: snap.images, headings: snap.headings, flightsText },
         new Date().toISOString(),
       );
       // Occupancy from the quote form overrides what we parsed, when provided.

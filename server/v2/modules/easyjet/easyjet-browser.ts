@@ -857,6 +857,9 @@ export interface CapturedDom {
   title: string;
   text: string;
   images: CapturedImage[];
+  // The page's h1/h2 text in document order — the deal's headline, which is an
+  // unanchorable line once it's inside body innerText.
+  headings: string[];
 }
 
 // Reads every rendered <img> (skipping data: URIs), with its natural size — used
@@ -958,10 +961,16 @@ export async function captureRenderedDom(
         text: document.body?.innerText || '',
         url: location.href,
         htmlLen: document.documentElement?.outerHTML.length || 0,
+        // Mirrors the bookmarklet's headings(): same shape from either capture
+        // route, so one spec rule works for both.
+        headings: Array.from(document.querySelectorAll('h1, h2'))
+          .map((h) => (h.textContent || '').replace(/\s+/g, ' ').trim())
+          .filter((t, i, all) => t && t.length <= 200 && all.indexOf(t) === i)
+          .slice(0, 12),
       }));
       const images = await captureImages(page);
       log('captured page:', { title: snap.title, textLen: snap.text.length, htmlLen: snap.htmlLen, imgs: images.length, url: snap.url });
-      return { title: snap.title, text: snap.text, images };
+      return { title: snap.title, text: snap.text, images, headings: snap.headings };
     } catch (e) {
       // Frame detached by a navigation — let it settle, then retry the read.
       log(`capture attempt ${i + 1}/4 read failed (page navigating?):`, e instanceof Error ? e.message : e);
@@ -974,7 +983,7 @@ export async function captureRenderedDom(
     .catch((e) => ({ title: '', text: '', url: `read-failed: ${e instanceof Error ? e.message : e}` }));
   const fbImages = await captureImages(page);
   log('captured page (fallback):', { title: fb.title, textLen: fb.text.length, imgs: fbImages.length, url: fb.url });
-  return { title: fb.title, text: fb.text, images: fbImages };
+  return { title: fb.title, text: fb.text, images: fbImages, headings: [] };
 }
 
 /**

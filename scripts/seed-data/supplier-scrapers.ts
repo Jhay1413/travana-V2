@@ -443,7 +443,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
       "extraction": {
         "wait": {
           "timeoutMs": 30000,
-          "textMatches": "£\\d{2,3,}(?:\\.\\d{2})?"
+          "textMatches": "£\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?"
         },
         "fields": {
           "adults": {
@@ -459,14 +459,14 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "regex": "([^/?#]+)",
             "jsonPath": "0.ecommerce.detail.products[0].dimension3",
             "transform": "titleCase",
-            "urlSegment": 4
+            "urlSegment": 3
           },
           "country": {
             "from": "url",
             "group": 1,
             "regex": "([^/?#]+)",
             "transform": "titleCase",
-            "urlSegment": 2
+            "urlSegment": 1
           },
           "infants": {
             "from": "text",
@@ -510,7 +510,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "regex": "([^/?#]+)",
             "jsonPath": "0.ecommerce.detail.products[0].dimension2",
             "transform": "titleCase",
-            "urlSegment": 3
+            "urlSegment": 2
           },
           "sales_price": {
             "from": "text",
@@ -588,12 +588,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "inbound_depart_time": {
             "from": "text",
             "jsonPath": "0.ecommerce.detail.products[0].dimension20"
-          },
-          "arrival_airport_name": {
-            "from": "text",
-            "group": 1,
-            "regex": "Return flights [A-Za-z ]+\\s*\\((?:2)\\) 10kg hand luggage",
-            "jsonPath": "0.ecommerce.detail.products[0].destinationAirportCode"
           },
           "outbound_depart_time": {
             "from": "text",
