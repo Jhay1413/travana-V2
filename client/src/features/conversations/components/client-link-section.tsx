@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2, Link2, UserPlus, ArrowUpRight, Unlink, UserCheck, Sparkles, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { clientDisplayName } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useContactLink, useLinkContact, useUnlinkContact } from "../api/use-contact-link";
 import { LinkClientDialog, type ClientPrefill } from "./link-client-dialog";
@@ -113,7 +114,7 @@ export function ClientLinkSection({ conversation }: { conversation: Conversation
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold">
-                {[linked.title, linked.firstName, linked.surename].filter(Boolean).join(" ")}
+                {clientDisplayName(linked)}
               </div>
               <div className="truncate text-[11px] text-black/45 dark:text-white/45">
                 {linked.phoneNumber}

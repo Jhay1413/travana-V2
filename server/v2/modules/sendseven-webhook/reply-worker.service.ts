@@ -90,6 +90,10 @@ interface ConversationContext {
   // Reset implicitly on enquiry creation — the new context object built there
   // omits it.
   askCount?: number;
+  // True once we've explained (once) why we like a quick call, after the
+  // customer asked to keep everything on messages. Their next answer is taken
+  // as final either way — we ask once, never twice.
+  callPushbackSent?: boolean;
   // The org user the just-created enquiry is owned by — reused as the
   // assignee of the callback task at the awaiting_availability step.
   enquiryOwnerUserId?: string;
@@ -1223,17 +1227,40 @@ export const replyWorker = {
       // and hand off. The transition is CLAIMED atomically before the task is
       // created — a retried/concurrent inbound that loses the claim does nothing.
       if (enquiryStatus === "awaiting_availability") {
-        const claimed = await conversationStateRepository.claimStatusTransition(conversationId, "awaiting_availability", "scheduled");
-        if (!claimed) {
-          console.log(`[sendseven-webhook] conv ${conversationId} lost the schedule-callback claim — already actioned, skipping`);
-          return;
-        }
-
         const rawTime = (message.text ?? "").trim();
         // They may answer "what time suits?" by declining the call altogether
         // ("can you just message please"). Confirming a callback then reads as
         // not listening — and the agent must know to message, not ring.
         const noCall = prefersMessagingOverCall(rawTime);
+
+        // ASK ONCE, THEN ACCEPT. A quick call is genuinely how the options get
+        // compared properly, so the first "just message me" gets one friendly
+        // explanation and a second ask — but only one. If they say it again
+        // (callPushbackSent), we take the answer and move on. Deliberately
+        // BEFORE the status claim: this turn does not finish the flow, so the
+        // conversation must stay in awaiting_availability for their reply.
+        if (noCall && !prevContext.callPushbackSent) {
+          if (!(await claimReply(conversationId, orgId, message.id))) return;
+          const askAgain = await generateTransitionReply(botConfig, kb, "encourage_call", rawTime, prevContext.onBehalfOfName, { orgId });
+          try {
+            await sendReply(orgId, conversationId, message.channel_id, askAgain, mode, false);
+          } catch (err) {
+            await releaseReplyClaim(message.id);
+            throw err;
+          }
+          await conversationStateRepository.update(conversationId, {
+            lastAiReplyAt: new Date(),
+            context: { ...prevContext, lastReply: askAgain, callPushbackSent: true },
+          });
+          console.log(`[sendseven-webhook] conv ${conversationId} customer asked to keep it on messages — explained the call once, asking again`);
+          return;
+        }
+
+        const claimed = await conversationStateRepository.claimStatusTransition(conversationId, "awaiting_availability", "scheduled");
+        if (!claimed) {
+          console.log(`[sendseven-webhook] conv ${conversationId} lost the schedule-callback claim — already actioned, skipping`);
+          return;
+        }
         const confirmReply = await generateTransitionReply(
           botConfig,
           kb,
@@ -1242,26 +1269,42 @@ export const replyWorker = {
           prevContext.onBehalfOfName,
           { orgId },
         );
-        let taskId: string | undefined;
+        let taskId: string | undefined = prevContext.availabilityTaskId;
         if (state.enquiryId && prevContext.enquiryOwnerUserId) {
-          // No call wanted → no time to parse; the task is still created so the
+          // No call wanted → no time to parse; the task still stands so the
           // enquiry is actioned, just as a message rather than a ring.
           const dueDate = noCall ? null : await parseAvailabilityTime(rawTime, { orgId });
-          const created = await taskService.create(
-            {
-              entityType: "enquiry",
-              entityId: state.enquiryId,
-              userId: prevContext.enquiryOwnerUserId,
-              title: noCall
-                ? `Message client (asked NOT to be called) — "${rawTime}"`
-                : `Call back — client available ${rawTime}`,
-              dueDate,
-              completed: false,
-            },
-            systemScope(orgId),
-          );
-          taskId = created.id;
-          console.log(`[sendseven-webhook] Created callback task ${taskId} for enquiry ${state.enquiryId} (conv ${conversationId})`);
+          const title = noCall
+            ? `Message client (asked NOT to be called) — "${rawTime}"`
+            : `Call back — client available ${rawTime}`;
+          // Normally this FILLS IN the undated task raised at enquiry creation.
+          // Creating one only happens for conversations that reached this step
+          // without a placeholder — either started before placeholders existed,
+          // or the placeholder write failed at creation time.
+          if (taskId) {
+            try {
+              await taskService.update(taskId, { title, dueDate }, systemScope(orgId));
+              console.log(`[sendseven-webhook] Updated follow-up task ${taskId} for enquiry ${state.enquiryId} (conv ${conversationId})`);
+            } catch (err) {
+              console.error(`[sendseven-webhook] conv ${conversationId} follow-up task ${taskId} update failed — creating a fresh one:`, err);
+              taskId = undefined;
+            }
+          }
+          if (!taskId) {
+            const created = await taskService.create(
+              {
+                entityType: "enquiry",
+                entityId: state.enquiryId,
+                userId: prevContext.enquiryOwnerUserId,
+                title,
+                dueDate,
+                completed: false,
+              },
+              systemScope(orgId),
+            );
+            taskId = created.id;
+            console.log(`[sendseven-webhook] Created callback task ${taskId} for enquiry ${state.enquiryId} (conv ${conversationId})`);
+          }
         } else {
           console.warn(`[sendseven-webhook] conv ${conversationId} awaiting_availability but missing enquiryId/owner — skipping task creation.`);
         }
@@ -1328,6 +1371,34 @@ export const replyWorker = {
 
         const onBehalfOfName = prevContext.beneficiary?.name;
         const askTimeReply = await generateTransitionReply(botConfig, kb, "ask_callback_time", undefined, onBehalfOfName, { orgId });
+
+        // Raise the follow-up task NOW, not when they answer. A customer who
+        // never replies to "what time suits?" would otherwise leave the enquiry
+        // with no task at all — invisible in every task list, and chased only if
+        // someone happened to spot it in the pipeline. It starts undated and is
+        // filled in (title + due date) the moment they answer, so this is one
+        // task either way, never two. Best-effort: the enquiry and the reply
+        // matter more than the task, so a failure here is logged, not thrown.
+        let availabilityTaskId: string | undefined;
+        if (ownerUserId) {
+          try {
+            const placeholder = await taskService.create(
+              {
+                entityType: "enquiry",
+                entityId: enquiryId,
+                userId: ownerUserId,
+                title: "Call back — awaiting preferred time from client",
+                dueDate: null,
+                completed: false,
+              },
+              systemScope(orgId),
+            );
+            availabilityTaskId = placeholder.id;
+            console.log(`[sendseven-webhook] Raised follow-up task ${availabilityTaskId} for enquiry ${enquiryId} (conv ${conversationId})`);
+          } catch (err) {
+            console.error(`[sendseven-webhook] conv ${conversationId} failed to raise the follow-up task for enquiry ${enquiryId}:`, err);
+          }
+        }
         // enquiryStatus is already committed to "awaiting_availability" by the claim above.
         await conversationStateRepository.update(conversationId, {
           intent: "enquiry",
@@ -1335,7 +1406,13 @@ export const replyWorker = {
           enquirySlots: {},
           needsHuman: false, // AI stays live to ask for a callback time
           lastAiReplyAt: new Date(),
-          context: { lastReply: askTimeReply, groupedAskSent: false, enquiryOwnerUserId: ownerUserId ?? undefined, onBehalfOfName },
+          context: {
+            lastReply: askTimeReply,
+            groupedAskSent: false,
+            enquiryOwnerUserId: ownerUserId ?? undefined,
+            onBehalfOfName,
+            availabilityTaskId,
+          },
         });
         console.log(`[sendseven-webhook] Created enquiry ${enquiryId} for org ${orgId} conv ${conversationId} — asking for callback time`);
         await sendReply(orgId, conversationId, message.channel_id, askTimeReply, mode, false);

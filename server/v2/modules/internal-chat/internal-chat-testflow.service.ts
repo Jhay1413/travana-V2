@@ -73,6 +73,9 @@ interface ConversationContext {
   askCount?: number;
   enquiryOwnerUserId?: string;
   availabilityTaskId?: string;
+  // Mirrors reply-worker: we explain the value of a quick call ONCE when the
+  // customer asks to keep it on messages, then take their next answer as final.
+  callPushbackSent?: boolean;
   // For a third-party enquiry: the traveller's name, carried to the
   // awaiting_availability step so the callback confirmation refers to them.
   onBehalfOfName?: string;
@@ -890,6 +893,21 @@ export const internalChatTestflowService = {
       // Mirrors reply-worker: the tester may decline the call ("just message
       // please"), which must not be confirmed back as a callback.
       const noCall = prefersMessagingOverCall(rawTime);
+
+      // Ask once about the call, then accept — mirrors reply-worker.
+      if (noCall && !prevContext.callPushbackSent) {
+        const askAgain = await generateTransitionReply(botConfig, kb, "encourage_call", rawTime, prevContext.onBehalfOfName, {
+          orgId,
+          feature: "staff_chat_test",
+          userId: scope.userId ?? undefined,
+        });
+        await internalChatRepository.updateSession(session.id, orgId, {
+          context: { ...prevContext, lastReply: askAgain, callPushbackSent: true },
+        });
+        const replyMessage = await persistReply(askAgain);
+        console.log(`[internal-chat-testflow] session ${session.id} tester asked to keep it on messages — explained the call once, asking again`);
+        return { replyMessage };
+      }
       const confirmReply = await generateTransitionReply(
         botConfig,
         kb,
@@ -993,12 +1011,33 @@ export const internalChatTestflowService = {
         feature: "staff_chat_test",
         userId: scope.userId ?? undefined,
       });
+      // Mirrors reply-worker: raise the follow-up task NOW so a tester who
+      // never answers still leaves a visible task, filled in when they do.
+      let availabilityTaskId: string | undefined;
+      if (ownerUserId) {
+        try {
+          const placeholderTask = await taskService.create(
+            {
+              entityType: "enquiry",
+              entityId: enquiryId,
+              userId: ownerUserId,
+              title: "Call back — awaiting preferred time from client",
+              dueDate: null,
+              completed: false,
+            },
+            systemScope(orgId),
+          );
+          availabilityTaskId = placeholderTask.id;
+        } catch (err) {
+          console.error(`[internal-chat-testflow] session ${session.id} failed to raise the follow-up task:`, err);
+        }
+      }
       await internalChatRepository.updateSession(session.id, orgId, {
         intent: "enquiry",
         enquiryId,
         enquirySlots: {},
         needsHuman: false, // stays live to ask for a callback time
-        context: { lastReply: askTimeReply, groupedAskSent: false, enquiryOwnerUserId: ownerUserId ?? undefined, onBehalfOfName, contactName: prevContext.contactName },
+        context: { lastReply: askTimeReply, groupedAskSent: false, enquiryOwnerUserId: ownerUserId ?? undefined, onBehalfOfName, availabilityTaskId, contactName: prevContext.contactName },
       });
       const replyMessage = await persistReply(askTimeReply);
       return { replyMessage };

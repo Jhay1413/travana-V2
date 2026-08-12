@@ -40,6 +40,8 @@ vi.mock("../ai-conversation/ai-conversation.brain", () => ({
   missingCoreFieldsFor: vi.fn(() => []),
   missingFieldsFor: vi.fn(() => []),
   parseAvailabilityTime: vi.fn(async () => new Date("2026-08-01")),
+  // Default: the customer gave a time, not a request to keep it on messages.
+  prefersMessagingOverCall: vi.fn(() => false),
   shouldCreateEnquiryNow: vi.fn(() => false),
   shouldForceTicketNow: vi.fn(() => false),
   similarReply: vi.fn(() => false),
@@ -119,7 +121,7 @@ vi.mock("./identity.service", () => ({
 }));
 
 vi.mock("../task/task.service", () => ({
-  taskService: { create: vi.fn(async () => ({ id: "task-1" })) },
+  taskService: { create: vi.fn(async () => ({ id: "task-1" })), update: vi.fn(async () => ({ id: "task-1" })) },
 }));
 
 vi.mock("./admin-agent.service", () => ({
@@ -136,6 +138,7 @@ import { conversationIntegrationRepository } from "../conversation-integration/c
 import { messagesRepository } from "../messages/messages.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { adminAgent } from "./admin-agent.service";
+import { taskService } from "../task/task.service";
 import type { SsWebhookEvent } from "./sendseven-webhook.types";
 import type { SendsevenConversationState } from "@shared/schema";
 
@@ -664,5 +667,79 @@ describe("handleInbound — AI opt-in gate", () => {
     await replyWorker.handleInbound(ORG_ID, makeEvent());
 
     expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+});
+
+// A customer who never answers "what time suits?" must not leave the enquiry
+// with no task at all — invisible in every task list. The follow-up task is
+// raised (undated) at enquiry creation and FILLED IN when they answer, so
+// there is exactly one task either way.
+describe("handleInbound — follow-up task lifecycle", () => {
+  it("raises an undated follow-up task the moment the enquiry is created", async () => {
+    const { shouldCreateEnquiryNow, hasSubstantiveSignal } = await import("../ai-conversation/ai-conversation.brain");
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+    vi.mocked(hasSubstantiveSignal).mockReturnValue(true);
+    vi.mocked(shouldCreateEnquiryNow).mockReturnValue(true);
+    vi.mocked(generateTurn).mockResolvedValue({
+      hand_off: false, intent: "enquiry", complete: true, slots: { destinations: ["Albufeira"] },
+      client: {}, beneficiary: { onBehalf: false }, reply: "lovely",
+    } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "Albufeira, 7 nights, 2 adults, £900" }));
+
+    expect(taskService.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entityType: "enquiry",
+        entityId: "enq-1",
+        title: "Call back — awaiting preferred time from client",
+        dueDate: null,
+        completed: false,
+      }),
+      expect.anything(),
+    );
+    // The id is carried so the answer turn fills THIS task in.
+    const updates = vi.mocked(conversationStateRepository.update).mock.calls;
+    const ctx = updates[updates.length - 1][1].context as { availabilityTaskId?: string };
+    expect(ctx.availabilityTaskId).toBe("task-1");
+  });
+
+  it("fills in that task when the time arrives instead of creating a second one", async () => {
+    // An enquiry in flight routes to sales (the real router short-circuits
+    // on enquiryInFlight; the mock needs telling).
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(
+      makeState({
+        enquiryStatus: "awaiting_availability",
+        enquiryId: "enq-1",
+        context: { enquiryOwnerUserId: "user-1", availabilityTaskId: "task-1" } as never,
+      }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "around 11 please" }));
+
+    expect(taskService.update).toHaveBeenCalledWith(
+      "task-1",
+      expect.objectContaining({ title: "Call back — client available around 11 please" }),
+      expect.anything(),
+    );
+    expect(taskService.create).not.toHaveBeenCalled();
+  });
+
+  it("falls back to creating one when there is no placeholder (older conversations)", async () => {
+    // An enquiry in flight routes to sales (the real router short-circuits
+    // on enquiryInFlight; the mock needs telling).
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(
+      makeState({
+        enquiryStatus: "awaiting_availability",
+        enquiryId: "enq-1",
+        context: { enquiryOwnerUserId: "user-1" } as never,
+      }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "around 11 please" }));
+
+    expect(taskService.update).not.toHaveBeenCalled();
+    expect(taskService.create).toHaveBeenCalledTimes(1);
   });
 });

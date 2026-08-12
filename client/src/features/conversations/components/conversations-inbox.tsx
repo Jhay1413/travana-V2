@@ -51,7 +51,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, clientDisplayName } from "@/lib/utils";
 import { EMOJI_CATEGORIES } from "@/lib/emoji";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/hooks/use-role";
@@ -256,7 +256,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
           <>
             <DetailField
               label="Name"
-              value={[client.title, client.firstName, client.surename].filter(Boolean).join(" ")}
+              value={clientDisplayName(client)}
               icon={User}
             />
             {client.phoneNumber && <DetailField label="Phone" value={client.phoneNumber} icon={Phone} />}
