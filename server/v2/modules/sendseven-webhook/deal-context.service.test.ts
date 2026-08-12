@@ -10,6 +10,10 @@ import {
 } from "./deal-context.service";
 import type { EnquirySlots, RetrievedDealContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
 
+// Minimal wording that marks the customer as referring to something they SAW,
+// which similarity-based pinning now requires.
+const SAW_POST = "saw your post";
+
 function match(
   distance: number,
   meta: Record<string, unknown> | null = {
@@ -33,7 +37,7 @@ describe("pickDealMatch", () => {
     const picked = pickDealMatch([
       match(0.3, { travelDealId: "far", quoteId: "q-far", title: "Far", postSchedule: "2026-08-01T00:00:00Z" }),
       match(0.1, { travelDealId: "near", quoteId: "q-near", title: "Near", postSchedule: "2026-01-01T00:00:00Z" }),
-    ]);
+    ], SAW_POST);
     expect(picked).toMatchObject({
       travelDealId: "near",
       quoteId: "q-near",
@@ -49,7 +53,7 @@ describe("pickDealMatch", () => {
       match(0.2, { travelDealId: "old", quoteId: "q-old", title: "Old post", postSchedule: "2026-02-01T00:00:00Z" }),
       // …loses to the fresher post the customer more plausibly just saw.
       match(0.22, { travelDealId: "fresh", quoteId: "q-fresh", title: "Fresh post", postSchedule: "2026-08-01T00:00:00Z" }),
-    ]);
+    ], SAW_POST);
     expect(picked?.travelDealId).toBe("fresh");
   });
 
@@ -57,7 +61,7 @@ describe("pickDealMatch", () => {
     const picked = pickDealMatch([
       match(0.1, { travelDealId: "close", quoteId: "q-close", title: "Close", postSchedule: "2026-01-01T00:00:00Z" }),
       match(0.3, { travelDealId: "recent", quoteId: "q-recent", title: "Recent", postSchedule: "2026-08-01T00:00:00Z" }),
-    ]);
+    ], SAW_POST);
     expect(picked?.travelDealId).toBe("close");
   });
 
@@ -65,14 +69,14 @@ describe("pickDealMatch", () => {
     const picked = pickDealMatch([
       match(0.2, { travelDealId: "undated", quoteId: "q-u", title: "Undated" }),
       match(0.21, { travelDealId: "dated", quoteId: "q-d", title: "Dated", postSchedule: "2026-08-01T00:00:00Z" }),
-    ]);
+    ], SAW_POST);
     expect(picked?.travelDealId).toBe("dated");
   });
 
   it("refuses to pin matches beyond the strict cutoff (candidate-band matches from the wider retrieval)", () => {
-    expect(pickDealMatch([match(0.45), match(0.55)])).toBeNull();
+    expect(pickDealMatch([match(0.45), match(0.55)], SAW_POST)).toBeNull();
     // A strict-band match still pins even when candidate-band noise rides along.
-    expect(pickDealMatch([match(0.55), match(0.3)])?.distance).toBe(0.3);
+    expect(pickDealMatch([match(0.55), match(0.3)], SAW_POST)?.distance).toBe(0.3);
   });
 
   it("title rescue: pins the deal whose title appears verbatim in the query, beating distance rank", () => {
@@ -150,7 +154,10 @@ describe("pickDealMatch", () => {
   it("pickDeterministicDealMatch returns only identified matches, never a distance guess", () => {
     // Well inside the pin cutoff, but nothing identifying in the text.
     const close = [match(0.1, { travelDealId: "a", quoteId: "qa", title: "Spring Time in Rome" })];
-    expect(pickDealMatch(close, "hi there")?.travelDealId).toBe("a");
+    // Similarity pins only alongside a post reference (see the gate tests
+    // below); on its own "hi there" identifies nothing.
+    expect(pickDealMatch(close, `${SAW_POST} hi there`)?.travelDealId).toBe("a");
+    expect(pickDealMatch(close, "hi there")).toBeNull();
     expect(pickDeterministicDealMatch(close, "hi there")).toBeNull();
     // Named outright → deterministic.
     expect(pickDeterministicDealMatch(close, "the spring time in rome one")?.travelDealId).toBe("a");
@@ -494,5 +501,44 @@ describe("pickDealMatch — sibling posts ruled out by the customer's dated fact
     const crete = dealMatch({ travelDealId: "d-crete", title: "Holiday Deal", travelDate: "2027-04-09", hotelName: "Stella Blue Seaside Resort" }, 0.55);
 
     expect(pickDealMatch([crete], query)?.travelDealId).toBe("d-crete");
+  });
+});
+
+// A plain enquiry is not a post reference. Naming a destination we happen to
+// advertise must not attach that advert — observed: "Looking for a holiday to
+// Albufeira next August" pinned our "Albufeira Summer Break" post and stamped
+// its June flight date onto an August enquiry.
+describe("pickDealMatch — similarity requires the customer to have referenced a post", () => {
+  const albufeira = (distance: number) => ({
+    sourceId: "d-alb",
+    content: "",
+    distance,
+    metadata: {
+      travelDealId: "d-alb",
+      quoteId: "q-alb",
+      title: "Albufeira Summer Break",
+      travelDate: "2026-06-11",
+      price: "439.00",
+      hotelName: "Cerro Mar Colina",
+      postSchedule: "2026-05-01T09:00:00.000Z",
+    },
+  });
+
+  it("does NOT pin when the customer merely says where they want to go", () => {
+    expect(pickDealMatch([albufeira(0.2)], "Looking for a holiday to Albufeira next August near a beach please")).toBeNull();
+  });
+
+  it("pins once they reference a post/advert/image", () => {
+    expect(pickDealMatch([albufeira(0.2)], "saw your Albufeira post, any info?")?.travelDealId).toBe("d-alb");
+    expect(pickDealMatch([albufeira(0.2)], "is this deal on the picture I sent still available?")?.travelDealId).toBe("d-alb");
+  });
+
+  it("still pins on a verbatim hotel name with no post wording at all", () => {
+    // Deterministic evidence — they named the hotel, so they mean that deal.
+    expect(pickDealMatch([albufeira(0.55)], "can you price up Cerro Mar Colina for me")?.travelDealId).toBe("d-alb");
+  });
+
+  it("still pins on a verbatim deal title with no post wording at all", () => {
+    expect(pickDealMatch([albufeira(0.55)], "how much is the albufeira summer break")?.travelDealId).toBe("d-alb");
   });
 });

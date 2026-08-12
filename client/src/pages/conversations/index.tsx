@@ -1,5 +1,5 @@
-import { ConversationsInbox } from "@/features/conversations";
+import { InboxWorkspace } from "@/features/conversations";
 
 export default function ConversationsPage() {
-  return <ConversationsInbox />;
+  return <InboxWorkspace />;
 }

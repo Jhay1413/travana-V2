@@ -19,6 +19,28 @@ export interface SsWebhookEvent {
     };
     conversation?: Record<string, unknown>;
     contact?: Record<string, unknown>;
+    // comment.received — a new comment on a connected IG/FB post.
+    comment?: {
+      // SendSeven's own id (`sc_…`); absent on some deliveries.
+      id?: string;
+      // Meta's comment id — the one the private-reply endpoint takes.
+      external_id?: string;
+      text?: string | null;
+      state?: string;
+      author?: { username?: string | null; name?: string | null; id?: string | null } | null;
+      // Null when SendSeven could not derive a reliable comment timestamp.
+      private_reply_window_expires_at?: string | null;
+      post_id?: string | null;
+      [key: string]: unknown;
+    };
+    // comment.received — the channel the commented-on post belongs to. Also
+    // what `source_filter_mode: "selected"` matches against.
+    channel_id?: string;
+    // True when a SendSeven auto-reply rule or flow already answered, which
+    // permanently spends the comment's single private reply.
+    auto_replied?: boolean;
+    is_reply?: boolean;
+    parent_external_comment_id?: string | null;
   };
 }
 

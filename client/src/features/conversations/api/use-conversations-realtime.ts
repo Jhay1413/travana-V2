@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { conversationsKeys } from "./use-conversations-queries";
 import { messagesKeys } from "./use-messages";
+import { commentsKeys } from "./use-comments";
 
 // Server: server/v2/realtime/realtime.routes.ts (not touched here — see
 // docs/realtime-inbox-sse-plan.md). Module-local base constant, mirroring the
@@ -127,6 +128,7 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
   const resync = useCallback(() => {
     qc.invalidateQueries({ queryKey: conversationsKeys.all });
     qc.invalidateQueries({ queryKey: messagesKeys.all });
+    qc.invalidateQueries({ queryKey: commentsKeys.all });
     onTicketsStaleRef.current?.();
   }, [qc]);
 
@@ -171,6 +173,16 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
       source.addEventListener("ticket.changed", () => {
         onTicketsStaleRef.current?.();
       });
+      // Comment events carry a commentId (sometimes none — the webhook echo
+      // only has Meta's id), never a conversationId, so they skip parsePayload
+      // too. Invalidating the whole comments root is the right granularity:
+      // the queue is state-filtered and paginated, so a new or triaged comment
+      // reorders the list rather than changing one row in place.
+      const invalidateComments = () => {
+        qc.invalidateQueries({ queryKey: commentsKeys.all });
+      };
+      source.addEventListener("comment.received", invalidateComments);
+      source.addEventListener("comment.updated", invalidateComments);
     };
 
     const close = () => {

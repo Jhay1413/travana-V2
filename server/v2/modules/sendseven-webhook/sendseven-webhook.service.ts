@@ -73,7 +73,10 @@ function publishRealtime(orgId: string, event: Parameters<typeof realtimeService
   }
 }
 
-const SUBSCRIBED_EVENTS = ["message.received", "message.sent", "conversation.updated"];
+// NOTE: connectWebhook prunes and recreates the endpoint, so adding an event
+// here only reaches orgs whose webhook is (re)connected afterwards. Existing
+// orgs must be re-registered before they receive comment.received.
+const SUBSCRIBED_EVENTS = ["message.received", "message.sent", "conversation.updated", "comment.received"];
 const MAX_SKEW_SECONDS = 300;
 
 // Verifies X-Sendseven-Signature over `${timestamp}.${rawBody}` (HMAC-SHA256),
@@ -289,6 +292,25 @@ export const sendsevenWebhookService = {
         publishRealtime(orgId, { type: "ai-state.changed", conversationId: conv.id, needsHuman: true });
       }
       if (conv?.id) publishRealtime(orgId, { type: "conversation.updated", conversationId: conv.id });
+      return;
+    }
+
+    // New comment on a connected IG/FB post → refresh the Comments queue.
+    //
+    // Read-only on purpose. The comment itself lives in SendSeven (the queue is
+    // fetched from GET /comments), so there is nothing to persist here, and no
+    // AI branch: comments get exactly one private reply ever, and answering
+    // them automatically is a deliberate later step gated on org opt-in. When
+    // that lands it belongs here, behind its own flag — NOT behind
+    // autoReplyEnabled, which governs DMs and would silently spend every
+    // comment's one reply the moment an org switched the DM bot on.
+    if (event.type === "comment.received") {
+      const comment = event.data?.comment;
+      publishRealtime(orgId, {
+        type: "comment.received",
+        commentId: comment?.id,
+        channelId: event.data?.channel_id,
+      });
       return;
     }
 

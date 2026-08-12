@@ -1,4 +1,6 @@
 export { default as ConversationsInbox } from "./components/conversations-inbox";
+export { InboxWorkspace } from "./components/inbox-workspace";
+export { CommentsPanel } from "./components/comments-panel";
 export { SendSevenIntegrationCard } from "./components/sendseven-integration-card";
 export { ChannelsDialog } from "./components/channels-dialog";
 export { CHANNELS, CHANNEL_ORDER } from "./channels";
@@ -10,6 +12,26 @@ export {
   useCreateConnectToken,
   useDeleteChannel,
 } from "./api/use-channels";
+export { commentsApi, canSendPrivateReply, isPrivateReplyOpen, privateReplyBlockedReason } from "./api/comments.api";
+export {
+  commentsKeys,
+  useComments,
+  useComment,
+  useCommentCapabilities,
+  useTriageComment,
+  usePrivateReply,
+} from "./api/use-comments";
+export type {
+  SsComment,
+  SsCommentList,
+  SsCommentState,
+  SsCommentStateFilter,
+  SsCommentTriageState,
+  SsSocialPost,
+  ListCommentsQuery,
+  PrivateReplyInput,
+  PrivateReplyResult,
+} from "./api/comments.api";
 export { inboxesApi } from "./api/inboxes.api";
 export { inboxesKeys, useInboxes } from "./api/use-inboxes";
 export type { SsInbox } from "./api/inboxes.api";
