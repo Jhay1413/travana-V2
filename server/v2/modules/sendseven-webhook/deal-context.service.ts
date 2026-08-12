@@ -503,6 +503,17 @@ export function pickDealMatch(matches: RetrievedMatch[], queryText?: string): De
   const deterministic = pickDeterministicDealMatch(matches, queryText);
   if (deterministic) return deterministic;
 
+  // Similarity alone must NEVER pin a deal to a customer who has not indicated
+  // they saw one. Naming a destination we happen to advertise is not a
+  // reference to the advert — observed: "Looking for a holiday to Albufeira
+  // next August near a beach please" pinned our "Albufeira Summer Break" post
+  // and stamped its JUNE flight date onto an enquiry that asked for August.
+  // Semantic distance cannot tell "I want to go to X" from "I saw your X
+  // deal"; the customer's own wording (or an image they sent) can. The
+  // DETERMINISTIC path above is exempt — a verbatim deal title or hotel name
+  // is direct evidence they mean that specific deal, however they phrase it.
+  if (!hasPostReferenceSignal(queryText ?? "")) return null;
+
   const all = matches.map(parseCandidate).filter((c): c is DealCandidate => c !== null);
   const candidates = all
     .filter((c) => c.distance <= DEAL_MATCH_MAX_DISTANCE)
