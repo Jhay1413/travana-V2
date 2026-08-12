@@ -19,6 +19,7 @@ import {
   missingCoreFieldsFor,
   missingFieldsFor,
   parseAvailabilityTime,
+  prefersMessagingOverCall,
   shouldCreateEnquiryNow,
   shouldForceTicketNow,
   similarReply,
@@ -886,15 +887,23 @@ export const internalChatTestflowService = {
       }
 
       const rawTime = userText.trim();
-      const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked", rawTime, prevContext.onBehalfOfName, {
-        orgId,
-        feature: "staff_chat_test",
-        userId: scope.userId ?? undefined,
-      });
+      // Mirrors reply-worker: the tester may decline the call ("just message
+      // please"), which must not be confirmed back as a callback.
+      const noCall = prefersMessagingOverCall(rawTime);
+      const confirmReply = await generateTransitionReply(
+        botConfig,
+        kb,
+        noCall ? "message_preferred" : "callback_booked",
+        rawTime,
+        prevContext.onBehalfOfName,
+        { orgId, feature: "staff_chat_test", userId: scope.userId ?? undefined },
+      );
       const enquiryId = session.enquiryId;
       let taskId: string | undefined;
       if (enquiryId && prevContext.enquiryOwnerUserId) {
-        const dueDate = await parseAvailabilityTime(rawTime, {
+        const dueDate = noCall
+          ? null
+          : await parseAvailabilityTime(rawTime, {
           orgId,
           feature: "staff_chat_test",
           userId: scope.userId ?? undefined,
@@ -904,7 +913,9 @@ export const internalChatTestflowService = {
             entityType: "enquiry",
             entityId: enquiryId,
             userId: prevContext.enquiryOwnerUserId,
-            title: `Call back — client available ${rawTime}`,
+            title: noCall
+              ? `Message client (asked NOT to be called) — "${rawTime}"`
+              : `Call back — client available ${rawTime}`,
             dueDate,
             completed: false,
           },

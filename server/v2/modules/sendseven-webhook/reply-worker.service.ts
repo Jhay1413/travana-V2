@@ -23,6 +23,7 @@ import {
   missingCoreFieldsFor,
   missingFieldsFor,
   parseAvailabilityTime,
+  prefersMessagingOverCall,
   shouldCreateEnquiryNow,
   shouldForceTicketNow,
   similarReply,
@@ -185,6 +186,11 @@ const HISTORY_LIMIT = 20;
 // auto-resumes — an agent re-enables the AI from the inbox. 7 days so the
 // auto-resume only fires on genuinely abandoned threads, not mid-deal lulls.
 const RESUME_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+// How long after the LAST activity on a handed-off conversation the AI keeps
+// out of it entirely, even on a new intent. An agent mid-exchange with the
+// customer ("what time suits?" / "around 11") must never be talked over; two
+// hours later, a fresh question is fair game.
+const HUMAN_ACTIVE_COOLOFF_MS = 60 * 60 * 1000;
 const FALLBACK_REPLY = "Thanks for your message — one of our advisors will be in touch shortly.";
 // Inbound message_types that carry a file even when there's no text caption — so
 // a bare passport photo isn't dropped by the text-only gate.
@@ -220,44 +226,50 @@ export const replyWorker = {
 
     const state = await conversationStateRepository.ensure(conversationId, orgId, contactId);
 
-    // Handed to a human: what happens next depends on WHY (handoffReason).
-    // Human-owned hand-offs (a real agent replied / was assigned / manually
-    // disabled the AI) are STICKY — the AI stays silent no matter how long the
-    // conversation idles, so it can never barge into (or duplicate the enquiry
-    // of) a slow-burn deal an agent is working across days. An agent brings it
-    // back with the inbox toggle (enableAi). Only AI-caused hand-offs
-    // (wound down / enquiry completed) auto-resume, and only after
-    // RESUME_AFTER_MS of inactivity, with a clean slate.
+    // Handed to a human: what happens next depends on WHY (handoffReason) and
+    // on whether the customer is raising something NEW.
+    //
+    //   manual_disable  — an agent switched the AI off on purpose. Always
+    //                     silent; only the inbox toggle brings it back.
+    //   everything else — the AI stays out of the conversation the human is
+    //                     handling, but RESUMES when the customer raises a new
+    //                     matter: a fresh sales enquiry, or an admin one (e.g.
+    //                     "I haven't received my call"). Pure chatter ("ok",
+    //                     "thanks") never wakes it. Decided by the same router
+    //                     the live turn uses — see the intent check after the
+    //                     opt-in gate, deferred so it only costs a call on
+    //                     conversations where the AI is actually enabled.
+    //
+    // Two guards keep it out of an agent's way: nothing resumes inside
+    // HUMAN_ACTIVE_COOLOFF_MS of the last activity (they're mid-exchange), and
+    // resuming always starts from a clean slate so the previous enquiry can't
+    // leak into the new one.
+    let pendingResumeCheck = false;
     if (prior?.needsHuman) {
       const handoffReason = (prior.context as ConversationContext | null)?.handoffReason ?? "human_reply";
-      if (handoffReason === "human_reply" || handoffReason === "manual_disable") {
+      if (handoffReason === "manual_disable") {
         console.log(
-          `[sendseven-webhook] conv ${conversationId} handed to human (reason=${handoffReason}) — sticky, staying silent until re-enabled`,
+          `[sendseven-webhook] conv ${conversationId} AI switched off by an agent — staying silent until re-enabled`,
         );
         return;
       }
-      if (inactiveMs < RESUME_AFTER_MS) {
+      if (inactiveMs < HUMAN_ACTIVE_COOLOFF_MS) {
         console.log(
-          `[sendseven-webhook] conv ${conversationId} handed off (reason=${handoffReason}, active ${Math.round(inactiveMs / 1000)}s ago) — staying silent`,
+          `[sendseven-webhook] conv ${conversationId} handed off (reason=${handoffReason}, active ${Math.round(inactiveMs / 1000)}s ago) — inside the cool-off, staying silent`,
         );
         return;
       }
-      console.log(`[sendseven-webhook] conv ${conversationId} idle ${Math.round(inactiveMs / 60000)}m — AI re-engaging`);
-      // Clear context too: stale groupedAskSent/availabilityTaskId/enquiryOwnerUserId
-      // flags from the previous enquiry cycle must not leak into a fresh start.
-      await conversationStateRepository.update(conversationId, {
-        needsHuman: false,
-        handledByHumanAt: null,
-        enquiryStatus: null,
-        enquirySlots: {},
-        enquiryId: null,
-        context: null,
-      });
-      state.needsHuman = false;
-      state.enquiryStatus = null;
-      state.enquirySlots = null;
-      state.enquiryId = null;
-      state.context = null;
+      // Past the long idle window the thread counts as abandoned: resume
+      // without spending a router call on it.
+      pendingResumeCheck = inactiveMs < RESUME_AFTER_MS;
+      console.log(
+        pendingResumeCheck
+          ? `[sendseven-webhook] conv ${conversationId} handed off (reason=${handoffReason}, idle ${Math.round(inactiveMs / 60000)}m) — checking for a new intent`
+          : `[sendseven-webhook] conv ${conversationId} idle ${Math.round(inactiveMs / 60000)}m — AI re-engaging`,
+      );
+      // Deferred when an intent check is still owed — resuming writes the
+      // clean slate, staying silent must leave the hand-off untouched.
+      if (!pendingResumeCheck) await clearHandoff(conversationId, state);
     }
 
     // Resolve an EXISTING client (link or phone/email match). We do NOT auto-create
@@ -320,6 +332,32 @@ export const replyWorker = {
           `clientAi=${client ? String(!!client.aiReplyEnabled) : "n/a"} enabledAt=${integration?.autoReplyEnabledAt ? "set" : "none"}) — staying silent`,
       );
       return;
+    }
+
+    // ── Resume-on-new-intent (handed-off conversations) ──────────────────
+    // The customer has come back to a conversation a human took over. Wake the
+    // AI only for a NEW matter — a fresh sales enquiry, or an admin one like
+    // "I haven't received my call" — never for chatter ("ok", "thanks") that
+    // belongs to the exchange the agent is already having. Classified from the
+    // latest message alone: the prior transcript is the HUMAN's conversation,
+    // and feeding it in would drag the old topic into the verdict. A router
+    // failure falls back to "general", i.e. stay out of the agent's way.
+    if (pendingResumeCheck) {
+      const resumeText = message.text?.trim() ?? "";
+      const resumeRoute = resumeText
+        ? await classifyConversationRoute({
+            transcript: resumeText,
+            latestText: resumeText,
+            enquiryInFlight: false,
+            orgId,
+          })
+        : "general";
+      if (resumeRoute === "general") {
+        console.log(`[sendseven-webhook] conv ${conversationId} no new intent (route=general) — leaving it with the agent`);
+        return;
+      }
+      console.log(`[sendseven-webhook] conv ${conversationId} new ${resumeRoute} intent — AI re-engaging with a clean slate`);
+      await clearHandoff(conversationId, state);
     }
 
     const mode = integration?.autoReplyMode ?? "draft";
@@ -1192,16 +1230,31 @@ export const replyWorker = {
         }
 
         const rawTime = (message.text ?? "").trim();
-        const confirmReply = await generateTransitionReply(botConfig, kb, "callback_booked", rawTime, prevContext.onBehalfOfName, { orgId });
+        // They may answer "what time suits?" by declining the call altogether
+        // ("can you just message please"). Confirming a callback then reads as
+        // not listening — and the agent must know to message, not ring.
+        const noCall = prefersMessagingOverCall(rawTime);
+        const confirmReply = await generateTransitionReply(
+          botConfig,
+          kb,
+          noCall ? "message_preferred" : "callback_booked",
+          rawTime,
+          prevContext.onBehalfOfName,
+          { orgId },
+        );
         let taskId: string | undefined;
         if (state.enquiryId && prevContext.enquiryOwnerUserId) {
-          const dueDate = await parseAvailabilityTime(rawTime, { orgId });
+          // No call wanted → no time to parse; the task is still created so the
+          // enquiry is actioned, just as a message rather than a ring.
+          const dueDate = noCall ? null : await parseAvailabilityTime(rawTime, { orgId });
           const created = await taskService.create(
             {
               entityType: "enquiry",
               entityId: state.enquiryId,
               userId: prevContext.enquiryOwnerUserId,
-              title: `Call back — client available ${rawTime}`,
+              title: noCall
+                ? `Message client (asked NOT to be called) — "${rawTime}"`
+                : `Call back — client available ${rawTime}`,
               dueDate,
               completed: false,
             },
@@ -1417,6 +1470,27 @@ async function isNewConversationDefaultOn(
   await conversationStateRepository.update(conversationId, { context: nextContext });
   state.context = nextContext;
   return isNew;
+}
+
+// Clears a hand-off and starts the conversation over: needsHuman off, and the
+// previous enquiry cycle wiped (status/slots/enquiryId/context) so its stale
+// groupedAskSent/availabilityTaskId/enquiryOwnerUserId flags — and its
+// collected details — can never leak into the new one. Mutates `state` as well
+// as the row, since the rest of the turn reads from it.
+async function clearHandoff(conversationId: string, state: SendsevenConversationState): Promise<void> {
+  await conversationStateRepository.update(conversationId, {
+    needsHuman: false,
+    handledByHumanAt: null,
+    enquiryStatus: null,
+    enquirySlots: {},
+    enquiryId: null,
+    context: null,
+  });
+  state.needsHuman = false;
+  state.enquiryStatus = null;
+  state.enquirySlots = null;
+  state.enquiryId = null;
+  state.context = null;
 }
 
 // Atomically claims the right to send a reply for THIS inbound message on the

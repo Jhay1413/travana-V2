@@ -12,6 +12,7 @@ import {
   isAcknowledgement,
   looksLikeActionableAdmin,
   looksLikeAdminAsk,
+  prefersMessagingOverCall,
   MAX_ENQUIRY_ASKS,
   missingCoreFieldsFor,
   normalizeTurnSlots,
@@ -935,5 +936,91 @@ describe("buildSystemPrompt (asking-style guardrails)", () => {
     expect(pinned).toContain("destination, dates, nights, party size — never budget in this conversation");
     // Without a pinned deal budget is a legitimate core ask again.
     expect(buildSystemPrompt(botConfig, [], null, true)).toContain("destination, dates, nights, party size, budget");
+  });
+});
+
+// Chasing phrases — the customer asking after something we owe them. These name
+// no record noun, so before ADMIN_CHASING_RE they fell through to the LLM
+// router; on a handed-off conversation that verdict decides whether the AI
+// re-engages at all, so a coin-flip meant a chasing customer sometimes got
+// silence.
+describe("looksLikeAdminAsk — chasing an update", () => {
+  it("recognises the customer chasing us", () => {
+    for (const text of [
+      "any update?",
+      "Any update on this please",
+      "any news?",
+      "Hi I haven't received my call",
+      "havent heard anything back",
+      "I have not heard from anyone",
+      "still waiting on my quote",
+      "nobody called me",
+      "no one has been in touch",
+      "chasing my booking confirmation",
+      "when will I hear back?",
+      "when do we get the tickets",
+      // The polite British chase — names no record noun at all.
+      "hiya were you able to sort a price for the mini cruise?",
+      "any joy with the price?",
+      "did you manage to get a price?",
+      "have you had a chance to look at this?",
+    ]) {
+      expect(looksLikeAdminAsk(text), text).toBe(true);
+    }
+  });
+
+  it("does not fire on sales chatter that merely sounds like waiting", () => {
+    for (const text of [
+      "still waiting on my mate to decide",
+      "we want to go in August",
+      "any deals for Spain?",
+      "10 or 11 nights please",
+    ]) {
+      expect(looksLikeAdminAsk(text), text).toBe(false);
+    }
+  });
+
+  it("chasing alone is not ticket-worthy — the admin bot answers from records first", () => {
+    expect(looksLikeActionableAdmin("any update?")).toBe(false);
+    // A genuine complaint still is.
+    expect(looksLikeActionableAdmin("this is unacceptable, I want a refund")).toBe(true);
+  });
+});
+
+// Answering "what time suits for a call?" by declining the call. Observed
+// failure: "Can you just message please" was confirmed back as "one of the team
+// will give you a ring then" — the opposite of what they asked for.
+describe("prefersMessagingOverCall", () => {
+  it("recognises a customer declining the call", () => {
+    for (const text of [
+      "Can you just message please",
+      "can you message me instead",
+      "just message me",
+      "text me instead please",
+      "could you whatsapp me",
+      "email me please",
+      "no calls please",
+      "please don't call me",
+      "I'd rather not be called",
+      "prefer to message",
+      "message is fine",
+      "keep it on here please",
+    ]) {
+      expect(prefersMessagingOverCall(text), text).toBe(true);
+    }
+  });
+
+  it("does not fire when they actually want a call", () => {
+    for (const text of [
+      "anytime today please",
+      "around 11",
+      "Maybe 1pm would be good",
+      "call me after 5",
+      "ring me tomorrow morning",
+      "message me the time then call me",
+      "",
+    ]) {
+      expect(prefersMessagingOverCall(text), text).toBe(false);
+    }
   });
 });

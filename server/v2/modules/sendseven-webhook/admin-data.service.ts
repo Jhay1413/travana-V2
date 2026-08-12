@@ -3,6 +3,8 @@ import { ticketAttachmentService } from "../ticket/ticket-attachment.service";
 import { clientFileService } from "../client/client-file.service";
 import { internalChatClientsRepository } from "../internal-chat/internal-chat-clients.repository";
 import { branchMemberRepository } from "../branch-member/branch-member.repository";
+import { taskService } from "../task/task.service";
+import { describeUkNow } from "../../utils/uk-time";
 import { systemScope } from "./identity.service";
 import type { InsertTicket } from "@shared/schema";
 
@@ -85,6 +87,30 @@ export interface CustomerSafeEnquiry {
   partySize: { adults: number | null; children: number | null; infants: number | null };
   budget: string | null;
   createdAt: Date | null;
+  // The callback a colleague still owes them, in UK wall-clock terms
+  // ("Thursday 6 August, 11:30") — the AI books these itself at the end of an
+  // enquiry, so without it a customer chasing ("any update?", "I haven't had
+  // my call") gets a vague "someone will be in touch" when the exact time is
+  // sitting in the task list. Null when nothing is outstanding.
+  scheduledCall: string | null;
+}
+
+// The soonest callback still owed on an enquiry, rendered in UK wall-clock
+// terms for the customer. Only incomplete, dated tasks count, and past-due ones
+// are ignored — telling someone they're booked in for a time that has already
+// gone is worse than saying nothing (they're chasing precisely because it
+// didn't happen). Best-effort: any failure reads as "no callback known".
+async function outstandingCallbackFor(orgId: string, enquiryId: string): Promise<string | null> {
+  try {
+    const tasks = await taskService.listByEntity("enquiry", enquiryId, systemScope(orgId));
+    const upcoming = tasks
+      .filter((t) => !t.completed && t.dueDate && new Date(t.dueDate).getTime() > Date.now())
+      .sort((a, b) => new Date(a.dueDate as Date).getTime() - new Date(b.dueDate as Date).getTime())[0];
+    return upcoming?.dueDate ? describeUkNow(new Date(upcoming.dueDate)) : null;
+  } catch (err) {
+    console.error(`[admin-data] callback lookup failed for enquiry ${enquiryId}:`, err);
+    return null;
+  }
 }
 
 export const adminDataService = {
@@ -164,7 +190,11 @@ export const adminDataService = {
   async getEnquiries(orgId: string, clientId: string): Promise<CustomerSafeEnquiry[]> {
     try {
       const { rows } = await internalChatClientsRepository.getClientEnquiryDetails(clientId, orgId);
-      return rows.map((r) => ({
+      // One task lookup per enquiry, in parallel — the list is already capped
+      // by the repository, and a failure degrades to "no callback known"
+      // rather than losing the enquiry itself.
+      const calls = await Promise.all(rows.map((r) => outstandingCallbackFor(orgId, r.id)));
+      return rows.map((r, i) => ({
         title: r.title,
         status: r.status,
         holidayType: r.holidayTypeName,
@@ -173,6 +203,7 @@ export const adminDataService = {
         partySize: { adults: r.adults, children: r.children, infants: r.infants },
         budget: r.budget,
         createdAt: r.dateCreated,
+        scheduledCall: calls[i],
       }));
     } catch (err) {
       console.error(`[admin-data] getEnquiries failed for client ${clientId}:`, err);

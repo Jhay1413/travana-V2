@@ -442,60 +442,102 @@ describe("handleInbound — pre-onboarding attachment deferral", () => {
 // with a clean slate.
 describe("handleInbound — hand-off resume gate", () => {
   const DAYS = 24 * 60 * 60 * 1000;
+  const MINUTES = 60 * 1000;
 
-  it("stays silent forever on a human-reply hand-off, even after weeks of idle", async () => {
-    vi.mocked(conversationStateRepository.find).mockResolvedValue(
-      makeState({ needsHuman: true, context: { handoffReason: "human_reply" } as never, updatedAt: new Date(Date.now() - 30 * DAYS) }),
-    );
+  const handedOff = (reason: string, idleMs: number) =>
+    makeState({ needsHuman: true, context: { handoffReason: reason } as never, updatedAt: new Date(Date.now() - idleMs) });
 
-    await replyWorker.handleInbound(ORG_ID, makeEvent());
+  it("stays silent when an agent switched the AI off, whatever the customer says", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(handedOff("manual_disable", 30 * DAYS));
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "looking for Tenerife in August" }));
 
     expect(generateTurn).not.toHaveBeenCalled();
     expect(messagesRepository.send).not.toHaveBeenCalled();
     expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
-    // No clean-slate resume write either — the hand-off state is untouched.
-    expect(conversationStateRepository.update).not.toHaveBeenCalledWith(
-      "conv-1",
-      expect.objectContaining({ needsHuman: false }),
-    );
+    // An explicit "off" is never overridden by intent — the router isn't even consulted.
+    expect(classifyConversationRoute).not.toHaveBeenCalled();
+    expect(conversationStateRepository.update).not.toHaveBeenCalledWith("conv-1", expect.objectContaining({ needsHuman: false }));
   });
 
-  it("treats a hand-off with no recorded reason (pre-existing rows) as human-owned — stays silent", async () => {
-    vi.mocked(conversationStateRepository.find).mockResolvedValue(
-      makeState({ needsHuman: true, context: null, updatedAt: new Date(Date.now() - 30 * DAYS) }),
-    );
+  it("stays out of an exchange the agent is actively having (inside the cool-off)", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(handedOff("human_reply", 10 * MINUTES));
 
-    await replyWorker.handleInbound(ORG_ID, makeEvent());
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "I haven't received my call" }));
 
-    expect(generateTurn).not.toHaveBeenCalled();
+    expect(classifyConversationRoute).not.toHaveBeenCalled();
     expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
   });
 
-  it("stays silent on an AI-caused hand-off that is still inside the resume window", async () => {
-    vi.mocked(conversationStateRepository.find).mockResolvedValue(
-      makeState({ needsHuman: true, context: { handoffReason: "ai_wound_down" } as never, updatedAt: new Date(Date.now() - 2 * DAYS) }),
-    );
+  it("stays silent on mere chatter — that belongs to the agent's exchange", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(handedOff("human_reply", 3 * DAYS));
+    vi.mocked(classifyConversationRoute).mockResolvedValue("general");
 
-    await replyWorker.handleInbound(ORG_ID, makeEvent());
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "ok" }));
 
     expect(generateTurn).not.toHaveBeenCalled();
     expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+    // The hand-off is left untouched for the agent.
+    expect(conversationStateRepository.update).not.toHaveBeenCalledWith("conv-1", expect.objectContaining({ needsHuman: false }));
   });
 
-  it("resumes with a clean slate on an AI-caused hand-off after the resume window", async () => {
-    vi.mocked(conversationStateRepository.find).mockResolvedValue(
-      makeState({ needsHuman: true, context: { handoffReason: "enquiry_scheduled" } as never, updatedAt: new Date(Date.now() - 8 * DAYS) }),
-    );
+  it("resumes on a NEW admin intent after a human hand-off (\"I haven't received my call\")", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(handedOff("human_reply", 3 * DAYS));
+    vi.mocked(classifyConversationRoute).mockResolvedValue("admin");
 
-    await replyWorker.handleInbound(ORG_ID, makeEvent());
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "Hi I haven't received my call" }));
 
-    // Clean-slate reset persisted before processing…
+    // Clean slate first, so the previous enquiry can't leak into the new matter.
     expect(conversationStateRepository.update).toHaveBeenCalledWith(
       "conv-1",
       expect.objectContaining({ needsHuman: false, enquiryStatus: null, enquirySlots: {}, enquiryId: null, context: null }),
     );
-    // …and the turn then processed normally (general route, draft mode → note).
+  });
+
+  it("resumes on a NEW sales intent after a human hand-off", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(handedOff("human_reply", 3 * DAYS));
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "can you look at Tenerife for us next May" }));
+
+    expect(conversationStateRepository.update).toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ needsHuman: false, enquiryStatus: null }),
+    );
+  });
+
+  it("applies the same rule to an AI-caused hand-off (enquiry logged, customer comes back)", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(handedOff("enquiry_scheduled", 2 * DAYS));
+    vi.mocked(classifyConversationRoute).mockResolvedValue("general");
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "thanks" }));
+
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("resumes without a router call once the thread is genuinely abandoned", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(handedOff("human_reply", 8 * DAYS));
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(classifyConversationRoute).not.toHaveBeenCalledWith(expect.objectContaining({ enquiryInFlight: false, transcript: "hello there" }));
+    expect(conversationStateRepository.update).toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ needsHuman: false, enquiryStatus: null, enquirySlots: {}, enquiryId: null, context: null }),
+    );
     expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats a hand-off with no recorded reason (pre-existing rows) as a human one", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({ needsHuman: true, context: null, updatedAt: new Date(Date.now() - 10 * MINUTES) }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    // Inside the cool-off → silent, exactly like an explicit human_reply.
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
   });
 });
 
