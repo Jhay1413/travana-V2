@@ -624,6 +624,52 @@ describe("gallery from booking JSON", () => {
   });
 });
 
+// From a real TUI retail-agents capture. TUI does two things no other portal
+// does: it packs the resize instruction into a COMPOUND query parameter
+// ("?i10c=img.resize(width:470)" — colon, not "="), and it embeds a Qualtrics
+// survey widget whose button images sit off-site alongside the photo CDN.
+describe("gallery from a TUI capture", () => {
+  const spec = { version: 1, fields: {} } as unknown as ExtractionSpec;
+  const PAGE = "https://retailagents.tui.co.uk/retail/bookaccommodation?productCode=013537";
+  const C = "https://content.tui.co.uk/adamtui/";
+  const size = (w: number, h: number) => `?i10c=img.resize(width:${w});img.crop(width:${w}%2Cheight:${h})`;
+  const TUN_12 = `${C}2018_4/19_9/fa7bc8f4/ACC_013537_TUN_12WebOriginalCompressed.jpg`;
+  const TUN_13 = `${C}2018_4/19_9/9fea3bf6/ACC_013537_TUN_13WebOriginalCompressed.jpg`;
+
+  const images = [
+    { src: "https://www.tui.co.uk/static-images/_ui/mobile/framework/tui-light/TUI-Logo.svg" },
+    { src: TUN_12 + size(470, 265) },
+    { src: "https://www.tui.co.uk/static-images/_ui/mobile/framework/tui-light/image_coming_soon.png" },
+    { src: "https://mwa.tui.com/shared/mwa/assets/v2/pictograms/room-change.svg" },
+    // Qualtrics' survey prompt — off-site, and its filename reads as neither
+    // chrome nor photography.
+    { src: "https://siteintercept.qualtrics.com/WRQualtricsShared/Graphics/siteintercept/wr-dialog-close-btn-black.png" },
+  ];
+
+  // Traversal order matters: the 658 copy is reached before the 1080 one.
+  const apiJson = {
+    packageData: { accommodation: { imageUrl: TUN_12 + size(658, 370), imageUrls: [TUN_13 + size(488, 274)] } },
+    packageViewData: { accomViewData: [{ accomImageUrl: TUN_12 + size(1080, 608) }] },
+  };
+
+  const gallery = () =>
+    runExtractionSpec(spec, { title: "", text: "x".repeat(300), url: PAGE, images, apiJson }, "x").hotel_images;
+
+  it("keeps the 1080 hero, not the 658 copy that was seen first", () => {
+    const tun12 = gallery().find((s) => s.includes("TUN_12"));
+    expect(tun12).toContain("width:1080");
+  });
+
+  it("counts each photo once across its four sizes", () => {
+    expect(gallery().filter((s) => s.includes("TUN_12"))).toHaveLength(1);
+    expect(gallery()).toHaveLength(2); // TUN_12 + TUN_13
+  });
+
+  it("drops the survey widget, the logo, the placeholder and the pictogram", () => {
+    expect(gallery().every((s) => s.includes("content.tui.co.uk"))).toBe(true);
+  });
+});
+
 // A jsonPath can land on a COMPOSITE value (an occupancy string, a label). The
 // number transform must reject those rather than mangle them into a plausible
 // figure, so the rule falls through to its regex/DOM source.

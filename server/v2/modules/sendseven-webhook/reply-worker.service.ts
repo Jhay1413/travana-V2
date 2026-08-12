@@ -614,6 +614,7 @@ export const replyWorker = {
         // message id to claim on) returns silently, same as the admin path.
         if (!(await claimReply(conversationId, orgId, message.id))) return;
         const reply = await generateGeneralReply(botConfig, kb, transcript, client, undefined, contactName);
+        if (await supersededByNewerMessage(conversationId, message.id)) return;
         try {
           await sendReply(orgId, conversationId, message.channel_id, reply, mode, false);
         } catch (err) {
@@ -801,6 +802,8 @@ export const replyWorker = {
           // tends to deny being able to "view" them).
           const onboardingReply =
             currentKind === "document" ? await generateDocumentReceivedAsk(botConfig, kb, { orgId }) : onboard.reply;
+          // A burst ("…cheap all inclusive" then "3 people") must produce ONE ask.
+          if (await supersededByNewerMessage(conversationId, message.id)) return;
           await sendReply(orgId, conversationId, message.channel_id, onboardingReply, mode, false);
           await conversationStateRepository.update(conversationId, {
             lastAiReplyAt: new Date(),
@@ -1435,6 +1438,7 @@ export const replyWorker = {
           // redelivery of the same message would ask the same follow-up
           // question twice.
           if (!(await claimReply(conversationId, orgId, message.id))) return;
+          if (await supersededByNewerMessage(conversationId, message.id)) return;
           try {
             await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
           } catch (err) {
@@ -1457,6 +1461,7 @@ export const replyWorker = {
         update.enquirySlots = mergedSlots;
         update.context = { ...prevContext, lastReply: turn.reply, askCount: askCount + 1 };
         if (!(await claimReply(conversationId, orgId, message.id))) return;
+        if (await supersededByNewerMessage(conversationId, message.id)) return;
         try {
           await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
         } catch (err) {
@@ -1547,6 +1552,40 @@ async function isNewConversationDefaultOn(
   await conversationStateRepository.update(conversationId, { context: nextContext });
   state.context = nextContext;
   return isNew;
+}
+
+// True when the customer has sent ANOTHER message since the one this turn is
+// answering — so this turn should step aside and let the newer message's own
+// turn reply with the fuller picture.
+//
+// Customers routinely fire two or three messages in a row ("…for a week cheap
+// all inclusive", then "3 people"). Each arrives as its OWN webhook, so the
+// per-message claim can't help: they are different messages, each legitimately
+// winning its own claim, and the thread fills with near-duplicate replies
+// (observed: the same "can you pop me your name and best phone number" twice,
+// seconds apart).
+//
+// Deliberately checked immediately BEFORE sending rather than when the turn
+// starts: the AI calls in between take a second or two, which is exactly the
+// window a burst lands in. Fails OPEN — a lookup error sends the reply, since a
+// possible duplicate beats a customer left unanswered.
+async function supersededByNewerMessage(conversationId: string, messageId: string | undefined): Promise<boolean> {
+  if (!messageId) return false;
+  try {
+    const list = await messagesRepository.list({ conversationId, page: 1, pageSize: 10 });
+    const inbound = (Array.isArray(list.items) ? list.items : [])
+      .filter((m) => m.direction === "inbound" && m.id && m.text?.trim())
+      .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+    const newest = inbound[inbound.length - 1];
+    if (!newest || newest.id === messageId) return false;
+    console.log(
+      `[sendseven-webhook] conv ${conversationId} message ${messageId} superseded by newer inbound ${newest.id} — leaving the reply to that turn`,
+    );
+    return true;
+  } catch (err) {
+    console.error(`[sendseven-webhook] conv ${conversationId} supersede check failed (replying anyway):`, err);
+    return false;
+  }
 }
 
 // Clears a hand-off and starts the conversation over: needsHuman off, and the

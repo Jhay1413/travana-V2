@@ -743,3 +743,57 @@ describe("handleInbound — follow-up task lifecycle", () => {
     expect(taskService.create).toHaveBeenCalledTimes(1);
   });
 });
+
+// Message bursts: customers routinely send two or three messages seconds apart
+// ("...for a week cheap all inclusive", then "3 people"). Each is its own
+// webhook with its own message id, so the per-message claim cannot dedupe them
+// — observed: the same "pop me your name and phone number" ask sent twice.
+describe("handleInbound — burst of messages produces ONE reply", () => {
+  const older = { id: "msg-1", direction: "inbound", text: "Egypt for a week, cheap all inclusive", created_at: "2026-08-09T21:25:00.000Z" };
+  const newer = { id: "msg-2", direction: "inbound", text: "3 people", created_at: "2026-08-09T21:25:20.000Z" };
+
+  beforeEach(() => {
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null, aiOverride: "enabled" }));
+    vi.mocked(messagesRepository.list).mockResolvedValue({ items: [older, newer] } as never);
+    vi.mocked(generateTurn).mockResolvedValue({
+      hand_off: false, intent: "enquiry", slots: {}, client: {}, beneficiary: { onBehalf: false },
+      reply: "Can you pop me your name and best phone number?",
+    } as never);
+  });
+
+  it("stays quiet on the earlier message once a newer one has arrived", async () => {
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ id: "msg-1", text: older.text }));
+
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+    expect(messagesRepository.send).not.toHaveBeenCalled();
+  });
+
+  it("replies to the LATEST message of the burst", async () => {
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ id: "msg-2", text: newer.text }));
+
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("still replies when the customer sent only one message", async () => {
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+    vi.mocked(messagesRepository.list).mockResolvedValue({ items: [older] } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ id: "msg-1", text: older.text }));
+
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("replies anyway if the supersede lookup fails (never leaves them unanswered)", async () => {
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+    vi.mocked(messagesRepository.list)
+      .mockResolvedValueOnce({ items: [older] } as never)  // the turn's own history fetch
+      .mockRejectedValueOnce(new Error("SendSeven down"));  // the supersede check
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ id: "msg-1", text: older.text }));
+
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+});

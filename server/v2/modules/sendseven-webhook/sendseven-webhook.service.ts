@@ -9,6 +9,7 @@ import { realtimeService } from "../../realtime/realtime.service";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { systemScope } from "./identity.service";
+import { scheduleInboundReply } from "./reply-debounce.service";
 import { replyWorker } from "./reply-worker.service";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
 import type { ConversationAiState, SsWebhookEndpointCreated, SsWebhookEvent } from "./sendseven-webhook.types";
@@ -316,8 +317,18 @@ export const sendsevenWebhookService = {
 
     // Inbound customer message → notify the inbox, and let the AI reply if it's on.
     if (event.type === "message.received" && m?.direction === "inbound") {
+      // The inbox update is immediate for EVERY message — only the AI's reply
+      // is debounced, so agents still see each message land in realtime.
       if (conversationId) publishRealtime(orgId, { type: "message.received", conversationId });
-      if (aiEnabled) await replyWorker.handleInbound(orgId, event);
+      if (aiEnabled) {
+        if (conversationId) {
+          // Held briefly so a burst ("…all inclusive" / "3 people") gets ONE
+          // reply, written with everything they said — see reply-debounce.
+          scheduleInboundReply(orgId, conversationId, event, (o, e) => replyWorker.handleInbound(o, e));
+        } else {
+          await replyWorker.handleInbound(orgId, event);
+        }
+      }
     }
   },
 

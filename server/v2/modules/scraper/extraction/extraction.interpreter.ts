@@ -352,8 +352,16 @@ function imagesFromJson(apiJson: unknown): string[] {
 
 // How wide a resizer was asked to render this image, when the size rides in the
 // query string. Path-encoded sizes go through pathSizeHint; sizeHint reads both.
+//
+// Two spellings, because portals disagree. A plain parameter ("?w=1080",
+// "?wid=700") and a COMPOUND one that packs a whole instruction into a single
+// value — TUI ships "?i10c=img.resize(width:470);img.crop(width:470,height:265)",
+// where the width sits behind a colon inside another parameter. Matching only
+// "w=" made every TUI variant of one photo score 0, so the first URL seen won
+// and a 658px thumbnail shipped in place of the 1080px hero that was also on
+// the page. Hence the wider prefix/separator classes.
 function widthHint(src: string): number {
-  const m = /[?&](?:w|wid|width)=(\d{2,5})\b/i.exec(src);
+  const m = /[?&:,;(](?:w|wid|width)[=:](\d{2,5})\b/i.exec(src);
   return m ? Number(m[1]) : 0;
 }
 
@@ -399,8 +407,13 @@ function selectGalleryImages(
   pageUrl: string,
 ): string[] {
   if (!images || images.length === 0) return [];
-  // Third-party widgets (reviews, maps, social) are never the property gallery.
-  const EXCLUDE = /tripadvisor|tacdn|googleapis|gstatic|feefo|facebook|twitter|doubleclick|recaptcha/i;
+  // Third-party widgets (reviews, maps, social, surveys) are never the property
+  // gallery. These are matched by HOST because a widget's own filenames are
+  // arbitrary — Qualtrics' survey prompt ships "wr-dialog-close-btn-black.png",
+  // which reads as neither chrome nor photography and was landing in TUI
+  // galleries as a result.
+  const EXCLUDE =
+    /tripadvisor|tacdn|googleapis|gstatic|feefo|facebook|twitter|doubleclick|recaptcha|qualtrics|siteintercept/i;
   // Site furniture: logos, UI icons, flags, pictograms, "image coming soon"
   // placeholders and anything under a static-asset path. These outnumber the
   // real photography on some portals, so counting images per host picks the
