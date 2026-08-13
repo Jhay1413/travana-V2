@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeUkNow, formatUkLocal, nextUkTimeAt, parseUkLocalDateTime, toUkWallClock, ukLocalToUtc } from "./uk-time";
+import { describeUkNow, formatUkLocal, nextUkCallbackSlot, parseUkLocalDateTime, toUkWallClock, ukLocalToUtc } from "./uk-time";
 
 // The whole point of this util is that a UK wall-clock time survives the
 // GMT/BST switch intact — a callback booked for "10pm" must be 10pm in London
@@ -86,22 +86,36 @@ describe("formatUkLocal / describeUkNow", () => {
   });
 });
 
-describe("nextUkTimeAt", () => {
-  it("uses today when the hour is still ahead", () => {
-    // 08:00 UK (07:00 UTC, BST) — 10am today is still to come.
-    const slot = nextUkTimeAt(10, new Date("2026-08-06T07:00:00.000Z"));
-    expect(formatUkLocal(slot)).toBe("2026-08-06 10:00");
+describe("nextUkCallbackSlot", () => {
+  // UK clock == UTC+1 in August, == UTC in January.
+  const at = (iso: string) => formatUkLocal(nextUkCallbackSlot(new Date(iso)));
+
+  it("books the next whole hour during office hours", () => {
+    expect(at("2026-08-06T09:30:00.000Z")).toBe("2026-08-06 11:00"); // 10:30 UK
+    expect(at("2026-08-06T09:05:00.000Z")).toBe("2026-08-06 11:00");
+    expect(at("2026-08-06T13:30:00.000Z")).toBe("2026-08-06 15:00");
   });
 
-  it("rolls to tomorrow once the hour has passed", () => {
-    // 21:37 UK — the "anytime" case that prompted this: a task due at 10am
-    // today would already be overdue, so it belongs tomorrow morning.
-    const slot = nextUkTimeAt(10, new Date("2026-08-06T20:37:00.000Z"));
-    expect(formatUkLocal(slot)).toBe("2026-08-07 10:00");
+  it("allows 4pm but not past it", () => {
+    // 15:30 UK → 16:00 is still fine.
+    expect(at("2026-08-06T14:30:00.000Z")).toBe("2026-08-06 16:00");
+    // 16:30 UK → next hour would be 17:00, so it waits for the morning.
+    expect(at("2026-08-06T15:30:00.000Z")).toBe("2026-08-07 10:00");
   });
 
-  it("stays 10am UK across the GMT/BST divide", () => {
-    expect(formatUkLocal(nextUkTimeAt(10, new Date("2026-01-15T06:00:00.000Z")))).toBe("2026-01-15 10:00");
-    expect(formatUkLocal(nextUkTimeAt(10, new Date("2026-07-15T06:00:00.000Z")))).toBe("2026-07-15 10:00");
+  it("waits for opening time when the customer answers early", () => {
+    // 07:30 UK → 08:00 is before we open.
+    expect(at("2026-08-06T06:30:00.000Z")).toBe("2026-08-06 10:00");
+  });
+
+  it("books the morning after a late-night answer, never midnight", () => {
+    // 23:30 UK — the next hour is 00:00, which is no use to anyone.
+    expect(at("2026-08-06T22:30:00.000Z")).toBe("2026-08-07 10:00");
+    expect(at("2026-08-07T01:00:00.000Z")).toBe("2026-08-07 10:00");
+  });
+
+  it("behaves the same in GMT as in BST", () => {
+    expect(at("2026-01-15T10:30:00.000Z")).toBe("2026-01-15 11:00");
+    expect(at("2026-01-15T16:30:00.000Z")).toBe("2026-01-16 10:00");
   });
 });

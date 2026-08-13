@@ -41,7 +41,7 @@ import { neonClientService } from "../neon-client/neon-client.service";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
 import { orgUserId as defaultOwnerUserId, resolveAndCreateEnquiry } from "./enquiry-auto-create.service";
-import { formatUkLocal } from "../../utils/uk-time";
+import { formatUkLocal, nextUkCallbackSlot } from "../../utils/uk-time";
 import {
   extractPhoneNumber,
   resolveClientForOnboarding,
@@ -198,10 +198,7 @@ const RESUME_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 // customer ("what time suits?" / "around 11") must never be talked over; two
 // hours later, a fresh question is fair game.
 const HUMAN_ACTIVE_COOLOFF_MS = 60 * 60 * 1000;
-// How far ahead a callback is booked when the customer gives no usable time
-// ("anytime", "today") — far enough out that the team realistically gets to it,
-// close enough that "today" still means today.
-const CALLBACK_LEAD_HOURS = 3;
+
 const FALLBACK_REPLY = "Thanks for your message — one of our advisors will be in touch shortly.";
 // Inbound message_types that carry a file even when there's no text caption — so
 // a bare passport photo isn't dropped by the text-only gate.
@@ -1323,12 +1320,11 @@ export const replyWorker = {
           // nothing (undated task, invisible in every due-date view), and the
           // second resolves to 10:00 — already past by the afternoon, so it
           // rolls to TOMORROW and the callback silently slips a day. Both get
-          // a slot CALLBACK_LEAD_HOURS from now instead, which keeps "today"
-          // on today and gives the team a realistic window.
+          // the next whole hour instead, which keeps "today" on today.
           if (!noCall && (isOpenAvailability(rawTime) || saysToday(rawTime)) && (!dueDate || saysToday(rawTime))) {
-            dueDate = new Date(Date.now() + CALLBACK_LEAD_HOURS * 60 * 60 * 1000);
+            dueDate = nextUkCallbackSlot();
             console.log(
-              `[sendseven-webhook] conv ${conversationId} no usable time in "${rawTime}" — callback set ${CALLBACK_LEAD_HOURS}h out, ${formatUkLocal(dueDate)} UK`,
+              `[sendseven-webhook] conv ${conversationId} no usable time in "${rawTime}" — callback set for ${formatUkLocal(dueDate)} UK`,
             );
           }
           const title = noCall

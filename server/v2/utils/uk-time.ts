@@ -132,14 +132,31 @@ export function describeUkNow(instant: Date): string {
   return ukLongParts.format(instant).replace(/,\s*$/, "");
 }
 
-// The next occurrence of a given UK wall-clock hour — today if it is still
-// ahead, otherwise tomorrow. Used to give a callback task a sensible slot when
-// the customer answered "anytime" (no time to parse, but they DID answer), so
-// the task still lands in a due-task list instead of sitting undated forever.
-export function nextUkTimeAt(hour: number, from: Date = new Date()): Date {
-  const today = toUkWallClock(from);
-  const todaySlot = ukLocalToUtc({ year: today.year, month: today.month, day: today.day, hour, minute: 0, second: 0 });
-  if (todaySlot.getTime() > from.getTime()) return todaySlot;
-  const tomorrow = toUkWallClock(new Date(from.getTime() + 24 * 60 * 60 * 1000));
-  return ukLocalToUtc({ year: tomorrow.year, month: tomorrow.month, day: tomorrow.day, hour, minute: 0, second: 0 });
+// Office hours a callback may be booked into, on a UK clock. 16 is inclusive —
+// a 16:00 call is fine, 17:00 is not.
+const CALLBACK_OPEN_HOUR = 10;
+const CALLBACK_CLOSE_HOUR = 16;
+
+/** Where a callback lands when the customer gave no usable time ("anytime").
+ *
+ *  The next whole hour — 10:30 → 11:00 — so it is soon and on a round hour,
+ *  the way people actually agree to be called. Clamped to office hours: too
+ *  early lands at 10:00 the same day, and anything past 16:00 (including the
+ *  small hours, which is where "the next hour" lands late at night) goes to
+ *  10:00 the next morning. Booking a call for midnight is worse than useless. */
+export function nextUkCallbackSlot(from: Date = new Date()): Date {
+  const now = toUkWallClock(from);
+  // Adding the hour in ABSOLUTE time, not wall-clock: "in an hour" stays an
+  // hour even across a DST jump.
+  const nextHour = new Date(ukLocalToUtc({ ...now, minute: 0, second: 0 }).getTime() + 60 * 60 * 1000);
+  const slot = toUkWallClock(nextHour);
+
+  if (slot.hour < CALLBACK_OPEN_HOUR) {
+    return ukLocalToUtc({ ...slot, hour: CALLBACK_OPEN_HOUR, minute: 0, second: 0 });
+  }
+  if (slot.hour > CALLBACK_CLOSE_HOUR) {
+    const tomorrow = toUkWallClock(new Date(nextHour.getTime() + 24 * 60 * 60 * 1000));
+    return ukLocalToUtc({ ...tomorrow, hour: CALLBACK_OPEN_HOUR, minute: 0, second: 0 });
+  }
+  return nextHour;
 }
