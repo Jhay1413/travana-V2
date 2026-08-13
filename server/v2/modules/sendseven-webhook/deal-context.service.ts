@@ -479,19 +479,29 @@ export function pickDealMatch(matches: RetrievedMatch[], queryText?: string): De
 
   const q = queryText.toLowerCase().replace(/\s+/g, " ");
   const titleHits = all.filter((c) => {
-    const t = c.title.trim().toLowerCase().replace(/\s+/g, " ");
-    // Very short titles substring-match too easily ("rome" would hit every
-    // Rome message) — require some substance before trusting the rescue.
-    return t.length >= 6 && q.includes(t);
+    const t = normaliseForTitleMatch(c.title);
+    // A title identifies a deal only if it carries at least TWO distinctive
+    // words. One ("Amsterdam") would claim every message mentioning the place,
+    // and a title of pure filler ("Holiday Deal") identifies nothing at all —
+    // plenty of posts share it.
+    const wanted = titleTokens(t);
+    if (wanted.length < 2) return false;
+    if (q.includes(t)) return true;
+    // Customers rarely quote a title exactly: our "Xmas in Amsterdam" post was
+    // asked about as "the Amsterdam Christmas deal", which shares every
+    // meaningful word but matches no substring. So also accept a title whose
+    // distinctive words ALL appear in the message, in any order.
+    const present = new Set(titleTokens(q));
+    return wanted.every((w) => present.has(w));
   });
   if (new Set(titleHits.map((c) => c.travelDealId)).size === 1) {
-    return toDealRef([...titleHits].sort((a, b) => a.distance - b.distance)[0]);
+    return toDealRef([...titleHits].sort((a, b) => a.distance - b.distance)[0], "marker");
   }
 
   const postSignal = hasPostReferenceSignal(queryText);
   const fieldHits = all.filter((c) => strongSignalHit(c, q, postSignal));
   if (new Set(fieldHits.map((c) => c.travelDealId)).size === 1) {
-    return toDealRef([...fieldHits].sort((a, b) => a.distance - b.distance)[0]);
+    return toDealRef([...fieldHits].sort((a, b) => a.distance - b.distance)[0], "marker");
   }
   return null;
 }
@@ -921,12 +931,20 @@ export async function resolveDealTurn(input: {
   // Hydrated fresh every turn (cheap: two small queries) so the AI always
   // quotes CURRENT hotel/flight detail, never the embedding's snapshot.
   const deal = ref ? await hydrateDealReplyContext(ref) : null;
-  if (deal) {
+  if (deal && ref) {
     // A corrected pin is a different holiday, so the "as posted or any
     // tweaks?" check is owed again on the new deal.
     deal.tweakCheckPending = repinned || !checkAsked;
-    const seededKeys = seedSlotsFromDeal(slots, deal);
-    if (pinnedNow) pinnedNow.seededKeys = seededKeys;
+    // A similarity guess must be CONFIRMED with the customer before any of its
+    // details are spoken as fact — only a match to something they actually
+    // said ("marker") is safe to assert. Seeding the enquiry slots waits on
+    // that too: an unconfirmed deal's date and airport must not land on the
+    // enquiry.
+    deal.unconfirmed = ref.source === "vector";
+    if (!deal.unconfirmed) {
+      const seededKeys = seedSlotsFromDeal(slots, deal);
+      if (pinnedNow) pinnedNow.seededKeys = seededKeys;
+    }
   }
   return { pinnedNow, deal, dealCandidates, repinned, externalDealMention: external };
 }
