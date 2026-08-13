@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeUkNow, formatUkLocal, parseUkLocalDateTime, toUkWallClock, ukLocalToUtc } from "./uk-time";
+import { describeUkNow, formatUkLocal, nextUkTimeAt, parseUkLocalDateTime, toUkWallClock, ukLocalToUtc } from "./uk-time";
 
 // The whole point of this util is that a UK wall-clock time survives the
 // GMT/BST switch intact — a callback booked for "10pm" must be 10pm in London
@@ -83,5 +83,25 @@ describe("formatUkLocal / describeUkNow", () => {
   it("describes the current UK time with its timezone abbreviation", () => {
     expect(describeUkNow(new Date("2026-08-06T21:00:00.000Z"))).toContain("BST");
     expect(describeUkNow(new Date("2026-01-15T21:00:00.000Z"))).toContain("GMT");
+  });
+});
+
+describe("nextUkTimeAt", () => {
+  it("uses today when the hour is still ahead", () => {
+    // 08:00 UK (07:00 UTC, BST) — 10am today is still to come.
+    const slot = nextUkTimeAt(10, new Date("2026-08-06T07:00:00.000Z"));
+    expect(formatUkLocal(slot)).toBe("2026-08-06 10:00");
+  });
+
+  it("rolls to tomorrow once the hour has passed", () => {
+    // 21:37 UK — the "anytime" case that prompted this: a task due at 10am
+    // today would already be overdue, so it belongs tomorrow morning.
+    const slot = nextUkTimeAt(10, new Date("2026-08-06T20:37:00.000Z"));
+    expect(formatUkLocal(slot)).toBe("2026-08-07 10:00");
+  });
+
+  it("stays 10am UK across the GMT/BST divide", () => {
+    expect(formatUkLocal(nextUkTimeAt(10, new Date("2026-01-15T06:00:00.000Z")))).toBe("2026-01-15 10:00");
+    expect(formatUkLocal(nextUkTimeAt(10, new Date("2026-07-15T06:00:00.000Z")))).toBe("2026-07-15 10:00");
   });
 });

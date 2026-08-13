@@ -18,6 +18,7 @@ import {
   mergeSlots,
   missingCoreFieldsFor,
   missingFieldsFor,
+  isOpenAvailability,
   parseAvailabilityTime,
   prefersMessagingOverCall,
   shouldCreateEnquiryNow,
@@ -43,6 +44,7 @@ import {
 import { taskService } from "../task/task.service";
 import { resolveOrCreateTestClient } from "./internal-chat-identity.service";
 import { internalChatRepository } from "./internal-chat.repository";
+import { nextUkTimeAt } from "../../utils/uk-time";
 import type { Scope } from "../../utils/scope";
 import type { InternalChatMessage, InternalChatSession } from "@shared/schema";
 
@@ -919,13 +921,18 @@ export const internalChatTestflowService = {
       const enquiryId = session.enquiryId;
       let taskId: string | undefined;
       if (enquiryId && prevContext.enquiryOwnerUserId) {
-        const dueDate = noCall
+        let dueDate = noCall
           ? null
           : await parseAvailabilityTime(rawTime, {
           orgId,
           feature: "staff_chat_test",
           userId: scope.userId ?? undefined,
         });
+        // Mirrors reply-worker: "anytime" is an answer without a time, so give
+        // the task the next 10am UK rather than leaving it undated.
+        if (!noCall && !dueDate && isOpenAvailability(rawTime)) {
+          dueDate = nextUkTimeAt(10);
+        }
         const created = await taskService.create(
           {
             entityType: "enquiry",

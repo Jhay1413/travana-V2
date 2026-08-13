@@ -89,7 +89,7 @@ function budgetType(explicit: unknown, raw: unknown): string | undefined {
 // AI-created enquiries need a real user_id (transaction.user_id is NOT NULL) —
 // use an active org_admin, else any active member. DB access lives in the
 // branch-member repository; this just delegates.
-async function orgUserId(orgId: string): Promise<string | null> {
+export async function orgUserId(orgId: string): Promise<string | null> {
   return branchMemberRepository.findDefaultOwner(orgId);
 }
 

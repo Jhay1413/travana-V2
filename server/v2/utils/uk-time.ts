@@ -131,3 +131,15 @@ const ukLongParts = new Intl.DateTimeFormat("en-GB", {
 export function describeUkNow(instant: Date): string {
   return ukLongParts.format(instant).replace(/,\s*$/, "");
 }
+
+// The next occurrence of a given UK wall-clock hour — today if it is still
+// ahead, otherwise tomorrow. Used to give a callback task a sensible slot when
+// the customer answered "anytime" (no time to parse, but they DID answer), so
+// the task still lands in a due-task list instead of sitting undated forever.
+export function nextUkTimeAt(hour: number, from: Date = new Date()): Date {
+  const today = toUkWallClock(from);
+  const todaySlot = ukLocalToUtc({ year: today.year, month: today.month, day: today.day, hour, minute: 0, second: 0 });
+  if (todaySlot.getTime() > from.getTime()) return todaySlot;
+  const tomorrow = toUkWallClock(new Date(from.getTime() + 24 * 60 * 60 * 1000));
+  return ukLocalToUtc({ year: tomorrow.year, month: tomorrow.month, day: tomorrow.day, hour, minute: 0, second: 0 });
+}

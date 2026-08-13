@@ -22,7 +22,9 @@ import {
   mergeSlots,
   missingCoreFieldsFor,
   missingFieldsFor,
+  isOpenAvailability,
   parseAvailabilityTime,
+  saysToday,
   prefersMessagingOverCall,
   shouldCreateEnquiryNow,
   shouldForceTicketNow,
@@ -38,7 +40,8 @@ import { messagesRepository } from "../messages/messages.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
-import { resolveAndCreateEnquiry } from "./enquiry-auto-create.service";
+import { orgUserId as defaultOwnerUserId, resolveAndCreateEnquiry } from "./enquiry-auto-create.service";
+import { formatUkLocal } from "../../utils/uk-time";
 import {
   extractPhoneNumber,
   resolveClientForOnboarding,
@@ -195,6 +198,10 @@ const RESUME_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 // customer ("what time suits?" / "around 11") must never be talked over; two
 // hours later, a fresh question is fair game.
 const HUMAN_ACTIVE_COOLOFF_MS = 60 * 60 * 1000;
+// How far ahead a callback is booked when the customer gives no usable time
+// ("anytime", "today") — far enough out that the team realistically gets to it,
+// close enough that "today" still means today.
+const CALLBACK_LEAD_HOURS = 3;
 const FALLBACK_REPLY = "Thanks for your message — one of our advisors will be in touch shortly.";
 // Inbound message_types that carry a file even when there's no text caption — so
 // a bare passport photo isn't dropped by the text-only gate.
@@ -1273,10 +1280,32 @@ export const replyWorker = {
           { orgId },
         );
         let taskId: string | undefined = prevContext.availabilityTaskId;
-        if (state.enquiryId && prevContext.enquiryOwnerUserId) {
+        // The owner is normally carried from enquiry creation. If it is missing
+        // — an enquiry created before that was persisted, or a context reset in
+        // between — fall back to the org's default owner rather than silently
+        // dropping the task: the customer has just been promised a call, so
+        // SOMETHING has to land in a task list.
+        const taskOwnerUserId = prevContext.enquiryOwnerUserId ?? (await defaultOwnerUserId(orgId));
+        if (state.enquiryId && taskOwnerUserId) {
           // No call wanted → no time to parse; the task still stands so the
           // enquiry is actioned, just as a message rather than a ring.
-          const dueDate = noCall ? null : await parseAvailabilityTime(rawTime, { orgId });
+          let dueDate = noCall ? null : await parseAvailabilityTime(rawTime, { orgId });
+          // "Anytime" / "whenever suits" is an ANSWER, just not a time — so it
+          // parses to nothing and the task would land undated, invisible in
+          // every due-date view and never reminded. Give it the next 10am UK
+          // slot so it is actually actioned.
+          // "Anytime" / "today" name no usable time: the first parses to
+          // nothing (undated task, invisible in every due-date view), and the
+          // second resolves to 10:00 — already past by the afternoon, so it
+          // rolls to TOMORROW and the callback silently slips a day. Both get
+          // a slot CALLBACK_LEAD_HOURS from now instead, which keeps "today"
+          // on today and gives the team a realistic window.
+          if (!noCall && (isOpenAvailability(rawTime) || saysToday(rawTime)) && (!dueDate || saysToday(rawTime))) {
+            dueDate = new Date(Date.now() + CALLBACK_LEAD_HOURS * 60 * 60 * 1000);
+            console.log(
+              `[sendseven-webhook] conv ${conversationId} no usable time in "${rawTime}" — callback set ${CALLBACK_LEAD_HOURS}h out, ${formatUkLocal(dueDate)} UK`,
+            );
+          }
           const title = noCall
             ? `Message client (asked NOT to be called) — "${rawTime}"`
             : `Call back — client available ${rawTime}`;
@@ -1298,7 +1327,7 @@ export const replyWorker = {
               {
                 entityType: "enquiry",
                 entityId: state.enquiryId,
-                userId: prevContext.enquiryOwnerUserId,
+                userId: taskOwnerUserId,
                 title,
                 dueDate,
                 completed: false,
@@ -1309,7 +1338,10 @@ export const replyWorker = {
             console.log(`[sendseven-webhook] Created callback task ${taskId} for enquiry ${state.enquiryId} (conv ${conversationId})`);
           }
         } else {
-          console.warn(`[sendseven-webhook] conv ${conversationId} awaiting_availability but missing enquiryId/owner — skipping task creation.`);
+          console.error(
+            `[sendseven-webhook] conv ${conversationId} awaiting_availability but NO task could be raised ` +
+              `(enquiryId=${state.enquiryId ?? "none"} owner=${taskOwnerUserId ?? "none"}) — the promised callback has nothing tracking it.`,
+          );
         }
         // enquiryStatus is already committed to "scheduled" by the claim above.
         await conversationStateRepository.update(conversationId, {

@@ -11,6 +11,7 @@ import {
   looksLikeDocumentMention,
   isAcknowledgement,
   looksLikeActionableAdmin,
+  isOpenAvailability,
   looksLikeAdminAsk,
   prefersMessagingOverCall,
   MAX_ENQUIRY_ASKS,
@@ -1021,6 +1022,23 @@ describe("prefersMessagingOverCall", () => {
       "",
     ]) {
       expect(prefersMessagingOverCall(text), text).toBe(false);
+    }
+  });
+});
+
+// "Anytime" is an ANSWER without a time: it parses to nothing, so without this
+// the callback task landed with no due date — invisible in every due-date view
+// and never picked up by the reminder cron.
+describe("isOpenAvailability", () => {
+  it("recognises an open-ended availability answer", () => {
+    for (const text of ["Anytime", "any time", "whenever suits", "I'm free all day", "no preference", "up to you", "asap", "as soon as possible"]) {
+      expect(isOpenAvailability(text), text).toBe(true);
+    }
+  });
+
+  it("does not fire on an answer that names a time or a decline", () => {
+    for (const text of ["around 11", "Maybe 1pm would be good", "after 5 tomorrow", "can you just message please"]) {
+      expect(isOpenAvailability(text), text).toBe(false);
     }
   });
 });
