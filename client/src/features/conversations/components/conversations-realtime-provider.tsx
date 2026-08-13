@@ -1,10 +1,11 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/hooks/use-toast";
+import { useCurrentUser } from "@/hooks/queries/use-auth-queries";
 import { conversationsKeys } from "../api/use-conversations-queries";
-import { useConversationsRealtime } from "../api/use-conversations-realtime";
+import { useConversationsRealtime, type TypingSignal } from "../api/use-conversations-realtime";
 import { ticketKeys } from "@/features/tickets";
 import type { SsConversation, SsConversationList } from "../api/conversations.api";
 
@@ -16,11 +17,30 @@ import type { SsConversation, SsConversationList } from "../api/conversations.ap
 // useConversationsRealtime itself — two callers would mean two EventSource
 // connections and duplicated invalidation work.
 
-interface ConversationsRealtimeValue {
-  connected: boolean;
+// How long a typing indicator survives without a fresh signal. The composer
+// re-pings every 3s while someone is actually typing, and sends an explicit
+// stop when they pause — so this only has to outlive one ping. It exists for
+// the case no stop ever arrives (a tab closed mid-sentence), which is why it
+// is a backstop rather than the primary way the indicator clears.
+const TYPING_TTL_MS = 5_000;
+
+export interface TypingPresence {
+  actor: "ai" | "agent";
+  name?: string;
+  userId?: string;
+  expiresAt: number;
 }
 
-const ConversationsRealtimeContext = createContext<ConversationsRealtimeValue>({ connected: false });
+interface ConversationsRealtimeValue {
+  connected: boolean;
+  /** Who is currently composing, by conversation id. */
+  typingByConversation: Record<string, TypingPresence>;
+}
+
+const ConversationsRealtimeContext = createContext<ConversationsRealtimeValue>({
+  connected: false,
+  typingByConversation: {},
+});
 
 export function useConversationsRealtimeState(): ConversationsRealtimeValue {
   return useContext(ConversationsRealtimeContext);
@@ -91,11 +111,71 @@ export function ConversationsRealtimeProvider({ children }: { children: ReactNod
     qc.invalidateQueries({ queryKey: ticketKeys.all });
   }, [qc]);
 
+  // Typing presence, keyed by conversation. One entry per conversation: if the
+  // AI and an agent somehow compose at once, the latest signal wins — showing
+  // two indicators would be noise.
+  const [typingByConversation, setTypingByConversation] = useState<Record<string, TypingPresence>>({});
+  const sweeper = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const { data: me } = useCurrentUser();
+  const myUserId = me?.id;
+
+  const handleTyping = useCallback((conversationId: string, signal: TypingSignal) => {
+    // The stream is org-wide, so an agent hears the echo of their own typing.
+    // Showing them "you are typing…" is nonsense — drop it.
+    if (signal.actor === "agent" && signal.userId && myUserId && signal.userId === myUserId) return;
+    setTypingByConversation((prev) => {
+      if (signal.stopped) {
+        if (!prev[conversationId]) return prev;
+        const next = { ...prev };
+        delete next[conversationId];
+        return next;
+      }
+      return {
+        ...prev,
+        [conversationId]: {
+          actor: signal.actor,
+          name: signal.name,
+          userId: signal.userId,
+          expiresAt: Date.now() + TYPING_TTL_MS,
+        },
+      };
+    });
+  }, [myUserId]);
+
+  // Drop expired indicators. One shared interval, and only while something is
+  // actually showing — no timer runs on an idle inbox.
+  useEffect(() => {
+    const hasAny = Object.keys(typingByConversation).length > 0;
+    if (!hasAny) {
+      if (sweeper.current) {
+        clearInterval(sweeper.current);
+        sweeper.current = null;
+      }
+      return;
+    }
+    if (sweeper.current) return;
+    sweeper.current = setInterval(() => {
+      const now = Date.now();
+      setTypingByConversation((prev) => {
+        const live = Object.entries(prev).filter(([, v]) => v.expiresAt > now);
+        return live.length === Object.keys(prev).length ? prev : Object.fromEntries(live);
+      });
+    }, 1_000);
+    return () => {
+      if (sweeper.current) {
+        clearInterval(sweeper.current);
+        sweeper.current = null;
+      }
+    };
+  }, [typingByConversation]);
+
   const { connected } = useConversationsRealtime({
     onMessagesReceived: handleMessagesReceived,
     onTicketsStale: handleTicketsStale,
+    onTyping: handleTyping,
   });
-  const value = useMemo(() => ({ connected }), [connected]);
+  const value = useMemo(() => ({ connected, typingByConversation }), [connected, typingByConversation]);
 
   return (
     <ConversationsRealtimeContext.Provider value={value}>

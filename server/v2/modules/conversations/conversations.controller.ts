@@ -220,6 +220,16 @@ export const conversationsController = {
     );
   }),
 
+  // POST /api/v2/conversations/:conversation_id/typing
+  // Cosmetic presence ping while an agent composes. Returns 204 — there is
+  // nothing to fetch, and the caller must never wait on it.
+  typing: asyncHandler(async (req: Request, res: Response) => {
+    const { orgId, userId } = getScope(req);
+    const { stopped } = (req.body ?? {}) as { stopped?: boolean };
+    await conversationsService.broadcastTyping(orgId, requireParam(req, "conversation_id"), userId, !!stopped);
+    return res.status(204).end();
+  }),
+
   // POST /api/v2/conversations/:conversation_id/ai-suggest-reply
   // On-demand "AI reply" for the composer: returns suggested text only —
   // nothing is sent, stored, or changed. Available to any staff member with

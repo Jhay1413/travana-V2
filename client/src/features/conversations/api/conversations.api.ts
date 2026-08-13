@@ -379,6 +379,12 @@ export const conversationsApi = {
     const { data } = await axiosClient.get<ConversationAiState>(`${BASE}/${id}/ai-state`);
     return data;
   },
+  // Presence ping while an agent composes. Fire-and-forget: 204, nothing to
+  // read, and a failure is swallowed by the caller.
+  typing: async (id: string, stopped = false): Promise<void> => {
+    await axiosClient.post(`${BASE}/${id}/typing`, { stopped });
+  },
+
   // On-demand composer suggestion — returns text only, changes nothing server-side.
   aiSuggestReply: async (id: string): Promise<{ suggestion: string }> => {
     const { data } = await axiosClient.post<{ suggestion: string }>(`${BASE}/${id}/ai-suggest-reply`);

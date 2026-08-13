@@ -373,7 +373,13 @@ export const replyWorker = {
 
     const mode = integration?.autoReplyMode ?? "draft";
 
-    await runWithSendSevenConfigAsync(cfg, async () => {
+    // From here on the AI is composing, which can take several seconds (routing,
+    // retrieval, the turn itself). Tell the inbox so agents see "AI is typing…"
+    // rather than silence — and always clear it, whether the turn replies,
+    // stays silent, or throws.
+    publishTyping(orgId, conversationId, { actor: "ai" });
+    try {
+      await runWithSendSevenConfigAsync(cfg, async () => {
       // messagesRepository.list() needs the SendSeven config bound above, so it
       // can't join a Promise.all outside runWithSendSevenConfigAsync — but
       // there's no data dependency between it and botConfig/kb, so fold the
@@ -1280,6 +1286,25 @@ export const replyWorker = {
           { orgId },
         );
         let taskId: string | undefined = prevContext.availabilityTaskId;
+        // Belt and braces: the id above is carried in the conversation context,
+        // which a reset (or an enquiry created before placeholders existed) can
+        // lose — and then this step would raise a SECOND task for the same
+        // enquiry, which is exactly what was observed. So when the id is
+        // missing, look the enquiry's own open task up instead of trusting the
+        // context. One callback task per enquiry then holds structurally,
+        // however the context behaved.
+        if (!taskId && state.enquiryId) {
+          try {
+            const existing = await taskService.listByEntity("enquiry", state.enquiryId, systemScope(orgId));
+            const open = existing.find((t) => !t.completed);
+            if (open) {
+              taskId = open.id;
+              console.log(`[sendseven-webhook] conv ${conversationId} recovered follow-up task ${taskId} from the enquiry (not in context)`);
+            }
+          } catch (err) {
+            console.error(`[sendseven-webhook] conv ${conversationId} could not look up existing tasks for enquiry ${state.enquiryId}:`, err);
+          }
+        }
         // The owner is normally carried from enquiry creation. If it is missing
         // — an enquiry created before that was persisted, or a context reset in
         // between — fall back to the org's default owner rather than silently
@@ -1524,9 +1549,27 @@ export const replyWorker = {
       update.intent = "other";
       await sendReply(orgId, conversationId, message.channel_id, turn.reply, mode, false);
       await conversationStateRepository.update(conversationId, update);
-    });
+      });
+    } finally {
+      publishTyping(orgId, conversationId, { actor: "ai", stopped: true });
+    }
   },
 };
+
+// Fire-and-forget "someone is composing" signal. Best-effort like every other
+// realtime publish here: the indicator is cosmetic, and the client expires it
+// on its own, so a bus failure must never disturb the reply itself.
+function publishTyping(
+  orgId: string,
+  conversationId: string,
+  typing: { actor: "ai" | "agent"; name?: string; userId?: string; stopped?: boolean },
+): void {
+  try {
+    realtimeService.publish(orgId, { type: "typing", conversationId, typing });
+  } catch (err) {
+    console.warn(`[sendseven-webhook] typing publish failed for conv ${conversationId}:`, err);
+  }
+}
 
 // Drops generic stand-ins the model may report as a traveller's name ("my
 // friend", "your friend", "someone") so we don't create a client literally

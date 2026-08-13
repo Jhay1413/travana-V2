@@ -919,7 +919,18 @@ export const internalChatTestflowService = {
         { orgId, feature: "staff_chat_test", userId: scope.userId ?? undefined },
       );
       const enquiryId = session.enquiryId;
-      let taskId: string | undefined;
+      // Mirrors reply-worker: prefer the placeholder raised at enquiry
+      // creation, and if the context lost it, recover the enquiry's own open
+      // task rather than raising a second one.
+      let taskId: string | undefined = prevContext.availabilityTaskId;
+      if (!taskId && enquiryId) {
+        try {
+          const existing = await taskService.listByEntity("enquiry", enquiryId, systemScope(orgId));
+          taskId = existing.find((t) => !t.completed)?.id;
+        } catch (err) {
+          console.error(`[internal-chat-testflow] session ${session.id} task lookup failed:`, err);
+        }
+      }
       if (enquiryId && prevContext.enquiryOwnerUserId) {
         let dueDate = noCall
           ? null

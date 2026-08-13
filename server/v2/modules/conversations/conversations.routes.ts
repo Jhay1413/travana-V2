@@ -44,6 +44,8 @@ router.post("/:conversation_id/bot-session/disable", c.botDisable);
 router.get("/:conversation_id/ai-state", validate(conversationIdParamValidator), c.aiState);
 // On-demand composer suggestion (side-effect-free) — any authenticated agent.
 router.post("/:conversation_id/ai-suggest-reply", validate(conversationIdParamValidator), c.aiSuggestReply);
+// Presence ping while composing — any agent with conversation access.
+router.post("/:conversation_id/typing", validate(conversationIdParamValidator), c.typing);
 router.post("/:conversation_id/ai-state/enable", validate(conversationIdParamValidator), c.aiEnable);
 router.post("/:conversation_id/ai-state/disable", validate(conversationIdParamValidator), c.aiDisable);
 

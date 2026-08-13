@@ -33,6 +33,9 @@ vi.mock("../ai-conversation/ai-conversation.brain", () => ({
   hasSubstantiveSignal: vi.fn(() => false),
   inferHolidayTypeFromText: vi.fn(() => null),
   isAcknowledgement: vi.fn(() => false),
+  // Defaults: the answer names a real time, so neither fallback applies.
+  isOpenAvailability: vi.fn(() => false),
+  saysToday: vi.fn(() => false),
   kbExceedsBudget: vi.fn(() => false),
   looksLikeActionableAdmin: vi.fn(() => false),
   looksLikeAdminAsk: vi.fn(() => false),
@@ -121,7 +124,11 @@ vi.mock("./identity.service", () => ({
 }));
 
 vi.mock("../task/task.service", () => ({
-  taskService: { create: vi.fn(async () => ({ id: "task-1" })), update: vi.fn(async () => ({ id: "task-1" })) },
+  taskService: {
+    create: vi.fn(async () => ({ id: "task-1" })),
+    update: vi.fn(async () => ({ id: "task-1" })),
+    listByEntity: vi.fn(async () => []),
+  },
 }));
 
 vi.mock("./admin-agent.service", () => ({
@@ -138,6 +145,7 @@ import { conversationIntegrationRepository } from "../conversation-integration/c
 import { messagesRepository } from "../messages/messages.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { adminAgent } from "./admin-agent.service";
+import { realtimeService } from "../../realtime/realtime.service";
 import { taskService } from "../task/task.service";
 import type { SsWebhookEvent } from "./sendseven-webhook.types";
 import type { SendsevenConversationState } from "@shared/schema";
@@ -725,7 +733,28 @@ describe("handleInbound — follow-up task lifecycle", () => {
     expect(taskService.create).not.toHaveBeenCalled();
   });
 
+  it("recovers the enquiry's existing task when the context lost its id — never a second task", async () => {
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+    vi.mocked(taskService.listByEntity).mockResolvedValue([
+      { id: "task-placeholder", completed: false, dueDate: null },
+    ] as never);
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(
+      makeState({
+        enquiryStatus: "awaiting_availability",
+        enquiryId: "enq-1",
+        // Context has the owner but NOT availabilityTaskId — the observed case.
+        context: { enquiryOwnerUserId: "user-1" } as never,
+      }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "anytime" }));
+
+    expect(taskService.update).toHaveBeenCalledWith("task-placeholder", expect.anything(), expect.anything());
+    expect(taskService.create).not.toHaveBeenCalled();
+  });
+
   it("falls back to creating one when there is no placeholder (older conversations)", async () => {
+    vi.mocked(taskService.listByEntity).mockResolvedValue([] as never);
     // An enquiry in flight routes to sales (the real router short-circuits
     // on enquiryInFlight; the mock needs telling).
     vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
@@ -795,5 +824,41 @@ describe("handleInbound — burst of messages produces ONE reply", () => {
     await replyWorker.handleInbound(ORG_ID, makeEvent({ id: "msg-1", text: older.text }));
 
     expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+});
+
+// "AI is typing…" — the AI turn can take several seconds, so the inbox is told
+// it is composing. The clear is the part that matters: an indicator that
+// sticks after a failure is worse than none at all.
+describe("handleInbound — AI typing indicator", () => {
+  const typingEvents = () =>
+    vi.mocked(realtimeService.publish).mock.calls
+      .map((c) => c[1] as { type: string; typing?: { actor: string; stopped?: boolean } })
+      .filter((e) => e.type === "typing");
+
+  it("announces it is composing and clears when the turn finishes", async () => {
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    const events = typingEvents();
+    expect(events[0]).toMatchObject({ typing: { actor: "ai" } });
+    expect(events[0].typing?.stopped).toBeFalsy();
+    expect(events[events.length - 1]).toMatchObject({ typing: { actor: "ai", stopped: true } });
+  });
+
+  it("clears the indicator even when the turn throws", async () => {
+    vi.mocked(classifyConversationRoute).mockRejectedValue(new Error("router down"));
+
+    await expect(replyWorker.handleInbound(ORG_ID, makeEvent())).rejects.toThrow("router down");
+
+    expect(typingEvents().at(-1)).toMatchObject({ typing: { actor: "ai", stopped: true } });
+  });
+
+  it("says nothing at all when the AI is not going to reply", async () => {
+    // Not opted in → the turn returns before composing anything.
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ clientId: null }));
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(typingEvents()).toHaveLength(0);
   });
 });

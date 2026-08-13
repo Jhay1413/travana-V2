@@ -7,7 +7,12 @@ export type ConversationEventType =
   | "message.received"
   | "message.sent"
   | "conversation.updated"
-  | "ai-state.changed";
+  | "ai-state.changed"
+  // Someone is composing a reply — the AI while it generates one, or another
+  // agent while they type. Purely presentational and deliberately
+  // fire-and-forget: it is never persisted, and a missed event costs nothing
+  // because the client expires its own indicator (see TYPING_TTL_MS there).
+  | "typing";
 
 // One event for the whole ticket lifecycle (created / updated / deleted).
 // Clients invalidate every ticket query off it, so splitting it three ways
@@ -26,6 +31,10 @@ export interface ConversationRealtimeEvent {
   conversationId: string;
   // Only set on ai-state.changed — drives the AI badge live.
   needsHuman?: boolean;
+  // Only set on `typing`. `name` is the agent's display name (staff-to-staff
+  // within one org — the AI carries no name), and `userId` lets a client
+  // ignore the echo of its own typing.
+  typing?: { actor: "ai" | "agent"; name?: string; userId?: string; stopped?: boolean };
 }
 
 export interface TicketRealtimeEvent {

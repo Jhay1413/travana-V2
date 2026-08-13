@@ -1,5 +1,6 @@
 import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
 import { suggestAiReply } from "../sendseven-webhook/suggest-reply.service";
+import { userRepository } from "../user/user.repository";
 import { realtimeService } from "../../realtime/realtime.service";
 import { conversationsRepository } from "./conversations.repository";
 import type { ListConversationsParams } from "./conversations.types";
@@ -88,6 +89,30 @@ export const conversationsService = {
   disableAi: (orgId: string, id: string) => sendsevenWebhookService.disableAi(orgId, id),
   // On-demand composer suggestion — side-effect-free, see suggest-reply.service.
   suggestReply: (orgId: string, id: string, userId?: string | null) => suggestAiReply(orgId, id, userId),
+
+  // "<agent> is typing…" — broadcast to the org so a colleague in the same
+  // conversation sees it. Nothing is stored: the event is cosmetic and the
+  // client expires its own indicator, so this is deliberately fire-and-forget
+  // and never fails the caller's request.
+  async broadcastTyping(orgId: string, conversationId: string, userId: string | null, stopped: boolean): Promise<void> {
+    if (!orgId || !conversationId) return;
+    let name: string | undefined;
+    if (userId) {
+      // Resolved server-side rather than trusted from the client: the name is
+      // shown to colleagues, so it should be the real one on the account.
+      const found = await userRepository.findRoleAndNameById(userId).catch(() => undefined);
+      name = found?.name ?? undefined;
+    }
+    try {
+      realtimeService.publish(orgId, {
+        type: "typing",
+        conversationId,
+        typing: { actor: "agent", name, userId: userId ?? undefined, stopped },
+      });
+    } catch (err) {
+      console.warn(`[conversations] typing publish failed for conv ${conversationId}:`, err);
+    }
+  },
 
   async bulkClose(orgId: string, body: unknown) {
     const result = await conversationsRepository.bulkClose(body);

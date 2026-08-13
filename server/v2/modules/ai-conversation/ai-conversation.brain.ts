@@ -408,7 +408,7 @@ const OPEN_AVAILABILITY_RE =
 // usable time. The parser resolves a bare day to 10:00, which by late
 // afternoon is already past, so it rolls to tomorrow and the callback silently
 // slips a day. Callers use this to keep the task on TODAY instead.
-const SAYS_TODAY_RE = /(?:today|this\s+(?:morning|afternoon|evening|arvo)|later\s+(?:on|today)|tonight)/i;
+const SAYS_TODAY_RE = /\b(?:today|this\s+(?:morning|afternoon|evening|arvo)|later\s+(?:on|today)|tonight)\b/i;
 
 export function saysToday(text: string): boolean {
   return SAYS_TODAY_RE.test(text ?? "");

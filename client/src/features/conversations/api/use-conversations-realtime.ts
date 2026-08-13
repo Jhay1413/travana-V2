@@ -25,12 +25,23 @@ const CONVERSATION_EVENT_TYPES = [
   "message.sent",
   "conversation.updated",
   "ai-state.changed",
+  "typing",
 ] as const;
 
 interface RealtimeEventPayload {
   type: (typeof CONVERSATION_EVENT_TYPES)[number];
   conversationId: string;
   needsHuman?: boolean;
+  typing?: TypingSignal;
+}
+
+/** Who is composing a reply in a conversation, from the server's `typing`
+ *  event. Purely presentational — nothing is cached or invalidated off it. */
+export interface TypingSignal {
+  actor: "ai" | "agent";
+  name?: string;
+  userId?: string;
+  stopped?: boolean;
 }
 
 function parsePayload(raw: string): RealtimeEventPayload | null {
@@ -67,6 +78,12 @@ export interface ConversationsRealtimeOptions {
    * not this module's to know. The caller decides what to re-fetch.
    */
   onTicketsStale?: () => void;
+  /**
+   * Fired on every `typing` event: the AI while it composes a reply, or another
+   * agent while they type. Delivered raw and unbatched — the indicator is
+   * cosmetic and the consumer owns how long to show it.
+   */
+  onTyping?: (conversationId: string, signal: TypingSignal) => void;
 }
 
 // Opens ONE shared EventSource and maps the server's thin SSE events to
@@ -95,6 +112,11 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
   useEffect(() => {
     onTicketsStaleRef.current = options.onTicketsStale;
   }, [options.onTicketsStale]);
+
+  const onTypingRef = useRef(options.onTyping);
+  useEffect(() => {
+    onTypingRef.current = options.onTyping;
+  }, [options.onTyping]);
 
   const flushMessageInvalidations = useCallback(() => {
     debounceTimer.current = null;
@@ -166,6 +188,12 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
         const payload = parsePayload(raw.data);
         if (!payload) return;
         qc.invalidateQueries({ queryKey: conversationsKeys.aiState(payload.conversationId) });
+      });
+      // Presence only — deliberately NOT debounced with the message events and
+      // never invalidates a query: it changes nothing that is cached.
+      source.addEventListener("typing", (raw: MessageEvent) => {
+        const payload = parsePayload(raw.data);
+        if (payload?.typing) onTypingRef.current?.(payload.conversationId, payload.typing);
       });
       // Carries a ticketId, not a conversationId, so it deliberately skips
       // parsePayload. The id isn't read: the consumer re-fetches every ticket

@@ -71,6 +71,7 @@ import {
 import { useContactLink } from "../api/use-contact-link";
 import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
+import { conversationsApi } from "../api/conversations.api";
 import { conversationsKeys, useConversations, useConversationBadgeCounts, unreadBadgeCount } from "../api/use-conversations-queries";
 import {
   useAiSuggestReply,
@@ -84,6 +85,32 @@ import { useConversationsRealtimeState } from "./conversations-realtime-provider
 import { useInboxes } from "../api/use-inboxes";
 import type { SsInbox } from "../api/inboxes.api";
 import type { Conversation, ConversationMessage, ConversationTag, InboxTab } from "../types";
+
+// How often the composer re-announces that this agent is still typing. The
+// server's indicator outlives one ping, so this is about keeping it alive, not
+// tracking keystrokes.
+const TYPING_PING_MS = 3_000;
+// How long a pause counts as "stopped typing". Short enough that the indicator
+// disappears about when the agent actually stops, long enough to survive
+// thinking mid-sentence.
+const TYPING_IDLE_MS = 1_500;
+
+// Three bouncing dots — the same visual language as the AI chat widget, so
+// "someone is composing" reads the same wherever it appears.
+function TypingDots() {
+  return (
+    <span className="flex items-center gap-1">
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="h-1.5 w-1.5 rounded-full bg-black/35 dark:bg-white/35"
+          animate={{ y: [0, -3, 0], opacity: [0.4, 1, 0.4] }}
+          transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15 }}
+        />
+      ))}
+    </span>
+  );
+}
 
 // ─── Avatar with channel badge ────────────────────────────────────────────────
 
@@ -384,6 +411,40 @@ function Composer({
   const [text, setText] = useState(draft?.text ?? "");
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  // Presence ping. Throttled to one call per TYPING_PING_MS while the agent is
+  // actively typing — the indicator outlives a single ping, so this keeps it
+  // alive rather than tracking keystrokes.
+  const lastTypingPing = useRef(0);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const sendTypingStop = useCallback(() => {
+    if (idleTimer.current) {
+      clearTimeout(idleTimer.current);
+      idleTimer.current = null;
+    }
+    // Only if we actually announced typing — otherwise this is a pointless
+    // request on every thread switch.
+    if (!lastTypingPing.current) return;
+    lastTypingPing.current = 0;
+    void conversationsApi.typing(conversation.id, true).catch(() => undefined);
+  }, [conversation.id]);
+
+  const pingTyping = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTypingPing.current >= TYPING_PING_MS) {
+      lastTypingPing.current = now;
+      // Cosmetic: never surface a failure to the agent mid-sentence.
+      void conversationsApi.typing(conversation.id, false).catch(() => undefined);
+    }
+    // Pausing is the common way people stop — waiting for the indicator to time
+    // out leaves it hanging for seconds after they've clearly finished, so an
+    // explicit stop is sent once they go quiet.
+    if (idleTimer.current) clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(sendTypingStop, TYPING_IDLE_MS);
+  }, [conversation.id, sendTypingStop]);
+
+  // Clear the indicator for colleagues when this thread is left mid-draft.
+  useEffect(() => sendTypingStop, [sendTypingStop]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadAttachment = useUploadAttachment();
@@ -652,10 +713,16 @@ function Composer({
         <Textarea
           ref={textareaRef}
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            setText(e.target.value);
+            // Clearing the box is as much a "stopped" as pausing is.
+            if (e.target.value.trim()) pingTyping();
+            else sendTypingStop();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
+              sendTypingStop();
               submit();
             }
           }}
@@ -750,7 +817,7 @@ export default function ConversationsInbox() {
   // The SSE connection is owned app-wide by ConversationsRealtimeProvider (it
   // also raises the new-message toast); read its state rather than opening a
   // second stream here.
-  const { connected: realtimeConnected } = useConversationsRealtimeState();
+  const { connected: realtimeConnected, typingByConversation } = useConversationsRealtimeState();
 
   // Custom inboxes (saved views) from SendSeven — drive the inbox switcher.
   const { data: inboxesData } = useInboxes();
@@ -835,6 +902,9 @@ export default function ConversationsInbox() {
       setSelectedId(filtered[0].id);
     }
   }, [filtered, selectedId]);
+
+  // Presence for the OPEN thread only — the inbox list stays quiet.
+  const typingHere = selectedId ? typingByConversation[selectedId] : undefined;
 
   const selected = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
@@ -1339,6 +1409,19 @@ export default function ConversationsInbox() {
                 </AnimatePresence>
               )}
             </div>
+
+            {typingHere && (
+              <div
+                className="flex items-center gap-2 border-t border-black/5 px-5 py-2 text-xs text-black/55 dark:border-white/5 dark:text-white/55"
+                data-testid="conversation-typing-indicator"
+                aria-live="polite"
+              >
+                <TypingDots />
+                <span>
+                  {typingHere.actor === "ai" ? "AI" : typingHere.name?.trim() || "Someone"} is typing…
+                </span>
+              </div>
+            )}
 
             {/* Keyed by conversation: switching threads unmounts the composer, so
                 no typed text, staged attachment, or reply/note mode can ever leak

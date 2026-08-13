@@ -13,6 +13,7 @@ import {
   looksLikeActionableAdmin,
   isOpenAvailability,
   looksLikeAdminAsk,
+  saysToday,
   prefersMessagingOverCall,
   MAX_ENQUIRY_ASKS,
   missingCoreFieldsFor,
@@ -1039,6 +1040,24 @@ describe("isOpenAvailability", () => {
   it("does not fire on an answer that names a time or a decline", () => {
     for (const text of ["around 11", "Maybe 1pm would be good", "after 5 tomorrow", "can you just message please"]) {
       expect(isOpenAvailability(text), text).toBe(false);
+    }
+  });
+});
+
+// "Today" names a DAY but no time. The availability parser resolves a bare day
+// to 10:00, which by the afternoon is already past — so it rolls to tomorrow
+// and the callback silently slips a day. Detecting it lets the caller keep the
+// task on today, a few hours out.
+describe("saysToday", () => {
+  it("recognises an answer that means today", () => {
+    for (const text of ["today", "anytime today", "later today", "this afternoon", "this evening", "tonight"]) {
+      expect(saysToday(text), text).toBe(true);
+    }
+  });
+
+  it("does not fire on another day or a specific future time", () => {
+    for (const text of ["tomorrow at 2", "around 11", "Monday please", "next week"]) {
+      expect(saysToday(text), text).toBe(false);
     }
   });
 });
