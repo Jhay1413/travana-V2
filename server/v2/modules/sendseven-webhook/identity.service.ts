@@ -34,6 +34,25 @@ export async function resolveExistingClient(orgId: string, contact: WebhookConta
   return null;
 }
 
+// The same lookup with NO writes — no contact link is created. For callers
+// that must stay side-effect-free (the composer's "AI reply" suggestion), and
+// for the case that matters most there: a conversation the live AI never
+// processed has no clientId on our state row, yet the contact IS linked to a
+// CRM client. Reading only the state row made the suggestion ask a known
+// customer for their phone number again.
+export async function findExistingClientReadOnly(orgId: string, contact: WebhookContact): Promise<string | null> {
+  if (!contact.id) return null;
+  try {
+    const existing = await contactLinkRepository.findByContact(orgId, contact.id);
+    if (existing) return existing.clientId;
+    const matches = await neonClientService.findMatches({ phone: contact.phone, email: contact.email }, systemScope(orgId));
+    return matches[0]?.id ?? null;
+  } catch (err) {
+    console.error(`[identity] read-only client lookup failed for contact ${contact.id}:`, err);
+    return null;
+  }
+}
+
 // Pulls the first phone-number-looking token out of free text. Used to capture a
 // traveller's number from a plain reply ("his number is 09355152084") without
 // depending on the model to echo it back in a structured field every turn.

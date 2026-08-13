@@ -8,7 +8,7 @@ import { messagesRepository } from "../messages/messages.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { hydrateDealReplyContext, type DealRef } from "./deal-context.service";
-import { systemScope } from "./identity.service";
+import { findExistingClientReadOnly, systemScope } from "./identity.service";
 import type { EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conversation/ai-conversation.types";
 
 // On-demand AI reply suggestion for the inbox composer ("AI reply" button):
@@ -51,11 +51,28 @@ export async function suggestAiReply(orgId: string, conversationId: string, user
     .find((m) => m.direction === "inbound");
   const transcript = buildTranscript(usable, latestInbound?.text?.trim() ?? "");
 
-  const client = state?.clientId
-    ? await neonClientService.getNeonClientById(state.clientId, systemScope(orgId)).catch(() => null)
+  const contact = (conv?.contact ?? null) as { id?: unknown; name?: unknown; phone?: unknown; email?: unknown } | null;
+  const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const contactName = str(contact?.name);
+
+  // Our conversation-state row only has a clientId once the LIVE AI has
+  // processed this conversation. On a thread an agent has handled all along —
+  // exactly where this button gets used — the row is empty even though the
+  // contact IS linked to a CRM client, and the suggestion would then ask a
+  // known customer for their phone number again. So fall back to the contact
+  // link, read-only (no link is created here: pressing a button to preview a
+  // reply must not change anyone's records).
+  const clientId =
+    state?.clientId ??
+    (await findExistingClientReadOnly(orgId, {
+      id: str(contact?.id) ?? "",
+      name: contactName,
+      phone: str(contact?.phone),
+      email: str(contact?.email),
+    }));
+  const client = clientId
+    ? await neonClientService.getNeonClientById(clientId, systemScope(orgId)).catch(() => null)
     : null;
-  const rawName = (conv?.contact as { name?: unknown } | null | undefined)?.name;
-  const contactName = typeof rawName === "string" && rawName.trim() ? rawName.trim() : null;
 
   // Current enquiry state feeds the prompt so the suggestion continues the
   // flow sensibly — but nothing the model returns (slots, intent, hand_off)
@@ -100,7 +117,14 @@ export async function suggestAiReply(orgId: string, conversationId: string, user
     transcript,
     state?.enquiryStatus ?? null,
     slots,
-    !!client,
+    // ALWAYS "known", even when no CRM client is linked. This button is used on
+    // manual and pre-AI conversations, where an agent is already talking to the
+    // customer — a draft that opens by asking for their name and phone number
+    // is useless there, and often plain wrong (they may have been a client for
+    // years). The agent can ask for details themselves if they actually need
+    // them. The client record above is still looked up when it exists, for the
+    // customer's real name and context; this only suppresses the onboarding ask.
+    true,
     retrieved,
     { orgId, feature: "staff_chat", userId: userId ?? undefined },
     contactName,

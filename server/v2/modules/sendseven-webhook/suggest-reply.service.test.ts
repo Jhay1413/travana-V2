@@ -56,11 +56,15 @@ vi.mock("./conversation-state.repository", () => ({
 
 vi.mock("./identity.service", () => ({
   systemScope: vi.fn((orgId: string) => ({ orgId })),
+  // Default: the contact isn't linked to anyone.
+  findExistingClientReadOnly: vi.fn(async () => null),
 }));
 
 import { suggestAiReply } from "./suggest-reply.service";
 import { generateTurn } from "../ai-conversation/ai-conversation.brain";
 import { conversationStateRepository } from "./conversation-state.repository";
+import { findExistingClientReadOnly } from "./identity.service";
+import { conversationsRepository } from "../conversations/conversations.repository";
 import { messagesRepository } from "../messages/messages.repository";
 
 const ORG_ID = "org-1";
@@ -84,10 +88,12 @@ describe("suggestAiReply", () => {
 
     expect(suggestion).toBe("Suggested reply text");
     const args = vi.mocked(generateTurn).mock.calls[0];
-    // client=null (no state row → no linked client), knownClient=false…
+    // No state row → no linked client record…
     expect(args[2]).toBeNull();
-    expect(args[6]).toBe(false);
-    // …and the contact name rides along as the last param.
+    // …but the draft never opens by asking for name/phone: an agent is already
+    // in this conversation. See the knownClient argument in suggest-reply.
+    expect(args[6]).toBe(true);
+    // The contact name rides along as the last param.
     expect(args[9]).toBe("Tracy Smith");
   });
 
@@ -132,5 +138,48 @@ describe("suggestAiReply", () => {
     } as never);
 
     await expect(suggestAiReply(ORG_ID, CONV_ID)).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+// A conversation an agent has handled all along has no clientId on our state
+// row — the live AI never processed it. Observed: the suggestion then asked a
+// customer we already have on file to "pop your best phone number over".
+describe("suggestAiReply — identity on conversations the live AI never touched", () => {
+  beforeEach(() => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(null);
+    vi.mocked(conversationsRepository.getById).mockResolvedValue({
+      contact: { id: "contact-1", name: "Martyn S", phone: "07700900123", email: null },
+    } as never);
+  });
+
+  it("treats a contact linked in the CRM as a known client", async () => {
+    vi.mocked(findExistingClientReadOnly).mockResolvedValue("client-9" as never);
+
+    await suggestAiReply(ORG_ID, CONV_ID);
+
+    expect(findExistingClientReadOnly).toHaveBeenCalledWith(ORG_ID, expect.objectContaining({ id: "contact-1" }));
+    // knownClient (arg 7) true → the prompt skips the name/phone onboarding ask.
+    expect(vi.mocked(generateTurn).mock.calls[0][6]).toBe(true);
+    expect(vi.mocked(generateTurn).mock.calls[0][2]).not.toBeNull();
+  });
+
+  it("never asks for name and phone, even when the contact is unknown to the CRM", async () => {
+    // The whole point of the button on a manual / pre-AI conversation: the
+    // agent wants a reply to what was said, not an onboarding script.
+    vi.mocked(findExistingClientReadOnly).mockResolvedValue(null as never);
+
+    await suggestAiReply(ORG_ID, CONV_ID);
+
+    expect(vi.mocked(generateTurn).mock.calls[0][6]).toBe(true);
+    expect(vi.mocked(generateTurn).mock.calls[0][2]).toBeNull();
+  });
+
+  it("prefers the state row's client and does not look up again", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue({ orgId: ORG_ID, clientId: "client-1" } as never);
+
+    await suggestAiReply(ORG_ID, CONV_ID);
+
+    expect(findExistingClientReadOnly).not.toHaveBeenCalled();
+    expect(vi.mocked(generateTurn).mock.calls[0][6]).toBe(true);
   });
 });
