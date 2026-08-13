@@ -138,7 +138,10 @@ router.use('/neon-clients',       ...auth, neonClientRoutes);
 router.use('/ai',                 ...auth, aiAskRoutes);
 router.use('/ai-enquiry',         ...auth, aiEnquiryRoutes);
 router.use('/destination-guru',   ...auth, destinationGuruRoutes);
-router.use('/json-mapper',        isAuthenticated, jsonMapperRoutes);
+// ...auth, not isAuthenticated alone: the mapper find-or-creates tour operators,
+// which are org-owned, so it needs orgBranchScope to populate req.orgId. Without
+// it every lookup ran org-blind and every created row landed with a null org.
+router.use('/json-mapper',        ...auth, jsonMapperRoutes);
 router.use('/easyjet',            ...auth, easyjetRoutes);
 router.use('/scrapers',           ...auth, scraperRoutes);
 router.use('/announcements',      ...auth, announcementRoutes);

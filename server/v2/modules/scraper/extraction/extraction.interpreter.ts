@@ -1005,7 +1005,24 @@ export function runExtractionSpec(
 
   const f: Record<string, string | number> = { ...(spec.constants ?? {}) };
   for (const [key, rule] of Object.entries(spec.fields ?? {})) {
-    f[key] = resolveField(rule, c);
+    const value = resolveField(rule, c);
+    // A rule that matched NOTHING must not wipe a constant of the same name.
+    // The AI writes both — it is told to declare tour_operator/currency as
+    // constants AND to try to extract every common field — so a spec routinely
+    // carries a constant and a rule for one key. The rule then returned '' on
+    // any page whose wording it didn't fit, blanking a value the spec author
+    // had stated outright. `tour_operator` blanking this way is what left the
+    // quote form's operator dropdown empty on captured imports, while the
+    // file-upload path (whose JSON carries the name directly, no spec involved)
+    // kept working.
+    //
+    // A constant is an explicit statement; an empty match is "found nothing".
+    // The explicit statement wins. Rules that DO match still override, and a
+    // rule with a `fallback` still applies it (resolveField returns the
+    // fallback, which is not empty). Mirrors applyScalarOverrides, which has
+    // always guarded this way.
+    if (isEmpty(value) && f[key] !== undefined && f[key] !== '') continue;
+    f[key] = value;
   }
 
   // Party size / duration: the URL is authoritative when the spec's text rules

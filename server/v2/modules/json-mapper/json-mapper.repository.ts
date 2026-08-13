@@ -1,6 +1,6 @@
 import { db } from '../../config/database';
 import { country, destination, resorts, accomodation_list, board_basis, tour_operator, airport, room_type, lodges, park } from '@shared/schema';
-import { ilike, and, eq, type SQL } from 'drizzle-orm';
+import { ilike, and, eq, isNull, type SQL } from 'drizzle-orm';
 
 // ILIKE treats %, _ and \ as pattern syntax; escape them so a name like
 // "100% Beach Resort" is matched literally.
@@ -84,9 +84,39 @@ export const jsonMapperRepository = {
     return exactThenContains((p) => db.select().from(board_basis).where(ilike(board_basis.type, p)).limit(1), typeName);
   },
 
-  async findTourOperatorByName(name: string) {
+  // Tour operators are the only lookup here that is ORG-SCOPED (every other
+  // table — board basis, room type, airport, country/destination/resort — is
+  // global). The quote form's dropdown lists ONLY rows whose org_id is the
+  // caller's, so a match from another org, or a global org_id IS NULL seed,
+  // resolves to an id the form cannot render: the field is set but shows blank.
+  // That is exactly what happened — an import resolved "Jet2holidays" to a row
+  // the agency didn't own, so the operator box came back empty.
+  //
+  // Hence: search WITHIN the org only. `findGlobalTourOperatorByName` handles
+  // the seed rows separately, because those must be copied into the org rather
+  // than referenced.
+  async findTourOperatorByName(name: string, orgId?: string | null) {
     if (!name) return null;
-    return exactThenContains((p) => db.select().from(tour_operator).where(ilike(tour_operator.name, p)).limit(1), name);
+    return exactThenContains(
+      (p) =>
+        db
+          .select()
+          .from(tour_operator)
+          .where(orgId ? and(ilike(tour_operator.name, p), eq(tour_operator.org_id, orgId))! : ilike(tour_operator.name, p))
+          .limit(1),
+      name,
+    );
+  },
+
+  // A platform seed (org_id IS NULL). Matched so its commission percentage can
+  // be carried into the org's own copy — creating a bare row instead would
+  // silently lose the commission the quote form calculates from.
+  async findGlobalTourOperatorByName(name: string) {
+    if (!name) return null;
+    return exactThenContains(
+      (p) => db.select().from(tour_operator).where(and(ilike(tour_operator.name, p), isNull(tour_operator.org_id))!).limit(1),
+      name,
+    );
   },
 
   async findAirportByCodeOrName(codeOrName: string) {
@@ -149,8 +179,14 @@ export const jsonMapperRepository = {
     return row;
   },
 
-  async createTourOperator(name: string) {
-    const [row] = await db.insert(tour_operator).values({ name }).returning();
+  // Stamped with the caller's org, so the row the mapper hands back is one the
+  // org-scoped dropdown will actually list. Without org_id these landed as
+  // orphans owned by nobody and invisible everywhere.
+  async createTourOperator(name: string, orgId?: string | null, commissionPercentage?: string | null) {
+    const [row] = await db
+      .insert(tour_operator)
+      .values({ name, org_id: orgId ?? null, ...(commissionPercentage != null ? { commission_percentage: commissionPercentage } : {}) })
+      .returning();
     return row;
   },
 

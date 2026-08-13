@@ -298,16 +298,9 @@ function applyLineItems(
     })));
   }
 
-  // Board basis / room type / tour operator dropdowns read full-list caches; if the
-  // import find-or-created any new rows, refresh those lists so the new ids resolve.
   const hasLineItems =
     raw.extraHotels.length || raw.transfers.length || raw.carHires.length ||
     raw.attractionTickets.length || raw.loungePasses.length || raw.airportParkings.length;
-  if (hasLineItems) {
-    queryClient.invalidateQueries({ queryKey: ["lookup", "board-basis"] });
-    queryClient.invalidateQueries({ queryKey: ["lookup", "room-types"] });
-    queryClient.invalidateQueries({ queryKey: ["tourOperators"] });
-  }
 
   const plural = (n: number, s: string, suf = "s") => `${n} ${s}${n === 1 ? "" : suf}`;
   const counts: string[] = [];
@@ -387,6 +380,21 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   };
 
   const idMapping = await jsonMapperApi.mapToIds(mappingInput);
+
+  // The board basis / room type / tour operator dropdowns render from full-list
+  // caches, and mapToIds FIND-OR-CREATES — so any of them may now name a row the
+  // cached list predates. An id with no matching option renders as an empty
+  // field, which reads as "the import didn't populate this".
+  //
+  // This used to be gated on the import having line items (extra hotels,
+  // transfers, …), but the PRIMARY stay's board basis and the quote's own tour
+  // operator are resolved on every import, line items or not. A deal with no
+  // extras therefore created a row and never refreshed the list that had to show
+  // it. Unconditional now: three cache invalidations are far cheaper than a
+  // silently blank dropdown, and TanStack coalesces them.
+  queryClient.invalidateQueries({ queryKey: ["lookup", "board-basis"] });
+  queryClient.invalidateQueries({ queryKey: ["lookup", "room-types"] });
+  queryClient.invalidateQueries({ queryKey: ["tourOperators"] });
 
   if (idMapping.warnings.length > 0) {
     toast({
@@ -708,6 +716,12 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
       inboundArriveAirport: flights ? (ib.arriveAirport || ib.arrive_airport) : undefined,
       ...lineItemsInput,
     });
+
+    // Same reason as the scraper path: mapToIds find-or-creates, so the
+    // full-list caches these dropdowns render from may now be behind.
+    queryClient.invalidateQueries({ queryKey: ["lookup", "board-basis"] });
+    queryClient.invalidateQueries({ queryKey: ["lookup", "room-types"] });
+    queryClient.invalidateQueries({ queryKey: ["tourOperators"] });
 
     if (flights) {
       if (result.outboundDepartAirportId) setValue("outboundDepartAirportId", result.outboundDepartAirportId as never);
