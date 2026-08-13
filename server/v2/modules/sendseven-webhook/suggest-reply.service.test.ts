@@ -45,6 +45,10 @@ vi.mock("../neon-client/neon-client.service", () => ({
   neonClientService: { getNeonClientById: vi.fn(async () => ({ id: "client-1", firstName: "Tracy" })) },
 }));
 
+vi.mock("./deal-context.service", () => ({
+  hydrateDealReplyContext: vi.fn(async () => ({ title: "Xmas in Amsterdam", hotelName: "Volkshotel" })),
+}));
+
 vi.mock("./conversation-state.repository", () => ({
   conversationStateRepository: {
     find: vi.fn(async () => null),
@@ -64,6 +68,7 @@ import { suggestAiReply } from "./suggest-reply.service";
 import { generateTurn } from "../ai-conversation/ai-conversation.brain";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { findExistingClientReadOnly } from "./identity.service";
+import { hydrateDealReplyContext } from "./deal-context.service";
 import { conversationsRepository } from "../conversations/conversations.repository";
 import { messagesRepository } from "../messages/messages.repository";
 
@@ -181,5 +186,30 @@ describe("suggestAiReply — identity on conversations the live AI never touched
 
     expect(findExistingClientReadOnly).not.toHaveBeenCalled();
     expect(vi.mocked(generateTurn).mock.calls[0][6]).toBe(true);
+  });
+});
+
+// A guessed pin must not be asserted by the draft either — the button reads the
+// live bot's pin, so it has to honour the same "identified vs guessed" verdict.
+describe("suggestAiReply — a guessed deal is passed through as unconfirmed", () => {
+  const withPin = (source: string) =>
+    ({ orgId: ORG_ID, clientId: "client-1", context: { dealRef: { travelDealId: "d1", quoteId: "q1", title: "Xmas in Amsterdam", source } } }) as never;
+
+  it("flags a similarity-matched deal so the draft checks the title first", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(withPin("vector"));
+
+    await suggestAiReply(ORG_ID, CONV_ID);
+
+    const retrieved = vi.mocked(generateTurn).mock.calls[0][7] as { deal?: { unconfirmed?: boolean } };
+    expect(retrieved.deal?.unconfirmed).toBe(true);
+  });
+
+  it("leaves an identified deal usable as fact", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(withPin("marker"));
+
+    await suggestAiReply(ORG_ID, CONV_ID);
+
+    const retrieved = vi.mocked(generateTurn).mock.calls[0][7] as { deal?: { unconfirmed?: boolean } };
+    expect(retrieved.deal?.unconfirmed).toBe(false);
   });
 });

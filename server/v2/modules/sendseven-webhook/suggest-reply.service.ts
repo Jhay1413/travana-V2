@@ -107,7 +107,14 @@ export async function suggestAiReply(orgId: string, conversationId: string, user
   // never consumed here (a suggestion isn't necessarily sent).
   const stateCtx = (state?.context as { dealRef?: DealRef; dealCheckAsked?: boolean } | null) ?? null;
   const deal = stateCtx?.dealRef ? await hydrateDealReplyContext(stateCtx.dealRef) : null;
-  if (deal) deal.tweakCheckPending = !stateCtx?.dealCheckAsked;
+  if (deal && stateCtx?.dealRef) {
+    deal.tweakCheckPending = !stateCtx.dealCheckAsked;
+    // Carry the live bot's own verdict on the pin: a deal matched by SIMILARITY
+    // ("vector") is a guess, so the draft must check the title rather than
+    // quote its hotel and price. Without this the button would confidently
+    // assert details the bot itself would have asked about first.
+    deal.unconfirmed = stateCtx.dealRef.source === "vector";
+  }
   const retrieved: RetrievedContext = { kb: kbMatches, quotes: quoteMatches, deal };
 
   const turn = await generateTurn(
