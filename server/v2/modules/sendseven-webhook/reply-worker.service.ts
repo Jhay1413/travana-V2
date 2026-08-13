@@ -221,7 +221,6 @@ const RESUME_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 // asked for a second time.
 const CALL_QUESTION_RE = /\b(?:call|ring|phone|speak|chat)\b[^?]{0,80}\?/i;
 const HUMAN_ACTIVE_COOLOFF_MS = 60 * 60 * 1000;
-
 const FALLBACK_REPLY = "Thanks for your message — one of our advisors will be in touch shortly.";
 // Inbound message_types that carry a file even when there's no text caption — so
 // a bare passport photo isn't dropped by the text-only gate.
