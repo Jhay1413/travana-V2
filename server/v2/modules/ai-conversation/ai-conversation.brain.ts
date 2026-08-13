@@ -1063,7 +1063,19 @@ export function buildSystemPrompt(
   // and carrying an explicit carve-out from the static "never quote prices /
   // never name hotels" rules: everything here was already published in the
   // Facebook post, so repeating it is not leaking.
-  if (retrieved?.deal) {
+  if (retrieved?.deal?.unconfirmed) {
+    // Matched by similarity alone — nothing the customer said identifies it, so
+    // it may well be a different post of ours with a similar theme. CHECK the
+    // title before any of it is spoken as fact.
+    parts.push(
+      [
+        `PROBABLE DEAL — NOT YET CONFIRMED. Their message looks like it is about our "${retrieved.deal.title}" post, but nothing they have said identifies it for certain, and we run similar posts. The details are withheld from you on purpose until they confirm.`,
+        `Your reply must CHECK the title with them, in one short natural question naming it exactly as written: e.g. "Just so I get you the right one — is it the ${retrieved.deal.title} deal you're after? x". Use that title EXACTLY; never invent or reword a deal name.`,
+        "Do NOT state, imply or hint at ANY detail of it — no hotel, price, dates, nights, board basis or flights — even if they asked for exactly that. Answering with details we haven't confirmed is how a customer ends up quoted the wrong holiday.",
+        "If they confirm, the full details load automatically for your next reply. If they say it's a different one, or don't recognise it, just carry on with the normal flow and collect their enquiry as usual.",
+      ].join(" "),
+    );
+  } else if (retrieved?.deal) {
     const dealLines = [
       "THE DEAL THE CUSTOMER IS ASKING ABOUT — they've messaged about this holiday deal we posted publicly on Facebook:",
       buildDealContextLines(retrieved.deal),

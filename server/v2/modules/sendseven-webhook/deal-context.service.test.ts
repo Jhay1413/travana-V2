@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   explicitDatesIn,
+  isAffirmative,
   mentionsExternalSource,
   pickDealCandidates,
   pickDealMatch,
@@ -540,5 +541,93 @@ describe("pickDealMatch — similarity requires the customer to have referenced 
 
   it("still pins on a verbatim deal title with no post wording at all", () => {
     expect(pickDealMatch([albufeira(0.55)], "how much is the albufeira summer break")?.travelDealId).toBe("d-alb");
+  });
+});
+
+// Customers don't quote titles. Our "Xmas in Amsterdam" post was asked about as
+// "the Amsterdam Christmas deal" — every meaningful word shared, no substring
+// match — so the correct deal was never identified and similarity picked a
+// DIFFERENT Amsterdam post, whose hotel the bot then named.
+describe("pickDealMatch — titles recognised from the customer's own wording", () => {
+  const deal = (id: string, title: string, distance: number) => ({
+    sourceId: id,
+    content: "",
+    distance,
+    metadata: { travelDealId: id, quoteId: `q-${id}`, title, postSchedule: "2026-08-01T09:00:00.000Z" },
+  });
+
+  it("matches a title whose words all appear, in any order, with xmas = christmas", () => {
+    const xmas = deal("d-xmas", "Xmas in Amsterdam", 0.55);
+    const city = deal("d-city", "Amsterdam City Sightseeing", 0.20);
+
+    // The city break is the CLOSER vector match, but the words identify the other.
+    expect(pickDealMatch([xmas, city], "which hotel is the Amsterdam Christmas deal for please")?.travelDealId).toBe("d-xmas");
+  });
+
+  it("still works when the customer writes the title back exactly", () => {
+    const xmas = deal("d-xmas", "Xmas in Amsterdam", 0.5);
+    expect(pickDealMatch([xmas], "saw your Xmas in Amsterdam post")?.travelDealId).toBe("d-xmas");
+  });
+
+  it("does NOT identify a deal from the destination alone", () => {
+    // "Amsterdam" is one distinctive word — matching on it would claim every
+    // Amsterdam message, which is the wrong-deal bug itself.
+    const bare = deal("d-ams", "Amsterdam", 0.5);
+    expect(pickDealMatch([bare], "anything for amsterdam?")).toBeNull();
+  });
+
+  it("stays ambiguous when two posts share every distinctive word", () => {
+    const a = deal("d-a", "Amsterdam Christmas Markets", 0.4);
+    const b = deal("d-b", "Christmas Markets Amsterdam", 0.41);
+    expect(pickDealMatch([a, b], "the amsterdam christmas markets one")).toBeNull();
+  });
+
+  it("does not match a title that only partly overlaps", () => {
+    const greece = deal("d-greece", "All Inclusive in Greece", 0.5);
+    // "greece" alone is not enough — "all inclusive" is missing.
+    expect(pickDealMatch([greece], "anything in greece?")).toBeNull();
+  });
+});
+
+// A similarity guess is not a certainty. Both wrong-deal incidents (a Kos
+// screenshot matched to a Crete post; "the Amsterdam Christmas deal" matched to
+// a different Amsterdam one) came from treating a guess as fact, so a guessed
+// deal is now marked for confirmation and only a match to something the
+// customer actually said may be spoken about outright.
+describe("pickDealMatch — how the deal was identified", () => {
+  const deal = (id: string, meta: Record<string, unknown>, distance: number) => ({
+    sourceId: id,
+    content: "",
+    distance,
+    metadata: { travelDealId: id, quoteId: `q-${id}`, postSchedule: "2026-08-01T09:00:00.000Z", ...meta },
+  });
+
+  it("marks a title match as identified, not guessed", () => {
+    const d = deal("d-xmas", { title: "Xmas in Amsterdam" }, 0.5);
+    expect(pickDealMatch([d], "the Amsterdam Christmas deal")?.source).toBe("marker");
+  });
+
+  it("marks a hotel-name match as identified", () => {
+    const d = deal("d-1", { title: "Winter Sun", hotelName: "Hotel Taormina" }, 0.5);
+    expect(pickDealMatch([d], "is the taormina still available?")?.source).toBe("marker");
+  });
+
+  it("marks a distance-only match as a guess", () => {
+    const d = deal("d-1", { title: "Winter Sun in Spain" }, 0.2);
+    expect(pickDealMatch([d], "saw your post about spain, any details?")?.source).toBe("vector");
+  });
+});
+
+describe("isAffirmative", () => {
+  it("accepts the ways customers confirm", () => {
+    for (const t of ["yes", "Yes please", "yeah that's the one", "that's it", "correct", "yep", "ok"]) {
+      expect(isAffirmative(t), t).toBe(true);
+    }
+  });
+
+  it("does not mistake other replies for confirmation", () => {
+    for (const t of ["no not that one", "Yesterday I saw it", "the other one", "how much is it?", ""]) {
+      expect(isAffirmative(t), t).toBe(false);
+    }
   });
 });

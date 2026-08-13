@@ -104,6 +104,12 @@ export interface RetrievedDealContext {
   // context.dealCheckAsked and flips that flag after the first sales turn
   // that had the chance to ask. Presentation-only; not persisted itself.
   tweakCheckPending?: boolean;
+  // True when this deal was matched by SIMILARITY alone — nothing the customer
+  // actually said identified it. The details below may belong to a different
+  // post (observed twice: a Kos screenshot matched a Crete deal, and "the
+  // Amsterdam Christmas deal" matched a different Amsterdam one), so the brain
+  // must confirm the title with the customer before stating any of them.
+  unconfirmed?: boolean;
   title: string;
   travelDate?: string | null;
   nights?: number | null;

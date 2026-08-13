@@ -128,7 +128,17 @@ function priceAppearsIn(q: string, price: string): boolean {
 // contain a deal's exact travel date, but pinning that deal — and quoting its
 // hotel and price at someone who never saw the advert — is presumptuous.
 const POST_REFERENCE_RE =
-  /\b(saw|seen|spotted|post|posted|posting|advert|advertisement|ad|ads|facebook|fb|insta|instagram|social|screenshot|picture|photo|image|story|reel|page)\b/i;
+  /\b(saw|seen|spotted|post|posted|posting|advert|advertisement|ad|ads|deal|deals|offer|offers|facebook|fb|insta|instagram|social|screenshot|picture|photo|image|story|reel|page)\b/i;
+
+// "yes", "yeah that's the one", "correct" — enough to accept a confirmation of
+// a guessed deal. Deliberately narrow: anything else leaves the deal
+// unconfirmed, which is the safe state.
+const AFFIRMATIVE_RE =
+  /^\s*(?:yes|yeah|yep|yh|yea|aye|correct|that'?s? (?:the one|right|it)|thats (?:the one|right|it)|it is|please|ok(?:ay)?)\b/i;
+
+export function isAffirmative(text: string): boolean {
+  return AFFIRMATIVE_RE.test(text ?? "");
+}
 
 export function hasPostReferenceSignal(text: string): boolean {
   return POST_REFERENCE_RE.test(text ?? "");
@@ -250,12 +260,48 @@ export function contradictsStatedDate(candidate: { travelDate: string | null }, 
   return !stated.has(dealDate.toISOString().slice(0, 10));
 }
 
-function toDealRef(winner: DealCandidate): DealRef {
+// Words that carry no identifying weight in a deal title — grammar, plus the
+// marketing filler nearly every post uses ("deal", "break", "escape"). Dropping
+// them is what lets "Xmas in Amsterdam" be recognised from "the Amsterdam
+// Christmas deal", and also stops two differently-named Amsterdam posts both
+// reducing to the same single word (the 2-word floor below then rejects them).
+const TITLE_STOPWORDS = new Set([
+  "a", "an", "the", "in", "at", "on", "to", "for", "of", "with", "and", "our", "your", "from", "this",
+  "deal", "deals", "offer", "offers", "holiday", "holidays", "break", "breaks", "getaway", "getaways",
+  "escape", "escapes", "trip", "trips", "special", "specials",
+]);
+
+// Same word, different spelling — customers and marketers rarely agree.
+const TITLE_SYNONYMS: Record<string, string> = {
+  xmas: "christmas",
+  crimbo: "christmas",
+  ny: "newyear",
+  nye: "newyear",
+  "all-inclusive": "allinclusive",
+};
+
+function normaliseForTitleMatch(text: string): string {
+  return (text ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function titleTokens(normalised: string): string[] {
+  return normalised
+    .split(" ")
+    .map((w) => TITLE_SYNONYMS[w] ?? w)
+    .filter((w) => w.length > 1 && !TITLE_STOPWORDS.has(w));
+}
+
+// `source` records HOW the deal was identified, and the difference matters
+// downstream: "marker" means the customer gave something that identifies it (a
+// title, a hotel, an exact date or price) and it can be spoken about as fact;
+// "vector" means it is the closest guess and must be CONFIRMED before any of
+// its details are quoted.
+function toDealRef(winner: DealCandidate, source: DealRef["source"] = "vector"): DealRef {
   return {
     travelDealId: winner.travelDealId,
     quoteId: winner.quoteId,
     title: winner.title,
-    source: "vector",
+    source,
     matchedAt: new Date().toISOString(),
     distance: winner.distance,
   };
@@ -290,21 +336,31 @@ export function pickDeterministicDealMatch(matches: RetrievedMatch[], queryText?
   const all = matches.map(parseCandidate).filter((c): c is DealCandidate => c !== null);
   if (all.length === 0) return null;
 
-  const q = queryText.toLowerCase().replace(/\s+/g, " ");
+  const q = normaliseForTitleMatch(queryText);
   const titleHits = all.filter((c) => {
-    const t = c.title.trim().toLowerCase().replace(/\s+/g, " ");
-    // Very short titles substring-match too easily ("rome" would hit every
-    // Rome message) — require some substance before trusting the rescue.
-    return t.length >= 6 && q.includes(t);
+    const t = normaliseForTitleMatch(c.title);
+    // A title identifies a deal only if it carries at least TWO distinctive
+    // words. One ("Amsterdam") would claim every message mentioning the place,
+    // and a title of pure filler ("Holiday Deal") identifies nothing at all —
+    // plenty of posts share it.
+    const wanted = titleTokens(t);
+    if (wanted.length < 2) return false;
+    if (q.includes(t)) return true;
+    // Customers rarely quote a title exactly: our "Xmas in Amsterdam" post was
+    // asked about as "the Amsterdam Christmas deal", which shares every
+    // meaningful word but matches no substring. So also accept a title whose
+    // distinctive words ALL appear in the message, in any order.
+    const present = new Set(titleTokens(q));
+    return wanted.every((w) => present.has(w));
   });
   if (new Set(titleHits.map((c) => c.travelDealId)).size === 1) {
-    return toDealRef([...titleHits].sort((a, b) => a.distance - b.distance)[0]);
+    return toDealRef([...titleHits].sort((a, b) => a.distance - b.distance)[0], "marker");
   }
 
   const postSignal = hasPostReferenceSignal(queryText);
   const fieldHits = all.filter((c) => strongSignalHit(c, q, postSignal));
   if (new Set(fieldHits.map((c) => c.travelDealId)).size === 1) {
-    return toDealRef([...fieldHits].sort((a, b) => a.distance - b.distance)[0]);
+    return toDealRef([...fieldHits].sort((a, b) => a.distance - b.distance)[0], "marker");
   }
   return null;
 }
@@ -578,6 +634,13 @@ export async function resolveDealTurn(input: {
         );
       }
     }
+  } else if (ref && ref.source === "vector" && isAffirmative(query)) {
+    // "yes, that's the one" — the customer has confirmed the guess, so it can
+    // now be spoken about as fact. Promoted to "marker" (an identifying fact
+    // they gave) and persisted via pinnedNow.
+    ref = { ...ref, source: "marker" };
+    pinnedNow = ref;
+    console.log(`[deal-context] ${logLabel} customer confirmed deal=${ref.travelDealId} "${ref.title}"`);
   } else if (ref) {
     // ALREADY PINNED — allow a correction ("no, it was the spring one"), but
     // only from a DETERMINISTIC match: an identifying fact the customer
@@ -601,12 +664,20 @@ export async function resolveDealTurn(input: {
   // Hydrated fresh every turn (cheap: two small queries) so the AI always
   // quotes CURRENT hotel/flight detail, never the embedding's snapshot.
   const deal = ref ? await hydrateDealReplyContext(ref) : null;
-  if (deal) {
+  if (deal && ref) {
     // A corrected pin is a different holiday, so the "as posted or any
     // tweaks?" check is owed again on the new deal.
     deal.tweakCheckPending = repinned || !checkAsked;
-    const seededKeys = seedSlotsFromDeal(slots, deal);
-    if (pinnedNow) pinnedNow.seededKeys = seededKeys;
+    // A similarity guess must be CONFIRMED with the customer before any of its
+    // details are spoken as fact — only a match to something they actually
+    // said ("marker") is safe to assert. Seeding the enquiry slots waits on
+    // that too: an unconfirmed deal's date and airport must not land on the
+    // enquiry.
+    deal.unconfirmed = ref.source === "vector";
+    if (!deal.unconfirmed) {
+      const seededKeys = seedSlotsFromDeal(slots, deal);
+      if (pinnedNow) pinnedNow.seededKeys = seededKeys;
+    }
   }
   return { pinnedNow, deal, dealCandidates, repinned, externalDealMention: external };
 }
