@@ -498,6 +498,33 @@ export function isOpenAvailability(text: string): boolean {
   return OPEN_AVAILABILITY_RE.test(text ?? "");
 }
 
+// "Anytime", "whenever suits", "I'm free all day" — the customer HAS answered
+// the callback question, they just haven't named a time. parseAvailabilityTime
+// correctly returns null (there is no time in there to parse), which used to
+// leave the task with NO due date: invisible in every due-date view and never
+// picked up by the due-task reminder. Recognising it lets the caller give the
+// task a sensible default slot instead.
+//
+// Only ever consulted AFTER parsing has already failed, so it can afford to be
+// generous — anything with a real time in it ("any time after 5") never reaches
+// here.
+const OPEN_AVAILABILITY_RE =
+  /\b(?:any\s?time|anytime|when\s?ever|whenever|all\s+day|any\s+day|no\s+preference|not\s+fussed|not\s+bothered|up\s+to\s+you|you\s+choose|your\s+choice|as\s+soon\s+as\s+(?:possible|you\s+can)|asap)\b/i;
+
+// "Today", "later today", "this afternoon" — they have named the DAY but no
+// usable time. The parser resolves a bare day to 10:00, which by late
+// afternoon is already past, so it rolls to tomorrow and the callback silently
+// slips a day. Callers use this to keep the task on TODAY instead.
+const SAYS_TODAY_RE = /(?:today|this\s+(?:morning|afternoon|evening|arvo)|later\s+(?:on|today)|tonight)/i;
+
+export function saysToday(text: string): boolean {
+  return SAYS_TODAY_RE.test(text ?? "");
+}
+
+export function isOpenAvailability(text: string): boolean {
+  return OPEN_AVAILABILITY_RE.test(text ?? "");
+}
+
 export function prefersMessagingOverCall(text: string): boolean {
   const t = (text ?? "").trim();
   if (!t) return false;
