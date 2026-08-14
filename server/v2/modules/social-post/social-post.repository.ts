@@ -5,15 +5,13 @@ import {
   transaction,
   quote_accomodation,
   accomodation_list,
-  accommodation_images,
-  lodge_images,
-  lodges,
-  park,
+  quoteImages,
+  deal_images,
   organization,
 } from "@shared/schema";
 import type { TravelDeal, InsertTravelDeal } from "@shared/schema";
 import type { OrganizationBranding } from "./social-post.types";
-import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 
 export const socialPostRepository = {
   async create(data: InsertTravelDeal): Promise<TravelDeal> {
@@ -157,9 +155,17 @@ export const socialPostRepository = {
   },
 
   /**
-   * Aggregate every image source for a quote: accommodation images, lodge
-   * images, the lodge's primary image, and park images. Used by the
-   * social-post composer to populate its image picker.
+   * The quote's own gallery, resolved exactly the way the quote view/edit
+   * screen resolves it (quote.repository findWithDetails): quote_images first,
+   * falling back to this quote's legacy deal_images rows, deduped by URL and
+   * ordered by position.
+   *
+   * The shared accommodation/lodge/park libraries are deliberately NOT merged
+   * in. Uploads are copied into those libraries on save (quote.service
+   * saveImagesToAccommodation/saveImagesToLodge) as separate rows, so reading
+   * them back here returned the same photo two or three times — once per
+   * library — and the composer auto-selects everything, so each copy was
+   * uploaded to OnlySocials as its own media item.
    */
   async isTestTransactionForQuote(quoteId: string): Promise<boolean> {
     const [row] = await db
@@ -172,85 +178,35 @@ export const socialPostRepository = {
   },
 
   async findAllImagesForQuote(quoteId: string): Promise<Array<{ url: string; name: string; source: string; isPrimary: boolean }>> {
+    const [ownImages, legacyDealImages, displayName] = await Promise.all([
+      db
+        .select({ url: quoteImages.url, isPrimary: quoteImages.isPrimary })
+        .from(quoteImages)
+        .where(eq(quoteImages.quoteId, quoteId))
+        .orderBy(asc(quoteImages.position), asc(quoteImages.id)),
+      // Legacy fallback: deal_images owned by this quote (owner_id = quote id),
+      // used only when the quote has no quote_images rows.
+      db
+        .select({ url: deal_images.image_url, isPrimary: deal_images.isPrimary })
+        .from(deal_images)
+        .where(eq(deal_images.owner_id, quoteId)),
+      this.findPrimaryAccommodationNameForQuote(quoteId),
+    ]);
+
+    const rows = ownImages.length > 0 ? ownImages : legacyDealImages;
+
+    const seen = new Set<string>();
     const images: Array<{ url: string; name: string; source: string; isPrimary: boolean }> = [];
-
-    const quoteAccoms = await db
-      .select({
-        accomodation_id: quote_accomodation.accomodation_id,
-        accomodation_name: accomodation_list.name,
-      })
-      .from(quote_accomodation)
-      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
-      .where(eq(quote_accomodation.quote_id, quoteId));
-
-    const accomIds = quoteAccoms.map((a) => a.accomodation_id).filter((id): id is string => !!id);
-
-    if (accomIds.length > 0) {
-      const accomImgs = await db
-        .select()
-        .from(accommodation_images)
-        .where(inArray(accommodation_images.accommodation_id, accomIds));
-
-      for (const img of accomImgs) {
-        const accom = quoteAccoms.find((a) => a.accomodation_id === img.accommodation_id);
-        images.push({
-          url: img.image_url,
-          name: accom?.accomodation_name || "Accommodation",
-          source: "accommodation",
-          isPrimary: img.isPrimary ?? false,
-        });
-      }
+    for (const row of rows) {
+      if (!row.url || seen.has(row.url)) continue;
+      seen.add(row.url);
+      images.push({
+        url: row.url,
+        name: displayName || "Quote",
+        source: "quote",
+        isPrimary: row.isPrimary ?? false,
+      });
     }
-
-    const [quoteRecord] = await db
-      .select({ lodge_id: quote.lodge_id, cottage_id: quote.cottage_id })
-      .from(quote)
-      .where(eq(quote.id, quoteId));
-
-    if (quoteRecord?.lodge_id) {
-      const lodgeImgs = await db
-        .select({
-          image_url: lodge_images.image_url,
-          isPrimary: lodge_images.isPrimary,
-          lodge_name: lodges.lodge_name,
-        })
-        .from(lodge_images)
-        .leftJoin(lodges, eq(lodge_images.lodge_id, lodges.id))
-        .where(eq(lodge_images.lodge_id, quoteRecord.lodge_id));
-
-      for (const img of lodgeImgs) {
-        images.push({
-          url: img.image_url,
-          name: img.lodge_name || "Lodge",
-          source: "lodge",
-          isPrimary: img.isPrimary ?? false,
-        });
-      }
-
-      const [lodge] = await db
-        .select({ image: lodges.image, lodge_name: lodges.lodge_name, park_id: lodges.park_id })
-        .from(lodges)
-        .where(eq(lodges.id, quoteRecord.lodge_id));
-
-      if (lodge?.image) {
-        images.push({ url: lodge.image, name: lodge.lodge_name || "Lodge", source: "lodge", isPrimary: false });
-      }
-
-      if (lodge?.park_id) {
-        const [parkRecord] = await db
-          .select({ image_1: park.image_1, image_2: park.image_2, name: park.name })
-          .from(park)
-          .where(eq(park.id, lodge.park_id));
-
-        if (parkRecord?.image_1) {
-          images.push({ url: parkRecord.image_1, name: parkRecord.name || "Park", source: "park", isPrimary: false });
-        }
-        if (parkRecord?.image_2) {
-          images.push({ url: parkRecord.image_2, name: parkRecord.name || "Park", source: "park", isPrimary: false });
-        }
-      }
-    }
-
     return images;
   },
 };

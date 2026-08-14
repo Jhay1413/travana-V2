@@ -10,6 +10,10 @@ export interface CapturedPage {
   title?: string;
   text: string;
   images?: string[];
+  // Index-aligned with `images`: the class names / data-tids around each one, so
+  // a spec can keep the property gallery and drop the room-card carousels that
+  // share the same image host.
+  imageContexts?: string[];
   // The page's h1/h2 text in document order. The deal's headline lives here —
   // in body text it's an unanchorable line, but a spec rule can address this
   // list positionally.
@@ -50,6 +54,9 @@ export function parseCapture(raw: string): CapturedPage {
     title: typeof c.title === "string" ? c.title : "",
     text: c.text,
     images: Array.isArray(c.images) ? c.images.filter((s): s is string => typeof s === "string") : undefined,
+    imageContexts: Array.isArray(c.imageContexts)
+      ? c.imageContexts.filter((s): s is string => typeof s === "string")
+      : undefined,
     // Absent from captures made with a pre-v7 bookmarklet — optional, so an old
     // one still imports, just without a title.
     headings: Array.isArray(c.headings) ? c.headings.filter((s): s is string => typeof s === "string") : undefined,

@@ -44,11 +44,25 @@ export interface ExtractionSpec {
   // Optional: build included_luggage from every match of this pattern.
   // Group 1 (count) and group 2 (label) are combined, e.g. "(2) 22kg baggage".
   luggageRegex?: string;
-  // Optional: substring/host that identifies the property gallery among the
-  // captured <img> URLs (e.g. "media.jet2.com/is/image"). When omitted, the
-  // interpreter auto-detects the dominant image CDN. Images can't be read from
-  // innerText, so they're captured separately and selected here.
+  // Images can't be read from innerText, so they're captured separately and
+  // selected here.
+  //
+  // Optional: substring(s) identifying the property gallery among the captured
+  // <img> URLs. Pipe-separate alternatives when a supplier serves photos from
+  // more than one host ("content.tui.co.uk|cdn.images.tui"); naming only one of
+  // them selects that host's stragglers and DISCARDS the real gallery, which is
+  // worse than not setting it at all. Omit it entirely and the interpreter
+  // auto-detects the dominant image CDN, which handles most portals.
   imageUrlIncludes?: string;
+  // Optional: keep only images sitting inside a container whose class names or
+  // data-tid contain this (case-insensitive), e.g. "hotel-main-view".
+  //
+  // A hotel page shows the property carousel AND one carousel per room card,
+  // all served from the same image host — so neither imageUrlIncludes nor the
+  // host heuristic can separate them; only DOM position can. The capture sends
+  // each image's surrounding class/data-tid names and this filters on them.
+  // Ignored when the capture carries no such context (pre-v9 bookmarklet).
+  imageContainerIncludes?: string;
   // Optional: a case-insensitive regex matching the visible text of a control
   // (button/link) that opens a "flight details / compare airports" modal holding
   // the real flight times + destination airport (e.g. "compare airport"). When

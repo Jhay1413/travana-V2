@@ -852,6 +852,9 @@ export interface CapturedImage {
   src: string;
   w: number;
   h: number;
+  // Class names / data-tids of the surrounding elements, for a spec's
+  // imageContainerIncludes. Mirrors what the bookmarklet sends.
+  context?: string;
 }
 export interface CapturedDom {
   title: string;
@@ -870,7 +873,52 @@ async function captureImages(page: Page): Promise<CapturedImage[]> {
       els
         .map((e) => {
           const img = e as HTMLImageElement;
-          return { src: img.currentSrc || img.src, w: img.naturalWidth || 0, h: img.naturalHeight || 0 };
+          // Widest srcset candidate, else whatever loaded, else the URL a lazy
+          // loader is holding for later. The browser picks for ITS viewport,
+          // which is routinely smaller than what's offered — and an undisplayed
+          // carousel slide often has no src at all, only a data attribute
+          // (slick's data-lazy). Mirrors the bookmarklet's widestSrc.
+          let best = '';
+          let bestWidth = 0;
+          for (const set of [img.getAttribute('srcset') || '', img.getAttribute('data-srcset') || '']) {
+            for (const part of set.split(',')) {
+              const bits = part.trim().split(/\s+/);
+              const m = /^(\d{2,5})w$/.exec(bits[1] || '');
+              const width = m ? Number(m[1]) : 0;
+              if (bits[0] && width > bestWidth) {
+                bestWidth = width;
+                best = bits[0];
+              }
+            }
+          }
+          let src = '';
+          if (bestWidth > 0) src = new URL(best, location.href).href;
+          else src = img.currentSrc || img.src || '';
+          if (!src) {
+            for (const attr of ['data-lazy', 'data-src', 'data-original', 'data-lazy-src', 'data-ofi-src']) {
+              const parked = img.getAttribute(attr);
+              if (parked) {
+                src = new URL(parked, location.href).href;
+                break;
+              }
+            }
+          }
+
+          const parts: string[] = [];
+          let el: HTMLElement | null = img.parentElement;
+          for (let d = 0; el && d < 8 && el !== document.body; d++) {
+            const tid = el.getAttribute('data-tid');
+            if (tid) parts.push(tid);
+            if (typeof el.className === 'string' && el.className) parts.push(el.className);
+            el = el.parentElement;
+          }
+
+          return {
+            src,
+            w: img.naturalWidth || 0,
+            h: img.naturalHeight || 0,
+            context: parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 300),
+          };
         })
         .filter((i) => i.src && !i.src.startsWith('data:')),
     )

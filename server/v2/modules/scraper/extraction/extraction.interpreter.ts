@@ -402,11 +402,36 @@ function imageOrigin(absSrc: string): string {
 // by the spec's imageUrlIncludes when set, else by the dominant image-CDN host.
 // Fully generic: no supplier names or filename formats are assumed.
 function selectGalleryImages(
-  images: { src: string; w?: number; h?: number }[] | undefined,
+  images: { src: string; w?: number; h?: number; context?: string }[] | undefined,
   spec: ExtractionSpec,
   pageUrl: string,
 ): string[] {
   if (!images || images.length === 0) return [];
+
+  // Narrow to a container FIRST, when the spec names one and the capture knows
+  // where each image sat. A hotel page carries the property carousel and one
+  // per room card, all from the same image host — so URL and host tests can't
+  // tell a bedroom shot from the hotel gallery, and room photos were landing in
+  // the quote. Applied before everything below so the chrome filters and the
+  // host heuristic only ever see the right container's images.
+  const container = spec.imageContainerIncludes?.toLowerCase();
+  if (container) {
+    // Only images captured FROM THE DOM carry a position. Ones harvested out of
+    // the booking JSON have none — they never sat anywhere on the page — so a
+    // rule about WHERE an image was must not be allowed to judge them.
+    //
+    // This matters more than it sounds: easyJet's slider is virtualised and
+    // holds three <img> at a time, so the bulk of its gallery arrives via the
+    // JSON. Filtering context-less images out alongside the room cards would
+    // have cut that supplier from ~20 photos to 3.
+    const positioned = images.filter((i) => i.context != null);
+    const unpositioned = images.filter((i) => i.context == null);
+    const inContainer = positioned.filter((i) => (i.context as string).toLowerCase().includes(container));
+    // Only honour it when it actually matched — a spec naming a container the
+    // page no longer uses (or a capture with no contexts at all) must not strip
+    // the DOM's contribution to the gallery.
+    if (inContainer.length) images = unpositioned.concat(inContainer);
+  }
   // Third-party widgets (reviews, maps, social, surveys) are never the property
   // gallery. These are matched by HOST because a widget's own filenames are
   // arbitrary — Qualtrics' survey prompt ships "wr-dialog-close-btn-black.png",
@@ -428,8 +453,16 @@ function selectGalleryImages(
   if (cleaned.length === 0) return [];
 
   let pool: string[];
-  const inc = spec.imageUrlIncludes?.toLowerCase();
-  const byInclude = inc ? cleaned.filter((s) => s.toLowerCase().includes(inc)) : [];
+  // Pipe-separated alternatives, because one supplier can serve photos from
+  // several hosts — TUI uses BOTH content.tui.co.uk and cdn.images.tui, and
+  // naming only one of them silently discarded the gallery on any deal served
+  // from the other. A plain substring with no pipe behaves exactly as before.
+  const inc = (spec.imageUrlIncludes ?? '')
+    .toLowerCase()
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const byInclude = inc.length ? cleaned.filter((s) => inc.some((i) => s.toLowerCase().includes(i))) : [];
   if (byInclude.length) {
     pool = byInclude;
   } else {
@@ -981,7 +1014,7 @@ export function runExtractionSpec(
     text: string;
     url: string;
     apiJson?: unknown;
-    images?: { src: string; w?: number; h?: number }[];
+    images?: { src: string; w?: number; h?: number; context?: string }[];
     headings?: string[]; // the page's h1/h2 text, document order
     flightsText?: string; // text of a flight-details modal, if one was opened
   },

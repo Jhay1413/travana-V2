@@ -670,6 +670,168 @@ describe("gallery from a TUI capture", () => {
   });
 });
 
+// easyJet's slider: every image goes through the site's own /_next/image proxy,
+// so page chrome, CMS marketing tiles and the hotel photography all share ONE
+// host. imageUrlIncludes names the photo bucket so the gallery is chosen by
+// where the photo really lives rather than by guessing the dominant host.
+describe("easyJet gallery pinned by imageUrlIncludes", () => {
+  const PAGE = "https://www.easyjet.com/en/holidays/turkey/marmaris/a-hotel";
+  const P = "https://www.easyjet.com/holidays/_next/image?url=";
+  const S3 = "https%3A%2F%2Fejh-web-prod-images.s3-eu-west-1.amazonaws.com%2F";
+  const spec = { version: 1, fields: {}, imageUrlIncludes: "ejh-web-prod-images" } as unknown as ExtractionSpec;
+
+  const photo = (hotel: string, n: string, w: number) =>
+    `${P}${S3}${hotel}%2FLarge%2F${hotel.split("_")[0]}_${n}.jpg&w=${w}&q=75`;
+
+  const images = [
+    // The container's CSS background is a CMS placeholder; its inner url= is
+    // RELATIVE, so unwrapping leaves it on the page's own host.
+    { src: `${P}%2Fholidays%2Fcms%2Fmedia%2F-%2Fjssmedia%2Fc7aabef6.ashx%3Fmw%3D500&w=1920&q=75` },
+    // The slide, as srcset advertises it — the widest is what should survive.
+    { src: photo("TRDL0125_Club_Viva_Hotel", "11", 640) },
+    { src: photo("TRDL0125_Club_Viva_Hotel", "11", 1920) },
+    { src: photo("TRDL0125_Club_Viva_Hotel", "11", 3840) },
+    { src: photo("TRDL0125_Club_Viva_Hotel", "12", 3840) },
+    { src: "https://www.easyjet.com/holidays/cms/media/-/jssmedia/logo/a-logo.svg" },
+  ];
+
+  const gallery = () =>
+    runExtractionSpec(spec, { title: "", text: "x".repeat(300), url: PAGE, images }, "x").hotel_images;
+
+  it("keeps only the photo-bucket images", () => {
+    expect(gallery()).toHaveLength(2);
+    expect(gallery().every((s) => s.includes("ejh-web-prod-images"))).toBe(true);
+  });
+
+  it("keeps the widest variant of a slide, not the first seen", () => {
+    const eleven = gallery().find((s) => s.includes("_11.jpg"));
+    expect(eleven).toContain("w=3840");
+  });
+
+  it("never lets the CMS placeholder or the logo through", () => {
+    expect(gallery().some((s) => /jssmedia|logo/i.test(s))).toBe(false);
+  });
+});
+
+// An easyJet hotel page runs the property carousel AND one carousel per room
+// card, every image from the same S3 bucket through the same /_next/image
+// proxy. Neither imageUrlIncludes nor the dominant-host heuristic can separate
+// them — a bedroom shot and a pool shot are indistinguishable by URL. Only
+// where they sit in the page tells them apart, so the capture reports each
+// image's surrounding class names / data-tids and the spec names the container.
+describe("gallery scoped to a container", () => {
+  const PAGE = "https://www.easyjet.com/en/holidays/turkey/marmaris/a-hotel";
+  const P = "https://www.easyjet.com/holidays/_next/image?url=";
+  const S3 = "https%3A%2F%2Fejh-web-prod-images.s3-eu-west-1.amazonaws.com%2FTRDL0125_Club_Viva_Hotel%2F";
+  const photo = (folder: string, file: string) => `${P}${S3}${folder}%2F${file}.jpg&w=3840&q=75`;
+
+  // Verbatim from the page: the property carousel, then a room card's slider.
+  const HOTEL_CTX = "image-gallery-slide center HotelImageCarousel_wrapper__DxsZe hotel-main-view img-slider-box";
+  const ROOM_CTX = "image-gallery-slide center OfferCardSlider_container__ZOmt_ room-card-img room-section";
+
+  const images = [
+    { src: photo("Large", "TRDL0125_00"), context: HOTEL_CTX },
+    { src: photo("Large", "TRDL0125_11"), context: HOTEL_CTX },
+    { src: photo("Medium", "DB01_03"), context: ROOM_CTX },
+    { src: photo("Medium", "DB01_04"), context: ROOM_CTX },
+    { src: photo("Medium", "FM01_01"), context: ROOM_CTX },
+  ];
+
+  const gallery = (spec: Partial<ExtractionSpec>, imgs = images) =>
+    runExtractionSpec({ version: 1, fields: {}, ...spec } as ExtractionSpec, { title: "", text: "x".repeat(300), url: PAGE, images: imgs }, "x")
+      .hotel_images;
+
+  it("keeps the property carousel and drops the room cards", () => {
+    const out = gallery({ imageUrlIncludes: "ejh-web-prod-images", imageContainerIncludes: "hotel-main-view" });
+    expect(out).toHaveLength(2);
+    expect(out.some((s) => /DB01|FM01/.test(s))).toBe(false);
+  });
+
+  it("without the container rule, the room photos come through — the bug", () => {
+    expect(gallery({ imageUrlIncludes: "ejh-web-prod-images" })).toHaveLength(5);
+  });
+
+  // A pre-v9 capture carries no contexts. Emptying the gallery would be a far
+  // worse failure than including a few room shots.
+  it("is ignored when the capture has no contexts", () => {
+    const noContext = images.map((i) => ({ src: i.src }));
+    expect(gallery({ imageContainerIncludes: "hotel-main-view" }, noContext)).toHaveLength(5);
+  });
+
+  it("is ignored when the named container matches nothing", () => {
+    expect(gallery({ imageContainerIncludes: "a-container-that-no-longer-exists" })).toHaveLength(5);
+  });
+
+  // easyJet's slider is VIRTUALISED — three <img> exist at a time, so most of
+  // its gallery arrives from the booking JSON instead of the DOM. Those images
+  // never sat anywhere on the page, so they carry no context and a rule about
+  // where an image was must not judge them. Filtering them out alongside the
+  // room cards would cut the supplier from ~20 photos to 3.
+  it("never discards images that came from the booking JSON", () => {
+    // Booking JSON holds DIRECT urls, not ones wrapped in the site's image
+    // proxy — imagesFromJson only recognises a url ending in an image
+    // extension, so a proxied "?url=…jpg&w=3840" is not harvested from there.
+    const bucket = "https://ejh-web-prod-images.s3-eu-west-1.amazonaws.com/TRDL0125_Club_Viva_Hotel/Small/";
+    const fromJson = {
+      packageData: [`${bucket}TRDL0125_13.jpg`, `${bucket}TRDL0125_14.jpg`, `${bucket}TRDL0125_15.jpg`],
+    };
+    const out = runExtractionSpec(
+      { version: 1, fields: {}, imageContainerIncludes: "hotel-main-view" } as unknown as ExtractionSpec,
+      { title: "", text: "x".repeat(300), url: PAGE, images, apiJson: fromJson },
+      "x",
+    ).hotel_images;
+
+    // 2 from the hotel carousel + 3 from the JSON; the 3 room-card shots go.
+    expect(out).toHaveLength(5);
+    expect(out.filter((s) => /TRDL0125_1[345]/.test(s))).toHaveLength(3);
+    expect(out.some((s) => /DB01|FM01/.test(s))).toBe(false);
+  });
+});
+
+// Regression: TUI serves photos from BOTH content.tui.co.uk and cdn.images.tui,
+// depending on the deal. Pinning imageUrlIncludes to one host didn't fall back
+// to the auto-detect — it selected that host's few stragglers and threw the real
+// gallery away, so a 35-slide hotel imported with two images.
+describe("a supplier with more than one image host", () => {
+  const PAGE = "https://retailagents.tui.co.uk/retail/bookaccommodation?productCode=013537";
+  const CDN = "https://cdn.images.tui/tui-images/";
+  const OLD = "https://content.tui.co.uk/adamtui/2018_4/19_9/aaa/";
+  const q = "?crop=edges&fit=crop&w=1080&h=608&q=70&auto=format";
+
+  // This deal's gallery is on cdn.images.tui; one stray destination shot is on
+  // the other host.
+  const images = [
+    { src: `${CDN}c88a43562fa5ee659d10fd6970dbe939.jpg${q}` },
+    { src: `${CDN}d99b54673fb6ff760e21ge7081ecf040.jpg${q}` },
+    { src: `${CDN}e00c65784gc7gg871f32hf8192fdg151.jpg${q}` },
+    { src: `${OLD}TUN_HAM_F048WebOriginalCompressed.jpg${q}` },
+    { src: "https://www.tui.co.uk/static-images/_ui/mobile/framework/tui-light/image_coming_soon.png" },
+  ];
+
+  const gallery = (imageUrlIncludes?: string) =>
+    runExtractionSpec(
+      { version: 1, fields: {}, ...(imageUrlIncludes ? { imageUrlIncludes } : {}) } as unknown as ExtractionSpec,
+      { title: "", text: "x".repeat(300), url: PAGE, images },
+      "x",
+    ).hotel_images;
+
+  it("finds the whole gallery with no imageUrlIncludes at all", () => {
+    expect(gallery()).toHaveLength(4);
+  });
+
+  it("pinning ONE host is what broke it", () => {
+    expect(gallery("content.tui.co.uk")).toHaveLength(1);
+  });
+
+  it("pipe-separated alternatives cover both hosts", () => {
+    expect(gallery("content.tui.co.uk|cdn.images.tui")).toHaveLength(4);
+  });
+
+  it("a plain substring with no pipe still behaves as before", () => {
+    expect(gallery("cdn.images.tui")).toHaveLength(3);
+  });
+});
+
 // A jsonPath can land on a COMPOSITE value (an occupancy string, a label). The
 // number transform must reject those rather than mangle them into a plausible
 // figure, so the rule falls through to its regex/DOM source.

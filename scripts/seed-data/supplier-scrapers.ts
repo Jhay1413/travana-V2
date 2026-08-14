@@ -312,6 +312,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "tour_operator": "Easyjet"
         },
         "luggageRegex": "(\\d+)\\s*x\\s*hold bags?",
+        "imageUrlIncludes": "ejh-web-prod-images",
         "flightModalTrigger": "compare prices"
       },
       "adapterType": "dom",
@@ -909,7 +910,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "tour_operator": "TUI"
         },
         "luggageRegex": "(\\d+)\\s*x?\\s*(?:bag|luggage|suitcase)s?",
-        "imageUrlIncludes": "plaza-prague-hotel",
         "flightModalTrigger": "compare airport|flight details"
       },
       "adapterType": "dom",

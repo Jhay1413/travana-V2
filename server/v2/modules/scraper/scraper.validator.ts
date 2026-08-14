@@ -51,6 +51,9 @@ export const importPageValidator = z.object({
     text: z.string().min(1, 'text is required').max(500_000),
     // Rendered <img> sources, used for the hotel gallery.
     images: z.array(z.string()).max(400).optional(),
+    // Index-aligned with `images`: each one's surrounding class names / data-tids,
+    // so a spec can scope the gallery to a container.
+    imageContexts: z.array(z.string().max(300)).max(400).optional(),
     // The page's h1/h2 text in document order, for the deal's headline. Short by
     // construction (the bookmarklet caps it), so the bounds are tight.
     headings: z.array(z.string().max(200)).max(20).optional(),

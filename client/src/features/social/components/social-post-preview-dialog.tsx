@@ -165,7 +165,11 @@ export function SocialPostPreviewDialog({
             url: img.url,
             name: img.name,
             source: img.source,
-            selected: true,
+            // Auto-select only for a post that has never been scheduled. Once it
+            // has, these same photos are already attached as OnlySocials media
+            // (loaded into existingImages) — re-sending their URLs uploads a
+            // second copy on every reschedule, so the post grows each time.
+            selected: !isScheduled,
           }));
           setUrlImages(mapped);
         })
@@ -175,7 +179,7 @@ export function SocialPostPreviewDialog({
         })
         .finally(() => setLoadingUrlImages(false));
     }
-  }, [open, travelDeal, quoteId]);
+  }, [open, travelDeal, quoteId, isScheduled]);
 
   useEffect(() => {
     if (!open) {
@@ -555,7 +559,7 @@ export function SocialPostPreviewDialog({
                   <div className="space-y-2" data-testid="section-accommodation-images">
                     <label className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
                       <Building2 className="w-3.5 h-3.5" />
-                      Accommodation / Lodge Images
+                      Quote Images
                       <span className="ml-auto text-[10px] text-black/40 dark:text-white/40 font-normal">
                         {selectedUrlCount} of {urlImages.length} selected
                       </span>

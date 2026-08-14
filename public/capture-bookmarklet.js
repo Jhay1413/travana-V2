@@ -16,7 +16,7 @@
   // Bump on every change. Shown in the capture alert so it's obvious which
   // version is actually installed in the bookmarks bar — an old bookmarklet
   // silently producing old-shaped captures is otherwise impossible to spot.
-  var VERSION = 'v7';
+  var VERSION = 'v11';
   var MAX_TEXT = 400000;
   var MAX_IMAGES = 300;
   var MAX_HEADINGS = 12;
@@ -181,29 +181,193 @@
     return best;
   }
 
-  var images = [];
-  var seen = {};
-  var imgs = document.images;
-  for (var k = 0; k < imgs.length && images.length < MAX_IMAGES; k++) {
-    var src = imgs[k].currentSrc || imgs[k].src || imgs[k].getAttribute('src') || '';
-    if (!src || src.indexOf('data:') === 0) continue;
-    // Some galleries yield root-relative srcs; send absolute URLs so the server
-    // never has to guess what they were relative to.
-    try {
-      src = new URL(src, location.href).href;
-    } catch (e) {
-      continue;
+  // The widest URL an <img> offers.
+  //
+  // `currentSrc` is whatever the browser chose FOR THIS VIEWPORT, which on a
+  // laptop is routinely a mid-size variant — easyJet's gallery advertises eight
+  // widths from 640w to 3840w and hands `currentSrc` the 1920. The quote keeps
+  // whichever URL we capture, so reading only currentSrc shipped a needlessly
+  // small photo when a larger one was named right there in `srcset`.
+  //
+  // The server still picks the widest among everything it receives; this makes
+  // sure the widest is actually in the set.
+  // A slide that hasn't been displayed yet often has NO src at all — its real
+  // URL is parked in a data attribute until the carousel reaches it. Jet2's
+  // slick gallery is the clearest case: every one of its slides carries
+  // data-lazy="https://media.jet2.com/…" from first render, so the whole gallery
+  // is readable without displaying a single slide.
+  //
+  // This is worth checking before any of the load-forcing tricks: when a portal
+  // parks its URLs like this there is nothing to force, and reading an attribute
+  // beats making thirty-five network requests.
+  var LAZY_ATTRS = ['data-lazy', 'data-src', 'data-original', 'data-lazy-src', 'data-ofi-src'];
+
+  function widestSrc(img) {
+    // 1. srcset, and its lazy twin — the widest candidate advertised.
+    var best = '';
+    var bestWidth = 0;
+    var sets = [img.getAttribute('srcset') || '', img.getAttribute('data-srcset') || ''];
+    for (var i = 0; i < sets.length; i++) {
+      var parts = sets[i].split(',');
+      for (var s = 0; s < parts.length; s++) {
+        var bits = parts[s].trim().split(/\s+/);
+        if (!bits[0]) continue;
+        var m = /^(\d{2,5})w$/.exec(bits[1] || '');
+        var width = m ? Number(m[1]) : 0;
+        if (width > bestWidth) {
+          bestWidth = width;
+          best = bits[0];
+        }
+      }
     }
-    if (seen[src]) continue;
-    seen[src] = 1;
-    images.push(src);
+    if (bestWidth > 0) return best;
+
+    // 2. Whatever actually loaded.
+    var direct = img.currentSrc || img.src || img.getAttribute('src') || '';
+    if (direct) return direct;
+
+    // 3. Nothing loaded — take the URL the lazy loader is holding for later.
+    for (var a = 0; a < LAZY_ATTRS.length; a++) {
+      var parked = img.getAttribute(LAZY_ATTRS[a]);
+      if (parked) return parked;
+    }
+    return '';
   }
 
+  // Where an image SITS in the page, as a flat bag of the class names and
+  // data-tids of its ancestors.
+  //
+  // A hotel page shows several galleries from the same image host: the property
+  // carousel, and one per room card. Picking the gallery by URL or by host
+  // therefore can't tell a room photo from a hotel photo — they differ only by
+  // position in the DOM. The spec's `imageContainerIncludes` matches against
+  // this string ("hotel-main-view", say) so the supplier-specific bit stays in
+  // config and this stays generic.
+  function imageContext(img) {
+    var parts = [];
+    var el = img.parentElement;
+    for (var d = 0; el && d < 8 && el !== document.body; d++) {
+      var tid = el.getAttribute('data-tid');
+      if (tid) parts.push(tid);
+      // SVG elements expose className as an object, not a string.
+      var cls = el.className;
+      if (typeof cls === 'string' && cls) parts.push(cls);
+      el = el.parentElement;
+    }
+    return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+  }
+
+  // ── Lazy galleries ─────────────────────────────────────────────────────────
+  //
+  // A property gallery is a carousel: all 35 slides exist in the DOM, but only
+  // the visible one holds a real src — the rest show "image coming soon" until
+  // their IntersectionObserver fires. Capturing as-is yielded ONE photo out of
+  // thirty-five.
+  //
+  // Clicking through every slide would take 35 × ~350ms of animation, well past
+  // the few seconds a browser keeps a click's "transient activation" alive — and
+  // without that, writing to the clipboard at the end is refused. So instead of
+  // navigating, FLATTEN the carousel: drop the translate that parks slides
+  // off-screen, let the track wrap, and unclip its ancestors. Every slide then
+  // occupies layout space at once, all the observers fire together, and the
+  // images load in parallel — about a second, one click, no navigation.
+  //
+  // Measured on a TUI hotel page: 1 slide loaded before, 35 after.
+  //
+  // Only inline styles are touched, and the exact previous cssText is restored
+  // before the user sees anything, so the page is left as it was found.
+  function unfurlGalleries() {
+    var undone = [];
+    function force(el, css) {
+      undone.push([el, el.style.cssText]);
+      for (var key in css) el.style.setProperty(key, css[key], 'important');
+    }
+    // The moving track: whatever is translated to park slides out of view.
+    var tracks = document.querySelectorAll(
+      '[class*="mainView"],[class*="MainView"],[class*="image-gallery-slides"],[class*="slides"],[class*="track"],[class*="Track"]',
+    );
+    for (var t = 0; t < tracks.length; t++) {
+      force(tracks[t], { transform: 'none', width: '100%', display: 'flex', 'flex-wrap': 'wrap' });
+    }
+    // The frame that clips it, plus each slide's own offset.
+    var boxes = document.querySelectorAll(
+      '[class*="gallery"],[class*="Gallery"],[class*="Galleries"],[class*="slider"],[class*="Slider"],[class*="carousel"],[class*="Carousel"],[class*="swipe"]',
+    );
+    for (var b = 0; b < boxes.length; b++) force(boxes[b], { overflow: 'visible' });
+    var slides = document.querySelectorAll('[class*="image-gallery-slide"],[class*="Slide"]');
+    for (var s = 0; s < slides.length; s++) force(slides[s], { transform: 'none', position: 'relative' });
+
+    return function restore() {
+      for (var i = 0; i < undone.length; i++) undone[i][0].style.cssText = undone[i][1];
+    };
+  }
+
+  // Poll until the number of real image sources stops growing — the gallery has
+  // finished loading — or the budget runs out. Bounded tightly on purpose: the
+  // clipboard write at the end still has to happen inside the click's activation
+  // window, so a slow page yields a partial gallery rather than no capture.
+  function whenImagesSettle(budgetMs, done) {
+    var startedAt = Date.now();
+    var previous = -1;
+    var stableTicks = 0;
+    var timer = setInterval(function () {
+      var count = 0;
+      for (var i = 0; i < document.images.length; i++) {
+        var s = document.images[i].currentSrc || document.images[i].src || '';
+        if (s && s.indexOf('data:') !== 0) count++;
+      }
+      stableTicks = count === previous ? stableTicks + 1 : 0;
+      previous = count;
+      if (stableTicks >= 2 || Date.now() - startedAt > budgetMs) {
+        clearInterval(timer);
+        done();
+      }
+    }, 200);
+  }
+
+  function collectImages() {
+    var images = [];
+    var imageContexts = [];
+    var seen = {};
+    var imgs = document.images;
+    for (var k = 0; k < imgs.length && images.length < MAX_IMAGES; k++) {
+      var src = widestSrc(imgs[k]);
+      if (!src || src.indexOf('data:') === 0) continue;
+      // Some galleries yield root-relative srcs; send absolute URLs so the server
+      // never has to guess what they were relative to.
+      try {
+        src = new URL(src, location.href).href;
+      } catch (e) {
+        continue;
+      }
+      if (seen[src]) continue;
+      seen[src] = 1;
+      images.push(src);
+      // Index-aligned with `images` — the server ignores the whole array if the
+      // lengths ever disagree, so a mismatch degrades rather than mislabels.
+      imageContexts.push(imageContext(imgs[k]));
+    }
+    return { images: images, imageContexts: imageContexts };
+  }
+
+  var restoreGalleries = unfurlGalleries();
+  whenImagesSettle(2000, function () {
+    var collected = collectImages();
+    // Put the page back BEFORE anything is shown, so the flattened carousel is
+    // never something the user has to look at or undo themselves.
+    restoreGalleries();
+    finish(collected.images, collected.imageContexts);
+  });
+
+  function finish(images, imageContexts) {
   var payload = {
     url: location.href,
     title: document.title,
     text: (document.body ? document.body.innerText || '' : '').slice(0, MAX_TEXT),
     images: images,
+    // Index-aligned with `images`: where each one sits in the page, so a spec
+    // can keep the property gallery and drop the room-card carousels.
+    imageContexts: imageContexts,
     // Ordered h1/h2 text — the deal's headline, addressable by position.
     headings: headings(),
     // An open modal wins; otherwise fall back to the itinerary hidden inside a
@@ -226,7 +390,9 @@
         VERSION +
         ': deal page captured (' +
         Math.round(json.length / 1024) +
-        ' KB).\n\nBooking JSON: ' +
+        ' KB).\n\nImages: ' +
+        images.length +
+        '\nBooking JSON: ' +
         (payload.apiJson ? 'found' : 'none on this page') +
         '\nFlight text: ' +
         (payload.flightsText ? 'found' : 'not found') +
@@ -256,5 +422,6 @@
     navigator.clipboard.writeText(json).then(done, fallback);
   } else {
     fallback();
+  }
   }
 })();

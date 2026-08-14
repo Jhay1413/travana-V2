@@ -54,6 +54,9 @@ export interface ImportPageInput {
   title?: string;
   text: string;
   images?: string[];
+  // Index-aligned with `images` — where each sits in the page, for
+  // spec.imageContainerIncludes. Absent on pre-v9 captures.
+  imageContexts?: string[];
   // Ordered h1/h2 text — where the deal's headline is addressable. Absent on
   // captures from a pre-v7 bookmarklet.
   headings?: string[];
@@ -513,7 +516,13 @@ export const scraperService = {
       );
     }
 
-    const images = (input.images ?? []).filter((s) => s && !s.startsWith('data:')).map((src) => ({ src }));
+    // Contexts are index-aligned with the RAW images array, so pair them before
+    // filtering. A length mismatch (an older bookmarklet, a truncated payload)
+    // drops them entirely rather than pairing a URL with someone else's context.
+    const contexts = input.imageContexts?.length === input.images?.length ? input.imageContexts : undefined;
+    const images = (input.images ?? [])
+      .map((src, i) => ({ src, context: contexts?.[i] }))
+      .filter((i) => i.src && !i.src.startsWith('data:'));
     const title = input.title ?? '';
 
     // First capture for this supplier: learn the extraction spec from THIS page
