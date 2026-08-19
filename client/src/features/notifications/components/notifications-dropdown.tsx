@@ -55,13 +55,13 @@ export function NotificationsDropdown({ userId }: NotificationsDropdownProps) {
         <Button
           variant="ghost"
           size="sm"
-          className="relative h-9 w-9 rounded-full p-0 text-black/60 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/10"
+          className="relative h-9 w-9 rounded-full p-0 text-white/85 hover:bg-white/10 hover:text-white"
           data-testid="button-notifications"
           aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-[#0b0b0f]">
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-[#2E3D50]">
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}

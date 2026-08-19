@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "wouter";
-import { motion } from "framer-motion";
+import { useLocation } from "wouter";
 import {
   ChevronDown,
   LogOut,
@@ -9,7 +8,6 @@ import {
   Sparkles,
   User2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AskAiDialog } from "@/components/shared/ask-ai-dialog";
 import {
@@ -21,7 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { NotificationsDropdown } from "@/features/notifications/components/notifications-dropdown";
 import { HeaderCreateMenu } from "@/components/layout/header-create-menu";
-import { MobileSidenav } from "./app-sidenav";
+import { BrandMark, MobileSidenav } from "./app-sidenav";
 import { useAuth } from "@/hooks/use-auth";
 import { useGlobalSearch } from "@/features/search/api/use-search-queries";
 
@@ -93,162 +91,161 @@ export function AppHeader() {
   const userAvatar = user?.image || user?.avatar || user?.profileImageUrl;
 
   return (
-    <div className="glass ringed grain rounded-3xl p-4 md:p-5 relative z-40">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-4">
-          <MobileSidenav />
-          <h1
-            className="title-serif text-2xl font-semibold tracking-tight md:text-3xl"
-            data-testid="text-page-title"
-          >
-            Travana
-          </h1>
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 bg-[#2E3D50] px-4">
+      {/* Below xl the rail is hidden, so the header carries the hamburger + brand. */}
+      <div className="flex items-center gap-3 xl:hidden">
+        <MobileSidenav />
+        <BrandMark />
+      </div>
 
+      {/* Global search */}
+      <div className="relative hidden w-full max-w-[600px] md:block" ref={searchRef}>
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-white/70" />
+        <Input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setShowSearchResults(true);
+          }}
+          onFocus={() => query.trim() && setShowSearchResults(true)}
+          placeholder="Search Travana"
+          className="h-9 rounded-lg border-transparent bg-[#46586F] pl-10 text-sm text-white placeholder:text-white/70 focus-visible:ring-1 focus-visible:ring-white/40 focus-visible:ring-offset-0"
+          data-testid="header-search"
+        />
+
+        {showSearchResults && query.trim() && hasResults && (
           <div
-            className="relative hidden md:block w-[280px] lg:w-[320px] z-[9999]"
-            ref={searchRef}
+            ref={scrollContainerRef}
+            className="absolute top-full left-0 right-0 z-[9999] mt-2 max-h-[420px] overflow-y-auto rounded-2xl border border-black/10 bg-white/95 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-black/95"
           >
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40 dark:text-white/50 z-10" />
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setShowSearchResults(true);
-              }}
-              onFocus={() => query.trim() && setShowSearchResults(true)}
-              placeholder="Search clients, quotes, bookings…"
-              className="h-10 rounded-2xl border-black/10 bg-black/5 pl-10 text-black placeholder:text-black/45 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-white/45"
-              data-testid="header-search"
-            />
-
-            {showSearchResults && query.trim() && hasResults && (
-              <div
-                ref={scrollContainerRef}
-                className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] max-h-[420px] overflow-y-auto"
-              >
-                {bookings.length > 0 && (
-                  <SearchGroup label="Bookings" count={bookings.length}>
-                    {bookings.map((b) => (
-                      <SearchRow
-                        key={b.id}
-                        title={b.name}
-                        subtitle={b.subtitle}
-                        onClick={() => {
-                          navigate(
-                            b.clientId
-                              ? `/clients/${b.clientId}/bookings/${b.id}`
-                              : `/bookings/${b.id}`,
-                          );
-                          setShowSearchResults(false);
-                          setQuery("");
-                        }}
-                        testId={`search-result-booking-${b.id}`}
-                      />
-                    ))}
-                  </SearchGroup>
-                )}
-
-                {clients.length > 0 && (
-                  <SearchGroup label="Clients" count={clients.length}>
-                    {clients.map((c) => (
-                      <SearchRow
-                        key={c.id}
-                        title={c.name}
-                        subtitle={c.subtitle}
-                        onClick={() => {
-                          navigate(`/clients/${c.id}`);
-                          setShowSearchResults(false);
-                          setQuery("");
-                        }}
-                        testId={`search-result-${c.id}`}
-                      />
-                    ))}
-                    <div ref={sentinelRef} className="h-px w-full" aria-hidden />
-                    {isFetchingNextPage && (
-                      <div className="px-4 py-2 text-center text-xs text-black/50 dark:text-white/50">
-                        Loading more…
-                      </div>
-                    )}
-                  </SearchGroup>
-                )}
-              </div>
+            {bookings.length > 0 && (
+              <SearchGroup label="Bookings" count={bookings.length}>
+                {bookings.map((b) => (
+                  <SearchRow
+                    key={b.id}
+                    title={b.name}
+                    subtitle={b.subtitle}
+                    onClick={() => {
+                      navigate(
+                        b.clientId
+                          ? `/clients/${b.clientId}/bookings/${b.id}`
+                          : `/bookings/${b.id}`,
+                      );
+                      setShowSearchResults(false);
+                      setQuery("");
+                    }}
+                    testId={`search-result-booking-${b.id}`}
+                  />
+                ))}
+              </SearchGroup>
             )}
 
-            {showSearchResults && query.trim() && debouncedQuery && globalSearchData?.pages?.length && !hasResults && (
-              <div className="absolute top-full left-0 right-0 mt-2 rounded-2xl border border-black/10 bg-white/95 dark:bg-black/95 dark:border-white/10 shadow-xl backdrop-blur-xl z-[9999] p-4">
-                <p className="text-center text-sm text-black/50 dark:text-white/50">
-                  No results found for "{query}"
-                </p>
-              </div>
+            {clients.length > 0 && (
+              <SearchGroup label="Clients" count={clients.length}>
+                {clients.map((c) => (
+                  <SearchRow
+                    key={c.id}
+                    title={c.name}
+                    subtitle={c.subtitle}
+                    onClick={() => {
+                      navigate(`/clients/${c.id}`);
+                      setShowSearchResults(false);
+                      setQuery("");
+                    }}
+                    testId={`search-result-${c.id}`}
+                  />
+                ))}
+                <div ref={sentinelRef} className="h-px w-full" aria-hidden />
+                {isFetchingNextPage && (
+                  <div className="px-4 py-2 text-center text-xs text-black/50 dark:text-white/50">
+                    Loading more…
+                  </div>
+                )}
+              </SearchGroup>
             )}
           </div>
-        </div>
+        )}
 
-        <div className="flex items-center gap-2">
-          <HeaderCreateMenu />
+        {showSearchResults && query.trim() && debouncedQuery && globalSearchData?.pages?.length && !hasResults && (
+          <div className="absolute top-full left-0 right-0 z-[9999] mt-2 rounded-2xl border border-black/10 bg-white/95 p-4 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-black/95">
+            <p className="text-center text-sm text-black/50 dark:text-white/50">
+              No results found for "{query}"
+            </p>
+          </div>
+        )}
+      </div>
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowAskAi(true)}
-            className="flex h-8 items-center gap-1.5 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 px-3 text-white shadow-sm shadow-blue-500/30 transition-shadow hover:shadow-md hover:shadow-blue-500/40"
-            data-testid="button-ask-luna"
-            aria-label="Ask Luna"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            <span className="text-[11px] font-semibold leading-none">Ask Luna</span>
-          </motion.button>
+      {/* Round "+" create button, right next to the search box. */}
+      <div className="shrink-0 pl-3">
+        <HeaderCreateMenu />
+      </div>
+      <div className="min-w-0 flex-1" />
 
-          {user && <NotificationsDropdown userId={user.id} />}
+      <div className="flex shrink-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setShowAskAi(true)}
+          className="flex items-center gap-2 text-sm font-medium text-white/90 transition-colors hover:text-white"
+          data-testid="button-ask-luna"
+          aria-label="Ask Luna"
+        >
+          <Sparkles className="h-4 w-4" />
+          <span className="hidden sm:inline">Ask Luna</span>
+        </button>
 
-          {userName && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-black/5 px-3 text-black/70 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-                  data-testid="button-user-menu"
-                >
-                  {userAvatar ? (
-                    <img src={userAvatar} alt="" className="h-6 w-6 rounded-full" />
-                  ) : (
-                    <div className="h-6 w-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-medium">
-                      {userName.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <span className="hidden sm:inline text-sm font-medium">{userName}</span>
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 rounded-xl z-[200]">
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => navigate("/my-profile")}
-                  data-testid="menu-item-profile"
-                >
-                  <User2 className="mr-2 h-4 w-4" />
-                  My Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-settings">
-                  <Settings2 className="mr-2 h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="cursor-pointer text-red-600 focus:text-red-600"
-                  onClick={() => logout()}
-                  data-testid="menu-item-logout"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        <div className="h-6 w-px bg-white/20" aria-hidden />
+
+        {user && <NotificationsDropdown userId={user.id} />}
+
+        <div className="h-6 w-px bg-white/20" aria-hidden />
+
+        {userName && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-2 text-white/90 transition-colors hover:text-white"
+                data-testid="button-user-menu"
+              >
+                {userAvatar ? (
+                  <img src={userAvatar} alt="" className="h-8 w-8 rounded-full object-cover" />
+                ) : (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-xs font-medium text-white">
+                    {userName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="hidden text-sm font-medium sm:inline">{userName}</span>
+                <ChevronDown className="h-4 w-4 text-white/70" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 rounded-xl z-[200]">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => navigate("/my-profile")}
+                data-testid="menu-item-profile"
+              >
+                <User2 className="mr-2 h-4 w-4" />
+                My Profile
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer" data-testid="menu-item-settings">
+                <Settings2 className="mr-2 h-4 w-4" />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="cursor-pointer text-red-600 focus:text-red-600"
+                onClick={() => logout()}
+                data-testid="menu-item-logout"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <AskAiDialog open={showAskAi} onOpenChange={setShowAskAi} />
-    </div>
+    </header>
   );
 }
 

@@ -317,12 +317,33 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
   const clientIds = Array.from(new Set(txns.map(t => t.client_id).filter(Boolean))) as string[];
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes, allUsers, allClients, allQuoteVariants] = await Promise.all([
-    db.select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, travel_date: enquiry_table.travel_date, adults: enquiry_table.adults, children: enquiry_table.children, infants: enquiry_table.infants, holiday_type_id: enquiry_table.holiday_type_id, status: enquiry_table.status, date_created: enquiry_table.date_created, date_expiry: enquiry_table.date_expiry }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
-    db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, travel_date: quote.travel_date, adult: quote.adult, child: quote.child, infant: quote.infant, sales_price: quote.sales_price, package_commission: quote.package_commission, holiday_type_id: quote.holiday_type_id, quote_status: quote.quote_status, isQuoteCopy: quote.isQuoteCopy, date_created: quote.date_created, date_expiry: quote.date_expiry }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`, isNull(quote.deleted_at))),
-    db.select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, travel_date: booking.travel_date, adult: booking.adult, child: booking.child, infant: booking.infant, sales_price: booking.sales_price, package_commission: booking.package_commission, holiday_type_id: booking.holiday_type_id }).from(booking).where(inArray(booking.transaction_id, txnIds)),
+    db.select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, travel_date: enquiry_table.travel_date, adults: enquiry_table.adults, children: enquiry_table.children, infants: enquiry_table.infants, holiday_type_id: enquiry_table.holiday_type_id, status: enquiry_table.status, date_created: enquiry_table.date_created, date_expiry: enquiry_table.date_expiry, destination_name: sql<string | null>`(
+      SELECT d.name FROM enquiry_destination ed
+      JOIN destination_table d ON ed.destination_id = d.id
+      WHERE ed.enquiry_id = enquiry_table.id
+      LIMIT 1
+    )` }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, travel_date: quote.travel_date, adult: quote.adult, child: quote.child, infant: quote.infant, sales_price: quote.sales_price, package_commission: quote.package_commission, holiday_type_id: quote.holiday_type_id, quote_status: quote.quote_status, isQuoteCopy: quote.isQuoteCopy, date_created: quote.date_created, date_expiry: quote.date_expiry, destination_name: sql<string | null>`(
+      SELECT d.name FROM quote_accomodation qa
+      JOIN accomodation_list_table al ON qa.accomodation_id = al.id
+      JOIN resorts_table r ON al.resorts_id = r.id
+      JOIN destination_table d ON r.destination_id = d.id
+      WHERE qa.quote_id = quote_table.id
+      ORDER BY qa.is_primary DESC NULLS LAST
+      LIMIT 1
+    )` }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`, isNull(quote.deleted_at))),
+    db.select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, travel_date: booking.travel_date, adult: booking.adult, child: booking.child, infant: booking.infant, sales_price: booking.sales_price, package_commission: booking.package_commission, holiday_type_id: booking.holiday_type_id, destination_name: sql<string | null>`(
+      SELECT d.name FROM booking_accomodation ba
+      JOIN accomodation_list_table al ON ba.accomodation_id = al.id
+      JOIN resorts_table r ON al.resorts_id = r.id
+      JOIN destination_table d ON r.destination_id = d.id
+      WHERE ba.booking_id = booking_table.id
+      ORDER BY ba.is_primary DESC NULLS LAST
+      LIMIT 1
+    )` }).from(booking).where(inArray(booking.transaction_id, txnIds)),
     getPackageTypeMap(),
     userIds.length > 0 ? db.select({ id: user.id, firstName: user.firstName, lastName: user.lastName, name: user.name, email: user.email }).from(user).where(inArray(user.id, userIds)) : Promise.resolve([]),
-    clientIds.length > 0 ? db.select({ id: clientTable.id, title: clientTable.title, firstName: clientTable.firstName, surename: clientTable.surename }).from(clientTable).where(inArray(clientTable.id, clientIds)) : Promise.resolve([]),
+    clientIds.length > 0 ? db.select({ id: clientTable.id, title: clientTable.title, firstName: clientTable.firstName, surename: clientTable.surename, phoneNumber: clientTable.phoneNumber }).from(clientTable).where(inArray(clientTable.id, clientIds)) : Promise.resolve([]),
     // All active quotes (primary + copies) for the pipeline card duplicate badge/dropdown. Unlike allQuotes above, this does NOT exclude isQuoteCopy.
     db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, isQuoteCopy: quote.isQuoteCopy, quote_status: quote.quote_status }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`, isNull(quote.deleted_at))),
   ]);
@@ -333,6 +354,7 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
     const name = [t, c.firstName, c.surename].filter(Boolean).join(" ").trim();
     return [c.id, name || null];
   }));
+  const clientPhoneMap = new Map(allClients.map((c: any) => [c.id, c.phoneNumber || null]));
   const packageTypeMap = allPackageTypes;
 
   const enquiryMap = new Map<string, any>();
@@ -378,7 +400,8 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
     const holiday_type_name = enquiry?.holiday_type_name || quotes[0]?.holiday_type_name || bookingEntry?.holiday_type_name || null;
     const assignedUser = txn.user_id ? (userMap.get(txn.user_id) || null) : null;
     const client_name = txn.client_id ? (clientNameMap.get(txn.client_id) || null) : null;
-    return { ...txn, holiday_type_name, client_name, enquiry, quotes, quote_variants: quoteVariantsMap.get(txn.id) || [], booking: bookingEntry, assignedUser };
+    const client_phone = txn.client_id ? (clientPhoneMap.get(txn.client_id) || null) : null;
+    return { ...txn, holiday_type_name, client_name, client_phone, enquiry, quotes, quote_variants: quoteVariantsMap.get(txn.id) || [], booking: bookingEntry, assignedUser };
   });
 }
 

@@ -153,12 +153,11 @@ export function HeaderCreateMenu() {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex h-8 items-center gap-1.5 rounded-full bg-[#3b82f6] px-3 text-[11px] font-semibold leading-none text-white transition-colors hover:bg-[#3b82f6]/90"
+            aria-label="Create"
+            className="grid h-9 w-9 place-items-center rounded-full border border-white/25 bg-white/5 text-white transition-colors hover:bg-white/15"
             data-testid="button-primary-action"
           >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Create</span>
-            <ChevronDown className="h-3.5 w-3.5" />
+            <Plus className="h-4 w-4" />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 rounded-xl z-[200]">

@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SquarePlus } from "lucide-react";
 import {
   useAgentStats,
   useCurrentUser,
@@ -10,32 +8,32 @@ import {
   useShopTargets,
   useAgentTargetsByUserId,
 } from "@/features/reports/api/use-targets-queries";
+import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
 import { ProfitStatBoxes, type ProfitStats } from "@/features/agent-overview/components/profit-stat-boxes";
-import { WhatsOnTab, type WhatsOnFilter } from "@/features/agent-overview/components/whats-on-tab";
-import { PipelineTab } from "@/features/agent-overview/components/pipeline-tab";
-import { SocialPostsTab, type SocialFilter } from "@/features/agent-overview/components/social-posts-tab";
-import { NewsTab } from "@/features/agent-overview/components/news-tab";
-import { NotesTab } from "@/features/agent-overview/components/notes-tab";
+import { DashboardCard, SegmentedTabs } from "@/features/agent-overview/components/dashboard-ui";
+import { TasksTab } from "@/features/agent-overview/components/tasks-tab";
+import { TicketsTab } from "@/features/agent-overview/components/tickets-tab";
+import { ConversationsTab } from "@/features/agent-overview/components/conversations-tab";
 import { MyCoursesTab } from "@/features/agent-overview/components/my-courses-tab";
-import { PinnedSection } from "@/features/agent-overview/components/pinned-section";
+import { NotesTab } from "@/features/agent-overview/components/notes-tab";
 import { EngagementSection } from "@/features/agent-overview/components/engagement-section";
-import { ExpiringQuotesSection } from "@/features/agent-overview/components/expiring-quotes-section";
+import { PipelineSection } from "@/features/agent-overview/components/pipeline-section";
+import { NewsSection } from "@/features/agent-overview/components/news-section";
+import { PipelineLivePanel } from "@/features/agent-overview/components/pipeline-live-panel";
+
+type DashboardTab = "tasks" | "tickets" | "conversations" | "my-courses" | "notes";
+
+const DASHBOARD_TABS: Array<{ value: DashboardTab; label: string }> = [
+  { value: "tasks", label: "Tasks" },
+  { value: "tickets", label: "Tickets" },
+  { value: "conversations", label: "Conversations" },
+  { value: "my-courses", label: "My Courses" },
+  { value: "notes", label: "Notes" },
+];
 
 export default function AgentOverviewPage() {
-  const [tab, setTab] = useState<
-    "whats-on" | "pipeline" | "calendar" | "news" | "daily-goals" | "my-courses"
-  >("whats-on");
-  const [whatsOnFilter, setWhatsOnFilter] = useState<WhatsOnFilter>("today");
-  const [whatsOnDate, setWhatsOnDate] = useState<string>(
-    new Date().toISOString().slice(0, 10),
-  );
-  const [socialFilter, setSocialFilter] = useState<SocialFilter>("today");
-  const [socialDateFrom, setSocialDateFrom] = useState<string>(
-    new Date().toISOString().slice(0, 10),
-  );
-  const [socialDateTo, setSocialDateTo] = useState<string>(
-    new Date().toISOString().slice(0, 10),
-  );
+  const [tab, setTab] = useState<DashboardTab>("tasks");
+  const [creatingTask, setCreatingTask] = useState(false);
 
   const { data: currentUser } = useCurrentUser();
   const { data: shopTargetsData } = useShopTargets();
@@ -76,93 +74,67 @@ export default function AgentOverviewPage() {
   const userId = currentUser?.id || "";
 
   return (
-    <section className="space-y-4">
-      <ProfitStatBoxes profitStats={profitStats} isAgentView={isAgentView} />
-      <div className="grid gap-4 lg:grid-cols-[1.5fr_.65fr]">
-        <Card className="glass ringed grain min-w-0 rounded-3xl p-4 md:p-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-              <div className="text-sm font-medium" data-testid="text-overview-title">
+    <div className="flex gap-6">
+      <section className="min-w-0 flex-1 space-y-4">
+        <ProfitStatBoxes profitStats={profitStats} isAgentView={isAgentView} />
+
+        <div className="grid gap-4 min-w-0 xl:grid-cols-[1.55fr_.7fr]">
+          <DashboardCard className="min-w-0" testId="card-agent-dashboard">
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-base font-semibold" data-testid="text-overview-title">
                 Agent Dashboard
               </div>
-              <div className="text-xs text-muted-foreground" data-testid="text-overview-subtitle">
-                Your dashboard at a glance.
-              </div>
+              <button
+                type="button"
+                onClick={() => setCreatingTask(true)}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-black/15 text-black/60 transition hover:bg-black/5 hover:text-black dark:border-white/20 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white"
+                aria-label="Add task"
+                data-testid="button-dashboard-add"
+              >
+                <SquarePlus className="h-4 w-4" />
+              </button>
             </div>
 
-            <Tabs value={tab} onValueChange={(v) => setTab(v as any)}>
-              <TabsList className="rounded-2xl bg-black/5 dark:bg-white/5" data-testid="tabs-overview">
-                <TabsTrigger value="whats-on" className="rounded-xl" data-testid="tab-overview-whats-on">
-                  What's On!
-                </TabsTrigger>
-                <TabsTrigger value="pipeline" className="rounded-xl" data-testid="tab-overview-pipeline">
-                  Pipeline
-                </TabsTrigger>
-                <TabsTrigger value="calendar" className="rounded-xl" data-testid="tab-overview-social">
-                  Social Posts
-                </TabsTrigger>
-                <TabsTrigger value="news" className="rounded-xl" data-testid="tab-overview-news">
-                  Latest News
-                </TabsTrigger>
-                <TabsTrigger value="daily-goals" className="rounded-xl" data-testid="tab-overview-daily-goals">
-                  Notes
-                </TabsTrigger>
-                <TabsTrigger value="my-courses" className="rounded-xl" data-testid="tab-overview-my-courses">
-                  My Courses
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <Separator className="my-4 bg-black/10 dark:bg-white/10" />
-
-          <Tabs value={tab}>
-            <TabsContent value="whats-on" className="mt-0">
-              <WhatsOnTab
-                userId={userId}
-                whatsOnFilter={whatsOnFilter}
-                whatsOnDate={whatsOnDate}
-                setWhatsOnFilter={setWhatsOnFilter}
-                setWhatsOnDate={setWhatsOnDate}
+            <div className="mt-3">
+              <SegmentedTabs
+                tabs={DASHBOARD_TABS}
+                value={tab}
+                onChange={setTab}
+                testIdPrefix="tab-overview"
               />
-            </TabsContent>
+            </div>
 
-            <TabsContent value="pipeline" className="mt-0">
-              <PipelineTab userId={userId} tab={tab} />
-            </TabsContent>
+            <div className="mt-4">
+              {tab === "tasks" && <TasksTab userId={userId} />}
+              {tab === "tickets" && <TicketsTab userId={userId} />}
+              {tab === "conversations" && <ConversationsTab />}
+              {tab === "my-courses" && <MyCoursesTab />}
+              {tab === "notes" && <NotesTab />}
+            </div>
+          </DashboardCard>
 
-            <TabsContent value="calendar" className="mt-0">
-              <SocialPostsTab
-                tab={tab}
-                socialFilter={socialFilter}
-                socialDateFrom={socialDateFrom}
-                socialDateTo={socialDateTo}
-                setSocialFilter={setSocialFilter}
-                setSocialDateFrom={setSocialDateFrom}
-                setSocialDateTo={setSocialDateTo}
-              />
-            </TabsContent>
-
-            <TabsContent value="news" className="mt-0">
-              <NewsTab />
-            </TabsContent>
-
-            <TabsContent value="daily-goals" className="mt-0">
-              <NotesTab />
-            </TabsContent>
-
-            <TabsContent value="my-courses" className="mt-0">
-              <MyCoursesTab />
-            </TabsContent>
-          </Tabs>
-        </Card>
-
-        <div className="flex min-w-0 flex-col gap-4">
           <EngagementSection />
-          <PinnedSection />
-          <ExpiringQuotesSection userId={userId} tab={tab} />
         </div>
-      </div>
-    </section>
+
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[1fr_1.15fr]">
+          <PipelineSection userId={userId} />
+          <NewsSection />
+        </div>
+      </section>
+
+      {/* Live feed of the user's newest enquiries, quotes and bookings.
+          Negative margins cancel the content panel's p-6 so the left border
+          runs the full height (and the panel reaches the right edge). */}
+      <PipelineLivePanel
+        userId={userId}
+        className="hidden w-[320px] shrink-0 border-l border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04] 2xl:block 2xl:-my-6 2xl:-mr-6 2xl:py-6"
+      />
+
+      <CreateTaskDialog
+        open={creatingTask}
+        onOpenChange={setCreatingTask}
+        defaultAssignedToId={userId}
+      />
+    </div>
   );
 }
