@@ -2,16 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  Blocks,
   ChevronRight,
-  Command,
-  LifeBuoy,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useRoles } from "@/hooks/use-role";
-import { useCurrentUser, useUnreadNotifications, useCurrentOrganization } from "@/hooks/queries";
+import { useCurrentUser, useUnreadNotifications } from "@/hooks/queries";
 import { getNavForRoles, isNavItem, type NavBadgeKey, type NavItem, type NavSection } from "@/config/nav";
 import { useTicketsByUser, countMyActiveTickets } from "@/features/tickets";
 // Imported from the module rather than the feature barrel on purpose: the
@@ -24,14 +23,28 @@ import { Sheet, SheetPortal, SheetTrigger } from "@/components/ui/sheet";
 
 const COLLAPSED_KEY = "sidebar-collapsed";
 
+// Travana platform logo shown at the top of the rail (and in the mobile
+// header). Replaced by the organisation logo when one is set.
+export function BrandMark() {
+  return (
+    <img
+      src="/Travana-Platform-Logo-White.png"
+      alt="Travana"
+      className="h-7 w-auto max-w-full object-contain"
+    />
+  );
+}
+
 function useSidebarCollapsed() {
+  // The icon rail is the default on every visit; expanding is remembered only
+  // for the current tab (sessionStorage), so a fresh load always shows the rail.
   const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem(COLLAPSED_KEY) === "true"; } catch { return false; }
+    try { return sessionStorage.getItem(COLLAPSED_KEY) !== "false"; } catch { return true; }
   });
   const toggle = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
-      try { localStorage.setItem(COLLAPSED_KEY, String(next)); } catch {}
+      try { sessionStorage.setItem(COLLAPSED_KEY, String(next)); } catch {}
       return next;
     });
   }, []);
@@ -66,16 +79,16 @@ function ItemRow({ item, active, collapsed, count = 0 }: { item: NavItem; active
         title={item.label}
         data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
         className={cn(
-          "relative grid h-10 w-10 place-items-center rounded-xl transition",
+          "relative grid h-10 w-10 place-items-center rounded-lg border transition",
           active
-            ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
-            : "text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white"
+            ? "border-white/30 bg-white/15 text-white"
+            : "border-white/15 text-[#8FA0B5] hover:border-white/25 hover:bg-white/10 hover:text-white"
         )}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-5 w-5" strokeWidth={1.75} />
         {showBadge && (
           <span
-            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-black"
+            className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-[#2E3D50]"
             data-testid={`badge-nav-${item.badge}`}
           >
             {badgeLabel}
@@ -90,30 +103,24 @@ function ItemRow({ item, active, collapsed, count = 0 }: { item: NavItem; active
       href={item.path}
       data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
       className={cn(
-        "flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition no-underline",
+        "flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition no-underline",
         active
-          ? "bg-black/5 text-black dark:bg-white/10 dark:text-white"
-          : "bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
+          ? "bg-white/15 text-white"
+          : "bg-transparent text-white/65 hover:bg-white/10 hover:text-white"
       )}
     >
       <div className="flex items-center gap-3">
-        <span
-          className={cn(
-            "inline-flex h-7 w-7 items-center justify-center rounded-lg border",
-            active
-              ? "border-black/10 bg-black/5 dark:border-white/15 dark:bg-white/10"
-              : "border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-          )}
+        <Icon
+          className={cn("h-4.5 w-4.5 shrink-0", active ? "text-white" : "text-[#8FA0B5]")}
+          strokeWidth={1.75}
           aria-hidden
-        >
-          <Icon className="h-4 w-4 text-black/70 dark:text-white/80" />
-        </span>
+        />
         <span className="text-sm font-medium">{item.label}</span>
       </div>
       <div className="flex items-center gap-2">
         {showBadge && (
           <span
-            className="inline-flex min-w-[28px] items-center justify-center rounded-full border border-red-700 bg-red-600 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white shadow-sm"
+            className="inline-flex min-w-[28px] items-center justify-center rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold tabular-nums text-white shadow-sm"
             data-testid={`badge-nav-${item.badge}`}
             aria-label={`${count} ${item.label}`}
           >
@@ -121,14 +128,35 @@ function ItemRow({ item, active, collapsed, count = 0 }: { item: NavItem; active
           </span>
         )}
         <ChevronRight
-          className={cn(
-            "h-4 w-4",
-            active ? "text-black/50 dark:text-white/70" : "text-black/35 dark:text-white/40"
-          )}
+          className={cn("h-4 w-4", active ? "text-white/70" : "text-white/30")}
         />
       </div>
     </Link>
   );
+}
+
+// Direct items only — labelled sub-sections (Data Management, Organisation…)
+// are skipped so the rail stays a short list.
+function collectUnlabelledLeaves(entries: Array<NavItem | NavSection>): NavItem[] {
+  const out: NavItem[] = [];
+  for (const e of entries) {
+    if (isNavItem(e)) out.push(e);
+    else if (!e.label) out.push(...collectUnlabelledLeaves(e.items));
+  }
+  return out;
+}
+
+// The icon rail shows only the agent menu's icons: the "Agent" role group when
+// the user has several roles, otherwise the top-level loose items of their nav.
+function railItems(sections: NavSection[]): NavItem[] {
+  const agent = sections.find((s) => s.id === "role-agent" || s.id === "main");
+  if (agent) {
+    const items = collectUnlabelledLeaves(agent.items);
+    if (items.length > 0) return items;
+  }
+  const loose = sections.filter((s) => !s.label).flatMap((s) => collectUnlabelledLeaves(s.items));
+  if (loose.length > 0) return loose;
+  return sections[0] ? collectUnlabelledLeaves(sections[0].items) : [];
 }
 
 function collectLeafItems(entries: Array<NavItem | NavSection>): NavItem[] {
@@ -273,17 +301,17 @@ function SectionBlock({
       <button
         type="button"
         onClick={() => onToggle(section.id)}
-        className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left transition bg-transparent text-black/65 hover:bg-black/5 hover:text-black dark:text-white/70 dark:hover:bg-white/7 dark:hover:text-white"
+        className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left transition bg-transparent text-white/70 hover:bg-white/10 hover:text-white"
         data-testid={`nav-section-${section.id}`}
       >
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5" aria-hidden>
-            {SectionIcon ? <SectionIcon className="h-4 w-4 text-black/70 dark:text-white/80" /> : null}
-          </span>
+          {SectionIcon ? (
+            <SectionIcon className="h-4.5 w-4.5 shrink-0 text-[#8FA0B5]" strokeWidth={1.75} aria-hidden />
+          ) : null}
           <span className="text-sm font-semibold">{section.label}</span>
         </div>
         <motion.div animate={{ rotate: expanded ? 90 : 0 }} transition={{ duration: 0.2 }}>
-          <ChevronRight className="h-4 w-4 text-black/35 dark:text-white/40" />
+          <ChevronRight className="h-4 w-4 text-white/30" />
         </motion.div>
       </button>
       <AnimatePresence initial={false}>
@@ -334,7 +362,8 @@ function SidenavInner({
   });
 
   const { data: currentUser } = useCurrentUser();
-  const { data: currentOrganization } = useCurrentOrganization();
+  // Org branding disabled while the Travana logo is forced (see brand block below).
+  // const { data: currentOrganization } = useCurrentOrganization();
   const { data: hubUnreadNotifs } = useUnreadNotifications(currentUser?.id || "");
   const hubUnreadCount = useMemo(() => {
     if (!hubUnreadNotifs || !Array.isArray(hubUnreadNotifs)) return 0;
@@ -412,165 +441,122 @@ function SidenavInner({
   return (
     <div
       className={cn(
-        "glass ringed grain flex flex-col rounded-3xl transition-all duration-250",
-        // Spans the full viewport height and stays put while the page scrolls.
-        // The rail is `hidden xl:block`, so the shell's gutter is always the lg
-        // one (py-4 = 1rem a side) — hence top-4 and 100vh minus both gutters,
-        // which keeps the panel's margins even top and bottom.
-        // `sticky` (not `fixed`): the aside still needs to occupy width in the
-        // flex row, and sticky travels within it without being taken out of flow.
-        sticky ? "sticky h-[calc(100vh-2rem)]" : "h-full",
-        collapsed ? "p-2" : "p-4"
+        "flex flex-col bg-[#2E3D50]",
+        // The rail spans the full viewport height, from the logo at its top to
+        // the bottom. `sticky` (not `fixed`): the aside still needs to occupy
+        // width in the flex row, and sticky travels within it without being
+        // taken out of flow.
+        sticky ? "sticky top-0 h-screen" : "h-full",
+        collapsed ? "items-center px-2 pb-3" : "px-3 pb-3"
       )}
     >
-        {collapsed ? (
-          <div className="flex shrink-0 flex-col items-center gap-1">
-            {onToggleCollapsed && (
-              <button
-                type="button"
-                onClick={onToggleCollapsed}
-                className="grid h-10 w-10 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
-                title="Expand sidebar"
-                data-testid="button-expand-sidebar"
-              >
-                <PanelLeftOpen className="h-6 w-6" />
-              </button>
-            )}
-            <div
-              className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-              data-testid="img-brand-mark"
-            >
-              <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
-            </div>
-          </div>
-        ) : (
-          // Brand sits flush left, aligned with the nav items below it. The collapse
-          // button is absolutely positioned top-right; pr-11 reserves its width so a
-          // wide logo can't run underneath it.
-          <div className="relative flex min-h-12 shrink-0 items-center">
-            <div className="flex min-w-0 max-w-full items-center justify-start pr-11">
-              {currentOrganization?.logoUrl ? (
-                <img
-                  src={currentOrganization.logoUrl}
-                  alt={currentOrganization.name || currentUser?.orgName || "Logo"}
-                  className="h-12 w-auto max-w-full object-contain"
-                  data-testid="img-brand-logo"
-                />
-              ) : (
-                <div className="flex min-w-0 items-center gap-3">
-                  <div
-                    className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5"
-                    data-testid="img-brand-mark"
-                  >
-                    <Command className="h-5 w-5 text-black/70 dark:text-white/85" />
-                    <span className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-black/5 dark:ring-white/5" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="title-serif truncate text-sm font-semibold" data-testid="text-brand-name">
-                      {currentUser?.orgName || "Travana"}
-                    </div>
-                    <div className="truncate text-xs text-black/55 dark:text-white/55" data-testid="text-brand-sub">
-                      {currentUser?.branchName || "—"}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            {onToggleCollapsed && (
-              <button
-                type="button"
-                onClick={onToggleCollapsed}
-                className="absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-xl text-black/40 hover:bg-black/5 hover:text-black dark:text-white/40 dark:hover:bg-white/7 dark:hover:text-white transition"
-                title="Minimise sidebar"
-                data-testid="button-collapse-sidebar"
-              >
-                <PanelLeftClose className="h-6 w-6" />
-              </button>
-            )}
-          </div>
+      {/* Brand — sits at the top of the rail, in line with the header bar
+          beside it (same h-14 height so the two rows align). */}
+      <div
+        className={cn(
+          "flex h-14 shrink-0 items-center",
+          collapsed ? "justify-center" : "gap-3 px-1"
         )}
+      >
+        {/* Org-logo override disabled for now — always show the Travana logo.
+        {currentOrganization?.logoUrl ? (
+          <img
+            src={currentOrganization.logoUrl}
+            alt={currentOrganization.name || "Logo"}
+            className={cn("w-auto object-contain", collapsed ? "h-8 max-w-[52px]" : "h-9 max-w-[180px]")}
+            data-testid="img-brand-logo"
+          />
+        ) : ( ... )}
+        */}
+        <BrandMark />
+        {!collapsed && (
+          <span className="title-serif truncate text-sm font-semibold text-white" data-testid="text-brand-name">
+            {currentUser?.orgName || "Travana"}
+          </span>
+        )}
+      </div>
 
-        <div className={cn("h-px shrink-0 bg-black/10 dark:bg-white/10", collapsed ? "my-2" : "my-4")} />
+      {/* The one growing child, so a nav taller than the screen (org admin has
+          the most sections) scrolls inside the panel rather than pushing the
+          bottom controls out of view. min-h-0 is required — without it this
+          flex child won't shrink below its content and the panel overflows. */}
+      <nav
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+          collapsed ? "scrollbar-none flex flex-col items-center gap-1.5" : "space-y-1",
+        )}
+      >
+        {collapsed
+          ? railItems(sections).map((item) => (
+              <ItemRow
+                key={item.path + item.label}
+                item={item}
+                active={isActive(currentPath, currentSearch, item.path)}
+                collapsed
+                count={badgeCountFor(item, badgeCounts)}
+              />
+            ))
+          : sections.map((section) => (
+              <SectionBlock
+                key={section.id}
+                section={section}
+                currentPath={currentPath}
+                currentSearch={currentSearch}
+                collapsed={false}
+                expandedIds={expandedSections}
+                onToggle={toggleSection}
+                badgeCounts={badgeCounts}
+              />
+            ))}
+      </nav>
 
-        {/* The one growing child, so a nav taller than the screen (org admin has
-            the most sections) scrolls inside the panel rather than pushing
-            TheHub card out of view. min-h-0 is required — without it this flex
-            child won't shrink below its content and the panel overflows. */}
-        <nav
-          className={cn(
-            "min-h-0 flex-1 overflow-y-auto",
-            collapsed ? "flex flex-col items-center gap-1" : "space-y-1",
-          )}
-        >
-          {sections.map((section) => (
-            <SectionBlock
-              key={section.id}
-              section={section}
-              currentPath={currentPath}
-              currentSearch={currentSearch}
-              collapsed={collapsed}
-              expandedIds={expandedSections}
-              onToggle={toggleSection}
-              badgeCounts={badgeCounts}
-            />
-          ))}
-
-          {collapsed && (
-            <>
-              <div className="my-1 h-px w-8 bg-black/10 dark:bg-white/10" />
-              <Link
-                href="/hub"
-                title="TheHub"
-                data-testid="link-hub"
-                className="relative grid h-10 w-10 place-items-center rounded-xl text-black/50 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/7 dark:hover:text-white transition"
-              >
-                <LifeBuoy className="h-4 w-4" />
+      {/* Sits below the scrolling nav, so on a tall screen it rests at the
+          bottom of the panel and stays reachable without scrolling. */}
+      {!collapsed && (
+        <>
+          <div className="my-3 h-px shrink-0 bg-white/10" />
+          <Link
+            href="/hub"
+            className="flex shrink-0 items-center justify-between rounded-xl px-3 py-2.5 text-left transition hover:bg-white/10 no-underline"
+            data-testid="link-hub"
+          >
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Blocks className="h-4.5 w-4.5 text-[#8FA0B5]" strokeWidth={1.75} />
                 {hubUnreadCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
+                  <span
+                    className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white shadow-sm"
+                    data-testid="badge-hub-unread"
+                  >
                     {hubUnreadCount > 99 ? "99+" : hubUnreadCount}
                   </span>
                 )}
-              </Link>
-            </>
-          )}
-        </nav>
-
-        {/* Sits below the scrolling nav, so on a tall screen it rests at the
-            bottom of the panel and stays reachable without scrolling. */}
-        {!collapsed && (
-          <>
-            <div className="my-4 h-px shrink-0 bg-black/10 dark:bg-white/10" />
-
-            <div className="grid shrink-0 gap-2">
-              <Link
-                href="/hub"
-                className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/5 px-3 py-3 text-left transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 no-underline"
-                data-testid="link-hub"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                    <LifeBuoy className="h-4 w-4 text-black/70 dark:text-white/80" />
-                    {hubUnreadCount > 0 && (
-                      <span
-                        className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white shadow-sm"
-                        data-testid="badge-hub-unread"
-                      >
-                        {hubUnreadCount > 99 ? "99+" : hubUnreadCount}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold" data-testid="text-support-title">TheHub</div>
-                    <div className="text-xs text-black/55 dark:text-white/55" data-testid="text-support-sub">
-                      Profile, News & Training
-                    </div>
-                  </div>
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-white/90" data-testid="text-support-title">TheHub</div>
+                <div className="text-xs text-white/50" data-testid="text-support-sub">
+                  Profile, News & Training
                 </div>
-                <ChevronRight className="h-4 w-4 text-black/45 dark:text-white/60" />
-              </Link>
+              </div>
             </div>
-          </>
-        )}
+            <ChevronRight className="h-4 w-4 text-white/40" />
+          </Link>
+        </>
+      )}
+
+      {onToggleCollapsed && (
+        <div className={cn("shrink-0 pt-2", collapsed ? "" : "flex justify-start")}>
+          <button
+            type="button"
+            onClick={onToggleCollapsed}
+            className="grid h-10 w-10 place-items-center rounded-lg border border-white/20 text-white/70 transition hover:bg-white/10 hover:text-white"
+            title={collapsed ? "Expand sidebar" : "Minimise sidebar"}
+            data-testid={collapsed ? "button-expand-sidebar" : "button-collapse-sidebar"}
+          >
+            {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -581,7 +567,7 @@ export function AppSidenav() {
     <aside
       className={cn(
         "hidden xl:block shrink-0 transition-all duration-250",
-        collapsed ? "w-[72px]" : "w-[300px]"
+        collapsed ? "w-16" : "w-[280px]"
       )}
       data-testid="app-sidenav"
     >
@@ -608,7 +594,7 @@ export function MobileSidenav() {
         <button
           type="button"
           aria-label="Open navigation"
-          className="xl:hidden inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-black/5 text-black/70 transition hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
+          className="xl:hidden inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/85 transition hover:bg-white/10 hover:text-white"
           data-testid="button-open-mobile-sidebar"
         >
           <Menu className="h-5 w-5" />
@@ -619,7 +605,7 @@ export function MobileSidenav() {
           className="fixed inset-0 z-50 bg-black/30 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
         />
         <SheetPrimitive.Content
-          className="fixed inset-y-0 left-0 z-50 h-full w-[320px] sm:max-w-[320px] p-3 transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+          className="fixed inset-y-0 left-0 z-50 h-full w-[300px] sm:max-w-[300px] overflow-hidden bg-[#2E3D50] transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
         >
           <SidenavInner collapsed={false} sticky={false} />
         </SheetPrimitive.Content>

@@ -1,0 +1,47 @@
+Icons 
+---
+
+Dashboard: <LayoutDashboard />
+Pipeline: <Kanban /> or <Funnel />
+Social Posts: <ThumbsUp />
+Inbox: <Mail />
+Tickets: <Tag />
+Live Chat: <MessageCircleMore />
+Opportunities: <Summary />
+
+Ask Luna: <Sparkles />
+
+Notification Bell: <Bell />
+
+The Hub: <Blocks />
+
+Create: <SquarePlus />
+
+In Play: <circle-star />
+
+Enquiry: <SquarePlus color="#ffffff" />
+
+News Arrow: <MoveRight size={20} color="#fe9a00" strokeWidth={1} />
+
+---
+Internal 
+
+Home
+-
+Profit: <BadgePoundSterling />
+Weekly: <BadgePoundSterling /> - Different Color bg
+Monthly Profit: <CalendarCheck />
+Target: <Target />
+
+Quote Engagement: <View />
+Pinned: <MapPinned />
+Expiring Quotes: <CalendarX />
+
+Options: <Ellipsis />
+
+===
+
+Messages 
+--
+Sales: <BadgePoundSterling color="#b3b3b3" />
+Admin: <lucide-icon name="shield-cog" [size]="36" color="#808080"></lucide-icon>

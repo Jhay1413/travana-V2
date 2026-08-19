@@ -21,16 +21,17 @@ function PageLoader() {
 export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <ConversationsRealtimeProvider>
-      <div className="app-shell px-2 py-2 md:px-3 md:py-3 lg:px-4 lg:py-4 min-h-screen">
-        <div className="flex w-full gap-3">
-          <AppSidenav />
-          <div className="flex min-w-0 flex-1 flex-col gap-3" data-testid="app-content">
-            <AppHeader />
-            <ImpersonationBanner />
-            <main className="min-w-0 flex-1">
-              <Suspense fallback={<PageLoader />}>{children}</Suspense>
-            </main>
-          </div>
+      {/* Dark-navy shell: full-height rail on the left (logo at its top), and
+          the header bar spanning only the remaining width beside it. Content
+          renders in a light panel with a rounded top-left corner. */}
+      <div className="flex min-h-screen bg-[#2E3D50]">
+        <AppSidenav />
+        <div className="flex min-w-0 flex-1 flex-col" data-testid="app-content">
+          <AppHeader />
+          <ImpersonationBanner />
+          <main className="min-h-[calc(100vh-3.5rem)] min-w-0 flex-1 rounded-tl-lg bg-[#F4F6F8] p-4 dark:bg-background md:p-6">
+            <Suspense fallback={<PageLoader />}>{children}</Suspense>
+          </main>
         </div>
         <NotificationToast />
         <ChatWidget />

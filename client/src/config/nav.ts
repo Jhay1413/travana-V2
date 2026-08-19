@@ -17,13 +17,17 @@ import {
   HeartHandshake,
   Hotel,
   Inbox,
+  Kanban,
+  LayoutDashboard,
   LayoutGrid,
   LifeBuoy,
   Link2,
   ListChecks,
+  Mail,
   Map,
   MapPin,
   MessageCircle,
+  MessageCircleMore,
   MessageSquare,
   Package,
   Plane,
@@ -36,6 +40,7 @@ import {
   Tag,
   Target,
   Tent,
+  ThumbsUp,
   Trash2,
   TrendingUp,
   Trophy,
@@ -72,17 +77,19 @@ export function isNavItem(entry: NavItem | NavSection): entry is NavItem {
   return "path" in entry;
 }
 
+// Icon choices follow Icons.txt at the repo root. ("Summary" listed there for
+// Opportunities is not a lucide icon, so Target stays.)
 const AGENT_NAV: NavConfig = [
   {
     id: "main",
     items: [
-      { path: "/agent-overview", label: "Agent Dashboard", icon: LayoutGrid },
-      { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
-      { path: "/social-posts", label: "Social Posts", icon: Share2 },
+      { path: "/agent-overview", label: "Agent Dashboard", icon: LayoutDashboard },
+      { path: "/pipeline", label: "Pipeline", icon: Kanban },
+      { path: "/social-posts", label: "Social Posts", icon: ThumbsUp },
       { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
-      { path: "/tickets", label: "Tickets", icon: LifeBuoy, badge: "tickets" },
-      { path: "/conversations", label: "Inbox", icon: Inbox, badge: "conversations" },
-      { path: "/chat", label: "Live Chat", icon: MessageSquare },
+      { path: "/tickets", label: "Tickets", icon: Tag, badge: "tickets" },
+      { path: "/conversations", label: "Inbox", icon: Mail, badge: "conversations" },
+      { path: "/chat", label: "Live Chat", icon: MessageCircleMore },
       { path: "/opportunities", label: "Opportunities", icon: Target },
       { path: "/tools", label: "Tools", icon: Wrench },
     ],
