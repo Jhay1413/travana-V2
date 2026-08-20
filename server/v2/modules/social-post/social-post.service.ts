@@ -63,9 +63,9 @@ function effectiveOrgId(scope: ScopeOrTrusted): string | null {
   return (scope as Scope).orgId || null;
 }
 
-// Cap on concurrent uploads to the external OnlySocials API. Kept modest so we
-// parallelise without tripping their rate limits.
-const MEDIA_UPLOAD_CONCURRENCY = 4;
+// Cap on concurrent uploads to the external OnlySocials API. Their /media
+// endpoint starts answering 500 "Server Error" under parallel load, so stay at 2.
+const MEDIA_UPLOAD_CONCURRENCY = 2;
 
 /** Run async tasks with a bounded number in flight at once; results keep input order. */
 async function mapWithConcurrency<T, R>(
@@ -101,8 +101,25 @@ type MediaTask =
  */
 async function resolveUploadableUrl(url: string): Promise<string> {
   const key = s3KeyFromStoredUrl(url);
-  if (!key) return url;
+  if (!key) return boundScene7ImageUrl(url);
   return presignImageKey(key);
+}
+
+/**
+ * Adobe Scene7 image servers (e.g. media.jet2.com/is/image/...) serve the
+ * full-resolution original when no size params are given, which OnlySocials'
+ * media endpoint can choke on. Cap the width; any other URL passes through.
+ */
+function boundScene7ImageUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (!parsed.pathname.includes("/is/image/")) return url;
+    if (parsed.searchParams.has("wid") || parsed.searchParams.has("hei")) return url;
+    parsed.searchParams.set("wid", "2000");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
 }
 
 /**
@@ -110,13 +127,14 @@ async function resolveUploadableUrl(url: string): Promise<string> {
  * ordered list of media ids (existing + uploaded). Files and URLs are uploaded
  * together through a single bounded-concurrency queue, so total time scales with
  * the slowest few uploads rather than the image count. File upload errors fail
- * the operation; URL fetch/upload errors are logged and skipped (best-effort).
+ * the operation; URL fetch/upload errors are skipped, but reported back via
+ * `failedUrls` so callers can tell the user which images were dropped.
  */
 async function resolveMediaIds(
   existingImageIds: number[],
   newFiles: Express.Multer.File[],
   imageUrls: string[],
-): Promise<number[]> {
+): Promise<{ ids: number[]; failedUrls: string[] }> {
   const tasks: MediaTask[] = [
     ...newFiles.map((file): MediaTask => ({ kind: "file", file })),
     ...imageUrls.map((url): MediaTask => ({ kind: "url", url })),
@@ -128,10 +146,11 @@ async function resolveMediaIds(
 
   if (tasks.length === 0) {
     console.log("[SocialPost][timing] resolveMediaIds: nothing to upload (existing-only)");
-    return [...existingImageIds];
+    return { ids: [...existingImageIds], failedUrls: [] };
   }
 
   const startedAt = Date.now();
+  const failedUrls: string[] = [];
   const uploaded = await mapWithConcurrency(tasks, MEDIA_UPLOAD_CONCURRENCY, async (task, index) => {
     const label = task.kind === "file" ? `file#${index} (${task.file.originalname})` : `url#${index} (${task.url})`;
     const taskStart = Date.now();
@@ -150,6 +169,7 @@ async function resolveMediaIds(
         `[SocialPost][timing]   FAILED ${label} after ${Date.now() - taskStart}ms:`,
         err,
       );
+      failedUrls.push(task.url);
       return null;
     }
   });
@@ -159,10 +179,10 @@ async function resolveMediaIds(
     `[SocialPost][timing] resolveMediaIds done: ${ok}/${tasks.length} uploaded in ${Date.now() - startedAt}ms total`,
   );
 
-  return [
-    ...existingImageIds,
-    ...uploaded.filter((id): id is number => id !== null),
-  ];
+  return {
+    ids: [...existingImageIds, ...uploaded.filter((id): id is number => id !== null)],
+    failedUrls,
+  };
 }
 
 async function assertQuoteInScope(quoteId: string, scope: ScopeOrTrusted) {
@@ -519,15 +539,15 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     newFiles: Express.Multer.File[],
     imageUrls: string[] = [],
     scope: ScopeOrTrusted = { orgId: null }
-  ): Promise<TravelDeal> {
+  ): Promise<{ deal: TravelDeal; failedImageUrls: string[] }> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] schedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
 
     const tMedia = Date.now();
-    const allImageIds = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
-    console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids)`);
+    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
+    console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids, ${failedUrls.length} failed)`);
 
     // OnlySocials stores the date/time verbatim (no timezone), so give it the
     // user's local wall-clock value; the DB keeps the absolute UTC instant.
@@ -543,7 +563,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
     console.log(`[SocialPost][timing] schedulePost DONE id=${id} total=${Date.now() - t0}ms`);
     syncDealEmbedding(updated);
-    return updated;
+    return { deal: updated, failedImageUrls: failedUrls };
   },
 
   async reschedulePost(
@@ -555,7 +575,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     postContent: string,
     imageUrls: string[] = [],
     scope: ScopeOrTrusted = { orgId: null }
-  ): Promise<TravelDeal> {
+  ): Promise<{ deal: TravelDeal; failedImageUrls: string[] }> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] reschedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
@@ -563,8 +583,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
 
     const tMedia = Date.now();
-    const allImageIds = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
-    console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids)`);
+    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
+    console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids, ${failedUrls.length} failed)`);
 
     // OnlySocials gets the local wall-clock value; the DB keeps the UTC instant.
     const tSchedule = Date.now();
@@ -584,7 +604,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
     console.log(`[SocialPost][timing] reschedulePost DONE id=${id} total=${Date.now() - t0}ms`);
     syncDealEmbedding(updated);
-    return updated;
+    return { deal: updated, failedImageUrls: failedUrls };
   },
 
   async deleteScheduledPost(id: string, scope: ScopeOrTrusted): Promise<TravelDeal> {

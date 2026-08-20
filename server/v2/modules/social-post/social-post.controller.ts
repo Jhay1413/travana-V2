@@ -35,8 +35,11 @@ export const socialPostController = {
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const deal = await socialPostService.schedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, imageUrls, getScope(req));
-    return successResponse(res, deal, "Post scheduled successfully");
+    const { deal, failedImageUrls } = await socialPostService.schedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, imageUrls, getScope(req));
+    const message = failedImageUrls.length
+      ? `Post scheduled, but ${failedImageUrls.length} image(s) failed to upload`
+      : "Post scheduled successfully";
+    return successResponse(res, { ...deal, failedImageUrls }, message);
   }),
 
   reschedulePost: asyncHandler(async (req: Request, res: Response) => {
@@ -53,8 +56,11 @@ export const socialPostController = {
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const deal = await socialPostService.reschedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, postContent, imageUrls, getScope(req));
-    return successResponse(res, deal, "Post rescheduled successfully");
+    const { deal, failedImageUrls } = await socialPostService.reschedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, postContent, imageUrls, getScope(req));
+    const message = failedImageUrls.length
+      ? `Post rescheduled, but ${failedImageUrls.length} image(s) failed to upload`
+      : "Post rescheduled successfully";
+    return successResponse(res, { ...deal, failedImageUrls }, message);
   }),
 
   deleteScheduledPost: asyncHandler(async (req: Request, res: Response) => {

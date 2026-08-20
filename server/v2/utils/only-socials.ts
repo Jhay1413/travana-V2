@@ -19,6 +19,34 @@ function getAuthHeader(): Record<string, string> {
   return { Authorization: `Bearer ${token.trim()}` };
 }
 
+const UPLOAD_RETRY_ATTEMPTS = 3;
+const UPLOAD_RETRY_BASE_DELAY_MS = 750;
+
+// OnlySocials' /media endpoint intermittently answers 500 {"message":"Server
+// Error"} under load; those uploads succeed on a retry. 4xx (except 429) are
+// permanent and not worth repeating.
+function isRetryableUploadError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  return status === undefined || status === 429 || status >= 500;
+}
+
+async function withUploadRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= UPLOAD_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt === UPLOAD_RETRY_ATTEMPTS || !isRetryableUploadError(error)) throw error;
+      const delay = UPLOAD_RETRY_BASE_DELAY_MS * attempt;
+      console.warn(`[OnlySocials] ${label}: attempt ${attempt}/${UPLOAD_RETRY_ATTEMPTS} failed, retrying in ${delay}ms`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
 export const deleteOnlySocialsPost = async (onlySocialsPostId: string): Promise<void> => {
   const url = `${getApiBase()}/posts/${onlySocialsPostId}`;
   try {
@@ -259,21 +287,23 @@ export const uploadMediaFromUrl = async (
       fileName += ext;
     }
 
-    const formData = new FormData();
-    formData.append("file", buffer, {
-      filename: fileName,
-      contentType,
-    });
-    formData.append("alt_text", altText ?? fileName);
-
     const tUpload = Date.now();
-    const uploadResponse = await axios.post(`${getApiBase()}/media`, formData, {
-      headers: {
-        ...getAuthHeader(),
-        ...formData.getHeaders(),
-      },
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
+    // Rebuild the FormData on every attempt — its stream is consumed by each send.
+    const uploadResponse = await withUploadRetry(`upload from URL ${imageUrl}`, () => {
+      const formData = new FormData();
+      formData.append("file", buffer, {
+        filename: fileName,
+        contentType,
+      });
+      formData.append("alt_text", altText ?? fileName);
+      return axios.post(`${getApiBase()}/media`, formData, {
+        headers: {
+          ...getAuthHeader(),
+          ...formData.getHeaders(),
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
     });
     console.log(`[OnlySocials][timing] upload to /media: ${Date.now() - tUpload}ms — ${imageUrl}`);
 
@@ -296,28 +326,28 @@ export const uploadOnlySocialsMedia = async (
 ): Promise<OnlySocialsMediaUploadResponse> => {
   const fileName = typeof file === "string" ? path.basename(file) : file.originalname;
 
-  const formData = new FormData();
-
-  if (typeof file === "string") {
-    formData.append("file", fs.createReadStream(file), fileName);
-  } else {
-    formData.append("file", file.buffer, {
-      filename: file.originalname,
-      contentType: file.mimetype,
-    });
-  }
-
-  formData.append("alt_text", altText ?? fileName);
-
   try {
     const tUpload = Date.now();
-    const response = await axios.post(`${getApiBase()}/media`, formData, {
-      headers: {
-        ...getAuthHeader(),
-        ...formData.getHeaders(),
-      },
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
+    // Rebuild the FormData on every attempt — its stream is consumed by each send.
+    const response = await withUploadRetry(`upload file ${fileName}`, () => {
+      const formData = new FormData();
+      if (typeof file === "string") {
+        formData.append("file", fs.createReadStream(file), fileName);
+      } else {
+        formData.append("file", file.buffer, {
+          filename: file.originalname,
+          contentType: file.mimetype,
+        });
+      }
+      formData.append("alt_text", altText ?? fileName);
+      return axios.post(`${getApiBase()}/media`, formData, {
+        headers: {
+          ...getAuthHeader(),
+          ...formData.getHeaders(),
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
     });
     console.log(`[OnlySocials][timing] upload file to /media: ${Date.now() - tUpload}ms — ${fileName}`);
     return response.data as OnlySocialsMediaUploadResponse;

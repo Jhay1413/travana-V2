@@ -371,13 +371,26 @@ export function SocialPostPreviewDialog({
       formData.append("imageUrls", JSON.stringify(selectedUrls));
       newFiles.forEach((file) => formData.append("files", file));
 
+      let result;
       if (isScheduled) {
         formData.append("postContent", onlySocialsPostContent || currentHtml);
-        await rescheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
-        toast({ title: "Post updated and rescheduled on OnlySocials" });
+        result = await rescheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
       } else {
-        await scheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
-        toast({ title: "Post saved and scheduled on OnlySocials" });
+        result = await scheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
+      }
+      const failedImages = result.failedImageUrls ?? [];
+      if (failedImages.length > 0) {
+        toast({
+          title: `Post ${isScheduled ? "rescheduled" : "scheduled"}, but ${failedImages.length} image${failedImages.length > 1 ? "s" : ""} failed to upload`,
+          description: "Reopen the post and reschedule to retry the missing images.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: isScheduled
+            ? "Post updated and rescheduled on OnlySocials"
+            : "Post saved and scheduled on OnlySocials",
+        });
       }
       onOpenChange(false);
     } catch (err) {

@@ -44,6 +44,12 @@ export interface TravelDeal {
   created_at: string;
 }
 
+/** Schedule/reschedule responses: the deal plus any quote-image URLs that
+ * failed to upload to OnlySocials (the post is still scheduled without them). */
+export interface SchedulePostResult extends TravelDeal {
+  failedImageUrls?: string[];
+}
+
 export interface QuoteImageSource {
   url: string;
   name: string;
@@ -69,8 +75,8 @@ export const socialPostApi = {
     return res;
   },
 
-  scheduleOnOnlySocials: async (id: string, formData: FormData): Promise<TravelDeal> => {
-    const { data: res } = await axiosClient.post<TravelDeal>(
+  scheduleOnOnlySocials: async (id: string, formData: FormData): Promise<SchedulePostResult> => {
+    const { data: res } = await axiosClient.post<SchedulePostResult>(
       `/api/v2/social-posts/${id}/schedule`,
       formData,
       { headers: { "Content-Type": "multipart/form-data" } }
@@ -78,8 +84,8 @@ export const socialPostApi = {
     return res;
   },
 
-  rescheduleOnOnlySocials: async (id: string, formData: FormData): Promise<TravelDeal> => {
-    const { data: res } = await axiosClient.put<TravelDeal>(
+  rescheduleOnOnlySocials: async (id: string, formData: FormData): Promise<SchedulePostResult> => {
+    const { data: res } = await axiosClient.put<SchedulePostResult>(
       `/api/v2/social-posts/${id}/reschedule`,
       formData,
       { headers: { "Content-Type": "multipart/form-data" } }
