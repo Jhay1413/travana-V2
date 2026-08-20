@@ -197,6 +197,11 @@ const RESUME_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 // out of it entirely, even on a new intent. An agent mid-exchange with the
 // customer ("what time suits?" / "around 11") must never be talked over; two
 // hours later, a fresh question is fair game.
+// An outbound message asking when to ring — ours or an agent's own words
+// ("Are u around tomorrow for a call? what time will be best?"). If the
+// customer's next message answers it, the callback is settled and must not be
+// asked for a second time.
+const CALL_QUESTION_RE = /\b(?:call|ring|phone|speak|chat)\b[^?]{0,80}\?/i;
 const HUMAN_ACTIVE_COOLOFF_MS = 60 * 60 * 1000;
 
 const FALLBACK_REPLY = "Thanks for your message — one of our advisors will be in touch shortly.";
@@ -350,24 +355,6 @@ export const replyWorker = {
     // latest message alone: the prior transcript is the HUMAN's conversation,
     // and feeding it in would drag the old topic into the verdict. A router
     // failure falls back to "general", i.e. stay out of the agent's way.
-    if (pendingResumeCheck) {
-      const resumeText = message.text?.trim() ?? "";
-      const resumeRoute = resumeText
-        ? await classifyConversationRoute({
-            transcript: resumeText,
-            latestText: resumeText,
-            enquiryInFlight: false,
-            orgId,
-          })
-        : "general";
-      if (resumeRoute === "general") {
-        console.log(`[sendseven-webhook] conv ${conversationId} no new intent (route=general) — leaving it with the agent`);
-        return;
-      }
-      console.log(`[sendseven-webhook] conv ${conversationId} new ${resumeRoute} intent — AI re-engaging with a clean slate`);
-      await clearHandoff(conversationId, state);
-    }
-
     const mode = integration?.autoReplyMode ?? "draft";
 
     // From here on the AI is composing, which can take several seconds (routing,
@@ -394,6 +381,62 @@ export const replyWorker = {
       const recent = list.items.filter((m) => !m.created_at || new Date(m.created_at).getTime() >= since);
       const latestText = message.text?.trim() ?? "";
       const transcript = buildTranscript(recent, latestText);
+
+      // ── Human takeover, detected from the THREAD ────────────────────────
+      // The hand-off normally comes from the message.sent webhook, or from a
+      // staff send through our own inbox. Neither fires when an agent replies
+      // somewhere else entirely — straight from the Facebook Page inbox, say —
+      // and then the AI has no idea a colleague is already in the conversation
+      // (observed: an agent asked about a call, the customer answered, and the
+      // AI asked for a callback time on top).
+      //
+      // The message is in the transcript either way, so the takeover is read
+      // from there: the newest outbound message is not one of ours. Recorded
+      // so later turns see it, and answered with silence while the colleague
+      // is still active — beyond the cool-off the normal resume rules apply on
+      // the next message.
+      const latestOutbound = [...list.items]
+        .filter((m) => m.direction === "outbound" && !m.is_internal && m.text?.trim())
+        .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""))
+        .pop();
+      if (latestOutbound?.id) {
+        const oursByMeta = (latestOutbound.meta as { source?: string } | null | undefined)?.source === "travana-ai";
+        const ours = oursByMeta || (await sendsevenWebhookRepository.isOurMessage(latestOutbound.id).catch(() => true));
+        const sentAgoMs = latestOutbound.created_at ? Date.now() - new Date(latestOutbound.created_at).getTime() : Infinity;
+        if (!ours) {
+          await conversationStateRepository.setNeedsHuman(conversationId, undefined, "human_reply").catch(() => undefined);
+          if (sentAgoMs < HUMAN_ACTIVE_COOLOFF_MS) {
+            console.log(
+              `[sendseven-webhook] conv ${conversationId} a colleague replied ${Math.round(sentAgoMs / 1000)}s ago (seen in the thread, not the webhook) — staying silent`,
+            );
+            return;
+          }
+        }
+      }
+
+      // Deferred until AFTER the takeover check above: deciding to resume wipes
+      // the enquiry state for a clean slate, and doing that before we know a
+      // colleague is mid-conversation would throw away a live enquiry only to
+      // fall silent a moment later. It also relied on our own row's updatedAt
+      // to judge idleness — which an agent replying from Facebook never
+      // touches, so a conversation they were actively working looked idle.
+      if (pendingResumeCheck) {
+        const resumeText = message.text?.trim() ?? "";
+        const resumeRoute = resumeText
+          ? await classifyConversationRoute({
+              transcript: resumeText,
+              latestText: resumeText,
+              enquiryInFlight: false,
+              orgId,
+            })
+          : "general";
+        if (resumeRoute === "general") {
+          console.log(`[sendseven-webhook] conv ${conversationId} no new intent (route=general) — leaving it with the agent`);
+          return;
+        }
+        console.log(`[sendseven-webhook] conv ${conversationId} new ${resumeRoute} intent — AI re-engaging with a clean slate`);
+        await clearHandoff(conversationId, state);
+      }
 
       // ── Transcript identity recovery ────────────────────────────────────
       // Still no CRM link, but the customer may already have TYPED their
@@ -1290,16 +1333,20 @@ export const replyWorker = {
         // missing, look the enquiry's own open task up instead of trusting the
         // context. One callback task per enquiry then holds structurally,
         // however the context behaved.
-        if (!taskId && state.enquiryId) {
+        const findOpenEnquiryTask = async (): Promise<string | undefined> => {
+          if (!state.enquiryId) return undefined;
           try {
             const existing = await taskService.listByEntity("enquiry", state.enquiryId, systemScope(orgId));
-            const open = existing.find((t) => !t.completed);
-            if (open) {
-              taskId = open.id;
-              console.log(`[sendseven-webhook] conv ${conversationId} recovered follow-up task ${taskId} from the enquiry (not in context)`);
-            }
+            return existing.find((t) => !t.completed)?.id;
           } catch (err) {
             console.error(`[sendseven-webhook] conv ${conversationId} could not look up existing tasks for enquiry ${state.enquiryId}:`, err);
+            return undefined;
+          }
+        };
+        if (!taskId) {
+          taskId = await findOpenEnquiryTask();
+          if (taskId) {
+            console.log(`[sendseven-webhook] conv ${conversationId} recovered follow-up task ${taskId} from the enquiry (not in context)`);
           }
         }
         // The owner is normally carried from enquiry creation. If it is missing
@@ -1339,8 +1386,27 @@ export const replyWorker = {
               await taskService.update(taskId, { title, dueDate }, systemScope(orgId));
               console.log(`[sendseven-webhook] Updated follow-up task ${taskId} for enquiry ${state.enquiryId} (conv ${conversationId})`);
             } catch (err) {
-              console.error(`[sendseven-webhook] conv ${conversationId} follow-up task ${taskId} update failed — creating a fresh one:`, err);
+              console.error(`[sendseven-webhook] conv ${conversationId} follow-up task ${taskId} update failed:`, err);
               taskId = undefined;
+            }
+          }
+          // The id we were carrying was stale, or its write failed. Look the
+          // enquiry up AGAIN before raising anything: the placeholder from
+          // enquiry creation is almost certainly still sitting there, and this
+          // is precisely where a second "Call back" task appeared next to an
+          // untouched "awaiting preferred time from client" one. Skipped when
+          // the lookup above already came back empty, so a genuinely
+          // task-less enquiry does not pay for a second query.
+          if (!taskId && prevContext.availabilityTaskId) {
+            const stillOpen = await findOpenEnquiryTask();
+            if (stillOpen) {
+              try {
+                await taskService.update(stillOpen, { title, dueDate }, systemScope(orgId));
+                taskId = stillOpen;
+                console.log(`[sendseven-webhook] conv ${conversationId} filled in the enquiry's existing task ${taskId} after a stale id`);
+              } catch (err) {
+                console.error(`[sendseven-webhook] conv ${conversationId} existing task ${stillOpen} would not update either:`, err);
+              }
             }
           }
           if (!taskId) {
@@ -1426,7 +1492,28 @@ export const replyWorker = {
         }
 
         const onBehalfOfName = prevContext.beneficiary?.name;
-        const askTimeReply = await generateTransitionReply(botConfig, kb, "ask_callback_time", undefined, onBehalfOfName, { orgId });
+
+        // They may ALREADY have been asked when suits for a call — by an AGENT,
+        // not by us ("Are u around tomorrow for a call? what time will be
+        // best?") — and this very message may be the answer. Asking again reads
+        // as not listening, and it happened: "Yes I'm free anywhere from around
+        // 10" was met with "when would be a good time for a quick call?".
+        const lastOutbound = [...recent]
+          .filter((m) => m.direction === "outbound" && !m.is_internal && m.text?.trim())
+          .sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""))
+          .pop();
+        const callWasJustAsked = !!lastOutbound?.text && CALL_QUESTION_RE.test(lastOutbound.text);
+        const answersTheCall =
+          callWasJustAsked &&
+          !prefersMessagingOverCall(latestText) &&
+          (isOpenAvailability(latestText) || saysToday(latestText) || (await parseAvailabilityTime(latestText, { orgId })) !== null);
+
+        const askTimeReply = answersTheCall
+          ? await generateTransitionReply(botConfig, kb, "callback_booked", latestText, onBehalfOfName, { orgId })
+          : await generateTransitionReply(botConfig, kb, "ask_callback_time", undefined, onBehalfOfName, { orgId });
+        if (answersTheCall) {
+          console.log(`[sendseven-webhook] conv ${conversationId} callback time already given ("${latestText}") — confirming instead of re-asking`);
+        }
 
         // Raise the follow-up task NOW, not when they answer. A customer who
         // never replies to "what time suits?" would otherwise leave the enquiry
@@ -1438,13 +1525,19 @@ export const replyWorker = {
         let availabilityTaskId: string | undefined;
         if (ownerUserId) {
           try {
+            const bookedDue = answersTheCall
+              ? ((await parseAvailabilityTime(latestText, { orgId })) ??
+                (isOpenAvailability(latestText) || saysToday(latestText) ? nextUkCallbackSlot() : null))
+              : null;
             const placeholder = await taskService.create(
               {
                 entityType: "enquiry",
                 entityId: enquiryId,
                 userId: ownerUserId,
-                title: "Call back — awaiting preferred time from client",
-                dueDate: null,
+                title: answersTheCall
+                  ? `Call back — client available ${latestText}`
+                  : "Call back — awaiting preferred time from client",
+                dueDate: bookedDue,
                 completed: false,
               },
               systemScope(orgId),
@@ -1460,10 +1553,14 @@ export const replyWorker = {
           intent: "enquiry",
           enquiryId,
           enquirySlots: {},
-          needsHuman: false, // AI stays live to ask for a callback time
+          // Normally the AI stays live to ask for a callback time. When that
+          // time has ALREADY been given, the flow is finished — hand over.
+          needsHuman: answersTheCall,
+          ...(answersTheCall ? { handledByHumanAt: new Date(), enquiryStatus: "scheduled" } : {}),
           lastAiReplyAt: new Date(),
           context: {
             lastReply: askTimeReply,
+            ...(answersTheCall ? { handoffReason: "enquiry_scheduled" as const } : {}),
             groupedAskSent: false,
             enquiryOwnerUserId: ownerUserId ?? undefined,
             onBehalfOfName,
@@ -1722,6 +1819,29 @@ async function sendReply(
   mode: string,
   isHandoff: boolean,
 ): Promise<void> {
+  // LAST-MOMENT HAND-OFF CHECK. Composing a turn takes real time — the inbound
+  // debounce, then routing, retrieval and the model itself — and an agent can
+  // step in during that window. Observed: an agent asked "are you around for a
+  // call tomorrow?", the customer answered, and the AI (already mid-turn)
+  // followed up by asking for a callback time all over again. The gate at the
+  // start of handleInbound was passed long before any of that happened, so it
+  // is re-checked HERE, against the state as it is now.
+  //
+  // Only a HUMAN-caused hand-off suppresses the send: the AI's own flows set
+  // needsHuman themselves just before their closing message (enquiry
+  // scheduled, wound down), and those must still go out. Hand-off lines are
+  // exempt for the same reason.
+  if (!isHandoff) {
+    const now = await conversationStateRepository.find(conversationId).catch(() => null);
+    const reason = (now?.context as ConversationContext | null)?.handoffReason;
+    if (now?.needsHuman && (reason === "human_reply" || reason === "manual_disable")) {
+      console.log(
+        `[sendseven-webhook] conv ${conversationId} an agent stepped in while the AI was composing — dropping the reply`,
+      );
+      return;
+    }
+  }
+
   const text = reply || FALLBACK_REPLY;
   const sent =
     mode === "send" || isHandoff

@@ -98,6 +98,9 @@ vi.mock("./conversation-state.repository", () => ({
 vi.mock("./sendseven-webhook.repository", () => ({
   sendsevenWebhookRepository: {
     markOurMessage: vi.fn(async () => undefined),
+    // Default: the last outbound message in the thread IS ours, so the
+    // thread-based takeover check stays quiet.
+    isOurMessage: vi.fn(async () => true),
     claimAdminTurn: vi.fn(async () => true),
     releaseAdminTurnClaim: vi.fn(async () => undefined),
     claimReplyTurn: vi.fn(async () => true),
@@ -254,6 +257,15 @@ beforeEach(() => {
   vi.mocked(neonClientService.getNeonClientById).mockResolvedValue({ id: "known-client-1", aiReplyEnabled: true } as never);
   vi.mocked(conversationIntegrationRepository.findByOrg).mockResolvedValue({ autoReplyMode: "draft" } as never);
 });
+
+
+// `find` is read twice per turn now: once by the hand-off gate at the start,
+// and once by sendReply immediately before sending (to catch an agent stepping
+// in mid-turn). These let a test say what each read sees.
+function stateAtStartThenSend(atStart: SendsevenConversationState | null, atSend: SendsevenConversationState | null) {
+  let call = 0;
+  vi.mocked(conversationStateRepository.find).mockImplementation(async () => (call++ === 0 ? atStart : atSend));
+}
 
 describe("handleInbound — general-route reply claim (Fix 1a)", () => {
   it("sends no second reply when the same message is redelivered under a different event_id", async () => {
@@ -528,7 +540,8 @@ describe("handleInbound — hand-off resume gate", () => {
   });
 
   it("resumes without a router call once the thread is genuinely abandoned", async () => {
-    vi.mocked(conversationStateRepository.find).mockResolvedValue(handedOff("human_reply", 8 * DAYS));
+    // Resuming calls clearHandoff, so by send time the row is no longer handed off.
+    stateAtStartThenSend(handedOff("human_reply", 8 * DAYS), null);
 
     await replyWorker.handleInbound(ORG_ID, makeEvent());
 
@@ -753,6 +766,53 @@ describe("handleInbound — follow-up task lifecycle", () => {
     expect(taskService.create).not.toHaveBeenCalled();
   });
 
+  // Observed: an enquiry ended up with BOTH "Call back — client available
+  // anytime today" and an untouched "Call back — awaiting preferred time from
+  // client". The context had an id, the update on it failed, and the code went
+  // straight to create without ever asking the enquiry what it already had.
+  it("does not raise a second task when the update on the carried id fails", async () => {
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+    vi.mocked(taskService.listByEntity).mockResolvedValue([
+      { id: "task-placeholder", completed: false, dueDate: null },
+    ] as never);
+    vi.mocked(taskService.update).mockRejectedValueOnce(new Error("Task not found"));
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(
+      makeState({
+        enquiryStatus: "awaiting_availability",
+        enquiryId: "enq-1",
+        context: { enquiryOwnerUserId: "user-1", availabilityTaskId: "task-stale" } as never,
+      }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "anytime today" }));
+
+    // It falls back onto the placeholder the enquiry already has…
+    expect(taskService.update).toHaveBeenLastCalledWith(
+      "task-placeholder",
+      expect.objectContaining({ title: "Call back — client available anytime today" }),
+      expect.anything(),
+    );
+    // …instead of leaving the customer's enquiry with two callbacks on it.
+    expect(taskService.create).not.toHaveBeenCalled();
+  });
+
+  it("still creates one when the stale id fails AND the enquiry genuinely has no task", async () => {
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+    vi.mocked(taskService.listByEntity).mockResolvedValue([] as never);
+    vi.mocked(taskService.update).mockRejectedValueOnce(new Error("Task not found"));
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(
+      makeState({
+        enquiryStatus: "awaiting_availability",
+        enquiryId: "enq-1",
+        context: { enquiryOwnerUserId: "user-1", availabilityTaskId: "task-deleted" } as never,
+      }),
+    );
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "anytime today" }));
+
+    expect(taskService.create).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to creating one when there is no placeholder (older conversations)", async () => {
     vi.mocked(taskService.listByEntity).mockResolvedValue([] as never);
     // An enquiry in flight routes to sales (the real router short-circuits
@@ -860,5 +920,238 @@ describe("handleInbound — AI typing indicator", () => {
     await replyWorker.handleInbound(ORG_ID, makeEvent());
 
     expect(typingEvents()).toHaveLength(0);
+  });
+});
+
+// Composing a turn takes seconds (debounce, routing, retrieval, the model), and
+// an agent can step in during that window. Observed: an agent asked "are you
+// around for a call tomorrow?", the customer answered, and the AI — already
+// mid-turn — asked for a callback time all over again.
+describe("handleInbound — an agent stepping in mid-turn", () => {
+  beforeEach(() => {
+    // clearAllMocks keeps implementations, and the burst suite above leaves a
+    // two-message history behind — which would trip the supersede check here.
+    vi.mocked(messagesRepository.list).mockResolvedValue({ items: [] } as never);
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState());
+    vi.mocked(classifyConversationRoute).mockResolvedValue("general");
+  });
+
+  it("drops the reply when a human took over while the AI was composing", async () => {
+    stateAtStartThenSend(null, makeState({ needsHuman: true, context: { handoffReason: "human_reply" } as never }));
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(messagesRepository.send).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("still sends when the AI itself set needsHuman on its own closing message", async () => {
+    // enquiry_scheduled / ai_wound_down are the AI's OWN hand-offs — their
+    // final message must still reach the customer.
+    stateAtStartThenSend(null, makeState({ needsHuman: true, context: { handoffReason: "enquiry_scheduled" } as never }));
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends normally when nobody has stepped in", async () => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(null);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+});
+
+// An AGENT may have already asked when to ring, and the customer's message may
+// be the answer. Observed: "Are u around tomorrow for a call? what time will be
+// best?" → "Yes I'm free anywhere from around 10 x" → the AI asked for a good
+// time to call all over again.
+describe("handleInbound — a callback time already given by the customer", () => {
+  const agentAskedAboutCall = {
+    id: "m-agent",
+    direction: "outbound",
+    text: "Hi Ellie, are u around tomorrow for a call? If so what time will be best? x",
+    created_at: "2026-08-01T02:19:00Z",
+  };
+
+  beforeEach(async () => {
+    const { shouldCreateEnquiryNow, hasSubstantiveSignal } = await import("../ai-conversation/ai-conversation.brain");
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+    vi.mocked(hasSubstantiveSignal).mockReturnValue(true);
+    vi.mocked(shouldCreateEnquiryNow).mockReturnValue(true);
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(null);
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState());
+    vi.mocked(messagesRepository.list).mockResolvedValue({ items: [agentAskedAboutCall] } as never);
+    vi.mocked(generateTurn).mockResolvedValue({
+      hand_off: false, intent: "enquiry", complete: true, slots: { destinations: ["Amsterdam"] },
+      client: {}, beneficiary: { onBehalf: false }, reply: "lovely",
+    } as never);
+  });
+
+  it("confirms the callback instead of asking for a time again", async () => {
+    const { generateTransitionReply } = await import("../ai-conversation/ai-conversation.brain");
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "Yes I'm free anywhere from around 10 x" }));
+
+    // "callback_booked", not "ask_callback_time".
+    expect(vi.mocked(generateTransitionReply).mock.calls.at(-1)?.[2]).toBe("callback_booked");
+    // The task records the time they gave, rather than waiting for one.
+    expect(taskService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.stringContaining("client available") }),
+      expect.anything(),
+    );
+    // And the conversation is finished with — handed over, not left mid-flow.
+    expect(conversationStateRepository.update).toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ needsHuman: true, enquiryStatus: "scheduled" }),
+    );
+  });
+
+  it("still asks when nobody has raised a call yet", async () => {
+    const { generateTransitionReply } = await import("../ai-conversation/ai-conversation.brain");
+    vi.mocked(messagesRepository.list).mockResolvedValue({
+      items: [{ ...agentAskedAboutCall, text: "Lovely, and how many nights?" }],
+    } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "around 10 would be good" }));
+
+    expect(vi.mocked(generateTransitionReply).mock.calls.at(-1)?.[2]).toBe("ask_callback_time");
+  });
+
+  it("does not treat a decline as a time", async () => {
+    const { generateTransitionReply, prefersMessagingOverCall } = await import("../ai-conversation/ai-conversation.brain");
+    vi.mocked(prefersMessagingOverCall).mockReturnValue(true);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "can you just message please" }));
+
+    expect(vi.mocked(generateTransitionReply).mock.calls.at(-1)?.[2]).toBe("ask_callback_time");
+  });
+});
+
+// An agent replying from Facebook's own inbox produces no message.sent webhook
+// and no staff-send through our app, so nothing marks the conversation as
+// human-owned. Their message IS in the thread though — observed: the AI replied
+// a minute after a colleague, asking for a callback time the customer had just
+// given.
+describe("handleInbound — a colleague replied outside our app", () => {
+  const theirs = (agoMs: number) => ({
+    id: "m-agent",
+    direction: "outbound",
+    text: "Hi Ellie, are u around tomorrow for a call? x",
+    created_at: new Date(Date.now() - agoMs).toISOString(),
+  });
+
+  beforeEach(() => {
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(null);
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState());
+    vi.mocked(classifyConversationRoute).mockResolvedValue("general");
+    // Not one of ours — no record of us having sent it.
+    vi.mocked(sendsevenWebhookRepository.isOurMessage).mockResolvedValue(false);
+  });
+
+  it("stays silent and records the hand-off when their message is recent", async () => {
+    vi.mocked(messagesRepository.list).mockResolvedValue({ items: [theirs(60_000)] } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(messagesRepository.send).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+    // Recorded, so later turns know a colleague owns this conversation.
+    expect(conversationStateRepository.setNeedsHuman).toHaveBeenCalledWith("conv-1", undefined, "human_reply");
+  });
+
+  it("replies normally when the last outbound message is the AI's own", async () => {
+    vi.mocked(messagesRepository.list).mockResolvedValue({
+      items: [{ ...theirs(60_000), meta: { source: "travana-ai" } }],
+    } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+    expect(conversationStateRepository.setNeedsHuman).not.toHaveBeenCalled();
+  });
+
+  it("treats an unreadable ownership check as ours, rather than going mute", async () => {
+    vi.mocked(messagesRepository.list).mockResolvedValue({ items: [theirs(60_000)] } as never);
+    vi.mocked(sendsevenWebhookRepository.isOurMessage).mockRejectedValue(new Error("db down"));
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+});
+
+// The Georgia case. A colleague worked the conversation from Facebook all
+// afternoon, so nothing ever touched our state row — by the evening it looked
+// idle for hours, the customer's next message read as a new intent, and the AI
+// resumed and replied over the top of a colleague who had messaged a minute
+// earlier. The takeover must be judged on the COLLEAGUE'S OWN message time.
+describe("handleInbound — a colleague working the thread outside our app", () => {
+  const DAYS = 24 * 60 * 60 * 1000;
+
+  beforeEach(() => {
+    vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState({ enquiryStatus: "collecting" }));
+    vi.mocked(sendsevenWebhookRepository.isOurMessage).mockResolvedValue(false);
+    // Handed off hours ago by our reckoning — past the cool-off, so the resume
+    // path would otherwise engage.
+    vi.mocked(conversationStateRepository.find).mockResolvedValue(
+      makeState({
+        needsHuman: true,
+        context: { handoffReason: "human_reply" } as never,
+        updatedAt: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      }),
+    );
+    // …but a colleague actually replied two minutes ago, in the thread.
+    vi.mocked(messagesRepository.list).mockResolvedValue({
+      items: [
+        {
+          id: "m-agent",
+          direction: "outbound",
+          text: "I've got a few prices back for you now!",
+          created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+        },
+      ],
+    } as never);
+    vi.mocked(classifyConversationRoute).mockResolvedValue("sales");
+  });
+
+  it("stays silent even though our own record made the thread look idle", async () => {
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "Can you let me know others please" }));
+
+    expect(messagesRepository.send).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+  });
+
+  it("does not wipe a live enquiry on the way to staying silent", async () => {
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "Can you let me know others please" }));
+
+    // clearHandoff resets status/slots/enquiryId — it must not run when the
+    // turn is about to go quiet anyway.
+    expect(conversationStateRepository.update).not.toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ enquiryStatus: null, enquirySlots: {} }),
+    );
+  });
+
+  it("resumes on a new intent once the colleague has genuinely gone quiet", async () => {
+    vi.mocked(messagesRepository.list).mockResolvedValue({
+      items: [
+        {
+          id: "m-agent",
+          direction: "outbound",
+          text: "I've got a few prices back for you now!",
+          created_at: new Date(Date.now() - 3 * DAYS).toISOString(),
+        },
+      ],
+    } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent({ text: "can you look at Tenerife for us next May" }));
+
+    expect(conversationStateRepository.update).toHaveBeenCalledWith(
+      "conv-1",
+      expect.objectContaining({ needsHuman: false, enquiryStatus: null }),
+    );
   });
 });

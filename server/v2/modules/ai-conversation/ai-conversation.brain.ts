@@ -2,6 +2,7 @@ import type OpenAI from "openai";
 import { CHAT_MODEL, UTILITY_MODEL, getOpenAI } from "../../utils/ai-model";
 import { describeUkNow, formatUkLocal, parseUkLocalDateTime } from "../../utils/uk-time";
 import { usageService } from "../usage/usage.service";
+import { anonymiseStyleExample } from "../knowledge-base/style-example-anonymiser";
 import type { AiUsageFeature } from "../usage/usage.types";
 import type { NeonClient, OrgBotConfig, OrgKnowledgeBase } from "@shared/schema";
 import type { AiTurn, EnquiryBeneficiary, EnquirySlots, RetrievedContext, RetrievedDealContext, RetrievedMatch, TranscriptMessage } from "./ai-conversation.types";
@@ -142,9 +143,24 @@ export function buildRulesBlock(rules: BotRule[], bot: BotAudience): string | nu
 export function buildStyleExamplesBlock(entries: OrgKnowledgeBase[], header: string): string | null {
   const examples = entries.filter((e) => e.isActive && isStyleExampleCategory(e.category));
   if (!examples.length) return null;
-  let text = examples.map((e) => `Example — ${e.title}:\n${e.content}`).join("\n\n");
+  // Personal data comes OUT before anything else. These entries are real
+  // customer conversations, they go into every single prompt verbatim, and a
+  // model that had lost its own context copied a name straight out of one and
+  // greeted a different customer with it — telling the model not to was not
+  // enough on its own, so the data is removed instead. Titles go through it
+  // too: a pasted conversation is often filed under the customer's own name.
+  // Stripped BEFORE the budget trim, so the cap can never cut a name in half
+  // and leave the fragment behind.
+  let text = examples
+    .map((e) => anonymiseStyleExample(`Example — ${e.title}:\n${e.content}`))
+    .join("\n\n");
   if (text.length > STYLE_EXAMPLE_CHAR_BUDGET) text = text.slice(0, STYLE_EXAMPLE_CHAR_BUDGET) + "…";
-  return `${header}\n${text}`;
+  return (
+    `${header}\n${text}\n\n` +
+    "(Everyone in the examples above appears as \"Team\", and their contact details as placeholders like [phone number] " +
+    "— the real names have been removed. Never write a bracketed placeholder into a reply, never invent a value to fill " +
+    "one in, and never name a colleague to a customer: say \"the team\", exactly as the examples do.)"
+  );
 }
 
 // A bare acknowledgement from the customer ("ok", "yes", "thanks", 👍…) — used to
@@ -1039,7 +1055,7 @@ export function buildSystemPrompt(
   // teach HOW we talk, not what is true.
   const styleBlock = buildStyleExamplesBlock(
     activeKb,
-    "How our team talks to customers — study these real example conversations and MATCH this tone, warmth, phrasing and overall approach in your replies. They are STYLE examples ONLY: do NOT treat the specific holidays, destinations, dates, prices, phone numbers or customers in them as real, current, or relevant to this conversation.",
+    "How our team talks to customers — study these real example conversations and MATCH this tone, warmth, phrasing and overall approach in your replies. They are STYLE examples ONLY: do NOT treat the specific holidays, destinations, dates, prices, phone numbers or customers in them as real, current, or relevant to this conversation. ABSOLUTE RULE — these are OTHER PEOPLE'S conversations: never copy a NAME, destination, hotel, date, price or any other detail out of them into your reply, and never reuse one of their messages as your own. The person you are talking to, and everything they want, appears in the transcript and nowhere else. Addressing this customer by a name from an example, or referring to a trip from one, is a serious error — it exposes another customer and tells this one you have not read a word they wrote.",
   );
   if (styleBlock) parts.push(styleBlock);
 
@@ -1150,7 +1166,7 @@ export function buildSystemPrompt(
       "Reference — similar past trips (INTERNAL ONLY, invisible to the customer — use ONLY to understand what they might be after and ask better questions. " +
         "NEVER surface anything from it: no prices, no availability, and NEVER name, recommend, or mention specific hotels, resorts, or properties " +
         `from this reference to the customer — finding and pricing options is the human advisors' job, not yours):\n${quotesText}\n\n` +
-        "Reminder: if the customer asks for hotel suggestions, options, or prices, do NOT name any property — reassure them naturally that we'll dig out the best options, and carry on with the normal flow (onboarding or the next core question).",
+        "Reminder: if the customer asks for hotel suggestions, options, or prices, do NOT name any property — reassure them naturally that we'll dig out the best options, and carry on with the normal flow (onboarding or the next core question). These are OTHER CUSTOMERS' trips: never address this customer by a name found here, and never refer to a destination or booking from here as though it were theirs.",
     );
   }
 
@@ -1338,7 +1354,8 @@ export async function generateTurn(
             "3. Open DIFFERENTLY from your last message — no second \"Thanks\", and don't use their name again if you used it last time.\n" +
             "4. Never repeat their own details back to them, and never ask them to pick when they gave a range or two options — that IS their answer.\n" +
             "5. If they asked a question or asked us to send something, answer it or say you'll get it over — don't reply with enquiry questions and don't offer them a menu of choices.\n" +
-            "6. Suggest no hotels or resorts of your own, and promise no call or callback while you're still gathering details.",
+            "6. Suggest no hotels or resorts of your own, and promise no call or callback while you're still gathering details.\n" +
+            "7. Every name and detail in your reply must come from THIS conversation. If you are about to use a customer name, destination or trip that does not appear in the transcript above, it belongs to someone else — stop and write the reply from what this customer actually said.",
         },
       ],
     });

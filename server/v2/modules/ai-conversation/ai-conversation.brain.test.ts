@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   audienceAllows,
   buildRulesBlock,
+  buildStyleExamplesBlock,
   buildSystemPrompt,
   decideDeterministicRoute,
   effectiveAttachmentKind,
@@ -1059,5 +1060,61 @@ describe("saysToday", () => {
     for (const text of ["tomorrow at 2", "around 11", "Monday please", "next week"]) {
       expect(saysToday(text), text).toBe(false);
     }
+  });
+});
+
+
+// Style examples are real pasted customer conversations, injected verbatim into
+// every prompt. A turn that had lost its own context once copied a name out of
+// one and greeted a different customer with it, so the identifiers are stripped
+// on the way in — see style-example-anonymiser.ts.
+describe("buildStyleExamplesBlock — personal data never reaches the prompt", () => {
+  const styleExample = {
+    id: "kb-style-1",
+    orgId: "org-1",
+    title: "Disneyland chat",
+    content: [
+      "Shannon: Hi, is the Disneyland deal still on?",
+      "Lisa: Hi Shannon! It is, give me your number and I'll check you on the system x",
+      "Shannon: 07700 900123",
+    ].join("\n"),
+    category: "conversation example",
+    audience: "general",
+    isActive: true,
+    createdBy: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as unknown as OrgKnowledgeBase;
+
+  it("redacts the names and the phone number", () => {
+    const block = buildStyleExamplesBlock([styleExample], "HEADER");
+
+    expect(block).not.toMatch(/Shannon/i);
+    expect(block).not.toMatch(/Lisa/i);
+    expect(block).not.toContain("07700 900123");
+  });
+
+  it("keeps the phrasing, which is the only thing the examples are for", () => {
+    const block = buildStyleExamplesBlock([styleExample], "HEADER");
+
+    expect(block).toContain("check you on the system x");
+    expect(block).toContain("Disneyland");
+  });
+
+  it("tells the model the placeholders are redactions, not text to copy", () => {
+    const block = buildStyleExamplesBlock([styleExample], "HEADER");
+
+    expect(block).toContain("never name a colleague to a customer");
+  });
+
+  it("scrubs it on the real path into the system prompt too", () => {
+    const prompt = buildSystemPrompt(null, [styleExample], null, true, { kb: [], quotes: [] });
+
+    expect(prompt).not.toMatch(/Shannon/i);
+    expect(prompt).not.toContain("07700 900123");
+  });
+
+  it("still returns null when the org has no style examples", () => {
+    expect(buildStyleExamplesBlock([], "HEADER")).toBeNull();
   });
 });
