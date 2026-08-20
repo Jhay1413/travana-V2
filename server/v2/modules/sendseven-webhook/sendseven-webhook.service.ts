@@ -161,7 +161,7 @@ export const sendsevenWebhookService = {
     }
     console.log(
       `[sendseven-webhook] Registered endpoint ${created.webhook_id} for org ${orgId} → ${url}` +
-        (opts.autoReply === undefined ? "" : ` (auto-reply ${opts.autoReply ? "on" : "off"})`),
+      (opts.autoReply === undefined ? "" : ` (auto-reply ${opts.autoReply ? "on" : "off"})`),
     );
     return { endpointId: created.webhook_id, url };
   },
@@ -225,7 +225,7 @@ export const sendsevenWebhookService = {
       // timestamp-too-old = a stale retry (signature was actually valid).
       console.warn(
         `[sendseven-webhook] signature rejected org=${orgId} reason=${verdict.reason} ` +
-          `hmacMatched=${verdict.hmacMatched} skew=${verdict.skew}s bodyLen=${rawBody.length}`,
+        `hmacMatched=${verdict.hmacMatched} skew=${verdict.skew}s bodyLen=${rawBody.length}`,
       );
       // A stale-but-authentic retry isn't an attack — ack it so SendSeven stops
       // retrying and doesn't circuit-break the endpoint.
@@ -365,7 +365,7 @@ export const sendsevenWebhookService = {
   // so in-flight state is cleared exactly like the old pause.
   async disableAi(orgId: string, conversationId: string): Promise<ConversationAiState> {
     await conversationStateRepository.ensure(conversationId, orgId, null);
-    await conversationStateRepository.setNeedsHuman(conversationId, orgId);
+    await conversationStateRepository.setNeedsHuman(conversationId, orgId, "manual_disable");
     await conversationStateRepository.setAiOverride(conversationId, orgId, "disabled");
     publishRealtime(orgId, { type: "ai-state.changed", conversationId, needsHuman: true });
     return this.getAiState(orgId, conversationId);
