@@ -898,10 +898,21 @@ function parseFlightsFromJson(apiJson: unknown): ParsedFlightModal | null {
 // Reliable fallbacks read straight from the deal URL when the page text didn't
 // yield a value — generic (any supplier), since dates and lodge codes are almost
 // always in the URL even when the rendered text/regex is inconsistent.
+// Outbound-date parameter names, widest vocabulary first. `from`/`to` are a
+// DATE RANGE on some portals (easyJet's trade portal writes
+// "?from=25-10-2026&to=01-11-2026") and a route on others ("?from=LBA") — which
+// is safe to try either way, because a value is only accepted below once it has
+// parsed to a real YYYY-MM-DD, and an airport code never does.
+const URL_DATE_KEYS = [
+  'start', 'date', 'when', 'traveldate', 'travel_date', 'checkin', 'arrival', 'depart',
+  'from', 'datefrom', 'startdate', 'start_date', 'departdate', 'depart_date',
+  'departuredate', 'departure_date', 'outbound', 'outbounddate', 'checkindate', 'check_in',
+] as const;
+
 function dateFromUrl(url: string): string {
   try {
     const params = new URL(url).searchParams;
-    for (const key of ['start', 'date', 'when', 'traveldate', 'travel_date', 'checkin', 'arrival', 'depart']) {
+    for (const key of URL_DATE_KEYS) {
       const v = params.get(key) ?? params.get(key.toUpperCase());
       if (v) {
         const d = parseDate(v);
@@ -994,6 +1005,12 @@ function nightsFromUrl(url: string): number {
   return 0;
 }
 
+// The calendar day of a "YYYY-MM-DDTHH:mm" stamp, or '' if there isn't one.
+function dateOnly(stamp: string | undefined): string {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(stamp ?? '');
+  return m ? m[1] : '';
+}
+
 function addNights(isoDate: string, nights: number): string {
   if (!isoDate || !nights) return isoDate;
   const d = new Date(`${isoDate}T00:00:00Z`);
@@ -1063,9 +1080,6 @@ export function runExtractionSpec(
   const occupancy = occupancyFromUrl(ctx.url);
   const adults = nbr(f.adults) || occupancy?.adults || 2;
   const nights = nbr(f.no_of_nights) || nightsFromUrl(ctx.url);
-  // Prefer the extracted date; fall back to the deal URL (reliable) when the
-  // page text didn't yield one, so travel_date is consistent.
-  const travelDate = str(f.travel_date) || dateFromUrl(ctx.url);
   const pricePerPerson = nbr(f.price_per_person);
   const total = nbr(f.sales_price) || pricePerPerson * adults;
   const departureName = str(f.departure_airport_name);
@@ -1128,6 +1142,17 @@ export function runExtractionSpec(
     parseFlightList(text) ??
     parseFlightLegCards(ctx.flightsText) ??
     parseFlightLegCards(text);
+  // Prefer the extracted date; fall back to the deal URL (reliable) when the
+  // page text didn't yield one; last, take the date off the outbound flight.
+  //
+  // The flight fallback is what saves a portal whose URL names its dates
+  // something dateFromUrl doesn't recognise AND whose spec rule missed: the
+  // itinerary block above has already been parsed into a real departure
+  // timestamp, so the date IS on the page, just not anywhere the two earlier
+  // sources look. Without it travel_date imported empty — and because
+  // check_in_date_time and the return leg's fallback times are derived from
+  // it, an empty travel_date emptied those too.
+  const travelDate = str(f.travel_date) || dateFromUrl(ctx.url) || dateOnly(modal?.outDepart);
   const returnDate = addNights(travelDate, nights);
   const destName = modal?.destName || arrivalName;
   const destCode = modal?.destCode || arrivalCode;

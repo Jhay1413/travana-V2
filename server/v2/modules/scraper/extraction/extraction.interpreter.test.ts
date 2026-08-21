@@ -1018,3 +1018,74 @@ describe("geo hierarchy", () => {
     expect([q.country, q.destination, q.resort]).toEqual(["", "", ""]);
   });
 });
+
+// Regression: an easyJet trade-portal capture imported with an empty
+// travel_date. The portal names its dates "from"/"to" — which dateFromUrl did
+// not recognise — and the stored spec's own travel_date rule missed the page's
+// "LBA Sun 25th Oct 2026 - 08:45" summary line, so both sources came back
+// empty even though the itinerary block stated the date plainly.
+describe("travel_date fallbacks", () => {
+  const EJ_URL =
+    "https://www.easyjet.com/en/holidays/trade-portal/spain/costa-del-sol/torremolinos/sandos-griego" +
+    "?ibf=true&to=01-11-2026&from=25-10-2026&flex=0&org=NCL,LBA&rooms=2_2:8|8&boardType=AI";
+
+  // A spec whose travel_date rule doesn't match this page.
+  const EJ_SPEC: ExtractionSpec = {
+    version: 1,
+    constants: { tour_operator: "easyJet holidays", currency: "GBP" },
+    fields: {
+      travel_date: { from: "text", regex: "Departing (\d{1,2} [A-Za-z]{3} \d{4})", group: 1, transform: "date" },
+      no_of_nights: { from: "text", regex: "(\d+) nights", group: 1, transform: "number" },
+    },
+  } as ExtractionSpec;
+
+  const ITINERARY = [
+    "Your flights",
+    "Sun 25th Oct 2026",
+    "EJU7016",
+    "08:45",
+    "12:45",
+    "Leeds Bradford",
+    "(LBA)",
+    "Malaga",
+    "(AGP)",
+    "Sun 1st Nov 2026",
+    "EJU7015",
+    "07:30",
+    "09:35",
+    "Malaga",
+    "(AGP)",
+    "Leeds Bradford",
+    "(LBA)",
+  ].join("\n");
+
+  const EJ_TEXT = ["Torremolinos, Sandos Griego", "All Inclusive", "7 nights", "£2,006", ITINERARY].join("\n");
+
+  it("reads the outbound date from a from=/to= deal URL", () => {
+    const q = runExtractionSpec(
+      EJ_SPEC,
+      { title: "Hotel Details", text: EJ_TEXT, url: EJ_URL },
+      "2026-08-21T00:00:00Z",
+    );
+    expect(q.travel_date).toBe("2026-10-25");
+    expect(q.check_in_date_time).toBe("2026-10-25"); // derived from travel_date
+  });
+
+  it("falls back to the outbound flight when the URL carries no date either", () => {
+    const q = runExtractionSpec(
+      EJ_SPEC,
+      { title: "Hotel Details", text: EJ_TEXT, url: "https://www.easyjet.com/en/holidays/trade-portal/x?ibf=true" },
+      "2026-08-21T00:00:00Z",
+    );
+    expect(q.travel_date).toBe("2026-10-25");
+  });
+
+  it("does not mistake a from= route parameter for a date", () => {
+    const q = runExtractionSpec(
+      { version: 1, constants: {}, fields: {} } as ExtractionSpec,
+      { title: "", text: "no itinerary here", url: "https://example.com/deal?from=LBA&to=AGP" },
+      "2026-08-21T00:00:00Z",
+    );
+    expect(q.travel_date).toBe("");
+  });
+});
