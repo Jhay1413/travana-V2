@@ -309,6 +309,13 @@
       "when": 1786010000615,
       "tag": "0043_soft_ezekiel",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1787225751229,
+      "tag": "0044_thick_outlaw_kid",
+      "breakpoints": true
     }
   ]
 }

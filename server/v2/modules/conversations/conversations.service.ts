@@ -1,9 +1,11 @@
 import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
 import { suggestAiReply } from "../sendseven-webhook/suggest-reply.service";
 import { userRepository } from "../user/user.repository";
+import { AppError } from "../../utils/error-handler";
 import { realtimeService } from "../../realtime/realtime.service";
 import { conversationsRepository } from "./conversations.repository";
-import type { ListConversationsParams } from "./conversations.types";
+import { conversationsAssignmentRepository, type AssignedUserInfo } from "./conversations-assignment.repository";
+import type { ListConversationsParams, SsBadgeCounts, SsConversation, SsConversationList } from "./conversations.types";
 
 // Fans a state change out to every agent in the org over SSE so their inbox
 // lists move in realtime (snooze/close/assign/etc. done by one agent update the
@@ -20,19 +22,84 @@ function publishUpdated(orgId: string, conversationId: string): void {
   }
 }
 
+// ── Local assignment overlay ──────────────────────────────────────────────────
+// Conversation assignment is PLATFORM data (Travana agents are not SendSeven
+// users), stored in sendseven_conversation_state and stamped onto every proxied
+// conversation payload here, in the same shape SendSeven would use
+// (assigned_user_id + assigned_user{id,name}) so the client mapping is unchanged.
+
+function stampAssignment(conversation: SsConversation, assignee: AssignedUserInfo | null | undefined): SsConversation {
+  conversation.assigned_user_id = assignee?.id ?? null;
+  conversation.assigned_user = assignee ? { id: assignee.id, name: assignee.name } : null;
+  return conversation;
+}
+
+async function overlayOne(orgId: string, conversation: SsConversation): Promise<SsConversation> {
+  const assignee = await conversationsAssignmentRepository.get(orgId, conversation.id);
+  return stampAssignment(conversation, assignee);
+}
+
+async function overlayList(orgId: string, list: SsConversationList): Promise<SsConversationList> {
+  const ids = (list.items ?? []).map((c) => c.id);
+  const assignments = await conversationsAssignmentRepository.getMany(orgId, ids);
+  for (const item of list.items ?? []) stampAssignment(item, assignments.get(item.id));
+  return list;
+}
+
+// Resolve an assignedTo filter value ('me' | 'unassigned' | 'me_and_unassigned'
+// | <travana user id>) against the overlaid assignment. Filtering happens after
+// the SendSeven page fetch (assignment is local), so a filtered page can hold
+// fewer rows than page_size — acceptable at inbox page sizes.
+function matchesAssignedTo(item: SsConversation, filter: string, currentUserId: string | null): boolean {
+  const assigned = item.assigned_user_id ?? null;
+  if (filter === "unassigned") return assigned === null;
+  if (filter === "me") return !!currentUserId && assigned === currentUserId;
+  if (filter === "me_and_unassigned") return assigned === null || (!!currentUserId && assigned === currentUserId);
+  return assigned === filter;
+}
+
 // Service layer. SendSeven is the source of truth for conversation state, so
 // this is thin orchestration over the repository. Client-side code owns the
 // snake_case → UI mapping; the proxy forwards provider payloads verbatim.
 //
-// The AI enable/disable/status trio is the one exception — that's OUR data
-// (sendseven_conversation_state), not SendSeven's, so it delegates to the
-// sendseven-webhook module's service (service→service, matching bot-config's
-// cross-module calls into the same service) rather than the repository above.
+// Two exceptions are OUR data, not SendSeven's:
+// - assignment (sendseven_conversation_state.assigned_user_id) — see overlay above
+// - the AI enable/disable/status trio — delegates to the sendseven-webhook module
 
 export const conversationsService = {
-  list: (params: ListConversationsParams) => conversationsRepository.list(params),
-  getById: (id: string) => conversationsRepository.getById(id),
-  badgeCounts: (inboxId?: string) => conversationsRepository.badgeCounts(inboxId),
+  async list(orgId: string, params: ListConversationsParams, currentUserId: string | null) {
+    // assignedTo is resolved locally — never forwarded to SendSeven.
+    const { assignedTo, ...rest } = params;
+    const list = await conversationsRepository.list(rest);
+    await overlayList(orgId, list);
+    if (assignedTo) {
+      list.items = (list.items ?? []).filter((c) => matchesAssignedTo(c, assignedTo, currentUserId));
+    }
+    return list;
+  },
+
+  async getById(orgId: string, id: string) {
+    const conversation = await conversationsRepository.getById(id);
+    return overlayOne(orgId, conversation);
+  },
+
+  // SendSeven's counts, with unanswered_assigned_to_me recomputed from LOCAL
+  // assignment (SendSeven resolves "me" against its own users, which we don't
+  // use). One extra needs-reply page fetch; badge polling is light.
+  async badgeCounts(orgId: string, currentUserId: string | null, inboxId?: string): Promise<SsBadgeCounts> {
+    const counts = await conversationsRepository.badgeCounts(inboxId);
+    if (!orgId || !currentUserId) return counts;
+    try {
+      const needsReply = await conversationsRepository.list({ needsReply: true, pageSize: 100, inboxId });
+      const mine = await conversationsAssignmentRepository.conversationIdsAssignedTo(orgId, currentUserId);
+      const mineSet = new Set(mine);
+      counts.unanswered_assigned_to_me = (needsReply.items ?? []).filter((c) => mineSet.has(c.id)).length;
+    } catch (err) {
+      console.warn("[conversations] local unanswered_assigned_to_me recount failed:", err);
+    }
+    return counts;
+  },
+
   trendingTags: (limit?: number) => conversationsRepository.trendingTags(limit),
   summary: (id: string) => conversationsRepository.summary(id),
   previous: (id: string, limit?: number) => conversationsRepository.previous(id, limit),
@@ -43,16 +110,49 @@ export const conversationsService = {
   transcriptStatus: (id: string, jobId: string) => conversationsRepository.transcriptStatus(id, jobId),
 
   create: (body: unknown) => conversationsRepository.create(body),
+
   async update(orgId: string, id: string, body: Record<string, unknown>) {
-    const result = await conversationsRepository.update(id, body);
+    // assigned_user_id is OURS — intercept it, write locally, and forward the
+    // rest (if any) to SendSeven.
+    const { assigned_user_id, ...rest } = body;
+    const hasLocalAssignment = "assigned_user_id" in body;
+    if (hasLocalAssignment) {
+      await conversationsAssignmentRepository.set(orgId, id, (assigned_user_id as string | null) ?? null);
+    }
+    const result =
+      Object.keys(rest).length > 0
+        ? await conversationsRepository.update(id, rest)
+        : await conversationsRepository.getById(id);
     publishUpdated(orgId, id);
-    return result;
+    return overlayOne(orgId, result);
   },
+
+  // Assignment is local: `userId` is a TRAVANA user id, validated against our
+  // user table. Nothing is written to SendSeven.
   async assign(orgId: string, id: string, userId: string) {
-    const result = await conversationsRepository.assign(id, userId);
+    const assignee = await userRepository.findById(userId);
+    if (!assignee) throw new AppError(`User ${userId} not found`, 404);
+    await conversationsAssignmentRepository.set(orgId, id, userId);
+    const conversation = await conversationsRepository.getById(id);
     publishUpdated(orgId, id);
-    return result;
+    return overlayOne(orgId, conversation);
   },
+
+  // Auto-claim on reply: when a Travana agent replies to an UNASSIGNED
+  // conversation, it becomes theirs. Already-assigned conversations are left
+  // alone — replying in a teammate's thread must not silently steal it.
+  // Best-effort by contract: callers fire-and-forget, failures only warn.
+  async autoAssignReplier(orgId: string, conversationId: string, travanaUserId: string): Promise<void> {
+    try {
+      const current = await conversationsAssignmentRepository.get(orgId, conversationId);
+      if (current) return;
+      await conversationsAssignmentRepository.set(orgId, conversationId, travanaUserId);
+      publishUpdated(orgId, conversationId);
+    } catch (err) {
+      console.warn(`[conversations] auto-assign after reply failed for conv ${conversationId}:`, err);
+    }
+  },
+
   async close(orgId: string, id: string, body: unknown) {
     const result = await conversationsRepository.close(id, body);
     publishUpdated(orgId, id);

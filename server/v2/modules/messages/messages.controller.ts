@@ -44,8 +44,8 @@ export const messagesController = {
 
   // POST /api/v1/messages
   send: asyncHandler(async (req: Request, res: Response) => {
-    const { orgId } = getScope(req);
-    return successResponse(res, await messagesService.send(orgId, req.body ?? {}), "Message sent", 201);
+    const { orgId, userId } = getScope(req);
+    return successResponse(res, await messagesService.send(orgId, req.body ?? {}, userId), "Message sent", 201);
   }),
 
   // POST /api/v1/messages/internal-notes
