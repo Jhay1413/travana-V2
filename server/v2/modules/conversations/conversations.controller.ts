@@ -28,24 +28,30 @@ export const conversationsController = {
   // GET /api/v1/conversations
   list: asyncHandler(async (req: Request, res: Response) => {
     const q = req.query as Record<string, string | undefined>;
-    const result = await conversationsService.list({
-      page: num(q.page),
-      pageSize: num(q.pageSize ?? q.page_size),
-      status: q.status || undefined,
-      assignedTo: q.assignedTo ?? q.assigned_to,
-      needsReply: bool(q.needsReply ?? q.needs_reply),
-      filter: q.filter || undefined,
-      contactId: q.contactId ?? q.contact_id,
-      search: q.search || undefined,
-      inboxId: q.inboxId ?? q.inbox_id,
-    });
+    const { orgId, userId } = getScope(req);
+    const result = await conversationsService.list(
+      orgId,
+      {
+        page: num(q.page),
+        pageSize: num(q.pageSize ?? q.page_size),
+        status: q.status || undefined,
+        assignedTo: q.assignedTo ?? q.assigned_to,
+        needsReply: bool(q.needsReply ?? q.needs_reply),
+        filter: q.filter || undefined,
+        contactId: q.contactId ?? q.contact_id,
+        search: q.search || undefined,
+        inboxId: q.inboxId ?? q.inbox_id,
+      },
+      userId,
+    );
     return successResponse(res, result, "Conversations retrieved");
   }),
 
   // GET /api/v1/conversations/badge-counts
   badgeCounts: asyncHandler(async (req: Request, res: Response) => {
     const inboxId = (req.query.inboxId ?? req.query.inbox_id) as string | undefined;
-    return successResponse(res, await conversationsService.badgeCounts(inboxId), "Badge counts retrieved");
+    const { orgId, userId } = getScope(req);
+    return successResponse(res, await conversationsService.badgeCounts(orgId, userId, inboxId), "Badge counts retrieved");
   }),
 
   // GET /api/v1/conversations/analytics/trending-tags
@@ -86,7 +92,8 @@ export const conversationsController = {
 
   // GET /api/v1/conversations/:conversation_id
   getById: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await conversationsService.getById(requireParam(req, "conversation_id")), "Conversation retrieved");
+    const { orgId } = getScope(req);
+    return successResponse(res, await conversationsService.getById(orgId, requireParam(req, "conversation_id")), "Conversation retrieved");
   }),
 
   // PATCH /api/v1/conversations/:conversation_id

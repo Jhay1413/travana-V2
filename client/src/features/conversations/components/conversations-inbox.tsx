@@ -75,10 +75,13 @@ import { conversationsApi } from "../api/conversations.api";
 import { conversationsKeys, useConversations, useConversationBadgeCounts, unreadBadgeCount } from "../api/use-conversations-queries";
 import {
   useAiSuggestReply,
+  useAssignConversation,
   useMarkConversationRead,
   useSnoozeConversation,
   useUnsnoozeConversation,
+  useUpdateConversation,
 } from "../api/use-conversations-mutations";
+import { useCurrentUser, useUsers } from "@/hooks/queries";
 import { useMessages, useSendMessage, useCreateInternalNote, useUploadAttachment } from "../api/use-messages";
 import { MAX_ATTACHMENT_BYTES, messageTypeForContentType } from "../api/messages.api";
 import { useConversationsRealtimeState } from "./conversations-realtime-provider";
@@ -229,6 +232,86 @@ function ConversationRow({
       </div>
       {conversation.unread && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-sky-500" />}
     </button>
+  );
+}
+
+// ─── Assign control ───────────────────────────────────────────────────────────
+// Thread-header dropdown for assigning the conversation to a Travana staff
+// member. Assignment is PLATFORM data (stored in our DB and overlaid onto the
+// proxied conversation payload server-side) — SendSeven is not involved, so no
+// per-agent SendSeven account is needed.
+function AssignControl({ conversation }: { conversation: Conversation }) {
+  const { toast } = useToast();
+  const { data: currentUser } = useCurrentUser();
+  const { data: staff = [], isLoading } = useUsers();
+  const assignMutation = useAssignConversation();
+  const updateMutation = useUpdateConversation();
+
+  const me = currentUser?.id ? staff.find((m) => m.id === currentUser.id) ?? { id: currentUser.id, name: "" } : undefined;
+
+  const onError = (err: unknown) => {
+    const e = err as { response?: { data?: { message?: string } }; message?: string };
+    toast({
+      title: "Could not update assignment",
+      description: e?.response?.data?.message ?? e?.message ?? "Unknown error",
+      variant: "destructive",
+    });
+  };
+
+  const doAssign = (userId: string) =>
+    assignMutation.mutate({ id: conversation.id, userId }, { onError });
+  const doUnassign = () =>
+    updateMutation.mutate({ id: conversation.id, body: { assigned_user_id: null } }, { onError });
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="flex items-center gap-1.5 rounded-xl border border-black/8 px-3 py-1.5 text-xs font-medium text-black/70 transition hover:bg-black/[0.03] dark:border-white/8 dark:text-white/70 dark:hover:bg-white/[0.04]"
+          data-testid="conversation-assign"
+        >
+          <UserPlus className="h-3.5 w-3.5" />
+          <span className="max-w-[120px] truncate">{conversation.assignee ?? "Assign"}</span>
+          <ChevronDown className="h-3 w-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {me && (
+          <>
+            <DropdownMenuItem onClick={() => doAssign(me.id)} data-testid="conversation-assign-me">
+              <User className="mr-1.5 h-3.5 w-3.5" />
+              Assign to me
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {isLoading ? (
+          <DropdownMenuItem disabled>Loading team…</DropdownMenuItem>
+        ) : staff.length === 0 ? (
+          <DropdownMenuItem disabled>No team members found</DropdownMenuItem>
+        ) : (
+          staff.map((m) => (
+            <DropdownMenuItem
+              key={m.id}
+              onClick={() => doAssign(m.id)}
+              data-testid={`conversation-assign-${m.id}`}
+            >
+              <User className="mr-1.5 h-3.5 w-3.5 shrink-0 text-black/40 dark:text-white/40" />
+              <span className="truncate">{m.name || m.email}</span>
+            </DropdownMenuItem>
+          ))
+        )}
+        {conversation.assignee && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={doUnassign} data-testid="conversation-unassign">
+              <XIcon className="mr-1.5 h-3.5 w-3.5" />
+              Unassign
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1334,6 +1417,7 @@ export default function ConversationsInbox() {
               <div className="flex flex-wrap items-center gap-1.5">
                 <AiStatusControl conversationId={selected.id} />
                 {canTestAi && <HeaderAction icon={FlaskConical} label="Test AI" onClick={() => setTestAiOpen(true)} />}
+                <AssignControl conversation={selected} />
                 {selected.snoozed ? (
                   <HeaderAction icon={AlarmClockOff} label="Unsnooze" onClick={unsnooze} />
                 ) : (

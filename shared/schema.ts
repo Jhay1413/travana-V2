@@ -2167,6 +2167,12 @@ export const sendsevenConversationState = pgTable("sendseven_conversation_state"
   aiOverride: text("ai_override"),
   context: jsonb("context"), // rolling recent messages / running summary (§13)
   lastAiReplyAt: timestamp("last_ai_reply_at"),
+  // Local (platform-side) conversation assignment: which Travana agent owns
+  // this conversation. Deliberately NOT mirrored to SendSeven — agents are not
+  // SendSeven users, so assignment lives here and is overlaid onto proxied
+  // conversation payloads by the conversations service.
+  assignedUserId: text("assigned_user_id").references(() => user.id, { onDelete: "set null" }),
+  assignedAt: timestamp("assigned_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

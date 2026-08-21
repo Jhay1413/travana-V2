@@ -26,7 +26,7 @@ type DashboardTab = "tasks" | "tickets" | "conversations" | "my-courses" | "note
 const DASHBOARD_TABS: Array<{ value: DashboardTab; label: string }> = [
   { value: "tasks", label: "Tasks" },
   { value: "tickets", label: "Tickets" },
-  { value: "conversations", label: "Conversations" },
+  { value: "conversations", label: "Latest Inbox" },
   { value: "my-courses", label: "My Courses" },
   { value: "notes", label: "Notes" },
 ];
