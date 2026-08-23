@@ -2173,6 +2173,10 @@ export const sendsevenConversationState = pgTable("sendseven_conversation_state"
   // conversation payloads by the conversations service.
   assignedUserId: text("assigned_user_id").references(() => user.id, { onDelete: "set null" }),
   assignedAt: timestamp("assigned_at"),
+  // Platform-side classification of the conversation ("sales" | "admin"),
+  // chosen by the agent in the inbox. Shown under the contact name in the
+  // conversation list. Local data, like assignment — not mirrored to SendSeven.
+  conversationType: text("conversation_type"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

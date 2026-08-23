@@ -1,5 +1,6 @@
 import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
 import { conversationsService } from "../conversations/conversations.service";
+import { userRepository } from "../user/user.repository";
 import { realtimeService } from "../../realtime/realtime.service";
 import { messagesRepository } from "./messages.repository";
 import { usageService } from "../usage/usage.service";
@@ -20,6 +21,28 @@ export const messagesService = {
   // SendSeven's own UI. Best-effort: a state-write failure must never fail
   // (or appear to fail) the send the user is waiting on.
   async send(orgId: string, body: Record<string, unknown>, senderUserId?: string | null): Promise<SsMessage> {
+    // Stamp WHO sent this on the message's free-form meta so the thread can
+    // show the replying agent's avatar (AI replies carry source "travana-ai"
+    // from the reply worker; staff replies get "travana-agent" here). SendSeven
+    // stores and echoes meta back on reads, so nothing else needs to persist it.
+    if (senderUserId) {
+      try {
+        const sender = await userRepository.findById(senderUserId);
+        if (sender) {
+          const name = [sender.firstName, sender.lastName].filter(Boolean).join(" ").trim() || sender.name;
+          body = {
+            ...body,
+            meta: {
+              ...((body.meta as Record<string, unknown> | undefined) ?? {}),
+              source: "travana-agent",
+              agent: { id: sender.id, name, avatar: sender.image ?? null },
+            },
+          };
+        }
+      } catch (err) {
+        console.warn("[messages] could not stamp sender on outbound message:", err);
+      }
+    }
     const sent = await messagesRepository.send(body);
     if (orgId) {
       void usageService.recordSendsevenSend({ orgId, source: "manual" });

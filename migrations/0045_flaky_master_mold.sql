@@ -1,0 +1,1 @@
+ALTER TABLE "sendseven_conversation_state" ADD COLUMN "conversation_type" text;

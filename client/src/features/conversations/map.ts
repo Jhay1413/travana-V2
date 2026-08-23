@@ -38,6 +38,22 @@ function mediaPreview(messageType: string | null | undefined): string {
 }
 
 // Maps a SendSeven message onto the UI thread model.
+// Who authored an outbound message, from the meta our own senders stamp on
+// it: the reply worker tags AI replies { source: "travana-ai" }; the inbox
+// tags staff replies { source: "travana-agent", agent: { name, avatar } }.
+function readAuthor(m: SsMessage): Pick<ConversationMessage, "authorName" | "authorAvatarUrl" | "isAi"> {
+  const meta = (m.meta ?? null) as { source?: unknown; agent?: { name?: unknown; avatar?: unknown } | null } | null;
+  if (!meta) return {};
+  if (meta.source === "travana-ai") return { isAi: true, authorName: "Luna" };
+  if (meta.source === "travana-agent" && meta.agent) {
+    return {
+      authorName: typeof meta.agent.name === "string" ? meta.agent.name : undefined,
+      authorAvatarUrl: typeof meta.agent.avatar === "string" ? meta.agent.avatar : undefined,
+    };
+  }
+  return {};
+}
+
 export function toUiMessage(m: SsMessage): ConversationMessage {
   return {
     id: m.id,
@@ -47,6 +63,7 @@ export function toUiMessage(m: SsMessage): ConversationMessage {
     read: !!m.read_at,
     isNote: !!m.is_internal,
     attachments: (m.attachments ?? []).map(toUiAttachment),
+    ...readAuthor(m),
   };
 }
 
@@ -151,6 +168,8 @@ export function toUiConversation(item: SsConversation): Conversation {
     preview: lastMessagePreview(item.last_message),
     lastActivityAt,
     tags: (item.tags ?? []).map((t) => ({ id: t.id, name: t.name, color: t.color ?? "#94a3b8" })),
+    inboxId: typeof item.inbox_id === "string" ? item.inbox_id : null,
+    conversationType: item.conversation_type === "sales" || item.conversation_type === "admin" ? item.conversation_type : null,
     contact: {
       id: contact.id ?? item.contact_id ?? item.id,
       displayName,
