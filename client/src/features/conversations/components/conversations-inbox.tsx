@@ -179,24 +179,40 @@ function TagChip({ tag }: { tag: ConversationTag }) {
 // Brand-style channel logo for the list row (design: big coloured circle with
 // the channel's mark rather than contact initials).
 function ChannelLogo({ channel }: { channel: Conversation["channel"] }) {
+  // Same artwork as the Agent Dashboard's Latest Inbox (conversations-tab.tsx).
   if (channel === "messenger") {
     return (
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#1877F2] text-white" title="Messenger">
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
-          <path d="M13.5 21v-7h2.4l.4-3h-2.8V9.1c0-.9.3-1.5 1.5-1.5h1.4V5c-.3 0-1.1-.1-2.1-.1-2.1 0-3.6 1.3-3.6 3.7V11H8.3v3h2.4v7h2.8z" />
-        </svg>
-      </span>
+      <svg viewBox="0 0 24 24" className="h-9 w-9 shrink-0" aria-label="Messenger" role="img">
+        <defs>
+          <linearGradient id="inbox-msgr-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#00B2FF" />
+            <stop offset="100%" stopColor="#006AFF" />
+          </linearGradient>
+        </defs>
+        <circle cx="12" cy="12" r="11" fill="url(#inbox-msgr-grad)" />
+        <path
+          fill="#fff"
+          d="M12 4.9c-4.06 0-7.2 2.97-7.2 6.67 0 2.09.99 3.94 2.6 5.17v2.36l2.4-1.32c.7.19 1.44.3 2.2.3 4.06 0 7.2-2.97 7.2-6.67S16.06 4.9 12 4.9zm.76 8.98-1.87-2-3.64 2 4-4.25 1.92 2 3.59-2-4 4.25z"
+        />
+      </svg>
     );
   }
   if (channel === "instagram") {
     return (
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-[#F9CE34] via-[#EE2A7B] to-[#6228D7] text-white" title="Instagram">
-        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-          <rect x="3" y="3" width="18" height="18" rx="5" />
-          <circle cx="12" cy="12" r="4" />
-          <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
-        </svg>
-      </span>
+      <svg viewBox="0 0 24 24" className="h-9 w-9 shrink-0" aria-label="Instagram" role="img">
+        <defs>
+          <radialGradient id="inbox-ig-grad" cx="0.3" cy="1.1" r="1.3">
+            <stop offset="0%" stopColor="#FFDD55" />
+            <stop offset="30%" stopColor="#FF543E" />
+            <stop offset="60%" stopColor="#C837AB" />
+            <stop offset="100%" stopColor="#3771C8" />
+          </radialGradient>
+        </defs>
+        <circle cx="12" cy="12" r="11" fill="url(#inbox-ig-grad)" />
+        <rect x="6.8" y="6.8" width="10.4" height="10.4" rx="3.2" fill="none" stroke="#fff" strokeWidth="1.5" />
+        <circle cx="12" cy="12" r="2.5" fill="none" stroke="#fff" strokeWidth="1.5" />
+        <circle cx="15.35" cy="8.65" r="0.85" fill="#fff" />
+      </svg>
     );
   }
   const meta = CHANNELS[channel];
