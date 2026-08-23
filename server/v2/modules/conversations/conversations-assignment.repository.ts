@@ -1,10 +1,11 @@
 import { db } from "../../config/database";
 import { sendsevenConversationState, user } from "@shared/schema";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
-// Local (platform-side) conversation assignment. Travana agents are NOT
-// SendSeven users, so who owns a conversation lives in OUR
-// sendseven_conversation_state table and is overlaid onto proxied SendSeven
+// Local (platform-side) per-conversation state that SendSeven doesn't hold:
+// who owns the conversation (assignment) and what kind it is (sales/admin).
+// Travana agents are NOT SendSeven users, so both live in OUR
+// sendseven_conversation_state table and are overlaid onto proxied SendSeven
 // payloads by the conversations service — never written to SendSeven.
 
 export interface AssignedUserInfo {
@@ -12,39 +13,53 @@ export interface AssignedUserInfo {
   name: string;
 }
 
+export type ConversationType = "sales" | "admin";
+
+export interface LocalConversationState {
+  assignee: AssignedUserInfo | null;
+  conversationType: ConversationType | null;
+}
+
 function displayName(u: { firstName?: string | null; lastName?: string | null; name?: string | null }): string {
   return [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || u.name || "Unknown";
 }
 
+function toType(v: string | null | undefined): ConversationType | null {
+  return v === "sales" || v === "admin" ? v : null;
+}
+
 export const conversationsAssignmentRepository = {
-  /** conversationId → assigned Travana user, for the given org. */
-  async getMany(orgId: string, conversationIds: string[]): Promise<Map<string, AssignedUserInfo>> {
-    const result = new Map<string, AssignedUserInfo>();
+  /** conversationId → local state (assignee + type), for the given org. */
+  async getMany(orgId: string, conversationIds: string[]): Promise<Map<string, LocalConversationState>> {
+    const result = new Map<string, LocalConversationState>();
     if (!orgId || conversationIds.length === 0) return result;
     const rows = await db
       .select({
         conversationId: sendsevenConversationState.conversationId,
         userId: sendsevenConversationState.assignedUserId,
+        conversationType: sendsevenConversationState.conversationType,
         firstName: user.firstName,
         lastName: user.lastName,
         name: user.name,
       })
       .from(sendsevenConversationState)
-      .innerJoin(user, eq(user.id, sendsevenConversationState.assignedUserId))
+      .leftJoin(user, eq(user.id, sendsevenConversationState.assignedUserId))
       .where(
         and(
           eq(sendsevenConversationState.orgId, orgId),
           inArray(sendsevenConversationState.conversationId, conversationIds),
-          isNotNull(sendsevenConversationState.assignedUserId),
         ),
       );
     for (const row of rows) {
-      if (row.userId) result.set(row.conversationId, { id: row.userId, name: displayName(row) });
+      result.set(row.conversationId, {
+        assignee: row.userId ? { id: row.userId, name: displayName(row) } : null,
+        conversationType: toType(row.conversationType),
+      });
     }
     return result;
   },
 
-  async get(orgId: string, conversationId: string): Promise<AssignedUserInfo | null> {
+  async get(orgId: string, conversationId: string): Promise<LocalConversationState | null> {
     const many = await this.getMany(orgId, [conversationId]);
     return many.get(conversationId) ?? null;
   },
@@ -80,6 +95,18 @@ export const conversationsAssignmentRepository = {
       .onConflictDoUpdate({
         target: sendsevenConversationState.conversationId,
         set: { assignedUserId: userId, assignedAt: userId ? now : null, updatedAt: now },
+      });
+  },
+
+  /** Upsert the conversation type (null clears it). */
+  async setType(orgId: string, conversationId: string, type: ConversationType | null): Promise<void> {
+    const now = new Date();
+    await db
+      .insert(sendsevenConversationState)
+      .values({ conversationId, orgId, conversationType: type, updatedAt: now })
+      .onConflictDoUpdate({
+        target: sendsevenConversationState.conversationId,
+        set: { conversationType: type, updatedAt: now },
       });
   },
 };

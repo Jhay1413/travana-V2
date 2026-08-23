@@ -38,6 +38,14 @@ import {
   CalendarDays,
   FlaskConical,
   Sparkles,
+  SquarePen,
+  Filter,
+  Ellipsis,
+  BadgePoundSterling,
+  ShieldCheck,
+  StickyNote,
+  ArrowLeftRight,
+  Unlink,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -68,7 +76,7 @@ import {
   groupMessagesByDay,
   initials,
 } from "./message-thread";
-import { useContactLink } from "../api/use-contact-link";
+import { useContactLink, useUnlinkContact } from "../api/use-contact-link";
 import { CHANNELS } from "../channels";
 import { toUiConversation, toUiMessage } from "../map";
 import { conversationsApi } from "../api/conversations.api";
@@ -81,7 +89,7 @@ import {
   useUnsnoozeConversation,
   useUpdateConversation,
 } from "../api/use-conversations-mutations";
-import { useCurrentUser, useUsers } from "@/hooks/queries";
+import { useCurrentUser, useUsers, useClientNotes } from "@/hooks/queries";
 import { useMessages, useSendMessage, useCreateInternalNote, useUploadAttachment } from "../api/use-messages";
 import { MAX_ATTACHMENT_BYTES, messageTypeForContentType } from "../api/messages.api";
 import { useConversationsRealtimeState } from "./conversations-realtime-provider";
@@ -168,70 +176,220 @@ function TagChip({ tag }: { tag: ConversationTag }) {
   );
 }
 
+// Brand-style channel logo for the list row (design: big coloured circle with
+// the channel's mark rather than contact initials).
+function ChannelLogo({ channel }: { channel: Conversation["channel"] }) {
+  if (channel === "messenger") {
+    return (
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#1877F2] text-white" title="Messenger">
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
+          <path d="M13.5 21v-7h2.4l.4-3h-2.8V9.1c0-.9.3-1.5 1.5-1.5h1.4V5c-.3 0-1.1-.1-2.1-.1-2.1 0-3.6 1.3-3.6 3.7V11H8.3v3h2.4v7h2.8z" />
+        </svg>
+      </span>
+    );
+  }
+  if (channel === "instagram") {
+    return (
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-tr from-[#F9CE34] via-[#EE2A7B] to-[#6228D7] text-white" title="Instagram">
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <rect x="3" y="3" width="18" height="18" rx="5" />
+          <circle cx="12" cy="12" r="4" />
+          <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      </span>
+    );
+  }
+  const meta = CHANNELS[channel];
+  const Icon = meta.icon;
+  return (
+    <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", meta.badge)} title={meta.label}>
+      <Icon className="h-4 w-4" />
+    </span>
+  );
+}
+
+// "16:33" for today, otherwise the usual day label.
+function rowTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  if (!isNaN(d.getTime()) && d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  }
+  return dayLabel(iso);
+}
+
+// Category icon for the inbox line: Sales → £ badge, Admin → shield (Icons.txt).
+function inboxIconFor(name: string): typeof Mailbox {
+  const n = name.toLowerCase();
+  if (n.includes("sales")) return BadgePoundSterling;
+  if (n.includes("admin")) return ShieldCheck;
+  return Mailbox;
+}
+
 function ConversationRow({
   conversation,
   active,
   onClick,
   draftPreview,
+  inboxName,
 }: {
   conversation: Conversation;
   active: boolean;
   onClick: () => void;
   // Unsent text left behind in this thread's composer. Takes over the preview
-  // line while it's set — see draftTags for when it clears.
+  // slot so the agent can see at a glance where they have a draft waiting.
   draftPreview?: string;
+  inboxName?: string;
 }) {
+  // The category line: the agent-chosen type (Sales / Admin) wins; an inbox
+  // name is the fallback for conversations that haven't been classified yet.
+  const categoryLabel = conversation.conversationType
+    ? CONVERSATION_TYPE_LABELS[conversation.conversationType]
+    : inboxName;
+  const InboxIcon = categoryLabel ? inboxIconFor(categoryLabel) : null;
   return (
     <button
       onClick={onClick}
       data-testid={`conversation-row-${conversation.id}`}
       className={cn(
-        "flex w-full items-center gap-3 border-b border-black/5 px-4 py-3 text-left transition dark:border-white/5",
+        "relative w-full px-3 py-3 text-left transition",
         active
-          ? "bg-black/[0.06] dark:bg-white/[0.08]"
-          : "hover:bg-black/[0.03] dark:hover:bg-white/[0.04]",
+          ? "rounded-2xl border border-sky-100 bg-sky-50 dark:border-sky-500/20 dark:bg-sky-500/10"
+          : "hover:bg-black/[0.02] dark:hover:bg-white/[0.03]",
       )}
     >
-      <ChannelAvatar conversation={conversation} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span
-            className={cn(
-              "truncate text-sm",
-              conversation.unread ? "font-bold text-black dark:text-white" : "font-semibold text-black/80 dark:text-white/80",
-            )}
-          >
-            {conversation.contact.displayName}
-          </span>
-          <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-black/40 dark:text-white/40">
-            {dayLabel(conversation.lastActivityAt)}
-          </span>
-        </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          {draftPreview ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-xs" data-testid={`conversation-draft-${conversation.id}`}>
-              <span className="flex-shrink-0 rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                Draft
+      <div className="flex items-start gap-3">
+        <ChannelLogo channel={conversation.channel} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={cn(
+                "truncate text-sm",
+                conversation.unread ? "font-bold text-black dark:text-white" : "font-bold text-black/85 dark:text-white/85",
+              )}
+            >
+              {conversation.contact.displayName}
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              {conversation.unread && <span className="h-2 w-2 rounded-full bg-sky-500" />}
+              <span className="whitespace-nowrap text-xs text-black/45 dark:text-white/45">
+                {rowTime(conversation.lastActivityAt)}
               </span>
-              <span className="truncate text-black/55 dark:text-white/55">{draftPreview}</span>
             </span>
-          ) : (
-            <span className="flex min-w-0 items-center gap-1 text-xs text-black/55 dark:text-white/55">
-              <ArrowUpRight className="h-3 w-3 flex-shrink-0 text-black/30 dark:text-white/30" />
-              <span className="truncate">{conversation.preview}</span>
-            </span>
-          )}
-          {conversation.assignee ? (
-            <span className="flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-black/45 dark:text-white/45 bg-black/[0.04] dark:bg-white/[0.06]">
-              {conversation.assignee}
-            </span>
-          ) : (
-            conversation.tags && conversation.tags.length > 0 && <TagChip tag={conversation.tags[0]} />
+          </div>
+          {categoryLabel && InboxIcon && (
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-black/50 dark:text-white/50" data-testid={`conversation-type-${conversation.id}`}>
+              <InboxIcon className="h-3.5 w-3.5 shrink-0 text-black/45 dark:text-white/45" />
+              <span className="truncate">{categoryLabel}</span>
+            </div>
           )}
         </div>
       </div>
-      {conversation.unread && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-sky-500" />}
+      <div className="mt-1.5 flex items-center gap-3">
+        <span className="w-9 shrink-0 text-center text-[10px] tracking-[0.2em] text-black/30 dark:text-white/30" aria-hidden>
+          ···
+        </span>
+        {draftPreview ? (
+          <span className="flex min-w-0 items-center gap-1.5 text-xs" data-testid={`conversation-draft-${conversation.id}`}>
+            <span className="shrink-0 rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+              Draft
+            </span>
+            <span className="truncate text-black/50 dark:text-white/50">{draftPreview}</span>
+          </span>
+        ) : (
+          <span className="truncate text-xs text-black/50 dark:text-white/50">{conversation.preview}</span>
+        )}
+      </div>
+      {!active && (
+        <span className="pointer-events-none absolute bottom-0 left-3 right-3 h-px bg-black/[0.06] dark:bg-white/[0.06]" aria-hidden />
+      )}
     </button>
+  );
+}
+
+// ─── Conversation type ────────────────────────────────────────────────────────
+const CONVERSATION_TYPE_LABELS: Record<"sales" | "admin", string> = { sales: "Sales", admin: "Admin" };
+
+// Small chip in the thread header for classifying the conversation. Persisted
+// on our side (sendseven_conversation_state.conversation_type) via the same
+// PATCH the other local fields use; the list row reads it back.
+function ConversationTypeControl({ conversation }: { conversation: Conversation }) {
+  const { toast } = useToast();
+  const update = useUpdateConversation();
+  const current = conversation.conversationType ?? null;
+  const Icon = current ? inboxIconFor(CONVERSATION_TYPE_LABELS[current]) : Tag;
+
+  const setType = (type: "sales" | "admin" | null) =>
+    update.mutate(
+      { id: conversation.id, body: { conversation_type: type } },
+      {
+        onSuccess: () =>
+          toast({
+            title: type ? `Marked as ${CONVERSATION_TYPE_LABELS[type]}` : "Type cleared",
+            description: type ? "Shown under the contact's name in the inbox list." : undefined,
+          }),
+        onError: (err) => {
+          const e = err as { response?: { data?: { message?: string } }; message?: string };
+          toast({ title: "Could not update type", description: e?.response?.data?.message ?? e?.message, variant: "destructive" });
+        },
+      },
+    );
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold transition",
+            current
+              ? "bg-black/[0.05] text-black/70 hover:bg-black/10 dark:bg-white/10 dark:text-white/80"
+              : "border border-dashed border-black/20 text-black/45 hover:text-black dark:border-white/20 dark:text-white/45",
+          )}
+          title="Conversation type"
+          data-testid="conversation-type"
+        >
+          <Icon className="h-3 w-3" />
+          {current ? CONVERSATION_TYPE_LABELS[current] : "Set type"}
+          <ChevronDown className="h-2.5 w-2.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="rounded-xl">
+        <DropdownMenuItem onClick={() => setType("sales")} className="gap-2 rounded-lg text-sm" data-testid="conversation-type-sales">
+          <BadgePoundSterling className="h-4 w-4" /> Sales {current === "sales" && <Check className="ml-auto h-3.5 w-3.5" />}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setType("admin")} className="gap-2 rounded-lg text-sm" data-testid="conversation-type-admin">
+          <ShieldCheck className="h-4 w-4" /> Admin {current === "admin" && <Check className="ml-auto h-3.5 w-3.5" />}
+        </DropdownMenuItem>
+        {current && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setType(null)} className="gap-2 rounded-lg text-sm" data-testid="conversation-type-clear">
+              <XIcon className="h-4 w-4" /> Clear
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ─── Linked client phone ──────────────────────────────────────────────────────
+// The pill beside the contact's name shows the CRM client's phone number —
+// only when the conversation is linked to a client. Unlinked conversations
+// show nothing (the SendSeven contact id is an opaque UUID, never useful here).
+// Shares the contact-link query (and its cache) with the ContactPanel.
+function LinkedClientPhonePill({ conversation }: { conversation: Conversation }) {
+  const { data: link } = useContactLink(conversation.contact.id, contactLinkMatch(conversation));
+  const phone = link?.linkedClient?.phoneNumber?.trim();
+  if (!phone) return null;
+  return (
+    <span
+      className="shrink-0 rounded-full border border-violet-200 bg-violet-50 px-3 py-0.5 text-xs font-semibold text-violet-600 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300"
+      data-testid="conversation-client-phone"
+    >
+      {phone}
+    </span>
   );
 }
 
@@ -259,19 +417,34 @@ function AssignControl({ conversation }: { conversation: Conversation }) {
   };
 
   const doAssign = (userId: string) =>
-    assignMutation.mutate({ id: conversation.id, userId }, { onError });
+    assignMutation.mutate(
+      { id: conversation.id, userId },
+      { onError, onSuccess: (conv) => toast({ title: "Conversation assigned", description: (conv.assigned_user as { name?: string } | null)?.name ?? undefined }) },
+    );
   const doUnassign = () =>
-    updateMutation.mutate({ id: conversation.id, body: { assigned_user_id: null } }, { onError });
+    updateMutation.mutate(
+      { id: conversation.id, body: { assigned_user_id: null } },
+      { onError, onSuccess: () => toast({ title: "Conversation unassigned" }) },
+    );
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex items-center gap-1.5 rounded-xl border border-black/8 px-3 py-1.5 text-xs font-medium text-black/70 transition hover:bg-black/[0.03] dark:border-white/8 dark:text-white/70 dark:hover:bg-white/[0.04]"
+          className="flex h-10 items-center gap-1.5 rounded-lg px-1.5 text-sm text-black/60 transition hover:bg-black/[0.03] dark:text-white/60 dark:hover:bg-white/[0.04]"
+          title={conversation.assignee ? `Assigned to ${conversation.assignee}` : "Assign"}
           data-testid="conversation-assign"
         >
-          <UserPlus className="h-3.5 w-3.5" />
-          <span className="max-w-[120px] truncate">{conversation.assignee ?? "Assign"}</span>
+          {conversation.assignee ? (
+            <span className="relative grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-[11px] font-bold text-white">
+              {initials(conversation.assignee)}
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#0b0b0f]" />
+            </span>
+          ) : (
+            <span className="grid h-8 w-8 place-items-center rounded-full border border-dashed border-black/25 text-black/45 dark:border-white/25 dark:text-white/45">
+              <UserPlus className="h-4 w-4" />
+            </span>
+          )}
           <ChevronDown className="h-3 w-3" />
         </button>
       </DropdownMenuTrigger>
@@ -329,109 +502,128 @@ function DetailField({ label, value, icon: Icon }: { label: string; value: strin
   );
 }
 
+// One labelled value in the Client Details panel: grey label, red icon, bold value.
+function ClientField({ label, icon: Icon, value }: { label: string; icon: typeof User; value: string }) {
+  return (
+    <div>
+      <div className="text-sm text-black/45 dark:text-white/45">{label}</div>
+      <div className="mt-1 flex items-center gap-2.5">
+        <Icon className="h-5 w-5 shrink-0 text-red-500" strokeWidth={1.75} />
+        <span className="truncate text-lg font-bold">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function memberSince(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function ContactPanel({ conversation }: { conversation: Conversation }) {
   const { contact } = conversation;
-  const meta = CHANNELS[conversation.channel];
-  const ChannelIcon = meta.icon;
+  const { toast } = useToast();
+  const [notesOpen, setNotesOpen] = useState(false);
 
-  // Shares the cached contact-link query with ClientLinkSection (keyed by contact
-  // id). When linked, Master Data shows the CRM client's record instead of the
-  // raw SendSeven contact fields.
+  // Shares the cached contact-link query with ClientLinkSection (keyed by
+  // contact id). When linked, the panel shows the CRM client's record.
   const { data: link } = useContactLink(conversation.contact.id, contactLinkMatch(conversation));
   const client = link?.linkedClient ?? null;
+  const unlinkContact = useUnlinkContact(conversation.contact.id);
+  const { data: notes = [] } = useClientNotes(client?.id ?? "");
+
+  const unlink = async () => {
+    try {
+      await unlinkContact.mutateAsync();
+      toast({ title: "Unlinked", description: "This contact is no longer linked to a client." });
+    } catch (err) {
+      toast({ title: "Couldn't unlink", description: (err as Error).message, variant: "destructive" });
+    }
+  };
+
+  const since = client ? memberSince(client.createdAt) : null;
 
   return (
-    <Card className="glass ringed grain flex flex-col overflow-hidden rounded-3xl p-0">
-      <div className="flex items-center justify-between border-b border-black/8 px-4 py-3 dark:border-white/8">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <ChannelAvatar conversation={conversation} size="sm" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold">{contact.displayName}</div>
-            <div className="truncate text-[11px] text-black/40 dark:text-white/40">{contact.id}</div>
-          </div>
-        </div>
-        <button className="flex items-center gap-1 text-xs font-medium text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white">
-          <ArrowUpRight className="h-3.5 w-3.5" /> Profile
-        </button>
+    <Card className="flex flex-col overflow-hidden rounded-none border-0 border-l border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
+      <div className="border-b border-black/10 px-6 py-6 dark:border-white/10">
+        <h2 className="text-lg font-bold">Client Details</h2>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-4 py-4">
-        <ClientLinkSection conversation={conversation} />
-
-        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-black/35 dark:text-white/35">
-          Master Data
-          {client && <span className="font-semibold normal-case text-green-600 dark:text-green-400">· from your CRM</span>}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="space-y-5 border-b border-black/10 px-6 py-5 dark:border-white/10">
+          {client ? (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <ClientField label="Name" icon={User} value={clientDisplayName(client)} />
+                <div className="flex shrink-0 items-center gap-2 pt-0.5">
+                  <span className="rounded-md bg-emerald-500 px-2.5 py-0.5 text-[11px] font-semibold text-white" data-testid="client-linked-badge">
+                    Linked
+                  </span>
+                  <button
+                    type="button"
+                    onClick={unlink}
+                    disabled={unlinkContact.isPending}
+                    title="Unlink this client"
+                    className="text-red-500 transition hover:text-red-600 disabled:opacity-50"
+                    data-testid="client-unlink"
+                  >
+                    {unlinkContact.isPending ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Unlink className="h-4.5 w-4.5" />}
+                  </button>
+                </div>
+              </div>
+              {client.phoneNumber && <ClientField label="Contact" icon={Phone} value={client.phoneNumber} />}
+              {!client.phoneNumber && client.email && <ClientField label="Contact" icon={Mail} value={client.email} />}
+              {since && <ClientField label="Member Since" icon={CalendarDays} value={since} />}
+            </>
+          ) : (
+            <>
+              <ClientField label="Name" icon={User} value={contact.displayName} />
+              {/* Not linked yet: suggestions + link / create-client actions. */}
+              <ClientLinkSection conversation={conversation} />
+            </>
+          )}
         </div>
-        {client ? (
-          <>
-            <DetailField
-              label="Name"
-              value={clientDisplayName(client)}
-              icon={User}
-            />
-            {client.phoneNumber && <DetailField label="Phone" value={client.phoneNumber} icon={Phone} />}
-            {client.email && <DetailField label="Email" value={client.email} icon={Mail} />}
-            {formatClientDate(client.DOB) && <DetailField label="Date of birth" value={formatClientDate(client.DOB)!} icon={Cake} />}
-            {composeClientAddress(client) && <DetailField label="Address" value={composeClientAddress(client)!} icon={MapPin} />}
-            {client.badge && <DetailField label="Badge" value={client.badge} icon={Star} />}
-            {formatClientDate(client.createdAt) && (
-              <DetailField label="Client since" value={formatClientDate(client.createdAt)!} icon={CalendarDays} />
-            )}
-          </>
-        ) : (
-          <>
-            <DetailField label="Display name" value={contact.displayName} icon={User} />
-            <DetailField label="First name" value={contact.firstName} icon={User} />
-            <DetailField label="Last name" value={contact.lastName} icon={User} />
-            <DetailField label="Languages" value={contact.languages.join(", ")} icon={Globe} />
-            {contact.birthday && (
-              <DetailField
-                label="Birthday"
-                value={new Date(contact.birthday).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                icon={Cake}
-              />
-            )}
-          </>
-        )}
 
-        <div className="pt-1 text-[10px] font-bold uppercase tracking-wider text-black/35 dark:text-white/35">
-          Contact Channels
-        </div>
-        <div className="rounded-2xl border border-black/8 p-3 dark:border-white/8">
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
-            {contact.handleLabel}
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className={cn("grid h-6 w-6 place-items-center rounded-full", meta.badge)}>
-                <ChannelIcon className="h-3 w-3" />
-              </span>
-              <span className="truncate text-sm text-black/80 dark:text-white/80">{contact.handle}</span>
+        <div className="flex-1" />
+
+        <div className="border-t border-b border-black/10 dark:border-white/10">
+          <button
+            type="button"
+            onClick={() => setNotesOpen((v) => !v)}
+            className="flex w-full items-center justify-between px-6 py-5 text-left"
+            data-testid="client-notes-toggle"
+          >
+            <span className="text-base font-bold">Notes</span>
+            <ChevronRight className={cn("h-5 w-5 text-black/50 transition dark:text-white/50", notesOpen && "rotate-90")} />
+          </button>
+          {notesOpen && (
+            <div className="space-y-3 px-6 pb-5" data-testid="client-notes">
+              {!client ? (
+                <p className="text-sm text-black/45 dark:text-white/45">Link this conversation to a client to see their notes.</p>
+              ) : notes.length === 0 ? (
+                <p className="text-sm text-black/45 dark:text-white/45">No notes on this client yet.</p>
+              ) : (
+                notes.map((n) => (
+                  <div key={n.id} className="rounded-lg border border-black/10 p-3 dark:border-white/10">
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-black/45 dark:text-white/45">
+                      <span className="truncate font-semibold">{n.author_name || "Note"}</span>
+                      <span className="shrink-0">{formatClientDate(n.createdAt)}</span>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-black/80 dark:text-white/80">
+                      {stripHtml(n.content || n.description || "")}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
-            <span className="flex flex-shrink-0 items-center gap-1 rounded-md bg-black/[0.05] px-1.5 py-0.5 text-[10px] text-black/50 dark:bg-white/[0.06] dark:text-white/50">
-              <Lock className="h-2.5 w-2.5" /> Read-only
-            </span>
-          </div>
-          <div className="mt-2">
-            <span className="inline-flex items-center gap-1 rounded-md bg-[#dcf37a] px-2 py-0.5 text-[10px] font-bold text-black">
-              <Star className="h-2.5 w-2.5 fill-black" /> PRIMARY
-            </span>
-          </div>
+          )}
         </div>
-        <button className="w-full rounded-xl border border-dashed border-black/15 py-2 text-xs font-medium text-black/50 transition hover:border-black/25 hover:text-black/70 dark:border-white/15 dark:text-white/50 dark:hover:text-white/70">
-          + Add contact channel
-        </button>
-
-        {contact.customFields.length > 0 && (
-          <>
-            <div className="pt-1 text-[10px] font-bold uppercase tracking-wider text-black/35 dark:text-white/35">
-              Custom Fields
-            </div>
-            {contact.customFields.map((f) => (
-              <DetailField key={f.label} label={f.label} value={f.value} />
-            ))}
-          </>
-        )}
       </div>
     </Card>
   );
@@ -649,45 +841,15 @@ function Composer({
   }, [text]);
 
   return (
-    <div className="border-t border-black/8 px-4 py-3 dark:border-white/8">
-      <div className="mb-2 flex items-center justify-end gap-2">
-        <button className="flex items-center gap-1.5 rounded-full bg-[#dcf37a] px-3 py-1.5 text-xs font-semibold text-black">
-          <Bot className="h-3.5 w-3.5" /> Router-Bot <ChevronDown className="h-3 w-3" />
-        </button>
-        <GenerateEnquiryButton conversation={conversation} />
-        <button
-          onClick={suggestReply}
-          disabled={aiSuggest.isPending || sending}
-          title="Have the AI draft a reply — it lands in the box for you to edit and send"
-          data-testid="composer-ai-suggest"
-          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-black/60 hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:text-white/60 dark:hover:bg-white/5"
-        >
-          {aiSuggest.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} AI reply
-        </button>
-        <button className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/5">
-          <Languages className="h-3.5 w-3.5" /> Translate
-        </button>
-      </div>
-
-      <div className="mb-2 flex items-center gap-4">
-        {(["reply", "note"] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            className={cn(
-              "rounded-lg px-3 py-1 text-sm font-semibold capitalize transition",
-              mode === m
-                ? m === "reply"
-                  ? "bg-black text-white dark:bg-white dark:text-black"
-                  : "bg-amber-400/20 text-amber-700 dark:text-amber-300"
-                : "text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white",
-            )}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
-
+    <div className="px-4 pb-4 pt-2">
+      <div
+        className={cn(
+          "rounded-xl border px-4 pt-3 pb-2.5",
+          mode === "note"
+            ? "border-amber-400/40 bg-amber-400/5"
+            : "border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.03]",
+        )}
+      >
       {/* Staged files: uploaded on pick, so by send time these are just ids. */}
       {attachments.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2" data-testid="composer-attachments">
@@ -725,14 +887,6 @@ function Composer({
         </div>
       )}
 
-      <div
-        className={cn(
-          "flex items-end gap-2 rounded-2xl border px-3 py-2",
-          mode === "note"
-            ? "border-amber-400/40 bg-amber-400/5"
-            : "border-black/10 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.03]",
-        )}
-      >
         <input
           ref={fileInputRef}
           type="file"
@@ -745,54 +899,6 @@ function Composer({
           }}
           data-testid="conversation-composer-file-input"
         />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={!canAttach}
-          title={canAttach ? "Attach a file" : "Attachments aren't supported on internal notes"}
-          className="mb-1 text-black/40 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-black/40 dark:text-white/40 dark:hover:text-white"
-          data-testid="conversation-composer-attach"
-        >
-          <Paperclip className="h-4 w-4" />
-        </button>
-        <button className="mb-1 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white">
-          <Pen className="h-4 w-4" />
-        </button>
-        <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="mb-1 text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white"
-              title="Insert emoji"
-              data-testid="conversation-composer-emoji"
-            >
-              <Smile className="h-4 w-4" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" side="top" className="w-72 p-2">
-            <div className="max-h-[240px] space-y-2 overflow-y-auto" data-testid="conversation-emoji-picker">
-              {EMOJI_CATEGORIES.map((cat) => (
-                <div key={cat.name}>
-                  <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
-                    {cat.name}
-                  </div>
-                  <div className="grid grid-cols-8 gap-0.5">
-                    {cat.emojis.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => insertEmoji(emoji)}
-                        className="rounded-lg p-1 text-lg leading-none transition hover:bg-black/5 dark:hover:bg-white/10"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
         <Textarea
           ref={textareaRef}
           value={text}
@@ -809,26 +915,127 @@ function Composer({
               submit();
             }
           }}
-          placeholder={mode === "note" ? "Add an internal note…" : "Type a message… (/ for commands, @ to assign)"}
-          rows={1}
+          placeholder={mode === "note" ? "Add an internal note…" : "Type a message…"}
+          rows={2}
           // Native browser spellcheck, stated explicitly so it can't be lost, with
           // the dictionary pinned to en-GB — on a US-locale machine the browser
           // otherwise flags "organise"/"colour" in every outbound message.
           spellCheck
           lang="en-GB"
-          className="min-h-0 flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="min-h-[56px] w-full resize-none border-0 bg-transparent px-0 py-1 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
           data-testid="conversation-composer-input"
         />
-        <Button
-          onClick={submit}
-          disabled={(!text.trim() && ready.length === 0) || uploading || sending}
-          size="icon"
-          title={uploading ? "Waiting for the upload to finish…" : undefined}
-          className="mb-1 h-9 w-9 flex-shrink-0 rounded-xl bg-black text-white hover:bg-black/85 disabled:opacity-40 dark:bg-white dark:text-black"
-          data-testid="conversation-send"
-        >
-          {sending || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        </Button>
+
+        {/* Toolbar: note toggle · emoji · attach · enquiry · AI — and Send. */}
+        <div className="mt-2 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-1 text-black/45 dark:text-white/45">
+            <button
+              type="button"
+              onClick={() => setMode(mode === "note" ? "reply" : "note")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm transition hover:bg-black/5 dark:hover:bg-white/10",
+                mode === "note" ? "font-semibold text-amber-600 dark:text-amber-300" : "hover:text-black dark:hover:text-white",
+              )}
+              title={mode === "note" ? "Switch back to reply" : "Write an internal note (not sent to the contact)"}
+              data-testid="composer-mode-toggle"
+            >
+              <StickyNote className="h-4 w-4" />
+              Note
+              <ArrowLeftRight className="h-3.5 w-3.5" />
+            </button>
+            <span className="mx-1 h-4 w-px bg-black/15 dark:bg-white/15" aria-hidden />
+            <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="grid h-8 w-8 place-items-center rounded-md transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"
+                  title="Insert emoji"
+                  data-testid="conversation-composer-emoji"
+                >
+                  <Smile className="h-4.5 w-4.5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" side="top" className="w-72 p-2">
+                <div className="max-h-[240px] space-y-2 overflow-y-auto" data-testid="conversation-emoji-picker">
+                  {EMOJI_CATEGORIES.map((cat) => (
+                    <div key={cat.name}>
+                      <div className="mb-1 px-1 text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
+                        {cat.name}
+                      </div>
+                      <div className="grid grid-cols-8 gap-0.5">
+                        {cat.emojis.map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => insertEmoji(emoji)}
+                            className="rounded-lg p-1 text-lg leading-none transition hover:bg-black/5 dark:hover:bg-white/10"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!canAttach}
+              title={canAttach ? "Attach a file" : "Attachments aren't supported on internal notes"}
+              className="grid h-8 w-8 place-items-center rounded-md transition hover:bg-black/5 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
+              data-testid="conversation-composer-attach"
+            >
+              <Paperclip className="h-4.5 w-4.5" />
+            </button>
+            <GenerateEnquiryButton conversation={conversation} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="grid h-8 w-8 place-items-center rounded-md transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"
+                  title="More"
+                  data-testid="composer-more"
+                >
+                  <Ellipsis className="h-4.5 w-4.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top" className="rounded-xl">
+                <DropdownMenuItem disabled className="gap-2 rounded-lg text-sm">
+                  <Bot className="h-4 w-4" /> Router-Bot
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled className="gap-2 rounded-lg text-sm">
+                  <Languages className="h-4 w-4" /> Translate
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <button
+              type="button"
+              onClick={suggestReply}
+              disabled={aiSuggest.isPending || sending}
+              title="Have the AI draft a reply — it lands in the box for you to edit and send"
+              data-testid="composer-ai-suggest"
+              className="ml-1 flex h-8 items-center gap-1 rounded-full bg-slate-500 px-3 text-xs font-semibold text-white transition hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {aiSuggest.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              AI
+            </button>
+          </div>
+
+          <Button
+            onClick={submit}
+            disabled={(!text.trim() && ready.length === 0) || uploading || sending}
+            variant="outline"
+            title={uploading ? "Waiting for the upload to finish…" : undefined}
+            className="h-10 shrink-0 gap-2 rounded-lg border-black/10 bg-black/[0.02] px-4 text-sm font-medium text-black/60 hover:bg-black/5 hover:text-black disabled:opacity-40 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/70"
+            data-testid="conversation-send"
+          >
+            {sending || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
+            <span className="h-4 w-px bg-black/15 dark:bg-white/15" aria-hidden />
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -840,10 +1047,11 @@ function HeaderAction({ icon: Icon, label, onClick }: { icon: typeof User; label
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-xl border border-black/8 px-3 py-1.5 text-xs font-medium text-black/70 transition hover:bg-black/[0.03] dark:border-white/8 dark:text-white/70 dark:hover:bg-white/[0.04]"
+      title={label}
+      aria-label={label}
+      className="grid h-10 w-10 place-items-center rounded-lg border border-black/10 text-black/55 transition hover:bg-black/[0.03] hover:text-black dark:border-white/10 dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
     >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
+      <Icon className="h-4 w-4" />
     </button>
   );
 }
@@ -870,6 +1078,8 @@ type Overlay = Record<string, { extraMessages: ConversationMessage[]; snoozed?: 
 export default function ConversationsInbox() {
   const [tab, setTab] = useState<InboxTab>("open");
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<Overlay>({});
@@ -972,10 +1182,14 @@ export default function ConversationsInbox() {
             : c.status === "open" && !c.snoozed,
       )
       .filter((c) => !q || c.contact.displayName.toLowerCase().includes(q) || c.preview.toLowerCase().includes(q))
-      .sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
-  }, [conversations, tab, search]);
+      .sort((a, b) => {
+        const diff = new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime();
+        return sortOrder === "newest" ? diff : -diff;
+      });
+  }, [conversations, tab, search, sortOrder]);
 
   const activeInbox = inboxId ? (inboxList.find((i) => i.id === inboxId) ?? null) : null;
+  const inboxNameById = useMemo(() => new Map(inboxList.map((i) => [i.id, i.name])), [inboxList]);
 
   // Keep a valid selection: if the current pick fell out of the list, select the first.
   useEffect(() => {
@@ -1213,132 +1427,174 @@ export default function ConversationsInbox() {
 
   return (
     <section
-      className="grid h-[calc(100vh-8rem)] gap-4"
+      className="-m-4 grid h-[calc(100vh-3.5rem)] gap-0 md:-m-6"
       style={{ gridTemplateColumns: "320px 1fr 300px" }}
       data-testid="section-conversations"
     >
       {/* ── Conversation list ── */}
-      <Card className="glass ringed grain flex flex-col overflow-hidden rounded-3xl p-0">
-        <div className="flex items-center gap-1.5 border-b border-black/8 px-3 py-2.5 dark:border-white/8">
-          <button className="grid h-8 w-8 place-items-center rounded-full text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/5">
-            <Search className="h-4 w-4" />
-          </button>
-          <button className="grid h-8 w-8 place-items-center rounded-full text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/5">
-            <User className="h-4 w-4" />
-          </button>
-          <button className="grid h-8 w-8 place-items-center rounded-full text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/5">
-            <UserPlus className="h-4 w-4" />
-          </button>
-          <button className="relative grid h-8 w-8 place-items-center rounded-full text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/5">
-            <MessageSquare className="h-4 w-4" />
-            {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-[#0b0b0f]">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
-            )}
-          </button>
-          <div className="flex-1" />
-          <span
-            className={cn(
-              "h-2 w-2 flex-shrink-0 rounded-full transition-colors",
-              realtimeConnected ? "bg-emerald-500" : "bg-black/15 dark:bg-white/15",
-            )}
-            title={realtimeConnected ? "Live" : "Reconnecting…"}
-            data-testid="conversation-realtime-indicator"
-          />
-          {canManageChannels && (
+      <Card className="flex flex-col overflow-hidden rounded-none border-0 border-r border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
+        <div className="flex items-center justify-between gap-2 px-5 pb-4 pt-5">
+          <h2 className="text-base font-bold">Inbox</h2>
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setChannelsOpen(true)}
-              title="Channels"
-              className="grid h-8 w-8 place-items-center rounded-full text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/5"
-              data-testid="conversation-channels-button"
+              type="button"
+              onClick={() => setSearchOpen((v) => !v)}
+              className={cn(
+                "grid h-8 w-8 place-items-center rounded-full border transition",
+                searchOpen
+                  ? "border-black/20 bg-black/5 text-black dark:border-white/20 dark:bg-white/10 dark:text-white"
+                  : "border-black/10 bg-white text-black/70 hover:bg-black/[0.03] dark:border-white/15 dark:bg-transparent dark:text-white/70",
+              )}
+              title="Search conversations"
+              data-testid="conversation-search-toggle"
             >
-              <RadioTower className="h-4 w-4" />
+              <Search className="h-4 w-4" />
             </button>
-          )}
-          <button className="grid h-8 w-8 place-items-center rounded-full bg-black text-white hover:bg-black/85 dark:bg-white dark:text-black">
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Inbox switcher: All Messages + custom inboxes from SendSeven */}
-        <div className="px-3 pt-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex w-full items-center justify-between rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2 text-sm font-semibold transition hover:bg-black/[0.04] dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]"
-                data-testid="conversation-inbox-switcher"
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <InboxDot inbox={activeInbox} />
-                  <span className="truncate">{activeInbox?.name ?? "All Messages"}</span>
-                </span>
-                <ChevronDown className="h-4 w-4 flex-shrink-0 text-black/40 dark:text-white/40" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="max-h-[60vh] w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto rounded-xl">
-              <DropdownMenuItem
-                onClick={() => setInboxId(null)}
-                className="flex items-center justify-between gap-2 rounded-lg text-sm"
-                data-testid="inbox-option-all"
-              >
-                <span className="flex items-center gap-2">
-                  <Mailbox className="h-4 w-4 text-black/50 dark:text-white/50" /> All Messages
-                </span>
-                {inboxId === null && <Check className="h-3.5 w-3.5" />}
-              </DropdownMenuItem>
-              {inboxList.length > 0 && <DropdownMenuSeparator />}
-              {inboxList.map((ib) => (
-                <DropdownMenuItem
-                  key={ib.id}
-                  onClick={() => setInboxId(ib.id)}
-                  className="flex items-center justify-between gap-2 rounded-lg text-sm"
-                  data-testid={`inbox-option-${ib.id}`}
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <InboxDot inbox={ib} />
-                    <span className="truncate">{ib.name}</span>
-                  </span>
-                  {inboxId === ib.id && <Check className="h-3.5 w-3.5 flex-shrink-0" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="px-3 pt-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/40 dark:text-white/40" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search conversations…"
-              className="h-8 rounded-xl border-black/10 bg-black/[0.03] pl-9 text-xs dark:border-white/10 dark:bg-white/[0.04]"
-              data-testid="conversation-search"
-            />
+            <button
+              type="button"
+              className="grid h-8 w-8 place-items-center rounded-full bg-sky-500 text-white transition hover:bg-sky-600"
+              title="New message"
+              data-testid="conversation-compose"
+            >
+              <SquarePen className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-6 border-b border-black/8 px-4 pt-3 dark:border-white/8">
-          {(["open", "snoozed", "closed"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={cn(
-                "relative pb-2 text-xs font-bold uppercase tracking-wide transition",
-                tab === t ? "text-black dark:text-white" : "text-black/40 hover:text-black/60 dark:text-white/40",
-              )}
-            >
-              {t}
-              {tab === t && pagination && pagination.total > 0 && (
-                <span className="ml-1 text-black/40 dark:text-white/40">{pagination.total}</span>
-              )}
-              {tab === t && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-black dark:bg-white" />}
-            </button>
-          ))}
+        {searchOpen && (
+          <div className="px-4 pb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/40 dark:text-white/40" />
+              <Input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search conversations…"
+                className="h-8 rounded-xl border-black/10 bg-black/[0.03] pl-9 text-xs dark:border-white/10 dark:bg-white/[0.04]"
+                data-testid="conversation-search"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-black/[0.06] px-4 pt-4 dark:border-white/[0.06]">
+          <div className="flex w-full items-center gap-1 rounded-sm border border-black/10 bg-black/[0.03] p-0.5 dark:border-white/10 dark:bg-white/[0.04]">
+            {(["open", "snoozed", "closed"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={cn(
+                  "flex-1 rounded-xs px-2 py-1 text-center text-xs transition",
+                  tab === t
+                    ? "border border-black/10 bg-white font-bold text-black shadow-sm dark:border-white/15 dark:bg-white/15 dark:text-white"
+                    : "font-semibold text-slate-500 hover:text-slate-700 dark:text-white/45 dark:hover:text-white/70",
+                )}
+                data-testid={`inbox-tab-${t}`}
+              >
+                {t === "open" ? "Open" : t === "snoozed" ? "Snoozed" : "Done"}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex items-center justify-between gap-2 border-b border-black/[0.06] px-4 py-3 dark:border-white/[0.06]">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-white/60 dark:hover:text-white"
+                data-testid="conversation-sort"
+              >
+                {sortOrder === "newest" ? "Newest" : "Oldest"}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="rounded-xl">
+              <DropdownMenuItem onClick={() => setSortOrder("newest")} className="flex items-center justify-between gap-3 rounded-lg text-sm">
+                Newest {sortOrder === "newest" && <Check className="h-3.5 w-3.5" />}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder("oldest")} className="flex items-center justify-between gap-3 rounded-lg text-sm">
+                Oldest {sortOrder === "oldest" && <Check className="h-3.5 w-3.5" />}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className="flex items-center gap-1">
+            {/* Inbox filter: All Messages + custom inboxes from SendSeven */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={cn(
+                    "grid h-7 w-7 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10",
+                    inboxId ? "text-sky-600" : "text-slate-500 dark:text-white/60",
+                  )}
+                  title={activeInbox?.name ?? "All Messages"}
+                  data-testid="conversation-inbox-switcher"
+                >
+                  <Filter className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-[60vh] w-56 overflow-y-auto rounded-xl">
+                <DropdownMenuItem
+                  onClick={() => setInboxId(null)}
+                  className="flex items-center justify-between gap-2 rounded-lg text-sm"
+                  data-testid="inbox-option-all"
+                >
+                  <span className="flex items-center gap-2">
+                    <Mailbox className="h-4 w-4 text-black/50 dark:text-white/50" /> All Messages
+                  </span>
+                  {inboxId === null && <Check className="h-3.5 w-3.5" />}
+                </DropdownMenuItem>
+                {inboxList.length > 0 && <DropdownMenuSeparator />}
+                {inboxList.map((ib) => (
+                  <DropdownMenuItem
+                    key={ib.id}
+                    onClick={() => setInboxId(ib.id)}
+                    className="flex items-center justify-between gap-2 rounded-lg text-sm"
+                    data-testid={`inbox-option-${ib.id}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <InboxDot inbox={ib} />
+                      <span className="truncate">{ib.name}</span>
+                    </span>
+                    {inboxId === ib.id && <Check className="h-3.5 w-3.5 flex-shrink-0" />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="grid h-7 w-7 place-items-center rounded-full text-slate-500 transition hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+                  title="More"
+                  data-testid="conversation-list-more"
+                >
+                  <Ellipsis className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl">
+                <DropdownMenuItem disabled className="gap-2 rounded-lg text-xs">
+                  <span
+                    className={cn("h-2 w-2 rounded-full", realtimeConnected ? "bg-emerald-500" : "bg-black/20 dark:bg-white/20")}
+                    data-testid="conversation-realtime-indicator"
+                  />
+                  {realtimeConnected ? "Live updates on" : "Reconnecting…"}
+                  {unreadCount > 0 && <span className="ml-auto font-semibold">{unreadCount} unread</span>}
+                </DropdownMenuItem>
+                {canManageChannels && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setChannelsOpen(true)} className="gap-2 rounded-lg text-sm" data-testid="conversation-channels-button">
+                      <RadioTower className="h-4 w-4" /> Channels
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-2 pt-2">
           {isLoading ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-black/30 dark:text-white/30">
               <Loader2 className="h-7 w-7 animate-spin" />
@@ -1366,6 +1622,7 @@ export default function ConversationsInbox() {
                 active={c.id === selectedId}
                 onClick={() => setSelectedId(c.id)}
                 draftPreview={draftTags[c.id]}
+                inboxName={c.inboxId ? inboxNameById.get(c.inboxId) : undefined}
               />
             ))
           )}
@@ -1399,19 +1656,22 @@ export default function ConversationsInbox() {
       </Card>
 
       {/* ── Thread ── */}
-      <Card className="glass ringed grain flex flex-col overflow-hidden rounded-3xl p-0">
+      <Card className="flex flex-col overflow-hidden rounded-none border-0 bg-white p-0 shadow-none dark:bg-white/[0.04]">
         {selected ? (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/8 px-5 py-3 dark:border-white/8">
               <div className="flex min-w-0 items-center gap-3">
-                <ChannelAvatar conversation={selected} size="sm" />
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-base font-bold">{selected.contact.displayName}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="truncate text-lg font-bold">{selected.contact.displayName}</span>
+                    <LinkedClientPhonePill conversation={selected} />
                   </div>
-                  <span className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", CHANNELS[selected.channel].chip)}>
-                    {selected.assignee ?? CHANNELS[selected.channel].label}
-                  </span>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span className={cn("inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold", CHANNELS[selected.channel].chip)}>
+                      {CHANNELS[selected.channel].label}
+                    </span>
+                    <ConversationTypeControl conversation={selected} />
+                  </div>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -1424,12 +1684,11 @@ export default function ConversationsInbox() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button
-                        className="flex items-center gap-1.5 rounded-xl border border-black/8 px-3 py-1.5 text-xs font-medium text-black/70 transition hover:bg-black/[0.03] dark:border-white/8 dark:text-white/70 dark:hover:bg-white/[0.04]"
+                        className="grid h-10 w-10 place-items-center rounded-lg border border-black/10 text-black/55 transition hover:bg-black/[0.03] hover:text-black dark:border-white/10 dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
+                        title="Snooze"
                         data-testid="conversation-snooze"
                       >
-                        <AlarmClock className="h-3.5 w-3.5" />
-                        Snooze
-                        <ChevronDown className="h-3 w-3" />
+                        <AlarmClock className="h-4 w-4" />
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -1456,7 +1715,7 @@ export default function ConversationsInbox() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 border-b border-black/8 px-5 py-2 dark:border-white/8">
+            <div className="flex flex-wrap items-center gap-2 border-b border-black/[0.06] px-6 py-2 dark:border-white/[0.06]">
               {selected.tags?.map((t) => (
                 <TagChip key={t.id} tag={t} />
               ))}
@@ -1468,8 +1727,11 @@ export default function ConversationsInbox() {
             <div
               ref={threadScrollRef}
               onScroll={handleThreadScroll}
-              className="flex-1 space-y-4 overflow-y-auto px-5 py-5"
+              className="flex-1 space-y-5 overflow-y-auto px-6 py-6"
             >
+              <div className="flex justify-center">
+                <ChannelLogo channel={selected.channel} />
+              </div>
               {messagesLoading && threadMessages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-black/30 dark:text-white/30">
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -1535,7 +1797,7 @@ export default function ConversationsInbox() {
       {selected ? (
         <ContactPanel conversation={selected} />
       ) : (
-        <Card className="glass ringed grain hidden rounded-3xl xl:block" />
+        <Card className="hidden rounded-none border-0 border-l border-black/10 bg-white shadow-none dark:border-white/10 dark:bg-white/[0.04] xl:block" />
       )}
 
       {canManageChannels && <ChannelsDialog open={channelsOpen} onOpenChange={setChannelsOpen} />}

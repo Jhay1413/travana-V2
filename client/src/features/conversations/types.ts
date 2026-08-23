@@ -50,6 +50,8 @@ export interface ConversationMessage {
   /** Set for outbound messages sent by a teammate. */
   authorName?: string;
   authorAvatarUrl?: string;
+  /** Outbound reply authored by the Luna AI (reply worker), not a person. */
+  isAi?: boolean;
   read?: boolean;
   /** Internal note (not sent to the contact) — rendered distinctly. */
   isNote?: boolean;
@@ -81,5 +83,9 @@ export interface Conversation {
   /** ISO timestamp the snooze expires, when snoozed. */
   snoozedUntil?: string | null;
   tags?: ConversationTag[];
+  /** SendSeven inbox this conversation belongs to (list row category line). */
+  inboxId?: string | null;
+  /** Agent-chosen classification, persisted on our side. */
+  conversationType?: "sales" | "admin" | null;
   messages: ConversationMessage[];
 }

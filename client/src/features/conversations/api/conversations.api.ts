@@ -46,6 +46,8 @@ export interface SsConversation {
   active_contact_method?: SsContactMethodInfo | null;
   assigned_user_id?: string | null;
   assigned_user?: Record<string, unknown> | null;
+  /** Platform-side classification (overlaid by our API): "sales" | "admin". */
+  conversation_type?: "sales" | "admin" | null;
   subject?: string | null;
   last_message_at?: string | null;
   last_message?: SsLastMessagePreview | null;
@@ -131,6 +133,7 @@ export interface ConversationCreate {
 export interface ConversationUpdate {
   status?: ConversationStatus | null;
   assigned_user_id?: string | null;
+  conversation_type?: "sales" | "admin" | null;
   subject?: string | null;
   notes?: string | null;
   needs_reply?: boolean | null;

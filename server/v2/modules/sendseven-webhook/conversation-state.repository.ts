@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../config/database";
 import { sendsevenConversationState, type SendsevenConversationState } from "@shared/schema";
 import type { HandoffReason } from "./sendseven-webhook.types";
@@ -29,9 +29,20 @@ export const conversationStateRepository = {
   },
 
   async update(conversationId: string, data: Partial<SendsevenConversationState>): Promise<void> {
+    // The AI owns the initial conversation type: every time the brain commits
+    // an intent, derive Sales (enquiry) / Admin (other) from it. COALESCE keeps
+    // any value already on the row, so an agent's manual choice in the inbox
+    // header (or an earlier AI classification) is never overwritten.
+    const derivedType = data.intent === "enquiry" ? "sales" : data.intent === "other" ? "admin" : null;
     await db
       .update(sendsevenConversationState)
-      .set({ ...data, updatedAt: new Date() })
+      .set({
+        ...data,
+        ...(derivedType && data.conversationType === undefined
+          ? { conversationType: sql`COALESCE(${sendsevenConversationState.conversationType}, ${derivedType})` }
+          : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(sendsevenConversationState.conversationId, conversationId));
   },
 

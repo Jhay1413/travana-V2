@@ -4,7 +4,8 @@ import { userRepository } from "../user/user.repository";
 import { AppError } from "../../utils/error-handler";
 import { realtimeService } from "../../realtime/realtime.service";
 import { conversationsRepository } from "./conversations.repository";
-import { conversationsAssignmentRepository, type AssignedUserInfo } from "./conversations-assignment.repository";
+import { conversationsAssignmentRepository, type ConversationType, type LocalConversationState } from "./conversations-assignment.repository";
+import { AppError } from "../../utils/error-handler";
 import type { ListConversationsParams, SsBadgeCounts, SsConversation, SsConversationList } from "./conversations.types";
 
 // Fans a state change out to every agent in the org over SSE so their inbox
@@ -28,15 +29,23 @@ function publishUpdated(orgId: string, conversationId: string): void {
 // conversation payload here, in the same shape SendSeven would use
 // (assigned_user_id + assigned_user{id,name}) so the client mapping is unchanged.
 
-function stampAssignment(conversation: SsConversation, assignee: AssignedUserInfo | null | undefined): SsConversation {
+function stampAssignment(conversation: SsConversation, state: LocalConversationState | null | undefined): SsConversation {
+  const assignee = state?.assignee ?? null;
   conversation.assigned_user_id = assignee?.id ?? null;
   conversation.assigned_user = assignee ? { id: assignee.id, name: assignee.name } : null;
+  conversation.conversation_type = state?.conversationType ?? null;
   return conversation;
 }
 
 async function overlayOne(orgId: string, conversation: SsConversation): Promise<SsConversation> {
-  const assignee = await conversationsAssignmentRepository.get(orgId, conversation.id);
-  return stampAssignment(conversation, assignee);
+  const state = await conversationsAssignmentRepository.get(orgId, conversation.id);
+  return stampAssignment(conversation, state);
+}
+
+function parseConversationType(v: unknown): ConversationType | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (v === "sales" || v === "admin") return v;
+  throw new AppError('conversation_type must be "sales", "admin" or null', 400);
 }
 
 async function overlayList(orgId: string, list: SsConversationList): Promise<SsConversationList> {
@@ -112,12 +121,14 @@ export const conversationsService = {
   create: (body: unknown) => conversationsRepository.create(body),
 
   async update(orgId: string, id: string, body: Record<string, unknown>) {
-    // assigned_user_id is OURS — intercept it, write locally, and forward the
-    // rest (if any) to SendSeven.
-    const { assigned_user_id, ...rest } = body;
-    const hasLocalAssignment = "assigned_user_id" in body;
-    if (hasLocalAssignment) {
+    // assigned_user_id and conversation_type are OURS — intercept them, write
+    // locally, and forward the rest (if any) to SendSeven.
+    const { assigned_user_id, conversation_type, ...rest } = body;
+    if ("assigned_user_id" in body) {
       await conversationsAssignmentRepository.set(orgId, id, (assigned_user_id as string | null) ?? null);
+    }
+    if ("conversation_type" in body) {
+      await conversationsAssignmentRepository.setType(orgId, id, parseConversationType(conversation_type));
     }
     const result =
       Object.keys(rest).length > 0
@@ -145,7 +156,7 @@ export const conversationsService = {
   async autoAssignReplier(orgId: string, conversationId: string, travanaUserId: string): Promise<void> {
     try {
       const current = await conversationsAssignmentRepository.get(orgId, conversationId);
-      if (current) return;
+      if (current?.assignee) return;
       await conversationsAssignmentRepository.set(orgId, conversationId, travanaUserId);
       publishUpdated(orgId, conversationId);
     } catch (err) {

@@ -1,3 +1,4 @@
+import lunaImg from "@assets/Luna-Platform-600-Final_1780477526775.png";
 import { useEffect, useRef, useState } from "react";
 import { Paperclip, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -162,20 +163,47 @@ export function MessageBubble({ message, conversation }: { message: Conversation
     );
   }
 
+  // Design: wide soft bubbles with the sender's avatar tucked over the outer
+  // top corner and the time sitting inside the bubble's bottom-right.
+  const avatar = outbound ? (
+    message.isAi ? (
+      <span
+        className="block h-10 w-10 overflow-hidden rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 ring-2 ring-white dark:ring-[#0b0b0f]"
+        title="Luna (AI)"
+      >
+        <img src={lunaImg} alt="Luna" className="h-full w-full scale-[1.55] object-cover object-[50%_8%]" />
+      </span>
+    ) : message.authorAvatarUrl ? (
+      <img
+        src={message.authorAvatarUrl}
+        alt=""
+        title={message.authorName}
+        className="h-10 w-10 rounded-full object-cover ring-2 ring-white dark:ring-[#0b0b0f]"
+      />
+    ) : (
+      <span
+        className="grid h-10 w-10 place-items-center rounded-full bg-emerald-500 text-[11px] font-bold text-white ring-2 ring-white dark:ring-[#0b0b0f]"
+        title={message.authorName}
+      >
+        {message.authorName ? initials(message.authorName) : <ChannelIcon className="h-4 w-4" />}
+      </span>
+    )
+  ) : (
+    <span className="grid h-10 w-10 place-items-center rounded-full bg-indigo-500 text-[11px] font-bold text-white ring-2 ring-white dark:ring-[#0b0b0f]">
+      {initials(conversation.contact.displayName)}
+    </span>
+  );
+
   return (
-    <div className={cn("flex items-end gap-2", outbound ? "justify-end" : "justify-start")}>
-      {!outbound && (
-        <div className={cn("grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-gradient-to-br text-[11px] font-semibold text-white", gradientFor(conversation.contact.id))}>
-          {initials(conversation.contact.displayName)}
-        </div>
-      )}
-      <div className={cn("max-w-[70%]", outbound && "flex flex-col items-end")}>
+    <div className={cn("flex", outbound ? "justify-end pr-3" : "justify-start pl-3")}>
+      <div className="relative max-w-[64%] pt-3">
+        <span className={cn("absolute top-0 z-10", outbound ? "-right-3" : "-left-3")}>{avatar}</span>
         <div
           className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
+            "rounded-xl px-6 pb-2 pt-5 text-[15px] leading-relaxed",
             outbound
-              ? "rounded-br-md bg-[#dcf37a] text-black dark:bg-[#c7e85f]/90"
-              : "rounded-bl-md bg-white text-black/85 ring-1 ring-black/5 dark:bg-white/[0.08] dark:text-white/90 dark:ring-white/10",
+              ? "rounded-tr-none bg-sky-100 text-black/85 dark:bg-sky-500/15 dark:text-white/90"
+              : "rounded-tl-none bg-slate-200/70 text-black/85 dark:bg-white/[0.08] dark:text-white/90",
           )}
         >
           {message.body && <p className="whitespace-pre-wrap">{message.body}</p>}
@@ -192,14 +220,9 @@ export function MessageBubble({ message, conversation }: { message: Conversation
               <div className="text-center text-sm font-semibold text-black">{message.cta.label}</div>
             </>
           )}
+          <div className="mt-2 text-right text-xs text-black/45 dark:text-white/45">{clockTime(message.sentAt)}</div>
         </div>
-        <span className="mt-1 px-1 text-[10px] text-black/40 dark:text-white/40">{clockTime(message.sentAt)}</span>
       </div>
-      {outbound && (
-        <div className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-emerald-500/90 text-[11px] font-semibold text-white">
-          <ChannelIcon className="h-3.5 w-3.5" />
-        </div>
-      )}
     </div>
   );
 }
@@ -227,7 +250,7 @@ export function groupMessagesByDay(messages: ConversationMessage[]): MessageDayG
 export function DayDivider({ label }: { label: string }) {
   return (
     <div className="flex justify-center">
-      <span className="rounded-full bg-black/[0.04] px-3 py-1 text-[10px] font-medium text-black/40 dark:bg-white/[0.06] dark:text-white/40">
+      <span className="rounded-lg border border-black/15 bg-white px-6 py-1.5 text-sm text-black/50 dark:border-white/15 dark:bg-transparent dark:text-white/50">
         {label}
       </span>
     </div>
