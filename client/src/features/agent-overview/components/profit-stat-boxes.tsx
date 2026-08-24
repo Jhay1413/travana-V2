@@ -86,7 +86,7 @@ export function ProfitStatBoxes({
           {currency.format(profitStats.monthProfit)}
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
-          <span className="font-semibold text-amber-500">{profitStats.bookingsCount}</span>{" "}
+          <span className="font-semibold text-[#fe9a00]">{profitStats.bookingsCount}</span>{" "}
           Bookings this Month
         </p>
       </StatCard>
@@ -101,7 +101,7 @@ export function ProfitStatBoxes({
             data-testid="progress-bar-target"
           >
             <div
-              className="h-full rounded-full bg-amber-500 transition-all duration-700 ease-out"
+              className="h-full rounded-full bg-[#fe9a00] transition-all duration-700 ease-out"
               style={{ width: `${Math.min(pct, 100)}%` }}
             />
           </div>
@@ -109,7 +109,7 @@ export function ProfitStatBoxes({
         </div>
       </StatCard>
 
-      <StatCard label="Run To Target" icon={BadgePoundSterling} iconClass="text-red-500" testId="stat-box-run-to-target">
+      <StatCard label="Run To Target" icon={BadgePoundSterling} iconClass="text-[#ff0015]" testId="stat-box-run-to-target">
         <p
           className="mt-2 flex flex-wrap items-baseline gap-x-1 text-2xl font-bold tracking-tight"
           data-testid="stat-value-run-to-target"
@@ -119,7 +119,7 @@ export function ProfitStatBoxes({
             / {currency.format(target)}
           </span>
         </p>
-        <p className="mt-2 text-xs font-semibold text-red-500">
+        <p className="mt-2 text-xs font-semibold text-[#ff0015]">
           {bookingsToTarget > 0 && ppb > 0
             ? `${bookingsToTarget} Bookings at ${currency.format(ppb)}ppb`
             : "Target reached"}

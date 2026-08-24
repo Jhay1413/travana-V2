@@ -109,7 +109,7 @@ export function AppHeader() {
           }}
           onFocus={() => query.trim() && setShowSearchResults(true)}
           placeholder="Search Travana"
-          className="h-9 rounded-lg border-transparent bg-[#46586F] pl-10 text-sm text-white placeholder:text-white/70 focus-visible:ring-1 focus-visible:ring-white/40 focus-visible:ring-offset-0"
+          className="h-9 rounded-sm border-transparent bg-[#46586F] pl-10 text-sm text-white placeholder:text-white/70 focus-visible:ring-1 focus-visible:ring-white/40 focus-visible:ring-offset-0"
           data-testid="header-search"
         />
 

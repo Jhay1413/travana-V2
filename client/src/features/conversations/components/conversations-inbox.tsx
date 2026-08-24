@@ -46,6 +46,7 @@ import {
   StickyNote,
   ArrowLeftRight,
   Unlink,
+  Unplug,
   Pin,
   Link,
   Share2,
@@ -241,12 +242,13 @@ function rowTime(iso: string): string {
   return dayLabel(iso);
 }
 
-// Category icon for the inbox line: Sales → £ badge, Admin → shield (Icons.txt).
-function inboxIconFor(name: string): typeof Mailbox {
+// Category icon + colour for the inbox line (Fonts and Icons.txt, Messages):
+// Sales → £ badge #b3b3b3, Admin → shield #808080.
+function inboxIconFor(name: string): { Icon: typeof Mailbox; className: string } {
   const n = name.toLowerCase();
-  if (n.includes("sales")) return BadgePoundSterling;
-  if (n.includes("admin")) return ShieldCheck;
-  return Mailbox;
+  if (n.includes("sales")) return { Icon: BadgePoundSterling, className: "text-[#b3b3b3]" };
+  if (n.includes("admin")) return { Icon: ShieldCheck, className: "text-[#808080]" };
+  return { Icon: Mailbox, className: "text-black/45 dark:text-white/45" };
 }
 
 function ConversationRow({
@@ -269,7 +271,7 @@ function ConversationRow({
   const categoryLabel = conversation.conversationType
     ? CONVERSATION_TYPE_LABELS[conversation.conversationType]
     : inboxName;
-  const InboxIcon = categoryLabel ? inboxIconFor(categoryLabel) : null;
+  const category = categoryLabel ? inboxIconFor(categoryLabel) : null;
   return (
     <button
       onClick={onClick}
@@ -287,8 +289,8 @@ function ConversationRow({
           <div className="flex items-center justify-between gap-2">
             <span
               className={cn(
-                "truncate text-sm",
-                conversation.unread ? "font-bold text-black dark:text-white" : "font-bold text-black/85 dark:text-white/85",
+                "truncate text-[17px]",
+                conversation.unread ? "font-semibold text-black dark:text-white" : "font-medium text-black/85 dark:text-white/85",
               )}
             >
               {conversation.contact.displayName}
@@ -300,16 +302,16 @@ function ConversationRow({
               </span>
             </span>
           </div>
-          {categoryLabel && InboxIcon && (
-            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-black/50 dark:text-white/50" data-testid={`conversation-type-${conversation.id}`}>
-              <InboxIcon className="h-3.5 w-3.5 shrink-0 text-black/45 dark:text-white/45" />
+          {categoryLabel && category && (
+            <div className="mt-0.5 flex items-center gap-1.5 text-[13px] text-[#a195a5] dark:text-white/50" data-testid={`conversation-type-${conversation.id}`}>
+              <category.Icon className={cn("h-4 w-4 shrink-0", category.className)} />
               <span className="truncate">{categoryLabel}</span>
             </div>
           )}
         </div>
       </div>
       <div className="mt-1.5 flex items-center gap-3">
-        <span className="w-9 shrink-0 text-center text-[10px] tracking-[0.2em] text-black/30 dark:text-white/30" aria-hidden>
+        <span className="w-9 shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 dark:text-white/30" aria-hidden>
           ···
         </span>
         {draftPreview ? (
@@ -317,10 +319,10 @@ function ConversationRow({
             <span className="shrink-0 rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
               Draft
             </span>
-            <span className="truncate text-black/50 dark:text-white/50">{draftPreview}</span>
+            <span className="truncate text-[13px] text-[#a195a5] dark:text-white/50">{draftPreview}</span>
           </span>
         ) : (
-          <span className="truncate text-xs text-black/50 dark:text-white/50">{conversation.preview}</span>
+          <span className="truncate text-[13px] text-[#a195a5] dark:text-white/50">{conversation.preview}</span>
         )}
       </div>
       {!active && (
@@ -340,7 +342,7 @@ function ConversationTypeControl({ conversation }: { conversation: Conversation 
   const { toast } = useToast();
   const update = useUpdateConversation();
   const current = conversation.conversationType ?? null;
-  const Icon = current ? inboxIconFor(CONVERSATION_TYPE_LABELS[current]) : Tag;
+  const Icon = current ? inboxIconFor(CONVERSATION_TYPE_LABELS[current]).Icon : Tag;
 
   const setType = (type: "sales" | "admin" | null) =>
     update.mutate(
@@ -454,7 +456,7 @@ function AssignControl({ conversation }: { conversation: Conversation }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex h-10 items-center gap-1.5 rounded-lg px-1.5 text-sm text-black/60 transition hover:bg-black/[0.03] dark:text-white/60 dark:hover:bg-white/[0.04]"
+          className="flex h-10 items-center gap-1.5 rounded-md px-1.5 text-sm text-black/60 transition hover:bg-black/[0.03] dark:text-white/60 dark:hover:bg-white/[0.04]"
           title={conversation.assignee ? `Assigned to ${conversation.assignee}` : "Assign"}
           data-testid="conversation-assign"
         >
@@ -531,7 +533,7 @@ function ClientField({ label, icon: Icon, value }: { label: string; icon: typeof
     <div>
       <div className="text-xs text-black/45 dark:text-white/45">{label}</div>
       <div className="mt-1 flex items-center gap-2.5">
-        <Icon className="h-4 w-4 shrink-0 text-red-500" strokeWidth={1.75} />
+        <Icon className="h-4 w-4 shrink-0 text-[#ff0000]" strokeWidth={1.25} />
         <span className="truncate text-base font-bold">{value}</span>
       </div>
     </div>
@@ -575,7 +577,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   return (
     <Card className="flex flex-col overflow-hidden rounded-none border-0 border-l border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
       <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-6 dark:border-white/10">
-        <h2 className="text-base font-bold">Client Details</h2>
+        <h2 className="text-[17px] font-semibold">Client Details</h2>
       </div>
 
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -593,10 +595,10 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
                     onClick={unlink}
                     disabled={unlinkContact.isPending}
                     title="Unlink this client"
-                    className="text-red-500 transition hover:text-red-600 disabled:opacity-50"
+                    className="text-[#ff0000] transition hover:text-red-600 disabled:opacity-50"
                     data-testid="client-unlink"
                   >
-                    {unlinkContact.isPending ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Unlink className="h-4.5 w-4.5" />}
+                    {unlinkContact.isPending ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Unplug className="h-4.5 w-4.5" strokeWidth={1.25} />}
                   </button>
                 </div>
               </div>
@@ -956,7 +958,7 @@ function Composer({
               type="button"
               onClick={() => setMode(mode === "note" ? "reply" : "note")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm transition hover:bg-black/5 dark:hover:bg-white/10",
+                "flex items-center gap-1.5 rounded-sm px-1.5 py-1 text-sm transition hover:bg-black/5 dark:hover:bg-white/10",
                 mode === "note" ? "font-semibold text-amber-600 dark:text-amber-300" : "hover:text-black dark:hover:text-white",
               )}
               title={mode === "note" ? "Switch back to reply" : "Write an internal note (not sent to the contact)"}
@@ -971,7 +973,7 @@ function Composer({
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="grid h-8 w-8 place-items-center rounded-md transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"
+                  className="grid h-8 w-8 place-items-center rounded-sm transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"
                   title="Insert emoji"
                   data-testid="conversation-composer-emoji"
                 >
@@ -1007,7 +1009,7 @@ function Composer({
               onClick={() => fileInputRef.current?.click()}
               disabled={!canAttach}
               title={canAttach ? "Attach a file" : "Attachments aren't supported on internal notes"}
-              className="grid h-8 w-8 place-items-center rounded-md transition hover:bg-black/5 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
+              className="grid h-8 w-8 place-items-center rounded-sm transition hover:bg-black/5 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
               data-testid="conversation-composer-attach"
             >
               <Paperclip className="h-4.5 w-4.5" />
@@ -1017,7 +1019,7 @@ function Composer({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="grid h-8 w-8 place-items-center rounded-md transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"
+                  className="grid h-8 w-8 place-items-center rounded-sm transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"
                   title="More"
                   data-testid="composer-more"
                 >
@@ -1051,7 +1053,7 @@ function Composer({
             disabled={(!text.trim() && ready.length === 0) || uploading || sending}
             variant="outline"
             title={uploading ? "Waiting for the upload to finish…" : undefined}
-            className="h-10 shrink-0 gap-2 rounded-lg border-black/10 bg-black/[0.02] px-4 text-sm font-medium text-black/60 hover:bg-black/5 hover:text-black disabled:opacity-40 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/70"
+            className="h-10 shrink-0 gap-2 rounded-md border-black/10 bg-black/[0.02] px-4 text-sm font-medium text-black/60 hover:bg-black/5 hover:text-black disabled:opacity-40 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/70"
             data-testid="conversation-send"
           >
             {sending || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
@@ -1072,7 +1074,7 @@ function HeaderAction({ icon: Icon, label, onClick }: { icon: typeof User; label
       onClick={onClick}
       title={label}
       aria-label={label}
-      className="grid h-10 w-10 place-items-center rounded-lg border border-black/10 text-black/55 transition hover:bg-black/[0.03] hover:text-black dark:border-white/10 dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
+      className="grid h-10 w-10 place-items-center rounded-md border border-black/10 text-black/55 transition hover:bg-black/[0.03] hover:text-black dark:border-white/10 dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
     >
       <Icon className="h-4 w-4" />
     </button>
@@ -1451,20 +1453,20 @@ export default function ConversationsInbox() {
 
   return (
     <section
-      className="-m-4 grid h-[calc(100vh-3.5rem)] gap-0 md:-m-6"
+      className="-m-4 grid h-[calc(100vh-3.5rem)] gap-0 overflow-hidden rounded-tl-lg md:-m-6"
       style={{ gridTemplateColumns: "320px 1fr 300px" }}
       data-testid="section-conversations"
     >
       {/* ── Conversation list ── */}
       <Card className="flex flex-col overflow-hidden rounded-none border-0 border-r border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
         <div className="flex h-[76px] shrink-0 items-center justify-between gap-2 border-b border-black/10 px-5 dark:border-white/10">
-          <h2 className="text-base font-bold">Inbox</h2>
+          <h2 className="text-[17px] font-semibold">Inbox</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setSearchOpen((v) => !v)}
               className={cn(
-                "grid h-8 w-8 place-items-center rounded-full border transition",
+                "grid h-8 w-8 place-items-center rounded-md border transition",
                 searchOpen
                   ? "border-black/20 bg-black/5 text-black dark:border-white/20 dark:bg-white/10 dark:text-white"
                   : "border-black/10 bg-white text-black/70 hover:bg-black/[0.03] dark:border-white/15 dark:bg-transparent dark:text-white/70",
@@ -1476,7 +1478,7 @@ export default function ConversationsInbox() {
             </button>
             <button
               type="button"
-              className="grid h-8 w-8 place-items-center rounded-full bg-sky-500 text-white transition hover:bg-sky-600"
+              className="grid h-8 w-8 place-items-center rounded-md bg-sky-500 text-white transition hover:bg-sky-600"
               title="New message"
               data-testid="conversation-compose"
             >
@@ -1508,10 +1510,10 @@ export default function ConversationsInbox() {
                 key={t}
                 onClick={() => setTab(t)}
                 className={cn(
-                  "flex-1 rounded-xs px-2 py-2 text-center text-xs transition",
+                  "flex-1 rounded-xs px-2 py-2 text-center text-sm font-semibold transition",
                   tab === t
-                    ? "border border-black/10 bg-white font-bold text-black shadow-sm dark:border-white/15 dark:bg-white/15 dark:text-white"
-                    : "font-semibold text-slate-500 hover:text-slate-700 dark:text-white/45 dark:hover:text-white/70",
+                    ? "border border-black/10 bg-white text-black shadow-sm dark:border-white/15 dark:bg-white/15 dark:text-white"
+                    : "text-[#7c98b0] hover:text-[#5f7d97] dark:text-white/45 dark:hover:text-white/70",
                 )}
                 data-testid={`inbox-tab-${t}`}
               >
@@ -1525,7 +1527,7 @@ export default function ConversationsInbox() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-slate-700 dark:text-white/60 dark:hover:text-white"
+                className="flex items-center gap-1 text-sm font-semibold text-[#7c98b0] hover:text-[#5f7d97] dark:text-white/60 dark:hover:text-white"
                 data-testid="conversation-sort"
               >
                 {sortOrder === "newest" ? "Newest" : "Oldest"}
@@ -1548,8 +1550,8 @@ export default function ConversationsInbox() {
               <DropdownMenuTrigger asChild>
                 <button
                   className={cn(
-                    "grid h-7 w-7 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10",
-                    inboxId ? "text-sky-600" : "text-slate-500 dark:text-white/60",
+                    "grid h-7 w-7 place-items-center rounded-md transition hover:bg-black/5 dark:hover:bg-white/10",
+                    inboxId ? "text-sky-600" : "text-[#7c98b0] dark:text-white/60",
                   )}
                   title={activeInbox?.name ?? "All Messages"}
                   data-testid="conversation-inbox-switcher"
@@ -1589,7 +1591,7 @@ export default function ConversationsInbox() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="grid h-7 w-7 place-items-center rounded-full text-slate-500 transition hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+                  className="grid h-7 w-7 place-items-center rounded-md text-[#7c98b0] transition hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
                   title="More"
                   data-testid="conversation-list-more"
                 >
@@ -1687,7 +1689,7 @@ export default function ConversationsInbox() {
               <div className="flex min-w-0 items-center gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
-                    <span className="truncate text-lg font-bold">{selected.contact.displayName}</span>
+                    <span className="truncate text-[17px] font-semibold">{selected.contact.displayName}</span>
                     <LinkedClientPhonePill conversation={selected} />
                   </div>
                   <div className="mt-1 flex items-center gap-1.5">
@@ -1718,7 +1720,7 @@ export default function ConversationsInbox() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      className="grid h-10 w-10 place-items-center rounded-lg text-black/55 transition hover:bg-black/[0.03] hover:text-black dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
+                      className="grid h-10 w-10 place-items-center rounded-md text-black/55 transition hover:bg-black/[0.03] hover:text-black dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
                       title="More actions"
                       data-testid="conversation-more"
                     >

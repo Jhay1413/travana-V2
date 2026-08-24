@@ -12,17 +12,17 @@ type Stage = "in_play" | "quote" | "enquiry";
 const STAGE_BADGE: Record<Stage, { label: string; className: string; icon: React.ElementType }> = {
   in_play: {
     label: "In-Play",
-    className: "border border-amber-400 bg-amber-50 text-amber-500 dark:bg-amber-500/10",
+    className: "border border-[#fe9a00] bg-[#fe9a00]/10 text-[#fe9a00]",
     icon: CircleStar,
   },
   quote: {
     label: "Quoted",
-    className: "bg-blue-500 text-white",
+    className: "bg-[#3d8ede] text-white",
     icon: Landmark,
   },
   enquiry: {
     label: "Enquiry",
-    className: "bg-emerald-500 text-white",
+    className: "bg-[#63ae55] text-white",
     icon: SquarePlus,
   },
 };
@@ -66,7 +66,7 @@ export function PipelineSection({ userId }: { userId: string }) {
 
   return (
     <DashboardCard className="min-w-0" testId="card-dashboard-pipeline">
-      <div className="text-base font-semibold">Pipeline</div>
+      <div className="text-[17px] font-semibold">Pipeline</div>
 
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[440px] border-collapse text-left">
@@ -110,7 +110,7 @@ export function PipelineSection({ userId }: { userId: string }) {
                     <td className="py-2.5 pr-2">
                       <span className="flex items-center gap-2 min-w-0">
                         <InitialsAvatar name={clientName} solid className="h-7 w-7" />
-                        <span className="truncate text-sm font-semibold">{clientName}</span>
+                        <span className="truncate text-[17px] font-medium">{clientName}</span>
                         <span className="shrink-0 text-[10px] text-black/40 dark:text-white/40">
                           {timeAgo(t.created_at)}
                         </span>

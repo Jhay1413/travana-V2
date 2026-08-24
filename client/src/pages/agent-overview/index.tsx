@@ -81,7 +81,7 @@ export default function AgentOverviewPage() {
         <div className="grid gap-4 min-w-0 xl:grid-cols-[1.55fr_.7fr]">
           <DashboardCard className="min-w-0" testId="card-agent-dashboard">
             <div className="flex items-start justify-between gap-2">
-              <div className="text-base font-semibold" data-testid="text-overview-title">
+              <div className="text-[17px] font-semibold" data-testid="text-overview-title">
                 Agent Dashboard
               </div>
               <button

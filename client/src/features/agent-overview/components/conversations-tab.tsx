@@ -149,13 +149,13 @@ export function ConversationsTab() {
                 <ChannelIcon channelType={c.channel_type} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="truncate text-base font-bold">{name}</span>
-                    <span className="shrink-0 text-xs font-semibold text-amber-500">
+                    <span className="truncate text-[17px] font-medium">{name}</span>
+                    <span className="shrink-0 text-xs font-semibold text-[#fe9a00]">
                       - {inboxTime(c.last_message_at || c.created_at)}
                     </span>
                   </div>
                   {preview && (
-                    <div className="mt-0.5 truncate pl-2 text-sm text-black/40 dark:text-white/40">
+                    <div className="mt-0.5 truncate pl-2 text-[13px] text-[#a195a5] dark:text-white/40">
                       {preview}
                     </div>
                   )}
@@ -199,7 +199,7 @@ export function ConversationsTab() {
       <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/5">
         <Link
           href="/conversations"
-          className="text-sm font-semibold text-amber-500 hover:underline"
+          className="text-sm font-semibold text-[#fe9a00] hover:underline"
           data-testid="link-view-all-conversations"
         >
           Open Inbox

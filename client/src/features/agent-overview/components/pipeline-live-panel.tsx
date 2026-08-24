@@ -108,7 +108,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
     <div className={className} data-testid="panel-pipeline-live">
       {/* Horizontal padding lives on the sections, not the panel, so the
           separator under the title spans the full panel width. */}
-      <div className="px-5 text-base font-bold">Pipeline Live!</div>
+      <div className="px-5 text-[17px] font-semibold">Pipeline Live!</div>
 
       <div className="mt-4 border-t border-black/10 px-5 pt-4 dark:border-white/10">
         <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} testIdPrefix="pipeline-live-tab" fullWidth transparent />
@@ -149,14 +149,14 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
                     navigate(dealHref(t, tab));
                   }
                 }}
-                className="cursor-pointer rounded-lg p-3 transition hover:bg-sky-50 dark:hover:bg-white/[0.05]"
+                className="cursor-pointer rounded-lg p-3 transition hover:bg-[#e9f8ff] dark:hover:bg-white/[0.05]"
                 data-testid={`card-pipeline-live-${t.id}`}
               >
                 <div className="flex items-start gap-3">
                   <OperatorChip name={operator} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-bold">{title}</span>
+                      <span className="truncate text-[17px] font-medium">{title}</span>
                       {value > 0 && (
                         <span className="shrink-0 text-sm font-semibold text-black/60 dark:text-white/60">
                           {currency.format(value)}
@@ -164,7 +164,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
                       )}
                     </div>
                     {location && (
-                      <div className="mt-0.5 truncate text-xs text-black/50 dark:text-white/50">
+                      <div className="mt-0.5 truncate text-[13px] text-[#a195a5] dark:text-white/50">
                         {location}
                       </div>
                     )}
