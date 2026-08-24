@@ -46,6 +46,9 @@ import {
   StickyNote,
   ArrowLeftRight,
   Unlink,
+  Pin,
+  Link,
+  Share2,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,6 +60,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn, clientDisplayName } from "@/lib/utils";
@@ -522,10 +529,10 @@ function DetailField({ label, value, icon: Icon }: { label: string; value: strin
 function ClientField({ label, icon: Icon, value }: { label: string; icon: typeof User; value: string }) {
   return (
     <div>
-      <div className="text-sm text-black/45 dark:text-white/45">{label}</div>
+      <div className="text-xs text-black/45 dark:text-white/45">{label}</div>
       <div className="mt-1 flex items-center gap-2.5">
-        <Icon className="h-5 w-5 shrink-0 text-red-500" strokeWidth={1.75} />
-        <span className="truncate text-lg font-bold">{value}</span>
+        <Icon className="h-4 w-4 shrink-0 text-red-500" strokeWidth={1.75} />
+        <span className="truncate text-base font-bold">{value}</span>
       </div>
     </div>
   );
@@ -567,18 +574,18 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
 
   return (
     <Card className="flex flex-col overflow-hidden rounded-none border-0 border-l border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
-      <div className="border-b border-black/10 px-6 py-6 dark:border-white/10">
-        <h2 className="text-lg font-bold">Client Details</h2>
+      <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-6 dark:border-white/10">
+        <h2 className="text-base font-bold">Client Details</h2>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="space-y-5 border-b border-black/10 px-6 py-5 dark:border-white/10">
           {client ? (
             <>
               <div className="flex items-start justify-between gap-3">
                 <ClientField label="Name" icon={User} value={clientDisplayName(client)} />
                 <div className="flex shrink-0 items-center gap-2 pt-0.5">
-                  <span className="rounded-md bg-emerald-500 px-2.5 py-0.5 text-[11px] font-semibold text-white" data-testid="client-linked-badge">
+                  <span className="rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white" data-testid="client-linked-badge">
                     Linked
                   </span>
                   <button
@@ -615,15 +622,15 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
             className="flex w-full items-center justify-between px-6 py-5 text-left"
             data-testid="client-notes-toggle"
           >
-            <span className="text-base font-bold">Notes</span>
-            <ChevronRight className={cn("h-5 w-5 text-black/50 transition dark:text-white/50", notesOpen && "rotate-90")} />
+            <span className="text-sm font-bold">Notes</span>
+            <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", notesOpen && "rotate-90")} />
           </button>
           {notesOpen && (
             <div className="space-y-3 px-6 pb-5" data-testid="client-notes">
               {!client ? (
-                <p className="text-sm text-black/45 dark:text-white/45">Link this conversation to a client to see their notes.</p>
+                <p className="text-xs text-black/45 dark:text-white/45">Link this conversation to a client to see their notes.</p>
               ) : notes.length === 0 ? (
-                <p className="text-sm text-black/45 dark:text-white/45">No notes on this client yet.</p>
+                <p className="text-xs text-black/45 dark:text-white/45">No notes on this client yet.</p>
               ) : (
                 notes.map((n) => (
                   <div key={n.id} className="rounded-lg border border-black/10 p-3 dark:border-white/10">
@@ -631,7 +638,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
                       <span className="truncate font-semibold">{n.author_name || "Note"}</span>
                       <span className="shrink-0">{formatClientDate(n.createdAt)}</span>
                     </div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-black/80 dark:text-white/80">
+                    <p className="mt-1 whitespace-pre-wrap text-xs text-black/80 dark:text-white/80">
                       {stripHtml(n.content || n.description || "")}
                     </p>
                   </div>
@@ -1149,6 +1156,7 @@ export default function ConversationsInbox() {
   const unreadCount = unreadBadgeCount(badges);
   const qc = useQueryClient();
   const snoozeMutation = useSnoozeConversation();
+  const { toast } = useToast();
   const unsnoozeMutation = useUnsnoozeConversation();
   const markReadMutation = useMarkConversationRead();
 
@@ -1449,7 +1457,7 @@ export default function ConversationsInbox() {
     >
       {/* ── Conversation list ── */}
       <Card className="flex flex-col overflow-hidden rounded-none border-0 border-r border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
-        <div className="flex items-center justify-between gap-2 px-5 pb-4 pt-5">
+        <div className="flex h-[76px] shrink-0 items-center justify-between gap-2 border-b border-black/10 px-5 dark:border-white/10">
           <h2 className="text-base font-bold">Inbox</h2>
           <div className="flex items-center gap-2">
             <button
@@ -1493,14 +1501,14 @@ export default function ConversationsInbox() {
           </div>
         )}
 
-        <div className="border-t border-black/[0.06] px-4 pt-4 dark:border-white/[0.06]">
-          <div className="flex w-full items-center gap-1 rounded-sm border border-black/10 bg-black/[0.03] p-0.5 dark:border-white/10 dark:bg-white/[0.04]">
+        <div className="px-4 pt-4">
+          <div className="flex w-full items-center gap-1 rounded-sm border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]">
             {(["open", "snoozed", "closed"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
                 className={cn(
-                  "flex-1 rounded-xs px-2 py-1 text-center text-xs transition",
+                  "flex-1 rounded-xs px-2 py-2 text-center text-xs transition",
                   tab === t
                     ? "border border-black/10 bg-white font-bold text-black shadow-sm dark:border-white/15 dark:bg-white/15 dark:text-white"
                     : "font-semibold text-slate-500 hover:text-slate-700 dark:text-white/45 dark:hover:text-white/70",
@@ -1610,7 +1618,7 @@ export default function ConversationsInbox() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 pt-2">
+        <div className="scrollbar-none flex-1 overflow-y-auto px-2 pt-2">
           {isLoading ? (
             <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-black/30 dark:text-white/30">
               <Loader2 className="h-7 w-7 animate-spin" />
@@ -1675,7 +1683,7 @@ export default function ConversationsInbox() {
       <Card className="flex flex-col overflow-hidden rounded-none border-0 bg-white p-0 shadow-none dark:bg-white/[0.04]">
         {selected ? (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/8 px-5 py-3 dark:border-white/8">
+            <div className="flex h-[76px] shrink-0 items-center justify-between gap-3 border-b border-black/10 px-6 dark:border-white/10">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
@@ -1691,43 +1699,78 @@ export default function ConversationsInbox() {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
-                <AiStatusControl conversationId={selected.id} />
-                {canTestAi && <HeaderAction icon={FlaskConical} label="Test AI" onClick={() => setTestAiOpen(true)} />}
                 <AssignControl conversation={selected} />
-                {selected.snoozed ? (
-                  <HeaderAction icon={AlarmClockOff} label="Unsnooze" onClick={unsnooze} />
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        className="grid h-10 w-10 place-items-center rounded-lg border border-black/10 text-black/55 transition hover:bg-black/[0.03] hover:text-black dark:border-white/10 dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
-                        title="Snooze"
-                        data-testid="conversation-snooze"
-                      >
-                        <AlarmClock className="h-4 w-4" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {SNOOZE_PRESETS.map((preset) => (
-                        <DropdownMenuItem
-                          key={preset.label}
-                          onClick={() => snoozeFor(preset.hours)}
-                          data-testid={`conversation-snooze-${preset.hours}h`}
-                        >
-                          {preset.label}
-                        </DropdownMenuItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={closeConversation}
-                        data-testid="conversation-snooze-close"
-                      >
-                        <XIcon className="mr-1.5 h-3.5 w-3.5" />
-                        Close conversation
+                <HeaderAction icon={Pin} label="Pin conversation (coming soon)" />
+                <HeaderAction
+                  icon={Link}
+                  label="Copy conversation link"
+                  onClick={() => {
+                    const url = `${window.location.origin}/conversations?conversation=${selected.id}`;
+                    navigator.clipboard
+                      .writeText(url)
+                      .then(() => toast({ title: "Link copied", description: url }))
+                      .catch(() => toast({ title: "Couldn't copy link", variant: "destructive" }));
+                  }}
+                />
+                <HeaderAction icon={Share2} label="Share (coming soon)" />
+
+                {/* Everything that used to sit in the header lives in this menu. */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="grid h-10 w-10 place-items-center rounded-lg text-black/55 transition hover:bg-black/[0.03] hover:text-black dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
+                      title="More actions"
+                      data-testid="conversation-more"
+                    >
+                      <Ellipsis className="h-5 w-5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-60 rounded-xl">
+                    <DropdownMenuLabel className="text-[10px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40">
+                      AI
+                    </DropdownMenuLabel>
+                    <div className="px-2 pb-1.5" onClick={(e) => e.stopPropagation()}>
+                      <AiStatusControl conversationId={selected.id} />
+                    </div>
+                    {canTestAi && (
+                      <DropdownMenuItem onClick={() => setTestAiOpen(true)} className="gap-2 rounded-lg text-sm" data-testid="conversation-test-ai">
+                        <FlaskConical className="h-4 w-4" /> Test AI
                       </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
+                    )}
+                    <DropdownMenuSeparator />
+                    {selected.snoozed ? (
+                      <DropdownMenuItem onClick={unsnooze} className="gap-2 rounded-lg text-sm" data-testid="conversation-unsnooze">
+                        <AlarmClockOff className="h-4 w-4" /> Unsnooze
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger className="gap-2 rounded-lg text-sm" data-testid="conversation-snooze">
+                          <AlarmClock className="h-4 w-4" /> Snooze
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="rounded-xl">
+                          {SNOOZE_PRESETS.map((preset) => (
+                            <DropdownMenuItem
+                              key={preset.label}
+                              onClick={() => snoozeFor(preset.hours)}
+                              className="rounded-lg text-sm"
+                              data-testid={`conversation-snooze-${preset.hours}h`}
+                            >
+                              {preset.label}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={closeConversation}
+                      className="gap-2 rounded-lg text-sm text-red-600 focus:text-red-600 dark:text-red-400"
+                      data-testid="conversation-snooze-close"
+                    >
+                      <XIcon className="h-4 w-4" /> Close conversation
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
@@ -1743,7 +1786,7 @@ export default function ConversationsInbox() {
             <div
               ref={threadScrollRef}
               onScroll={handleThreadScroll}
-              className="flex-1 space-y-5 overflow-y-auto px-6 py-6"
+              className="scrollbar-none flex-1 space-y-5 overflow-y-auto px-6 py-6"
             >
               <div className="flex justify-center">
                 <ChannelLogo channel={selected.channel} />
