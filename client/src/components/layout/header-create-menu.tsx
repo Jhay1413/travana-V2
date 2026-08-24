@@ -160,58 +160,31 @@ export function HeaderCreateMenu() {
             <Plus className="h-4 w-4" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48 rounded-xl z-[200]">
-          <DropdownMenuItem
-            className="cursor-pointer"
-            data-testid="menu-item-new-client"
-            onClick={() => {
-              setShowAddressSection(false);
-              setShowNewClientDialog(true);
-            }}
-          >
-            <UserRound className="mr-2 h-4 w-4" />
-            New Client
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            data-testid="menu-item-enquiry"
-            onClick={() => openSelectClient("enquiry")}
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            Enquiry
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            data-testid="menu-item-quote"
-            onClick={() => openSelectClient("quote")}
-          >
-            <FileText className="mr-2 h-4 w-4" />
-            Quote
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            data-testid="menu-item-booking"
-            onClick={() => openSelectClient("booking")}
-          >
-            <Ticket className="mr-2 h-4 w-4" />
-            Booking
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            data-testid="menu-item-task"
-            onClick={() => openSelectClient("task")}
-          >
-            <ClipboardList className="mr-2 h-4 w-4" />
-            Task
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            data-testid="menu-item-ticket"
-            onClick={() => openSelectClient("ticket")}
-          >
-            <AlertCircle className="mr-2 h-4 w-4" />
-            Ticket
-          </DropdownMenuItem>
+        {/* Dark navy panel, plain text items — matches the header design. */}
+        <DropdownMenuContent
+          align="start"
+          sideOffset={10}
+          className="z-[200] w-56 rounded-lg border-0 bg-[#2E3D50] p-3 text-white shadow-xl"
+        >
+          {(
+            [
+              { label: "New Client", testid: "menu-item-new-client", onClick: () => { setShowAddressSection(false); setShowNewClientDialog(true); } },
+              { label: "Enquiry", testid: "menu-item-enquiry", onClick: () => openSelectClient("enquiry") },
+              { label: "Quote", testid: "menu-item-quote", onClick: () => openSelectClient("quote") },
+              { label: "Booking", testid: "menu-item-booking", onClick: () => openSelectClient("booking") },
+              { label: "Task", testid: "menu-item-task", onClick: () => openSelectClient("task") },
+              { label: "Ticket", testid: "menu-item-ticket", onClick: () => openSelectClient("ticket") },
+            ] as const
+          ).map((item) => (
+            <DropdownMenuItem
+              key={item.label}
+              className="cursor-pointer rounded-md px-3 py-2 text-[15px] text-white focus:bg-white/10 focus:text-white"
+              data-testid={item.testid}
+              onClick={item.onClick}
+            >
+              {item.label}
+            </DropdownMenuItem>
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
 
