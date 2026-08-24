@@ -30,7 +30,7 @@ export function NewsSection() {
   return (
     <DashboardCard className="min-w-0" testId="card-dashboard-news">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-base font-semibold">Latest News</div>
+        <div className="text-[17px] font-semibold">Latest News</div>
         <Link
           href="/hub/news"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white"
@@ -52,7 +52,7 @@ export function NewsSection() {
             return (
               <div key={n.id} className="group" data-testid={`news-item-${n.id}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center rounded-md border border-purple-300 bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-600 dark:border-purple-500/40 dark:bg-purple-500/10 dark:text-purple-300">
+                  <span className="inline-flex items-center rounded-md border border-[#af84e8]/40 bg-[#faf5ff] px-2 py-0.5 text-[10px] font-semibold text-[#af84e8] dark:border-[#af84e8]/40 dark:bg-[#af84e8]/10 dark:text-[#af84e8]">
                     {prettyCategory((n as any).category)}
                   </span>
                   <span className="shrink-0 text-[11px] text-black/40 dark:text-white/40">
@@ -61,12 +61,12 @@ export function NewsSection() {
                 </div>
                 <Link
                   href="/hub/news"
-                  className="mt-1.5 block truncate text-sm font-semibold hover:underline"
+                  className="mt-1.5 block truncate text-[17px] font-medium hover:underline"
                 >
                   {title}
                 </Link>
                 {summary && (
-                  <div className="mt-0.5 line-clamp-1 text-xs text-black/50 dark:text-white/50">
+                  <div className="mt-0.5 line-clamp-1 text-[13px] text-[#a195a5] dark:text-white/50">
                     {summary}
                   </div>
                 )}

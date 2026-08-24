@@ -48,7 +48,7 @@ export function SegmentedTabs<T extends string>({
   return (
     <div
       className={cn(
-        "items-center gap-1 rounded-md border border-black/10 p-1 dark:border-white/10",
+        "items-center gap-1 rounded-md border border-black/10 p-1.5 dark:border-white/10",
         transparent ? "bg-transparent" : "bg-black/[0.03] dark:bg-white/[0.03]",
         fullWidth ? "flex w-full" : "inline-flex max-w-full overflow-x-auto",
       )}
@@ -60,11 +60,11 @@ export function SegmentedTabs<T extends string>({
           onClick={() => onChange(t.value)}
           className={cn(
             "rounded-sm font-semibold transition",
-            dense ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-xs",
+            dense ? "px-2 py-1 text-xs" : "px-3 py-1 text-sm",
             fullWidth ? "flex-1 text-center" : "shrink-0",
             value === t.value
-              ? "bg-white text-amber-500 shadow-sm dark:bg-white/15 dark:text-amber-400"
-              : "text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white",
+              ? "bg-white text-[#fe9a00] shadow-sm dark:bg-white/15 dark:text-[#fe9a00]"
+              : "text-[#7c98b0] hover:text-[#5f7d97] dark:text-white/55 dark:hover:text-white",
           )}
           data-testid={`${testIdPrefix}-${t.value}`}
         >

@@ -53,12 +53,12 @@ export function TicketsTab({ userId }: { userId: string }) {
               <InitialsAvatar name={ticket.clientName || ticket.subject} className="h-8 w-8 text-[11px]" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="truncate text-sm font-semibold">{ticket.subject}</span>
+                  <span className="truncate text-[17px] font-medium">{ticket.subject}</span>
                   <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
                     {timeAgo(ticket.createdAt)}
                   </span>
                 </div>
-                <div className="mt-0.5 truncate text-xs text-black/50 dark:text-white/50">
+                <div className="mt-0.5 truncate text-[13px] text-[#a195a5] dark:text-white/50">
                   {[ticket.clientName, ticket.type, ticket.priority && `${ticket.priority} priority`]
                     .filter(Boolean)
                     .join(" · ")}
@@ -81,7 +81,7 @@ export function TicketsTab({ userId }: { userId: string }) {
       <div className="mt-4">
         <Link
           href="/tickets"
-          className="text-sm font-semibold text-amber-500 hover:underline"
+          className="text-sm font-semibold text-[#fe9a00] hover:underline"
           data-testid="link-view-all-tickets"
         >
           View All Tickets
