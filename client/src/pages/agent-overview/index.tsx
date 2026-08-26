@@ -127,7 +127,7 @@ export default function AgentOverviewPage() {
           runs the full height (and the panel reaches the right edge). */}
       <PipelineLivePanel
         userId={userId}
-        className="hidden w-[320px] shrink-0 border-l border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04] 2xl:block 2xl:-my-6 2xl:-mr-6 2xl:py-6"
+        className="hidden w-[380px] shrink-0 border-l border-black/10 bg-white dark:border-white/10 dark:bg-white/[0.04] 2xl:block 2xl:-my-6 2xl:-mr-6 2xl:py-6"
       />
 
       <CreateTaskDialog

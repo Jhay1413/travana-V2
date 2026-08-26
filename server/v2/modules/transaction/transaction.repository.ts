@@ -1,7 +1,7 @@
 import { db } from "../../config/database";
 import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking } from "@shared/schema";
 import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
-import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, type SQL } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, getTableColumns, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
 import { buildTransactionRecordScopeConds } from "../../utils/scope-conditions";
@@ -173,7 +173,41 @@ async function enrichTransactions(txns: Transaction[]) {
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes, allClients] = await Promise.all([
     db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
-    db.select().from(quote).where(and(inArray(quote.transaction_id, txnIds), isNull(quote.deleted_at))),
+    // Full quote rows plus the display joins the client-details panels need
+    // (destination / operator / departing airport) — same scalar-subquery
+    // pattern as enrichTransactionsLightweight below.
+    db.select({
+      ...getTableColumns(quote),
+      destination_name: sql<string | null>`(
+      SELECT d.name FROM quote_accomodation qa
+      JOIN accomodation_list_table al ON qa.accomodation_id = al.id
+      JOIN resorts_table r ON al.resorts_id = r.id
+      JOIN destination_table d ON r.destination_id = d.id
+      WHERE qa.quote_id = quote_table.id
+      ORDER BY qa.is_primary DESC NULLS LAST
+      LIMIT 1
+    )`,
+      main_tour_operator_name: sql<string | null>`(
+      SELECT tour_operator_table.name FROM tour_operator_table
+      WHERE tour_operator_table.id = quote_table.main_tour_operator_id
+    )`,
+      departing_airport_name: sql<string | null>`(
+      SELECT airport_table.airport_name
+      FROM quote_flights
+      LEFT JOIN airport_table ON quote_flights.departing_airport_id = airport_table.id
+      WHERE quote_flights.quote_id = quote_table.id
+      ORDER BY quote_flights.departure_date_time ASC
+      LIMIT 1
+    )`,
+      departing_airport_code: sql<string | null>`(
+      SELECT airport_table.airport_code
+      FROM quote_flights
+      LEFT JOIN airport_table ON quote_flights.departing_airport_id = airport_table.id
+      WHERE quote_flights.quote_id = quote_table.id
+      ORDER BY quote_flights.departure_date_time ASC
+      LIMIT 1
+    )`,
+    }).from(quote).where(and(inArray(quote.transaction_id, txnIds), isNull(quote.deleted_at))),
     db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
     getPackageTypeMap(),
     clientIds.length > 0
@@ -323,13 +357,20 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       WHERE ed.enquiry_id = enquiry_table.id
       LIMIT 1
     )` }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
-    db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, travel_date: quote.travel_date, adult: quote.adult, child: quote.child, infant: quote.infant, sales_price: quote.sales_price, package_commission: quote.package_commission, holiday_type_id: quote.holiday_type_id, quote_status: quote.quote_status, isQuoteCopy: quote.isQuoteCopy, date_created: quote.date_created, date_expiry: quote.date_expiry, destination_name: sql<string | null>`(
+    db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, travel_date: quote.travel_date, num_of_nights: quote.num_of_nights, adult: quote.adult, child: quote.child, infant: quote.infant, sales_price: quote.sales_price, package_commission: quote.package_commission, holiday_type_id: quote.holiday_type_id, quote_status: quote.quote_status, isQuoteCopy: quote.isQuoteCopy, date_created: quote.date_created, date_expiry: quote.date_expiry, destination_name: sql<string | null>`(
       SELECT d.name FROM quote_accomodation qa
       JOIN accomodation_list_table al ON qa.accomodation_id = al.id
       JOIN resorts_table r ON al.resorts_id = r.id
       JOIN destination_table d ON r.destination_id = d.id
       WHERE qa.quote_id = quote_table.id
       ORDER BY qa.is_primary DESC NULLS LAST
+      LIMIT 1
+    )`, departing_airport_code: sql<string | null>`(
+      SELECT airport_table.airport_code
+      FROM quote_flights
+      LEFT JOIN airport_table ON quote_flights.departing_airport_id = airport_table.id
+      WHERE quote_flights.quote_id = quote_table.id
+      ORDER BY quote_flights.departure_date_time ASC
       LIMIT 1
     )` }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`, isNull(quote.deleted_at))),
     db.select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, travel_date: booking.travel_date, adult: booking.adult, child: booking.child, infant: booking.infant, sales_price: booking.sales_price, package_commission: booking.package_commission, holiday_type_id: booking.holiday_type_id, destination_name: sql<string | null>`(
