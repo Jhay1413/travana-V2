@@ -40,6 +40,31 @@ function OperatorChip({ name }: { name: string | null }) {
   );
 }
 
+function formatTravelDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// Quotes don't carry a return date — derive it from travel_date + num_of_nights.
+// "NCL - 31/10/2026 → 03/11/2026"; parts degrade gracefully when missing.
+function travelLineFor(q: { departing_airport_code?: string | null; travel_date?: string | null; num_of_nights?: number | null } | undefined): string | null {
+  if (!q) return null;
+  const depart = formatTravelDate(q.travel_date);
+  let ret: string | null = null;
+  if (q.travel_date && q.num_of_nights) {
+    const d = new Date(q.travel_date);
+    if (!isNaN(d.getTime())) {
+      d.setDate(d.getDate() + q.num_of_nights);
+      ret = formatTravelDate(d.toISOString());
+    }
+  }
+  const range = [depart, ret].filter(Boolean).join(" → ");
+  const line = [q.departing_airport_code || null, range || null].filter(Boolean).join(" - ");
+  return line || null;
+}
+
 function dealValue(t: Transaction): number {
   if (t.quotes?.length) {
     return t.quotes.reduce(
@@ -134,6 +159,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
             const operator =
               q0?.main_tour_operator_name || (t.booking as any)?.main_tour_operator_name || null;
             const value = dealValue(t);
+            const travelLine = travelLineFor(q0);
             const clientName = (t as any).client_name || t.client?.name || null;
             const clientPhone = (t as any).client_phone || null;
             const clientLine = [clientName, clientPhone].filter(Boolean).join(" - ");
@@ -166,6 +192,11 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
                     {location && (
                       <div className="mt-0.5 truncate text-[13px] text-[#a195a5] dark:text-white/50">
                         {location}
+                      </div>
+                    )}
+                    {travelLine && (
+                      <div className="mt-0.5 truncate text-xs text-[#a195a5] dark:text-white/50">
+                        {travelLine}
                       </div>
                     )}
                     {clientLine && (

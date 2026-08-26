@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLocation } from "wouter";
 import {
   Search,
   Plus,
@@ -97,7 +98,8 @@ import {
   useUnsnoozeConversation,
   useUpdateConversation,
 } from "../api/use-conversations-mutations";
-import { useCurrentUser, useUsers, useClientNotes } from "@/hooks/queries";
+import { useCurrentUser, useUsers, useClientNotes, useTransactions } from "@/hooks/queries";
+import type { Quote, Transaction } from "@/features/quote/types";
 import { useMessages, useSendMessage, useCreateInternalNote, useUploadAttachment } from "../api/use-messages";
 import { MAX_ATTACHMENT_BYTES, messageTypeForContentType } from "../api/messages.api";
 import { useConversationsRealtimeState } from "./conversations-realtime-provider";
@@ -546,10 +548,86 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// ─── Live Quotes ──────────────────────────────────────────────────────────────
+
+// Quote joins (destination, departing airport, operator name) aren't declared on
+// the base `Quote` type, but the transactions API returns them alongside it —
+// same shape pipeline-live-panel casts around.
+type LiveQuoteRecord = Quote & {
+  destination_name?: string | null;
+  departing_airport_name?: string | null;
+  departing_airport_code?: string | null;
+  main_tour_operator_name?: string | null;
+};
+
+const liveQuoteCurrency = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GBP",
+  maximumFractionDigits: 0,
+});
+
+const LIVE_QUOTE_CHIP_PALETTE = ["bg-red-500", "bg-sky-500", "bg-orange-500", "bg-emerald-600", "bg-indigo-500"];
+
+// Colored initial chip for the quote's tour operator — same pattern as
+// PipelineLivePanel's OperatorChip, replicated locally since cross-feature
+// imports between agent-overview and conversations aren't allowed.
+function LiveQuoteOperatorChip({ name }: { name: string | null }) {
+  const label = (name || "•")[0]?.toUpperCase() || "•";
+  const hash = [...(name || "x")].reduce((s, c) => s + c.charCodeAt(0), 0);
+  return (
+    <span
+      className={cn(
+        "grid h-8 w-8 shrink-0 place-items-center rounded-md text-sm font-bold text-white",
+        LIVE_QUOTE_CHIP_PALETTE[hash % LIVE_QUOTE_CHIP_PALETTE.length],
+      )}
+      title={name || undefined}
+      aria-hidden
+    >
+      {label}
+    </span>
+  );
+}
+
+const LIVE_QUOTE_EXCLUDED_STATUSES = new Set(["lost", "archived", "won"]);
+
+function isLiveQuoteStatus(status: string | null | undefined): boolean {
+  return !!status && !LIVE_QUOTE_EXCLUDED_STATUSES.has(status.toLowerCase());
+}
+
+function liveQuoteFormatDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// Quotes don't carry a return date — derive it from travel_date + num_of_nights.
+function liveQuoteReturnDate(travelDate: string | null | undefined, nights: number | null | undefined): string | null {
+  if (!travelDate || !nights) return null;
+  const d = new Date(travelDate);
+  if (isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + nights);
+  return liveQuoteFormatDate(d.toISOString());
+}
+
+// Picks each transaction's primary quote (the non-copy one, falling back to the
+// first) and keeps only those still "live" (not lost/archived/won), newest first.
+function selectLiveQuotes(transactions: Transaction[] | undefined): LiveQuoteRecord[] {
+  const primaries = (transactions ?? [])
+    .map((t) => (t.quotes?.find((q) => !q.isQuoteCopy) || t.quotes?.[0]) as LiveQuoteRecord | undefined)
+    .filter((q): q is LiveQuoteRecord => !!q && isLiveQuoteStatus(q.quote_status));
+  return [...primaries]
+    .sort((a, b) => new Date(b.date_created || 0).getTime() - new Date(a.date_created || 0).getTime())
+    .slice(0, 5);
+}
+
 function ContactPanel({ conversation }: { conversation: Conversation }) {
   const { contact } = conversation;
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [notesOpen, setNotesOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [liveQuotesOpen, setLiveQuotesOpen] = useState(true);
 
   // Shares the cached contact-link query with ClientLinkSection (keyed by
   // contact id). When linked, the panel shows the CRM client's record.
@@ -557,6 +635,21 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   const client = link?.linkedClient ?? null;
   const unlinkContact = useUnlinkContact(conversation.contact.id);
   const { data: notes = [] } = useClientNotes(client?.id ?? "");
+  const { data: transactions, isLoading: isLoadingLiveQuotes } = useTransactions(
+    { clientId: client?.id ?? "" },
+    { enabled: !!client?.id },
+  );
+  const liveQuotes = useMemo(() => (client ? selectLiveQuotes(transactions) : []), [client, transactions]);
+  // Lifetime counts for the History tiles — same shapes the client profile page
+  // derives from this endpoint (enquiries/quotes/bookings across transactions).
+  const historyCounts = useMemo(() => {
+    const txns = transactions ?? [];
+    return {
+      enquiries: txns.filter((t) => t.enquiry).length,
+      quotes: txns.flatMap((t) => t.quotes || []).length,
+      bookings: txns.filter((t) => t.booking).length,
+    };
+  }, [transactions]);
 
   const unlink = async () => {
     try {
@@ -609,6 +702,109 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
             </>
           )}
         </div>
+
+        {client && (
+          <div className="border-t border-black/10 dark:border-white/10" data-testid="client-history">
+            <button
+              type="button"
+              onClick={() => setHistoryOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-5 text-left xl:px-6"
+              data-testid="client-history-toggle"
+            >
+              <span className="text-sm font-bold">History</span>
+              <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", historyOpen && "rotate-90")} />
+            </button>
+            {historyOpen && (
+              <div className="grid grid-cols-3 gap-3 px-4 pb-5 xl:px-6">
+                {[
+                  { label: "Enquiries", count: historyCounts.enquiries, className: "text-emerald-500" },
+                  { label: "Quotes", count: historyCounts.quotes, className: "text-sky-500" },
+                  { label: "Bookings", count: historyCounts.bookings, className: "text-amber-500" },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-xl border border-black/10 px-2 py-3 text-center dark:border-white/10"
+                    data-testid={`client-history-${stat.label.toLowerCase()}`}
+                  >
+                    <div className="text-2xl font-semibold">{isLoadingLiveQuotes ? "–" : stat.count}</div>
+                    <div className={cn("mt-0.5 text-[13px]", stat.className)}>{stat.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {client && (
+          <div className="border-t border-black/10 dark:border-white/10" data-testid="client-live-quotes">
+            <button
+              type="button"
+              onClick={() => setLiveQuotesOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-5 text-left xl:px-6"
+              data-testid="client-live-quotes-toggle"
+            >
+              <span className="text-sm font-bold">Live Quotes</span>
+              <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", liveQuotesOpen && "rotate-90")} />
+            </button>
+            {liveQuotesOpen && (
+              <div className="space-y-1 px-4 pb-5 xl:px-6">
+                {isLoadingLiveQuotes ? (
+                  <p className="text-center text-xs text-black/45 dark:text-white/45">Loading…</p>
+                ) : liveQuotes.length === 0 ? (
+                  <p className="text-center text-xs text-black/45 dark:text-white/45">No live quotes</p>
+                ) : (
+                  liveQuotes.map((q) => {
+                    const price = parseFloat(q.sales_price || "0") || 0;
+                    const departureDate = liveQuoteFormatDate(q.travel_date);
+                    const returnDate = liveQuoteReturnDate(q.travel_date, q.num_of_nights);
+                    const dateRange = [departureDate, returnDate].filter(Boolean).join(" → ");
+                    const departureLine = [q.departing_airport_code || q.departing_airport_name || null, dateRange || null].filter(Boolean).join(" - ");
+                    return (
+                      <div
+                        key={q.id}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => navigate(`/clients/${client.id}/quotes/${q.id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigate(`/clients/${client.id}/quotes/${q.id}`);
+                          }
+                        }}
+                        className="cursor-pointer rounded-lg p-3 transition hover:bg-[#e9f8ff] dark:hover:bg-white/[0.05]"
+                        data-testid={`client-live-quote-${q.id}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <LiveQuoteOperatorChip name={q.main_tour_operator_name ?? null} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <span className="truncate text-sm font-semibold">{q.title || "Untitled quote"}</span>
+                              {price > 0 && (
+                                <span className="shrink-0 text-sm font-semibold text-black/60 dark:text-white/60">
+                                  {liveQuoteCurrency.format(price)}
+                                </span>
+                              )}
+                            </div>
+                            {q.destination_name && (
+                              <div className="mt-0.5 truncate text-[13px] text-[#a195a5] dark:text-white/50">
+                                {q.destination_name}
+                              </div>
+                            )}
+                            {departureLine && (
+                              <div className="mt-0.5 truncate text-xs text-[#a195a5] dark:text-white/50">
+                                {departureLine}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex-1" />
 
