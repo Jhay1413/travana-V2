@@ -255,14 +255,14 @@ export function HolidayDetailsPanel({ selection, enquiries, quotes, bookings, cl
       </div>
 
       <div className="px-4 pt-4 3xl:px-6">
-        <div className="flex w-full items-center gap-1 rounded-md border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]">
+        <div className="flex w-full items-center gap-1 rounded-[6px] border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]">
           {DETAILS_TABS.map((t) => (
             <button
               key={t.value}
               type="button"
               onClick={() => setTab(t.value)}
               className={cn(
-                "flex-1 rounded-sm px-2 py-1 text-center text-[13px] font-semibold transition 3xl:text-sm",
+                "flex-1 rounded-[4px] px-2 py-1 text-center text-[13px] font-semibold transition 3xl:text-sm",
                 tab === t.value
                   ? "border border-black/10 bg-white font-bold text-black shadow-sm dark:border-white/15 dark:bg-white/15 dark:text-white"
                   : "text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white",

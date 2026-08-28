@@ -173,26 +173,29 @@ function HeroGallery({
   const lightboxImages = [primaryImage, ...withUrls].map((img) => ({ id: img.id, url: img.url }));
   return (
     <>
+      {/* One visual block: only the OUTER corners are rounded (via the
+          wrapper's overflow clip) and the images are separated by a thin
+          0.5-unit line of card background, per the design. */}
       <div
-        className={cn("grid gap-2", thumbs.length > 0 && "md:grid-cols-[3fr_2fr]")}
+        className={cn("grid gap-0.5 overflow-hidden rounded-lg", thumbs.length > 0 && "md:grid-cols-[3fr_2fr]")}
         data-testid="holiday-detail-gallery"
       >
         <button
           type="button"
           onClick={() => setLightboxIndex(0)}
-          className="relative h-[220px] cursor-pointer overflow-hidden rounded-xl md:h-[260px] 3xl:h-[320px]"
+          className="relative h-[220px] cursor-pointer overflow-hidden md:h-[260px] 3xl:h-[320px]"
           aria-label="View images"
         >
           <img src={primaryImage.url} alt="" className="h-full w-full object-cover" />
         </button>
         {thumbs.length > 0 && (
-          <div className="hidden grid-cols-2 grid-rows-2 gap-2 md:grid">
+          <div className="hidden grid-cols-2 grid-rows-2 gap-0.5 md:grid">
             {thumbs.map((img, i) => (
               <button
                 key={img.id}
                 type="button"
                 onClick={() => setLightboxIndex(i + 1)}
-                className="relative cursor-pointer overflow-hidden rounded-xl"
+                className="relative cursor-pointer overflow-hidden"
                 aria-label="View image"
               >
                 <img src={img.url} alt="" className="h-full w-full object-cover" />
@@ -232,7 +235,7 @@ interface FieldRowSpec {
 function FieldItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-center gap-3" data-testid={`holiday-detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-orange-500 text-white">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-orange-500 text-white">
         <Icon className="h-4 w-4" />
       </span>
       <div className="min-w-0 truncate text-[13px] 3xl:text-sm">
@@ -870,9 +873,9 @@ function DetailTabsCard({
   return (
     <Card className="mt-6 rounded-2xl border border-black/10 bg-white p-3 shadow-sm" data-testid="holiday-detail-tabs-card">
       <Tabs value={tab} onValueChange={(v) => setTab(v as DetailTab)}>
-        <TabsList className="h-8 rounded-md border border-black/10 bg-black/[0.02] p-0.5">
+        <TabsList className="h-8 rounded-[6px] border border-black/10 bg-black/[0.02] p-0.5">
           {DETAIL_TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="rounded-sm px-4 py-0.5 text-[13px] font-semibold data-[state=active]:font-bold 3xl:text-sm" data-testid={`holiday-detail-tab-${t.value}`}>
+            <TabsTrigger key={t.value} value={t.value} className="rounded-[4px] px-4 py-0.5 text-[13px] font-semibold data-[state=active]:font-bold 3xl:text-sm" data-testid={`holiday-detail-tab-${t.value}`}>
               {t.label}
             </TabsTrigger>
           ))}
@@ -1282,11 +1285,11 @@ function QuoteHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailC
               <h1 className="truncate text-lg font-bold leading-tight text-black/90 3xl:text-xl" data-testid="holiday-detail-title">
                 {title}
               </h1>
-              <span className="text-lg font-bold leading-tight text-[#f97316] 3xl:text-xl" data-testid="holiday-detail-price">
+              <span className="text-lg font-bold leading-tight text-[#f97316] 3xl:text-2xl" data-testid="holiday-detail-price">
                 {currency.format(quote.commissions.price)}
               </span>
               {quote.pricePerPerson > 0 && (
-                <span className="text-sm font-semibold text-black/50">{currency.format(quote.pricePerPerson)}pp</span>
+                <span className="text-base font-semibold ">{currency.format(quote.pricePerPerson)}pp</span>
               )}
             </div>
             <div className="flex items-center gap-2">
@@ -1735,7 +1738,7 @@ export interface HolidayDetailViewProps {
 
 export function HolidayDetailView({ clientId, clientName, selection, onBack }: HolidayDetailViewProps) {
   return (
-    <div className="mt-2" data-testid="holiday-detail-view">
+    <div data-testid="holiday-detail-view">
       {selection.type === "quote" && (
         <QuoteHolidayDetail key={selection.id} id={selection.id} clientId={clientId} clientName={clientName} onBack={onBack} />
       )}

@@ -191,6 +191,10 @@ async function enrichTransactions(txns: Transaction[]) {
       SELECT tour_operator_table.name FROM tour_operator_table
       WHERE tour_operator_table.id = quote_table.main_tour_operator_id
     )`,
+      main_tour_operator_logo_url: sql<string | null>`(
+      SELECT tour_operator_table.logo_url FROM tour_operator_table
+      WHERE tour_operator_table.id = quote_table.main_tour_operator_id
+    )`,
       departing_airport_name: sql<string | null>`(
       SELECT airport_table.airport_name
       FROM quote_flights
@@ -208,7 +212,19 @@ async function enrichTransactions(txns: Transaction[]) {
       LIMIT 1
     )`,
     }).from(quote).where(and(inArray(quote.transaction_id, txnIds), isNull(quote.deleted_at))),
-    db.select().from(booking).where(inArray(booking.transaction_id, txnIds)),
+    // Booking rows plus the operator display joins the client-details panels
+    // need — same scalar-subquery pattern as the quotes select above.
+    db.select({
+      ...getTableColumns(booking),
+      main_tour_operator_name: sql<string | null>`(
+      SELECT tour_operator_table.name FROM tour_operator_table
+      WHERE tour_operator_table.id = booking_table.main_tour_operator_id
+    )`,
+      main_tour_operator_logo_url: sql<string | null>`(
+      SELECT tour_operator_table.logo_url FROM tour_operator_table
+      WHERE tour_operator_table.id = booking_table.main_tour_operator_id
+    )`,
+    }).from(booking).where(inArray(booking.transaction_id, txnIds)),
     getPackageTypeMap(),
     clientIds.length > 0
       ? db.select({
@@ -372,6 +388,12 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       WHERE quote_flights.quote_id = quote_table.id
       ORDER BY quote_flights.departure_date_time ASC
       LIMIT 1
+    )`, main_tour_operator_name: sql<string | null>`(
+      SELECT tour_operator_table.name FROM tour_operator_table
+      WHERE tour_operator_table.id = quote_table.main_tour_operator_id
+    )`, main_tour_operator_logo_url: sql<string | null>`(
+      SELECT tour_operator_table.logo_url FROM tour_operator_table
+      WHERE tour_operator_table.id = quote_table.main_tour_operator_id
     )` }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`, isNull(quote.deleted_at))),
     db.select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, travel_date: booking.travel_date, adult: booking.adult, child: booking.child, infant: booking.infant, sales_price: booking.sales_price, package_commission: booking.package_commission, holiday_type_id: booking.holiday_type_id, destination_name: sql<string | null>`(
       SELECT d.name FROM booking_accomodation ba
@@ -381,6 +403,12 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       WHERE ba.booking_id = booking_table.id
       ORDER BY ba.is_primary DESC NULLS LAST
       LIMIT 1
+    )`, main_tour_operator_name: sql<string | null>`(
+      SELECT tour_operator_table.name FROM tour_operator_table
+      WHERE tour_operator_table.id = booking_table.main_tour_operator_id
+    )`, main_tour_operator_logo_url: sql<string | null>`(
+      SELECT tour_operator_table.logo_url FROM tour_operator_table
+      WHERE tour_operator_table.id = booking_table.main_tour_operator_id
     )` }).from(booking).where(inArray(booking.transaction_id, txnIds)),
     getPackageTypeMap(),
     userIds.length > 0 ? db.select({ id: user.id, firstName: user.firstName, lastName: user.lastName, name: user.name, email: user.email }).from(user).where(inArray(user.id, userIds)) : Promise.resolve([]),
