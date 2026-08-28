@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useRole } from "@/hooks/use-role";
-import { ChevronLeft, Merge } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Spinner } from "@/components/ui/spinner";
 import {
   useNeonClient,
@@ -29,23 +26,13 @@ import { transformNeonClientData, transformTicket, filesFor } from "@/features/c
 import { EditClientDialog } from "@/features/client/components/modals/EditClientDialog";
 import { MergeClientDialog } from "@/features/client/components/modals/MergeClientDialog";
 import { UploadFileDialog } from "@/features/client/components/modals/UploadFileDialog";
+import { AllHolidaysPanel } from "@/features/client/components/all-holidays-panel";
+import { HolidayDetailsPanel } from "@/features/client/components/holiday-details-panel";
+import { HolidayDetailView } from "@/features/client/components/holiday-detail-view";
+import { ClientIndexView, composeAddress } from "@/features/client/components/client-index-view";
+import type { HolidaySelection } from "@/features/client/types";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/features/booking/components/booking-create-dialog";
-import {
-  ClientOverviewTab,
-  PortalPinSection,
-  ReferralStatsSection,
-} from "@/features/client/components/tabs/ClientOverviewTab";
-import { ClientEnquiriesTab } from "@/features/client/components/tabs/ClientEnquiriesTab";
-import { ClientQuotesTab } from "@/features/client/components/tabs/ClientQuotesTab";
-import { ClientBookedTab } from "@/features/client/components/tabs/ClientBookedTab";
-import { ClientFilesTab } from "@/features/client/components/tabs/ClientFilesTab";
-import { ClientTicketsTab } from "@/features/client/components/tabs/ClientTicketsTab";
-import { ClientChatsTab } from "@/features/client/components/tabs/ClientChatsTab";
-import { ClientVipClubTab } from "@/features/client/components/tabs/ClientVipClubTab";
-import { ReferrerSelector } from "@/features/client/components/sections/ReferrerSelector";
-import { ClientProfileHeader } from "@/features/client/components/sections/ClientProfileHeader";
-import { ClientContactDetails } from "@/features/client/components/sections/ClientContactDetails";
 import { CreateTaskDialog } from "@/features/client/components/modals/CreateTaskDialog";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import {
@@ -63,21 +50,13 @@ export default function ClientPage() {
 
   const { role } = useRole();
   const [q, setQ] = useState("");
-  type ClientTab = "overview" | "enquiries" | "quotes" | "booked" | "files" | "tickets" | "chats" | "vip-club";
-  const validTabs: ClientTab[] = ["overview", "enquiries", "quotes", "booked", "files", "tickets", "chats", "vip-club"];
-  const [tab, setTab] = useState<ClientTab>(() => {
-    const params = new URLSearchParams(window.location.search);
-    const t = params.get("tab") as ClientTab | null;
-    return t && validTabs.includes(t) ? t : "overview";
-  });
-  const [expandedCopyGroups, setExpandedCopyGroups] = useState<Record<string, boolean>>({});
   const [showQuoteCreateDialog, setShowQuoteCreateDialog] = useState(false);
   const [showBookingCreateDialog, setShowBookingCreateDialog] = useState(false);
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
   const [convertingEnquiryInitialValues, setConvertingEnquiryInitialValues] = useState<Partial<QuoteFormValues> | undefined>(undefined);
-  const [isContactDetailsOpen, setIsContactDetailsOpen] = useState(true);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [holidaySelection, setHolidaySelection] = useState<HolidaySelection | null>(null);
   const clientId = params?.clientId ?? "";
 
   const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
@@ -110,6 +89,10 @@ export default function ClientPage() {
     else if (create === "ticket") ticketCreate.setShowTicketDialog(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    setHolidaySelection(null);
+  }, [clientId]);
 
   async function handleConvertEnquiryToQuote(enq: EnquiryTable) {
     if (!enq.transaction_id) {
@@ -246,221 +229,105 @@ export default function ClientPage() {
 
   return (
     <>
-      <div className="relative min-h-[calc(100vh-56px)] w-full ">
-        <div className="relative mt-2 grid gap-2 lg:grid-cols-12" data-testid="layout-client-page">
-          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-3 lg:col-span-4">
-            <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => navigate("/clients")}
-                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-                data-testid="button-back-clients"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowMergeDialog(true)}
-                className="inline-flex items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 text-xs font-semibold text-black/75 transition hover:bg-black/[0.03]"
-                data-testid="button-merge-client"
-                title="Merge this duplicate into another client"
-              >
-                <Merge className="h-4 w-4" />
-                Merge duplicate
-              </button>
-            </div>
+      <section
+        className="-m-4 grid h-[calc(100vh-3.5rem)] grid-cols-1 gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[250px_1fr_240px] xl:grid-cols-[300px_1fr_300px] 3xl:grid-cols-[380px_1fr_380px]"
+        data-testid="section-client-profile"
+      >
+        <AllHolidaysPanel
+          className="hidden lg:flex"
+          enquiries={enquiries}
+          quotes={quotes}
+          bookings={bookings}
+          selection={holidaySelection}
+          onSelect={setHolidaySelection}
+          onCreate={(kind) => {
+            if (kind === "enquiry") enquiryActions.setShowEnquiryWizard(true);
+            else if (kind === "quote") setShowQuoteCreateDialog(true);
+            else if (kind === "booking") setShowBookingCreateDialog(true);
+            else if (kind === "task") taskCreate.setShowTaskDialog(true);
+            else if (kind === "ticket") ticketCreate.setShowTicketDialog(true);
+          }}
+          isLoadingTransactions={isLoadingTransactions}
+        />
 
-            <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-3" data-testid="box-client-profile">
-              <ClientProfileHeader
-                name={client.name}
-                phone={clientData?.phoneNumber}
-                badge={clientData?.badge}
-                isFavorited={isFavorited}
-                aiReplyEnabled={!!clientData?.aiReplyEnabled}
-                onToggleFavorite={handleToggleClientPin}
-                onChangeBadge={handleChangeClientBadge}
-                onToggleAiReply={handleToggleAiReply}
-              />
-
-              <div className="mt-3 border-t border-black/10 pt-3">
-                <div className="mb-1.5 text-[11px] font-semibold text-black/50">Referred by</div>
-                <ReferrerSelector
-                  className="w-full"
-                  currentReferredByClientId={clientData?.referredByClientId}
-                  excludeClientId={clientId}
-                  onSelect={(referredByClientId) => {
-                    editForm.updateNeonClientMutation.mutate(
-                      { id: clientId, data: { referredByClientId } },
-                      {
-                        onSuccess: () => toast({ title: "Referrer saved" }),
-                        onError: () => toast({ title: "Failed to save referrer", variant: "destructive" }),
-                      },
-                    );
-                  }}
-                  onClear={() => {
-                    editForm.updateNeonClientMutation.mutate(
-                      { id: clientId, data: { referredByClientId: null } },
-                      {
-                        onSuccess: () => toast({ title: "Referrer removed" }),
-                        onError: () => toast({ title: "Failed to remove referrer", variant: "destructive" }),
-                      },
-                    );
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 " data-testid="card-client-summary">
-              <div className="mb-3">
-                <ReferralStatsSection clientId={clientId} />
-              </div>
-            </div>
-            <div className="mt-4 ">
-              <PortalPinSection clientId={clientId} />
-            </div>
-
-            <ClientContactDetails
-              clientData={clientData}
-              isOpen={isContactDetailsOpen}
-              onToggle={() => setIsContactDetailsOpen((v) => !v)}
-              onEdit={editForm.openEditDialog}
-            />
-          </Card>
-
-          <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/60 p-3 lg:col-span-8">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-sm font-semibold" data-testid="text-client-right-title">
-                  Client workspace
-                </div>
-                <div className="mt-1 text-xs text-black/55" data-testid="text-client-right-subtitle">
-                  Knowing you client is the key to Rapport
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-3xl border border-black/10 bg-white/60 p-2" data-testid="tabs-client-workspace">
-              <Tabs value={tab} onValueChange={(v) => setTab(v as ClientTab)}>
-                <TabsList className="grid w-full grid-cols-4 sm:grid-cols-8 rounded-2xl border border-black/10 bg-white/70">
-                  <TabsTrigger value="overview" className="rounded-xl" data-testid="tab-overview">
-                    Overview
-                  </TabsTrigger>
-                  <TabsTrigger value="enquiries" className="rounded-xl" data-testid="tab-enquiries">
-                    Enquiries
-                  </TabsTrigger>
-                  <TabsTrigger value="quotes" className="rounded-xl" data-testid="tab-quotes">
-                    Quotes
-                  </TabsTrigger>
-                  <TabsTrigger value="booked" className="rounded-xl" data-testid="tab-booked">
-                    Booked
-                  </TabsTrigger>
-                  <TabsTrigger value="files" className="rounded-xl" data-testid="tab-files">
-                    Files
-                  </TabsTrigger>
-                  <TabsTrigger value="tickets" className="rounded-xl" data-testid="tab-tickets">
-                    Tickets
-                  </TabsTrigger>
-                  <TabsTrigger value="chats" className="rounded-xl" data-testid="tab-chats">
-                    Chats
-                  </TabsTrigger>
-                  <TabsTrigger value="vip-club" className="rounded-xl" data-testid="tab-vip-club">
-                    VIP Club
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="mt-3">
-                  <ClientOverviewTab
-                    clientData={clientData}
-                    client={client}
-                    enquiries={enquiries}
-                    quotes={quotes}
-                    bookings={bookings}
-                    tickets={tickets}
-                    tasks={tasks}
-                    clientId={clientId}
-                    navigate={navigate}
-                  />
-                </TabsContent>
-
-                <TabsContent value="enquiries" className="mt-3">
-                  <ClientEnquiriesTab
-                    enquiries={enquiries}
-                    isLoadingTransactions={isLoadingTransactions}
-                    clientId={clientId}
-                    navigate={navigate}
-                    client={client}
-                    userFavorites={userFavorites}
-                    toggleFavoriteMutation={toggleFavoriteMutation}
-                    onConvertEnquiryToQuote={handleConvertEnquiryToQuote}
-                    onEditEnquiry={enquiryActions.openWizardForEdit}
-                    onNewEnquiry={enquiryActions.openWizardForNew}
-                    onDeleteEnquiry={enquiryActions.handleDeleteEnquiry}
-                  />
-                </TabsContent>
-
-                <TabsContent value="quotes" className="mt-3">
-                  <ClientQuotesTab
-                    quotes={quotes}
-                    bookings={bookings}
-                    transactions={transactions}
-                    clientId={clientId}
-                    navigate={navigate}
-                    onNewQuote={() => setShowQuoteCreateDialog(true)}
-                    expandedCopyGroups={expandedCopyGroups}
-                    setExpandedCopyGroups={setExpandedCopyGroups}
-                    client={client}
-                    userFavorites={userFavorites}
-                    toggleFavoriteMutation={toggleFavoriteMutation}
-                  />
-                </TabsContent>
-
-                <TabsContent value="booked" className="mt-3">
-                  <ClientBookedTab
-                    bookings={bookings}
-                    quotes={quotes}
-                    clientId={clientId}
-                    navigate={navigate}
-                    onAddBooking={() => setShowBookingCreateDialog(true)}
-                    expandedCopyGroups={expandedCopyGroups}
-                    setExpandedCopyGroups={setExpandedCopyGroups}
-                    client={client}
-                    userFavorites={userFavorites}
-                    toggleFavoriteMutation={toggleFavoriteMutation}
-                    getUserName={getUserName}
-                  />
-                </TabsContent>
-
-                <TabsContent value="files" className="mt-3">
-                  <ClientFilesTab
-                    clientFiles={fileActions.clientFilesData}
-                    onDeleteFile={fileActions.deleteFile}
-                    filteredFiles={filteredFiles}
-                    onUploadFile={() => fileActions.setShowUploadFileModal(true)}
-                    role={role}
-                  />
-                </TabsContent>
-
-                <TabsContent value="tickets" className="mt-3">
-                  <ClientTicketsTab
-                    tickets={ticketsData ?? []}
-                    users={usersData ?? []}
-                    onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
-                  />
-                </TabsContent>
-
-                <TabsContent value="chats" className="mt-3">
-                  <ClientChatsTab clientId={clientId} />
-                </TabsContent>
-
-                <TabsContent value="vip-club" className="mt-3">
-                  <ClientVipClubTab clientId={clientId} />
-                </TabsContent>
-              </Tabs>
-            </div>
-          </Card>
+        <div className="flex min-h-0 min-w-0 flex-col">
+          {/* Center header — the client's name, aligned with the side panels'
+              76px headers (All Holidays / Details), per the design. */}
+          <div className="flex h-[76px] shrink-0 flex-col justify-center border-b border-black/10 bg-white px-4 3xl:px-6 dark:border-white/10 dark:bg-white/[0.04]">
+            <h2 className="truncate text-[15px] font-semibold 3xl:text-[17px]" data-testid="client-center-header">
+              {client.name}
+            </h2>
+            {(client.phone || composeAddress(clientData)) && (
+              <p className="mt-0.5 truncate text-xs text-black/45 3xl:text-[13px] dark:text-white/45" data-testid="client-center-header-contact">
+                {[client.phone, composeAddress(clientData)].filter(Boolean).join(" · ")}
+              </p>
+            )}
+          </div>
+          <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+        {holidaySelection ? (
+          <HolidayDetailView
+            clientId={clientId}
+            clientName={client.name}
+            selection={holidaySelection}
+            onBack={() => setHolidaySelection(null)}
+          />
+        ) : (
+          <ClientIndexView
+            clientId={clientId}
+            client={client}
+            clientData={clientData}
+            onEdit={editForm.openEditDialog}
+            onMerge={() => setShowMergeDialog(true)}
+            isFavorited={isFavorited}
+            onToggleFavorite={handleToggleClientPin}
+            onChangeBadge={handleChangeClientBadge}
+            aiReplyEnabled={!!clientData?.aiReplyEnabled}
+            onToggleAiReply={handleToggleAiReply}
+            onSelectReferrer={(referredByClientId) => {
+              editForm.updateNeonClientMutation.mutate(
+                { id: clientId, data: { referredByClientId } },
+                {
+                  onSuccess: () => toast({ title: "Referrer saved" }),
+                  onError: () => toast({ title: "Failed to save referrer", variant: "destructive" }),
+                },
+              );
+            }}
+            onClearReferrer={() => {
+              editForm.updateNeonClientMutation.mutate(
+                { id: clientId, data: { referredByClientId: null } },
+                {
+                  onSuccess: () => toast({ title: "Referrer removed" }),
+                  onError: () => toast({ title: "Failed to remove referrer", variant: "destructive" }),
+                },
+              );
+            }}
+            enquiries={enquiries}
+            quotes={quotes}
+            bookings={bookings}
+            overviewTickets={tickets}
+            tasks={tasks}
+            navigate={navigate}
+            clientFiles={fileActions.clientFilesData}
+            filteredFiles={filteredFiles}
+            onDeleteFile={fileActions.deleteFile}
+            onUploadFile={() => fileActions.setShowUploadFileModal(true)}
+            role={role}
+            rawTickets={ticketsData ?? []}
+            users={usersData ?? []}
+            onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
+          />
+        )}
+          </div>
         </div>
-      </div>
+
+        <HolidayDetailsPanel
+          className="hidden lg:flex"
+          selection={holidaySelection}
+          enquiries={enquiries}
+          quotes={quotes}
+          bookings={bookings}
+        />
+      </section>
       <QuoteCreateDialog
         transactionId={convertingFromEnquiryTxnId || undefined}
         clientId={clientId}

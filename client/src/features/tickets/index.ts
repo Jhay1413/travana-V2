@@ -7,3 +7,5 @@ export * from "./lib/ticket-filters";
 export { ticketApi } from "./api/ticket.api";
 export * from "./api/use-ticket-queries";
 export * from "./api/use-ticket-mutations";
+export { TicketsInbox } from "./components/tickets-inbox";
+export { CreateTicketDialog } from "./components/create-ticket-dialog";

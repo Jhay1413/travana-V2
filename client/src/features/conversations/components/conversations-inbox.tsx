@@ -192,7 +192,7 @@ function ChannelLogo({ channel }: { channel: Conversation["channel"] }) {
   // Same artwork as the Agent Dashboard's Latest Inbox (conversations-tab.tsx).
   if (channel === "messenger") {
     return (
-      <svg viewBox="0 0 24 24" className="h-7 w-7 shrink-0 xl:h-8 xl:w-8" aria-label="Messenger" role="img">
+      <svg viewBox="0 0 24 24" className="h-7 w-7 shrink-0 3xl:h-8 3xl:w-8" aria-label="Messenger" role="img">
         <defs>
           <linearGradient id="inbox-msgr-grad" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#00B2FF" />
@@ -209,7 +209,7 @@ function ChannelLogo({ channel }: { channel: Conversation["channel"] }) {
   }
   if (channel === "instagram") {
     return (
-      <svg viewBox="0 0 24 24" className="h-7 w-7 shrink-0 xl:h-8 xl:w-8" aria-label="Instagram" role="img">
+      <svg viewBox="0 0 24 24" className="h-7 w-7 shrink-0 3xl:h-8 3xl:w-8" aria-label="Instagram" role="img">
         <defs>
           <radialGradient id="inbox-ig-grad" cx="0.3" cy="1.1" r="1.3">
             <stop offset="0%" stopColor="#FFDD55" />
@@ -228,7 +228,7 @@ function ChannelLogo({ channel }: { channel: Conversation["channel"] }) {
   const meta = CHANNELS[channel];
   const Icon = meta.icon;
   return (
-    <span className={cn("grid h-7 w-7 shrink-0 xl:h-8 xl:w-8 place-items-center rounded-full", meta.badge)} title={meta.label}>
+    <span className={cn("grid h-7 w-7 shrink-0 3xl:h-8 3xl:w-8 place-items-center rounded-full", meta.badge)} title={meta.label}>
       <Icon className="h-4 w-4" />
     </span>
   );
@@ -289,7 +289,7 @@ function ConversationRow({
         <ChannelLogo channel={conversation.channel} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-[15px] font-medium text-black/85 xl:text-[17px] dark:text-white/85">
+            <span className="truncate text-[15px] font-medium text-black/85 3xl:text-[17px] dark:text-white/85">
               {conversation.contact.displayName}
             </span>
             <span className="flex shrink-0 items-center gap-1.5">
@@ -300,7 +300,7 @@ function ConversationRow({
             </span>
           </div>
           {categoryLabel && category && (
-            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[#a195a5] xl:text-[13px] dark:text-white/50" data-testid={`conversation-type-${conversation.id}`}>
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[#a195a5] 3xl:text-[13px] dark:text-white/50" data-testid={`conversation-type-${conversation.id}`}>
               <category.Icon className={cn("h-4 w-4 shrink-0", category.className)} />
               <span className="truncate">{categoryLabel}</span>
             </div>
@@ -316,10 +316,10 @@ function ConversationRow({
             <span className="shrink-0 rounded bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
               Draft
             </span>
-            <span className="truncate text-xs text-[#a195a5] xl:text-[13px] dark:text-white/50">{draftPreview}</span>
+            <span className="truncate text-xs text-[#a195a5] 3xl:text-[13px] dark:text-white/50">{draftPreview}</span>
           </span>
         ) : (
-          <span className="truncate text-xs text-[#a195a5] xl:text-[13px] dark:text-white/50">{conversation.preview}</span>
+          <span className="truncate text-xs text-[#a195a5] 3xl:text-[13px] dark:text-white/50">{conversation.preview}</span>
         )}
       </div>
       {!active && (
@@ -531,7 +531,7 @@ function ClientField({ label, icon: Icon, value }: { label: string; icon: typeof
       <div className="text-xs text-black/45 dark:text-white/45">{label}</div>
       <div className="mt-1 flex items-center gap-2.5">
         <Icon className="h-4 w-4 shrink-0 text-[#ff0000]" strokeWidth={1.25} />
-        <span className="truncate text-sm font-bold xl:text-base">{value}</span>
+        <span className="truncate text-sm font-bold 3xl:text-base">{value}</span>
       </div>
     </div>
   );
@@ -664,12 +664,12 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
 
   return (
     <Card className="flex flex-col overflow-hidden rounded-none border-0 border-l border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
-      <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-4 xl:px-6 dark:border-white/10">
-        <h2 className="text-[15px] font-semibold xl:text-[17px]">Client Details</h2>
+      <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
+        <h2 className="text-[15px] font-semibold 3xl:text-[17px]">Client Details</h2>
       </div>
 
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="space-y-5 border-b border-black/10 px-4 py-5 xl:px-6 dark:border-white/10">
+        <div className="space-y-5 border-b border-black/10 px-4 py-5 3xl:px-6 dark:border-white/10">
           {client ? (
             <>
               <div className="flex items-start justify-between gap-3">
@@ -708,14 +708,14 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
             <button
               type="button"
               onClick={() => setHistoryOpen((v) => !v)}
-              className="flex w-full items-center justify-between px-4 py-5 text-left xl:px-6"
+              className="flex w-full items-center justify-between px-4 py-5 text-left 3xl:px-6"
               data-testid="client-history-toggle"
             >
               <span className="text-sm font-bold">History</span>
               <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", historyOpen && "rotate-90")} />
             </button>
             {historyOpen && (
-              <div className="grid grid-cols-3 gap-3 px-4 pb-5 xl:px-6">
+              <div className="grid grid-cols-3 gap-3 px-4 pb-5 3xl:px-6">
                 {[
                   { label: "Enquiries", count: historyCounts.enquiries, className: "text-emerald-500" },
                   { label: "Quotes", count: historyCounts.quotes, className: "text-sky-500" },
@@ -740,14 +740,14 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
             <button
               type="button"
               onClick={() => setLiveQuotesOpen((v) => !v)}
-              className="flex w-full items-center justify-between px-4 py-5 text-left xl:px-6"
+              className="flex w-full items-center justify-between px-4 py-5 text-left 3xl:px-6"
               data-testid="client-live-quotes-toggle"
             >
               <span className="text-sm font-bold">Live Quotes</span>
               <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", liveQuotesOpen && "rotate-90")} />
             </button>
             {liveQuotesOpen && (
-              <div className="space-y-1 px-4 pb-5 xl:px-6">
+              <div className="space-y-1 px-4 pb-5 3xl:px-6">
                 {isLoadingLiveQuotes ? (
                   <p className="text-center text-xs text-black/45 dark:text-white/45">Loading…</p>
                 ) : liveQuotes.length === 0 ? (
@@ -812,14 +812,14 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
           <button
             type="button"
             onClick={() => setNotesOpen((v) => !v)}
-            className="flex w-full items-center justify-between px-4 py-5 text-left xl:px-6"
+            className="flex w-full items-center justify-between px-4 py-5 text-left 3xl:px-6"
             data-testid="client-notes-toggle"
           >
             <span className="text-sm font-bold">Notes</span>
             <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", notesOpen && "rotate-90")} />
           </button>
           {notesOpen && (
-            <div className="space-y-3 px-4 pb-5 xl:px-6" data-testid="client-notes">
+            <div className="space-y-3 px-4 pb-5 3xl:px-6" data-testid="client-notes">
               {!client ? (
                 <p className="text-xs text-black/45 dark:text-white/45">Link this conversation to a client to see their notes.</p>
               ) : notes.length === 0 ? (
@@ -1644,13 +1644,13 @@ export default function ConversationsInbox() {
 
   return (
     <section
-      className="-m-4 grid h-[calc(100vh-3.5rem)] grid-cols-[250px_1fr_240px] gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[300px_1fr_300px] xl:grid-cols-[380px_1fr_380px]"
+      className="-m-4 grid h-[calc(100vh-3.5rem)] grid-cols-[250px_1fr_240px] gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[300px_1fr_300px] 3xl:grid-cols-[380px_1fr_380px]"
       data-testid="section-conversations"
     >
       {/* ── Conversation list ── */}
       <Card className="flex flex-col overflow-hidden rounded-none border-0 border-r border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
         <div className="flex h-[76px] shrink-0 items-center justify-between gap-2 border-b border-black/10 px-5 dark:border-white/10">
-          <h2 className="text-[15px] font-semibold xl:text-[17px]">Inbox</h2>
+          <h2 className="text-[15px] font-semibold 3xl:text-[17px]">Inbox</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1700,7 +1700,7 @@ export default function ConversationsInbox() {
                 key={t}
                 onClick={() => setTab(t)}
                 className={cn(
-                  "flex-1 rounded-xs px-2 py-2 text-center text-sm font-semibold transition",
+                  "flex-1 rounded-xs px-2 py-1 text-center text-[13px] font-semibold transition 3xl:text-sm",
                   tab === t
                     ? "border border-black/10 bg-white text-black shadow-sm dark:border-white/15 dark:bg-white/15 dark:text-white"
                     : "text-[#7c98b0] hover:text-[#5f7d97] dark:text-white/45 dark:hover:text-white/70",
@@ -1879,7 +1879,7 @@ export default function ConversationsInbox() {
               <div className="flex min-w-0 items-center gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
-                    <span className="truncate text-[15px] font-semibold xl:text-[17px]">{selected.contact.displayName}</span>
+                    <span className="truncate text-[15px] font-semibold 3xl:text-[17px]">{selected.contact.displayName}</span>
                     <LinkedClientPhonePill conversation={selected} />
                   </div>
                   <div className="mt-1 flex items-center gap-1.5">

@@ -382,6 +382,109 @@ function LinkedContactChats({ contactId }: { contactId: string }) {
   );
 }
 
+// Thread-only variant for the holiday detail view's Inbox tab: no conversation
+// list on the left — just the conversation box (thread + composer), like the
+// main inbox's center column. Shows the client's most recent thread; when they
+// have threads on several channels, a slim channel-pill row above the thread
+// switches between them.
+function LinkedContactThreadBox({ contactId }: { contactId: string }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { data: list, isLoading, isError } = useConversations({ contactId, pageSize: 50 });
+
+  const conversations = useMemo(() => {
+    const items = (list?.items ?? []).map(toUiConversation);
+    return items.sort((a, b) => Date.parse(b.lastActivityAt) - Date.parse(a.lastActivityAt));
+  }, [list]);
+
+  const selected = useMemo(
+    () => conversations.find((c) => c.id === selectedId) ?? conversations[0] ?? null,
+    [conversations, selectedId],
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-12 text-xs text-black/40">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading conversation…
+      </div>
+    );
+  }
+  if (isError) {
+    return <EmptyState icon={MessageSquare} title="Couldn't load conversations" hint="The messaging service didn't respond. Try again shortly." />;
+  }
+  if (!selected) {
+    return (
+      <EmptyState
+        icon={MessageSquare}
+        title="No conversations yet"
+        hint="This client is linked to the inbox but hasn't messaged on any channel."
+      />
+    );
+  }
+
+  return (
+    <div data-testid="client-chat-thread-box">
+      {conversations.length > 1 && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          {conversations.map((c) => {
+            const meta = CHANNELS[c.channel];
+            const Icon = meta.icon;
+            const active = selected.id === c.id;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setSelectedId(c.id)}
+                title={`${meta.label}${c.status === "closed" ? " (closed)" : ""}`}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition",
+                  active
+                    ? "border-black/20 bg-white text-black shadow-sm"
+                    : "border-black/10 bg-black/[0.02] text-black/50 hover:text-black",
+                )}
+                data-testid={`client-chat-channel-${c.id}`}
+              >
+                <span className={cn("grid h-4 w-4 place-items-center rounded-full", meta.badge)}>
+                  <Icon className="h-2.5 w-2.5" />
+                </span>
+                {meta.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className="flex h-[34rem] min-h-0 flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/70">
+        <ConversationThread conversation={selected} />
+      </div>
+    </div>
+  );
+}
+
+export function ClientConversationBox({ clientId }: { clientId: string }) {
+  const { data: link, isLoading, isError } = useClientContactLink(clientId);
+  const contactId = link?.contactId ?? null;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-12 text-xs text-black/40">
+        <Loader2 className="h-4 w-4 animate-spin" /> Checking chat connection…
+      </div>
+    );
+  }
+  if (isError) {
+    return <EmptyState icon={Unplug} title="Couldn't load chats" hint="The chat connection couldn't be checked. Try again shortly." />;
+  }
+  if (!contactId) {
+    return (
+      <EmptyState
+        icon={Unplug}
+        title="Not connected to a conversation"
+        hint="Link this client to a contact from the inbox to see their chat history here."
+      />
+    );
+  }
+  return <LinkedContactThreadBox contactId={contactId} />;
+}
+
 export function ClientChatsTab({ clientId }: { clientId: string }) {
   const [, navigate] = useLocation();
   const { data: link, isLoading, isError } = useClientContactLink(clientId);

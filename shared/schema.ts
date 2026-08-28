@@ -1440,6 +1440,7 @@ export const tickets = pgTable("tickets", {
   resolvedAt: timestamp("resolved_at"),
   orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  bookingId: uuid("booking_id").references(() => booking.id, { onDelete: "set null" }),
 });
 
 export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true });

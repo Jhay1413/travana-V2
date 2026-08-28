@@ -45,3 +45,114 @@ Messages
 --
 Sales: <BadgePoundSterling color="#b3b3b3" />
 Admin: <lucide-icon name="shield-cog" [size]="36" color="#808080"></lucide-icon>
+
+
+
+Fonts
+=====
+
+Poppins
+
+Main Titles: SemiBold 26pt
+Tabs: SemiBold 20.50pt
+Titles: Medium 26pt
+First Line: Regular 20pt #a195a5
+
+
+
+
+pool view x2 lower level
+
+Colours
+---
+
+All Orange: #fe9a00
+Green: #00b77a
+Blue (Stage Quoted): #3d8ede
+Green (Enquiry): #63ae55
+Destination Bg: #faf5ff
+Destination Text: #af84e8
+Red (Run to Target):#ff0015
+Live Sales! (Rollover): #e9f8ff
+Menu Text Colour (Blue/Grey): #7c98b0
+
+
+
+Icons
+---
+
+Dashboard: <LayoutDashboard />
+Pipeline: <Kanban /> or <Funnel />
+Social Posts: <ThumbsUp />
+Inbox: <Mail />
+Tickets: <Tag />
+Live Chat: <MessageCircleMore />
+Opportunities: <Summary />
+
+Ask Luna: <Sparkles />
+
+Notification Bell: <Bell />
+
+The Hub: <Blocks />
+
+Create: <SquarePlus />
+
+In Play: <circle-star />
+
+Enquiry: <SquarePlus color="#ffffff" />
+
+News Arrow: <MoveRight size={20} color="#fe9a00" strokeWidth={1} />
+
+Disconnect:<Unplug size={36} color="#ff0000" strokeWidth={1.25} />
+
+User: <User size={36} color="#ff0000" strokeWidth={1.25} />
+
+Phone: <Phone size={36} color="#ff0000" strokeWidth={1.25} />
+
+
+
+
+---
+Internal
+
+Home
+-
+Profit: <BadgePoundSterling />
+Weekly: <BadgePoundSterling /> - Different Color bg
+Monthly Profit: <CalendarCheck />
+Target: <Target />
+
+Quote Engagement: <View />
+Pinned: <MapPinned />
+Expiring Quotes: <CalendarX />
+
+Options: <Ellipsis />
+
+===
+
+Messages
+--
+Sales: <BadgePoundSterling color="#b3b3b3" />
+Admin: <lucide-icon name="shield-cog" [size]="36" color="#808080"></lucide-icon>
+
+Quote Templates
+--
+Travel Date: <CalendarDays size={40} color="#ffffff" />	`
+Hotel: <Hotel size={40} color="#ffffff" />
+Room: <BedDouble size={40} color="#ffffff" />
+Board: <Utensils size={40} color="#ffffff" />
+Transfer: <Bus size={40} color="#ffffff" />
+
+Depature Airport: <PlaneTakeoff size={40} color="#ffffff" />
+Tour Operator: <GlobeCheck size={40} color="#ffffff" />
+Passengers: <Users size={40} color="#ffffff" />
+No Nights: <MoonStar size={40} color="#ffffff" />
+Lead Source: <SquareArrowRightEnter size={40} color="#ffffff" />
+
+
+
+
+
+f8fafb
+
+e7e9ed
