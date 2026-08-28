@@ -28,6 +28,7 @@ function buildTicketWithNamesQuery() {
       clientId: tickets.clientId,
       userId: tickets.userId,
       assignedTo: tickets.assignedTo,
+      bookingId: tickets.bookingId,
       type: tickets.type,
       status: tickets.status,
       priority: tickets.priority,

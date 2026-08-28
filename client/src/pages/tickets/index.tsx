@@ -1,10 +1,10 @@
 import { useParams } from "wouter";
-import TicketsBoard from "@/features/social/components/boards/tickets-board";
+import { TicketsInbox } from "@/features/tickets";
 
 export default function TicketsPage() {
   const params = useParams<{ ticketId?: string }>();
 
   return (
-    <TicketsBoard selectedTicketId={params.ticketId} />
+    <TicketsInbox selectedTicketId={params.ticketId} />
   );
 }

@@ -3,6 +3,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Full-size desktop tier. Tailwind's 2xl (1536px) is exactly what a 1920
+   laptop reports at Windows' default 125% scaling, so "large screen" styles
+   keyed on 2xl still hit laptops. 3xl targets genuinely wide viewports. */
+@theme {
+  --breakpoint-3xl: 112.5rem; /* 1800px */
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
