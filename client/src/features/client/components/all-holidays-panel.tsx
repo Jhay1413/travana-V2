@@ -19,8 +19,15 @@ import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
 type QuoteRow = Quote & {
   destination_name?: string | null;
   main_tour_operator_name?: string | null;
+  main_tour_operator_logo_url?: string | null;
   departing_airport_name?: string | null;
   departing_airport_code?: string | null;
+};
+
+// Bookings get the same operator joins from the transactions API.
+type BookingRow = HolidayBooking & {
+  main_tour_operator_name?: string | null;
+  main_tour_operator_logo_url?: string | null;
 };
 
 // ─── Formatting helpers ─────────────────────────────────────────────────────
@@ -103,6 +110,7 @@ interface HolidayRowData {
   title: string;
   price: number;
   operatorName: string | null;
+  operatorLogoUrl: string | null;
   destinationName: string | null;
   dateLine: string | null;
   createdAt: string | null;
@@ -122,6 +130,7 @@ function buildQuoteRows(quotes: Quote[]): HolidayRowData[] {
         title: qr.title || "Untitled quote",
         price: netPrice(qr.sales_price, qr.discounts, qr.service_charge),
         operatorName: qr.main_tour_operator_name ?? null,
+        operatorLogoUrl: qr.main_tour_operator_logo_url ?? null,
         destinationName: qr.destination_name ?? null,
         dateLine: buildDateLine(code, qr.travel_date, qr.num_of_nights),
         createdAt: qr.date_created,
@@ -137,6 +146,7 @@ function buildEnquiryRows(enquiries: EnquiryTable[]): HolidayRowData[] {
     title: e.title || "Untitled enquiry",
     price: 0,
     operatorName: null,
+    operatorLogoUrl: null,
     destinationName: e.destinations?.[0]?.name ?? null,
     dateLine: buildDateLine(null, e.travel_date, e.no_of_nights),
     createdAt: e.date_created,
@@ -145,18 +155,22 @@ function buildEnquiryRows(enquiries: EnquiryTable[]): HolidayRowData[] {
 }
 
 function buildBookingRows(bookings: HolidayBooking[]): HolidayRowData[] {
-  return bookings.map((b) => ({
-    id: b.id,
-    type: "booking" as const,
-    title: b.title || "Untitled booking",
-    price: netPrice(b.sales_price, b.discounts, b.service_charge),
-    // Bookings carry no destination/operator joins in the transactions payload.
-    operatorName: null,
-    destinationName: null,
-    dateLine: buildDateLine(null, b.travel_date, b.num_of_nights),
-    createdAt: b.date_created,
-    expired: isBookingExpired(b),
-  }));
+  return bookings.map((b) => {
+    const br = b as BookingRow;
+    return {
+      id: b.id,
+      type: "booking" as const,
+      title: b.title || "Untitled booking",
+      price: netPrice(b.sales_price, b.discounts, b.service_charge),
+      operatorName: br.main_tour_operator_name ?? null,
+      operatorLogoUrl: br.main_tour_operator_logo_url ?? null,
+      // Bookings carry no destination join in the transactions payload.
+      destinationName: null,
+      dateLine: buildDateLine(null, b.travel_date, b.num_of_nights),
+      createdAt: b.date_created,
+      expired: isBookingExpired(b),
+    };
+  });
 }
 
 function sortRows(rows: HolidayRowData[], order: "newest" | "oldest"): HolidayRowData[] {
@@ -179,7 +193,7 @@ function OperatorChip({ name }: { name: string }) {
   return (
     <span
       className={cn(
-        "grid h-7 w-7 shrink-0 place-items-center rounded-md text-[13px] font-bold text-white 3xl:h-8 3xl:w-8 3xl:text-sm",
+        "grid h-9 w-9 shrink-0 place-items-center rounded-[6px] text-[13px] font-bold text-white 3xl:h-10 3xl:w-10 3xl:text-sm",
         HOLIDAY_CHIP_PALETTE[hash % HOLIDAY_CHIP_PALETTE.length],
       )}
       title={name}
@@ -190,12 +204,30 @@ function OperatorChip({ name }: { name: string }) {
   );
 }
 
+// The tour operator's uploaded logo, rendered as a rounded square. Falls back
+// to the initial chip when the image fails to load (dead URL, blocked, …).
+function OperatorLogo({ name, logoUrl }: { name: string | null; logoUrl: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return name ? <OperatorChip name={name} /> : <NeutralChip label={name || "•"} />;
+  }
+  return (
+    <img
+      src={logoUrl}
+      alt={name || "Tour operator"}
+      title={name || undefined}
+      onError={() => setFailed(true)}
+      className="h-9 w-9 shrink-0 rounded-[6px] border border-black/5 bg-white object-contain 3xl:h-10 3xl:w-10"
+    />
+  );
+}
+
 // Neutral chip used when there's no operator to hash against (enquiries, bookings).
 function NeutralChip({ label }: { label: string }) {
   const initial = label[0]?.toUpperCase() || "•";
   return (
     <span
-      className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-black/10 text-[13px] font-bold text-black/60 3xl:h-8 3xl:w-8 3xl:text-sm dark:bg-white/10 dark:text-white/60"
+      className="grid h-9 w-9 shrink-0 place-items-center rounded-[6px] bg-black/10 text-[13px] font-bold text-black/60 3xl:h-10 3xl:w-10 3xl:text-sm dark:bg-white/10 dark:text-white/60"
       aria-hidden
     >
       {initial}
@@ -234,7 +266,13 @@ function HolidayListRow({
       data-testid={`all-holidays-row-${row.id}`}
     >
       <div className="flex items-start gap-3">
-        {row.operatorName ? <OperatorChip name={row.operatorName} /> : <NeutralChip label={row.title} />}
+        {row.operatorLogoUrl ? (
+          <OperatorLogo name={row.operatorName} logoUrl={row.operatorLogoUrl} />
+        ) : row.operatorName ? (
+          <OperatorChip name={row.operatorName} />
+        ) : (
+          <NeutralChip label={row.title} />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
             <span className={cn("truncate text-[13px] font-semibold 3xl:text-sm", row.expired && "text-red-500")}>{row.title}</span>
@@ -253,7 +291,7 @@ function HolidayListRow({
           same visual language as the inbox conversation rows. */}
       {row.dateLine && (
         <div className="mt-1.5 flex items-center gap-3">
-          <span className="w-7 shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 3xl:w-8 dark:text-white/30" aria-hidden>
+          <span className="w-9 shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 3xl:w-10 dark:text-white/30" aria-hidden>
             ···
           </span>
           <span className="truncate text-xs text-[#a195a5] dark:text-white/50">{row.dateLine}</span>
@@ -431,14 +469,14 @@ export function AllHolidaysPanel({
       )}
 
       <div className="px-4 pt-4">
-        <div className="flex w-full items-center gap-1 rounded-md border border-black/10 bg-black/[0.02] p-1 dark:border-white/10 dark:bg-white/[0.04]">
+        <div className="flex w-full items-center gap-1 rounded-[6px] border border-black/10 bg-black/[0.02] p-1 dark:border-white/10 dark:bg-white/[0.04]">
           {HOLIDAY_TABS.map((t) => (
             <button
               key={t.value}
               type="button"
               onClick={() => selectTab(t.value)}
               className={cn(
-                "flex-1 rounded-sm px-2 py-1 text-center text-[13px] font-semibold transition 3xl:text-sm",
+                "flex-1 rounded-[4px] px-2 py-1 text-center text-[13px] font-semibold transition 3xl:text-sm",
                 tab === t.value
                   ? "border border-black/10 bg-white font-bold text-black shadow-sm dark:border-white/15 dark:bg-white/15 dark:text-white"
                   : "text-[#7c98b0] hover:text-black dark:text-white/50 dark:hover:text-white",

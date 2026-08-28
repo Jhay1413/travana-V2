@@ -90,7 +90,20 @@ export default function ClientPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Deep-link support: /clients/:id?holiday=quote:<id> (or booking:/enquiry:)
+  // opens the client page with that holiday selected in the center detail view —
+  // the pipeline board and Pipeline Live link here instead of the old
+  // standalone pages. Re-parses on client change so stale selections never
+  // leak across clients.
   useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get("holiday");
+    if (raw) {
+      const [type, id] = raw.split(":");
+      if ((type === "quote" || type === "booking" || type === "enquiry") && id) {
+        setHolidaySelection({ type, id });
+        return;
+      }
+    }
     setHolidaySelection(null);
   }, [clientId]);
 
@@ -263,7 +276,7 @@ export default function ClientPage() {
               </p>
             )}
           </div>
-          <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3 md:px-6 md:pb-6 md:pt-4">
         {holidaySelection ? (
           <HolidayDetailView
             clientId={clientId}

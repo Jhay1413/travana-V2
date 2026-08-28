@@ -558,6 +558,7 @@ type LiveQuoteRecord = Quote & {
   departing_airport_name?: string | null;
   departing_airport_code?: string | null;
   main_tour_operator_name?: string | null;
+  main_tour_operator_logo_url?: string | null;
 };
 
 const liveQuoteCurrency = new Intl.NumberFormat("en-GB", {
@@ -577,7 +578,7 @@ function LiveQuoteOperatorChip({ name }: { name: string | null }) {
   return (
     <span
       className={cn(
-        "grid h-8 w-8 shrink-0 place-items-center rounded-md text-sm font-bold text-white",
+        "grid h-9 w-9 shrink-0 place-items-center rounded-[6px] text-sm font-bold text-white",
         LIVE_QUOTE_CHIP_PALETTE[hash % LIVE_QUOTE_CHIP_PALETTE.length],
       )}
       title={name || undefined}
@@ -585,6 +586,22 @@ function LiveQuoteOperatorChip({ name }: { name: string | null }) {
     >
       {label}
     </span>
+  );
+}
+
+// The tour operator's uploaded logo as a rounded square, falling back to the
+// initial chip when there's no logo or the image fails to load.
+function LiveQuoteOperatorMark({ name, logoUrl }: { name: string | null; logoUrl: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!logoUrl || failed) return <LiveQuoteOperatorChip name={name} />;
+  return (
+    <img
+      src={logoUrl}
+      alt={name || "Tour operator"}
+      title={name || undefined}
+      onError={() => setFailed(true)}
+      className="h-9 w-9 shrink-0 rounded-[6px] border border-black/5 bg-white object-contain"
+    />
   );
 }
 
@@ -775,7 +792,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
                         data-testid={`client-live-quote-${q.id}`}
                       >
                         <div className="flex items-start gap-3">
-                          <LiveQuoteOperatorChip name={q.main_tour_operator_name ?? null} />
+                          <LiveQuoteOperatorMark name={q.main_tour_operator_name ?? null} logoUrl={q.main_tour_operator_logo_url ?? null} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline justify-between gap-2">
                               <span className="truncate text-sm font-semibold">{q.title || "Untitled quote"}</span>

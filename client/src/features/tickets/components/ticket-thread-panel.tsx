@@ -164,21 +164,23 @@ function SenderAvatar({ name, imageUrl }: { name: string; imageUrl: string | nul
 function NoteBubble({ note, isMe }: { note: ThreadNote; isMe: boolean }) {
   return (
     <div className={cn("flex", isMe ? "justify-end" : "justify-start")}>
-      {/* Avatar straddles the bubble's top-left — half above, half inside —
-          mirroring the quote details Notes tab. mt-4 reserves room for the
-          protruding half. */}
+      {/* Avatar sits flush at the bubble's very top-left corner, straddling
+          the top edge — half above, half inside — mirroring the quote details
+          Notes tab. mt-4 reserves room for the protruding half. */}
       <div className="relative mt-4 max-w-[75%]">
-        <div className="absolute -top-4 left-3">
+        <div className="absolute -top-4 left-0">
           <SenderAvatar name={note.authorName} imageUrl={note.authorImage} />
         </div>
         <div
           className={cn(
-            "rounded-2xl py-2.5 pl-14 pr-4 text-sm",
+            "rounded-2xl px-4 py-2.5 text-sm",
             isMe ? "bg-sky-100 text-black/85 dark:bg-sky-500/15 dark:text-white/90" : "bg-black/5 text-black/85 dark:bg-white/[0.08] dark:text-white/90",
           )}
           data-testid={`ticket-note-${note.id}`}
         >
-          <div className="mb-1 flex flex-wrap items-baseline gap-1 text-xs">
+          {/* Only the header row is indented past the corner avatar — the
+              message body below it runs the bubble's full width. */}
+          <div className="mb-1 flex flex-wrap items-baseline gap-1 pl-6 text-xs">
             <span className="font-semibold text-sky-600 dark:text-sky-400">{note.authorName}</span>
             <span className="text-black/40 dark:text-white/40">– {formatNoteDate(note.createdAt)}</span>
           </div>

@@ -29,7 +29,7 @@ function OperatorChip({ name }: { name: string | null }) {
   return (
     <span
       className={cn(
-        "grid h-8 w-8 shrink-0 place-items-center rounded-md text-sm font-bold text-white",
+        "grid h-9 w-9 shrink-0 place-items-center rounded-[6px] text-sm font-bold text-white",
         CHIP_PALETTE[hash % CHIP_PALETTE.length],
       )}
       title={name || undefined}
@@ -37,6 +37,22 @@ function OperatorChip({ name }: { name: string | null }) {
     >
       {label}
     </span>
+  );
+}
+
+// The tour operator's uploaded logo as a rounded square, falling back to the
+// initial chip when there's no logo or the image fails to load.
+function OperatorMark({ name, logoUrl }: { name: string | null; logoUrl: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!logoUrl || failed) return <OperatorChip name={name} />;
+  return (
+    <img
+      src={logoUrl}
+      alt={name || "Tour operator"}
+      title={name || undefined}
+      onError={() => setFailed(true)}
+      className="h-9 w-9 shrink-0 rounded-[6px] border border-black/5 bg-white object-contain"
+    />
   );
 }
 
@@ -87,15 +103,17 @@ function dealValue(t: Transaction): number {
 }
 
 
+// Client-linked deals open in the client dashboard's new detail view (via the
+// ?holiday= deep link); only client-less deals fall back to the standalone pages.
 function dealHref(t: Transaction, tab: LiveTab): string {
   if (tab === "enquiry" && t.enquiry) {
-    return t.client_id ? `/clients/${t.client_id}/enquiries/${t.enquiry.id}` : `/enquiries/${t.enquiry.id}`;
+    return t.client_id ? `/clients/${t.client_id}?holiday=enquiry:${t.enquiry.id}` : `/enquiries/${t.enquiry.id}`;
   }
   if (tab === "bookings" && t.booking) {
-    return t.client_id ? `/clients/${t.client_id}/bookings/${t.booking.id}` : `/bookings/${t.booking.id}`;
+    return t.client_id ? `/clients/${t.client_id}?holiday=booking:${t.booking.id}` : `/bookings/${t.booking.id}`;
   }
   const q = t.quotes?.find((x) => !x.isQuoteCopy) || t.quotes?.[0];
-  if (q) return t.client_id ? `/clients/${t.client_id}/quotes/${q.id}` : `/quotes/${q.id}`;
+  if (q) return t.client_id ? `/clients/${t.client_id}?holiday=quote:${q.id}` : `/quotes/${q.id}`;
   return "/pipeline";
 }
 
@@ -158,6 +176,8 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
               null;
             const operator =
               q0?.main_tour_operator_name || (t.booking as any)?.main_tour_operator_name || null;
+            const operatorLogo =
+              q0?.main_tour_operator_logo_url || (t.booking as any)?.main_tour_operator_logo_url || null;
             const value = dealValue(t);
             const travelLine = travelLineFor(q0);
             const clientName = (t as any).client_name || t.client?.name || null;
@@ -179,7 +199,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
                 data-testid={`card-pipeline-live-${t.id}`}
               >
                 <div className="flex items-start gap-3">
-                  <OperatorChip name={operator} />
+                  <OperatorMark name={operator} logoUrl={operatorLogo} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-[17px] font-medium">{title}</span>

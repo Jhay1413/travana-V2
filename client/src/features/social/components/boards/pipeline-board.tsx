@@ -292,12 +292,12 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick,
 
   const navUrl = () => {
     if (!t.client_id) return "/pipeline";
-    if (stage === "Enquiry" && t.enquiry) return `/clients/${t.client_id}/enquiries/${t.enquiry.id}`;
+    if (stage === "Enquiry" && t.enquiry) return `/clients/${t.client_id}?holiday=enquiry:${t.enquiry.id}`;
     if ((stage === "Quoted" || stage === "In Play") && t.quotes?.length) {
       const main = t.quotes.find(q => !q.isQuoteCopy) || t.quotes[0];
-      return `/clients/${t.client_id}/quotes/${main.id}`;
+      return `/clients/${t.client_id}?holiday=quote:${main.id}`;
     }
-    if (stage === "Booked" && t.booking) return `/clients/${t.client_id}/bookings/${t.booking.id}`;
+    if (stage === "Booked" && t.booking) return `/clients/${t.client_id}?holiday=booking:${t.booking.id}`;
     return `/clients/${t.client_id}`;
   };
 
@@ -418,7 +418,7 @@ function DealCard({ transaction: t, stage, clientName, onDragStart, onCardClick,
                           onClick={(e) => {
                             e.stopPropagation();
                             setShowQuotes(false);
-                            if (t.client_id) setLocation(`/clients/${t.client_id}/quotes/${q.id}`);
+                            if (t.client_id) setLocation(`/clients/${t.client_id}?holiday=quote:${q.id}`);
                           }}
                         >
                           <span className="truncate text-xs text-gray-700">{q.title || "Untitled quote"}</span>
@@ -607,12 +607,12 @@ function TransactionDetailPanel({ transaction: t, stage, clientName, onClose }: 
 
   const navUrl = () => {
     if (!t.client_id) return "/pipeline";
-    if (stage === "Enquiry" && t.enquiry) return `/clients/${t.client_id}/enquiries/${t.enquiry.id}`;
+    if (stage === "Enquiry" && t.enquiry) return `/clients/${t.client_id}?holiday=enquiry:${t.enquiry.id}`;
     if ((stage === "Quoted" || stage === "In Play") && t.quotes?.length) {
       const main = t.quotes.find(q => !q.isQuoteCopy) || t.quotes[0];
-      return `/clients/${t.client_id}/quotes/${main.id}`;
+      return `/clients/${t.client_id}?holiday=quote:${main.id}`;
     }
-    if (stage === "Booked" && t.booking) return `/clients/${t.client_id}/bookings/${t.booking.id}`;
+    if (stage === "Booked" && t.booking) return `/clients/${t.client_id}?holiday=booking:${t.booking.id}`;
     return `/clients/${t.client_id}`;
   };
 

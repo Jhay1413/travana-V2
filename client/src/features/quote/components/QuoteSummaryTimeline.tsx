@@ -36,7 +36,7 @@ const PANEL_TYPOGRAPHY: TimelineTypography = {
   primary: "mt-0.5 text-xs font-bold text-black 3xl:text-[13px] dark:text-white",
   secondaryRow: "flex items-center gap-1.5 text-[11px] text-black/75 3xl:text-xs dark:text-white/75",
   secondaryText: "text-[11px] text-black/75 3xl:text-xs dark:text-white/75",
-  iconWrap: "grid h-6 w-6 place-items-center rounded-full border 3xl:h-7 3xl:w-7",
+  iconWrap: "grid h-6 w-6 place-items-center rounded-[6px] border 3xl:h-7 3xl:w-7",
   icon: "h-3 w-3 3xl:h-3.5 3xl:w-3.5",
   smallIcon: "h-3 w-3 shrink-0",
 };
