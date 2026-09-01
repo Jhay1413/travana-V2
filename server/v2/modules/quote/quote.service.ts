@@ -175,8 +175,22 @@ function syncFreeQuoteEmbedding(quoteId: string, orgId: string | null | undefine
   if (!orgId) return;
   void (async () => {
     try {
+      // ONE definition of "embeddable", shared with the backfill script — see
+      // embeddableFreeQuoteConditions in quote.repository.ts. This used to test
+      // `isFreeQuote` alone, which let the live store fill with rows a rebuild
+      // would never reproduce: free quotes on TEST transactions, ones flagged
+      // not_for_social, and ones since deactivated.
+      //
+      // A quote that no longer qualifies has its existing embedding REMOVED
+      // rather than merely skipped. Skipping is why deactivating a free quote
+      // left it retrievable by the AI for ever: nothing but a hard delete ever
+      // called removeSource.
+      if (!(await newQuoteRepository.isEmbeddableFreeQuote(quoteId))) {
+        removeFreeQuoteEmbedding(quoteId);
+        return;
+      }
       const details = await newQuoteRepository.findWithDetails(quoteId);
-      if (!details || !details.isFreeQuote) return;
+      if (!details) return;
       await aiEmbeddingsService.syncSource({
         orgId,
         sourceType: "quote",

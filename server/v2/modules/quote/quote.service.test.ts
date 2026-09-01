@@ -24,6 +24,7 @@ vi.mock("./quote.repository", () => ({
     upsertCruise: vi.fn(),
     saveImagesToAccommodation: vi.fn(),
     saveImagesToLodge: vi.fn(),
+    isEmbeddableFreeQuote: vi.fn(),
   },
 }));
 vi.mock("../transaction/transaction.repository", () => ({
@@ -34,10 +35,14 @@ vi.mock("../tag/tag.service", () => ({ tagService: { addQuoteTags: vi.fn(), upda
 vi.mock("../task/task.service", () => ({ taskService: { completeByEntity: vi.fn() } }));
 vi.mock("../enquiry/enquiry.repository", () => ({ enquiryTableRepository: { findByTransactionId: vi.fn() } }));
 vi.mock("../destination-guru/destination-guru.service", () => ({ destinationGuruService: { generate: vi.fn() } }));
+vi.mock("../ai-embeddings/ai-embeddings.service", () => ({
+  aiEmbeddingsService: { syncSource: vi.fn(), removeSource: vi.fn(), removeSourceById: vi.fn() },
+}));
 
 import { newQuoteService } from "./quote.service";
 import { newQuoteRepository } from "./quote.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
+import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { quoteImageRepository } from "./quote-image.repository";
 import { taskService } from "../task/task.service";
 import { enquiryTableRepository } from "../enquiry/enquiry.repository";
@@ -354,5 +359,63 @@ describe("newQuoteService.duplicateQuote", () => {
     await expect(newQuoteService.duplicateQuote("missing", {} as never, TRUSTED)).rejects.toMatchObject({
       statusCode: 404,
     });
+  });
+});
+
+
+// The quote vector store has two writers — this one and the backfill script —
+// and they had drifted: the backfill required six conditions, this path checked
+// isFreeQuote alone. So the live store accumulated rows a rebuild would never
+// reproduce, and nothing but a HARD delete ever removed one.
+describe("newQuoteService — free-quote embedding lifecycle", () => {
+  // The embedding sync is deliberately fire-and-forget, so the assertions have
+  // to wait for its microtask chain rather than the awaited call.
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  function freeQuoteUpdate() {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({
+      id: "q1", transaction_id: "t1", quote_status: "quoted", isFreeQuote: true,
+    } as never);
+    // `q` in updateQuote is the UPDATE's return value, not findById's.
+    vi.mocked(newQuoteRepository.update).mockResolvedValue({
+      id: "q1", transaction_id: "t1", quote_status: "quoted", isFreeQuote: true,
+    } as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ id: "q1", isFreeQuote: true } as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: "org-1" } as never);
+  }
+
+  it("embeds a free quote that still qualifies", async () => {
+    freeQuoteUpdate();
+    vi.mocked(newQuoteRepository.isEmbeddableFreeQuote).mockResolvedValue(true as never);
+
+    await newQuoteService.updateQuote("q1", { sales_price: "1000" } as never, TRUSTED);
+    await flush();
+
+    expect(aiEmbeddingsService.syncSource).toHaveBeenCalled();
+    expect(aiEmbeddingsService.removeSourceById).not.toHaveBeenCalled();
+  });
+
+  it("REMOVES the embedding when the quote no longer qualifies, rather than skipping", async () => {
+    // Deactivated, soft-deleted, moved onto a test transaction, or flagged
+    // not_for_social — all of these now retract the embedding. Skipping is why
+    // a deactivated free quote stayed retrievable by the AI indefinitely.
+    freeQuoteUpdate();
+    vi.mocked(newQuoteRepository.isEmbeddableFreeQuote).mockResolvedValue(false as never);
+
+    await newQuoteService.updateQuote("q1", { sales_price: "1000" } as never, TRUSTED);
+    await flush();
+
+    expect(aiEmbeddingsService.removeSourceById).toHaveBeenCalledWith("quote", "q1");
+    expect(aiEmbeddingsService.syncSource).not.toHaveBeenCalled();
+  });
+
+  it("asks the shared predicate, never isFreeQuote alone", async () => {
+    freeQuoteUpdate();
+    vi.mocked(newQuoteRepository.isEmbeddableFreeQuote).mockResolvedValue(true as never);
+
+    await newQuoteService.updateQuote("q1", { sales_price: "1000" } as never, TRUSTED);
+    await flush();
+
+    expect(newQuoteRepository.isEmbeddableFreeQuote).toHaveBeenCalledWith("q1");
   });
 });
