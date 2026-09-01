@@ -100,6 +100,26 @@ function getScheduleDateRange(filter: string): { start: Date; end: Date } | null
   return null;
 }
 
+/** THE definition of "a free quote whose details may be embedded for AI
+ *  retrieval": client-less (isFreeQuote), live, not on a test transaction, not
+ *  withheld from social, and org-scoped (ai_embeddings rows must be).
+ *
+ *  Shared deliberately by BOTH writers of the quote vector store — the backfill
+ *  projection below and the per-quote runtime check — so they cannot drift.
+ *  They had: the backfill applied all six conditions, the runtime sync applied
+ *  only isFreeQuote, so the live store accumulated rows a rebuild would never
+ *  reproduce. Callers must join `transaction` for the two conditions on it. */
+function embeddableFreeQuoteConditions() {
+  return [
+    eq(quote.isFreeQuote, true),
+    eq(quote.is_active, true),
+    isNull(quote.deleted_at),
+    eq(transaction.is_test, false),
+    eq(quote.not_for_social, false),
+    isNotNull(transaction.org_id),
+  ];
+}
+
 export const newQuoteRepository = {
   async findById(id: string): Promise<Quote | undefined> {
     const [result] = await db.select().from(quote).where(and(eq(quote.id, id), isNull(quote.deleted_at))).limit(1);
@@ -609,6 +629,22 @@ export const newQuoteRepository = {
     return ids.map(id => quoteMap.get(id)).filter(Boolean);
   },
 
+  /** True when this quote currently qualifies for AI retrieval, by the SAME
+   *  definition the backfill uses (see embeddableFreeQuoteConditions). The
+   *  runtime writer calls this so a quote embedded on save is always one the
+   *  backfill would also have produced — previously it checked `isFreeQuote`
+   *  alone, and so embedded quotes that were on a test transaction, flagged
+   *  not_for_social, deactivated, or soft-deleted. */
+  async isEmbeddableFreeQuote(quoteId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: quote.id })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(and(eq(quote.id, quoteId), ...embeddableFreeQuoteConditions()))
+      .limit(1);
+    return !!row;
+  },
+
   /** Batch, org-agnostic projection of FREE quotes for the embeddings backfill
    *  script — org id + resolved names only (no raw ids in the name fields).
    *  Uses the same "free quote" definition as findFreeQuotesPaginated, but
@@ -655,16 +691,7 @@ export const newQuoteRepository = {
       .leftJoin(destination, eq(resorts.destination_id, destination.id))
       .leftJoin(country, eq(destination.country_id, country.id))
       .leftJoin(board_basis, eq(quote_accomodation.board_basis_id, board_basis.id))
-      .where(
-        and(
-          eq(quote.isFreeQuote, true),
-          eq(quote.is_active, true),
-          isNull(quote.deleted_at),
-          eq(transaction.is_test, false),
-          eq(quote.not_for_social, false),
-          isNotNull(transaction.org_id),
-        ),
-      )
+      .where(and(...embeddableFreeQuoteConditions()))
       .orderBy(quote.date_created, quote.id)
       .limit(limit)
       .offset(offset);

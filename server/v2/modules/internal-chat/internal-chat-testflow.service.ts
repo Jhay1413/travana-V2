@@ -4,7 +4,10 @@ import {
   buildTranscript,
   decideDeterministicRoute,
   effectiveAttachmentKind,
+  cleanTravellerName,
+  extractTravellerRelationship,
   generateBeneficiaryAsk,
+  GENERIC_TRAVELLER_RE,
   generateDocumentReceivedAsk,
   generateGeneralReply,
   generateTransitionReply,
@@ -126,19 +129,20 @@ interface ConversationContext {
     name?: string;
     phone?: string;
     clientId?: string;
+    // How the sender referred to them ("mam", "wife") — so every later ask says
+    // "your mam's number", not a guessed "your friend's". Mirrors reply-worker.
+    relationship?: string;
   };
+  // We have asked this still-unidentified contact for their name and number.
+  // Keeps the next turn on the onboarding flow instead of letting a terse reply
+  // ("no i cant") fall to the general route, whose prompt forbids the ask.
+  // Mirrors reply-worker.
+  onboardingAsked?: boolean;
 }
 
-// Drops generic stand-ins the model may report as a traveller's name ("my
-// friend", "your friend", "someone") so we don't create a client literally
-// called "friend"/"your friend". Mirrors reply-worker's cleanTravellerName.
-export const GENERIC_TRAVELLER_RE =
-  /^(?:(?:a|my|your|his|her|their|the)\s+)?(?:friend|mate|buddy|pal|someone|somebody|colleague|co-?worker|client|customer|person|people|guy|lady|companion|partner|other\s+half)$/i;
-export function cleanTravellerName(raw?: string): string | undefined {
-  const v = (raw ?? "").trim();
-  if (!v || GENERIC_TRAVELLER_RE.test(v)) return undefined;
-  return v;
-}
+// The traveller-name guard lives in the shared brain — this module used to
+// carry a COPY of it, which drifted (see GENERIC_TRAVELLER_RE there).
+export { GENERIC_TRAVELLER_RE, cleanTravellerName };
 
 // Masks a phone number for logging — keeps only the last 4 digits so the
 // state-transition logs stay useful for debugging without dumping a
@@ -372,6 +376,12 @@ export const internalChatTestflowService = {
     // submitted) forces admin, exactly like the SendSeven flow.
     const deterministicRoute = decideDeterministicRoute({
       enquiryInFlight,
+      // Both mirror reply-worker: a document on a third-party enquiry must not
+      // pull the turn to admin, and a terse reply while we are still waiting
+      // for a name and number must not fall to the general route (whose prompt
+      // forbids asking for them).
+      beneficiaryInFlight: !!prevContext.beneficiary,
+      onboardingInFlight: !knownClient && !!prevContext.onboardingAsked,
       hasAttachments: pendingAttachments.length > 0,
       // holidayImageInfo persisting from a PRIOR turn keeps the conversation
       // deterministically on SALES for the whole collecting flow (mirrors
@@ -535,7 +545,10 @@ export const internalChatTestflowService = {
       // collects the traveller's phone and files the enquiry under them.
       const beneficiaryEnquiry = !!prevContext.beneficiary || !!onboard.beneficiary?.onBehalf;
       if (beneficiaryEnquiry && !prevContext.beneficiary) {
-        prevContext.beneficiary = { name: cleanTravellerName(onboard.beneficiary?.fullName) };
+        prevContext.beneficiary = {
+          name: cleanTravellerName(onboard.beneficiary?.fullName),
+          relationship: extractTravellerRelationship(userText),
+        };
       }
       if (!beneficiaryEnquiry) {
         // An admin matter (complaint, document, account query) — recognised by the
@@ -552,6 +565,10 @@ export const internalChatTestflowService = {
         const full = onboard.client?.fullName?.trim();
         const phone = onboard.client?.phone?.trim();
         if (!(full && phone)) {
+          // Mirrors reply-worker: the ask is now RECORDED on every shape of this
+          // write, so the next turn stays on onboarding instead of a terse reply
+          // ("no i cant") falling to the general route.
+          prevContext.onboardingAsked = true;
           // Persist the admin intent (domain) so it survives to the completion turn,
           // plus whether it's an actionable complaint/submission stated now (e.g.
           // "my room is filthy") so it isn't lost on the name/phone turns.
@@ -563,10 +580,7 @@ export const internalChatTestflowService = {
                 adminActionable: prevContext.adminActionable || looksLikeActionableAdmin(userText),
               },
             });
-          } else if (prevContext.holidayImageInfo) {
-            // A deal-image's details must survive the onboarding detour even
-            // though this isn't an admin matter — persist the context so the
-            // completion turn still has them in view.
+          } else {
             await internalChatRepository.updateSession(session.id, orgId, { context: { ...prevContext } });
           }
           // A document sent on THIS pre-identification turn: reply
@@ -581,6 +595,9 @@ export const internalChatTestflowService = {
           return { replyMessage };
         }
 
+        // Onboarding is finished — drop the marker so it can never keep a later,
+        // unrelated turn pinned to the sales route.
+        delete prevContext.onboardingAsked;
         // Phone ↔ name allocation (mirrors reply-worker). A number already on
         // file under a DIFFERENT client's name creates a NEW client under the
         // name given and carries on — the customer is never asked to justify
@@ -769,6 +786,9 @@ export const internalChatTestflowService = {
     const beneficiaryActive = !!benCtx || !!benTurn?.onBehalf;
     if (beneficiaryActive && enquiryStatus !== "awaiting_availability") {
       const travellerName = cleanTravellerName(benTurn?.fullName) || benCtx?.name;
+      // Mirrors reply-worker: refer to the traveller the way the customer did
+      // ("your mam"), never a guessed "your friend".
+      const travellerRelationship = extractTravellerRelationship(userText) ?? benCtx?.relationship;
       let benClientId = benCtx?.clientId;
       // Only TRUST the free-text phone extraction while we're actually in the
       // phone-collection step (the traveller isn't resolved yet) — mirrors
@@ -789,11 +809,14 @@ export const internalChatTestflowService = {
           // (3.3, mirrors reply-worker) Generated in the org's voice/language via
           // the brain, falling back to the fixed English line on any failure.
           const askKind: BeneficiaryAskKind = !travellerName && !travellerPhone ? "name_and_phone" : !travellerName ? "name" : "phone";
-          const ask = await generateBeneficiaryAsk(botConfig, kb, askKind, travellerName, {
-            orgId,
-            feature: "staff_chat_test",
-            userId: scope.userId ?? undefined,
-          });
+          const ask = await generateBeneficiaryAsk(
+            botConfig,
+            kb,
+            askKind,
+            travellerName,
+            { orgId, feature: "staff_chat_test", userId: scope.userId ?? undefined },
+            travellerRelationship,
+          );
           await internalChatRepository.updateSession(session.id, orgId, {
             intent: "enquiry",
             enquiryStatus: "collecting",
@@ -885,18 +908,20 @@ export const internalChatTestflowService = {
     // The transition is CLAIMED atomically before the task is created, same as
     // reply-worker.
     if (enquiryStatus === "awaiting_availability") {
-      const claimed = await internalChatRepository.claimStatusTransition(session.id, orgId, "awaiting_availability", "scheduled");
-      if (!claimed) {
-        const replyMessage = await persistReply("That callback has already been logged.");
-        return { replyMessage };
-      }
-
       const rawTime = userText.trim();
       // Mirrors reply-worker: the tester may decline the call ("just message
       // please"), which must not be confirmed back as a callback.
       const noCall = prefersMessagingOverCall(rawTime);
 
       // Ask once about the call, then accept — mirrors reply-worker.
+      //
+      // ORDER IS LOad-BEARING: this runs BEFORE the status claim, exactly as it
+      // does in reply-worker. Claiming first burned the one and only
+      // awaiting_availability → scheduled transition on the pushback turn, which
+      // does NOT finish the flow — so the session was already "scheduled" when
+      // the tester answered, isFreshEnquiry wiped the enquiry state, and their
+      // answer fell through to the sales bot ("That's already been logged")
+      // instead of being confirmed. Observed exactly that.
       if (noCall && !prevContext.callPushbackSent) {
         const askAgain = await generateTransitionReply(botConfig, kb, "encourage_call", rawTime, prevContext.onBehalfOfName, {
           orgId,
@@ -908,6 +933,12 @@ export const internalChatTestflowService = {
         });
         const replyMessage = await persistReply(askAgain);
         console.log(`[internal-chat-testflow] session ${session.id} tester asked to keep it on messages — explained the call once, asking again`);
+        return { replyMessage };
+      }
+
+      const claimed = await internalChatRepository.claimStatusTransition(session.id, orgId, "awaiting_availability", "scheduled");
+      if (!claimed) {
+        const replyMessage = await persistReply("That callback has already been logged.");
         return { replyMessage };
       }
       const confirmReply = await generateTransitionReply(

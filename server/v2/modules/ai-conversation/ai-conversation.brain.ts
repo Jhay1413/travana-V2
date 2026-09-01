@@ -140,8 +140,25 @@ export function buildRulesBlock(rules: BotRule[], bot: BotAudience): string | nu
 
 // Renders style-example KB entries into a capped block. Framing differs by
 // caller (customer bot vs internal assistant), so the header is passed in.
-export function buildStyleExamplesBlock(entries: OrgKnowledgeBase[], header: string): string | null {
-  const examples = entries.filter((e) => e.isActive && isStyleExampleCategory(e.category));
+// `header` is the CALLER's lead-in — what these examples are for, in that bot's
+// own words. Everything about how they must be TREATED is owned by this
+// function and appended below, so it reaches every call site identically. It
+// used to be part of the header string, which meant the full rule existed on
+// exactly one of eight callers: the sales prompt. The admin bot and the
+// general-reply path — both free-form — had only a bare "match the tone" line,
+// and the anonymiser deliberately keeps destinations, hotels, dates and prices,
+// so nothing was telling them not to borrow another customer's trip.
+//
+// `audience` gates which entries this bot may see at all. Optional only so the
+// callers that already pre-filter can keep doing so; pass it wherever the
+// caller hands over a raw, unfiltered kb list.
+export function buildStyleExamplesBlock(
+  entries: OrgKnowledgeBase[],
+  header: string,
+  audience?: BotAudience,
+): string | null {
+  const visible = audience ? entries.filter((e) => audienceAllows(e.audience, audience)) : entries;
+  const examples = visible.filter((e) => e.isActive && isStyleExampleCategory(e.category));
   if (!examples.length) return null;
   // Personal data comes OUT before anything else. These entries are real
   // customer conversations, they go into every single prompt verbatim, and a
@@ -157,9 +174,15 @@ export function buildStyleExamplesBlock(entries: OrgKnowledgeBase[], header: str
   if (text.length > STYLE_EXAMPLE_CHAR_BUDGET) text = text.slice(0, STYLE_EXAMPLE_CHAR_BUDGET) + "…";
   return (
     `${header}\n${text}\n\n` +
-    "(Everyone in the examples above appears as \"Team\", and their contact details as placeholders like [phone number] " +
-    "— the real names have been removed. Never write a bracketed placeholder into a reply, never invent a value to fill " +
-    "one in, and never name a colleague to a customer: say \"the team\", exactly as the examples do.)"
+    "(HOW TO USE THE EXAMPLES ABOVE — these are OTHER PEOPLE'S conversations, included ONLY to show how we talk. " +
+    "Everyone in them appears as \"Team\", and their contact details as placeholders like [phone number] — the real " +
+    "names have been removed. Never write a bracketed placeholder into a reply, never invent a value to fill one in, " +
+    "and never name a colleague to a customer: say \"the team\", exactly as the examples do. " +
+    "Take NOTHING FACTUAL out of them: no destination, hotel, resort, date, price, or trip in an example belongs to " +
+    "the person you are speaking to, and none of it is current or relevant to this conversation. Never reuse one of " +
+    "their messages as your own. Everything this customer wants appears in the conversation itself and nowhere else — " +
+    "referring to an example's holiday as though it were theirs exposes another customer and tells this one you have " +
+    "not read a word they wrote.)"
   );
 }
 
@@ -270,8 +293,15 @@ const ADMIN_PROVIDING_RE = new RegExp(
 // existing booking, NOT a new sales lead. Beyond the explicit "complain/refund",
 // a handful of strong dissatisfaction words that don't plausibly appear in a new
 // holiday enquiry (so they won't hijack a genuine sales lead).
+// The ESCALATION half was missing entirely: "this is an absolute joke, third
+// time ive asked, sort it out or im going to trading standards" matched
+// nothing here and nothing in ADMIN_ASK_RE either (no record noun), so the
+// angriest message we get had no deterministic floor at all and was routed by
+// the LLM alone. Only unambiguous escalation is added — phrasings a customer
+// opening a NEW holiday enquiry would never use — so a sales lead is never
+// mis-routed into a ticket.
 const ADMIN_COMPLAINT_RE =
-  /\b(?:complain\w*|refund|filth\w*|disgusting|unhygienic|unacceptable|appalling|cockroach\w*|bed\s?bugs?|ripped?\s+off|not\s+(?:happy|satisfied)|so\s+dirty|really\s+dirty|absolutely\s+filthy)\b/i;
+  /\b(?:complain\w*|refund|filth\w*|disgusting|unhygienic|unacceptable|appalling|cockroach\w*|bed\s?bugs?|ripped?\s+off|not\s+(?:happy|satisfied)|so\s+dirty|really\s+dirty|absolutely\s+filthy)\b|\btrading\s+standards\b|\bombudsman\b|\bsolicitors?\b|\blegal\s+action\b|\babsolute(?:ly)?\s+(?:joke|disgrace|shambles)\b|\b(?:disgrace|shambles|fuming|livid|appalled)\b|\btak(?:e|ing)\s+(?:this|it)\s+further\b|\bescalat(?:e|ing|ion)\b/i;
 // The customer CHASING something we owe them — "any update?", "I haven't
 // received my call", "still waiting on my quote", "nobody rang me". These are
 // unambiguously about a record/promise they already have with us, but they
@@ -377,15 +407,42 @@ export interface RoutePrecedenceInput {
   attachmentKind?: ImageTriageKind | null;
   actionable: boolean;
   adminAsk: boolean;
+  // A third-party ("on behalf of a friend") enquiry is already established on
+  // this conversation. The sender is NOT onboarded in that flow — the enquiry
+  // is filed under the traveller — so the admin bot's `clientId` guard can
+  // never be satisfied and an admin verdict just falls through to the sales
+  // bot anyway, minus its vector retrieval. See the carve-out below.
+  beneficiaryInFlight?: boolean;
+  // We have already asked this (still unidentified) contact for their name and
+  // number, and are waiting for it. Nothing about that is recorded in the
+  // enquiry state — the onboarding branch writes no status and no slots — so
+  // without this the turn falls through to the LLM classifier, and a terse
+  // reply mid-onboarding ("no i cant", "why do you need it?", "ok") lands on
+  // the GENERAL route. That prompt explicitly instructs the bot NOT to ask for
+  // a name or number, so the onboarding ask is abandoned mid-flow and the lead
+  // is lost. Observed exactly that.
+  onboardingInFlight?: boolean;
 }
 export function decideDeterministicRoute(input: RoutePrecedenceInput): DeterministicRoute {
   const kind = input.attachmentKind ?? (input.hasAttachments ? "document" : null);
   const documentAttachment = kind === "document";
   const holidayInfoAttachment = kind === "holiday_info";
+  // Carve-out for a third-party enquiry: a DOCUMENT the sender attached belongs
+  // to that enquiry — a passport for the traveller, or (far more often) a deal
+  // screenshot that vision failed on and the fail-safe typed as "document". It
+  // must not pull the turn onto the admin route, which for a beneficiary
+  // enquiry means falling through to the sales bot with no retrieval at all.
+  // Only the DOCUMENT signal is overridden: a real complaint or a verification
+  // detail (actionable / adminAsk) still breaks out exactly as before.
+  if (input.beneficiaryInFlight && documentAttachment && !input.actionable && !input.adminAsk) return "sales";
   const complaintBreaksOutOfEnquiry = input.enquiryInFlight && (documentAttachment || input.actionable);
   if (complaintBreaksOutOfEnquiry) return "admin";
   if (input.enquiryInFlight) return "sales";
   if (documentAttachment || input.adminAsk) return "admin";
+  // Deliberately AFTER the admin checks: an admin question mid-onboarding still
+  // reaches the admin bot (that carry-across is what D6 relies on). This only
+  // stops an unidentified contact's terse reply falling to "general".
+  if (input.onboardingInFlight) return "sales";
   if (holidayInfoAttachment) return "sales";
   return "classify";
 }
@@ -404,8 +461,15 @@ export type TransitionKind = "ask_callback_time" | "callback_booked" | "message_
 // (observed: "Can you just message please" → "one of the team will give you a
 // ring then"), which reads as not listening and sets the wrong expectation for
 // the agent picking the task up.
+// PLURALS MATTER HERE. This read `\bmessage\b`, so a customer whose second,
+// final refusal was the bare word "messages please" fell through as NOT a
+// refusal — and the awaiting_availability step then took the callback_booked
+// branch and confirmed a phone call to someone who had just declined one
+// twice, raising a task titled `Call back — client available "messages
+// please"`. Exactly the regression this regex exists to prevent, surviving on
+// one letter.
 const PREFERS_MESSAGE_RE =
-  /\b(?:just|only|please|pls|rather|prefer(?:ably)?|instead)?\s*(?:can|could|cud|would)?\s*(?:you|u|yous)?\s*(?:just\s+)?(?:message|msg|text|whats ?app|email|e-?mail|write)\b(?:\s+(?:me|us|here|instead|please|pls))?|\b(?:no|not?)\s+(?:phone\s+)?calls?\b|\b(?:don'?t|do\s+not|dont|rather\s+not|can'?t)\s+(?:be\s+)?(?:call(?:ed)?|r(?:i|u)ng|phoned?)\b|\b(?:prefer|rather)\s+(?:to\s+)?(?:message|text|email|chat)\b|\bmessage\s+(?:is\s+)?(?:fine|better|best|ok(?:ay)?)\b|\bkeep\s+it\s+(?:on\s+)?(?:here|chat|messages?)\b/i;
+  /\b(?:just|only|please|pls|rather|prefer(?:ably)?|instead)?\s*(?:can|could|cud|would)?\s*(?:you|u|yous)?\s*(?:just\s+)?(?:messages?|msgs?|texts?|whats ?app|emails?|e-?mails?|write)\b(?:\s+(?:me|us|here|instead|please|pls))?|\b(?:no|not?)\s+(?:phone\s+)?calls?\b|\b(?:don'?t|do\s+not|dont|rather\s+not|can'?t)\s+(?:be\s+)?(?:call(?:ed)?|r(?:i|u)ng|phoned?)\b|\b(?:prefer|rather)\s+(?:to\s+)?(?:messages?|texts?|emails?|chat)\b|\bmessages?\s+(?:is\s+|are\s+)?(?:fine|better|best|ok(?:ay)?)\b|\bkeep\s+(?:it|this|that|things|everything|em|them)\s+(?:all\s+)?(?:on\s+)?(?:here|chat|messages?)\b|\bkeep\s+it\s+all\s+(?:on\s+)?(?:here|chat|messages?)\b|\b(?:here|messages?)\s+(?:is|are)\s+(?:fine|better|best|ok(?:ay)?|good)\b/i;
 
 // "Anytime", "whenever suits", "I'm free all day" — the customer HAS answered
 // the callback question, they just haven't named a time. parseAvailabilityTime
@@ -418,7 +482,7 @@ const PREFERS_MESSAGE_RE =
 // generous — anything with a real time in it ("any time after 5") never reaches
 // here.
 const OPEN_AVAILABILITY_RE =
-  /\b(?:any\s?time|anytime|when\s?ever|whenever|all\s+day|any\s+day|no\s+preference|not\s+fussed|not\s+bothered|up\s+to\s+you|you\s+choose|your\s+choice|as\s+soon\s+as\s+(?:possible|you\s+can)|asap)\b/i;
+  /\b(?:any\s?time|anytime|when\s?ever|whenever|(?:all|most\s+of\s+the)\s+day|any\s+day|most\s+days|no\s+preference|not\s+fussed|not\s+bothered|up\s+to\s+you|you\s+choose|your\s+choice|as\s+soon\s+as\s+(?:possible|you\s+can)|asap)\b/i;
 
 // "Today", "later today", "this afternoon" — they have named the DAY but no
 // usable time. The parser resolves a bare day to 10:00, which by late
@@ -497,7 +561,7 @@ export async function generateTransitionReply(
       "Use UK English. Write in the warm, natural, conversational voice of a friendly UK high-street travel agent — relaxed and human, never robotic, corporate, stiff, or formulaic.",
     ];
     if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
-    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:");
+    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:", "sales");
     if (styleBlock) parts.push(styleBlock);
     const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "sales");
     if (rulesBlock) parts.push(rulesBlock);
@@ -525,6 +589,44 @@ export async function generateTransitionReply(
 // failure so the turn is never reply-less. Mirrors generateTransitionReply.
 export type BeneficiaryAskKind = "name_and_phone" | "name" | "phone";
 
+// HOW THE CUSTOMER REFERRED TO THE TRAVELLER — "my mam", "our Sheila", "my
+// wife". The beneficiary ask is a tiny standalone call with no transcript, so
+// it used to hard-code the word "friend": a customer who said "my mam wants to
+// go to Lanzarote" was answered with "send me your friend's full name", which
+// is wrong on the facts and reads as not having listened. Returns the bare
+// relationship word for the caller to render as "your <word>", or undefined
+// when they did not say — in which case the wording stays NEUTRAL. Never
+// guessed.
+// Generic stand-ins the model may report as the traveller's NAME, so we never
+// create a CRM client literally called "friend" or "My Mam" and file an enquiry
+// against it — we ask for a real name instead.
+//
+// LIVES HERE, IN THE SHARED BRAIN, ON PURPOSE. This used to be defined twice —
+// once in reply-worker and once, copied, in internal-chat-testflow, whose
+// comment read "Mirrors reply-worker's cleanTravellerName". They drifted the
+// moment the family terms were added to one of them: the live bot stopped
+// creating a client called "My Mam" while the Test AI sandbox carried on doing
+// it. One definition, both drivers.
+//
+// Anchored ^…$ throughout, so a real name is never touched: "Nan Smith" and
+// "Frank Partner" pass straight through — only the bare relationship word is
+// rejected. "our" is in the determiner set because "our mam" is ordinary usage
+// in the North East.
+export const GENERIC_TRAVELLER_RE =
+  /^(?:(?:a|my|our|your|his|her|their|the)\s+)?(?:friend|mate|buddy|pal|someone|somebody|colleague|co-?worker|client|customer|person|people|guy|lady|companion|partner|other\s+half|mam|mum|mummy|mom|mother|dad|daddy|father|nan|nana|gran|grandma|grandmother|grandad|granddad|grandfather|sister|brother|sibling|son|daughter|child|kid|wife|husband|missus|hubby|girlfriend|boyfriend|fianc(?:e|é|ee|ée)|auntie|aunt|uncle|cousin|nephew|niece|neighbour|neighbor|boss|in-?law|parents?|folks)$/i;
+export function cleanTravellerName(raw?: string): string | undefined {
+  const v = (raw ?? "").trim();
+  if (!v || GENERIC_TRAVELLER_RE.test(v)) return undefined;
+  return v;
+}
+
+const TRAVELLER_RELATIONSHIP_RE =
+  /\b(?:my|our)\s+(mam|mum|mummy|mom|mother|dad|daddy|father|nan|nana|gran|grandma|grandmother|grandad|granddad|grandfather|sister|brother|son|daughter|wife|husband|missus|hubby|partner|girlfriend|boyfriend|auntie|aunt|uncle|cousin|nephew|niece|neighbour|neighbor|friend|mate|colleague|boss|parents|folks)\b/i;
+export function extractTravellerRelationship(text: string): string | undefined {
+  const m = TRAVELLER_RELATIONSHIP_RE.exec(text || "");
+  return m ? m[1].toLowerCase() : undefined;
+}
+
 export async function generateBeneficiaryAsk(
   botConfig: OrgBotConfig | null,
   kb: OrgKnowledgeBase[],
@@ -533,21 +635,32 @@ export async function generateBeneficiaryAsk(
   travellerName?: string,
   // Optional usage-metering context override — see generateTransitionReply.
   ctx?: AiUsageCtx,
+  // How the customer referred to the traveller ("mam", "wife") — see
+  // extractTravellerRelationship. Undefined keeps the wording neutral.
+  relationship?: string,
 ): Promise<string> {
   const name = travellerName?.trim();
+  const rel = relationship?.trim();
+  // "your mam's" when they told us, "their" when they did not. NEVER "your
+  // friend's" on a guess.
+  const possessive = rel ? `your ${rel}'s` : "their";
+  const phoneWho = name ? `${name}'s` : possessive;
   const fallback =
     kind === "name_and_phone"
-      ? "Of course! Could you pop me your friend's name and phone number so I can get this set up for them? 😊"
+      ? `Of course! Could you pop me ${possessive} name and phone number so I can get this set up for them? 😊`
       : kind === "name"
-        ? "Lovely! And what's your friend's name so I can get this set up for them? 😊"
-        : `Of course! Could you pop me ${name ?? "your friend"}'s phone number so I can get this set up for them? 😊`;
+        ? `Lovely! And what's ${possessive} name so I can get this set up for them? 😊`
+        : `Of course! Could you pop me ${phoneWho} phone number so I can get this set up for them? 😊`;
 
+  const relNote = rel
+    ? ` The customer referred to the traveller as "my ${rel}" — refer to them the same way ("your ${rel}"), never as a "friend".`
+    : " The customer has NOT said who the traveller is to them, so do NOT guess a relationship — never call them a \"friend\", \"mam\", or anything else. Keep it neutral (\"them\", \"the person travelling\").";
   const instruction =
-    kind === "name_and_phone"
-      ? "Ask the customer for their friend's (the traveller's) NAME and PHONE NUMBER so you can get the enquiry set up for them."
+    (kind === "name_and_phone"
+      ? `Ask the customer for ${possessive} (the traveller's) NAME and PHONE NUMBER so you can get the enquiry set up for them.`
       : kind === "name"
-        ? "Ask the customer for their friend's (the traveller's) NAME so you can get the enquiry set up for them."
-        : `Ask the customer for ${name ?? "their friend"}'s PHONE NUMBER so you can get the enquiry set up for them.`;
+        ? `Ask the customer for ${possessive} (the traveller's) NAME so you can get the enquiry set up for them.`
+        : `Ask the customer for ${phoneWho} PHONE NUMBER so you can get the enquiry set up for them.`) + relNote;
 
   try {
     const parts: string[] = [
@@ -556,7 +669,7 @@ export async function generateBeneficiaryAsk(
     ];
     if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
     if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
-    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:");
+    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:", "sales");
     if (styleBlock) parts.push(styleBlock);
     const rulesBlock = buildRulesBlock(parseBotRules(botConfig?.rules), "sales");
     if (rulesBlock) parts.push(rulesBlock);
@@ -594,7 +707,7 @@ export async function generateDocumentReceivedAsk(
     ];
     if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
     if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
-    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:");
+    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:", "admin");
     if (styleBlock) parts.push(styleBlock);
     parts.push(
       "The customer has just sent a document file (e.g. a passport photo). The system HAS received the file and it will be logged for a colleague once we know who the customer is. Write ONE short, warm message that (a) confirms you've received the file, and (b) asks for their NAME and PHONE NUMBER so you can log it against their record. Do NOT say you cannot view or receive attachments. Do NOT claim to have checked or verified the document. Reply with the message text ONLY.",
@@ -605,6 +718,42 @@ export async function generateDocumentReceivedAsk(
       messages: [{ role: "system", content: parts.join("\n\n") }],
     });
     logAiUsage("documentReceivedAsk", UTILITY_MODEL, res.usage, ctx ?? { orgId: botConfig?.orgId });
+    return res.choices[0]?.message?.content?.trim() || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// The customer sent audio/video, which nothing here can read (see
+// isUnreadableMediaType). Says so plainly and asks them to type the details —
+// far better than the fail-safe alternative of silently opening a support
+// ticket for a voice note that may well be an ordinary sales question. WHAT is
+// said is fixed; only the WORDING is generated in the org's voice, falling back
+// to a fixed line on any failure. Mirrors generateDocumentReceivedAsk.
+export async function generateUnreadableMediaAsk(
+  botConfig: OrgBotConfig | null,
+  kb: OrgKnowledgeBase[],
+  ctx?: AiUsageCtx,
+): Promise<string> {
+  const fallback = "Thanks for that! I can't listen to voice notes or watch videos on here — could you pop the main details in a message and I'll get straight onto it?";
+  try {
+    const parts: string[] = [
+      `You are ${botConfig?.name?.trim() || "a friendly UK travel agent"} chatting with a customer of a UK travel agency.`,
+      "Use UK English. Write in the warm, natural, conversational voice of a friendly UK high-street travel agent.",
+    ];
+    if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
+    if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
+    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:", "sales");
+    if (styleBlock) parts.push(styleBlock);
+    parts.push(
+      "The customer has just sent a voice note or a video, and you cannot listen to or watch it. Write ONE short, warm message that (a) says plainly you can't pick up voice notes/videos on here, and (b) asks them to type the main details so you can help. Do NOT pretend to know what it said, do NOT guess its contents, and do NOT apologise at length. Reply with the message text ONLY.",
+    );
+    const res = await getOpenAI().chat.completions.create({
+      model: UTILITY_MODEL,
+      temperature: 0.7,
+      messages: [{ role: "system", content: parts.join("\n\n") }],
+    });
+    logAiUsage("unreadableMediaAsk", UTILITY_MODEL, res.usage, ctx ?? { orgId: botConfig?.orgId });
     return res.choices[0]?.message?.content?.trim() || fallback;
   } catch {
     return fallback;
@@ -628,7 +777,7 @@ export async function generateTicketConfirmation(botConfig: OrgBotConfig | null,
     if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
     if (botConfig?.signOff?.trim()) parts.push(`Sign-off: ${botConfig.signOff.trim()}`);
     if (botConfig?.language?.trim()) parts.push(`Reply in: ${botConfig.language.trim()}`);
-    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:");
+    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:", "admin");
     if (styleBlock) parts.push(styleBlock);
     parts.push(
       "You have JUST logged a support ticket for this customer's request with the team. Write ONE short, warm confirmation message that (a) confirms it's been logged, and (b) reassures them a colleague will follow up shortly. Do NOT ask any further questions. Reply with the message text ONLY.",
@@ -668,7 +817,7 @@ export async function generateGroupedAsk(
       "Use UK English. Warm, natural, conversational voice of a friendly UK high-street travel agent. Do NOT format as a bulleted/numbered list or a form — one or two short sentences only.",
     ];
     if (botConfig?.persona?.trim()) parts.push(`Tone: ${botConfig.persona.trim()}`);
-    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:");
+    const styleBlock = buildStyleExamplesBlock(kb, "Match the tone, warmth and phrasing of these example conversations:", "sales");
     if (styleBlock) parts.push(styleBlock);
     if (transcript.trim()) {
       parts.push(
@@ -1020,8 +1169,9 @@ export function buildSystemPrompt(
   parts.push(
     [
       "ENQUIRING ON BEHALF OF SOMEONE ELSE: If the customer makes clear the holiday is for ANOTHER person and they themselves are NOT one of the travellers — e.g. \"my friend James wants to book Benidorm\", \"I'm enquiring for my mum Susan\", \"my friend saw your Benidorm post\" — then:",
-      "  • set beneficiary.onBehalf=true. Put the traveller's REAL name in beneficiary.fullName ONLY if they've actually told you it. NEVER put a generic word like \"friend\", \"my friend\", \"your friend\", \"mate\", or \"my mum\" in beneficiary.fullName — that is NOT a name. If you don't have their real name yet, leave beneficiary.fullName EMPTY.",
-      "  • if you DO have the traveller's real name, do NOT ask for it again — just ask for their phone (naming them, e.g. \"Can I grab James's phone number?\"). If you do NOT have their real name, ask for their NAME and phone number (e.g. \"Of course! What's your friend's name and number so I can set this up for them?\"). Either way, do NOT ask the sender for their OWN name or number.",
+      "  • set beneficiary.onBehalf=true. Put the traveller's REAL name in beneficiary.fullName ONLY if they've actually told you it. NEVER put a relationship or generic word there — not \"friend\", \"my friend\", \"mate\", \"someone\", and not a family word like \"mam\", \"mum\", \"my mother\", \"my wife\", \"my brother\", \"my nan\". None of those is a name. If you don't have their real name yet, leave beneficiary.fullName EMPTY.",
+      "  • REFER TO THEM AS THE CUSTOMER DID. If they said \"my mam\", say \"your mam\"; if they said \"my wife\", say \"your wife\". Calling someone's mother \"your friend\" reads as though you have not read their message. If they have not said who the person is, stay neutral (\"them\") — never guess a relationship.",
+      "  • if you DO have the traveller's real name, do NOT ask for it again — just ask for their phone (naming them, e.g. \"Can I grab James's phone number?\"). If you do NOT have their real name, ask for their NAME and phone number, referring to them the way the customer did (e.g. \"Of course! What's your mam's name and number so I can set this up for her?\"). Either way, do NOT ask the sender for their OWN name or number.",
       "  • once they give it, put the traveller's phone in beneficiary.phone.",
       "  • keep capturing all the holiday details they mention into `slots` exactly as normal — the enquiry is for the traveller.",
       "  • carry beneficiary.onBehalf=true and beneficiary.fullName on EVERY following turn of this same enquiry, even after you have the phone.",
@@ -1055,7 +1205,7 @@ export function buildSystemPrompt(
   // teach HOW we talk, not what is true.
   const styleBlock = buildStyleExamplesBlock(
     activeKb,
-    "How our team talks to customers — study these real example conversations and MATCH this tone, warmth, phrasing and overall approach in your replies. They are STYLE examples ONLY: do NOT treat the specific holidays, destinations, dates, prices, phone numbers or customers in them as real, current, or relevant to this conversation. ABSOLUTE RULE — these are OTHER PEOPLE'S conversations: never copy a NAME, destination, hotel, date, price or any other detail out of them into your reply, and never reuse one of their messages as your own. The person you are talking to, and everything they want, appears in the transcript and nowhere else. Addressing this customer by a name from an example, or referring to a trip from one, is a serious error — it exposes another customer and tells this one you have not read a word they wrote.",
+    "How our team talks to customers — study these real example conversations and MATCH this tone, warmth, phrasing and overall approach in your replies. They are STYLE examples ONLY.",
   );
   if (styleBlock) parts.push(styleBlock);
 
@@ -1184,6 +1334,9 @@ export function buildSystemPrompt(
         "- On every reply after that, look at what they have already given and ask ONLY for what is still missing — e.g. if they gave just their name, ask for their phone number only. NEVER re-ask for a detail they have already provided.",
         "- GIVE NO INFORMATION UNTIL THEY ARE ON THE SYSTEM. Until you have their details, you do NOT answer questions about the holiday — no hotel or resort names, no prices, no dates, no availability, no flight times, no what's-included — not even when the answer is sitting in the deal block or company information below. This is a hard rule, not a preference.",
         "- IF THEY COME BACK WITH A QUESTION INSTEAD OF THEIR DETAILS (\"no problem, can you tell me the hotel name first?\", \"how much is it?\", \"whereabouts is it?\"): do NOT drop the ask and do NOT answer it. In ONE short message, say warmly that you can sort that for them and ask again for what is still missing — e.g. \"Yes of course, I can get all that over to you — can you just pop your number over first? x\". Never refuse them outright or explain a policy; just reassure and re-ask. Keep doing this, warmly and never naggingly, until you have their details: nothing can be looked up, sent or logged without them.",
+        "- IF THEY ASK WHY YOU NEED IT, PUSH BACK, OR REFUSE (\"why do you need my number\", \"just tell me the price\", \"no I can't\", \"I'd rather not\"): explain, warmly and briefly, using ONE of these two REAL reasons and NOTHING ELSE — (a) we just need your number to check you're on the system, so we can get all the information and prices sent over to you; or (b) you are an admin here and can only check them on the system — it is one of the team who sends the information out. Vary the wording naturally; do not recite these word for word every time.",
+        "  NEVER INVENT A REASON. Do not say it is for security, data protection, GDPR, verification, company policy, or 'the system won't let me' — none of that is true and customers can tell. The two reasons above are the only ones you have.",
+        "  AND NEVER CLOSE THE CONVERSATION. Do not say you are unable to help, that you cannot send anything without it, or anything that reads as a dead end (\"if you change your mind, I'm here\"). Stay friendly, keep the door open, and leave the ask standing — e.g. \"No bother at all — pop it over whenever you're ready and I'll get it straight across to you x\". If they refuse more than once, keep it light and brief rather than repeating the same explanation; never argue, never nag, and never make them feel awkward for asking.",
         "- Put whatever they provide into `client`: { fullName, phone } — leave a field as an empty string until they actually give it.",
         "Only once you have BOTH their name and phone, give a brief confirmation that you can see them on the system (e.g. \"That's great, I can see you on the system\"), then respond to WHAT THEY ACTUALLY ASKED FOR: if they've already shown they want a holiday, carry on helping with that; if they only greeted you or haven't said what they need, ask an OPEN, friendly question about how you can help (e.g. \"what can I help you with today?\") — per the MOST IMPORTANT RULE above, do not assume they want to book. Do not start collecting holiday enquiry details until you have their name and phone AND they've actually expressed interest in a holiday.",
       ].join("\n"),
@@ -1203,10 +1356,35 @@ export function buildSystemPrompt(
 // counts. Returns null (leave holidayType unset) when nothing matches, so the
 // Package Holiday default at enquiry creation still applies.
 export function inferHolidayTypeFromText(text: string): string | null {
-  const t = text || "";
+  const t = customerSaid(text || "");
   if (/\bcruise/i.test(t)) return "Cruise Package";
   if (/\bhot\s*tub|\blodge\b/i.test(t)) return "Hot Tub Break";
   return null;
+}
+
+// The CUSTOMER's half of a buildTranscript-shaped string ("Customer: …" /
+// "Agent: …" lines). The holiday-type backstop must never read our OWN words:
+// a reply of ours that merely mentions a cruise ("we don't do cruise-only
+// bookings") would otherwise re-type a Benidorm package enquiry as a Cruise
+// Package — changing the whole required-field checklist and the enquiry that
+// gets logged. Plain (non-transcript) text has no such prefixes and is
+// returned unchanged, so single-message callers behave exactly as before.
+function customerSaid(text: string): string {
+  const lines = text.split("\n");
+  if (!lines.some((l) => /^\s*(?:Customer|Agent):/i.test(l))) return text;
+  const out: string[] = [];
+  let inCustomer = false;
+  for (const line of lines) {
+    const speaker = /^\s*(Customer|Agent):\s*(.*)$/i.exec(line);
+    if (speaker) {
+      inCustomer = speaker[1].toLowerCase() === "customer";
+      if (inCustomer) out.push(speaker[2]);
+      continue;
+    }
+    // A continuation line belongs to whoever spoke last (messages can wrap).
+    if (inCustomer) out.push(line);
+  }
+  return out.join("\n");
 }
 
 // The full set of keys EnquirySlots recognises — used by normalizeTurnSlots to
@@ -1706,15 +1884,76 @@ export function looksLikeDocumentMention(text: string): boolean {
   return DOCUMENT_MENTION_RE.test(text || "");
 }
 
-// The kind the DRIVERS act on for the current message's attachment(s):
-//   - no triage (vision failed/unavailable) → "document" (fail-safe: an
-//     unclassifiable attachment is ticketed, never silently dropped);
-//   - triage said "other" but the customer's text names a document → the
-//     customer's words win → "document";
-//   - otherwise the triage verdict stands.
+// Media nothing in this pipeline can read: audio and video. Vision only accepts
+// image/*, so these produce no triage at all — and the fail-safe then types
+// them "document", which routes to the admin bot and opens a support ticket.
+// That turns EVERY voice note into a ticket, including "hiya just wondering
+// about Benidorm", which is a sales lead. Callers use this to ask for text
+// instead. PDFs are deliberately NOT included: vision can't read them either,
+// but they genuinely are documents and the fail-safe ticket is right for them.
+const UNREADABLE_MEDIA_RE = /^(?:audio|video)\//i;
+export function isUnreadableMediaType(contentType: string | null | undefined): boolean {
+  return UNREADABLE_MEDIA_RE.test((contentType ?? "").trim());
+}
+
+// The customer's own words saying the attachment is a DEAL they've seen — "saw
+// this on your Facebook", "your post", "this deal", "is this still available",
+// "how much is this". The mirror image of DOCUMENT_MENTION_RE, and needed for
+// the same reason: vision is not always right, and not always available.
+//
+// Deliberately NOT hasPostReferenceSignal from deal-context.service.ts, which
+// exists to gate deal PINNING and matches bare "picture|photo|image|screenshot"
+// — it would fire on "here's a picture of my passport". Wrong tool for sorting
+// an attachment.
+const DEAL_MENTION_RE = new RegExp(
+  [
+    // "saw/seen/spotted this on your page / on Facebook"
+    "\\b(?:saw|seen|spotted|found)\\b[^.!?]{0,40}\\b(?:your|ur|the)\\s+(?:page|post|advert|ad|story|reel|feed|site|website)\\b",
+    "\\b(?:saw|seen|spotted|found)\\b[^.!?]{0,40}\\b(?:facebook|fb|instagram|insta|ig|tiktok|social)\\b",
+    // "your post", "your quote", "you posted this"
+    "\\b(?:your|ur)\\s+(?:post|advert|advertisement|ad|deal|offer|page|quote)\\b",
+    "\\b(?:you|yous|u)\\s+(?:posted|advertised|shared)\\b",
+    // "this deal", "that offer", "the holiday", "this one"
+    "\\b(?:this|that|the)\\s+(?:deal|offer|advert|advertisement|package|holiday|trip|quote|one)\\b",
+    // Asking the price/availability of whatever is in the picture
+    "\\bis\\s+(?:this|that|it)\\s+(?:still\\s+)?(?:available|going|on)\\b",
+    "\\bstill\\s+available\\b",
+    "\\bhow\\s+much\\s+(?:is|for|would)\\b",
+  ].join("|"),
+  "i",
+);
+export function looksLikeDealMention(text: string): boolean {
+  return DEAL_MENTION_RE.test(text || "");
+}
+
+// The kind the DRIVERS act on for the current message's attachment(s) — the
+// triage verdict, with the customer's own words as a tie-break in BOTH
+// directions. In precedence order:
+//
+//   1. a "holiday_info" verdict stands — vision positively identified an
+//      advert, which beats any keyword guess;
+//   2. the customer names a DOCUMENT → "document". Vision misjudges a
+//      real-world photo of a passport (angled, partial, on a table) as
+//      "other", and their words are better evidence than the picture;
+//   3. the customer names a DEAL ("saw this on your page", "how much is
+//      this?") → "holiday_info". This is the mirror of (2) and it fixes two
+//      holes: a null triage used to force "document" no matter what they
+//      wrote, and a "document" verdict ignored their words entirely — so a
+//      screenshot of one of OUR OWN social posts (which can read as an
+//      invoice/listing: hotel, dates, price, terms) was ticketed to admin
+//      instead of reaching the sales bot;
+//   4. no triage at all (vision failed, a non-vision model, a PDF, or an
+//      oversized file) and nothing said either way → "document". The
+//      fail-safe is kept deliberately: with no signal in either direction, a
+//      spurious ticket is a far better outcome than a passport quietly sorted
+//      into a sales enquiry and never logged for anyone.
+//
+// Document words beat deal words throughout, for that same reason.
 export function effectiveAttachmentKind(triageKind: ImageTriageKind | null | undefined, messageText: string): ImageTriageKind {
+  if (triageKind === "holiday_info") return "holiday_info";
+  if (looksLikeDocumentMention(messageText)) return "document";
+  if (looksLikeDealMention(messageText)) return "holiday_info";
   if (!triageKind) return "document";
-  if (triageKind === "other" && looksLikeDocumentMention(messageText)) return "document";
   return triageKind;
 }
 
@@ -1755,6 +1994,7 @@ export async function triageImageAttachments(attachments: ImageAttachmentLike[],
             'You classify and read images a customer has sent to a UK travel agency chat. Respond ONLY with JSON: {"kind": "document" | "holiday_info" | "other", "description": string}.\n' +
             '- "document": ANY of the images is identity or booking paperwork being submitted — a passport, ID, driving licence, insurance document, booking confirmation, invoice, receipt, or a photo/scan of any official document or form. A real-world PHOTO of such a document counts — angled, partially visible, on a table, or photographed from a screen — it does not need to be a clean scan. If any image is such a document, kind MUST be "document". When unsure between "document" and "other" for something that looks like an official card or paper, choose "document".\n' +
             '- "holiday_info": otherwise, the image(s)\' main content is details of a holiday/trip the customer may want — a screenshot of a holiday advert, deal, price/listing, hotel or cruise offer, itinerary, or a social-media post about a trip.\n' +
+            '  A holiday ADVERT, DEAL or PRICE LISTING is ALWAYS "holiday_info", never "document" — including when it is laid out formally, with a price, dates, terms and small print, and so resembles an invoice or a booking confirmation. The test is not how official it looks: it is whether the customer is SUBMITTING their own paperwork ("document") or SHOWING YOU A TRIP they are interested in ("holiday_info"). A screenshot of a travel agency\'s own social-media post — ours or a competitor\'s — is always the latter.\n' +
             '- "other": anything else (a general photo with no usable trip details and no document).\n' +
             "description — depends on kind:\n" +
             '- for "document": ONE short factual sentence per image: what it is and the key details visible EXACTLY as shown (names, reference/document numbers, expiry dates).\n' +
@@ -1791,6 +2031,13 @@ export async function describeImageAttachments(attachments: ImageAttachmentLike[
 // Best-effort extraction of the date/time the customer says they're available
 // for a callback, in Europe/London terms. Returns null if nothing usable was
 // stated (the task is still created — just with no due date).
+// Sanity bounds on the callback time the model extracts (see the check at the
+// end of parseAvailabilityTime). A couple of minutes of slack absorbs the
+// round-trip on "call me now"-style answers; anything further back is a wrong
+// year or a wrong day, and anything past the far bound is not a callback.
+const PAST_CALLBACK_TOLERANCE_MS = 5 * 60 * 1000;
+const MAX_CALLBACK_AHEAD_MS = 365 * 24 * 60 * 60 * 1000;
+
 export async function parseAvailabilityTime(text: string, ctx?: AiUsageCtx): Promise<Date | null> {
   const now = new Date();
   let raw: string | undefined;
@@ -1841,6 +2088,20 @@ export async function parseAvailabilityTime(text: string, ctx?: AiUsageCtx): Pro
     const instant = parseUkLocalDateTime(value.replace(/(?:Z|[+-]\d{2}:?\d{2})$/i, "").replace(/\.\d+$/, ""));
     if (!instant) {
       console.warn(`[ai-conversation.brain] parseAvailabilityTime got an unusable date/time: ${value}`);
+      return null;
+    }
+    // The prompt says "never a date/time in the past", but the model does get
+    // the year wrong ("Friday at 2" resolved into last year) and a boundary
+    // phrase can land a minute behind. A past due date is worse than none: the
+    // task is instantly overdue, and the confirmation promises a call at a time
+    // that has already gone. Same for an absurdly distant one — a callback is
+    // days away, not years. Either way, fall back to "no usable time", which
+    // the callers already handle (next UK slot / undated task).
+    const aheadMs = instant.getTime() - Date.now();
+    if (aheadMs < -PAST_CALLBACK_TOLERANCE_MS || aheadMs > MAX_CALLBACK_AHEAD_MS) {
+      console.warn(
+        `[ai-conversation.brain] parseAvailabilityTime rejected an out-of-range callback time: ${value} (${Math.round(aheadMs / 60000)}m from now)`,
+      );
       return null;
     }
     return instant;

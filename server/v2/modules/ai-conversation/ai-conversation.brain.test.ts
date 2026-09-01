@@ -10,6 +10,7 @@ import {
   IMAGE_TRIAGE_MAX_IMAGES,
   inferHolidayTypeFromText,
   looksLikeDocumentMention,
+  looksLikeDealMention,
   isAcknowledgement,
   looksLikeActionableAdmin,
   isOpenAvailability,
@@ -172,6 +173,29 @@ describe("inferHolidayTypeFromText", () => {
   it("prefers cruise when both cruise and lodge-ish wording appear", () => {
     expect(inferHolidayTypeFromText("a cruise, not a lodge holiday")).toBe("Cruise Package");
   });
+
+  // The backstop reads a whole buildTranscript-shaped conversation, which
+  // contains OUR replies as well as the customer's. Typing a Benidorm package
+  // enquiry as a Cruise Package because WE said the word "cruise" swaps the
+  // entire required-field checklist and logs the wrong holiday type.
+  it("ignores the agency's own words in a transcript", () => {
+    expect(
+      inferHolidayTypeFromText(["Customer: 2 weeks in Benidorm", "Agent: we don't do cruise-only bookings, but I can help"].join("\n")),
+    ).toBeNull();
+    expect(
+      inferHolidayTypeFromText(["Customer: somewhere warm in May", "Agent: a lodge with a hot tub is lovely this time of year"].join("\n")),
+    ).toBeNull();
+  });
+
+  it("still reads the customer's own words in a transcript", () => {
+    expect(inferHolidayTypeFromText(["Agent: what were you thinking?", "Customer: a cruise round the Med"].join("\n"))).toBe(
+      "Cruise Package",
+    );
+  });
+
+  it("keeps a customer message that wraps onto its own lines", () => {
+    expect(inferHolidayTypeFromText(["Agent: hi there", "Customer: hello", "we fancy a cruise"].join("\n"))).toBe("Cruise Package");
+  });
 });
 
 describe("normalizeTurnSlots", () => {
@@ -216,6 +240,36 @@ describe("normalizeTurnSlots", () => {
 describe("decideDeterministicRoute (Phase 3.2 route precedence)", () => {
   it("routes to admin when an actionable signal breaks out of an in-flight enquiry", () => {
     expect(decideDeterministicRoute({ enquiryInFlight: true, actionable: true, adminAsk: true })).toBe("admin");
+  });
+
+  // A third-party enquiry never onboards the sender, so an admin verdict there
+  // cannot reach the admin bot (its clientId guard fails) — it just falls
+  // through to the sales bot with its vector retrieval skipped. A document on
+  // such a turn belongs to the enquiry, so it must not force admin at all.
+  describe("third-party (beneficiary) enquiry carve-out", () => {
+    const base = { enquiryInFlight: true, beneficiaryInFlight: true, hasAttachments: true } as const;
+
+    it("keeps a document attachment on sales", () => {
+      expect(decideDeterministicRoute({ ...base, attachmentKind: "document", actionable: false, adminAsk: false })).toBe("sales");
+    });
+
+    it("keeps an untriaged attachment on sales too (vision failed → document fail-safe)", () => {
+      expect(decideDeterministicRoute({ ...base, attachmentKind: null, actionable: false, adminAsk: false })).toBe("sales");
+    });
+
+    it("still breaks out to admin for a genuine complaint", () => {
+      expect(decideDeterministicRoute({ ...base, attachmentKind: "document", actionable: true, adminAsk: false })).toBe("admin");
+    });
+
+    it("still breaks out to admin when the customer supplies verification details", () => {
+      expect(decideDeterministicRoute({ ...base, attachmentKind: "document", actionable: false, adminAsk: true })).toBe("admin");
+    });
+
+    it("leaves the non-beneficiary case exactly as it was", () => {
+      expect(
+        decideDeterministicRoute({ enquiryInFlight: true, hasAttachments: true, attachmentKind: "document", actionable: false, adminAsk: false }),
+      ).toBe("admin");
+    });
   });
 
   it("routes to admin when an attachment breaks out of an in-flight enquiry, even if not textually actionable", () => {
@@ -752,6 +806,36 @@ describe("effectiveAttachmentKind (customer's words vs vision verdict)", () => {
     expect(effectiveAttachmentKind("other", "")).toBe("other");
   });
 
+  // The mirror of the document tie-break. Without it a screenshot of one of OUR
+  // OWN social posts was ticketed to admin: a null triage forced "document" no
+  // matter what the customer wrote, and a "document" verdict ignored their
+  // words entirely — and a deal advert with a hotel, dates, price and terms
+  // reads a lot like an invoice to the classifier.
+  it("the customer naming a deal → holiday_info, even when vision said document", () => {
+    expect(effectiveAttachmentKind("document", "saw this on your facebook, how much?")).toBe("holiday_info");
+    expect(effectiveAttachmentKind("document", "is this still available?")).toBe("holiday_info");
+    expect(effectiveAttachmentKind("other", "your post from yesterday")).toBe("holiday_info");
+  });
+
+  it("the customer naming a deal rescues a failed vision call too", () => {
+    // A PDF, an oversized image, or a vision outage — all arrive as null.
+    expect(effectiveAttachmentKind(null, "how much is this one?")).toBe("holiday_info");
+    expect(effectiveAttachmentKind(null, "seen this on insta")).toBe("holiday_info");
+    expect(effectiveAttachmentKind(undefined, "can we do this deal")).toBe("holiday_info");
+  });
+
+  it("a named document still beats a deal mention — a passport must never be sorted into sales", () => {
+    expect(effectiveAttachmentKind(null, "saw this on your page, and here's my passport")).toBe("document");
+    expect(effectiveAttachmentKind("other", "how much is this? sending my insurance too")).toBe("document");
+  });
+
+  it("keeps the fail-safe when the customer says nothing either way", () => {
+    // No signal in either direction: a spurious ticket beats a passport
+    // quietly sorted into a sales enquiry and logged for nobody.
+    expect(effectiveAttachmentKind(null, "")).toBe("document");
+    expect(effectiveAttachmentKind(null, "look at this lovely beach!")).toBe("document");
+  });
+
   it("a confident document/holiday_info verdict stands regardless of text", () => {
     expect(effectiveAttachmentKind("document", "look at this")).toBe("document");
     expect(effectiveAttachmentKind("holiday_info", "can you do this deal? passport ready when needed")).toBe("holiday_info");
@@ -1107,6 +1191,31 @@ describe("buildStyleExamplesBlock — personal data never reaches the prompt", (
     expect(block).toContain("never name a colleague to a customer");
   });
 
+  // The anonymiser deliberately KEEPS destinations, hotels, dates and prices —
+  // they are what the examples teach. So the "don't borrow another customer's
+  // trip" rule is the only thing standing between those and a reply, and it
+  // used to live in the sales caller's header string: one of eight call sites.
+  it("carries the do-not-borrow rule on EVERY call site, not just the sales prompt", () => {
+    const block = buildStyleExamplesBlock([styleExample], "HEADER");
+
+    expect(block).toContain("OTHER PEOPLE'S conversations");
+    expect(block).toMatch(/no destination, hotel, resort, date, price, or trip/i);
+    expect(block).toContain("Never reuse one of");
+  });
+
+  it("gates entries by audience when the caller hands over an unfiltered list", () => {
+    const adminOnly = { ...styleExample, id: "kb-style-2", audience: "admin" } as OrgKnowledgeBase;
+
+    // No audience argument → unchanged behaviour (caller pre-filtered).
+    expect(buildStyleExamplesBlock([adminOnly], "HEADER")).not.toBeNull();
+    // Audience given → an admin-only example is invisible to the sales bot.
+    expect(buildStyleExamplesBlock([adminOnly], "HEADER", "sales")).toBeNull();
+    expect(buildStyleExamplesBlock([adminOnly], "HEADER", "admin")).not.toBeNull();
+    // A general-audience example stays visible to both.
+    expect(buildStyleExamplesBlock([styleExample], "HEADER", "sales")).not.toBeNull();
+    expect(buildStyleExamplesBlock([styleExample], "HEADER", "admin")).not.toBeNull();
+  });
+
   it("scrubs it on the real path into the system prompt too", () => {
     const prompt = buildSystemPrompt(null, [styleExample], null, true, { kb: [], quotes: [] });
 
@@ -1116,5 +1225,24 @@ describe("buildStyleExamplesBlock — personal data never reaches the prompt", (
 
   it("still returns null when the org has no style examples", () => {
     expect(buildStyleExamplesBlock([], "HEADER")).toBeNull();
+  });
+});
+
+describe("looksLikeDealMention", () => {
+  it("matches the ways customers refer to a post they have seen", () => {
+    expect(looksLikeDealMention("saw this on your facebook")).toBe(true);
+    expect(looksLikeDealMention("spotted this on your page")).toBe(true);
+    expect(looksLikeDealMention("your post")).toBe(true);
+    expect(looksLikeDealMention("you posted this yesterday")).toBe(true);
+    expect(looksLikeDealMention("is this deal still on")).toBe(true);
+    expect(looksLikeDealMention("how much is this?")).toBe(true);
+    expect(looksLikeDealMention("is this still available")).toBe(true);
+  });
+
+  it("does not fire on a document being submitted", () => {
+    expect(looksLikeDealMention("here's a picture of my passport")).toBe(false);
+    expect(looksLikeDealMention("sending my insurance document")).toBe(false);
+    expect(looksLikeDealMention("photo attached")).toBe(false);
+    expect(looksLikeDealMention("")).toBe(false);
   });
 });
