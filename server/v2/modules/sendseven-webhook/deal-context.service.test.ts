@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasPostReferenceSignal,
   explicitDatesIn,
   isAffirmative,
   mentionsExternalSource,
@@ -628,6 +629,43 @@ describe("isAffirmative", () => {
   it("does not mistake other replies for confirmation", () => {
     for (const t of ["no not that one", "Yesterday I saw it", "the other one", "how much is it?", ""]) {
       expect(isAffirmative(t), t).toBe(false);
+    }
+  });
+});
+
+// LIVE FAILURE. "Hiya are u doing deals for ac Milan flights and hotels?" read
+// as a reference to one of our posts — purely because of the bare word "deals"
+// — which let similarity pin an unrelated Marhaba Royal deal and name it back
+// to the customer. This gate is the only thing standing between "I want to go
+// to X" and "I saw your X deal", so its negatives matter more than its
+// positives.
+describe("hasPostReferenceSignal — generic commercial words are not evidence", () => {
+  it("does not fire on ordinary ways of asking what an agency sells", () => {
+    for (const t of [
+      "Hiya are u doing deals for ac Milan flights and hotels?",
+      "do you do deals for tenerife",
+      "have you got any offers for spain in september",
+      "any deals for Spain in September",
+      "whats your best price for tenerife in october",
+      "looking for a holiday to Albufeira next August near a beach please",
+    ]) {
+      expect(hasPostReferenceSignal(t)).toBe(false);
+    }
+  });
+
+  it("still fires when they actually point at a post", () => {
+    for (const t of [
+      "saw this on your facebook",
+      "is this deal still available",
+      "your deal looked good",
+      "the deal you posted yesterday",
+      "spotted your advert",
+      "I saw your post about kos",
+      "sending you a screenshot",
+      // The image-details note the worker injects for a screenshot they sent.
+      "[Details from the image(s) I've sent in this chat]",
+    ]) {
+      expect(hasPostReferenceSignal(t)).toBe(true);
     }
   });
 });

@@ -779,6 +779,108 @@ function parseFlightLegCards(text: string | undefined): ParsedFlightModal | null
   };
 }
 
+// Fourth flight convention: INLINE PROSE legs, where a whole leg is written as
+// one sentence instead of a card or a stacked list:
+//   Manchester to Denpasar/Bali, Return, 2 Adults
+//   Outbound: Depart MAN 17th Jun 2027, 18:40, Arrive DPS 19th Jun 2027, 00:05 | Flying with: Swiss International (LX381) - Economy class
+//   Inbound: Depart DPS 28th Jun 2027, 13:20, Arrive MAN 29th Jun 2027, 08:15 | Flying with: Singapore Airlines (SQ939) - Economy class
+// Keyed on the SHAPE — a "Depart …" clause followed by an "Arrive …" clause on
+// the same line, each carrying an airport code, a date and a time — so any
+// portal writing its itinerary as prose is read without new configuration.
+// Unlike the stacked layout this one states BOTH dates, so an after-midnight
+// arrival keeps its own date rather than borrowing the departure's.
+const OUT_LABEL = /\b(outbound|outward|going out|going there|departing)\b/i;
+const RET_LABEL = /\b(inbound|returning|return leg|return flight|coming back|coming home|homebound)\b/i;
+const DEPART_WORD = /\bdepart(?:s|ing|ure)?\b/i;
+const ARRIVE_WORD = /\barriv(?:e|es|ing|al)\b/i;
+const DATE_IN_TEXT =
+  /(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\.?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[-/]\d{1,2}[-/]\d{4})/;
+// "Manchester to Denpasar/Bali, Return, 2 Adults" — the header portals print
+// above such an itinerary. Only read for the airport NAMES, which the leg
+// sentences themselves give as codes alone.
+const ROUTE_HEADER = /^([A-Za-z][A-Za-z .'/-]{2,39}?)\s+to\s+([A-Za-z][A-Za-z .'/-]{2,39}?)(?:,|$)/;
+
+// Reads one "<code> <date>, <time>" clause. The code is the token right after
+// the Depart/Arrive keyword, so carrier text further along the line can never
+// be mistaken for an airport.
+function scanInlineClause(clause: string): { code: string; when: string } | null {
+  const date = DATE_IN_TEXT.exec(clause)?.[1] ?? '';
+  if (!date) return null;
+  const time = /\b(\d{1,2}:\d{2})\b/.exec(clause)?.[1] ?? '';
+  const head = clause.slice(0, clause.indexOf(date));
+  const code = [...head.matchAll(/\b([A-Z]{3})\b/g)].map((m) => m[1]).find((c) => !NOT_A_CODE.test(c)) ?? '';
+  return { code, when: combineDateTime(date, time) };
+}
+
+function parseInlineLeg(line: string): {
+  depart: string;
+  arrive: string;
+  fromCode: string;
+  toCode: string;
+  flightNo: string;
+} | null {
+  const d = DEPART_WORD.exec(line);
+  const a = ARRIVE_WORD.exec(line);
+  if (!d || !a || a.index <= d.index) return null;
+  const dep = scanInlineClause(line.slice(d.index + d[0].length, a.index));
+  // The arrival clause ends where the carrier note starts.
+  const arr = scanInlineClause(line.slice(a.index + a[0].length).split(/\s*[|·•]\s*/)[0]);
+  if (!dep) return null;
+  const tail = line.includes('|') ? line.slice(line.indexOf('|')) : line.slice(a.index);
+  const flightNo =
+    /\(([A-Z]{1,3}\s?\d{1,4}[A-Z]?)\)/.exec(line)?.[1] ?? /\b([A-Z]{2}\s?\d{1,4}[A-Z]?)\b/.exec(tail)?.[1] ?? '';
+  return {
+    depart: dep.when,
+    arrive: arr?.when ?? '',
+    fromCode: dep.code,
+    toCode: arr?.code ?? '',
+    flightNo: flightNo.replace(/\s+/g, ''),
+  };
+}
+
+function parseFlightInlineLegs(text: string | undefined): ParsedFlightModal | null {
+  if (!text) return null;
+  const lines = text.split('\n').map((l) => l.trim());
+  const legs: { leg: NonNullable<ReturnType<typeof parseInlineLeg>>; isReturn: boolean; index: number }[] = [];
+  lines.forEach((line, index) => {
+    if (!line) return;
+    const leg = parseInlineLeg(line);
+    if (leg) legs.push({ leg, isReturn: RET_LABEL.test(line) && !OUT_LABEL.test(line), index });
+  });
+  if (legs.length === 0) return null;
+
+  const outEntry = legs.find((l) => !l.isReturn) ?? legs[0];
+  const retEntry = legs.find((l) => l !== outEntry && l.isReturn) ?? legs.find((l) => l !== outEntry);
+  const out = outEntry.leg;
+  const ret = retEntry?.leg;
+
+  // Airport names off the route header directly above the outbound leg, when
+  // there is one — the leg sentences name airports by code only.
+  let homeName = '';
+  let destName = '';
+  for (let i = outEntry.index - 1; i >= 0 && i >= outEntry.index - 3; i--) {
+    if (!lines[i]) continue;
+    const m = ROUTE_HEADER.exec(lines[i]);
+    if (m) {
+      [homeName, destName] = [m[1].trim(), m[2].trim()];
+      break;
+    }
+  }
+
+  return {
+    homeName,
+    homeCode: out.fromCode,
+    destName,
+    destCode: out.toCode,
+    outDepart: out.depart,
+    outArrive: out.arrive,
+    retDepart: ret?.depart ?? '',
+    retArrive: ret?.arrive ?? '',
+    outFlightNo: out.flightNo,
+    retFlightNo: ret?.flightNo ?? '',
+  };
+}
+
 // ─── Flights from the operator's own booking JSON ────────────────────────────
 // Best source by a distance: operators embed the booking record as JSON in the
 // page, so the legs arrive already structured — no shadow DOM, no collapsed
@@ -907,13 +1009,22 @@ const URL_DATE_KEYS = [
   'start', 'date', 'when', 'traveldate', 'travel_date', 'checkin', 'arrival', 'depart',
   'from', 'datefrom', 'startdate', 'start_date', 'departdate', 'depart_date',
   'departuredate', 'departure_date', 'outbound', 'outbounddate', 'checkindate', 'check_in',
+  // Cruise checkouts date the deal by its SAILING, never by a "checkin".
+  'saildate', 'sail_date', 'sailingdate', 'sailing_date', 'embarkdate', 'embarkationdate',
+  'cruisedate', 'cruise_date',
 ] as const;
 
 function dateFromUrl(url: string): string {
   try {
-    const params = new URL(url).searchParams;
+    // Param names are matched case-INSENSITIVELY: portals spell the same key
+    // every which way ("sailDate", "departDate", "CHECKIN"), and a key list can
+    // never enumerate the casings.
+    const params = new Map<string, string>();
+    for (const [k, v] of new URL(url).searchParams) {
+      if (!params.has(k.toLowerCase())) params.set(k.toLowerCase(), v);
+    }
     for (const key of URL_DATE_KEYS) {
-      const v = params.get(key) ?? params.get(key.toUpperCase());
+      const v = params.get(key);
       if (v) {
         const d = parseDate(v);
         if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
@@ -986,10 +1097,44 @@ function occupancyFromUrl(url: string): { adults: number; children: number } | n
       const children = Number(params.get('children') ?? params.get('ch')) || 0;
       return { adults, children };
     }
+    const rooms = occupancyFromRoomParams(params);
+    if (rooms) return rooms;
   } catch {
     /* not a URL */
   }
   return null;
+}
+
+// Duration written into the page's own wording, e.g. "5-Night Hamburg &
+// Rotterdam Cruise". Deliberately keyed on the SINGULAR, adjectival form
+// ("5-night holiday", "7 night stay") — the plural ("2 nights") is what a
+// duration PICKER prints for options the guest hasn't chosen, and reading one
+// of those would report someone else's holiday length.
+function nightsFromText(pageText: string): number {
+  const m = /\b(\d{1,2})[-\s]night\b/i.exec(pageText);
+  const n = m ? Number(m[1]) : 0;
+  return n > 0 && n < 100 ? n : 0;
+}
+
+// Party size from INDEXED ROOM PARAMS — "r0a=2&r0c=0" (room 0: 2 adults, 0
+// children), the shape cruise and multi-room checkouts use. Case-sensitive on
+// purpose: the same URLs carry unrelated capitalised keys ("r0A=1102" is a
+// price), and a value is only believed when it reads as a plausible headcount.
+function occupancyFromRoomParams(params: URLSearchParams): { adults: number; children: number } | null {
+  let adults = 0;
+  let children = 0;
+  let sawAdults = false;
+  for (const [key, value] of params) {
+    const n = Number(value);
+    if (!Number.isInteger(n) || n < 0 || n > 20) continue;
+    if (/^r\d+a$/.test(key)) {
+      adults += n;
+      sawAdults = true;
+    } else if (/^r\d+c$/.test(key)) {
+      children += n;
+    }
+  }
+  return sawAdults && adults > 0 ? { adults, children } : null;
 }
 
 function nightsFromUrl(url: string): number {
@@ -1005,6 +1150,15 @@ function nightsFromUrl(url: string): number {
   return 0;
 }
 
+// A date normalised to YYYY-MM-DD, or '' when the value isn't a date at all.
+// parseDate hands back whatever it was given when nothing matches, which is
+// fine for a best-effort field but not for one date that has to EQUAL another.
+function isoDate(raw: string): string {
+  if (!raw) return '';
+  const d = parseDate(raw);
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+}
+
 // The calendar day of a "YYYY-MM-DDTHH:mm" stamp, or '' if there isn't one.
 function dateOnly(stamp: string | undefined): string {
   const m = /^(\d{4}-\d{2}-\d{2})/.exec(stamp ?? '');
@@ -1017,6 +1171,105 @@ function addNights(isoDate: string, nights: number): string {
   if (Number.isNaN(d.getTime())) return isoDate;
   d.setUTCDate(d.getUTCDate() + nights);
   return d.toISOString().slice(0, 10);
+}
+
+// ─── Cruise itinerary printed as a DAY / PORT table ──────────────────────────
+// The day-by-day ports are the one part of a cruise page that no field rule can
+// reach: it is a repeating table, not a scalar. A spec CAN declare an
+// itineraryRegex, but the AI writes that from one example and it is the first
+// thing to break — so the shape is also read here, supplier-neutrally:
+//   Day  Port
+//   1
+//   Southampton, England
+//   Departs at 5:00 pm
+//   2
+//   Cruising
+//   Day at Sea
+// A row is a line holding ONLY a day number (or "Day 3"), then the port on the
+// next line and any detail line after it. Rows must run 1, 2, 3… without a gap,
+// which is what keeps a page of prices or a numbered FAQ from parsing as an
+// itinerary.
+// A day cell, which is a NUMBER OR A RANGE: an overnight port call is printed
+// as one row spanning two days ("8 - 9", "Days 8-9"). Stripping the non-digits
+// out of that — which both readers below used to do — turned day 8-9 into day
+// 89, and the run of days then broke at the range, truncating the itinerary.
+const ITINERARY_DAY_LINE = /^(?:days?\s*)?(\d{1,2})(?:\s*[-–—]\s*(\d{1,2})?)?[\s.:)\t]*$/i;
+// The same shape read out of a longer string, for spec-supplied day values
+// ("Day 8-9", "8 – 9").
+function parseDayRange(raw: string): { start: number; end: number } | null {
+  const m = /(\d{1,2})(?:\s*[-–—]\s*(\d{1,2}))?/.exec(raw);
+  if (!m) return null;
+  const start = Number(m[1]);
+  const end = m[2] ? Number(m[2]) : start;
+  // A range runs forwards and stays short; anything else is read as one day.
+  return { start, end: end > start && end - start <= 3 ? end : start };
+}
+
+// One row per day the cell covers, so an overnight port appears on both of its
+// days instead of leaving a hole in the list.
+function daysInRange(range: { start: number; end: number }): number[] {
+  const days: number[] = [];
+  for (let d = range.start; d <= range.end; d++) days.push(d);
+  return days;
+}
+
+function parseItineraryTable(pageText: string): { day: number; description: string; sub_description?: string }[] {
+  const lines = pageText.split('\n').map((l) => l.replace(/\s+/g, ' ').trim());
+  // Every line that is just a day number (or a day range), with what it claims.
+  const marks: { index: number; start: number; end: number }[] = [];
+  lines.forEach((line, index) => {
+    const m = ITINERARY_DAY_LINE.exec(line);
+    if (!m) return;
+    const start = Number(m[1]);
+    const end = m[2] ? Number(m[2]) : start;
+    marks.push({ index, start, end: end > start && end - start <= 3 ? end : start });
+  });
+
+  const rows: { day: number; description: string; sub_description?: string }[] = [];
+  let lastDay = 0;
+  for (let i = 0; i < marks.length; i++) {
+    // Days must run 1, 2, 3… without a gap — measured against the last day
+    // COVERED, so a "8 - 9" row is followed by 10. That is what keeps a
+    // numbered FAQ or a list of prices from parsing as an itinerary. A "1"
+    // restarts the run, so a stray number earlier in the page can't hold it
+    // hostage.
+    if (marks[i].start !== lastDay + 1) {
+      if (marks[i].start !== 1) continue;
+      rows.length = 0;
+    }
+    // The row's content runs to the next day line — bounded, so the last row
+    // can't swallow the rest of the page.
+    const end = Math.min(marks[i + 1]?.index ?? lines.length, marks[i].index + 5);
+    const content = lines
+      .slice(marks[i].index + 1, end)
+      .filter((l) => l && !l.startsWith('*') && l.length <= 80);
+    if (!content.length) continue;
+    for (const day of daysInRange(marks[i])) {
+      rows.push({
+        day,
+        description: content[0],
+        // "Departs at 5:00 pm", "Day at Sea", "From 7:00 am - 4:00 pm" — the
+        // times the port line doesn't carry.
+        ...(content[1] ? { sub_description: content[1] } : {}),
+      });
+    }
+    lastDay = marks[i].end;
+  }
+  // Two rows is a coincidence; three consecutive days is an itinerary.
+  return rows.length >= 3 ? rows : [];
+}
+
+// The value a labelled pair states, e.g. "Onboard" / "Freedom of the Seas".
+// Cruise pages print their headline facts this way — label line, value line —
+// and the label vocabulary is industry-standard, not supplier wording.
+function labelledValue(pageText: string, label: RegExp): string {
+  const lines = pageText.split('\n').map((l) => l.trim());
+  for (let i = 0; i < lines.length; i++) {
+    if (!label.test(lines[i])) continue;
+    const value = lines.slice(i + 1).find((l) => l);
+    if (value && value.length <= 80 && !label.test(value)) return value;
+  }
+  return '';
 }
 
 /**
@@ -1079,7 +1332,7 @@ export function runExtractionSpec(
   // missed (the deal URL almost always carries occupancy + duration params).
   const occupancy = occupancyFromUrl(ctx.url);
   const adults = nbr(f.adults) || occupancy?.adults || 2;
-  const nights = nbr(f.no_of_nights) || nightsFromUrl(ctx.url);
+  const nights = nbr(f.no_of_nights) || nightsFromUrl(ctx.url) || nightsFromText(ctx.title) || nightsFromText(text);
   const pricePerPerson = nbr(f.price_per_person);
   const total = nbr(f.sales_price) || pricePerPerson * adults;
   const departureName = str(f.departure_airport_name);
@@ -1127,9 +1380,10 @@ export function runExtractionSpec(
   // Prefer a flight-details modal (real times + destination name/code) when one
   // was captured; otherwise fall back to home name (page) + destination code
   // (image) with date-only times.
-  // Two conventions, both supplier-neutral: a "Depart:/Arrive:" details modal
-  // (Jet2-shaped), else a stacked itinerary printed in the page's own text
-  // (easyJet-shaped). The modal wins when present because it is unambiguous;
+  // Four conventions, all supplier-neutral: a "Depart:/Arrive:" details modal
+  // (Jet2-shaped), a stacked itinerary printed in the page's own text
+  // (easyJet-shaped), one-sentence legs (Vista-shaped) and OUT/RTN leg cards
+  // (TUI-shaped). The modal wins when present because it is unambiguous;
   // the list is searched in the modal text first, then the page body, since
   // some portals render the itinerary inline with no modal at all.
   // The operator's own booking JSON wins outright when the page carries one:
@@ -1140,6 +1394,8 @@ export function runExtractionSpec(
     parseFlightModal(ctx.flightsText, departureName) ??
     parseFlightList(ctx.flightsText) ??
     parseFlightList(text) ??
+    parseFlightInlineLegs(ctx.flightsText) ??
+    parseFlightInlineLegs(text) ??
     parseFlightLegCards(ctx.flightsText) ??
     parseFlightLegCards(text);
   // Prefer the extracted date; fall back to the deal URL (reliable) when the
@@ -1152,7 +1408,17 @@ export function runExtractionSpec(
   // sources look. Without it travel_date imported empty — and because
   // check_in_date_time and the return leg's fallback times are derived from
   // it, an empty travel_date emptied those too.
-  const travelDate = str(f.travel_date) || dateFromUrl(ctx.url) || dateOnly(modal?.outDepart);
+  //
+  // A CRUISE HAS ONE DATE: the sailing. cruise_date is therefore resolved first
+  // and becomes the travel date, so the two can never disagree and everything
+  // derived from travel_date — the return date, check_in_date_time, the flight
+  // fallback times — lines up with the sailing. It is normalised on the way in:
+  // a spec rule captures the page's own wording ("21 Jun 2027") unless it
+  // declares transform:'date', and that reached the form as text the date field
+  // could not read.
+  const sailDate = isoDate(str(f.cruise_date));
+  const travelDate =
+    sailDate || isoDate(str(f.travel_date)) || str(f.travel_date) || dateFromUrl(ctx.url) || dateOnly(modal?.outDepart);
   const returnDate = addNights(travelDate, nights);
   const destName = modal?.destName || arrivalName;
   const destCode = modal?.destCode || arrivalCode;
@@ -1232,19 +1498,36 @@ export function runExtractionSpec(
 
   // ─── Cruise Package: added only when the page is a cruise ──────────────────
   // (client detects a cruise from cruise_line + ship_name).
-  if (str(f.cruise_line) && str(f.ship_name)) {
-    result.cruise_line = str(f.cruise_line);
-    result.ship_name = str(f.ship_name);
-    result.cruise_date = str(f.cruise_date) || travelDate;
-    result.cruise_title = str(f.cruise_title);
-    result.embarkation = str(f.embarkation);
-    result.debarkation = str(f.debarkation);
+  //
+  // A day-by-day PORT TABLE is cruise evidence in its own right — nothing else
+  // publishes one — so a page carrying one is treated as a cruise even when the
+  // spec's cruise_line/ship_name rules missed. Without that the whole cruise
+  // block was dropped, and with it the itinerary: the client routes a scraped
+  // deal to its cruise importer on cruise_line + ship_name, and only that
+  // importer maps the itinerary onto the form.
+  const portTable = parseItineraryTable(text);
+  // Label pairs the page prints beside the table ("Onboard" / "Freedom of the
+  // Seas"). Only consulted when the spec said nothing.
+  const shipName = str(f.ship_name) || (portTable.length ? labelledValue(text, /^(onboard|ship|your ship|sailing on)$/i) : '');
+  // The operator of a cruise line's own site IS the cruise line; an agent
+  // portal reselling a cruise names the line on the page, and its spec rule
+  // wins here.
+  const cruiseLine = str(f.cruise_line) || (portTable.length && shipName ? str(f.tour_operator) : '');
+  if (cruiseLine && shipName) {
+    result.cruise_line = cruiseLine;
+    result.ship_name = shipName;
+    result.cruise_date = travelDate; // === travel_date, by construction above
+    result.cruise_title = str(f.cruise_title) || str(f.quote_title);
+    result.embarkation =
+      str(f.embarkation) || labelledValue(text, /^(leaving from|departing from|departure port|sails from|embarkation)$/i);
+    // A cruise ends where its last day docks, which the table already states.
+    result.debarkation = str(f.debarkation) || portTable[portTable.length - 1]?.description || '';
     result.cabin_type = str(f.cabin_type);
     result.cabin_number = str(f.cabin_number);
     result.cruise_only = truthy(f.cruise_only);
     result.cruise_extras = str(f.cruise_extras);
 
-    const itinerary: { day: number; description: string }[] = [];
+    let itinerary: { day: number; description: string; sub_description?: string }[] = [];
     if (spec.itineraryRegex) {
       const re = (() => {
         try {
@@ -1257,11 +1540,16 @@ export function runExtractionSpec(
         let i = 0;
         for (const m of text.matchAll(re)) {
           i += 1;
-          const dayNum = m[1] ? parseInt(String(m[1]).replace(/\D/g, ''), 10) || i : i;
-          itinerary.push({ day: dayNum, description: (m[2] ?? m[1] ?? '').trim() });
+          // Ranges again: "Day 8-9" is days 8 AND 9, never day 89.
+          const range = m[1] ? parseDayRange(String(m[1])) : null;
+          const description = (m[2] ?? m[1] ?? '').trim();
+          for (const day of range ? daysInRange(range) : [i]) itinerary.push({ day, description });
         }
       }
     }
+    // The spec's own regex wins; the table scan is what saves a supplier whose
+    // rule was never generated or no longer matches.
+    if (!itinerary.length) itinerary = portTable;
     if (itinerary.length) result.itinerary = itinerary;
   }
 

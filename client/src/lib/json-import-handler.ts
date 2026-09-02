@@ -685,7 +685,9 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
   const rawItinerary = Array.isArray(cruise.itinerary) ? cruise.itinerary : Array.isArray(cruise.days) ? cruise.days : [];
   const itinerary = rawItinerary.map((d: any, idx: number) => {
     const rawDay = d?.day ?? d?.day_number;
-    const parsedDay = typeof rawDay === "number" ? rawDay : parseInt(String(rawDay ?? "").replace(/[^\d]/g, ""), 10);
+    // Take the FIRST number, not every digit: an overnight port call is written
+    // as a range ("8-9"), and stripping the non-digits made it day 89.
+    const parsedDay = typeof rawDay === "number" ? rawDay : Number(/\d{1,2}/.exec(String(rawDay ?? ""))?.[0]);
     return {
       day: Number.isFinite(parsedDay) && parsedDay > 0 ? parsedDay : idx + 1,
       description: String(d?.description ?? d?.port ?? ""),

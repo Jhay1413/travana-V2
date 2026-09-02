@@ -127,8 +127,22 @@ function priceAppearsIn(q: string, price: string): boolean {
 // Gates the date/price rescue below: "we want Rome on 12 April" happens to
 // contain a deal's exact travel date, but pinning that deal — and quoting its
 // hotel and price at someone who never saw the advert — is presumptuous.
+// "DEAL" ON ITS OWN IS NOT EVIDENCE. This gate is the ONLY thing stopping
+// similarity from pinning one of our posts to a customer who never saw one —
+// and it used to match the bare words deal/deals/offer/offers/ad/ads. So
+// "Hiya are u doing deals for ac Milan flights and hotels?" read as "I saw one
+// of your posts", similarity was let loose on a generic flights-and-hotels
+// query, and an unrelated Marhaba Royal deal got pinned and named back to the
+// customer. Those words are ordinary commercial English ("do you do deals
+// for…", "any offers?") and carry no evidence at all.
+//
+// So they now count ONLY when a determiner points at something specific —
+// "your deal", "this offer", "the deal you posted". Words that ARE evidential
+// on their own (saw/seen/spotted, post, advert, screenshot, facebook, insta,
+// story, reel, page) are unchanged, as are picture/photo/image, which the
+// image-details note relies on to signal a screenshot the customer sent.
 const POST_REFERENCE_RE =
-  /\b(saw|seen|spotted|post|posted|posting|advert|advertisement|ad|ads|deal|deals|offer|offers|facebook|fb|insta|instagram|social|screenshot|picture|photo|image|story|reel|page)\b/i;
+  /\b(?:saw|seen|spotted|post|posted|posting|advert|advertisement|facebook|fb|insta|instagram|social|screenshot|picture|photo|image|story|reel|page)\b|\b(?:your|ur|this|that|the|these|those)\s+(?:deals?|offers?|ads?)\b|\b(?:deals?|offers?|ads?)\s+(?:you|u|yous)\s+(?:posted|shared|advertised|put\s+up)\b/i;
 
 // "yes", "yeah that's the one", "correct" — enough to accept a confirmation of
 // a guessed deal. Deliberately narrow: anything else leaves the deal

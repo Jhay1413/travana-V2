@@ -1215,7 +1215,21 @@ export const replyWorker = {
       // NeonClient's name (a personalization nicety, not used for
       // extraction/correctness) — an acceptable trade-off to avoid the
       // redundant LLM call and the slot-discarding bug it caused.
-      const turn = firstTurn ?? (await generateTurn(botConfig, kb, clientRecord, transcriptForAi, enquiryStatus, priorSlots, true, retrieved, undefined, contactName));
+      // A deal (or a set of candidate posts) is in play, so the ONBOARDING prompt
+      // deliberately said nothing about it: "share nothing from here and finish
+      // onboarding first", with its one-time check and the which-post question
+      // both deferred to the NEXT reply. That makes the onboarding turn's text a
+      // holding line by construction ("I'll get all the details over to you
+      // shortly x"). Reusing it as the sales turn means the deferred reply never
+      // happens at all: the customer is left with a promise nothing fulfils, no
+      // deal check, no next core question — so the enquiry never completes and
+      // the callback is never asked for. Observed exactly that. Worth the second
+      // model call; it only fires on deal-pinned conversations.
+      const onboardingDeferredADeal = !!retrieved.deal || !!retrieved.dealCandidates?.length;
+      const reusedOnboardingTurn = !!firstTurn && !onboardingDeferredADeal;
+      const turn = reusedOnboardingTurn
+        ? (firstTurn as AiTurn)
+        : await generateTurn(botConfig, kb, clientRecord, transcriptForAi, enquiryStatus, priorSlots, true, retrieved, undefined, contactName);
       console.log(
         `[sendseven-webhook] conv=${conversationId} known=${knownClient} mode=${mode} intent=${turn.intent} ` +
           `handoff=${turn.hand_off} status=${enquiryStatus}`,
@@ -1226,7 +1240,7 @@ export const replyWorker = {
       // message as the deal question), and that prompt explicitly defers the
       // check to the next reply; consuming it here would burn the check
       // without ever asking it.
-      if (retrieved.deal?.tweakCheckPending && !firstTurn) prevContext.dealCheckAsked = true;
+      if (retrieved.deal?.tweakCheckPending && !reusedOnboardingTurn) prevContext.dealCheckAsked = true;
 
       if (turn.hand_off) return doHandoff(turn.reply);
 

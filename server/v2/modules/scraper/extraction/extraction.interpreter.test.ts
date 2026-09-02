@@ -1089,3 +1089,265 @@ describe("travel_date fallbacks", () => {
     expect(q.travel_date).toBe("");
   });
 });
+
+// A basket page that prints each leg as one sentence (Vista / Hays-shaped).
+// None of the card / stacked / modal parsers fit it, so flights imported with
+// no dates or times at all.
+describe("inline prose flight legs", () => {
+  const spec = { version: 1, fields: {} } as unknown as ExtractionSpec;
+
+  const VISTA_TEXT = [
+    "Basket Reference: BDG8YY",
+    "Flights",
+    "Manchester to Denpasar/Bali, Return, 2 Adults",
+    "Outbound: Depart MAN 17th Jun 2027, 18:40, Arrive DPS 19th Jun 2027, 00:05 | Flying with: Swiss International (LX381) - Economy class",
+    "Inbound: Depart DPS 28th Jun 2027, 13:20, Arrive MAN 29th Jun 2027, 08:15 | Flying with: Singapore Airlines (SQ939) - Economy class",
+    "Accommodation",
+    "Hard Rock Hotel Bali, Kuta/ Legian, 2 Adults",
+    "TOTAL HOLIDAY COST",
+    "£2613.69",
+  ].join("\n");
+
+  const q = runExtractionSpec(spec, { title: "VISTA", text: VISTA_TEXT, url: "https://x.test/itinerary.pl" }, "x");
+
+  it("reads both legs' dates and times", () => {
+    const [out, ret] = q.flights;
+    expect(out.departure_date_time).toBe("2027-06-17T18:40");
+    // The arrival states its own (next-day) date — it is not borrowed from the
+    // departure the way single-date layouts have to.
+    expect(out.arrival_date_time).toBe("2027-06-19T00:05");
+    expect(ret.departure_date_time).toBe("2027-06-28T13:20");
+    expect(ret.arrival_date_time).toBe("2027-06-29T08:15");
+  });
+
+  it("reads the airport codes, names and flight numbers", () => {
+    const [out, ret] = q.flights;
+    expect(out.departing_airport).toBe("MAN");
+    expect(out.arrival_airport).toBe("DPS");
+    expect(out.departing_airport_name).toBe("Manchester");
+    expect(out.arrival_airport_name).toBe("Denpasar/Bali");
+    expect(out.flight_number).toBe("LX381");
+    expect(ret.departing_airport).toBe("DPS");
+    expect(ret.arrival_airport).toBe("MAN");
+    expect(ret.flight_number).toBe("SQ939");
+  });
+
+  it("takes travel_date off the outbound leg when nothing else names it", () => {
+    expect(q.travel_date).toBe("2027-06-17");
+  });
+
+  it("does not hijack the stacked-itinerary or OUT/RTN layouts", () => {
+    const stacked = [
+      "Fri 14th Aug 2026", "EZY2051", "17:00", "23:25",
+      "Manchester", "(MAN)", "Rhodes, Diagoras", "(RHO)",
+      "Fri 21st Aug 2026", "EZY2052", "06:00", "10:20",
+      "Rhodes, Diagoras", "(RHO)", "Manchester", "(MAN)",
+    ].join("\n");
+    const s = runExtractionSpec(spec, { title: "", text: stacked, url: "https://x.test/d" }, "x");
+    expect(s.flights[0].departure_date_time).toBe("2026-08-14T17:00");
+    expect(s.flights[0].flight_number).toBe("EZY2051");
+  });
+});
+
+// A cruise-line checkout summary (Royal Caribbean-shaped). It carries no
+// flights and no "checkin" param, so the deal's date, length and party size all
+// have to come from conventions the interpreter already owns.
+describe("cruise checkout fallbacks", () => {
+  const spec = { version: 1, fields: {} } as unknown as ExtractionSpec;
+
+  const RCCL_URL =
+    "https://www.royalcaribbean.com/gbr/en/checkout/summary?groupId=FR05STH-1158403524&sailDate=2027-06-21&shipCode=FR&cabinClassType=INTERIOR&roomIndex=0&r0a=2&r0c=0&r0b=n&r0d=INTERIOR&r0A=1102&r0p=M";
+  const RCCL_TITLE = "5-night Hamburg & Rotterdam Cruise | Summary | Royal Caribbean Cruises";
+  const RCCL_TEXT = [
+    "5-Night Hamburg & Rotterdam Cruise",
+    "Leaving from", "Southampton, England",
+    "Onboard", "Freedom of the Seas",
+    "Dates", "21 Jun 2027", "26 Jun 2027",
+    "Guests", "2 Adults",
+    "Trip total", "£1,102.00 GBP",
+  ].join("\n");
+
+  const q = runExtractionSpec(spec, { title: RCCL_TITLE, text: RCCL_TEXT, url: RCCL_URL }, "x");
+
+  it("dates the deal from the sailing param, whatever its casing", () => {
+    expect(q.travel_date).toBe("2027-06-21");
+    expect(q.check_in_date_time).toBe("2027-06-21");
+  });
+
+  it("reads the length from the '5-Night …' wording", () => {
+    expect(q.no_of_nights).toBe(5);
+  });
+
+  it("ignores a plural duration picker, which lists options nobody chose", () => {
+    const picker = ["Durations", "2 nights", "-£206pp", "6 nights"].join("\n");
+    const p = runExtractionSpec(spec, { title: "", text: picker, url: "https://x.test/d" }, "x");
+    expect(p.no_of_nights).toBe(0);
+  });
+
+  it("reads party size from indexed room params, not the capitalised price key", () => {
+    const url = RCCL_URL.replace("r0a=2", "r0a=3").replace("r0c=0", "r0c=1");
+    const p = runExtractionSpec(spec, { title: RCCL_TITLE, text: RCCL_TEXT, url }, "x");
+    expect(p.adults).toBe(3); // not 1102 from "r0A=1102"
+    expect(p.children).toBe(1);
+  });
+});
+
+// The day-by-day ports sit in a "View Ports" drawer as a Day/Port table. No
+// field rule can reach a repeating table, and the spec's itineraryRegex is
+// AI-written from one example — so the shape is read supplier-neutrally.
+describe("cruise itinerary table", () => {
+  const CRUISE_TEXT = [
+    "5-Night Hamburg & Rotterdam Cruise",
+    "Leaving from", "Southampton, England",
+    "Onboard", "Freedom of the Seas",
+    "Dates", "21 Jun 2027", "26 Jun 2027",
+    "View Ports",
+    "Itinerary",
+    "Day\tPort",
+    "1\t", "Southampton, England", "Departs at 5:00 pm", "",
+    "2\t", "Cruising", "Day at Sea", "",
+    "3\t", "Hamburg, Germany", "From 7:00 am - 4:00 pm", "",
+    "4\t", "Rotterdam, Netherlands", "From 10:30 am - 9:00 pm", "",
+    "5\t", "Cruising", "Day at Sea", "",
+    "6\t", "Southampton, England", "Arrives at 5:30 am", "",
+    "* A cruising experience with us provides access to a range of destinations.",
+  ].join("\n");
+
+  // What a cruise line's own spec carries: operator + currency, no cruise rules.
+  const spec = {
+    version: 1,
+    constants: { tour_operator: "Royal Caribbean", currency: "GBP" },
+    fields: {},
+  } as unknown as ExtractionSpec;
+  const CTX = { title: "", text: CRUISE_TEXT, url: "https://www.royalcaribbean.com/checkout/summary?sailDate=2027-06-21" };
+
+  it("reads every day, its port and the times beneath it", () => {
+    const q = runExtractionSpec(spec, CTX, "x");
+    expect(q.itinerary).toHaveLength(6);
+    expect(q.itinerary?.[0]).toEqual({ day: 1, description: "Southampton, England", sub_description: "Departs at 5:00 pm" });
+    expect(q.itinerary?.[2]).toEqual({ day: 3, description: "Hamburg, Germany", sub_description: "From 7:00 am - 4:00 pm" });
+    expect(q.itinerary?.[5].day).toBe(6);
+    // The trailing disclaimer is not a port.
+    expect(JSON.stringify(q.itinerary)).not.toContain("cruising experience with us");
+  });
+
+  it("treats the port table as cruise evidence when the spec has no cruise rules", () => {
+    const q = runExtractionSpec(spec, CTX, "x");
+    expect(q.ship_name).toBe("Freedom of the Seas");
+    expect(q.cruise_line).toBe("Royal Caribbean");
+    expect(q.embarkation).toBe("Southampton, England");
+    expect(q.debarkation).toBe("Southampton, England"); // the last day's port
+    expect(q.cruise_date).toBe("2027-06-21");
+  });
+
+  it("still prefers the spec's own itineraryRegex", () => {
+    const withRegex = { ...spec, itineraryRegex: String.raw`Day (\d+)\s*[-–]\s*(.+)` } as unknown as ExtractionSpec;
+    const text = `${CRUISE_TEXT}\nDay 1 - Dover, England\nDay 2 - Bruges, Belgium`;
+    const q = runExtractionSpec(withRegex, { ...CTX, text }, "x");
+    expect(q.itinerary).toHaveLength(2);
+    expect(q.itinerary?.[0].description).toBe("Dover, England");
+  });
+
+  it("does not read a page's stray numbers as an itinerary", () => {
+    const notACruise = ["Durations", "2", "-£206pp", "6", "nights", "Onboard", "Wi-Fi"].join("\n");
+    const q = runExtractionSpec(spec, { title: "", text: notACruise, url: "https://x.test/d" }, "x");
+    expect(q.itinerary).toBeUndefined();
+    expect(q.ship_name).toBeUndefined(); // and the deal is not turned into a cruise
+  });
+});
+
+// A cruise has one date: the sailing. cruise_date and travel_date must agree,
+// whichever of them the page states and however it writes it.
+describe("cruise date is the travel date", () => {
+  const CRUISE_TEXT = [
+    "Leaving from", "Southampton, England",
+    "Onboard", "Freedom of the Seas",
+    "Day\tPort",
+    "1\t", "Southampton, England", "Departs at 5:00 pm", "",
+    "2\t", "Cruising", "Day at Sea", "",
+    "3\t", "Hamburg, Germany", "From 7:00 am - 4:00 pm", "",
+  ].join("\n");
+
+  const specWith = (fields: Record<string, unknown>) =>
+    ({ version: 1, constants: { tour_operator: "Royal Caribbean" }, fields }) as unknown as ExtractionSpec;
+
+  it("normalises a sail date written in the page's own wording and travels on it", () => {
+    // No transform:'date' on the rule, so the raw capture is "21 Jun 2027" —
+    // which the form's date field could not read.
+    const spec = specWith({ cruise_date: { from: "text", regex: "Sails (.+)", group: 1 } });
+    const q = runExtractionSpec(spec, { title: "", text: `Sails 21 Jun 2027\n${CRUISE_TEXT}`, url: "https://x.test/d" }, "x");
+    expect(q.cruise_date).toBe("2027-06-21");
+    expect(q.travel_date).toBe("2027-06-21");
+    expect(q.check_in_date_time).toBe("2027-06-21");
+  });
+
+  it("keeps the two in step when only the travel date is known", () => {
+    const q = runExtractionSpec(specWith({}), { title: "", text: CRUISE_TEXT, url: "https://x.test/d?sailDate=2027-06-21" }, "x");
+    expect(q.travel_date).toBe("2027-06-21");
+    expect(q.cruise_date).toBe(q.travel_date);
+  });
+
+  it("lets the sailing win when a page states both", () => {
+    const spec = specWith({
+      travel_date: { from: "text", regex: String.raw`Book by ([\d-]+)`, group: 1 },
+      cruise_date: { from: "text", regex: String.raw`Sails ([\d-]+)`, group: 1 },
+    });
+    const text = `Book by 2027-04-12\nSails 2027-06-21\n${CRUISE_TEXT}`;
+    const q = runExtractionSpec(spec, { title: "", text, url: "https://x.test/d" }, "x");
+    expect(q.cruise_date).toBe("2027-06-21");
+    expect(q.travel_date).toBe("2027-06-21");
+  });
+});
+
+// An overnight port call is printed as ONE row spanning two days ("8 - 9").
+describe("cruise itinerary day ranges", () => {
+  const spec = {
+    version: 1,
+    constants: { tour_operator: "Royal Caribbean" },
+    fields: {},
+  } as unknown as ExtractionSpec;
+
+  const OVERNIGHT_TEXT = [
+    "Onboard", "Freedom of the Seas",
+    "Day\tPort",
+    "1\t", "Southampton, England", "Departs at 5:00 pm", "",
+    "2\t", "Cruising", "Day at Sea", "",
+    "3\t", "Hamburg, Germany", "From 7:00 am - 4:00 pm", "",
+    "4 - 5", "Amsterdam, Netherlands", "Overnight in port", "",
+    "6\t", "Cruising", "Day at Sea", "",
+    "7\t", "Southampton, England", "Arrives at 5:30 am", "",
+  ].join("\n");
+
+  const q = runExtractionSpec(spec, { title: "", text: OVERNIGHT_TEXT, url: "https://x.test/d?sailDate=2027-06-21" }, "x");
+
+  it("reads a range as its own days, never as one crushed number", () => {
+    const days = q.itinerary?.map((d) => d.day);
+    expect(days).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(days).not.toContain(45);
+  });
+
+  it("puts the overnight port on both of its days", () => {
+    expect(q.itinerary?.[3]).toEqual({ day: 4, description: "Amsterdam, Netherlands", sub_description: "Overnight in port" });
+    expect(q.itinerary?.[4]).toEqual({ day: 5, description: "Amsterdam, Netherlands", sub_description: "Overnight in port" });
+  });
+
+  it("keeps reading the days that follow a range", () => {
+    // The run used to break at the range and drop everything after it.
+    expect(q.itinerary?.[6]).toEqual({ day: 7, description: "Southampton, England", sub_description: "Arrives at 5:30 am" });
+  });
+
+  it("expands a range the spec's own itineraryRegex captured", () => {
+    const withRegex = {
+      version: 1,
+      // A spec that names the cruise itself, so detection doesn't lean on the
+      // port table this page doesn't have.
+      constants: { cruise_line: "Royal Caribbean", ship_name: "Freedom of the Seas" },
+      fields: {},
+      itineraryRegex: String.raw`Days? ([\d\s–-]+?):\s*(.+)`,
+    } as unknown as ExtractionSpec;
+    const text = ["Day 1: Dover", "Days 2-3: Bruges", "Day 4: Dover"].join("\n");
+    const r = runExtractionSpec(withRegex, { title: "", text, url: "https://x.test/d?sailDate=2027-06-21" }, "x");
+    expect(r.itinerary?.map((d) => d.day)).toEqual([1, 2, 3, 4]);
+    expect(r.itinerary?.[2]).toEqual({ day: 3, description: "Bruges" });
+  });
+});

@@ -735,8 +735,20 @@ export const internalChatTestflowService = {
     // Retrieval was computed above (before the onboarding gate). When this
     // same message completed onboarding, reuse that turn instead of a second
     // generateTurn call — mirrors reply-worker.
+    // A deal (or a set of candidate posts) is in play, so the ONBOARDING prompt
+    // deliberately said nothing about it: "share nothing from here and finish
+    // onboarding first", with its one-time check and the which-post question
+    // both deferred to the NEXT reply. That makes the onboarding turn's text a
+    // holding line by construction ("I'll get all the details over to you
+    // shortly x"). Reusing it as the sales turn means the deferred reply never
+    // happens at all: the customer is left with a promise nothing fulfils, no
+    // deal check, no next core question — so the enquiry never completes and
+    // the callback is never asked for. Observed exactly that. Worth the second
+    // model call; it only fires on deal-pinned conversations.
+    const onboardingDeferredADeal = !!retrieved.deal || !!retrieved.dealCandidates?.length;
+    const reusedOnboardingTurn = !!firstTurn && !onboardingDeferredADeal;
     const turn =
-      firstTurn ??
+      (reusedOnboardingTurn ? firstTurn : null) ??
       (await generateTurn(
         botConfig,
         kb,
@@ -753,7 +765,7 @@ export const internalChatTestflowService = {
     // Consume the one-time deal check only on a REAL sales turn — `firstTurn`
     // means we're reusing the onboarding turn, whose prompt defers the check
     // to the next reply. Mirrors reply-worker.
-    if (retrieved.deal?.tweakCheckPending && !firstTurn) prevContext.dealCheckAsked = true;
+    if (retrieved.deal?.tweakCheckPending && !reusedOnboardingTurn) prevContext.dealCheckAsked = true;
 
     if (turn.hand_off) {
       const replyMessage = await doHandoff(prevContext, turn.reply);
