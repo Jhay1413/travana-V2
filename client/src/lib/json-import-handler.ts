@@ -18,6 +18,34 @@ export interface JsonImportDeps {
   fallbackFieldMapper?: (data: Record<string, any>, setIfPresent: (key: string, val: unknown) => void, toIsoDate: (d: string | undefined) => string) => void;
 }
 
+// Resolving the form's package type must never fail SILENTLY. Every call site
+// used `packageTypesData?.find(...)` behind an `if (found)`, and
+// packageTypesData is a snapshot taken when the import began — so if that
+// lookup had not loaded, the import set no package type at all and the form's
+// "default new records to Package Holiday" effect then stamped the wrong type
+// on a cruise, with nothing said. Fall back to the live query cache (the same
+// key usePackageTypes writes), and speak up when even that cannot answer.
+const PACKAGE_TYPES_QUERY_KEY = ["lookup", "package-types"] as const;
+
+function resolvePackageTypeId(
+  name: string,
+  deps: Pick<JsonImportDeps, "packageTypesData" | "queryClient" | "toast">,
+): string | null {
+  const fromSnapshot = deps.packageTypesData?.find((p) => p.name === name);
+  if (fromSnapshot) return fromSnapshot.id;
+
+  const cached = deps.queryClient.getQueryData<PackageTypeRecord[]>(PACKAGE_TYPES_QUERY_KEY);
+  const fromCache = cached?.find((p) => p.name === name);
+  if (fromCache) return fromCache.id;
+
+  deps.toast({
+    title: "Package type not set",
+    description: `Could not find the "${name}" package type, so the form kept the type it had. Set it by hand before saving.`,
+    variant: "destructive",
+  });
+  return null;
+}
+
 function toIsoDate(d: string | undefined): string {
   if (!d) return "";
   const match = d.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
@@ -446,8 +474,8 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
 
   const serverDetectedLodge = (idMapping as unknown as Record<string, unknown>).isLodge === true;
   if (isLodgeQuote || serverDetectedLodge) {
-    const hotTubPackage = packageTypesData?.find((p) => p.name === "Hot Tub Break");
-    if (hotTubPackage) setValue("packageType", hotTubPackage.id);
+    const hotTubPackageId = resolvePackageTypeId("Hot Tub Break", deps);
+    if (hotTubPackageId) setValue("packageType", hotTubPackageId);
     if (skipLodgeResetRef && idMapping.parkId && idMapping.lodgeId) {
       skipLodgeResetRef.current = true;
     }
@@ -465,8 +493,8 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   } else {
     // Not a lodge → this is a package holiday. Switch the form's type explicitly
     // so importing a package after a Hot Tub Break doesn't stay stuck on it.
-    const packageHoliday = packageTypesData?.find((p) => p.name === "Package Holiday");
-    if (packageHoliday) setValue("packageType", packageHoliday.id);
+    const packageHolidayId = resolvePackageTypeId("Package Holiday", deps);
+    if (packageHolidayId) setValue("packageType", packageHolidayId);
   }
 
   setValue(
@@ -617,8 +645,8 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
   };
 
   // Force the package type to Cruise so the cruise section renders.
-  const cruisePackage = packageTypesData?.find((p) => p.name === "Cruise Package");
-  if (cruisePackage) setValue("packageType", cruisePackage.id);
+  const cruisePackageId = resolvePackageTypeId("Cruise Package", deps);
+  if (cruisePackageId) setValue("packageType", cruisePackageId);
 
   // Common quote/booking-level fields.
   // No transfer type in the JSON — or one that isn't a dropdown option — means
@@ -642,6 +670,14 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
   const cruiseDate = toIsoDate(cruise.cruise_date || cruise.cruiseDate || cruise.departure_date || cruise.departureDate || cruise.date);
   const cruiseTitle = cruise.cruise_title || cruise.cruiseTitle || cruise.title;
   const embarkation = cruise.embarkation || cruise.departure_port || cruise.departurePort || cruise.leaving_from || cruise.leavingFrom;
+
+  // The quote's TOUR OPERATOR. This path resolved every other catalog value but
+  // never this one, so an imported cruise landed with an empty operator — and
+  // the fault only became visible once cruise detection started catching the
+  // pages that used to fall through to the scraper path, which does set it.
+  // On a cruise line's own site the operator IS the line, so that stands in when
+  // the scrape didn't name one separately.
+  const tourOperator = data.tour_operator || data.tourOperator || cruise.tour_operator || cruiseLine;
 
   const cruiseOnly = cruise.cruise_only ?? cruise.cruiseOnly ?? false;
   setIfPresent("cruiseOnly", cruiseOnly);
@@ -705,6 +741,7 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
   // newly-created line/ship/voyage become selectable and the names resolve.
   try {
     const result = await jsonMapperApi.mapToIds({
+      tourOperator,
       cruiseLine,
       shipName,
       cruiseDate,
@@ -724,6 +761,10 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
     queryClient.invalidateQueries({ queryKey: ["lookup", "board-basis"] });
     queryClient.invalidateQueries({ queryKey: ["lookup", "room-types"] });
     queryClient.invalidateQueries({ queryKey: ["tourOperators"] });
+
+    // mapToIds find-or-creates the operator; without setting the id the form's
+    // dropdown stays empty however well the name resolved.
+    if (result.tourOperatorId) setValue("tourOperatorId", result.tourOperatorId as never);
 
     if (flights) {
       if (result.outboundDepartAirportId) setValue("outboundDepartAirportId", result.outboundDepartAirportId as never);

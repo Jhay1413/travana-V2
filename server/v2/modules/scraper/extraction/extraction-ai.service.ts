@@ -16,7 +16,14 @@ const nullToUndef = (v: unknown): unknown => (v === null ? undefined : v);
 // its fallback. The AI regularly invents "json"/"api"/"apiJson" for those rules;
 // rejecting them threw away the entire spec over a field that would have worked.
 // Normalise instead — anything unrecognised becomes "text".
-const SOURCES = ['text', 'title', 'url', 'images'] as const;
+//
+// "headings" MUST be listed here. The system prompt tells the AI to read
+// quote_title from the headings list by POSITION, and the interpreter
+// implements that source — but while this enum omitted it, every such rule was
+// normalised to "text" and the positional regex then counted lines of the page
+// BODY instead. Carnival's title came out "IMPORTANT NOTICE" (the second line
+// of a site banner) rather than the voyage name in the second heading.
+const SOURCES = ['text', 'title', 'url', 'images', 'headings'] as const;
 const normaliseFrom = (v: unknown): unknown => {
   if (typeof v !== 'string') return 'text';
   const s = v.trim().toLowerCase();
@@ -34,7 +41,9 @@ const fieldRuleSchema = z.object({
   fallback: z.preprocess(nullToUndef, z.union([z.string(), z.number()]).optional()),
 });
 
-const specSchema = z.object({
+// Exported for tests: the validator and the interpreter must agree on the set
+// of field sources, and they silently drifted apart once already.
+export const specSchema = z.object({
   version: z.preprocess((v) => v ?? 1, z.number()),
   wait: z.preprocess(
     nullToUndef,
@@ -89,7 +98,7 @@ Output ONLY a JSON object with this shape:
   "wait": { "textMatches": "<regex that appears once the priced quote has rendered, e.g. a currency amount>", "timeoutMs": 30000 },
   "constants": { "tour_operator": "<operator name>", "currency": "GBP" },
   "fields": {
-    "<fieldName>": { "from": "text"|"title"|"url", "regex": "<JS regex; capture group 1 is the value>", "group": 1, "transform": "number"|"date"|"titleCase"|null, "urlSegment": <int, only for from:url>, "map": {"raw":"canonical"}, "fallback": <value> }
+    "<fieldName>": { "from": "text"|"title"|"url"|"images"|"headings", "regex": "<JS regex; capture group 1 is the value>", "group": 1, "transform": "number"|"date"|"titleCase"|null, "urlSegment": <int, only for from:url>, "map": {"raw":"canonical"}, "fallback": <value> }
   },
   "luggageRegex": "<optional matchAll regex; group1=count, group2=label>",
   "flightModalTrigger": "<optional: case-insensitive regex matching the visible text of a button/link that opens a flight-details or 'compare airports/dates' popup — see below>",

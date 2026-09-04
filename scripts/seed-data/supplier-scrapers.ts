@@ -168,6 +168,223 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
     }
   },
   {
+    "supplierKey": "carnival",
+    "supplierName": "Carnival",
+    "adapterType": "dom",
+    "isActive": true,
+    "config": {
+      "auth": {
+        "type": "none"
+      },
+      "deepLink": {
+        "hostIncludes": "carnival.com",
+        "pathIncludes": ""
+      },
+      "extraction": {
+        "wait": {
+          "timeoutMs": 30000,
+          "textMatches": "\\$\\d{1,3}(,\\d{3})*(\\.\\d{2})?"
+        },
+        "fields": {
+          "adults": {
+            "from": "text",
+            "group": 1,
+            "regex": "Guests:\\s*(\\d+)",
+            "transform": "number"
+          },
+          "country": {
+            "from": "text",
+            "group": 1,
+            "regex": "from [^,]+, ([A-Z]{2})"
+          },
+          "ship_name": {
+            "from": "text",
+            "group": 1,
+            "regex": "Ship:\\s*([^\n]+)"
+          },
+          "cabin_type": {
+            "from": "text",
+            "group": 1,
+            "regex": "Room 1:\\s*([^\n]+)"
+          },
+          "cruise_date": {
+            "from": "text",
+            "group": 2,
+            "regex": "(Fri|Mon|Tue|Wed|Thu|Sat|Sun)\\s+([A-Za-z]{3}\\s+\\d{2},\\s+\\d{4})",
+            "transform": "date"
+          },
+          "cruise_line": {
+            "from": "title",
+            "group": 1,
+            "regex": "^(Carnival)"
+          },
+          "embarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "from ([^,\\n]+),"
+          },
+          "quote_title": {
+            "from": "headings",
+            "group": 1,
+            "regex": "^[^\\n]*\\n([^\\n]+)"
+          },
+          "sales_price": {
+            "from": "text",
+            "group": 1,
+            "regex": "Total \\(USD\\):\\s*\\$([\\d,]+\\.\\d{2})",
+            "transform": "number"
+          },
+          "cabin_number": {
+            "from": "text",
+            "group": 1,
+            "regex": "Room:\\s*(\\d+)"
+          },
+          "cruise_title": {
+            "from": "headings",
+            "group": 1,
+            "regex": "^[^\\n]*\\n([^\\n]+)"
+          },
+          "no_of_nights": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d+)-Day",
+            "transform": "number"
+          },
+          "price_per_person": {
+            "from": "text",
+            "group": 1,
+            "regex": "Rates are in US Dollars, average per person and based on double occupancy\\..*?\\$([\\d,]+\\.\\d{2})",
+            "transform": "number"
+          }
+        },
+        "version": 1,
+        "constants": {
+          "currency": "USD",
+          "tour_operator": "Carnival"
+        },
+        "luggageRegex": "",
+        "itineraryRegex": "Day\\s*(\\d+)[^\\n]*\\n([^\n]+)",
+        "flightModalTrigger": ""
+      },
+      "adapterType": "dom",
+      "captureOnly": true,
+      "specNeedsReview": true
+    }
+  },
+  {
+    "supplierKey": "cunard",
+    "supplierName": "Cunard",
+    "adapterType": "dom",
+    "isActive": true,
+    "config": {
+      "auth": {
+        "type": "none"
+      },
+      "deepLink": {
+        "hostIncludes": "cunard.com",
+        "pathIncludes": ""
+      },
+      "extraction": {
+        "wait": {
+          "timeoutMs": 30000,
+          "textMatches": "£\\d{1,3}(,\\d{3})*(\\.\\d{2})?\\s*per person"
+        },
+        "fields": {
+          "adults": {
+            "from": "text",
+            "group": 1,
+            "regex": "based on (\\d+) guests?",
+            "transform": "number"
+          },
+          "country": {
+            "from": "text",
+            "group": 1,
+            "regex": "Departs:\\s*[^,\\n]+,\\s*([^|\\n]+?)\\s*\\|"
+          },
+          "ship_name": {
+            "from": "text",
+            "group": 1,
+            "regex": "\\d+\\s*Nights?\\s*\\([^)]*\\)\\s*\\n+\\s*([^\\n]+)"
+          },
+          "cabin_type": {
+            "from": "text",
+            "group": 1,
+            "regex": "([A-Za-z ]+ Staterooms?)\\s*From£[\\d,]+per person"
+          },
+          "cruise_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d{1,2} [A-Za-z]{3} \\d{4}) - (\\d{1,2} [A-Za-z]{3} \\d{4})",
+            "transform": "date"
+          },
+          "cruise_line": {
+            "map": {
+              "| Cunard": "Cunard"
+            },
+            "from": "title",
+            "group": 0,
+            "regex": "\\|\\s*Cunard\\s*$"
+          },
+          "debarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "Arrives: ([^,\\n]+),"
+          },
+          "destination": {
+            "from": "text",
+            "group": 1,
+            "regex": "Departs: [^,\\n]+, ([^|\\n]+) \\|"
+          },
+          "embarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "Departs: ([^,\\n]+),"
+          },
+          "quote_title": {
+            "from": "title",
+            "group": 1,
+            "regex": "^([A-Za-z &]+?)\\s*\\|\\s*\\d+\\s*nights?"
+          },
+          "travel_date": {
+            "from": "title",
+            "group": 1,
+            "regex": "\\|\\s*(\\d{1,2} [A-Za-z]{3} \\d{2})\\s*\\|",
+            "transform": "date"
+          },
+          "cruise_title": {
+            "from": "title",
+            "group": 1,
+            "regex": "^([A-Za-z &]+) \\| \\d+ nights?"
+          },
+          "no_of_nights": {
+            "from": "text",
+            "group": 1,
+            "regex": ",\\s*(\\d+)\\s*Nights?\\s*\\(",
+            "transform": "number"
+          },
+          "price_per_person": {
+            "from": "text",
+            "group": 1,
+            "regex": "From£[\\d,]+per person\\s*£([\\d,]+)per person",
+            "transform": "number"
+          }
+        },
+        "version": 1,
+        "constants": {
+          "currency": "GBP",
+          "tour_operator": "Cunard"
+        },
+        "luggageRegex": "",
+        "itineraryRegex": "Day\\s*(\\d+(?:-\\d+)?)\\s*\\n([^\n]+)",
+        "imageUrlIncludes": "",
+        "flightModalTrigger": ""
+      },
+      "adapterType": "dom",
+      "captureOnly": true,
+      "specNeedsReview": true
+    }
+  },
+  {
     "supplierKey": "easyjet",
     "supplierName": "Easyjet",
     "adapterType": "dom",
@@ -630,7 +847,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
       "extraction": {
         "wait": {
           "timeoutMs": 30000,
-          "textMatches": "\\$\\d+\\.\\d{2}\\s*USD"
+          "textMatches": "[£$€]\\s*[\\d,]+\\.\\d{2}"
         },
         "fields": {
           "adults": {
@@ -656,10 +873,16 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "regex": "Guests?\\s*\\n*[0-9]+ Adults?\\s*\\n*([0-9]+) Children?",
             "transform": "number"
           },
+          "currency": {
+            "from": "url",
+            "group": 1,
+            "regex": "selectedCurrencyCode=([A-Z]{3})",
+            "fallback": "GBP"
+          },
           "ship_name": {
             "from": "text",
             "group": 1,
-            "regex": "Onboard\\s*\\n*([A-Za-z\\s]+)"
+            "regex": "(?:^|\\n)\\s*On\\s?Board\\s*\\n+\\s*([^\\n]+)"
           },
           "cabin_type": {
             "from": "text",
@@ -669,7 +892,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "cruise_date": {
             "from": "text",
             "group": 1,
-            "regex": "Dates?\\s*\\n*([A-Za-z]{3,9} \\d{1,2}, \\d{4})",
+            "regex": "(?:^|\\n)\\s*Dates?\\s*\\n+\\s*(\\d{1,2} [A-Za-z]{3,9} \\d{4})",
             "transform": "date"
           },
           "cruise_line": {
@@ -683,11 +906,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "group": 0,
             "regex": "cruise only"
           },
-          "debarkation": {
-            "from": "text",
-            "group": 1,
-            "regex": "Dates?\\s*\\n*[A-Za-z]{3,9} \\d{1,2}, \\d{4}\\s*\\n*([A-Za-z\\s,]+)"
-          },
           "destination": {
             "from": "url",
             "group": 1,
@@ -696,12 +914,17 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "embarkation": {
             "from": "text",
             "group": 1,
-            "regex": "Leaving from\\s*\\n*([A-Za-z\\s,]+)"
+            "regex": "(?:^|\\n)\\s*Leaving from\\s*\\n+\\s*([^\\n]+)"
+          },
+          "quote_title": {
+            "from": "title",
+            "group": 1,
+            "regex": "^(.*?)\\s*\\|"
           },
           "sales_price": {
             "from": "text",
             "group": 1,
-            "regex": "Trip total\\s*\\n*\\$([\\d,]+\\.\\d{2})",
+            "regex": "Trip total\\s*\\n*[£$€]?\\s*([\\d,]+\\.\\d{2})",
             "transform": "number"
           },
           "cabin_number": {
@@ -723,24 +946,24 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "accommodation": {
             "from": "text",
             "group": 1,
-            "regex": "Onboard\\s*\\n*([A-Za-z\\s]+)"
+            "regex": "(?:^|\\n)\\s*On\\s?Board\\s*\\n+\\s*([^\\n]+)"
           },
           "price_per_person": {
             "from": "text",
             "group": 1,
-            "regex": "The price is per person.*?\\$([\\d,]+\\.\\d{2})",
+            "regex": "The price is per person.*?[£$€]?\\s*([\\d,]+\\.\\d{2})",
             "transform": "number"
           },
           "tourist_tax_total": {
             "from": "text",
             "group": 1,
-            "regex": "Taxes and fees\\s*\\n*\\$([\\d,]+\\.\\d{2})",
+            "regex": "Taxes and fees\\s*\\n*[£$€]?\\s*([\\d,]+\\.\\d{2})",
             "transform": "number"
           }
         },
         "version": 1,
         "constants": {
-          "currency": "USD",
+          "currency": "GBP",
           "tour_operator": "Royal Caribbean"
         },
         "itineraryRegex": "Day\\s*(\\d+)\\s*\\n*([A-Za-z\\s,&]+)",
@@ -911,6 +1134,109 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "luggageRegex": "(\\d+)\\s*x?\\s*(?:bag|luggage|suitcase)s?",
         "flightModalTrigger": "compare airport|flight details"
+      },
+      "adapterType": "dom",
+      "captureOnly": true,
+      "specNeedsReview": true
+    }
+  },
+  {
+    "supplierKey": "virginvoyages",
+    "supplierName": "Virginvoyages",
+    "adapterType": "dom",
+    "isActive": true,
+    "config": {
+      "auth": {
+        "type": "none"
+      },
+      "deepLink": {
+        "hostIncludes": "virginvoyages.com",
+        "pathIncludes": ""
+      },
+      "extraction": {
+        "wait": {
+          "timeoutMs": 30000,
+          "textMatches": "£[\\d,]+(\\.\\d{2})?"
+        },
+        "fields": {
+          "adults": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d+)\\s+sailors",
+            "transform": "number"
+          },
+          "country": {
+            "from": "text",
+            "group": 1,
+            "regex": "Round trip from [^,]+, ([^,\\n]+)"
+          },
+          "ship_name": {
+            "from": "text",
+            "group": 1,
+            "regex": "\\d+\\s*NIGHTS\\s*\\n+\\s*(?:[•·|-]\\s*\\n+\\s*)?([^\\n]+)"
+          },
+          "cabin_type": {
+            "from": "text",
+            "group": 1,
+            "regex": "Choose cabin\\s*\\n+\\s*([^\\n]+)"
+          },
+          "cruise_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "([A-Z][a-z]{2} \\d{1,2} - [A-Z][a-z]{2} \\d{1,2}, \\d{4})"
+          },
+          "cruise_line": {
+            "from": "text",
+            "fallback": "Virgin Voyages"
+          },
+          "embarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "Round trip from ([^,\\n]+)"
+          },
+          "quote_title": {
+            "from": "text",
+            "group": 1,
+            "regex": "\\d+\\s*NIGHTS\\s*\\n+\\s*(?:[•·|-]\\s*\\n+\\s*)?[^\\n]+\\n+\\s*([^\\n]+)"
+          },
+          "sales_price": {
+            "from": "text",
+            "group": 1,
+            "regex": "Grand total\\s*£([\\d,]+(?:\\.\\d{2})?)",
+            "transform": "number"
+          },
+          "cruise_title": {
+            "from": "text",
+            "group": 1,
+            "regex": "\\d+\\s*NIGHTS\\s*\\n+\\s*(?:[•·|-]\\s*\\n+\\s*)?[^\\n]+\\n+\\s*([^\\n]+)"
+          },
+          "no_of_nights": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d+)\\s*NIGHTS",
+            "transform": "number"
+          },
+          "price_per_person": {
+            "from": "text",
+            "group": 1,
+            "regex": "£([\\d,]+(?:\\.\\d{2})?)\\s*\\(Includes taxes & fees\\)",
+            "transform": "number"
+          },
+          "tourist_tax_total": {
+            "from": "text",
+            "group": 1,
+            "regex": "Prepay Service Charge\\s*£([\\d,]+(?:\\.\\d{2})?)",
+            "transform": "number"
+          }
+        },
+        "version": 1,
+        "constants": {
+          "currency": "GBP",
+          "tour_operator": "Virgin Voyages"
+        },
+        "luggageRegex": "",
+        "imageUrlIncludes": "",
+        "flightModalTrigger": ""
       },
       "adapterType": "dom",
       "captureOnly": true,

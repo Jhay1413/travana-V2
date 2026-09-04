@@ -1336,6 +1336,46 @@ describe("cruise itinerary day ranges", () => {
     expect(q.itinerary?.[6]).toEqual({ day: 7, description: "Southampton, England", sub_description: "Arrives at 5:30 am" });
   });
 
+  // A row also prints an unbroken block of SEA DAYS, and an ocean crossing is
+  // long — Cunard writes a transatlantic as "Day 7-13". Capped at 3 days, that
+  // collapsed to day 7 alone, and because the days after it no longer followed
+  // on, everything past it was dropped: a 28-day voyage ended at day 7.
+  it("keeps a long block of sea days, and the itinerary that follows it", () => {
+    const spec = {
+      version: 1,
+      constants: { cruise_line: "Cunard", ship_name: "Queen Elizabeth" },
+      fields: {},
+      itineraryRegex: String.raw`Day\s*(\d+(?:-\d+)?)\s*\n([^\n]+)`,
+    } as unknown as ExtractionSpec;
+    const text = [
+      "Day", "1", "Barcelona, Spain",
+      "Day", "2", "At sea",
+      "Day", "3-9", "At sea",
+      "Day", "10", "Miami, FL, USA",
+    ].join("\n");
+    const q = runExtractionSpec(spec, { title: "", text, url: "https://x.test/d?sailDate=2027-10-29" }, "x");
+    expect(q.itinerary?.map((d) => d.day)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(q.itinerary?.[8]).toEqual({ day: 9, description: "At sea" });
+    // The day after the block still reads, which is what used to be lost.
+    expect(q.itinerary?.[9]).toEqual({ day: 10, description: "Miami, FL, USA" });
+  });
+
+  it("still refuses a range too long to be one row", () => {
+    const spec = {
+      version: 1,
+      constants: { cruise_line: "Cunard", ship_name: "Queen Elizabeth" },
+      fields: {},
+      itineraryRegex: String.raw`Day\s*(\d+(?:-\d+)?)\s*\n([^\n]+)`,
+    } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(spec, {
+      title: "",
+      text: ["Day", "1-99", "At sea"].join("\n"),
+      url: "https://x.test/d?sailDate=2027-10-29",
+    }, "x");
+    expect(q.itinerary).toHaveLength(1);
+    expect(q.itinerary?.[0].day).toBe(1);
+  });
+
   it("expands a range the spec's own itineraryRegex captured", () => {
     const withRegex = {
       version: 1,
@@ -1349,5 +1389,135 @@ describe("cruise itinerary day ranges", () => {
     const r = runExtractionSpec(withRegex, { title: "", text, url: "https://x.test/d?sailDate=2027-06-21" }, "x");
     expect(r.itinerary?.map((d) => d.day)).toEqual([1, 2, 3, 4]);
     expect(r.itinerary?.[2]).toEqual({ day: 3, description: "Bruges" });
+  });
+});
+
+// A cruise checkout that prints NO day-by-day itinerary — Virgin Voyages'
+// summary page states the ship, the sailing and the cabin and nothing else.
+// Detection hung on the spec's ship_name regex alone: neither supplier-neutral
+// fallback ran without a port table, so when that one AI-written regex missed
+// the whole cruise block vanished and the deal imported as a package holiday.
+describe("cruise page with no port table", () => {
+  const VIRGIN_TEXT = [
+    "Your Voyage",
+    "Southern Caribbean &",
+    "  Aruban Nights",
+    "£2,065.10 (Includes taxes & fees)",
+    "",
+    "7 NIGHTS",
+    "",
+    "•",
+    "",
+    "VALIANT LADY",
+    "",
+    "Southern Caribbean & Aruban Nights",
+    "",
+    "Round trip from San Juan, Puerto Rico, USA",
+    "The Insider",
+    "2 sailors",
+  ].join("\n");
+  const URL = "https://www.virginvoyages.com/book/voyage-planner/summary?currencyCode=GBP&dateFrom=2027-03-01";
+
+  // The ship rule as the AI first wrote it: pinned to ONE voyage's name, and
+  // blind to the blank line the page puts between the ship and that name.
+  const brokenShipRule = { from: "text", regex: String.raw`([A-Z ]+)\nSouthern Caribbean & Aruban Nights`, group: 1 };
+  const specWithBrokenShip = {
+    version: 1,
+    constants: { tour_operator: "Virgin Voyages", currency: "GBP" },
+    fields: {
+      ship_name: brokenShipRule,
+      cruise_line: { from: "text", fallback: "Virgin Voyages" },
+      embarkation: { from: "text", regex: String.raw`Round trip from ([^,\n]+)`, group: 1 },
+    },
+  } as unknown as ExtractionSpec;
+
+  it("is still a cruise when the spec's ship rule misses", () => {
+    const q = runExtractionSpec(specWithBrokenShip, { title: "", text: VIRGIN_TEXT, url: URL }, "x");
+    // Both keys present is what routes the deal to the client's cruise importer.
+    expect(q.cruise_line).toBe("Virgin Voyages");
+    expect(q.ship_name).toBeDefined();
+    expect(q.embarkation).toBe("San Juan");
+    expect(q.cruise_date).toBe(q.travel_date);
+  });
+
+  it("reads the ship once the spec's rule is anchored structurally", () => {
+    const fixed = {
+      ...specWithBrokenShip,
+      fields: {
+        ...specWithBrokenShip.fields,
+        // Anchored on the page's SHAPE — the line after the nights/bullet
+        // header — so the next voyage on a different ship still reads.
+        ship_name: { from: "text", regex: String.raw`\d+\s*NIGHTS\s*\n+\s*(?:[•·|-]\s*\n+\s*)?([^\n]+)`, group: 1 },
+      },
+    } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(fixed, { title: "", text: VIRGIN_TEXT, url: URL }, "x");
+    expect(q.ship_name).toBe("VALIANT LADY");
+    expect(q.cruise_line).toBe("Virgin Voyages");
+  });
+
+  it("reads a ship labelled 'On Board', as Royal Caribbean spells it", () => {
+    const text = [
+      "Leaving from", "Southampton, England",
+      "On Board", "Freedom of the Seas",
+      "Dates", "9 May 2027",
+    ].join("\n");
+    const spec = {
+      version: 1,
+      constants: { tour_operator: "Royal Caribbean" },
+      // Declares cruise fields, so the page is a cruise even with no port table.
+      fields: { cabin_type: { from: "text", regex: String.raw`We choose your ([A-Za-z ]+)`, group: 1 } },
+    } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(spec, { title: "", text, url: "https://x.test/d?sailDate=2027-05-09" }, "x");
+    expect(q.ship_name).toBe("Freedom of the Seas");
+    expect(q.embarkation).toBe("Southampton, England");
+  });
+
+  // US portals write the month first. A month-first date used to parse to
+  // nothing, so the field was dropped as un-ISO and the date fell back to a URL
+  // parameter — and Carnival's "sailDate=07022027" is MMDDYYYY, read there as
+  // DDMMYYYY. A 2 July sailing was imported as 7 February.
+  it("reads a month-first sailing date instead of falling back to the URL", () => {
+    const spec = {
+      version: 1,
+      constants: { cruise_line: "Carnival", ship_name: "Carnival Conquest" },
+      fields: {
+        cruise_date: {
+          from: "text",
+          group: 2,
+          regex: String.raw`(Fri|Mon|Tue|Wed|Thu|Sat|Sun)\s+([A-Za-z]{3}\s+\d{2},\s+\d{4})`,
+          transform: "date",
+        },
+      },
+    } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(spec, {
+      title: "",
+      text: "Ship: Carnival Conquest\nFri Jul 02, 2027 - Mon Jul 05, 2027",
+      url: "https://www.carnival.com/booking/review?sailDate=07022027",
+    }, "x");
+    expect(q.cruise_date).toBe("2027-07-02");
+    expect(q.travel_date).toBe("2027-07-02");
+  });
+
+  it("still reads a day-first date the other way round", () => {
+    const spec = {
+      version: 1,
+      constants: { cruise_line: "Royal Caribbean", ship_name: "Freedom of the Seas" },
+      fields: { cruise_date: { from: "text", group: 1, regex: String.raw`Dates?\s*\n+\s*(\d{1,2} [A-Za-z]{3,9} \d{4})`, transform: "date" } },
+    } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(spec, { title: "", text: "Dates\n9 May 2027", url: "https://x.test/d" }, "x");
+    expect(q.cruise_date).toBe("2027-05-09");
+  });
+
+  it("leaves a page whose spec claims no cruise fields alone", () => {
+    // Same shape of page, but a spec written for a package holiday. Nothing
+    // here should invent a sailing.
+    const packageSpec = {
+      version: 1,
+      constants: { tour_operator: "Some Portal", currency: "GBP" },
+      fields: { accommodation: { from: "text", regex: String.raw`^([^\n]+)`, group: 1 } },
+    } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(packageSpec, { title: "", text: VIRGIN_TEXT, url: URL }, "x");
+    expect(q.cruise_line).toBeUndefined();
+    expect(q.ship_name).toBeUndefined();
   });
 });

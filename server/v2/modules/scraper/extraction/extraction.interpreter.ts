@@ -36,6 +36,14 @@ function parseDate(raw: string): string {
   if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   m = /(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\s+(\d{4})/.exec(s);
   if (m) return `${m[3]}-${MONTHS[m[2].toLowerCase()] ?? '01'}-${m[1].padStart(2, '0')}`;
+  // MONTH FIRST — "Jul 02, 2027", "July 2 2027" — how US portals write a date.
+  // Tried after the day-first form above, which owns "9 May 2027", so the two
+  // can't compete. Without this branch a month-first date parsed to nothing,
+  // the field was discarded as un-ISO, and the sailing date silently fell back
+  // to a URL parameter: Carnival's "sailDate=07022027" is MMDDYYYY, read there
+  // as DDMMYYYY, which dated a 2 July sailing 7 February.
+  m = /([A-Za-z]{3})[A-Za-z]*\s+(\d{1,2}),?\s+(\d{4})/.exec(s);
+  if (m && MONTHS[m[1].toLowerCase()]) return `${m[3]}-${MONTHS[m[1].toLowerCase()]}-${m[2].padStart(2, '0')}`;
   // Compact 8-digit dates with no separators, as analytics blobs often carry
   // them (Jet2's dataLayer writes "06092026"). A plausible-looking leading year
   // is NOT enough to call it YYYYMMDD: "19092026" (19 Sep 2026) leads with
@@ -1173,6 +1181,22 @@ function addNights(isoDate: string, nights: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// Spec keys that exist only for a sailing. A spec carrying any of them was
+// written against a cruise page, which classifies the SUPPLIER — the spec is
+// reused for every deal on that portal. Deliberately excludes the common
+// fields (price, nights, operator…): those say nothing about the package type.
+const CRUISE_SPEC_KEYS = [
+  'cruise_line',
+  'ship_name',
+  'cruise_date',
+  'cruise_title',
+  'embarkation',
+  'debarkation',
+  'cabin_type',
+  'cabin_number',
+  'cruise_only',
+] as const;
+
 // ─── Cruise itinerary printed as a DAY / PORT table ──────────────────────────
 // The day-by-day ports are the one part of a cruise page that no field rule can
 // reach: it is a repeating table, not a scalar. A spec CAN declare an
@@ -1194,6 +1218,14 @@ function addNights(isoDate: string, nights: number): string {
 // out of that — which both readers below used to do — turned day 8-9 into day
 // 89, and the run of days then broke at the range, truncating the itinerary.
 const ITINERARY_DAY_LINE = /^(?:days?\s*)?(\d{1,2})(?:\s*[-–—]\s*(\d{1,2})?)?[\s.:)\t]*$/i;
+// How many days one row may span. An overnight port call spans two, but a row
+// is also how a line prints an unbroken block of SEA DAYS, and an ocean
+// crossing is long: Cunard writes a transatlantic as "Day 7-13". A cap of 3
+// silently collapsed that to day 7 alone — and because the days after it then
+// no longer followed on, the rest of the itinerary was dropped too, ending a
+// 28-day voyage at day 7. Still bounded, so a stray "1-99" cannot fabricate a
+// hundred rows.
+const MAX_DAY_RANGE = 21;
 // The same shape read out of a longer string, for spec-supplied day values
 // ("Day 8-9", "8 – 9").
 function parseDayRange(raw: string): { start: number; end: number } | null {
@@ -1202,7 +1234,7 @@ function parseDayRange(raw: string): { start: number; end: number } | null {
   const start = Number(m[1]);
   const end = m[2] ? Number(m[2]) : start;
   // A range runs forwards and stays short; anything else is read as one day.
-  return { start, end: end > start && end - start <= 3 ? end : start };
+  return { start, end: end > start && end - start <= MAX_DAY_RANGE ? end : start };
 }
 
 // One row per day the cell covers, so an overnight port appears on both of its
@@ -1222,7 +1254,7 @@ function parseItineraryTable(pageText: string): { day: number; description: stri
     if (!m) return;
     const start = Number(m[1]);
     const end = m[2] ? Number(m[2]) : start;
-    marks.push({ index, start, end: end > start && end - start <= 3 ? end : start });
+    marks.push({ index, start, end: end > start && end - start <= MAX_DAY_RANGE ? end : start });
   });
 
   const rows: { day: number; description: string; sub_description?: string }[] = [];
@@ -1506,14 +1538,34 @@ export function runExtractionSpec(
   // deal to its cruise importer on cruise_line + ship_name, and only that
   // importer maps the itinerary onto the form.
   const portTable = parseItineraryTable(text);
-  // Label pairs the page prints beside the table ("Onboard" / "Freedom of the
-  // Seas"). Only consulted when the spec said nothing.
-  const shipName = str(f.ship_name) || (portTable.length ? labelledValue(text, /^(onboard|ship|your ship|sailing on)$/i) : '');
+  // A SPEC THAT DECLARES CRUISE FIELDS is the third kind of evidence, and the
+  // one that covers checkouts printing no itinerary at all (Virgin Voyages'
+  // summary page states the ship, the sailing and the cabin, but never a
+  // day-by-day plan). The AI is told to add cruise fields ONLY to a page that
+  // is a sailing, and a spec is reused for one portal — so cruise rules in the
+  // spec are that portal's author saying "this site sells cruises".
+  //
+  // Without this the whole cruise block hung on ONE AI-written ship_name regex:
+  // when that regex broke — pinned to an example voyage's wording, say — the
+  // deal silently imported as a package holiday, losing the line, the sailing
+  // date, the cabin and the itinerary along with the ship.
+  const specDeclaresCruise =
+    !!spec.itineraryRegex ||
+    CRUISE_SPEC_KEYS.some((key) => spec.fields?.[key] != null || spec.constants?.[key] != null);
+  const isCruisePage = !!str(f.cruise_line) || !!str(f.ship_name) || portTable.length > 0 || specDeclaresCruise;
+  // Label pairs the page prints beside the table ("On Board" / "Freedom of the
+  // Seas"). Only consulted when the spec said nothing. "On Board" is TWO WORDS
+  // on Royal Caribbean's own pages — their UI dictionary spells the label
+  // "common.onboard": "On Board" — so the space is optional here.
+  const shipName = str(f.ship_name) || (isCruisePage ? labelledValue(text, /^(on\s?board|ship|your ship|sailing on)$/i) : '');
   // The operator of a cruise line's own site IS the cruise line; an agent
   // portal reselling a cruise names the line on the page, and its spec rule
   // wins here.
-  const cruiseLine = str(f.cruise_line) || (portTable.length && shipName ? str(f.tour_operator) : '');
-  if (cruiseLine && shipName) {
+  const cruiseLine = str(f.cruise_line) || (isCruisePage ? str(f.tour_operator) : '');
+  // The SHIP is no longer part of the gate. A named line on a page the spec
+  // calls a cruise is enough: an unnamed ship is one blank field the agent
+  // fills in, whereas dropping the block loses everything the page did state.
+  if (isCruisePage && cruiseLine) {
     result.cruise_line = cruiseLine;
     result.ship_name = shipName;
     result.cruise_date = travelDate; // === travel_date, by construction above
