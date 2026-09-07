@@ -151,7 +151,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
     <div className={className} data-testid="panel-pipeline-live">
       {/* Horizontal padding lives on the sections, not the panel, so the
           separator under the title spans the full panel width. */}
-      <div className="px-5 text-[17px] font-semibold">Pipeline Live!</div>
+      <div className="px-5 text-sm font-semibold">Pipeline Live!</div>
 
       <div className="mt-4 border-t border-black/10 px-5 pt-4 dark:border-white/10">
         <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} testIdPrefix="pipeline-live-tab" fullWidth transparent />
@@ -202,7 +202,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
                   <OperatorMark name={operator} logoUrl={operatorLogo} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-[17px] font-medium">{title}</span>
+                      <span className="truncate text-sm font-medium">{title}</span>
                       {value > 0 && (
                         <span className="shrink-0 text-sm font-semibold text-black/60 dark:text-white/60">
                           {currency.format(value)}

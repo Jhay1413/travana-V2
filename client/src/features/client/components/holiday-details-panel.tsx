@@ -134,7 +134,7 @@ function SummaryField({ label, icon: Icon, value }: { label: string; icon: typeo
       <div className="text-xs text-black/45 dark:text-white/45">{label}</div>
       <div className="mt-1 flex items-center gap-2.5">
         <Icon className="h-4 w-4 shrink-0 text-[#ff0000]" strokeWidth={1.25} />
-        <span className="truncate text-[13px] font-bold 3xl:text-sm">{value}</span>
+        <span className="truncate text-[13px] font-normal 3xl:text-sm">{value}</span>
       </div>
     </div>
   );
@@ -151,7 +151,7 @@ function HolidaySummary({
   return (
     <div className="space-y-5 px-4 py-5 3xl:px-6">
       <div>
-        <h3 className="text-[13px] font-bold 3xl:text-sm">Travel Summary</h3>
+        <h3 className="text-[13px] font-semibold 3xl:text-sm">Travel Summary</h3>
         {model.dateRangeText && <p className="mt-1 text-[13px] text-black/70 dark:text-white/70">{model.dateRangeText}</p>}
         {model.destinationName && (
           <p className="mt-0.5 text-[13px] text-black/50 dark:text-white/50">{model.destinationName}</p>
@@ -251,7 +251,7 @@ export function HolidayDetailsPanel({ selection, enquiries, quotes, bookings, cl
       data-testid="holiday-details-panel"
     >
       <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
-        <h2 className="text-[15px] font-semibold 3xl:text-[17px]">Details</h2>
+        <h2 className="text-sm font-semibold">Details</h2>
       </div>
 
       <div className="px-4 pt-4 3xl:px-6">

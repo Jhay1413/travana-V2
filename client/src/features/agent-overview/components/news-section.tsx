@@ -30,7 +30,7 @@ export function NewsSection() {
   return (
     <DashboardCard className="min-w-0" testId="card-dashboard-news">
       <div className="flex items-center justify-between gap-2">
-        <div className="text-[17px] font-semibold">Latest News</div>
+        <div className="text-sm font-semibold">Latest News</div>
         <Link
           href="/hub/news"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white"
@@ -61,7 +61,7 @@ export function NewsSection() {
                 </div>
                 <Link
                   href="/hub/news"
-                  className="mt-1.5 block truncate text-[17px] font-medium hover:underline"
+                  className="mt-1.5 block truncate text-sm font-medium hover:underline"
                 >
                   {title}
                 </Link>

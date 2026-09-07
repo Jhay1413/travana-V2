@@ -201,7 +201,7 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
       <div className="p-4 pb-5 flex-1 flex flex-col gap-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-bold text-black/90 dark:text-white/90 truncate" data-testid={`text-title-${quote.id}`}>{quote.title || "Untitled"}</h3>
+            <h3 className="text-sm font-semibold text-black/90 dark:text-white/90 truncate" data-testid={`text-title-${quote.id}`}>{quote.title || "Untitled"}</h3>
             <p className="text-xs text-black/55 dark:text-white/55 mt-0.5 truncate" data-testid={`text-subtitle-${quote.id}`}>{getSubtitle(quote)}</p>
           </div>
           <Badge className="shrink-0 bg-blue-500 text-white border-0 text-xs font-bold px-3 py-1.5 rounded-lg shadow" data-testid={`badge-price-${quote.id}`}>{pricePerPerson}</Badge>

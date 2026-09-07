@@ -234,14 +234,14 @@ export function TasksTab({ userId }: { userId: string }) {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="shrink-0 text-[17px] font-medium text-[#fe9a00]">
+                    <span className="shrink-0 text-sm font-medium text-[#fe9a00]">
                       {new Date(task.dueDate || 0).toLocaleTimeString("en-GB", {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
                     </span>
                     <span className="text-black/30 dark:text-white/30">–</span>
-                    <span className="truncate text-[17px] font-medium" data-testid={`text-dashboard-task-title-${task.id}`}>
+                    <span className="truncate text-sm font-medium" data-testid={`text-dashboard-task-title-${task.id}`}>
                       {task.title}
                     </span>
                   </div>
