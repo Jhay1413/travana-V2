@@ -214,7 +214,7 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
       {/* ── Ticket list ── */}
       <Card className="flex flex-col overflow-hidden rounded-none border-0 border-r border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
         <div className="flex h-[76px] shrink-0 items-center justify-between gap-2 border-b border-black/10 px-5 dark:border-white/10">
-          <h2 className="text-sm font-semibold">Tickets</h2>
+          <h2 className="text-sm font-semibold 3xl:text-base">Tickets</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"

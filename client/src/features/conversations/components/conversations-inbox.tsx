@@ -289,7 +289,7 @@ function ConversationRow({
         <ChannelLogo channel={conversation.channel} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-medium text-black/85 dark:text-white/85">
+            <span className="truncate text-sm font-medium 3xl:text-base text-black/85 dark:text-white/85">
               {conversation.contact.displayName}
             </span>
             <span className="flex shrink-0 items-center gap-1.5">
@@ -531,7 +531,7 @@ function ClientField({ label, icon: Icon, value }: { label: string; icon: typeof
       <div className="text-xs text-black/45 dark:text-white/45">{label}</div>
       <div className="mt-1 flex items-center gap-2.5">
         <Icon className="h-4 w-4 shrink-0 text-[#ff0000]" strokeWidth={1.25} />
-        <span className="truncate text-sm font-normal 3xl:text-base">{value}</span>
+        <span className="truncate text-[13px] font-normal 3xl:text-sm">{value}</span>
       </div>
     </div>
   );
@@ -682,7 +682,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   return (
     <Card className="flex flex-col overflow-hidden rounded-none border-0 border-l border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
       <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
-        <h2 className="text-sm font-semibold">Client Details</h2>
+        <h2 className="text-sm font-semibold 3xl:text-base">Client Details</h2>
       </div>
 
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -795,7 +795,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
                           <LiveQuoteOperatorMark name={q.main_tour_operator_name ?? null} logoUrl={q.main_tour_operator_logo_url ?? null} />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline justify-between gap-2">
-                              <span className="truncate text-sm font-semibold">{q.title || "Untitled quote"}</span>
+                              <span className="truncate text-sm font-semibold 3xl:text-base">{q.title || "Untitled quote"}</span>
                               {price > 0 && (
                                 <span className="shrink-0 text-sm font-semibold text-black/60 dark:text-white/60">
                                   {liveQuoteCurrency.format(price)}
@@ -1667,7 +1667,7 @@ export default function ConversationsInbox() {
       {/* ── Conversation list ── */}
       <Card className="flex flex-col overflow-hidden rounded-none border-0 border-r border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
         <div className="flex h-[76px] shrink-0 items-center justify-between gap-2 border-b border-black/10 px-5 dark:border-white/10">
-          <h2 className="text-sm font-semibold">Inbox</h2>
+          <h2 className="text-sm font-semibold 3xl:text-base">Inbox</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1896,7 +1896,7 @@ export default function ConversationsInbox() {
               <div className="flex min-w-0 items-center gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
-                    <span className="truncate text-sm font-semibold">{selected.contact.displayName}</span>
+                    <span className="truncate text-sm font-semibold 3xl:text-base">{selected.contact.displayName}</span>
                     <LinkedClientPhonePill conversation={selected} />
                   </div>
                   <div className="mt-1 flex items-center gap-1.5">

@@ -512,7 +512,7 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
     <Card className="flex flex-col overflow-hidden rounded-none border-0 bg-white p-0 shadow-none dark:bg-white/[0.04]">
       <div className="flex h-[76px] shrink-0 items-center justify-between gap-3 border-b border-black/10 px-6 dark:border-white/10">
         <div className="min-w-0">
-          <span className="block truncate text-sm font-semibold" data-testid="ticket-thread-subject">
+          <span className="block truncate text-sm font-semibold 3xl:text-base" data-testid="ticket-thread-subject">
             {ticket.subject}
           </span>
           <div className="mt-1 flex items-center gap-1.5">

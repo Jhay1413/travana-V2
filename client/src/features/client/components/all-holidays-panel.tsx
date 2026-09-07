@@ -395,7 +395,7 @@ export function AllHolidaysPanel({
       data-testid="all-holidays-panel"
     >
       <div className="flex h-[76px] shrink-0 items-center justify-between gap-2 border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
-        <h2 className="text-sm font-semibold">All Holidays</h2>
+        <h2 className="text-sm font-semibold 3xl:text-base">All Holidays</h2>
         <div className="flex items-center gap-2">
           <button
             type="button"
