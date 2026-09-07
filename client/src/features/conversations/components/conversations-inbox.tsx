@@ -289,7 +289,7 @@ function ConversationRow({
         <ChannelLogo channel={conversation.channel} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-[15px] font-medium text-black/85 3xl:text-[17px] dark:text-white/85">
+            <span className="truncate text-sm font-medium text-black/85 dark:text-white/85">
               {conversation.contact.displayName}
             </span>
             <span className="flex shrink-0 items-center gap-1.5">
@@ -531,7 +531,7 @@ function ClientField({ label, icon: Icon, value }: { label: string; icon: typeof
       <div className="text-xs text-black/45 dark:text-white/45">{label}</div>
       <div className="mt-1 flex items-center gap-2.5">
         <Icon className="h-4 w-4 shrink-0 text-[#ff0000]" strokeWidth={1.25} />
-        <span className="truncate text-sm font-bold 3xl:text-base">{value}</span>
+        <span className="truncate text-sm font-normal 3xl:text-base">{value}</span>
       </div>
     </div>
   );
@@ -682,7 +682,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   return (
     <Card className="flex flex-col overflow-hidden rounded-none border-0 border-l border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
       <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
-        <h2 className="text-[15px] font-semibold 3xl:text-[17px]">Client Details</h2>
+        <h2 className="text-sm font-semibold">Client Details</h2>
       </div>
 
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -728,7 +728,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
               className="flex w-full items-center justify-between px-4 py-5 text-left 3xl:px-6"
               data-testid="client-history-toggle"
             >
-              <span className="text-sm font-bold">History</span>
+              <span className="text-sm font-semibold">History</span>
               <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", historyOpen && "rotate-90")} />
             </button>
             {historyOpen && (
@@ -760,7 +760,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
               className="flex w-full items-center justify-between px-4 py-5 text-left 3xl:px-6"
               data-testid="client-live-quotes-toggle"
             >
-              <span className="text-sm font-bold">Live Quotes</span>
+              <span className="text-sm font-semibold">Live Quotes</span>
               <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", liveQuotesOpen && "rotate-90")} />
             </button>
             {liveQuotesOpen && (
@@ -832,7 +832,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
             className="flex w-full items-center justify-between px-4 py-5 text-left 3xl:px-6"
             data-testid="client-notes-toggle"
           >
-            <span className="text-sm font-bold">Notes</span>
+            <span className="text-sm font-semibold">Notes</span>
             <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", notesOpen && "rotate-90")} />
           </button>
           {notesOpen && (
@@ -1667,7 +1667,7 @@ export default function ConversationsInbox() {
       {/* ── Conversation list ── */}
       <Card className="flex flex-col overflow-hidden rounded-none border-0 border-r border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
         <div className="flex h-[76px] shrink-0 items-center justify-between gap-2 border-b border-black/10 px-5 dark:border-white/10">
-          <h2 className="text-[15px] font-semibold 3xl:text-[17px]">Inbox</h2>
+          <h2 className="text-sm font-semibold">Inbox</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -1896,7 +1896,7 @@ export default function ConversationsInbox() {
               <div className="flex min-w-0 items-center gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
-                    <span className="truncate text-[15px] font-semibold 3xl:text-[17px]">{selected.contact.displayName}</span>
+                    <span className="truncate text-sm font-semibold">{selected.contact.displayName}</span>
                     <LinkedClientPhonePill conversation={selected} />
                   </div>
                   <div className="mt-1 flex items-center gap-1.5">

@@ -68,21 +68,21 @@ export function ProfitStatBoxes({
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <StatCard label="Todays Profit" icon={BadgePoundSterling} iconClass="text-emerald-500" testId="stat-box-todays-profit">
-        <p className="mt-2 text-3xl font-bold tracking-tight" data-testid="stat-value-todays-profit">
+        <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-todays-profit">
           {currency.format(profitStats.todayProfit)}
         </p>
         <p className="mt-2 text-xs text-muted-foreground">Total from today's bookings</p>
       </StatCard>
 
       <StatCard label="This Weeks Profit" icon={BadgePoundSterling} iconClass="text-blue-500" testId="stat-box-weeks-profit">
-        <p className="mt-2 text-3xl font-bold tracking-tight" data-testid="stat-value-weeks-profit">
+        <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-weeks-profit">
           {currency.format(profitStats.weekProfit)}
         </p>
         <p className="mt-2 text-xs text-muted-foreground">Total from this week's bookings</p>
       </StatCard>
 
       <StatCard label="This Month" icon={CalendarCheck} iconClass="text-emerald-500" testId="stat-box-this-month">
-        <p className="mt-2 text-3xl font-bold tracking-tight" data-testid="stat-value-this-month">
+        <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-this-month">
           {currency.format(profitStats.monthProfit)}
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
@@ -92,7 +92,7 @@ export function ProfitStatBoxes({
       </StatCard>
 
       <StatCard label="Target" icon={Target} iconClass="text-amber-500" testId="stat-box-target">
-        <p className="mt-2 text-3xl font-bold tracking-tight" data-testid="stat-value-target">
+        <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-target">
           {currency.format(target)}
         </p>
         <div className="mt-3 flex items-center gap-2">
@@ -111,7 +111,7 @@ export function ProfitStatBoxes({
 
       <StatCard label="Run To Target" icon={BadgePoundSterling} iconClass="text-[#ff0015]" testId="stat-box-run-to-target">
         <p
-          className="mt-2 flex flex-wrap items-baseline gap-x-1 text-2xl font-bold tracking-tight"
+          className="mt-2 flex flex-wrap items-baseline gap-x-1 text-lg font-semibold tracking-tight"
           data-testid="stat-value-run-to-target"
         >
           {currency.format(remaining)}

@@ -45,7 +45,7 @@ export function EngagementSection() {
 
   return (
     <DashboardCard className="min-w-0" testId="card-engagement">
-      <div className="text-[17px] font-semibold">Quote Engagement</div>
+      <div className="text-sm font-semibold">Quote Engagement</div>
 
       <div className="mt-3">
         <SegmentedTabs tabs={TABS} value={filter} onChange={setFilter} testIdPrefix="engagement-filter" fullWidth />
@@ -85,12 +85,12 @@ export function EngagementSection() {
               >
                 <div className="min-w-0 flex-1">
                   <div
-                    className={`truncate text-[17px] font-medium ${hasRealClientName ? "" : "italic text-black/55 dark:text-white/55"}`}
+                    className={`truncate text-sm font-medium ${hasRealClientName ? "" : "italic text-black/55 dark:text-white/55"}`}
                     data-testid={`engagement-client-${row.quoteId}`}
                   >
                     {displayName}
                   </div>
-                  <div className="mt-0.5 truncate text-[13px] text-[#a195a5] dark:text-white/50">
+                  <div className="mt-0.5 truncate text-xs text-[#a195a5] dark:text-white/50">
                     {row.quoteTitle}
                   </div>
                 </div>

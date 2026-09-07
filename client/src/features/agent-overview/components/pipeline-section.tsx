@@ -66,7 +66,7 @@ export function PipelineSection({ userId }: { userId: string }) {
 
   return (
     <DashboardCard className="min-w-0" testId="card-dashboard-pipeline">
-      <div className="text-[17px] font-semibold">Pipeline</div>
+      <div className="text-sm font-semibold">Pipeline</div>
 
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[440px] border-collapse text-left">
@@ -110,7 +110,7 @@ export function PipelineSection({ userId }: { userId: string }) {
                     <td className="py-2.5 pr-2">
                       <span className="flex items-center gap-2 min-w-0">
                         <InitialsAvatar name={clientName} solid className="h-7 w-7" />
-                        <span className="truncate text-[17px] font-medium">{clientName}</span>
+                        <span className="truncate text-sm font-medium">{clientName}</span>
                         <span className="shrink-0 text-[10px] text-black/40 dark:text-white/40">
                           {timeAgo(t.created_at)}
                         </span>
