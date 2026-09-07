@@ -267,7 +267,7 @@ export default function ClientPage() {
           {/* Center header — the client's name, aligned with the side panels'
               76px headers (All Holidays / Details), per the design. */}
           <div className="flex h-[76px] shrink-0 flex-col justify-center border-b border-black/10 bg-white px-4 3xl:px-6 dark:border-white/10 dark:bg-white/[0.04]">
-            <h2 className="truncate text-sm font-semibold" data-testid="client-center-header">
+            <h2 className="truncate text-sm font-semibold 3xl:text-base" data-testid="client-center-header">
               {client.name}
             </h2>
             {(client.phone || composeAddress(clientData)) && (

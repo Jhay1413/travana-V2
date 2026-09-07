@@ -48,13 +48,13 @@ function ClientField({ label, icon: Icon, value, href }: { label: string; icon: 
         {href ? (
           <Link
             href={href}
-            className="truncate text-sm font-medium text-sky-600 hover:underline 3xl:text-base dark:text-sky-400"
+            className="truncate text-[13px] font-medium text-sky-600 hover:underline 3xl:text-sm dark:text-sky-400"
             data-testid="ticket-client-name-link"
           >
             {value}
           </Link>
         ) : (
-          <span className="truncate text-sm font-normal 3xl:text-base">{value}</span>
+          <span className="truncate text-[13px] font-normal 3xl:text-sm">{value}</span>
         )}
       </div>
     </div>
@@ -147,7 +147,7 @@ export function TicketClientPanel({ ticket }: { ticket: Ticket | null | undefine
   return (
     <Card className="flex flex-col overflow-hidden rounded-none border-0 border-l border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
       <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
-        <h2 className="text-sm font-semibold">Client Details</h2>
+        <h2 className="text-sm font-semibold 3xl:text-base">Client Details</h2>
       </div>
 
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">

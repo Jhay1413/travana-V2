@@ -251,7 +251,7 @@ export function HolidayDetailsPanel({ selection, enquiries, quotes, bookings, cl
       data-testid="holiday-details-panel"
     >
       <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
-        <h2 className="text-sm font-semibold">Details</h2>
+        <h2 className="text-sm font-semibold 3xl:text-base">Details</h2>
       </div>
 
       <div className="px-4 pt-4 3xl:px-6">
