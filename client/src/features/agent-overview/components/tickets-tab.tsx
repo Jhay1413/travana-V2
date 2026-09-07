@@ -53,7 +53,7 @@ export function TicketsTab({ userId }: { userId: string }) {
               <InitialsAvatar name={ticket.clientName || ticket.subject} className="h-8 w-8 text-[11px]" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="truncate text-[17px] font-medium">{ticket.subject}</span>
+                  <span className="truncate text-sm font-medium">{ticket.subject}</span>
                   <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
                     {timeAgo(ticket.createdAt)}
                   </span>

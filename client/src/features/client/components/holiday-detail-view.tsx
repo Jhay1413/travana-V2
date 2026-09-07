@@ -240,7 +240,7 @@ function FieldItem({ icon: Icon, label, value }: { icon: LucideIcon; label: stri
       </span>
       <div className="min-w-0 truncate text-[13px] 3xl:text-sm">
         <span className="text-black/45">{label}: </span>
-        <span className="font-bold text-black/90">{value}</span>
+        <span className="font-normal text-black/90">{value}</span>
       </div>
     </div>
   );
@@ -1282,10 +1282,10 @@ function QuoteHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailC
         <div className="px-2 pb-2 3xl:px-4">
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-baseline gap-3">
-              <h1 className="truncate text-lg font-bold leading-tight text-black/90 3xl:text-xl" data-testid="holiday-detail-title">
+              <h1 className="truncate text-sm font-semibold leading-tight text-black/90 3xl:text-base" data-testid="holiday-detail-title">
                 {title}
               </h1>
-              <span className="text-lg font-bold leading-tight text-[#f97316] 3xl:text-2xl" data-testid="holiday-detail-price">
+              <span className="text-base font-semibold leading-tight text-[#f97316] 3xl:text-lg" data-testid="holiday-detail-price">
                 {currency.format(quote.commissions.price)}
               </span>
               {quote.pricePerPerson > 0 && (
@@ -1440,10 +1440,10 @@ function BookingHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
         <div className="px-2 pb-2 3xl:px-4">
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-baseline gap-3">
-              <h1 className="truncate text-lg font-bold leading-tight text-black/90 3xl:text-xl" data-testid="holiday-detail-title">
+              <h1 className="truncate text-sm font-semibold leading-tight text-black/90 3xl:text-base" data-testid="holiday-detail-title">
                 {title}
               </h1>
-              <span className="text-lg font-bold leading-tight text-[#f97316] 3xl:text-xl" data-testid="holiday-detail-price">
+              <span className="text-base font-semibold leading-tight text-[#f97316] 3xl:text-lg" data-testid="holiday-detail-price">
                 {currency.format(totalPrice)}
               </span>
               {booking.pricePerPerson > 0 && (
@@ -1617,7 +1617,7 @@ function EnquiryActionsMenu({
       <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
         <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
           <DialogHeader className="px-6 pt-6">
-            <DialogTitle className="text-lg font-semibold">Convert Enquiry to Quote</DialogTitle>
+            <DialogTitle className="text-sm font-semibold">Convert Enquiry to Quote</DialogTitle>
             <DialogDescription className="text-sm text-black/55">
               Review and adjust the details from the enquiry, then create the quote.
             </DialogDescription>
@@ -1665,11 +1665,11 @@ function EnquiryHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
         <div className="px-2 pb-2 3xl:px-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-baseline gap-3">
-            <h1 className="truncate text-lg font-bold leading-tight text-black/90 3xl:text-xl" data-testid="holiday-detail-title">
+            <h1 className="truncate text-sm font-semibold leading-tight text-black/90 3xl:text-base" data-testid="holiday-detail-title">
               {title}
             </h1>
             {enquiry.budget && (
-              <span className="text-lg font-bold leading-tight text-[#f97316] 3xl:text-xl" data-testid="holiday-detail-price">
+              <span className="text-base font-semibold leading-tight text-[#f97316] 3xl:text-lg" data-testid="holiday-detail-price">
                 {currency.format(parseFloat(enquiry.budget))}
                 {formatBudgetType(enquiry.budget_type)}
               </span>

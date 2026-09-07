@@ -149,7 +149,7 @@ export function ConversationsTab() {
                 <ChannelIcon channelType={c.channel_type} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="truncate text-[17px] font-medium">{name}</span>
+                    <span className="truncate text-sm font-medium">{name}</span>
                     <span className="shrink-0 text-xs font-semibold text-[#fe9a00]">
                       - {inboxTime(c.last_message_at || c.created_at)}
                     </span>
