@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Check, Loader2, RotateCcw } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, HelpCircle, Loader2, RotateCcw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,18 @@ interface FieldRule {
   regex?: string;
   urlSegment?: number;
   transform?: string;
+  // Provenance (EXTRACTION_STATUS.md §4.3, the field picker). A rule the human
+  // PICKED was derived from a click and verified to reproduce the exact value
+  // they confirmed on the real page. A GENERATED rule (the AI path) has only
+  // passed shape checks — it has never been proven to produce a correct value
+  // on any real page. All optional: a spec built before picker mode shipped
+  // carries none of this, and every check below treats that absence as
+  // "unknown provenance", not as "generated" — so an older spec renders
+  // exactly as it did before this metadata existed.
+  origin?: "picked" | "generated";
+  verifiedValue?: string;
+  strategy?: string;
+  pickedAt?: string;
 }
 
 // An AI-generated spec is learned from ONE page, so its rules are routinely
@@ -52,7 +64,21 @@ export function SupplierSpecReviewDialog({ scraper, onOpenChange }: SupplierSpec
   const needsReview = config.specNeedsReview === true;
 
   const rules = useMemo(() => Object.entries(spec?.fields ?? {}), [spec]);
-  const suspect = useMemo(() => rules.filter(([, r]) => looksOverfitted(r)).map(([k]) => k), [rules]);
+  // A rule the human picked was already verified against a value they
+  // confirmed on the real page — the overfitting heuristic exists to catch
+  // rules that were never proven, so a picked rule is exempt from it. Rules
+  // with no `origin` at all (every spec generated before picker mode shipped)
+  // fall through to the heuristic exactly as before.
+  const suspect = useMemo(
+    () => rules.filter(([, r]) => r.origin !== "picked" && looksOverfitted(r)).map(([k]) => k),
+    [rules],
+  );
+  // Only render provenance UI when the spec actually carries it — an older
+  // spec with none of these keys must look exactly as it did before this
+  // metadata existed.
+  const hasProvenance = useMemo(() => rules.some(([, r]) => r.origin != null), [rules]);
+  const pickedCount = useMemo(() => rules.filter(([, r]) => r.origin === "picked").length, [rules]);
+  const generatedCount = useMemo(() => rules.filter(([, r]) => r.origin === "generated").length, [rules]);
 
   const submit = (approve: boolean) => {
     if (!scraper) return;
@@ -102,6 +128,17 @@ export function SupplierSpecReviewDialog({ scraper, onOpenChange }: SupplierSpec
                 {needsReview ? "Needs review" : "Approved"}
               </span>
               <span className="text-xs text-black/45">{rules.length} field rules</span>
+              {hasProvenance && (
+                <span className="flex items-center gap-1.5 text-xs text-black/45">
+                  <span className="flex items-center gap-1 text-emerald-700">
+                    <CheckCircle2 className="h-3 w-3" /> {pickedCount} verified
+                  </span>
+                  <span className="text-black/25">·</span>
+                  <span className="flex items-center gap-1 text-black/50">
+                    <HelpCircle className="h-3 w-3" /> {generatedCount} unverified
+                  </span>
+                </span>
+              )}
             </div>
 
             {suspect.length > 0 && (
@@ -118,21 +155,62 @@ export function SupplierSpecReviewDialog({ scraper, onOpenChange }: SupplierSpec
             )}
 
             <div className="overflow-hidden rounded-xl border border-black/10">
-              <div className="grid grid-cols-[150px_60px_1fr] gap-2 border-b border-black/5 bg-black/[0.02] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-black/50">
+              <div
+                className={`grid gap-2 border-b border-black/5 bg-black/[0.02] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-black/50 ${
+                  hasProvenance ? "grid-cols-[150px_60px_100px_1fr]" : "grid-cols-[150px_60px_1fr]"
+                }`}
+              >
                 <div>Field</div>
                 <div>Source</div>
+                {hasProvenance && <div>Verified?</div>}
                 <div>Rule</div>
               </div>
               <div className="divide-y divide-black/5">
                 {rules.map(([name, rule]) => (
-                  <div key={name} className="grid grid-cols-[150px_60px_1fr] items-start gap-2 px-3 py-2 text-xs">
+                  <div
+                    key={name}
+                    className={`grid items-start gap-2 px-3 py-2 text-xs ${
+                      hasProvenance ? "grid-cols-[150px_60px_100px_1fr]" : "grid-cols-[150px_60px_1fr]"
+                    }`}
+                  >
                     <div className={`font-medium ${suspect.includes(name) ? "text-amber-700" : "text-black/70"}`}>
                       {name}
                     </div>
                     <div className="text-black/45">{rule.jsonPath ? "json" : (rule.from ?? "text")}</div>
+                    {hasProvenance && (
+                      <div>
+                        {rule.origin === "picked" && (
+                          <span
+                            className="flex w-fit items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700"
+                            title={
+                              rule.pickedAt
+                                ? `Picked and verified against a value confirmed on the real page (${new Date(rule.pickedAt).toLocaleString()}).`
+                                : "Picked and verified against a value confirmed on the real page."
+                            }
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Verified
+                          </span>
+                        )}
+                        {rule.origin === "generated" && (
+                          <span
+                            className="flex w-fit items-center gap-1 rounded-full bg-black/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-black/50"
+                            title="AI-generated: only passed shape checks — never proven to produce a correct value on a real page."
+                          >
+                            <HelpCircle className="h-3 w-3" /> Unverified
+                          </span>
+                        )}
+                        {rule.origin == null && <span className="text-black/25">—</span>}
+                      </div>
+                    )}
                     <div className="min-w-0 break-all font-mono text-[10px] text-black/60">
                       {rule.jsonPath ?? rule.regex ?? (rule.urlSegment != null ? `segment ${rule.urlSegment}` : "—")}
                       {rule.transform ? <span className="text-black/35"> → {rule.transform}</span> : null}
+                      {rule.verifiedValue && (
+                        <div className="mt-1 text-black/40">
+                          Verified value: <span className="text-black/60">&ldquo;{rule.verifiedValue}&rdquo;</span>
+                        </div>
+                      )}
+                      {rule.strategy && <div className="text-black/35">Strategy: {rule.strategy}</div>}
                     </div>
                   </div>
                 ))}

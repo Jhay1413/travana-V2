@@ -187,10 +187,14 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "fields": {
           "adults": {
-            "from": "text",
+            "from": "url",
             "group": 1,
-            "regex": "Guests:\\s*(\\d+)",
-            "transform": "number"
+            "regex": "numGuests=([^&]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:41:48.189Z",
+            "strategy": "url-param",
+            "transform": "number",
+            "verifiedValue": "2"
           },
           "country": {
             "from": "text",
@@ -226,13 +230,21 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "quote_title": {
             "from": "headings",
             "group": 1,
-            "regex": "^[^\\n]*\\n([^\\n]+)"
+            "regex": "^[^\\n]*\\n([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:41:48.189Z",
+            "strategy": "heading-position",
+            "verifiedValue": "3-Day The Bahamas from Miami, FL"
           },
           "sales_price": {
             "from": "text",
             "group": 1,
-            "regex": "Total \\(USD\\):\\s*\\$([\\d,]+\\.\\d{2})",
-            "transform": "number"
+            "regex": "(?:^|\\n)\\s*Total \\(USD\\):\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:41:48.189Z",
+            "strategy": "label-anchored",
+            "transform": "number",
+            "verifiedValue": "$926.00"
           },
           "cabin_number": {
             "from": "text",
@@ -262,8 +274,165 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "currency": "USD",
           "tour_operator": "Carnival"
         },
+        "packageType": "cruise",
         "luggageRegex": "",
         "itineraryRegex": "Day\\s*(\\d+)[^\\n]*\\n([^\n]+)",
+        "flightModalTrigger": ""
+      },
+      "adapterType": "dom",
+      "captureOnly": true,
+      "specNeedsReview": true
+    }
+  },
+  {
+    "supplierKey": "celebritycruises",
+    "supplierName": "Celebritycruises",
+    "adapterType": "dom",
+    "isActive": true,
+    "config": {
+      "auth": {
+        "type": "none"
+      },
+      "deepLink": {
+        "hostIncludes": "celebritycruises.com",
+        "pathIncludes": ""
+      },
+      "extraction": {
+        "wait": {
+          "timeoutMs": 30000,
+          "textMatches": "£\\s?\\d{1,3}(,\\d{3})*(\\.\\d{2})?\\s?GBP"
+        },
+        "fields": {
+          "adults": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Guests\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:39:18.304Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "2 Adults"
+          },
+          "country": {
+            "from": "url",
+            "group": 1,
+            "regex": "country=([A-Z]{3})"
+          },
+          "infants": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d+)\\s+Infants?",
+            "transform": "number"
+          },
+          "children": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d+)\\s+Children?",
+            "transform": "number"
+          },
+          "ship_name": {
+            "from": "text",
+            "group": 1,
+            "regex": "Onboard\\s*\\n?([A-Za-z ]+)"
+          },
+          "cabin_type": {
+            "from": "text",
+            "group": 1,
+            "regex": "We choose your ([^\n]+)"
+          },
+          "cruise_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "Dates?\\s*\\n?([0-9]{1,2}\\s+[A-Za-z]{3,9}\\s+20\\d{2})",
+            "transform": "date"
+          },
+          "cruise_line": {
+            "from": "title",
+            "group": 0,
+            "regex": "Celebrity Cruises",
+            "fallback": "Celebrity Cruises"
+          },
+          "cruise_only": {
+            "from": "text",
+            "group": 0,
+            "regex": "Cruise-Only"
+          },
+          "debarkation": {
+            "from": "text",
+            "group": 2,
+            "regex": "(\\d+)\\s*\\n([A-Za-z ,]+)\\s*\\nArrives At"
+          },
+          "embarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "Leaving from\\s*\\n?([A-Za-z ,]+)"
+          },
+          "quote_title": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Sign In\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:39:18.305Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "10 Night Italy & French Riviera"
+          },
+          "sales_price": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Room Total\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:39:18.304Z",
+            "strategy": "label-anchored",
+            "transform": "number",
+            "verifiedValue": "£2,984.00"
+          },
+          "travel_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "Dates?\\s*\\n?([0-9]{1,2}\\s+[A-Za-z]{3,9}\\s+20\\d{2})",
+            "transform": "date"
+          },
+          "cabin_number": {
+            "from": "text",
+            "group": 1,
+            "regex": "Room location\\s*\\n?([^\n]+)"
+          },
+          "cruise_title": {
+            "from": "title",
+            "group": 1,
+            "regex": "^([\\d]+\\s+Night\\s+[^|]+)"
+          },
+          "no_of_nights": {
+            "from": "title",
+            "group": 1,
+            "regex": "(\\d+)\\s+Night",
+            "transform": "number"
+          },
+          "accommodation": {
+            "from": "text",
+            "group": 1,
+            "regex": "We choose your ([^\n]+)"
+          },
+          "price_per_person": {
+            "from": "text",
+            "group": 1,
+            "regex": "Guest Total\\s*\\n?£([\\d,]+\\.\\d{2})",
+            "transform": "number"
+          },
+          "tourist_tax_total": {
+            "from": "text",
+            "group": 1,
+            "regex": "Taxes and fees\\s*\\n?£([\\d,]+\\.\\d{2})",
+            "transform": "number"
+          }
+        },
+        "version": 1,
+        "constants": {
+          "currency": "GBP",
+          "tour_operator": "Celebrity Cruises"
+        },
+        "packageType": "cruise",
+        "luggageRegex": "",
+        "itineraryRegex": "^(\\d+|Day\\s*\\d+)\\s*\\n([A-Za-z /()]+,? [A-Za-z]+|Cruising \\(Cruising\\)|Day At Sea)",
         "flightModalTrigger": ""
       },
       "adapterType": "dom",
@@ -832,6 +1001,382 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
     }
   },
   {
+    "supplierKey": "msccruises",
+    "supplierName": "Msccruises",
+    "adapterType": "dom",
+    "isActive": true,
+    "config": {
+      "auth": {
+        "type": "none"
+      },
+      "deepLink": {
+        "hostIncludes": "msccruises.co.uk",
+        "pathIncludes": ""
+      },
+      "extraction": {
+        "wait": {
+          "timeoutMs": 30000,
+          "textMatches": "£\\d+"
+        },
+        "fields": {
+          "adults": {
+            "from": "url",
+            "group": 1,
+            "regex": "occupancy1=(\\d+)%7C",
+            "transform": "number"
+          },
+          "country": {
+            "from": "text",
+            "group": 1,
+            "regex": "\\|\\s*([A-Za-z ]+)"
+          },
+          "infants": {
+            "from": "url",
+            "group": 1,
+            "regex": "occupancy1=\\d+%7C\\d+%7C(\\d+)%7C",
+            "transform": "number"
+          },
+          "children": {
+            "from": "url",
+            "group": 1,
+            "regex": "occupancy1=\\d+%7C(\\d+)%7C",
+            "transform": "number"
+          },
+          "ship_name": {
+            "from": "text",
+            "group": 1,
+            "regex": "on\\s+(MSC [A-Za-z]+)"
+          },
+          "cabin_type": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Cabin Type:\\s*\\n+\\s*([^\\n]+)"
+          },
+          "cruise_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d{1,2}\\s+\\w{3},\\s*\\d{4})",
+            "transform": "date"
+          },
+          "cruise_line": {
+            "from": "text",
+            "group": 0,
+            "regex": "MSC Cruises",
+            "fallback": "MSC Cruises"
+          },
+          "cruise_only": {
+            "map": {
+              "true": "false",
+              "false": "true"
+            },
+            "from": "url",
+            "group": 1,
+            "regex": "isFlightIncluded=(false|true)"
+          },
+          "debarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Arrival:\\s*\\n+\\s*[^\\n]+\\n+\\s*[^|\\n]*\\|\\s*([^\\n]+)"
+          },
+          "embarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Departure:\\s*\\n+\\s*[^\\n]+\\n+\\s*[^|\\n]*\\|\\s*([^\\n]+)"
+          },
+          "quote_title": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Upgrade Now\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-06T03:46:35.521Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "7 nights | Spain, Portugal"
+          },
+          "sales_price": {
+            "from": "text",
+            "group": 1,
+            "regex": "Total price\\s*\\n+\\s*£\\s*([\\d,]+(?:\\.\\d{2})?)",
+            "transform": "number"
+          },
+          "travel_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Departure:\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-06T03:46:35.520Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "17, Jan 2027"
+          },
+          "cabin_number": {
+            "from": "text",
+            "group": 1,
+            "regex": "\\bCabin\\s+(\\d{3,5})\\b"
+          },
+          "cruise_title": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Your cruise\\s*\\n+\\s*([^\\n]+)"
+          },
+          "no_of_nights": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Duration:\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-06T03:46:35.521Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "7 nights"
+          },
+          "price_per_person": {
+            "from": "text",
+            "group": 1,
+            "regex": "Price per person from:\\s*£([\\d,]+)",
+            "transform": "number"
+          }
+        },
+        "version": 1,
+        "constants": {
+          "currency": "GBP",
+          "tour_operator": "MSC Cruises"
+        },
+        "packageType": "cruise",
+        "luggageRegex": "",
+        "flightModalTrigger": ""
+      },
+      "adapterType": "dom",
+      "captureOnly": true,
+      "specNeedsReview": true
+    }
+  },
+  {
+    "supplierKey": "ncl",
+    "supplierName": "Ncl",
+    "adapterType": "dom",
+    "isActive": true,
+    "config": {
+      "auth": {
+        "type": "none"
+      },
+      "deepLink": {
+        "hostIncludes": "ncl.com",
+        "pathIncludes": ""
+      },
+      "extraction": {
+        "wait": {
+          "timeoutMs": 30000,
+          "textMatches": "\\$\\d{1,3}(,\\d{3})*(\\.\\d{2})?"
+        },
+        "fields": {
+          "adults": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d+)\\s+Guests?",
+            "transform": "number"
+          },
+          "country": {
+            "from": "text",
+            "group": 0,
+            "regex": "Italy",
+            "fallback": "Italy"
+          },
+          "ship_name": {
+            "from": "text",
+            "group": 1,
+            "regex": "ON NORWEGIAN ([A-Z]+)"
+          },
+          "cabin_type": {
+            "from": "text",
+            "group": 1,
+            "regex": "STATEROOM #\\d+\\s*([^\n]+)"
+          },
+          "cruise_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d{1,2} \\w{3} \\u2014 \\d{1,2} \\w{3} \\d{4})"
+          },
+          "cruise_line": {
+            "from": "text",
+            "group": 0,
+            "regex": "Norwegian Cruise Line",
+            "fallback": "Norwegian Cruise Line"
+          },
+          "debarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "DAY 9\\s*([^\n]+)"
+          },
+          "embarkation": {
+            "from": "text",
+            "group": 0,
+            "regex": "Rome \\(Civitavecchia\\), Italy"
+          },
+          "quote_title": {
+            "from": "text",
+            "group": 1,
+            "regex": "^([^\n]+)"
+          },
+          "sales_price": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Total Due\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:35:23.418Z",
+            "strategy": "label-anchored",
+            "transform": "number",
+            "verifiedValue": "$2,617.40"
+          },
+          "cabin_number": {
+            "from": "text",
+            "group": 1,
+            "regex": "STATEROOM #?(\\d+)"
+          },
+          "no_of_nights": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d+)-DAY",
+            "transform": "number"
+          },
+          "accommodation": {
+            "from": "text",
+            "group": 1,
+            "regex": "STATEROOM #\\d+\\s*([^\n]+)"
+          },
+          "price_per_person": {
+            "from": "text",
+            "group": 1,
+            "regex": "Family Inside\\s*\\$([\\d,]+)",
+            "transform": "number"
+          }
+        },
+        "version": 1,
+        "constants": {
+          "currency": "USD",
+          "tour_operator": "Norwegian Cruise Line"
+        },
+        "packageType": "cruise",
+        "luggageRegex": "",
+        "itineraryRegex": "DAY\\s*(\\d+)\\s*([^\n]+)",
+        "flightModalTrigger": ""
+      },
+      "adapterType": "dom",
+      "captureOnly": true,
+      "specNeedsReview": true
+    }
+  },
+  {
+    "supplierKey": "pocruises",
+    "supplierName": "Pocruises",
+    "adapterType": "dom",
+    "isActive": true,
+    "config": {
+      "auth": {
+        "type": "none"
+      },
+      "deepLink": {
+        "hostIncludes": "pocruises.com",
+        "pathIncludes": ""
+      },
+      "extraction": {
+        "wait": {
+          "timeoutMs": 30000,
+          "textMatches": "£\\s?\\d{1,3}(,\\d{3})*(\\.\\d{2})?pp"
+        },
+        "fields": {
+          "adults": {
+            "from": "text",
+            "group": 1,
+            "regex": "Based On (\\d+) Guests?",
+            "transform": "number"
+          },
+          "country": {
+            "from": "text",
+            "group": 2,
+            "regex": "Location\\s*\\n?([A-Za-z ,\\-()\\/]+), ([A-Za-z]+) to"
+          },
+          "ship_name": {
+            "from": "text",
+            "group": 1,
+            "regex": "Sailing on\\s*([A-Za-z]+),"
+          },
+          "cabin_type": {
+            "from": "text",
+            "group": 1,
+            "regex": "(Inside|Outside|Balcony|Suite) Based On"
+          },
+          "cruise_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d{1,2} \\w{3,9} \\d{4})\\s*-\\s*(\\d{1,2} \\w{3,9} \\d{4})",
+            "transform": "date"
+          },
+          "cruise_line": {
+            "from": "text",
+            "group": 1,
+            "regex": "About ([A-Za-z& ]+)"
+          },
+          "cruise_only": {
+            "from": "text",
+            "group": 1,
+            "regex": "(Direct flights and transfers included)"
+          },
+          "debarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Location\\s*\\n+\\s*[^\\n]+?\\s+to\\s+([^\\n]+)"
+          },
+          "destination": {
+            "from": "text",
+            "group": 1,
+            "regex": "Location\\s*\\n?([A-Za-z ,\\-()\\/]+)\\sto"
+          },
+          "embarkation": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Location\\s*\\n+\\s*([^\\n]+?)\\s+to\\s+"
+          },
+          "quote_title": {
+            "from": "headings",
+            "group": 1,
+            "regex": "^([^\n]+)"
+          },
+          "travel_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d{1,2} \\w{3,9} \\d{4})\\s*-\\s*\\d{1,2} \\w{3,9} \\d{4}",
+            "transform": "date"
+          },
+          "cruise_title": {
+            "from": "headings",
+            "group": 1,
+            "regex": "^([^\n]+)"
+          },
+          "no_of_nights": {
+            "from": "text",
+            "group": 1,
+            "regex": "(\\d+) nights?",
+            "transform": "number"
+          },
+          "price_per_person": {
+            "from": "text",
+            "group": 1,
+            "regex": "£\\s?([\\d,]+)pp",
+            "transform": "number"
+          }
+        },
+        "version": 1,
+        "constants": {
+          "currency": "GBP",
+          "tour_operator": "P&O Cruises"
+        },
+        "packageType": "cruise",
+        "itineraryRegex": "Day\\s*(\\d+(?:-\\d+)?)\\s*\\n?([A-Za-z ,()\\/\\-]+)",
+        "imageUrlIncludes": "azura"
+      },
+      "adapterType": "dom",
+      "captureOnly": true,
+      "specNeedsReview": true
+    }
+  },
+  {
     "supplierKey": "royalcaribbean",
     "supplierName": "Royalcaribbean",
     "adapterType": "dom",
@@ -853,8 +1398,11 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "adults": {
             "from": "text",
             "group": 1,
-            "regex": "Guests?\\s*\\n*([0-9]+) Adults?",
-            "transform": "number"
+            "regex": "(?:^|\\n)\\s*Guests\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:31:51.185Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "2 Adults"
           },
           "country": {
             "from": "url",
@@ -914,12 +1462,20 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "embarkation": {
             "from": "text",
             "group": 1,
-            "regex": "(?:^|\\n)\\s*Leaving from\\s*\\n+\\s*([^\\n]+)"
+            "regex": "(?:^|\\n)\\s*Leaving from\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:31:51.186Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "Southampton, England"
           },
           "quote_title": {
-            "from": "title",
+            "from": "text",
             "group": 1,
-            "regex": "^(.*?)\\s*\\|"
+            "regex": "(?:^|\\n)\\s*Sign In\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:31:51.186Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "7 Night Spain & Portugal Cruise"
           },
           "sales_price": {
             "from": "text",
@@ -927,15 +1483,29 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "regex": "Trip total\\s*\\n*[£$€]?\\s*([\\d,]+\\.\\d{2})",
             "transform": "number"
           },
+          "travel_date": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Dates\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:31:51.185Z",
+            "strategy": "label-anchored",
+            "transform": "date",
+            "verifiedValue": "9 May 2027"
+          },
           "cabin_number": {
             "from": "text",
-            "group": 0,
-            "regex": "Room location\\s*\\n*To be assigned \\*"
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Room(?:\\s*(?:number|no\\.?))?\\s*:?\\s*\\n+\\s*(\\d{3,5})\\b"
           },
           "cruise_title": {
-            "from": "title",
+            "from": "text",
             "group": 1,
-            "regex": "^(.*?)\\s*\\|"
+            "regex": "(?:^|\\n)\\s*Sign In\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:31:51.186Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "7 Night Spain & Portugal Cruise"
           },
           "no_of_nights": {
             "from": "title",
@@ -966,6 +1536,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "currency": "GBP",
           "tour_operator": "Royal Caribbean"
         },
+        "packageType": "cruise",
         "itineraryRegex": "Day\\s*(\\d+)\\s*\\n*([A-Za-z\\s,&]+)",
         "imageUrlIncludes": "royalcaribbean"
       },
@@ -1051,12 +1622,23 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "jsonPath": "packageData.accommodation.locationMap.DESTINATION",
             "transform": "titleCase"
           },
+          "quote_title": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)\\s*Edit Search\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:55:35.381Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "Guayarmina Princess Hotel - Adults Only"
+          },
           "sales_price": {
             "from": "text",
             "group": 1,
-            "regex": "Total Price £([\\d,.]+)",
-            "jsonPath": "price.totalPartyPriceForMC",
-            "transform": "number"
+            "regex": "(?:^|\\n)\\s*£1095\\.85pp\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:55:35.379Z",
+            "strategy": "label-anchored",
+            "verifiedValue": "Total Price £2191.70"
           },
           "star_rating": {
             "from": "text",
@@ -1104,9 +1686,12 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "price_per_person": {
             "from": "text",
             "group": 1,
-            "regex": "£([\\d,.]+)pp",
-            "jsonPath": "price.perPerson",
-            "transform": "number"
+            "regex": "(?:^|\\n)\\s*Green & Fair Hotel\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-07T06:55:35.380Z",
+            "strategy": "label-anchored",
+            "transform": "number",
+            "verifiedValue": "£1095.85pp"
           },
           "tourist_tax_total": {
             "from": "text",
@@ -1132,6 +1717,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "currency": "GBP",
           "tour_operator": "TUI"
         },
+        "packageType": "package-holiday",
         "luggageRegex": "(\\d+)\\s*x?\\s*(?:bag|luggage|suitcase)s?",
         "flightModalTrigger": "compare airport|flight details"
       },
@@ -1202,8 +1788,12 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "sales_price": {
             "from": "text",
             "group": 1,
-            "regex": "Grand total\\s*£([\\d,]+(?:\\.\\d{2})?)",
-            "transform": "number"
+            "regex": "(?:^|\\n)\\s*Grand total\\s*\\n+\\s*([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-09-06T03:50:50.070Z",
+            "strategy": "label-anchored",
+            "transform": "number",
+            "verifiedValue": "£2,013.10"
           },
           "cruise_title": {
             "from": "text",
@@ -1214,12 +1804,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "from": "text",
             "group": 1,
             "regex": "(\\d+)\\s*NIGHTS",
-            "transform": "number"
-          },
-          "price_per_person": {
-            "from": "text",
-            "group": 1,
-            "regex": "£([\\d,]+(?:\\.\\d{2})?)\\s*\\(Includes taxes & fees\\)",
             "transform": "number"
           },
           "tourist_tax_total": {
@@ -1234,6 +1818,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "currency": "GBP",
           "tour_operator": "Virgin Voyages"
         },
+        "packageType": "cruise",
         "luggageRegex": "",
         "imageUrlIncludes": "",
         "flightModalTrigger": ""

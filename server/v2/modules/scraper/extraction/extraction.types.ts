@@ -6,14 +6,20 @@
 // only runs regexes/transforms the spec declares, so a new supplier is added by
 // config alone and a compromised spec can't run arbitrary code.
 
-export type FieldSource = 'text' | 'title' | 'url' | 'images' | 'headings';
+export type FieldSource = 'text' | 'title' | 'url' | 'images' | 'headings' | 'deepText';
 export type FieldTransform = 'number' | 'date' | 'titleCase' | 'trim' | 'lower' | 'upper';
 
 export interface FieldRule {
   // Where to read: page innerText (default), page title, the deep-link URL, the
-  // captured image URLs, or the page's h1/h2 headings (one per line, document
+  // captured image URLs, the page's h1/h2 headings (one per line, document
   // order — anchor a rule with ^ + a line count rather than by wording, since a
-  // headline is arbitrary prose).
+  // headline is arbitrary prose), or "deepText" — the full DOM text INCLUDING
+  // collapsed/hidden nodes and open shadow roots. Prefer "text"; reach for
+  // "deepText" ONLY for a value that genuinely never appears in the visible
+  // text (a cruise itinerary sitting inside a collapsed drawer — see
+  // extraction.interpreter.ts's itinerary fallback for the real case this
+  // covers), because deepText also contains inactive tabs, other cabin grades
+  // and pre-rendered alternatives that a loose rule can match by mistake.
   // Optional so a pure-API override rule can be just { jsonPath: "…" } — e.g.
   // the easyjet adapter's config overrides, where there is no captured DOM.
   from?: FieldSource;
@@ -29,6 +35,18 @@ export interface FieldRule {
   // "Shared Transfer"}). Applied after transform, before fallback.
   map?: Record<string, string>;
   fallback?: string | number; // used when nothing matches
+
+  // ─── Provenance (picker-spec.ts / EXTRACTION_AUDIT.md §4 Phase 3) ──────────
+  // All four below are metadata ONLY — the interpreter never reads them when
+  // running a rule. They record where a rule came from, for the review UI and
+  // for mergePickedIntoSpec's `replaced` reporting, without changing runtime
+  // behaviour. A spec stored before these existed simply has them undefined,
+  // which is indistinguishable from 'generated' — exactly the backwards
+  // compatibility this needs.
+  origin?: 'picked' | 'generated'; // 'picked' = a human clicked the element and it verified; 'generated' = the AI wrote it from one example page
+  verifiedValue?: string; // the exact value the agent's click reproduced at pick time (deriveSpecFromPicks only stores a rule that verifies against it)
+  strategy?: string; // which derivation strategy produced this rule (see DerivationStrategy in picker-spec.ts) — 'url-param' | 'label-anchored' | 'heading-position' | 'title-prefix' | 'line-offset'
+  pickedAt?: string; // ISO timestamp of when the pick was made
 }
 
 export interface ExtractionSpec {
@@ -72,4 +90,15 @@ export interface ExtractionSpec {
   // Optional (cruise only): build the day-by-day itinerary from every match.
   // Group 1 = day (number or "Day 3"), group 2 = description/port.
   itineraryRegex?: string;
+  // Optional: the ONE package type an agent (or the AI generator) DECLARED this
+  // supplier's pages to be, rather than leaving it to be inferred from which
+  // fields happened to resolve. Virgin Voyages' ship_name regex was pinned to
+  // one voyage's wording and matched nothing — under pure inference that made
+  // the page look like a package holiday and dropped the entire cruise block
+  // (line, sailing date, cabin, itinerary) along with the ship. When this is
+  // set it is AUTHORITATIVE: 'cruise'/'lodge' emit that block even if a field
+  // inside it resolved empty, and 'package-holiday' suppresses both. Unset
+  // (the case for every spec stored before this field existed) falls back to
+  // the pre-existing field-based inference, unchanged.
+  packageType?: 'cruise' | 'package-holiday' | 'lodge';
 }

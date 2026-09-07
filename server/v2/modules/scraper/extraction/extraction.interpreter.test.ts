@@ -1088,6 +1088,25 @@ describe("travel_date fallbacks", () => {
     );
     expect(q.travel_date).toBe("");
   });
+
+  // Regression: a rule can capture prose ("Jul 02") that isoDate correctly
+  // rejects as not-ISO, but the raw unparsed capture used to be tried before
+  // dateFromUrl — so that non-date text still won and reached travel_date (and
+  // from there returnDate / check_in_date_time). dateFromUrl must outrank the
+  // raw fallback; the raw value is only used when the URL carries no date.
+  it("prefers a valid URL date over a non-ISO raw capture", () => {
+    const spec = {
+      version: 1,
+      constants: {},
+      fields: { travel_date: { from: "text", regex: "Departing (.+)", group: 1 } },
+    } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(
+      spec,
+      { title: "", text: "Departing Jul 02", url: "https://example.com/deal?date=27-08-2026" },
+      "2026-08-21T00:00:00Z",
+    );
+    expect(q.travel_date).toBe("2026-08-27");
+  });
 });
 
 // A basket page that prints each leg as one sentence (Vista / Hays-shaped).
@@ -1253,6 +1272,168 @@ describe("cruise itinerary table", () => {
     const q = runExtractionSpec(spec, { title: "", text: notACruise, url: "https://x.test/d" }, "x");
     expect(q.itinerary).toBeUndefined();
     expect(q.ship_name).toBeUndefined(); // and the deal is not turned into a cruise
+  });
+});
+
+// A THIRD itinerary shape: MSC Cruises' cruise-summary page never prints a
+// day/port table at all — it prints
+//   Itinerary:
+//   Santa Cruz De Tenerife | Puerto Del Rosario | Funchal (+ 3)
+// with ZERO day-number lines in `text` OR `deepText` (measured on a live
+// capture — EXTRACTION_AUDIT.md, EXTRACTION_STATUS.md). Neither
+// parseItineraryTable (needs a run of 1, 2, 3…) nor a stored itineraryRegex
+// written for "1 Portname" can ever match this. parsePortListItinerary is
+// the reader for it, tried only once both of those have found nothing.
+describe("cruise itinerary — pipe-separated port list, no day numbers (MSC)", () => {
+  const spec = {
+    version: 1,
+    constants: { tour_operator: "MSC Cruises", cruise_line: "MSC Cruises", currency: "GBP" },
+    fields: {},
+  } as unknown as ExtractionSpec;
+  const URL = "https://www.msccruises.co.uk/booking/summary?sailDate=2027-04-10";
+
+  it("reads the visible ports and numbers them sequentially, not as calendar days", () => {
+    const text = [
+      "Your cruise",
+      "Itinerary:",
+      "Santa Cruz De Tenerife | Puerto Del Rosario | Funchal (+ 3)",
+      "Trip total", "£1,299.00",
+    ].join("\n");
+    const q = runExtractionSpec(spec, { title: "", text, url: URL }, "x");
+    expect(q.itinerary).toEqual([
+      { day: 1, description: "Santa Cruz De Tenerife" },
+      { day: 2, description: "Puerto Del Rosario" },
+      { day: 3, description: "Funchal" },
+    ]);
+    // No sub_description is invented — the page states none for this shape.
+    expect(q.itinerary?.every((row) => !("sub_description" in row))).toBe(true);
+  });
+
+  it("does not read the cabin-position line as an itinerary", () => {
+    // Real UI chrome on this exact page: a bare pipe is common outside the
+    // itinerary block, so the LABEL anchor (not "any pipe-separated line") is
+    // what must keep this honest.
+    const text = [
+      "Your cabin",
+      "Aft | Deck 8 | Cabin 8235",
+      "11:00 PM | Santa Cruz De Tenerife",
+    ].join("\n");
+    const q = runExtractionSpec(spec, { title: "", text, url: URL }, "x");
+    expect(q.itinerary).toBeUndefined();
+  });
+
+  it("does not read a schedule line as an itinerary even directly under a label", () => {
+    // Belt-and-suspenders: even if the cabin/schedule line ever sat right
+    // under a genuine label, the digit/currency shape check still rejects it.
+    const text = ["Itinerary:", "Aft | Deck 8 | Cabin 8235"].join("\n");
+    const q = runExtractionSpec(spec, { title: "", text, url: URL }, "x");
+    expect(q.itinerary).toBeUndefined();
+  });
+
+  it("combines with the ship label when the page states both, with no port table at all", () => {
+    const text = [
+      "Itinerary:",
+      "Santa Cruz De Tenerife | Puerto Del Rosario | Funchal",
+      "Onboard", "MSC Virtuosa",
+    ].join("\n");
+    // Cruise-ness comes from the spec's own cruise_line constant (this
+    // describe block's `spec`) — the port list only ever supplies the
+    // itinerary, never the cruise/not-a-cruise decision.
+    const q = runExtractionSpec(spec, { title: "", text, url: URL }, "x");
+    expect(q.ship_name).toBe("MSC Virtuosa");
+    expect(q.itinerary).toHaveLength(3);
+  });
+
+  it("prefers a day/port table over the port-list reader when the page has both", () => {
+    const text = [
+      "Itinerary",
+      "Day\tPort",
+      "1\t", "Southampton, England", "",
+      "2\t", "Cruising", "Day at Sea", "",
+      "3\t", "Hamburg, Germany", "",
+      "Itinerary:",
+      "Santa Cruz De Tenerife | Puerto Del Rosario | Funchal",
+    ].join("\n");
+    const q = runExtractionSpec(spec, { title: "", text, url: URL }, "x");
+    expect(q.itinerary?.[0]).toEqual({ day: 1, description: "Southampton, England" });
+  });
+
+  it("falls back to deepText's port list only when the visible text yields nothing", () => {
+    const deepText = ["Itinerary:", "Santa Cruz De Tenerife | Puerto Del Rosario | Funchal (+ 3)"].join("\n");
+    const q = runExtractionSpec(spec, { title: "", text: "Your cruise, no itinerary block here", url: URL, deepText }, "x");
+    expect(q.itinerary).toHaveLength(3);
+    expect(q.itinerary?.[0].description).toBe("Santa Cruz De Tenerife");
+  });
+});
+
+// The real failure that motivated `deepText`: an agent captured a Royal
+// Caribbean checkout page without opening the "View Ports" drawer.
+// document.body.innerText excludes collapsed content, so the whole
+// day-by-day itinerary was absent from `text` even though it was in the DOM
+// (an image inside the drawer WAS captured, and "Itinerary" was in
+// `headings`) — the cruise imported with no itinerary, silently. `deepText`
+// carries the full DOM text (including collapsed nodes) so this can be
+// recovered, but ONLY as a strict last resort: see the "never consults"
+// test below for why.
+describe("cruise itinerary — deepText fallback (the RC drawer failure)", () => {
+  const spec = {
+    version: 1,
+    constants: { tour_operator: "Royal Caribbean", currency: "GBP", cruise_line: "Royal Caribbean" },
+    fields: {},
+  } as unknown as ExtractionSpec;
+  const URL = "https://www.royalcaribbean.com/checkout/summary?sailDate=2027-06-21";
+
+  // What the bookmarklet actually captured as `text`: the headline facts, and
+  // the drawer's own (collapsed) trigger — but not one day of the table.
+  const VISIBLE_TEXT = [
+    "5-Night Hamburg & Rotterdam Cruise",
+    "Leaving from", "Southampton, England",
+    "Onboard", "Freedom of the Seas",
+    "Dates", "21 Jun 2027", "26 Jun 2027",
+    "View Ports",
+  ].join("\n");
+
+  // What `deepText` carries on top: everything in VISIBLE_TEXT, plus the table
+  // that was sitting inside the collapsed drawer.
+  const DEEP_TEXT = [
+    VISIBLE_TEXT,
+    "Itinerary",
+    "Day\tPort",
+    "1\t", "Southampton, England", "Departs at 5:00 pm", "",
+    "2\t", "Cruising", "Day at Sea", "",
+    "3\t", "Hamburg, Germany", "From 7:00 am - 4:00 pm", "",
+    "4\t", "Rotterdam, Netherlands", "From 10:30 am - 9:00 pm", "",
+    "5\t", "Cruising", "Day at Sea", "",
+    "6\t", "Southampton, England", "Arrives at 5:30 am", "",
+  ].join("\n");
+
+  it("recovers the itinerary from deepText when the drawer was collapsed on capture", () => {
+    const q = runExtractionSpec(spec, { title: "", text: VISIBLE_TEXT, url: URL, deepText: DEEP_TEXT }, "x");
+    expect(q.itinerary).toHaveLength(6);
+    expect(q.itinerary?.[0]).toEqual({ day: 1, description: "Southampton, England", sub_description: "Departs at 5:00 pm" });
+    expect(q.itinerary?.[3]).toEqual({ day: 4, description: "Rotterdam, Netherlands", sub_description: "From 10:30 am - 9:00 pm" });
+  });
+
+  it("imports with no itinerary when deepText wasn't captured — pre-deepText behaviour, unaffected", () => {
+    const q = runExtractionSpec(spec, { title: "", text: VISIBLE_TEXT, url: URL }, "x");
+    expect(q.itinerary).toBeUndefined();
+  });
+
+  it("never consults deepText once the visible text already yields an itinerary", () => {
+    // A conflicting itinerary in deepText — if this were ever read, day 1
+    // would come out "Rotterdam" instead of "Southampton". This proves the
+    // fallback is STRICT: it never runs, let alone overrides, once `text`
+    // alone already produced a result, so no existing supplier's output can
+    // change from adding `deepText` to the payload.
+    const conflictingDeepText = [
+      "Itinerary",
+      "Day\tPort",
+      "1\t", "Rotterdam, Netherlands", "Departs at 5:00 pm", "",
+      "2\t", "Cruising", "Day at Sea", "",
+      "3\t", "Hamburg, Germany", "From 7:00 am - 4:00 pm", "",
+    ].join("\n");
+    const q = runExtractionSpec(spec, { title: "", text: DEEP_TEXT, url: URL, deepText: conflictingDeepText }, "x");
+    expect(q.itinerary?.[0].description).toBe("Southampton, England");
   });
 });
 
@@ -1519,5 +1700,105 @@ describe("cruise page with no port table", () => {
     const q = runExtractionSpec(packageSpec, { title: "", text: VIRGIN_TEXT, url: URL }, "x");
     expect(q.cruise_line).toBeUndefined();
     expect(q.ship_name).toBeUndefined();
+  });
+
+  // A DECLARED packageType is authoritative over all of the field-based
+  // inference above (extraction.types.ts). This is what actually ends the
+  // Virgin Voyages class of failure: the earlier fix (specDeclaresCruise, the
+  // port-table check) still depends on the AI having written SOME cruise field
+  // or itinerary regex that resolves as "cruise evidence" — an agent can now
+  // just SAY it, and no missed field can be misread as "this isn't a cruise".
+  describe("declared packageType overrides inference", () => {
+    // ship_name has no rule AT ALL here (not merely a broken one), and there's
+    // no port table and no itineraryRegex either — under the old pure
+    // inference this page would have zero cruise evidence and import as a
+    // package holiday, same as the original Virgin Voyages bug.
+    it("still emits the cruise block when ship_name is entirely absent, given packageType: 'cruise'", () => {
+      const spec = {
+        version: 1,
+        packageType: "cruise",
+        constants: { tour_operator: "Virgin Voyages", currency: "GBP" },
+        fields: {
+          embarkation: { from: "text", regex: String.raw`Round trip from ([^,\n]+)`, group: 1 },
+        },
+      } as unknown as ExtractionSpec;
+      const q = runExtractionSpec(spec, { title: "", text: VIRGIN_TEXT, url: URL }, "x");
+      expect(q.cruise_line).toBe("Virgin Voyages");
+      expect(q.ship_name).toBe(""); // blank, not dropped — the agent fills it in
+      expect(q.embarkation).toBe("San Juan");
+      expect(q.itinerary).toBeUndefined(); // no port table, no itineraryRegex
+    });
+
+    // A page WITH a port table — normally cruise evidence on its own — but the
+    // agent has declared this supplier a package holiday. The declaration
+    // wins: no cruise block, even though inference alone would have found one.
+    it("suppresses the cruise block on a page with a port table, given packageType: 'package-holiday'", () => {
+      const PORT_TABLE_TEXT = [
+        "Day\tPort",
+        "1\t", "Southampton, England", "Departs at 5:00 pm", "",
+        "2\t", "Cruising", "Day at Sea", "",
+        "3\t", "Hamburg, Germany", "From 7:00 am - 4:00 pm", "",
+      ].join("\n");
+      const spec = {
+        version: 1,
+        packageType: "package-holiday",
+        constants: { tour_operator: "Some Portal", currency: "GBP" },
+        fields: { accommodation: { from: "text", regex: String.raw`^([^\n]+)`, group: 1 } },
+      } as unknown as ExtractionSpec;
+      const q = runExtractionSpec(spec, { title: "", text: PORT_TABLE_TEXT, url: "https://x.test/d" }, "x");
+      expect(q.cruise_line).toBeUndefined();
+      expect(q.ship_name).toBeUndefined();
+      expect(q.itinerary).toBeUndefined();
+    });
+
+    // No packageType at all — every spec stored before this field existed.
+    // Same spec/page as the pre-existing "is still a cruise when the spec's
+    // ship rule misses" test above: inference must fire exactly as before.
+    it("falls back to inference, unchanged, when packageType is unset", () => {
+      const q = runExtractionSpec(specWithBrokenShip, { title: "", text: VIRGIN_TEXT, url: URL }, "x");
+      expect(q.cruise_line).toBe("Virgin Voyages");
+      expect(q.ship_name).toBeDefined();
+    });
+  });
+});
+
+// On a sailing the voyage name IS the quote's headline. The reverse fallback
+// (cruise_title borrowing quote_title) has always existed, so a spec naming
+// only the voyage produced a titled cruise and an UNTITLED quote — and on a
+// cruise `accommodation`, the old fallback, holds the ship or nothing.
+describe("cruise title doubles as the quote title", () => {
+  const TEXT = "Onboard\nFreedom of the Seas\nDates\n9 May 2027";
+  const ctx = { title: "", text: TEXT, url: "https://x.test/d?sailDate=2027-05-09" };
+
+  it("fills quote_title from cruise_title when only the voyage was picked", () => {
+    const spec = {
+      version: 1,
+      constants: { cruise_line: "Royal Caribbean", ship_name: "Freedom of the Seas", cruise_title: "7 Night Spain & Portugal Cruise" },
+      fields: {},
+    } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(spec, ctx, "x");
+    expect(q.quote_title).toBe("7 Night Spain & Portugal Cruise");
+    expect(q.cruise_title).toBe("7 Night Spain & Portugal Cruise");
+  });
+
+  it("still lets an explicit quote_title win over the voyage name", () => {
+    const spec = {
+      version: 1,
+      constants: {
+        cruise_line: "Royal Caribbean", ship_name: "Freedom of the Seas",
+        cruise_title: "7 Night Spain & Portugal Cruise", quote_title: "Agent's own headline",
+      },
+      fields: {},
+    } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(spec, ctx, "x");
+    expect(q.quote_title).toBe("Agent's own headline");
+    // The reverse fallback is unchanged: cruise_title keeps its own value.
+    expect(q.cruise_title).toBe("7 Night Spain & Portugal Cruise");
+  });
+
+  it("leaves a non-cruise quote_title falling back to the hotel name", () => {
+    const spec = { version: 1, constants: { accommodation: "Plaza Prague Hotel" }, fields: {} } as unknown as ExtractionSpec;
+    const q = runExtractionSpec(spec, { title: "", text: "Plaza Prague Hotel", url: "https://x.test/d" }, "x");
+    expect(q.quote_title).toBe("Plaza Prague Hotel");
   });
 });

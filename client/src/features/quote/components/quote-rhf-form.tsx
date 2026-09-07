@@ -1,11 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { handleJsonUpload as handleJsonUploadUtil, handleJsonData, type JsonImportDeps } from "@/lib/json-import-handler";
-import { usePageCaptureImport, type CapturedPage } from "@/features/quote/api/use-page-capture-import";
+import {
+  usePageCaptureImport,
+  type CapturedPage,
+  type ImportValidation,
+} from "@/features/quote/api/use-page-capture-import";
+import { withMoneyFieldsQuarantined } from "@/features/quote/lib/import-validation";
+import { ImportValidationPanel } from "@/features/quote/components/sections/ImportValidationPanel";
+import { SupplierScraperPicksResultView, type SupplierScraperPicksResult } from "@/features/supplier-scraper";
 import {
   existingImageItem,
   pendingFiles,
@@ -238,15 +245,36 @@ export function QuoteRHFForm({
   // (already logged-in) browser via the bookmarklet; the server only interprets
   // it. No stored credentials, no headless browser, no bot protection to clear.
   const pageCaptureImport = usePageCaptureImport();
+  // The API validates the extracted quote (EXTRACTION_AUDIT.md §4 Phase 1) but
+  // never blocks on it — the deal always lands in the form. What's shown here
+  // is purely "double-check these before saving".
+  const [importValidation, setImportValidation] = useState<ImportValidation | null>(null);
+  // Present only when the pasted/clipboard capture carried field-picker picks
+  // (see use-page-capture-import.ts's PickedField/picks) — i.e. an agent had
+  // already told the picker where a field lived on THIS supplier's page.
+  // Rendered below via the same SupplierScraperPicksResultView the standalone
+  // "Apply field picks" screen uses, so an agent gets the same
+  // applied/couldn't-map/preserved breakdown right here instead of having to
+  // know that other screen exists.
+  const [importPicks, setImportPicks] = useState<SupplierScraperPicksResult | null>(null);
   const handlePageCaptureImport = (capture: CapturedPage, supplierKey: string) => {
     setIsImporting(true);
+    setImportValidation(null);
+    setImportPicks(null);
     pageCaptureImport.mutate(
       // Omit the key entirely when auto-detecting, rather than sending "".
       supplierKey ? { ...capture, supplierKey } : capture,
       {
         onSuccess: async (result) => {
           try {
-            await handleJsonData(result.quote as Record<string, any>, prepareJsonImport());
+            // Money fields (sales_price, price_per_person) that failed
+            // validation are dropped here rather than auto-filled — the
+            // agent types the number instead of trusting one that may be
+            // wrong. Fields with only a warning still populate.
+            const quoteForImport = withMoneyFieldsQuarantined(result.quote, result.validation);
+            await handleJsonData(quoteForImport as Record<string, any>, prepareJsonImport());
+            setImportValidation(result.validation ?? null);
+            setImportPicks(result.picks ?? null);
             // Surfaces "created supplier X / learned its spec — review it", so a
             // newly auto-configured supplier doesn't go unnoticed.
             if (result.message) toast({ title: "Imported", description: result.message });
@@ -310,6 +338,34 @@ export function QuoteRHFForm({
           onPageCaptureImport={handlePageCaptureImport}
           pageCapturePending={pageCaptureImport.isPending}
         />
+
+        {/* ── IMPORT VALIDATION (errors/warnings from the last capture import) */}
+        {importValidation && (
+          <ImportValidationPanel validation={importValidation} onDismiss={() => setImportValidation(null)} />
+        )}
+
+        {/* ── FIELD PICKS APPLIED (only present when this capture carried
+             field-picker picks — see use-page-capture-import.ts) — tells the
+             agent what got mapped into the supplier's spec and what couldn't
+             be, right where the import happened, instead of only being
+             visible on the separate supplier-scrapers "Apply field picks"
+             screen an agent has no reason to know about. */}
+        {importPicks && (
+          <div className="space-y-2 rounded-xl border border-black/10 bg-white/70 p-3">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-xs font-semibold text-black/70">Field picks applied to this supplier's spec</p>
+              <button
+                type="button"
+                onClick={() => setImportPicks(null)}
+                aria-label="Dismiss field-pick results"
+                className="text-black/40 transition hover:text-black/70"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <SupplierScraperPicksResultView result={importPicks} />
+          </div>
+        )}
 
         {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
         <QuoteOverviewSection />

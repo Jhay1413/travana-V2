@@ -1,10 +1,19 @@
 import { AppError } from '../../utils/error-handler';
 import { encrypt, decrypt } from '../../utils/encryption';
-import type { Scope } from '../../utils/scope';
+import { hasAnyRole, type Scope } from '../../utils/scope';
 import { scraperRepository } from './scraper.repository';
 import { getAdapter } from './adapters';
 import { extractionAiService, loginConfigAiService } from './extraction/extraction-ai.service';
 import { runExtractionSpec } from './extraction/extraction.interpreter';
+import { validateQuote, type ValidationResult } from './extraction/extraction.validate';
+import {
+  deriveSpecFromPicks,
+  mergePickedIntoSpec,
+  type DerivationProblem,
+  type MergeResult,
+  type PickedField,
+  type PickerCaptureContext,
+} from './extraction/picker-spec';
 import { easyjetService } from '../easyjet/easyjet.service';
 import type {
   ResolvedScraper,
@@ -12,6 +21,7 @@ import type {
   ScraperConfig,
   ScraperCredentials,
 } from './scraper-engine.types';
+import type { ExtractionSpec } from './extraction/extraction.types';
 import type { ScrapedQuoteJson } from '../easyjet/easyjet.types';
 import type { SupplierScraper } from '@shared/schema';
 
@@ -62,10 +72,69 @@ export interface ImportPageInput {
   headings?: string[];
   flightsText?: string;
   apiJson?: unknown;
+  // The full DOM text INCLUDING collapsed/hidden nodes and open shadow
+  // roots. `text` (innerText) excludes collapsed content — a Royal Caribbean
+  // checkout captured with its "View Ports" drawer closed had the whole
+  // day-by-day itinerary missing from `text` even though it was in the DOM.
+  // Absent on pre-deepText captures.
+  deepText?: string;
+  // Present when this capture came from the bookmarklet's FIELD PICKER mode
+  // rather than "Instant capture". THIS is the fix for the bug where pasting
+  // a picker payload into the normal "Capture from supplier page" dialog
+  // silently discarded the picks: parseCapture on the client used to rebuild
+  // the payload from a whitelist that omitted `picked` entirely, so an agent
+  // who'd just told the picker where the price lived got an ordinary import,
+  // a success toast, and no rule ever written — `origin: 'picked'` appeared
+  // on zero rules across every stored spec despite the picker having been
+  // used. See importFromPage below: when present and non-empty, the picks are
+  // applied to the supplier's spec BEFORE extraction runs, via the exact same
+  // path savePicks uses (applyPickedFields).
+  pickerVersion?: number;
+  packageType?: ExtractionSpec['packageType'];
+  picked?: PickedField[];
   supplierKey?: string;
   adults?: number;
   children?: number;
   infants?: number;
+}
+
+// Outcome of applying picks during an import (importFromPage) or a standalone
+// picking session (savePicks) — same shape either way, since both go through
+// applyPickedFields below.
+export interface AppliedPicksResult {
+  applied: MergeResult['applied'];
+  problems: DerivationProblem[];
+  preserved: string[];
+}
+
+// What the field-picker bookmarklet posts (EXTRACTION_AUDIT.md §4 Phase 3/picker).
+// Same capture shape as ImportPageInput's core fields, plus the picks
+// themselves — `pickerVersion` is accepted for forward-compat logging but
+// isn't otherwise interpreted, and `packageType` is the type the agent
+// declared BEFORE picking (see PickerCaptureContext in picker-spec.ts), which
+// rides straight onto the derived spec as authoritative.
+export interface SavePicksInput {
+  url: string;
+  title?: string;
+  text: string;
+  headings?: string[];
+  apiJson?: unknown;
+  deepText?: string;
+  pickerVersion?: number;
+  packageType?: ExtractionSpec['packageType'];
+  picked: PickedField[];
+  supplierKey?: string;
+}
+
+export interface SavePicksResult {
+  supplierKey: string;
+  applied: MergeResult['applied'];
+  problems: DerivationProblem[];
+  preserved: string[];
+  // Always true (see scraperService.savePicks) — picking is open to any
+  // authenticated agent, not just a platform admin, so its output is never
+  // auto-trusted the way a platform admin's own approved edit is.
+  specNeedsReview: boolean;
 }
 
 // Is this supplier behind a login? The manual page-import path is for suppliers
@@ -177,6 +246,90 @@ function toView(row: SupplierScraper): SupplierScraperView {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+// Shared by importFromPage and savePicks: turns click-verified field picks
+// into a merged extraction spec, with the SAME approved-spec protection and
+// pre-merge archive either path needs. Factored out specifically so the two
+// entry points cannot drift — the whole reason importFromPage needed this fix
+// in the first place is that a second, independent path (parseCapture's
+// client-side whitelist) silently dropped `picked` while this one worked
+// fine; duplicating the merge/protect/archive logic instead of sharing it
+// would just create a new place for the same class of bug to happen again.
+//
+// Deliberately does NOT call `resolved.persistConfig` — the two callers
+// persist at different points (savePicks persists the merged spec directly;
+// importFromPage needs the merged spec in hand before it can pass it to
+// runExtractionSpec, then persists it itself) so persistence stays their call.
+async function applyPickedFields(
+  resolved: ResolvedScraper,
+  picked: PickedField[],
+  ctx: Omit<PickerCaptureContext, 'headings'> & { headings?: string[] },
+  scope: Scope,
+): Promise<{ spec: ExtractionSpec; result: AppliedPicksResult }> {
+  const existingSpec = resolved.config.extraction;
+  const deepLink = resolved.config.deepLink;
+
+  // Every candidate rule is re-verified against THIS capture inside
+  // deriveSpecFromPicks — an unverifiable pick becomes a DerivationProblem,
+  // never a guessed rule (see picker-spec.ts's module comment).
+  const { spec: pickedSpec, derived, problems: derivationProblems } = deriveSpecFromPicks(picked, ctx);
+
+  const hostIncludes = deepLink?.hostIncludes ?? '';
+  const archived = await scraperRepository.findArchivedSpec(hostIncludes);
+  const specIsApproved = archived?.approved === true;
+  const isPlatformAdmin = hasAnyRole(scope.orgRoles, ['platform_admin']);
+
+  // Split the verified picks into what's allowed to merge and what's blocked
+  // because it would overwrite a reviewed rule. A field the approved spec
+  // doesn't already have is never blocked — this only protects EXISTING
+  // rules, not the whole spec from ever growing.
+  const problems: DerivationProblem[] = [...derivationProblems];
+  const allowedDerived = derived.filter((d) => {
+    const existingRule = existingSpec?.fields?.[d.field];
+    if (!existingRule || !specIsApproved || isPlatformAdmin) return true;
+    problems.push({
+      field: d.field,
+      reason:
+        `this supplier's extraction spec is APPROVED (supplier_spec_archive) — only a platform admin can ` +
+        `overwrite an existing rule in it, so "${d.field}" was left unchanged. Pick a field the approved ` +
+        'spec doesn\'t already cover, or have a platform admin review and apply this change.',
+    });
+    return false;
+  });
+  const allowedFields = Object.fromEntries(allowedDerived.map((d) => [d.field, d.rule]));
+  const allowedPickedSpec: ExtractionSpec = { ...pickedSpec, fields: allowedFields };
+
+  // Archive the PRE-merge spec before writing, reusing the same archiveSpec
+  // path approveSpec/remove use, so a bad picking session is recoverable —
+  // the archive keeps whatever `approved` status it already had.
+  if (existingSpec && hostIncludes) {
+    await scraperRepository.archiveSpec({
+      hostIncludes,
+      supplierKey: resolved.supplierKey,
+      extraction: existingSpec,
+      approved: specIsApproved,
+    });
+  }
+
+  const { spec: mergedSpec, applied, preserved } = mergePickedIntoSpec(existingSpec, allowedPickedSpec, allowedDerived);
+
+  // Silent-discard guard (EXTRACTION_AUDIT.md — "one paste should do both
+  // things", and the bug this whole fix exists for): picks were POSTED, but
+  // nothing was applied and nothing was reported as a problem either. That
+  // combination must never look like an empty, quiet success — surface it so
+  // a future regression in deriveSpecFromPicks/the approved-spec filter is
+  // visible instead of indistinguishable from "nothing to do".
+  if (picked.length > 0 && applied.length === 0 && problems.length === 0) {
+    problems.push({
+      field: '(all picked fields)',
+      reason:
+        'none of the picked fields could be verified against this capture, and none were blocked by an ' +
+        'approved spec — nothing was applied. This should not happen; treat it as a bug.',
+    });
+  }
+
+  return { spec: mergedSpec, result: { applied, problems, preserved } };
 }
 
 export const scraperService = {
@@ -458,6 +611,10 @@ export const scraperService = {
     userId?: string,
   ): Promise<{
     quote: ScrapedQuoteJson;
+    // Post-extraction validation (EXTRACTION_AUDIT.md §4 Phase 1) — never
+    // throws and never blocks the import (agents need the deal in front of
+    // them); the caller renders these issues alongside the quote.
+    validation: ValidationResult;
     supplierKey: string;
     supplierName: string;
     created: boolean;
@@ -467,6 +624,13 @@ export const scraperService = {
     specNeedsReview: boolean;
     // A previously archived spec was restored instead of asking the AI.
     specRestored: boolean;
+    // Present only when `input.picked` carried at least one field picker
+    // result. See applyPickedFields — picks are merged into the spec BEFORE
+    // extraction runs, so `quote` above already reflects them; this reports
+    // what happened to the picks themselves (same shape savePicks returns),
+    // so the caller can never mistake "picks were posted" for "picks were
+    // silently dropped" (the bug this whole feature exists to close).
+    picks?: AppliedPicksResult;
   }> {
     // An explicit supplier still wins (re-importing into a known config), but
     // the default is to work it out from the captured URL.
@@ -551,13 +715,44 @@ export const scraperService = {
     if (!spec) {
       specGenerated = true;
       spec = await extractionAiService.generateSpecFromDom(
-        { title, text: input.text, url: input.url, apiJson: input.apiJson, headings: input.headings },
+        {
+          title,
+          text: input.text,
+          url: input.url,
+          apiJson: input.apiJson,
+          headings: input.headings,
+          deepText: input.deepText,
+        },
         resolved.supplierName,
       );
       // A freshly-learned spec is derived from ONE page, so it can be overfitted
       // to that deal (a literal board basis, this hotel's name, one airport).
       // Flag it for a human read; clearing the flag is the approve action.
       if (resolved.persistConfig) await resolved.persistConfig({ extraction: spec, specNeedsReview: true });
+    }
+
+    // "One paste should do both things": when this capture came from the
+    // field-picker bookmarklet, apply the picks to the supplier's spec BEFORE
+    // extraction runs, via the exact same derive → merge → protect → archive
+    // path savePicks uses (applyPickedFields) — so the imported deal reflects
+    // the picks immediately instead of the agent having to visit a separate
+    // screen (SupplierScraperPicksDialog) that a normal capture flow gives no
+    // reason to know about. This never blocks the import: a pick that fails
+    // to derive is reported as a problem, not a failed capture (see
+    // applyPickedFields's own silent-discard guard).
+    let picks: AppliedPicksResult | undefined;
+    if (input.picked && input.picked.length > 0) {
+      const applied = await applyPickedFields(
+        resolved,
+        input.picked,
+        { url: input.url, title, text: input.text, headings: input.headings, packageType: input.packageType },
+        scope,
+      );
+      spec = applied.spec;
+      if (resolved.persistConfig) {
+        await resolved.persistConfig({ extraction: applied.spec, specNeedsReview: true });
+      }
+      picks = applied.result;
     }
 
     const quote = runExtractionSpec(
@@ -570,6 +765,7 @@ export const scraperService = {
         images,
         headings: input.headings,
         flightsText: input.flightsText,
+        deepText: input.deepText,
       },
       new Date().toISOString(),
     );
@@ -577,14 +773,26 @@ export const scraperService = {
     if (input.adults != null) quote.adults = input.adults;
     if (input.children != null) quote.children = input.children;
     if (input.infants != null) quote.infants = input.infants;
+
+    // Post-extraction validation (EXTRACTION_AUDIT.md §4 Phase 1). Real page
+    // text IS available on this path (the agent's own browser captured it), so
+    // this also doubles as the wait.textMatches post-hoc capture gate: the
+    // length check above only catches an (almost) BLANK page, not one that
+    // rendered fully but was captured before the price replaced its loading
+    // state — checkCaptureComplete inside validateQuote catches that shape by
+    // re-checking the spec's own wait.textMatches against the captured text.
+    const validation = validateQuote(quote, { url: input.url, text: input.text, title, spec, headings: input.headings });
+
     return {
       quote,
+      validation,
       supplierKey: resolved.supplierKey,
       supplierName: resolved.supplierName,
       created,
       specGenerated,
       specRestored,
       specNeedsReview: resolved.config.specNeedsReview === true,
+      picks,
     };
   },
 
@@ -596,7 +804,7 @@ export const scraperService = {
     scope: Scope,
     occupancy?: { adults?: number; children?: number; infants?: number },
     supplierKey?: string,
-  ): Promise<ScrapedQuoteJson> {
+  ): Promise<{ quote: ScrapedQuoteJson; validation: ValidationResult }> {
     let resolved: ResolvedScraper;
     try {
       // Explicit supplier chosen in the UI → use it directly; otherwise match by URL.
@@ -611,7 +819,10 @@ export const scraperService = {
       const hasEnvCreds = !!process.env.EASYJET_TRADE_USERNAME && !!process.env.EASYJET_TRADE_PASSWORD;
       if ((noMatch || tableMissing) && looksEasyJet && hasEnvCreds) {
         // Env-configured easyJet (buildDefaultContext) as a transitional fallback.
-        return easyjetService.scrapeQuoteFromLink({ url, ...occupancy });
+        const quote = await easyjetService.scrapeQuoteFromLink({ url, ...occupancy });
+        // No rendered-DOM text or spec reaches this layer on this path either —
+        // see the ValidationContext.text comment — so text is '' here too.
+        return { quote, validation: validateQuote(quote, { url, text: '' }) };
       }
       throw err;
     }
@@ -622,6 +833,96 @@ export const scraperService = {
     if (!adapter) {
       throw new AppError(`No scraper adapter registered for type "${resolved.config.adapterType}"`, 500);
     }
-    return adapter.scrape(url, resolved, occupancy);
+    const quote = await adapter.scrape(url, resolved, occupancy);
+    // Post-extraction validation (EXTRACTION_AUDIT.md §4 Phase 1). Unlike
+    // importFromPage, the rendered page's innerText lives inside the adapter's
+    // own closure (dom.adapter.ts) and never reaches this layer, so text is ''
+    // here — every text-dependent check (prose repetition, capture-complete,
+    // currency-from-text/symbol) degrades to "no evidence" rather than false
+    // positives (see the ValidationContext.text comment in extraction.validate.ts).
+    const validation = validateQuote(quote, { url, text: '', spec: resolved.config.extraction });
+    return { quote, validation };
+  },
+
+  // Stores a field-picker mapping into a supplier's extraction spec. Unlike
+  // importFromPage/generateSpecFromDom (which each own the WHOLE spec —
+  // either restoring one wholesale or generating one from scratch), a picker
+  // session only ever verifies the handful of fields an agent clicked
+  // (deriveSpecFromPicks — picker-spec.ts). Storing that wholesale would
+  // DELETE the AI's rules for every other field, `constants` (tour_operator,
+  // currency), `wait.textMatches` (the CAPTURE_INCOMPLETE validation gate),
+  // `itineraryRegex`, `luggageRegex` and the image config — mergePickedIntoSpec
+  // exists specifically to merge instead of replace.
+  //
+  // Access control (EXTRACTION_AUDIT.md §1.5 gated scraper MUTATIONS behind
+  // requirePlatformAdmin because supplier_scraper is platform-wide — one
+  // tenant's bad edit breaks every tenant. Picking is different: it's an
+  // ordinary agent's workflow while looking at a deal page, not a config-
+  // management action, so gating it the same way would make the feature
+  // unusable for the people it's built for. The route (scraper.routes.ts)
+  // stays open to any authenticated agent. What still needs protecting is
+  // reviewed work: a spec archived with `approved: true`
+  // (supplier_spec_archive) represents rules a platform admin has already
+  // read and signed off — an ordinary agent's click must not silently
+  // overwrite one of THOSE, even though it's free to add a rule for a field
+  // the approved spec never covered. And because picking is now open to
+  // anyone, its output is never auto-trusted: specNeedsReview is unconditionally
+  // true, exactly like a freshly AI-generated spec.
+  async savePicks(input: SavePicksInput, scope: Scope, userId?: string): Promise<SavePicksResult> {
+    let resolved: ResolvedScraper;
+    if (input.supplierKey) {
+      resolved = await this.resolveByKey(input.supplierKey, scope);
+    } else {
+      ({ resolved } = await this.resolveOrCreateForCapture(input.url, scope, userId));
+    }
+
+    // Same ownership guard as importFromPage: naming a supplier explicitly
+    // must not let a page from a foreign site rewrite that supplier's spec.
+    const deepLink = resolved.config.deepLink;
+    if (deepLink?.hostIncludes) {
+      let host: string;
+      try {
+        host = new URL(input.url).hostname;
+      } catch {
+        throw new AppError('The captured page has an invalid URL', 400);
+      }
+      if (!host.includes(deepLink.hostIncludes)) {
+        throw new AppError(
+          `That capture came from "${host}", which isn't ${resolved.supplierName}'s site. ` +
+            'Capture the deal again from the right portal.',
+          400,
+        );
+      }
+    }
+
+    if (input.text.trim().length < 200) {
+      throw new AppError(
+        'The captured page had almost no text — make sure the deal page is open and fully loaded (with the price showing), then capture again.',
+        400,
+      );
+    }
+
+    const title = input.title ?? '';
+
+    // Derive → merge → protect-approved → archive, shared with importFromPage
+    // via applyPickedFields so the two entry points cannot drift.
+    const { spec: mergedSpec, result } = await applyPickedFields(
+      resolved,
+      input.picked,
+      { url: input.url, title, text: input.text, headings: input.headings, packageType: input.packageType },
+      scope,
+    );
+
+    if (resolved.persistConfig) {
+      await resolved.persistConfig({ extraction: mergedSpec, specNeedsReview: true });
+    }
+
+    return {
+      supplierKey: resolved.supplierKey,
+      applied: result.applied,
+      problems: result.problems,
+      preserved: result.preserved,
+      specNeedsReview: true,
+    };
   },
 };

@@ -33,15 +33,20 @@ export const scraperController = {
 
   // Used by the quote form's "Import" button: resolve the supplier from the URL
   // for this org, then scrape. Returns the ScraperJson the import pipeline eats.
+  //
+  // The response body stays backward-compatible: the client reads the quote's
+  // fields directly off `data` (see client/src/features/quote/api/use-easyjet-import.ts),
+  // so the quote is spread at the top level rather than nested — `validation` is
+  // added alongside it as a new, additive field existing callers simply ignore.
   scrape: asyncHandler(async (req: Request, res: Response) => {
     const { url, supplierKey, adults, children, infants } = req.body;
-    const data = await scraperService.scrapeFromUrl(
+    const { quote, validation } = await scraperService.scrapeFromUrl(
       url,
       getScope(req),
       { adults, children, infants },
       supplierKey,
     );
-    return successResponse(res, data, 'Scraped supplier deal');
+    return successResponse(res, { ...quote, validation }, 'Scraped supplier deal');
   }),
 
   // Marks an AI-generated extraction spec reviewed (or sends it back for
@@ -68,6 +73,49 @@ export const scraperController = {
         : result.specNeedsReview
           ? `Imported from ${result.supplierName} using an UNAPPROVED extraction spec — check the fields, then approve it in Supplier Scrapers.`
           : `Imported deal from ${result.supplierName}`;
-    return successResponse(res, result.quote, message);
+    // Same backward-compatible shape as `scrape` above: the quote's fields stay
+    // at the top level of `data` (client/src/features/quote/api/use-page-capture-import.ts
+    // reads `data` as the quote directly), `validation` is additive.
+    //
+    // `picks` is ONLY present when the capture carried field-picker picks
+    // (input.picked) — see importFromPage/applyPickedFields. It is spread in
+    // the same additive way as `validation`: an older client that has never
+    // heard of `picks` just ignores the key. The client-side guard that
+    // matters is the other direction — use-page-capture-import.ts treats a
+    // picker payload that comes back WITHOUT a `picks` key as a hard error,
+    // specifically so a future regression here can't silently reproduce the
+    // whitelist bug this feature fixes. `applied`/`problems`/`preserved` are
+    // reshaped to match SupplierScraperPicksResult (supplier-scraper feature)
+    // so the client can render both paths with the same component.
+    return successResponse(
+      res,
+      {
+        ...result.quote,
+        validation: result.validation,
+        ...(result.picks
+          ? {
+              picks: {
+                supplierKey: result.supplierKey,
+                applied: result.picks.applied,
+                problems: result.picks.problems,
+                preserved: result.picks.preserved,
+                specNeedsReview: true,
+              },
+            }
+          : {}),
+      },
+      message,
+    );
+  }),
+
+  // Field-picker submission: merges a click-verified field mapping into the
+  // supplier's stored extraction spec. Open to any authenticated agent (see
+  // scraper.routes.ts / scraperService.savePicks for why) — the response
+  // shape is fixed for the picker UI: { supplierKey, applied, problems,
+  // preserved, specNeedsReview }.
+  savePicks: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const result = await scraperService.savePicks(req.body, scope, scope.userId ?? undefined);
+    return successResponse(res, result, 'Field picks saved to the extraction spec');
   }),
 };

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileSearch, Pencil, Plus, ServerCog, Trash2 } from "lucide-react";
+import { FileSearch, Pencil, Plus, ServerCog, Trash2, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import {
   useDeleteSupplierScraper,
   SupplierScraperDialog,
   SupplierSpecReviewDialog,
+  SupplierScraperPicksDialog,
   type SupplierScraper,
 } from "@/features/supplier-scraper";
 
@@ -30,6 +31,7 @@ export default function AgencySupplierScrapersPage() {
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<SupplierScraper | null>(null);
   const [reviewing, setReviewing] = useState<SupplierScraper | null>(null);
+  const [applyingPicks, setApplyingPicks] = useState(false);
 
   const list = data ?? [];
 
@@ -60,15 +62,20 @@ export default function AgencySupplierScrapersPage() {
             Credentials are encrypted and never shown again.
           </p>
         </div>
-        <Button
-          onClick={() => {
-            setEditing(null);
-            setCreating(true);
-          }}
-          data-testid="button-add-supplier-scraper"
-        >
-          <Plus className="mr-1 h-3.5 w-3.5" /> Add supplier
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setApplyingPicks(true)} data-testid="button-apply-field-picks">
+            <Wand2 className="mr-1 h-3.5 w-3.5" /> Apply field picks
+          </Button>
+          <Button
+            onClick={() => {
+              setEditing(null);
+              setCreating(true);
+            }}
+            data-testid="button-add-supplier-scraper"
+          >
+            <Plus className="mr-1 h-3.5 w-3.5" /> Add supplier
+          </Button>
+        </div>
       </div>
 
       {list.length === 0 ? (
@@ -177,6 +184,8 @@ export default function AgencySupplierScrapersPage() {
       )}
 
       <SupplierSpecReviewDialog scraper={reviewing} onOpenChange={(open) => !open && setReviewing(null)} />
+
+      <SupplierScraperPicksDialog open={applyingPicks} onOpenChange={setApplyingPicks} />
 
       <SupplierScraperDialog
         open={creating || !!editing}

@@ -135,7 +135,15 @@ function isEmpty(v: string | number): boolean {
 
 function resolveField(
   rule: FieldRule,
-  ctx: { title: string; text: string; url: string; apiJson?: unknown; imagesText?: string; headingsText?: string },
+  ctx: {
+    title: string;
+    text: string;
+    url: string;
+    apiJson?: unknown;
+    imagesText?: string;
+    headingsText?: string;
+    deepText?: string;
+  },
 ): string | number {
   // 1. API first: if the captured API JSON has this value, use it.
   if (rule.jsonPath && ctx.apiJson != null) {
@@ -151,6 +159,11 @@ function resolveField(
   if (rule.from === 'title') source = ctx.title;
   else if (rule.from === 'images') source = ctx.imagesText ?? '';
   else if (rule.from === 'headings') source = ctx.headingsText ?? '';
+  // The full DOM text, including collapsed/hidden nodes and open shadow
+  // roots — unlike ctx.text (innerText), which excludes anything not
+  // rendered. Absent unless the capture sent it (pre-deepText bookmarklet),
+  // in which case this behaves exactly like an empty source always has.
+  else if (rule.from === 'deepText') source = ctx.deepText ?? '';
   else if (rule.from === 'url') {
     if (rule.urlSegment != null) {
       let segs: string[] = [];
@@ -1291,6 +1304,122 @@ function parseItineraryTable(pageText: string): { day: number; description: stri
   return rows.length >= 3 ? rows : [];
 }
 
+// Runs a spec's itineraryRegex against a source string. Factored out of
+// runExtractionSpec so the exact same logic can be retried against `deepText`
+// (see the fallback below) without duplicating the day-range handling.
+function buildItineraryFromRegex(
+  source: string,
+  itineraryRegex: string,
+): { day: number; description: string; sub_description?: string }[] {
+  const items: { day: number; description: string; sub_description?: string }[] = [];
+  let re: RegExp | null;
+  try {
+    re = new RegExp(itineraryRegex, 'gi');
+  } catch {
+    re = null;
+  }
+  if (!re) return items;
+  let i = 0;
+  for (const m of source.matchAll(re)) {
+    i += 1;
+    // Ranges again: "Day 8-9" is days 8 AND 9, never day 89.
+    const range = m[1] ? parseDayRange(String(m[1])) : null;
+    const description = (m[2] ?? m[1] ?? '').trim();
+    for (const day of range ? daysInRange(range) : [i]) items.push({ day, description });
+  }
+  return items;
+}
+
+// ─── Cruise itinerary printed as a PIPE-SEPARATED PORT LIST, no days at all ──
+// A THIRD itinerary shape, alongside the day/port table above and a spec's own
+// itineraryRegex. Measured on a live MSC Cruises capture (EXTRACTION_AUDIT.md,
+// EXTRACTION_STATUS.md): MSC's cruise-summary page never prints a day/port
+// table — it prints
+//   Itinerary:
+//   Santa Cruz De Tenerife | Puerto Del Rosario | Funchal (+ 3)
+// with ZERO day-number lines anywhere in `text` OR `deepText`. parseItineraryTable
+// needs a run of 1, 2, 3… and finds nothing; a stored itineraryRegex written
+// against a "1 Portname" table (`^(\d+)\s+([A-Za-z ]+)`) can never match this
+// shape either. Without this reader the cruise imports with no itinerary at all.
+//
+// The label is what keeps this HONEST: a bare pipe is common UI chrome on this
+// exact page ("Aft | Deck 8 | Cabin 8235", "11:00 PM | Santa Cruz De
+// Tenerife") — scanning the page for any pipe-separated line would read the
+// cabin position as an itinerary. Only a line that follows a line consisting
+// SOLELY of an itinerary label is ever considered.
+export interface PortListItinerary {
+  ports: string[];
+  // MSC states "(+ 3)" after the last visible port: three more ports exist but
+  // load only when "View itinerary" is clicked, so they are never in this
+  // capture's DOM. Reported separately so the caller (the validator) can flag
+  // the itinerary as partial rather than silently treating 3 ports as the
+  // whole cruise.
+  hiddenCount: number;
+}
+
+// "Itinerary" / "Itinerary:" / "Ports" / "Ports of call", case-insensitive,
+// the WHOLE line (not merely present in it) — a heading, not a sentence that
+// happens to contain the word (checkCruiseItineraryMissing's ITINERARY_MENTION_RE
+// deliberately allows the word anywhere in prose; this one must not, or it
+// would treat any itinerary-mentioning sentence as the label to read under).
+const PORT_LIST_LABEL_RE = /^(?:itinerary|ports(?:\s+of\s+call)?)\s*:?\s*$/i;
+
+// "(+ 3)" / "(+3)" trailing the last port — the count of ports the page says
+// exist but didn't render.
+const HIDDEN_COUNT_RE = /\s*\(\+\s*(\d+)\)\s*$/;
+
+// Obvious chrome that would otherwise slip in as a fake "port" if it ever sat
+// directly under a genuine label.
+const PORT_LIST_CHROME_RE = /^(view itinerary|show more|read more|see more|see all|full itinerary)$/i;
+
+// A real port name ("Santa Cruz De Tenerife", "Puerto Del Rosario", "Funchal")
+// is short prose with no digits or currency in it. A schedule fragment
+// ("11:00 PM", "Deck 8", "Cabin 8235") or a UI control fails at least one of
+// these, which is what keeps the cabin-position line and the departure-time
+// line out even if they ever ended up directly under a label.
+function looksLikePort(entry: string): boolean {
+  if (!entry) return false;
+  if (entry.length > 40) return false;
+  if (/[\d$£€]/.test(entry)) return false;
+  if (PORT_LIST_CHROME_RE.test(entry)) return false;
+  return true;
+}
+
+export function parsePortListItinerary(pageText: string): PortListItinerary {
+  const lines = pageText.split('\n').map((l) => l.trim());
+  for (let i = 0; i < lines.length; i++) {
+    if (!PORT_LIST_LABEL_RE.test(lines[i])) continue;
+    // The next NON-EMPTY line — MSC's label and list sit on adjacent lines,
+    // but a blank line between them costs nothing to skip past.
+    const valueLine = lines.slice(i + 1).find((l) => l);
+    if (!valueLine || !valueLine.includes('|')) continue;
+
+    const rawParts = valueLine.split('|').map((p) => p.trim()).filter(Boolean);
+    if (rawParts.length < 2) continue; // one "port" is a coincidence, not an itinerary
+
+    // Strip "(+ N)" off the LAST entry before the place-shape check runs, so
+    // "Funchal (+ 3)" is read as the port "Funchal" plus a hidden count of 3,
+    // not rejected for containing a digit.
+    let hiddenCount = 0;
+    const lastIndex = rawParts.length - 1;
+    const hiddenMatch = HIDDEN_COUNT_RE.exec(rawParts[lastIndex]);
+    if (hiddenMatch) {
+      hiddenCount = Number(hiddenMatch[1]);
+      rawParts[lastIndex] = rawParts[lastIndex].slice(0, hiddenMatch.index).trim();
+    }
+
+    const ports = rawParts.filter(looksLikePort);
+    // Filtering can drop entries below 2 (the cabin-position and
+    // departure-time false positives both fall to 0 or 1 survivors here) —
+    // that is "not an itinerary", so keep scanning in case a later label on
+    // the page introduces a genuine one.
+    if (ports.length < 2) continue;
+
+    return { ports, hiddenCount };
+  }
+  return { ports: [], hiddenCount: 0 };
+}
+
 // The value a labelled pair states, e.g. "Onboard" / "Freedom of the Seas".
 // Cruise pages print their headline facts this way — label line, value line —
 // and the label vocabulary is industry-standard, not supplier wording.
@@ -1319,6 +1448,16 @@ export function runExtractionSpec(
     images?: { src: string; w?: number; h?: number; context?: string }[];
     headings?: string[]; // the page's h1/h2 text, document order
     flightsText?: string; // text of a flight-details modal, if one was opened
+    // The full DOM text INCLUDING collapsed/hidden nodes and open shadow
+    // roots — unlike `text` (document.body.innerText), which excludes
+    // anything not rendered. Exists because a Royal Caribbean checkout
+    // captured with its "View Ports" drawer collapsed had the WHOLE
+    // day-by-day itinerary missing from `text`, even though the content was
+    // in the DOM the entire time (an image inside the drawer WAS captured,
+    // and "Itinerary" was in `headings`). Optional and absent on every
+    // capture made before this field existed — everything below that reads
+    // it degrades to today's behaviour exactly when it's undefined.
+    deepText?: string;
   },
   scrapedAt: string,
 ): ScrapedQuoteJson {
@@ -1336,7 +1475,13 @@ export function runExtractionSpec(
   // Headings, one per line in document order, for from: 'headings' rules. The
   // deal's headline is here; in the page body it is an unanchorable line.
   const headingsText = (ctx.headings ?? []).join('\n');
-  const c = { ...ctx, text, imagesText, headingsText };
+  // deepText carries collapsed drawers, closed tabs and pre-rendered
+  // alternatives on top of the visible page, so it routinely runs several
+  // times longer than `text` — capped more generously than the 40k above so
+  // the very content this field exists for (a hidden itinerary well down a
+  // long checkout page) isn't the part that gets truncated away.
+  const deepText = ctx.deepText ? ctx.deepText.slice(0, 200_000) : undefined;
+  const c = { ...ctx, text, imagesText, headingsText, deepText };
 
   const f: Record<string, string | number> = { ...(spec.constants ?? {}) };
   for (const [key, rule] of Object.entries(spec.fields ?? {})) {
@@ -1448,9 +1593,19 @@ export function runExtractionSpec(
   // a spec rule captures the page's own wording ("21 Jun 2027") unless it
   // declares transform:'date', and that reached the form as text the date field
   // could not read.
+  // dateFromUrl outranks the raw, unparsed f.travel_date on purpose. A rule can
+  // capture prose like "Jul 02" that isoDate correctly rejects as not-ISO — if
+  // the raw string were tried before the URL, that non-date text would win over
+  // a perfectly good URL date and flow into returnDate and check_in_date_time
+  // as-is. The raw value is kept as the very last resort (not deleted) because
+  // some supplier relies on it when neither the URL nor a modal date exist.
   const sailDate = isoDate(str(f.cruise_date));
   const travelDate =
-    sailDate || isoDate(str(f.travel_date)) || str(f.travel_date) || dateFromUrl(ctx.url) || dateOnly(modal?.outDepart);
+    sailDate ||
+    isoDate(str(f.travel_date)) ||
+    dateFromUrl(ctx.url) ||
+    dateOnly(modal?.outDepart) ||
+    str(f.travel_date);
   const returnDate = addNights(travelDate, nights);
   const destName = modal?.destName || arrivalName;
   const destCode = modal?.destCode || arrivalCode;
@@ -1513,7 +1668,16 @@ export function runExtractionSpec(
     // which is what most portals put in that heading anyway — so a supplier
     // whose spec has no quote_title rule still gets a titled quote instead of a
     // blank one.
-    quote_title: str(f.quote_title) || str(f.accommodation),
+    //
+    // ON A CRUISE THE VOYAGE NAME *IS* THE QUOTE TITLE — "Southern Caribbean &
+    // Aruban Nights" is what the agent wants on the quote, not the ship or the
+    // cabin, which is all `accommodation` holds on a sailing. The reverse
+    // fallback has always existed (cruise_title borrows quote_title, below), so
+    // without this one a spec that names only the voyage produced a titled
+    // cruise and an untitled quote. `cruise_title` is only ever set by a spec
+    // that declares it, so this is cruise-only in practice without needing the
+    // package type, which isn't resolved yet at this point.
+    quote_title: str(f.quote_title) || str(f.cruise_title) || str(f.accommodation),
     board_basis: str(f.board_basis) || boardBasisFromText(text),
     room_type: str(f.room_type),
     check_in_date_time: travelDate,
@@ -1552,7 +1716,17 @@ export function runExtractionSpec(
   const specDeclaresCruise =
     !!spec.itineraryRegex ||
     CRUISE_SPEC_KEYS.some((key) => spec.fields?.[key] != null || spec.constants?.[key] != null);
-  const isCruisePage = !!str(f.cruise_line) || !!str(f.ship_name) || portTable.length > 0 || specDeclaresCruise;
+  // A DECLARED packageType is AUTHORITATIVE and overrides all of the field-based
+  // inference above — see extraction.types.ts. Absent (every spec stored before
+  // this field existed, and any spec whose author didn't set it) falls through
+  // to that inference UNCHANGED, so old specs behave identically. Declared
+  // 'package-holiday' forces this false even on a page with a port table: the
+  // agent has said this supplier doesn't sell cruises, full stop.
+  const declaredType = spec.packageType;
+  const isCruisePage =
+    declaredType === 'cruise' ||
+    (declaredType === undefined &&
+      (!!str(f.cruise_line) || !!str(f.ship_name) || portTable.length > 0 || specDeclaresCruise));
   // Label pairs the page prints beside the table ("On Board" / "Freedom of the
   // Seas"). Only consulted when the spec said nothing. "On Board" is TWO WORDS
   // on Royal Caribbean's own pages — their UI dictionary spells the label
@@ -1572,42 +1746,71 @@ export function runExtractionSpec(
     result.cruise_title = str(f.cruise_title) || str(f.quote_title);
     result.embarkation =
       str(f.embarkation) || labelledValue(text, /^(leaving from|departing from|departure port|sails from|embarkation)$/i);
-    // A cruise ends where its last day docks, which the table already states.
-    result.debarkation = str(f.debarkation) || portTable[portTable.length - 1]?.description || '';
+    // debarkation is derived from the itinerary's last day, so it is assigned
+    // AFTER the itinerary is resolved below — `portTable` alone is built from
+    // the VISIBLE text, and a capture taken with the itinerary drawer closed
+    // has none, which left the disembarkation port blank on exactly the pages
+    // the deepText fallback exists to rescue.
     result.cabin_type = str(f.cabin_type);
     result.cabin_number = str(f.cabin_number);
     result.cruise_only = truthy(f.cruise_only);
     result.cruise_extras = str(f.cruise_extras);
 
-    let itinerary: { day: number; description: string; sub_description?: string }[] = [];
-    if (spec.itineraryRegex) {
-      const re = (() => {
-        try {
-          return new RegExp(spec.itineraryRegex, 'gi');
-        } catch {
-          return null;
-        }
-      })();
-      if (re) {
-        let i = 0;
-        for (const m of text.matchAll(re)) {
-          i += 1;
-          // Ranges again: "Day 8-9" is days 8 AND 9, never day 89.
-          const range = m[1] ? parseDayRange(String(m[1])) : null;
-          const description = (m[2] ?? m[1] ?? '').trim();
-          for (const day of range ? daysInRange(range) : [i]) itinerary.push({ day, description });
-        }
-      }
-    }
     // The spec's own regex wins; the table scan is what saves a supplier whose
     // rule was never generated or no longer matches.
+    let itinerary: { day: number; description: string; sub_description?: string }[] = spec.itineraryRegex
+      ? buildItineraryFromRegex(text, spec.itineraryRegex)
+      : [];
     if (!itinerary.length) itinerary = portTable;
+    // STRICT fallback, tried only when the visible page produced NOTHING at
+    // all: this is the Royal Caribbean drawer failure (see the `deepText`
+    // comment on runExtractionSpec's ctx) — an agent captured a checkout page
+    // without opening the "View Ports" drawer, so the whole itinerary was
+    // absent from `text` even though it was in the DOM. Gated behind
+    // `!itinerary.length` so no supplier whose visible text already yields an
+    // itinerary can ever change: deepText also contains inactive tabs, other
+    // cabin grades and pre-rendered alternatives, so it is deliberately a
+    // last resort, not merged in ahead of a working result.
+    if (!itinerary.length && deepText) {
+      itinerary = spec.itineraryRegex ? buildItineraryFromRegex(deepText, spec.itineraryRegex) : [];
+      if (!itinerary.length) itinerary = parseItineraryTable(deepText);
+    }
+    // THIRD and last-resort shape: a pipe-separated port list with no day
+    // numbers at all (see parsePortListItinerary above — the real MSC page).
+    // Tried only when every day-based reader above found nothing, on `text`
+    // then `deepText`, same strict discipline as the tier above: no supplier
+    // whose day-based result is already non-empty is ever touched by this.
+    if (!itinerary.length) {
+      let portList = parsePortListItinerary(text);
+      if (!portList.ports.length && deepText) portList = parsePortListItinerary(deepText);
+      // The ports are in SAILING ORDER, but their DAYS are unknown — a
+      // 7-night cruise calling at 6 ports does not put port N on day N (sea
+      // days and overnight calls break that mapping). Numbered sequentially
+      // anyway because ScrapedQuoteJson.itinerary requires a `day` and the
+      // client reassigns idx+1 on import regardless — so these numbers are
+      // SEQUENCE POSITIONS, not calendar days. This shape is exactly why:
+      // MSC's page never states a day number for any port, so there is no
+      // day to recover in the first place. No `sub_description` is invented
+      // either — the page states none, unlike the day/port table's times.
+      if (portList.ports.length) itinerary = portList.ports.map((description, idx) => ({ day: idx + 1, description }));
+    }
     if (itinerary.length) result.itinerary = itinerary;
+    // A cruise ends where its last day docks. Read from the RESOLVED itinerary
+    // rather than from `portTable`, so a sailing recovered via deepText names
+    // its disembarkation port too — with the closed drawer this was silently
+    // blank even once the ports themselves had been rescued.
+    result.debarkation = str(f.debarkation) || itinerary[itinerary.length - 1]?.description || '';
   }
 
   // ─── Hot Tub Break / lodge: added only when the page is a lodge ────────────
+  // Same declared-beats-inferred rule as the cruise gate above, and for the
+  // same reason: a lodge spec whose lodge_type/park/cottage rules all missed
+  // on one page would otherwise silently drop the whole block instead of
+  // surfacing blank fields the agent can fill in.
   const isLodge =
-    !!str(f.lodge_type) || !!str(f.lodge_code) || !!str(f.lodge_park_name) || !!str(f.cottage_id) || truthy(f.hot_tub);
+    declaredType === 'lodge' ||
+    (declaredType === undefined &&
+      (!!str(f.lodge_type) || !!str(f.lodge_code) || !!str(f.lodge_park_name) || !!str(f.cottage_id) || truthy(f.hot_tub)));
   if (isLodge) {
     // lodge_code is almost always the trailing code in the deal URL path (e.g.
     // "…-lp33338"); fall back to it so the code is saved even when the page text
