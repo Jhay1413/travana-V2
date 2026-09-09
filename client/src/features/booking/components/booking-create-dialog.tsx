@@ -7,6 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { FormDrawer } from "@/components/shared/form-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateTransaction } from "@/hooks/mutations";
 import {
@@ -227,6 +228,7 @@ export function BookingCreateDialog({
   onOpenChange,
   onSuccess,
   initialValues,
+  presentation = "dialog",
 }: BookingCreateDialogProps) {
   const { toast } = useToast();
   const createTransaction = useCreateTransaction();
@@ -324,28 +326,46 @@ export function BookingCreateDialog({
     });
   };
 
+  const isDrawer = presentation === "drawer";
+  const description = "Fill in the booking details, accommodation, flights, and pricing.";
+
+  const form = (
+    <BookingRHFForm
+      key={clientId + open}
+      layout={isDrawer ? "drawer" : "card"}
+      defaultValues={defaultValues}
+      onSubmit={handleSubmit}
+      isLoading={createTransaction.isPending}
+      submitLabel="Create Booking"
+      onCancel={isDrawer ? undefined : () => onOpenChange(false)}
+      clientId={clientId}
+    />
+  );
+
+  if (isDrawer) {
+    return (
+      <FormDrawer
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Create / Edit Booking"
+        description={description}
+        data-testid="booking-create-drawer"
+      >
+        {form}
+      </FormDrawer>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
         <DialogHeader className="px-6 pt-6">
           <DialogTitle className="text-lg font-semibold">New Booking</DialogTitle>
-          <DialogDescription className="text-sm text-black/55">
-            Fill in the booking details, accommodation, flights, and pricing.
-          </DialogDescription>
+          <DialogDescription className="text-sm text-black/55">{description}</DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-100px)]">
-          <div className="px-6 pb-6">
-            <BookingRHFForm
-              key={clientId + open}
-              defaultValues={defaultValues}
-              onSubmit={handleSubmit}
-              isLoading={createTransaction.isPending}
-              submitLabel="Create Booking"
-              onCancel={() => onOpenChange(false)}
-              clientId={clientId}
-            />
-          </div>
+          <div className="px-6 pb-6">{form}</div>
         </ScrollArea>
       </DialogContent>
     </Dialog>

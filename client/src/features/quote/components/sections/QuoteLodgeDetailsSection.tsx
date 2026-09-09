@@ -8,15 +8,15 @@ import { useParks, useLodges } from "@/hooks/queries";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import type { QuoteFormValues } from "@/features/quote/types";
 
-export function QuoteLodgeDetailsSection() {
+export function QuoteLodgeDetailsSection({ bare = false }: { /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean } = {}) {
   const { control } = useFormContext<QuoteFormValues>();
   const parkId = useWatch({ control, name: "parkId" });
   const { data: parksData } = useParks();
   const { data: lodgesData } = useLodges(parkId || undefined);
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-      <SectionHeader icon={Hotel} title="Lodge Details" />
+    <div className={bare ? "" : "rounded-2xl border border-black/10 bg-white/70 p-4"}>
+      {!bare && <SectionHeader icon={Hotel} title="Lodge Details" />}
       <div className="grid gap-3 md:grid-cols-3">
         <FormField
           control={control}

@@ -342,6 +342,7 @@ export default function ClientPage() {
         />
       </section>
       <QuoteCreateDialog
+        presentation="drawer"
         transactionId={convertingFromEnquiryTxnId || undefined}
         clientId={clientId}
         userId={currentUser?.id}
@@ -365,6 +366,7 @@ export default function ClientPage() {
         initialValues={convertingEnquiryInitialValues}
       />
       <BookingCreateDialog
+        presentation="drawer"
         clientId={clientId}
         open={showBookingCreateDialog}
         onOpenChange={setShowBookingCreateDialog}
@@ -374,6 +376,7 @@ export default function ClientPage() {
       />
 
       <CreateTaskDialog
+        presentation="drawer"
         open={taskCreate.showTaskDialog}
         onOpenChange={taskCreate.setShowTaskDialog}
         taskForm={taskCreate.taskForm}
@@ -383,6 +386,7 @@ export default function ClientPage() {
       />
 
       <CreateTicketDialog
+        presentation="drawer"
         open={ticketCreate.showTicketDialog}
         onOpenChange={ticketCreate.setShowTicketDialog}
         clientName={clientData ? `${clientData.firstName} ${clientData.surename}`.trim() : "this client"}
@@ -419,6 +423,7 @@ export default function ClientPage() {
       />
 
       <EnquiryWizard
+        presentation="drawer"
         open={enquiryActions.showEnquiryWizard}
         onOpenChange={enquiryActions.onWizardOpenChange}
         enquiry={enquiryActions.editingEnquiry}

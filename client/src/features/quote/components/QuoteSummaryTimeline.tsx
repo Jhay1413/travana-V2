@@ -30,10 +30,10 @@ const DEFAULT_TYPOGRAPHY: TimelineTypography = {
 
 // Sizes step down one notch below xl so the narrow lg panel tier stays legible.
 const PANEL_TYPOGRAPHY: TimelineTypography = {
-  title: "text-[13px] font-bold 3xl:text-[15px]",
+  title: "text-[13px] font-semibold 3xl:text-[15px]",
   subtitle: "mt-0.5 text-xs text-black/80 3xl:text-[13px] dark:text-white/80",
-  label: (color: string) => `text-xs font-bold 3xl:text-[13px] ${color}`,
-  primary: "mt-0.5 text-xs font-bold text-black 3xl:text-[13px] dark:text-white",
+  label: (color: string) => `text-xs font-medium 3xl:text-[13px] ${color}`,
+  primary: "mt-0.5 text-xs font-medium text-black 3xl:text-[13px] dark:text-white",
   secondaryRow: "flex items-center gap-1.5 text-[11px] text-black/75 3xl:text-xs dark:text-white/75",
   secondaryText: "text-[11px] text-black/75 3xl:text-xs dark:text-white/75",
   iconWrap: "grid h-6 w-6 place-items-center rounded-[6px] border 3xl:h-7 3xl:w-7",

@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { usePackageTypes, useTourOperators } from "@/hooks/queries";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
+import { LEAD_SOURCES } from "@/features/quote/types/quote-form.types";
 import type { QuoteFormValues } from "@/features/quote/types";
 
 export function QuoteOverviewSection() {
@@ -100,7 +101,7 @@ export function QuoteOverviewSection() {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {["SHOP", "FACEBOOK", "WHATSAPP", "INSTAGRAM", "PHONE_ENQUIRY"].map((s) => (
+                  {LEAD_SOURCES.map((s) => (
                     <SelectItem key={s} value={s}>{s.replace(/_/g, " ")}</SelectItem>
                   ))}
                 </SelectContent>

@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Dialog,
@@ -1334,7 +1335,7 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
             </div>
             <div className="grid gap-2">
               <Label htmlFor="dueDate">Due Date</Label>
-              <Input id="dueDate" type="date" value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} data-testid="input-due-date" />
+              <DatePicker id="dueDate" value={formData.dueDate} onChange={(dueDate) => setFormData({ ...formData, dueDate })} className="h-9 rounded-md" data-testid="input-due-date" />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description">Description</Label>

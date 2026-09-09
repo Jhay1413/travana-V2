@@ -13,12 +13,15 @@ interface QuoteImportRowProps {
   // Import from a page the agent captured in their own browser (bookmarklet).
   onPageCaptureImport?: (capture: CapturedPage, supplierKey: string) => void;
   pageCapturePending?: boolean;
+  /** The drawer layout shows "Not For Social" in its footer instead. */
+  hideNotForSocial?: boolean;
 }
 
 export function QuoteImportRow({
   onJsonUpload,
   onPageCaptureImport,
   pageCapturePending,
+  hideNotForSocial = false,
 }: QuoteImportRowProps) {
   const { control } = useFormContext<QuoteFormValues>();
   const { data: scrapers } = useSupplierScrapers();
@@ -63,6 +66,7 @@ export function QuoteImportRow({
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
+      {!hideNotForSocial && (
       <FormField
         control={control}
         name="not_for_social"
@@ -73,6 +77,7 @@ export function QuoteImportRow({
           </label>
         )}
       />
+      )}
       {onPageCaptureImport && (
         <>
           <button

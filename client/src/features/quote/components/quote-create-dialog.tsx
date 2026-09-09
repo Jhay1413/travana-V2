@@ -7,6 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { FormDrawer } from "@/components/shared/form-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateQuote, useCreateTransaction, useCreateSocialQuote, useDuplicateQuote } from "@/hooks/mutations";
 import { usePackageTypes } from "@/hooks/queries";
@@ -227,6 +228,7 @@ export function QuoteCreateDialog({
   socialPost = false,
   markAsCopy = false,
   duplicateFromQuoteId,
+  presentation = "dialog",
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
   const createQuote = useCreateQuote();
@@ -411,30 +413,48 @@ export function QuoteCreateDialog({
     }
   };
 
+  const isDrawer = presentation === "drawer";
+  const description = socialPost
+    ? "Fill in the details to create a social post. No client will be attached."
+    : "Fill in the quote details, accommodation, flights, and pricing.";
+
+  const form = (
+    <QuoteRHFForm
+      key={(transactionId || clientId || "social") + open}
+      layout={isDrawer ? "drawer" : "card"}
+      defaultValues={defaultValues}
+      onSubmit={handleSubmit}
+      isLoading={isSubmitting}
+      submitLabel={socialPost ? "Create Social Post" : "Create Quote"}
+      onCancel={isDrawer ? undefined : () => onOpenChange(false)}
+      initialImageUrls={initialImages}
+    />
+  );
+
+  if (isDrawer) {
+    return (
+      <FormDrawer
+        open={open}
+        onOpenChange={onOpenChange}
+        title={socialPost ? "Create Social Post" : "Create / Edit Quote"}
+        description={description}
+        data-testid="quote-create-drawer"
+      >
+        {form}
+      </FormDrawer>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
         <DialogHeader className="px-6 pt-6">
           <DialogTitle className="text-lg font-semibold">{socialPost ? "New Social Post" : "New Quote"}</DialogTitle>
-          <DialogDescription className="text-sm text-black/55">
-            {socialPost
-              ? "Fill in the details to create a social post. No client will be attached."
-              : "Fill in the quote details, accommodation, flights, and pricing."}
-          </DialogDescription>
+          <DialogDescription className="text-sm text-black/55">{description}</DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-100px)]">
-          <div className="px-6 pb-6">
-            <QuoteRHFForm
-              key={(transactionId || clientId || "social") + open}
-              defaultValues={defaultValues}
-              onSubmit={handleSubmit}
-              isLoading={isSubmitting}
-              submitLabel={socialPost ? "Create Social Post" : "Create Quote"}
-              onCancel={() => onOpenChange(false)}
-              initialImageUrls={initialImages}
-            />
-          </div>
+          <div className="px-6 pb-6">{form}</div>
         </ScrollArea>
       </DialogContent>
     </Dialog>

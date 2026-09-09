@@ -12,12 +12,15 @@ import { Spinner } from "@/components/ui/spinner";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/features/enquiry/types";
 import type { EnquiryTable } from "@/features/quote/types";
+import type { FormPresentation } from "@/features/quote/types";
 import type { EnquiryIntent } from "@/features/conversations/api/ai-enquiry.api";
 import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useBoardBasis, useAirports, useAccommodationTypes } from "@/hooks/queries";
 import { useEnquiry } from "@/features/enquiry/api/use-enquiry-queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { AddAirportModal } from "@/features/lookups/components/lookups/add-airport-modal";
+import { FormDrawer, FormDrawerSection, FormDrawerFooter, drawerLabelClass, drawerInputClass, drawerControlClass } from "@/components/shared/form-drawer";
+import { cn } from "@/lib/utils";
 
 const FLEXIBILITY_OPTIONS = [
   "Exact Date",
@@ -76,10 +79,20 @@ const NIGHTS_MULTI_OPTIONS = Array.from({ length: 21 }, (_, i) => ({
   label: `${i + 1} night${i === 0 ? "" : "s"}`,
 }));
 
-function NightsMultiField({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+function NightsMultiField({
+  value,
+  onChange,
+  labelClassName,
+  controlClassName,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  labelClassName?: string;
+  controlClassName?: string;
+}) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs font-medium text-black/60">Number of Nights</Label>
+      <Label className={labelClassName ?? "text-xs font-medium text-black/60"}>Number of Nights</Label>
       <MultiSearchableSelect
         value={value}
         onValueChange={onChange}
@@ -87,6 +100,7 @@ function NightsMultiField({ value, onChange }: { value: string[]; onChange: (v: 
         placeholder="Select nights..."
         searchPlaceholder="Search nights..."
         emptyMessage="No options."
+        className={controlClassName}
         data-testid="select-nights"
       />
       <p className="text-[10px] text-black/40">Select one or more durations the customer would consider.</p>
@@ -384,6 +398,8 @@ interface EnquiryWizardProps {
   isSaving: boolean;
   /** AI-drafted intent to pre-fill a NEW enquiry (resolved to lookup IDs on open). */
   aiPrefill?: EnquiryIntent | null;
+  /** How the wizard is presented: the centered 3-step modal (default) or the right-hand Create/Edit drawer. */
+  presentation?: FormPresentation;
 }
 
 type StepDef = { title: string; description: string };
@@ -412,8 +428,9 @@ function getSteps(holidayType: string): StepDef[] {
   return PACKAGE_STEPS;
 }
 
-export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving, aiPrefill }: EnquiryWizardProps) {
+export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving, aiPrefill, presentation = "dialog" }: EnquiryWizardProps) {
   const isEdit = !!enquiry;
+  const isDrawer = presentation === "drawer";
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<EnquiryForm>(defaultForm);
   const [direction, setDirection] = useState(1);
@@ -600,8 +617,10 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
     return acc;
   }, { ...form.labels, ...addedAirportLabels });
 
+  // The only hard requirements — title and holiday type — live on step 0.
+  const isStep0Valid = form.enquiryTitle.trim() !== "" && form.holidayType !== "";
   const canProceed = () => {
-    if (step === 0) return form.enquiryTitle.trim() !== "" && form.holidayType !== "";
+    if (step === 0) return isStep0Valid;
     return true;
   };
 
@@ -701,6 +720,797 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
   const isHotTub = holidayTypeName === "Hot Tub Break";
   const isCruise = holidayTypeName === "Cruise Package";
 
+  // ----- Presentation-aware field classes -----
+  const inputCls = isDrawer ? drawerInputClass : "h-10 rounded-xl border-black/10 bg-white/70";
+  const controlCls = isDrawer ? drawerControlClass : "h-10 rounded-xl border-black/10 bg-white/70";
+  // Date / combobox pickers ship their own dialog-mode classes; only override in the drawer.
+  const pickerCls = isDrawer ? drawerControlClass : undefined;
+  const labelCls = isDrawer ? drawerLabelClass : "text-xs font-medium text-black/60";
+  const textareaCls = isDrawer
+    ? cn(drawerInputClass, "h-auto min-h-[88px] py-2 resize-none")
+    : "resize-none rounded-xl border-black/10 bg-white/70 text-sm";
+  const childAgeCls = isDrawer ? cn(inputCls, "w-[70px] px-2 text-center") : "h-9 w-16 rounded-xl border-black/10 bg-white/70";
+  // Makes an element span both drawer columns; a no-op in dialog mode (single column).
+  const span2 = isDrawer ? "sm:col-span-2" : "";
+
+  // ===== STEP 0: Holiday Details =====
+  const step0Content = (
+    <>
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Enquiry Title *</Label>
+        <Input
+          placeholder={
+            isHotTub ? "e.g. Lake District Hot Tub Weekend" :
+            isCruise ? "e.g. Mediterranean Cruise" :
+            "e.g. Maldives Family Holiday"
+          }
+          value={form.enquiryTitle}
+          onChange={(e) => set("enquiryTitle", e.target.value)}
+          className={inputCls}
+          data-testid="input-enquiry-title"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Holiday Type *</Label>
+        <Select value={form.holidayType} onValueChange={(v) => set("holidayType", v)}>
+          <SelectTrigger className={controlCls} data-testid="select-holiday-type">
+            <SelectValue placeholder="Select holiday type..." />
+          </SelectTrigger>
+          <SelectContent>
+            {(packageTypesData || []).map((pt: any) => (
+              <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isHotTub && (
+        <>
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Accommodation Type</Label>
+            <Select value={form.accommodationType} onValueChange={(v) => set("accommodationType", v)}>
+              <SelectTrigger className={controlCls} data-testid="select-accommodation-type">
+                <SelectValue placeholder="Select accommodation type..." />
+              </SelectTrigger>
+              <SelectContent>
+                {(accommodationTypesData || []).map((t: any) => (
+                  <SelectItem key={t.id} value={t.id}>{t.type}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className={cn("space-y-1.5", span2)}>
+            <Label className={labelCls}>Destinations</Label>
+            <MultiSearchableSelect
+              value={form.destinations}
+              onValueChange={handleDestinationsChange}
+              selectedLabels={form.labels}
+              options={(allDestinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
+              placeholder="Search destinations..."
+              searchPlaceholder="Search destinations..."
+              emptyMessage="No destinations found."
+              className={pickerCls}
+              data-testid="select-enquiry-destination"
+            />
+          </div>
+        </>
+      )}
+
+      {isCruise && (
+        <>
+          <div className={cn("space-y-1.5", span2)}>
+            <Label className={labelCls}>Cruise Destination</Label>
+            <SearchableSelect
+              value={form.cruiseDestination}
+              onValueChange={(v) => {
+                const label = (allDestinationsData || []).find((d: any) => d.id === v)?.name || "";
+                setForm((prev) => ({ ...prev, cruiseDestination: v, labels: { ...prev.labels, [v]: label } }));
+              }}
+              selectedLabel={form.labels[form.cruiseDestination]}
+              options={(allDestinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
+              placeholder="Search destinations..."
+              searchPlaceholder="Search destinations..."
+              emptyMessage="No destinations found."
+              className={pickerCls}
+              data-testid="select-cruise-destination"
+            />
+          </div>
+          <div className={cn("grid gap-3 sm:grid-cols-2", span2)}>
+            <div className="space-y-1.5">
+              <Label className={labelCls}>Travel Date</Label>
+              <DatePicker
+                value={form.travelDate}
+                onChange={(v) => set("travelDate", v)}
+                placeholder="Pick a date"
+                className={pickerCls}
+                data-testid="input-travel-date"
+              />
+            </div>
+            <NightsMultiField
+              value={form.flexibleNights}
+              onChange={(v) => set("flexibleNights", v)}
+              labelClassName={labelCls}
+              controlClassName={isDrawer ? controlCls : undefined}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Flexibility</Label>
+            <Select value={form.flexibility} onValueChange={(v) => set("flexibility", v)}>
+              <SelectTrigger className={controlCls} data-testid="select-flexibility">
+                <SelectValue placeholder="Select flexibility..." />
+              </SelectTrigger>
+              <SelectContent>
+                {CRUISE_FLEXIBILITY_OPTIONS.map((f) => (
+                  <SelectItem key={f} value={f}>{f}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+
+      {!isHotTub && !isCruise && (
+        <div className={cn("grid gap-3 sm:grid-cols-3", span2)}>
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Countries</Label>
+            <MultiSearchableSelect
+              value={form.countries}
+              onValueChange={handleCountriesChange}
+              options={(countriesData || []).map((c: any) => ({ value: c.id, label: c.country_name }))}
+              placeholder="Select ..."
+              searchPlaceholder="Search countries..."
+              emptyMessage="No countries found."
+              className={pickerCls}
+              data-testid="select-enquiry-country"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Destinations</Label>
+            <MultiSearchableSelect
+              value={form.destinations}
+              onValueChange={handleDestinationsChange}
+              selectedLabels={form.labels}
+              options={(destinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
+              placeholder="Select ..."
+              searchPlaceholder="Search destinations..."
+              emptyMessage="No destinations found."
+              className={pickerCls}
+              data-testid="select-enquiry-destination"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className={labelCls}>Resorts</Label>
+            <MultiSearchableSelect
+              value={form.resorts}
+              onValueChange={handleResortsChange}
+              selectedLabels={form.labels}
+              options={(resortsData || []).map((r: any) => ({ value: r.id, label: r.name }))}
+              onSearch={setResortSearch}
+              placeholder="Search ..."
+              searchPlaceholder="Search resorts..."
+              emptyMessage="No resorts found."
+              className={pickerCls}
+              data-testid="select-enquiry-resort"
+            />
+          </div>
+        </div>
+      )}
+
+      {!isDrawer && (
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Notes</Label>
+          <Textarea
+            placeholder="Any notes about the holiday details..."
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            rows={2}
+            className={textareaCls}
+            data-testid="textarea-enquiry-notes-step0"
+          />
+        </div>
+      )}
+    </>
+  );
+
+  // ===== STEP 1: Travel & Passengers / Guests & Budget / Budget & Passengers =====
+  const step1Content = isHotTub ? (
+    <>
+      <div className={cn("grid grid-cols-2 gap-3", span2)}>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Guests</Label>
+          <Input
+            type="number"
+            min={1}
+            value={form.guests}
+            onChange={(e) => set("guests", parseInt(e.target.value) || 1)}
+            className={inputCls}
+            data-testid="input-guests"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Pets</Label>
+          <Select value={form.pets} onValueChange={(v) => set("pets", v)}>
+            <SelectTrigger className={controlCls} data-testid="select-pets">
+              <SelectValue placeholder="Pets?" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Yes">Yes</SelectItem>
+              <SelectItem value="No">No</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className={cn("grid grid-cols-2 gap-3", span2)}>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Min Budget (£)</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
+            <Input
+              type="number"
+              min={0}
+              step={50}
+              placeholder="0.00"
+              value={form.minBudget}
+              onChange={(e) => set("minBudget", e.target.value)}
+              className={cn(inputCls, "pl-7")}
+              data-testid="input-min-budget"
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Max Budget (£)</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
+            <Input
+              type="number"
+              min={0}
+              step={50}
+              placeholder="0.00"
+              value={form.maxBudget}
+              onChange={(e) => set("maxBudget", e.target.value)}
+              className={cn(inputCls, "pl-7")}
+              data-testid="input-max-budget"
+            />
+          </div>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Budget Type</Label>
+        <Select value={form.budgetType} onValueChange={(v) => set("budgetType", v)}>
+          <SelectTrigger className={controlCls} data-testid="select-budget-type">
+            <SelectValue placeholder="Select type..." />
+          </SelectTrigger>
+          <SelectContent>
+            {BUDGET_TYPES.map((bt) => (
+              <SelectItem key={bt} value={bt}>{bt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {!isDrawer && (
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Notes</Label>
+          <Textarea
+            placeholder="Any notes about guests or budget..."
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            rows={2}
+            className={textareaCls}
+            data-testid="textarea-enquiry-notes-step1"
+          />
+        </div>
+      )}
+    </>
+  ) : isCruise ? (
+    <>
+      <div className={cn("grid grid-cols-2 gap-3", span2)}>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Min Budget (£)</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
+            <Input
+              type="number"
+              min={0}
+              step={50}
+              placeholder="0.00"
+              value={form.minBudget}
+              onChange={(e) => set("minBudget", e.target.value)}
+              className={cn(inputCls, "pl-7")}
+              data-testid="input-min-budget"
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Max Budget (£)</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
+            <Input
+              type="number"
+              min={0}
+              step={50}
+              placeholder="0.00"
+              value={form.maxBudget}
+              onChange={(e) => set("maxBudget", e.target.value)}
+              className={cn(inputCls, "pl-7")}
+              data-testid="input-max-budget"
+            />
+          </div>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Budget Type</Label>
+        <Select value={form.budgetType} onValueChange={(v) => set("budgetType", v)}>
+          <SelectTrigger className={controlCls} data-testid="select-budget-type">
+            <SelectValue placeholder="Per person or package..." />
+          </SelectTrigger>
+          <SelectContent>
+            {BUDGET_TYPES.map((bt) => (
+              <SelectItem key={bt} value={bt}>{bt}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className={cn("grid grid-cols-3 gap-3", span2)}>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Adults</Label>
+          <Input
+            type="number"
+            min={1}
+            value={form.passengersAdults}
+            onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
+            className={inputCls}
+            data-testid="input-adults"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Children</Label>
+          <Input
+            type="number"
+            min={0}
+            value={form.passengersChildren}
+            onChange={(e) => set("passengersChildren", parseInt(e.target.value) || 0)}
+            className={inputCls}
+            data-testid="input-children"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Infants</Label>
+          <Input
+            type="number"
+            min={0}
+            value={form.passengersInfants}
+            onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
+            className={inputCls}
+            data-testid="input-infants"
+          />
+        </div>
+      </div>
+      {form.passengersChildren > 0 && (
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Child Ages</Label>
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: form.passengersChildren }, (_, i) => (
+              <Input
+                key={i}
+                type="number"
+                min={0}
+                max={17}
+                value={form.childAges[i] ?? 0}
+                onChange={(e) => {
+                  const next = [...form.childAges];
+                  next[i] = parseInt(e.target.value) || 0;
+                  set("childAges", next);
+                }}
+                className={childAgeCls}
+                placeholder={`Child ${i + 1}`}
+                data-testid={`input-child-age-${i}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {!isDrawer && (
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Notes</Label>
+          <Textarea
+            placeholder="Any notes about budget or passengers..."
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            rows={2}
+            className={textareaCls}
+            data-testid="textarea-enquiry-notes-step1"
+          />
+        </div>
+      )}
+    </>
+  ) : (
+    <>
+      <div className={cn("space-y-1.5", span2)}>
+        <Label className={labelCls}>Departure Airports</Label>
+        <MultiSearchableSelect
+          value={form.departureAirports}
+          onValueChange={(v) => set("departureAirports", v)}
+          selectedLabels={airportLabels}
+          options={airportOptions}
+          placeholder="Select airports..."
+          searchPlaceholder="Search airports..."
+          emptyMessage="No airports found."
+          onSearchCapture={setAirportSearch}
+          onAddNew={airportSearch ? () => setShowAddAirport(true) : undefined}
+          addNewLabel="Add Airport"
+          className={pickerCls}
+          data-testid="input-departure-airport"
+        />
+        <AddAirportModal
+          open={showAddAirport}
+          onOpenChange={setShowAddAirport}
+          initialName={airportSearch}
+          onSuccess={(airport) => {
+            const label = `${airport.airport_name}${airport.airport_code ? ` (${airport.airport_code})` : ""}`;
+            setAddedAirportLabels((prev) => ({ ...prev, [airport.id]: label }));
+            setForm((prev) => ({
+              ...prev,
+              departureAirports: [...prev.departureAirports, airport.id],
+            }));
+            setAirportSearch("");
+          }}
+        />
+      </div>
+      <div className={cn("grid gap-3 sm:grid-cols-2", span2)}>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Travel Date</Label>
+          <DatePicker
+            value={form.travelDate}
+            onChange={(v) => set("travelDate", v)}
+            placeholder="Pick a date"
+            className={pickerCls}
+            data-testid="input-travel-date"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Flexibility</Label>
+          <Select value={form.flexibility} onValueChange={(v) => set("flexibility", v)}>
+            <SelectTrigger className={controlCls} data-testid="select-flexibility">
+              <SelectValue placeholder="Select flexibility..." />
+            </SelectTrigger>
+            <SelectContent>
+              {FLEXIBILITY_OPTIONS.map((f) => (
+                <SelectItem key={f} value={f}>{f}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className={cn("grid grid-cols-3 gap-3", span2)}>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Adults</Label>
+          <Input
+            type="number"
+            min={1}
+            value={form.passengersAdults}
+            onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
+            className={inputCls}
+            data-testid="input-adults"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Children</Label>
+          <Input
+            type="number"
+            min={0}
+            value={form.passengersChildren}
+            onChange={(e) => set("passengersChildren", parseInt(e.target.value) || 0)}
+            className={inputCls}
+            data-testid="input-children"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Infants</Label>
+          <Input
+            type="number"
+            min={0}
+            value={form.passengersInfants}
+            onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
+            className={inputCls}
+            data-testid="input-infants"
+          />
+        </div>
+      </div>
+      {form.passengersChildren > 0 && (
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Child Ages</Label>
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: form.passengersChildren }, (_, i) => (
+              <Input
+                key={i}
+                type="number"
+                min={0}
+                max={17}
+                value={form.childAges[i] ?? 0}
+                onChange={(e) => {
+                  const next = [...form.childAges];
+                  next[i] = parseInt(e.target.value) || 0;
+                  set("childAges", next);
+                }}
+                className={childAgeCls}
+                placeholder={`Child ${i + 1}`}
+                data-testid={`input-child-age-${i}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {!isDrawer && (
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Notes</Label>
+          <Textarea
+            placeholder="Any notes about travel or passengers..."
+            value={form.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            rows={2}
+            className={textareaCls}
+            data-testid="textarea-enquiry-notes-step1"
+          />
+        </div>
+      )}
+    </>
+  );
+
+  // ===== STEP 2: Stay & Dates / Cruise Preferences / Accommodation & Budget =====
+  const step2Content = isHotTub ? (
+    <>
+      <NightsMultiField
+        value={form.flexibleNights}
+        onChange={(v) => set("flexibleNights", v)}
+        labelClassName={labelCls}
+        controlClassName={isDrawer ? controlCls : undefined}
+      />
+      <div className={cn("grid grid-cols-2 gap-3", span2)}>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Weekend Lodge</Label>
+          <Select value={form.weekendLodge} onValueChange={(v) => set("weekendLodge", v)}>
+            <SelectTrigger className={controlCls} data-testid="select-weekend-lodge">
+              <SelectValue placeholder="Weekend lodge?" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Yes">Yes</SelectItem>
+              <SelectItem value="No">No</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Flexible on Date</Label>
+          <Select value={form.flexibleOnDate} onValueChange={(v) => set("flexibleOnDate", v)}>
+            <SelectTrigger className={controlCls} data-testid="select-flexible-on-date">
+              <SelectValue placeholder="Flexible?" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Yes">Yes</SelectItem>
+              <SelectItem value="No">No</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {form.flexibleOnDate === "Yes" && (
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Flexibility Options</Label>
+          <Select value={form.flexibility} onValueChange={(v) => set("flexibility", v)}>
+            <SelectTrigger className={controlCls} data-testid="select-flexibility">
+              <SelectValue placeholder="Select flexibility..." />
+            </SelectTrigger>
+            <SelectContent>
+              {HOT_TUB_FLEXIBILITY_OPTIONS.map((f) => (
+                <SelectItem key={f} value={f}>{f}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Travel Date</Label>
+        <DatePicker
+          value={form.travelDate}
+          onChange={(v) => set("travelDate", v)}
+          placeholder="Pick a date"
+          className={pickerCls}
+          data-testid="input-travel-date"
+        />
+      </div>
+      <div className={cn("space-y-1.5", span2)}>
+        <Label className={labelCls}>Notes</Label>
+        <Textarea
+          placeholder="Any notes about the stay or dates..."
+          value={form.notes}
+          onChange={(e) => set("notes", e.target.value)}
+          rows={2}
+          className={textareaCls}
+          data-testid="textarea-enquiry-notes-step2"
+        />
+      </div>
+    </>
+  ) : isCruise ? (
+    <>
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Cruise Line</Label>
+        <Input
+          placeholder="e.g. Royal Caribbean, MSC, P&O"
+          value={form.cruiseLine}
+          onChange={(e) => set("cruiseLine", e.target.value)}
+          className={inputCls}
+          data-testid="input-cruise-line"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label className={labelCls}>Cabin Type</Label>
+        <Select value={form.cabinType} onValueChange={(v) => set("cabinType", v)}>
+          <SelectTrigger className={controlCls} data-testid="select-cabin-type">
+            <SelectValue placeholder="Select cabin type..." />
+          </SelectTrigger>
+          <SelectContent>
+            {CABIN_TYPES.map((ct) => (
+              <SelectItem key={ct} value={ct}>{ct}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className={cn("grid grid-cols-2 gap-3", span2)}>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Pre-Cruise Stay Days</Label>
+          <Input
+            type="number"
+            min={0}
+            placeholder="0"
+            value={form.preCruiseStayDays}
+            onChange={(e) => set("preCruiseStayDays", e.target.value)}
+            className={inputCls}
+            data-testid="input-pre-cruise-days"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Post-Cruise Stay Days</Label>
+          <Input
+            type="number"
+            min={0}
+            placeholder="0"
+            value={form.postCruiseStayDays}
+            onChange={(e) => set("postCruiseStayDays", e.target.value)}
+            className={inputCls}
+            data-testid="input-post-cruise-days"
+          />
+        </div>
+      </div>
+      <div className={cn("space-y-1.5", span2)}>
+        <Label className={labelCls}>Notes</Label>
+        <Textarea
+          placeholder="Any notes about cruise preferences..."
+          value={form.notes}
+          onChange={(e) => set("notes", e.target.value)}
+          rows={2}
+          className={textareaCls}
+          data-testid="textarea-enquiry-notes-step2"
+        />
+      </div>
+    </>
+  ) : (
+    <>
+      <div className={cn("grid gap-3 sm:grid-cols-2", span2)}>
+        <NightsMultiField
+          value={form.flexibleNights}
+          onChange={(v) => set("flexibleNights", v)}
+          labelClassName={labelCls}
+          controlClassName={isDrawer ? controlCls : undefined}
+        />
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Min Star Rating</Label>
+          <Select value={form.starRating} onValueChange={(v) => set("starRating", v)}>
+            <SelectTrigger className={controlCls} data-testid="select-star-rating">
+              <SelectValue placeholder="Select rating..." />
+            </SelectTrigger>
+            <SelectContent>
+              {STAR_RATINGS.map((r) => (
+                <SelectItem key={r} value={r}>{r}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className={cn("space-y-1.5", span2)}>
+        <Label className={labelCls}>Board Basis</Label>
+        <MultiSearchableSelect
+          value={form.boardBases}
+          onValueChange={(v) => set("boardBases", v)}
+          options={ALLOWED_BOARD_BASIS
+            .map((name) =>
+              (boardBasisData || []).find(
+                (b: any) => (b.type || "").trim().toLowerCase() === name.toLowerCase(),
+              ),
+            )
+            .filter(Boolean)
+            .map((b: any) => ({ value: b.id, label: (b.type || "").trim() }))}
+          placeholder="Select board basis..."
+          searchPlaceholder="Search board basis..."
+          emptyMessage="No board basis found."
+          className={pickerCls}
+          data-testid="select-board-basis"
+        />
+      </div>
+      <div className={cn("grid gap-3 sm:grid-cols-2", span2)}>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Budget</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
+            <Input
+              type="number"
+              min={0}
+              step={50}
+              placeholder="0.00"
+              value={form.budget}
+              onChange={(e) => set("budget", e.target.value)}
+              className={cn(inputCls, "pl-7")}
+              data-testid="input-budget"
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className={labelCls}>Budget Type</Label>
+          <Select value={form.budgetType} onValueChange={(v) => set("budgetType", v)}>
+            <SelectTrigger className={controlCls} data-testid="select-budget-type">
+              <SelectValue placeholder="Select type..." />
+            </SelectTrigger>
+            <SelectContent>
+              {BUDGET_TYPES.map((bt) => (
+                <SelectItem key={bt} value={bt}>{bt}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className={cn("space-y-1.5", span2)}>
+        <Label className={labelCls}>Notes</Label>
+        <Textarea
+          placeholder="Any notes about accommodation or budget..."
+          value={form.notes}
+          onChange={(e) => set("notes", e.target.value)}
+          rows={2}
+          className={textareaCls}
+          data-testid="textarea-enquiry-notes-step2"
+        />
+      </div>
+    </>
+  );
+
+  if (isDrawer) {
+    return (
+      <FormDrawer
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Create / Edit Enquiry"
+        description={steps[0].description}
+        data-testid="enquiry-drawer"
+      >
+        <FormDrawerSection title={steps[0].title} data-testid="enquiry-drawer-section-0">
+          <div className="grid gap-4 sm:grid-cols-2">{step0Content}</div>
+        </FormDrawerSection>
+        <FormDrawerSection title={steps[1].title} data-testid="enquiry-drawer-section-1">
+          <div className="grid gap-4 sm:grid-cols-2">{step1Content}</div>
+        </FormDrawerSection>
+        <FormDrawerSection title={steps[2].title} data-testid="enquiry-drawer-section-2">
+          <div className="grid gap-4 sm:grid-cols-2">{step2Content}</div>
+        </FormDrawerSection>
+        <FormDrawerFooter
+          isTest={form.is_test}
+          onTestChange={(v) => set("is_test", v)}
+          isLoading={isSaving}
+          disabled={!isStep0Valid}
+          hint={isStep0Valid ? undefined : "Enter a title and holiday type to save."}
+          submitLabel={isEdit ? "Save Changes" : "Create Enquiry"}
+          onSubmit={handleSubmit}
+          data-testid="drawer-footer"
+        />
+      </FormDrawer>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg overflow-hidden rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-enquiry-wizard">
@@ -756,730 +1566,9 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
               transition={{ duration: 0.2, ease: "easeInOut" }}
               className="grid gap-4"
             >
-              {/* ===== STEP 0 ===== */}
-              {step === 0 && (
-                <>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Enquiry Title *</Label>
-                    <Input
-                      placeholder={
-                        isHotTub ? "e.g. Lake District Hot Tub Weekend" :
-                        isCruise ? "e.g. Mediterranean Cruise" :
-                        "e.g. Maldives Family Holiday"
-                      }
-                      value={form.enquiryTitle}
-                      onChange={(e) => set("enquiryTitle", e.target.value)}
-                      className="h-10 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-enquiry-title"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Holiday Type *</Label>
-                    <Select value={form.holidayType} onValueChange={(v) => set("holidayType", v)}>
-                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-holiday-type">
-                        <SelectValue placeholder="Select holiday type..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(packageTypesData || []).map((pt: any) => (
-                          <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {isHotTub && (
-                    <>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Accommodation Type</Label>
-                        <Select value={form.accommodationType} onValueChange={(v) => set("accommodationType", v)}>
-                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-accommodation-type">
-                            <SelectValue placeholder="Select accommodation type..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(accommodationTypesData || []).map((t: any) => (
-                              <SelectItem key={t.id} value={t.id}>{t.type}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Destinations</Label>
-                        <MultiSearchableSelect
-                          value={form.destinations}
-                          onValueChange={handleDestinationsChange}
-                          selectedLabels={form.labels}
-                          options={(allDestinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
-                          placeholder="Search destinations..."
-                          searchPlaceholder="Search destinations..."
-                          emptyMessage="No destinations found."
-                          data-testid="select-enquiry-destination"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {isCruise && (
-                    <>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Cruise Destination</Label>
-                        <SearchableSelect
-                          value={form.cruiseDestination}
-                          onValueChange={(v) => {
-                            const label = (allDestinationsData || []).find((d: any) => d.id === v)?.name || "";
-                            setForm((prev) => ({ ...prev, cruiseDestination: v, labels: { ...prev.labels, [v]: label } }));
-                          }}
-                          selectedLabel={form.labels[form.cruiseDestination]}
-                          options={(allDestinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
-                          placeholder="Search destinations..."
-                          searchPlaceholder="Search destinations..."
-                          emptyMessage="No destinations found."
-                          data-testid="select-cruise-destination"
-                        />
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                          <DatePicker
-                            value={form.travelDate}
-                            onChange={(v) => set("travelDate", v)}
-                            placeholder="Pick a date"
-                            data-testid="input-travel-date"
-                          />
-                        </div>
-                        <NightsMultiField value={form.flexibleNights} onChange={(v) => set("flexibleNights", v)} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Flexibility</Label>
-                        <Select value={form.flexibility} onValueChange={(v) => set("flexibility", v)}>
-                          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-flexibility">
-                            <SelectValue placeholder="Select flexibility..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CRUISE_FLEXIBILITY_OPTIONS.map((f) => (
-                              <SelectItem key={f} value={f}>{f}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </>
-                  )}
-
-                  {!isHotTub && !isCruise && (
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Countries</Label>
-                        <MultiSearchableSelect
-                          value={form.countries}
-                          onValueChange={handleCountriesChange}
-                          options={(countriesData || []).map((c: any) => ({ value: c.id, label: c.country_name }))}
-                          placeholder="Select ..."
-                          searchPlaceholder="Search countries..."
-                          emptyMessage="No countries found."
-                          data-testid="select-enquiry-country"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Destinations</Label>
-                        <MultiSearchableSelect
-                          value={form.destinations}
-                          onValueChange={handleDestinationsChange}
-                          selectedLabels={form.labels}
-                          options={(destinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
-                          placeholder="Select ..."
-                          searchPlaceholder="Search destinations..."
-                          emptyMessage="No destinations found."
-                          data-testid="select-enquiry-destination"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs font-medium text-black/60">Resorts</Label>
-                        <MultiSearchableSelect
-                          value={form.resorts}
-                          onValueChange={handleResortsChange}
-                          selectedLabels={form.labels}
-                          options={(resortsData || []).map((r: any) => ({ value: r.id, label: r.name }))}
-                          onSearch={setResortSearch}
-                          placeholder="Search ..."
-                          searchPlaceholder="Search resorts..."
-                          emptyMessage="No resorts found."
-                          data-testid="select-enquiry-resort"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Notes</Label>
-                    <Textarea
-                      placeholder="Any notes about the holiday details..."
-                      value={form.notes}
-                      onChange={(e) => set("notes", e.target.value)}
-                      rows={2}
-                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
-                      data-testid="textarea-enquiry-notes-step0"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* ===== STEP 1: HOT TUB ===== */}
-              {step === 1 && isHotTub && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Guests</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={form.guests}
-                        onChange={(e) => set("guests", parseInt(e.target.value) || 1)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-guests"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Pets</Label>
-                      <Select value={form.pets} onValueChange={(v) => set("pets", v)}>
-                        <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-pets">
-                          <SelectValue placeholder="Pets?" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Yes">Yes</SelectItem>
-                          <SelectItem value="No">No</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Min Budget (£)</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={50}
-                          placeholder="0.00"
-                          value={form.minBudget}
-                          onChange={(e) => set("minBudget", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70 pl-7"
-                          data-testid="input-min-budget"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Max Budget (£)</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={50}
-                          placeholder="0.00"
-                          value={form.maxBudget}
-                          onChange={(e) => set("maxBudget", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70 pl-7"
-                          data-testid="input-max-budget"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Budget Type</Label>
-                    <Select value={form.budgetType} onValueChange={(v) => set("budgetType", v)}>
-                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-budget-type">
-                        <SelectValue placeholder="Select type..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BUDGET_TYPES.map((bt) => (
-                          <SelectItem key={bt} value={bt}>{bt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Notes</Label>
-                    <Textarea
-                      placeholder="Any notes about guests or budget..."
-                      value={form.notes}
-                      onChange={(e) => set("notes", e.target.value)}
-                      rows={2}
-                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
-                      data-testid="textarea-enquiry-notes-step1"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* ===== STEP 1: CRUISE ===== */}
-              {step === 1 && isCruise && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Min Budget (£)</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={50}
-                          placeholder="0.00"
-                          value={form.minBudget}
-                          onChange={(e) => set("minBudget", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70 pl-7"
-                          data-testid="input-min-budget"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Max Budget (£)</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={50}
-                          placeholder="0.00"
-                          value={form.maxBudget}
-                          onChange={(e) => set("maxBudget", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70 pl-7"
-                          data-testid="input-max-budget"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Budget Type</Label>
-                    <Select value={form.budgetType} onValueChange={(v) => set("budgetType", v)}>
-                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-budget-type">
-                        <SelectValue placeholder="Per person or package..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BUDGET_TYPES.map((bt) => (
-                          <SelectItem key={bt} value={bt}>{bt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Adults</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={form.passengersAdults}
-                        onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-adults"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Children</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={form.passengersChildren}
-                        onChange={(e) => set("passengersChildren", parseInt(e.target.value) || 0)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-children"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Infants</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={form.passengersInfants}
-                        onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-infants"
-                      />
-                    </div>
-                  </div>
-                  {form.passengersChildren > 0 && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Child Ages</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {Array.from({ length: form.passengersChildren }, (_, i) => (
-                          <Input
-                            key={i}
-                            type="number"
-                            min={0}
-                            max={17}
-                            value={form.childAges[i] ?? 0}
-                            onChange={(e) => {
-                              const next = [...form.childAges];
-                              next[i] = parseInt(e.target.value) || 0;
-                              set("childAges", next);
-                            }}
-                            className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
-                            placeholder={`Child ${i + 1}`}
-                            data-testid={`input-child-age-${i}`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Notes</Label>
-                    <Textarea
-                      placeholder="Any notes about budget or passengers..."
-                      value={form.notes}
-                      onChange={(e) => set("notes", e.target.value)}
-                      rows={2}
-                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
-                      data-testid="textarea-enquiry-notes-step1"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* ===== STEP 1: PACKAGE / OTHERS ===== */}
-              {step === 1 && !isHotTub && !isCruise && (
-                <>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Departure Airports</Label>
-                    <MultiSearchableSelect
-                      value={form.departureAirports}
-                      onValueChange={(v) => set("departureAirports", v)}
-                      selectedLabels={airportLabels}
-                      options={airportOptions}
-                      placeholder="Select airports..."
-                      searchPlaceholder="Search airports..."
-                      emptyMessage="No airports found."
-                      onSearchCapture={setAirportSearch}
-                      onAddNew={airportSearch ? () => setShowAddAirport(true) : undefined}
-                      addNewLabel="Add Airport"
-                      data-testid="input-departure-airport"
-                    />
-                    <AddAirportModal
-                      open={showAddAirport}
-                      onOpenChange={setShowAddAirport}
-                      initialName={airportSearch}
-                      onSuccess={(airport) => {
-                        const label = `${airport.airport_name}${airport.airport_code ? ` (${airport.airport_code})` : ""}`;
-                        setAddedAirportLabels((prev) => ({ ...prev, [airport.id]: label }));
-                        setForm((prev) => ({
-                          ...prev,
-                          departureAirports: [...prev.departureAirports, airport.id],
-                        }));
-                        setAirportSearch("");
-                      }}
-                    />
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                      <DatePicker
-                        value={form.travelDate}
-                        onChange={(v) => set("travelDate", v)}
-                        placeholder="Pick a date"
-                        data-testid="input-travel-date"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Flexibility</Label>
-                      <Select value={form.flexibility} onValueChange={(v) => set("flexibility", v)}>
-                        <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-flexibility">
-                          <SelectValue placeholder="Select flexibility..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FLEXIBILITY_OPTIONS.map((f) => (
-                            <SelectItem key={f} value={f}>{f}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Adults</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={form.passengersAdults}
-                        onChange={(e) => set("passengersAdults", parseInt(e.target.value) || 1)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-adults"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Children</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={form.passengersChildren}
-                        onChange={(e) => set("passengersChildren", parseInt(e.target.value) || 0)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-children"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Infants</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={form.passengersInfants}
-                        onChange={(e) => set("passengersInfants", parseInt(e.target.value) || 0)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-infants"
-                      />
-                    </div>
-                  </div>
-                  {form.passengersChildren > 0 && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Child Ages</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {Array.from({ length: form.passengersChildren }, (_, i) => (
-                          <Input
-                            key={i}
-                            type="number"
-                            min={0}
-                            max={17}
-                            value={form.childAges[i] ?? 0}
-                            onChange={(e) => {
-                              const next = [...form.childAges];
-                              next[i] = parseInt(e.target.value) || 0;
-                              set("childAges", next);
-                            }}
-                            className="h-9 w-16 rounded-xl border-black/10 bg-white/70"
-                            placeholder={`Child ${i + 1}`}
-                            data-testid={`input-child-age-${i}`}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Notes</Label>
-                    <Textarea
-                      placeholder="Any notes about travel or passengers..."
-                      value={form.notes}
-                      onChange={(e) => set("notes", e.target.value)}
-                      rows={2}
-                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
-                      data-testid="textarea-enquiry-notes-step1"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* ===== STEP 2: HOT TUB ===== */}
-              {step === 2 && isHotTub && (
-                <>
-                  <NightsMultiField value={form.flexibleNights} onChange={(v) => set("flexibleNights", v)} />
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Weekend Lodge</Label>
-                      <Select value={form.weekendLodge} onValueChange={(v) => set("weekendLodge", v)}>
-                        <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-weekend-lodge">
-                          <SelectValue placeholder="Weekend lodge?" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Yes">Yes</SelectItem>
-                          <SelectItem value="No">No</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Flexible on Date</Label>
-                      <Select value={form.flexibleOnDate} onValueChange={(v) => set("flexibleOnDate", v)}>
-                        <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-flexible-on-date">
-                          <SelectValue placeholder="Flexible?" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Yes">Yes</SelectItem>
-                          <SelectItem value="No">No</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  {form.flexibleOnDate === "Yes" && (
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Flexibility Options</Label>
-                      <Select value={form.flexibility} onValueChange={(v) => set("flexibility", v)}>
-                        <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-flexibility">
-                          <SelectValue placeholder="Select flexibility..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {HOT_TUB_FLEXIBILITY_OPTIONS.map((f) => (
-                            <SelectItem key={f} value={f}>{f}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Travel Date</Label>
-                    <DatePicker
-                      value={form.travelDate}
-                      onChange={(v) => set("travelDate", v)}
-                      placeholder="Pick a date"
-                      data-testid="input-travel-date"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Notes</Label>
-                    <Textarea
-                      placeholder="Any notes about the stay or dates..."
-                      value={form.notes}
-                      onChange={(e) => set("notes", e.target.value)}
-                      rows={2}
-                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
-                      data-testid="textarea-enquiry-notes-step2"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* ===== STEP 2: CRUISE ===== */}
-              {step === 2 && isCruise && (
-                <>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Cruise Line</Label>
-                    <Input
-                      placeholder="e.g. Royal Caribbean, MSC, P&O"
-                      value={form.cruiseLine}
-                      onChange={(e) => set("cruiseLine", e.target.value)}
-                      className="h-10 rounded-xl border-black/10 bg-white/70"
-                      data-testid="input-cruise-line"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Cabin Type</Label>
-                    <Select value={form.cabinType} onValueChange={(v) => set("cabinType", v)}>
-                      <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-cabin-type">
-                        <SelectValue placeholder="Select cabin type..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CABIN_TYPES.map((ct) => (
-                          <SelectItem key={ct} value={ct}>{ct}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Pre-Cruise Stay Days</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        placeholder="0"
-                        value={form.preCruiseStayDays}
-                        onChange={(e) => set("preCruiseStayDays", e.target.value)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-pre-cruise-days"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Post-Cruise Stay Days</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        placeholder="0"
-                        value={form.postCruiseStayDays}
-                        onChange={(e) => set("postCruiseStayDays", e.target.value)}
-                        className="h-10 rounded-xl border-black/10 bg-white/70"
-                        data-testid="input-post-cruise-days"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Notes</Label>
-                    <Textarea
-                      placeholder="Any notes about cruise preferences..."
-                      value={form.notes}
-                      onChange={(e) => set("notes", e.target.value)}
-                      rows={2}
-                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
-                      data-testid="textarea-enquiry-notes-step2"
-                    />
-                  </div>
-                </>
-              )}
-
-              {/* ===== STEP 2: PACKAGE / OTHERS ===== */}
-              {step === 2 && !isHotTub && !isCruise && (
-                <>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <NightsMultiField value={form.flexibleNights} onChange={(v) => set("flexibleNights", v)} />
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Min Star Rating</Label>
-                      <Select value={form.starRating} onValueChange={(v) => set("starRating", v)}>
-                        <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-star-rating">
-                          <SelectValue placeholder="Select rating..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STAR_RATINGS.map((r) => (
-                            <SelectItem key={r} value={r}>{r}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Board Basis</Label>
-                    <MultiSearchableSelect
-                      value={form.boardBases}
-                      onValueChange={(v) => set("boardBases", v)}
-                      options={ALLOWED_BOARD_BASIS
-                        .map((name) =>
-                          (boardBasisData || []).find(
-                            (b: any) => (b.type || "").trim().toLowerCase() === name.toLowerCase(),
-                          ),
-                        )
-                        .filter(Boolean)
-                        .map((b: any) => ({ value: b.id, label: (b.type || "").trim() }))}
-                      placeholder="Select board basis..."
-                      searchPlaceholder="Search board basis..."
-                      emptyMessage="No board basis found."
-                      data-testid="select-board-basis"
-                    />
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Budget</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-black/50">£</span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={50}
-                          placeholder="0.00"
-                          value={form.budget}
-                          onChange={(e) => set("budget", e.target.value)}
-                          className="h-10 rounded-xl border-black/10 bg-white/70 pl-7"
-                          data-testid="input-budget"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-medium text-black/60">Budget Type</Label>
-                      <Select value={form.budgetType} onValueChange={(v) => set("budgetType", v)}>
-                        <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-budget-type">
-                          <SelectValue placeholder="Select type..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {BUDGET_TYPES.map((bt) => (
-                            <SelectItem key={bt} value={bt}>{bt}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-medium text-black/60">Notes</Label>
-                    <Textarea
-                      placeholder="Any notes about accommodation or budget..."
-                      value={form.notes}
-                      onChange={(e) => set("notes", e.target.value)}
-                      rows={2}
-                      className="resize-none rounded-xl border-black/10 bg-white/70 text-sm"
-                      data-testid="textarea-enquiry-notes-step2"
-                    />
-                  </div>
-                </>
-              )}
+              {step === 0 && step0Content}
+              {step === 1 && step1Content}
+              {step === 2 && step2Content}
             </motion.div>
           </AnimatePresence>
         </div>

@@ -42,9 +42,16 @@ import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  DrawerField,
+  FormDrawer,
+  FormDrawerFooter,
+  FormDrawerSection,
+  drawerControlClass,
+  drawerInputClass,
+} from "@/components/shared/form-drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { EMOJI_CATEGORIES } from "@/lib/emoji";
@@ -664,61 +671,66 @@ function HolidayAddTaskDialog({
     );
   };
 
+  const canSubmit = !!title && !!dueDate;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="holiday-dialog-add-task">
-        <DialogHeader>
-          <DialogTitle className="text-sm font-semibold">Add Task</DialogTitle>
-          <DialogDescription className="text-xs text-black/55">
-            Set a task with a due date and time.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="mt-3 grid gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-black/60">Task</Label>
+    <FormDrawer
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Create Task"
+      description="Set a task with a due date and time."
+      data-testid="holiday-dialog-add-task"
+    >
+      <div className="space-y-5 px-7 pb-6 pt-6">
+        <DrawerField label="Task" className="max-w-[420px]">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Enter a task…"
+            className={drawerInputClass}
+            data-testid="holiday-input-task-title"
+          />
+        </DrawerField>
+        <DrawerField label="Assign To" className="max-w-[420px]">
+          <UserReassignSelect
+            value={assignedToId || assignedUserId || currentUser?.id || ""}
+            onValueChange={setAssignedToId}
+            className={drawerControlClass}
+            data-testid="holiday-select-task-assign-to"
+          />
+        </DrawerField>
+      </div>
+      <FormDrawerSection title="Schedule" data-testid="drawer-section-task-schedule">
+        <div className="flex flex-wrap gap-x-6 gap-y-4">
+          <DrawerField label="Due Date" className="w-[170px]">
+            <DatePicker
+              value={dueDate}
+              onChange={(v) => setDueDate(v)}
+              placeholder="Pick a date"
+              className={drawerControlClass}
+              data-testid="holiday-input-task-due-date"
+            />
+          </DrawerField>
+          <DrawerField label="Due Time" className="w-[140px]">
             <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter a task…"
-              className="h-9 rounded-xl border-black/10 bg-white/70"
-              data-testid="holiday-input-task-title"
+              type="time"
+              value={dueTime}
+              onChange={(e) => setDueTime(e.target.value)}
+              className={drawerInputClass}
+              data-testid="holiday-input-task-due-time"
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-black/60">Assign To</Label>
-            <UserReassignSelect
-              value={assignedToId || assignedUserId || currentUser?.id || ""}
-              onValueChange={setAssignedToId}
-              data-testid="holiday-select-task-assign-to"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Due Date</Label>
-              <DatePicker value={dueDate} onChange={(v) => setDueDate(v)} placeholder="Pick a date" data-testid="holiday-input-task-due-date" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Due Time</Label>
-              <Input
-                type="time"
-                value={dueTime}
-                onChange={(e) => setDueTime(e.target.value)}
-                className="h-9 rounded-xl border-black/10 bg-white/70"
-                data-testid="holiday-input-task-due-time"
-              />
-            </div>
-          </div>
-          <Button
-            className="h-9 w-full rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-            data-testid="holiday-button-confirm-add-task"
-            onClick={handleAdd}
-            disabled={!title || !dueDate || createMutation.isPending}
-          >
-            {createMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Add Task"}
-          </Button>
+          </DrawerField>
         </div>
-      </DialogContent>
-    </Dialog>
+      </FormDrawerSection>
+      <FormDrawerFooter
+        submitLabel="Create Task"
+        isLoading={createMutation.isPending}
+        disabled={!canSubmit}
+        hint={canSubmit ? undefined : "Enter a task and a due date to save."}
+        onSubmit={handleAdd}
+        data-testid="drawer-footer"
+      />
+    </FormDrawer>
   );
 }
 
@@ -1182,6 +1194,7 @@ function QuoteActionsMenu({
       </DropdownMenu>
 
       <QuoteEditDialog
+        presentation="drawer"
         quoteId={quoteId}
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
@@ -1238,6 +1251,7 @@ function QuoteActionsMenu({
       />
 
       <CreateTicketDialog
+        presentation="drawer"
         open={ticketCreate.showTicketDialog}
         onOpenChange={ticketCreate.setShowTicketDialog}
         clientName={clientName || quote.quoteTitle || "this client"}
@@ -1399,7 +1413,12 @@ function BookingActionsMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <BookingEditDialog bookingId={bookingId} open={showEditDialog} onOpenChange={setShowEditDialog} />
+      <BookingEditDialog
+        presentation="drawer"
+        bookingId={bookingId}
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+      />
       <BookingUpsellsDialog bookingId={bookingId} open={showUpsellsDialog} onOpenChange={setShowUpsellsDialog} />
       <QuoteDeleteDialog
         open={showDeleteDialog}
@@ -1607,6 +1626,7 @@ function EnquiryActionsMenu({
       </DropdownMenu>
 
       <EnquiryWizard
+        presentation="drawer"
         open={showEditWizard}
         onOpenChange={setShowEditWizard}
         enquiry={enquiry as any}

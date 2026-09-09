@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -313,7 +314,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
           </div>
           <div className="grid gap-2">
             <Label htmlFor="dueDate">Due Date</Label>
-            <Input id="dueDate" type="date" value={formData.dueDate} onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })} data-testid="input-due-date" />
+            <DatePicker id="dueDate" value={formData.dueDate} onChange={(dueDate) => setFormData({ ...formData, dueDate })} className="h-9 rounded-md" data-testid="input-due-date" />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="description">Description</Label>

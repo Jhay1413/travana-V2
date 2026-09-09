@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 
 interface QuoteExpiryDialogProps {
@@ -41,11 +42,10 @@ export function QuoteExpiryDialog({
         <div className="mt-3 grid gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-black/60">Expiry Date</Label>
-            <input
-              type="date"
+            <DatePicker
               value={expiryDate}
-              onChange={(e) => onExpiryDateChange(e.target.value)}
-              className="h-9 w-full rounded-xl border border-black/10 bg-white/70 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              onChange={onExpiryDateChange}
+              className="h-9"
               data-testid="input-expiry-date"
             />
           </div>

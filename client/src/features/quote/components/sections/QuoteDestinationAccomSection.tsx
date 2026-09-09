@@ -22,9 +22,15 @@ import { AddResortModal } from "@/features/lookups/components/lookups/add-resort
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
 import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
-import type { QuoteFormValues } from "@/features/quote/types";
+import {
+  FormDrawerSection,
+  drawerControlClass,
+  drawerInputClass,
+  drawerLabelClass,
+} from "@/components/shared/form-drawer";
+import type { QuoteFormValues, FormLayout } from "@/features/quote/types";
 
-export function QuoteDestinationAccomSection() {
+export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: FormLayout } = {}) {
   const { control, setValue } = useFormContext<QuoteFormValues>();
   const country = useWatch({ control, name: "country" });
   const destination = useWatch({ control, name: "destination" });
@@ -78,18 +84,29 @@ export function QuoteDestinationAccomSection() {
   const { data: boardBasisData } = useBoardBasis();
   const { data: roomTypeData } = useRoomTypes();
 
-  return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-      <SectionHeader icon={MapPin} title="Destination & Accommodation" />
-      <div className="grid gap-3 md:grid-cols-2">
+  const isDrawer = layout === "drawer";
+  const labelCls = isDrawer ? drawerLabelClass : "text-xs font-medium text-black/60";
+  const inputCls = isDrawer ? drawerInputClass : "h-9 rounded-xl border-black/10 bg-white/70";
+  const controlCls = isDrawer ? drawerControlClass : undefined;
+  const itemCls = isDrawer ? "space-y-1.5" : undefined;
+
+  // Drawer bar reads "Hotel - <accommodation>, <destination>" from the current
+  // selection; the by-id lookups cover values loaded with the record.
+  const accomName = selectedAccommodations?.[0]?.name || accomLabel;
+  const destName = selectedDestinations?.[0]?.name || destLabel;
+  const hotelTitle = `Hotel${accomName ? ` - ${accomName}` : ""}${destName ? `, ${destName}` : ""}`;
+
+  const body = (
+      <div className={isDrawer ? "grid grid-cols-3 gap-x-6 gap-y-4" : "grid gap-3 md:grid-cols-2"}>
         <FormField
           control={control}
           name="country"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Country</FormLabel>
+            <FormItem className={itemCls}>
+              <FormLabel className={labelCls}>Country</FormLabel>
               <FormControl>
                 <SearchableSelect
+                  className={controlCls}
                   options={(countriesData || []).map((c: { id: string; country_name: string }) => ({
                     value: c.id,
                     label: c.country_name,
@@ -116,10 +133,11 @@ export function QuoteDestinationAccomSection() {
           control={control}
           name="destination"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Destination</FormLabel>
+            <FormItem className={itemCls}>
+              <FormLabel className={labelCls}>Destination</FormLabel>
               <FormControl>
                 <SearchableSelect
+                  className={controlCls}
                   options={withSelected(destinationsData, selectedDestinations)}
                   value={field.value ?? ""}
                   onValueChange={(value) => {
@@ -152,10 +170,11 @@ export function QuoteDestinationAccomSection() {
           control={control}
           name="resort"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Resort</FormLabel>
+            <FormItem className={itemCls}>
+              <FormLabel className={labelCls}>Resort</FormLabel>
               <FormControl>
                 <SearchableSelect
+                  className={controlCls}
                   options={withSelected(resortsData, selectedResorts)}
                   value={field.value ?? ""}
                   selectedLabel={resortLabel}
@@ -193,10 +212,11 @@ export function QuoteDestinationAccomSection() {
           control={control}
           name="accommodationId"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Accommodation</FormLabel>
+            <FormItem className={itemCls}>
+              <FormLabel className={labelCls}>Accommodation</FormLabel>
               <FormControl>
                 <SearchableSelect
+                  className={controlCls}
                   options={withSelected(accommodationsData, selectedAccommodations)}
                   value={field.value ?? ""}
                   selectedLabel={accomLabel}
@@ -332,10 +352,11 @@ export function QuoteDestinationAccomSection() {
           control={control}
           name="boardBasisId"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Board Basis</FormLabel>
+            <FormItem className={itemCls}>
+              <FormLabel className={labelCls}>{isDrawer ? "Board Type" : "Board Basis"}</FormLabel>
               <FormControl>
                 <SearchableSelect
+                  className={controlCls}
                   options={(boardBasisData || []).map((b: { id: string; type: string }) => ({
                     value: b.id,
                     label: b.type,
@@ -357,10 +378,11 @@ export function QuoteDestinationAccomSection() {
           control={control}
           name="roomType"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Room Type</FormLabel>
+            <FormItem className={itemCls}>
+              <FormLabel className={labelCls}>Room Type</FormLabel>
               <FormControl>
                 <SearchableSelect
+                  className={controlCls}
                   options={(roomTypeData || []).map((r: { id: string; name: string | null }) => ({
                     value: r.id,
                     label: r.name || r.id,
@@ -382,10 +404,10 @@ export function QuoteDestinationAccomSection() {
           control={control}
           name="checkInDate"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Check-in Date</FormLabel>
+            <FormItem className={itemCls}>
+              <FormLabel className={labelCls}>Check-in Date</FormLabel>
               <FormControl>
-                <DatePicker value={field.value ?? ""} onChange={field.onChange} />
+                <DatePicker value={field.value ?? ""} onChange={field.onChange} className={controlCls} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -396,16 +418,30 @@ export function QuoteDestinationAccomSection() {
           control={control}
           name="checkInTime"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Check-in Time</FormLabel>
+            <FormItem className={itemCls}>
+              <FormLabel className={labelCls}>Check-in Time</FormLabel>
               <FormControl>
-                <Input type="time" {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" />
+                <Input type="time" {...field} value={field.value ?? ""} className={inputCls} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
       </div>
+  );
+
+  if (isDrawer) {
+    return (
+      <FormDrawerSection title={hotelTitle} data-testid="drawer-section-hotel">
+        {body}
+      </FormDrawerSection>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
+      <SectionHeader icon={MapPin} title="Destination & Accommodation" />
+      {body}
     </div>
   );
 }

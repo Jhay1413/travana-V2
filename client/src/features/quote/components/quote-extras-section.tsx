@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -190,7 +191,7 @@ function TransferExtra({ control, index, tourOperatorOptions, mainTourOperatorId
         <FormField control={control} name={`${p}.pickUpDate` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Pick-up Date</FormLabel>
-            <FormControl><Input type="date" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpTime` as any} render={({ field }) => (
@@ -202,7 +203,7 @@ function TransferExtra({ control, index, tourOperatorOptions, mainTourOperatorId
         <FormField control={control} name={`${p}.dropOffDate` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Drop-off Date</FormLabel>
-            <FormControl><Input type="date" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffTime` as any} render={({ field }) => (
@@ -258,7 +259,7 @@ function CarHireExtra({ control, index, tourOperatorOptions, mainTourOperatorId,
         <FormField control={control} name={`${p}.pickUpDate` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Pick-up Date</FormLabel>
-            <FormControl><Input type="date" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpTime` as any} render={({ field }) => (
@@ -270,7 +271,7 @@ function CarHireExtra({ control, index, tourOperatorOptions, mainTourOperatorId,
         <FormField control={control} name={`${p}.dropOffDate` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Drop-off Date</FormLabel>
-            <FormControl><Input type="date" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffTime` as any} render={({ field }) => (
@@ -326,7 +327,7 @@ function AttractionTicketExtra({ control, index, tourOperatorOptions, mainTourOp
         <FormField control={control} name={`${p}.dateOfVisit` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Date of Visit</FormLabel>
-            <FormControl><Input type="date" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.numberOfTickets` as any} render={({ field }) => (
@@ -379,7 +380,7 @@ function LoungePassExtra({ control, index, tourOperatorOptions, airportOptions, 
         <FormField control={control} name={`${p}.dateOfUsage` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Date of Usage</FormLabel>
-            <FormControl><Input type="date" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
           </FormItem>
         )} />
         <BookingRefTourOpFields control={control} prefix={p} tourOperatorOptions={tourOperatorOptions} />
@@ -443,7 +444,7 @@ function AirportParkingExtra({ control, index, tourOperatorOptions, airportOptio
         <FormField control={control} name={`${p}.parkingDate` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Parking Date</FormLabel>
-            <FormControl><Input type="date" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.duration` as any} render={({ field }) => (
@@ -608,7 +609,7 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
         <FormField control={control} name={`${p}.checkInDate` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Check-in Date</FormLabel>
-            <FormControl><Input type="date" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.checkInTime` as any} render={({ field }) => (
@@ -637,7 +638,7 @@ function ExtraAccommodationExtra({ control, index, initialLabel, tourOperatorOpt
 
 // ─── Main Extras Section ──────────────────────────────────────────────────────
 
-export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourOperatorId = "", isCruise = false }: { control: Control<ExtrasFormValues>; initialAccomLabels?: string[]; mainTourOperatorId?: string; isCruise?: boolean }) {
+export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourOperatorId = "", isCruise = false, bare = false }: { control: Control<ExtrasFormValues>; initialAccomLabels?: string[]; mainTourOperatorId?: string; isCruise?: boolean; /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean }) {
   const formMethods = useFormContext();
   const { setValue } = formMethods;
   // The quote's selected destination lives on the same form — use it to
@@ -684,9 +685,9 @@ export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourO
   };
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-      <div className="mb-4 flex items-center justify-between">
-        <SectionHeader icon={PackagePlus} title="Extras" />
+    <div className={bare ? "" : "rounded-2xl border border-black/10 bg-white/70 p-4"}>
+      <div className={bare ? "mb-4 flex items-center justify-end" : "mb-4 flex items-center justify-between"}>
+        {!bare && <SectionHeader icon={PackagePlus} title="Extras" />}
         {totalExtras > 0 && (
           <span className="rounded-full bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
             {totalExtras} added
