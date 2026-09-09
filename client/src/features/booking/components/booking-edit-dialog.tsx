@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
+import { FormDrawer } from "@/components/shared/form-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateBooking, useUploadBookingImages, useAddBookingImageUrls, useDeleteBookingImage, useReconcileUpsells } from "@/hooks/mutations";
 import { useReorderBookingImages } from "@/features/booking/api/use-booking-image-mutations";
@@ -422,6 +423,7 @@ export function BookingEditDialog({
   onOpenChange,
   onSuccess,
   clientId,
+  presentation = "dialog",
 }: BookingUpdateDialogProps) {
   const { toast } = useToast();
   const updateBooking = useUpdateBooking();
@@ -551,41 +553,66 @@ export function BookingEditDialog({
     );
   };
 
+  const isDrawer = presentation === "drawer";
+  const description = "Update booking details, accommodation, flights, and pricing.";
+
+  const status = (
+    <>
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Spinner className="h-6 w-6" />
+        </div>
+      )}
+      {isError && (
+        <div className="py-12 text-center text-sm text-red-500">
+          Failed to load booking data.
+        </div>
+      )}
+    </>
+  );
+
+  const form = !isLoading && !isError && bookingData && (
+    <BookingRHFForm
+      key={bookingId + open}
+      layout={isDrawer ? "drawer" : "card"}
+      defaultValues={defaultValues}
+      initialExtraAccomLabels={initialExtraAccomLabels}
+      existingImages={existingImages}
+      onSubmit={handleSubmit}
+      isLoading={updateBooking.isPending}
+      submitLabel="Save Changes"
+      onCancel={isDrawer ? undefined : () => onOpenChange(false)}
+      clientId={clientId}
+    />
+  );
+
+  if (isDrawer) {
+    return (
+      <FormDrawer
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Create / Edit Booking"
+        description={description}
+        data-testid="booking-edit-drawer"
+      >
+        {status}
+        {form}
+      </FormDrawer>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
         <DialogHeader className="px-6 pt-6">
           <DialogTitle className="text-lg font-semibold">Edit Booking</DialogTitle>
-          <DialogDescription className="text-sm text-black/55">
-            Update booking details, accommodation, flights, and pricing.
-          </DialogDescription>
+          <DialogDescription className="text-sm text-black/55">{description}</DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-100px)]">
           <div className="px-6 pb-6">
-            {isLoading && (
-              <div className="flex items-center justify-center py-12">
-                <Spinner className="h-6 w-6" />
-              </div>
-            )}
-            {isError && (
-              <div className="py-12 text-center text-sm text-red-500">
-                Failed to load booking data.
-              </div>
-            )}
-            {!isLoading && !isError && bookingData && (
-              <BookingRHFForm
-                key={bookingId + open}
-                defaultValues={defaultValues}
-                initialExtraAccomLabels={initialExtraAccomLabels}
-                existingImages={existingImages}
-                onSubmit={handleSubmit}
-                isLoading={updateBooking.isPending}
-                submitLabel="Save Changes"
-                onCancel={() => onOpenChange(false)}
-                clientId={clientId}
-              />
-            )}
+            {status}
+            {form}
           </div>
         </ScrollArea>
       </DialogContent>

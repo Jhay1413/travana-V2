@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { FormImageItem } from "@/features/quote/lib/form-images";
+import type { FormLayout, FormPresentation, SharedHolidayFormValues } from "@/features/quote/types/quote-form.types";
 
 export const flightLegSchema = z.object({
   departAirportId: z.string().default(""),
@@ -194,6 +195,14 @@ export const bookingFormSchema = z.object({
 
 export type FlightLegValue = z.infer<typeof flightLegSchema>;
 export type BookingFormValues = z.infer<typeof bookingFormSchema>;
+
+// Compile-time guard: the shared drawer sections (quote/components/drawer-sections)
+// are mounted inside the booking form too, so its values must cover every
+// field they read. Fails to type-check if a shared field is renamed or dropped.
+type AssertTrue<T extends true> = T;
+export type BookingCoversSharedHolidayFields = AssertTrue<
+  BookingFormValues extends SharedHolidayFormValues ? true : false
+>;
 export type ExtrasFormValues = Pick<BookingFormValues, "transfers" | "carHires" | "attractionTickets" | "loungePasses" | "airportParkings" | "extraAccommodations">;
 export type UpsellsFormValues = Pick<BookingFormValues, "upsells">;
 export type UpsellItemValue = BookingFormValues["upsells"][number];
@@ -285,6 +294,7 @@ export interface BookingRHFFormProps {
   existingImages?: Array<{ id: string; url: string }>;
   initialImageUrls?: string[];
   clientId?: string;
+  layout?: FormLayout;
 }
 
 export interface BookingCreateDialogProps {
@@ -293,6 +303,7 @@ export interface BookingCreateDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: (bookingId: string) => void;
   initialValues?: Partial<BookingFormValues>;
+  presentation?: FormPresentation;
 }
 
 export interface BookingUpdateDialogProps {
@@ -301,4 +312,5 @@ export interface BookingUpdateDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   clientId?: string;
+  presentation?: FormPresentation;
 }

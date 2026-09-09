@@ -15,16 +15,18 @@ import type { QuoteFormValues, FlightLegValue } from "@/features/quote/types";
  * Airport picker that also lets the user create an airport inline when the one
  * they need isn't in the dropdown (mirrors the "Add Accommodation" flow).
  */
-function AirportSelectField({
+export function AirportSelectField({
   value,
   onValueChange,
   options,
   defaultCountryId,
+  className,
 }: {
   value: string;
   onValueChange: (v: string) => void;
   options: { value: string; label: string }[];
   defaultCountryId?: string;
+  className?: string;
 }) {
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -33,6 +35,7 @@ function AirportSelectField({
   return (
     <>
       <SearchableSelect
+        className={className}
         options={options}
         value={value}
         selectedLabel={addedLabel}
@@ -62,7 +65,7 @@ function AirportSelectField({
   );
 }
 
-const emptyFlightLeg: FlightLegValue = {
+export const emptyFlightLeg: FlightLegValue = {
   departAirportId: "",
   departAirport: "",
   arriveAirportId: "",
@@ -82,7 +85,7 @@ interface ConnectingLegFieldsProps {
   onRemove: () => void;
 }
 
-function ConnectingLegFields({ control, direction, index, airportOptions, onRemove }: ConnectingLegFieldsProps) {
+export function ConnectingLegFields({ control, direction, index, airportOptions, onRemove }: ConnectingLegFieldsProps) {
   const prefix =
     direction === "outbound"
       ? (`outboundConnectingLegs.${index}` as const)

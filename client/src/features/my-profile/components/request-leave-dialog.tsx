@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useRequestMyLeave } from "@/hooks/mutations";
@@ -115,24 +116,22 @@ export function RequestLeaveDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="leave-from">From</Label>
-              <Input
+              <DatePicker
                 id="leave-from"
-                type="date"
                 value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                required
+                onChange={setFrom}
+                className="h-9 rounded-md"
                 data-testid="input-leave-from"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="leave-to">To</Label>
-              <Input
+              <DatePicker
                 id="leave-to"
-                type="date"
                 value={to}
                 min={from}
-                onChange={(e) => setTo(e.target.value)}
-                required
+                onChange={setTo}
+                className="h-9 rounded-md"
                 data-testid="input-leave-to"
               />
             </div>

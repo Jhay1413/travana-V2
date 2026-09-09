@@ -11,7 +11,7 @@ import { useCruiseLines, useShips, useCruiseItineraries } from "@/hooks/queries"
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import type { QuoteFormValues } from "@/features/quote/types";
 
-export function QuoteCruiseDetailsSection() {
+export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean } = {}) {
   const { control, setValue, register } = useFormContext<QuoteFormValues>();
   const { fields: itineraryFields, append: appendItineraryDay, remove: removeItineraryDay } = useFieldArray({
     control,
@@ -49,8 +49,8 @@ export function QuoteCruiseDetailsSection() {
   }, [appendItineraryDay, itineraryFields.length]);
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-      <SectionHeader icon={Anchor} title="Cruise Details" />
+    <div className={bare ? "" : "rounded-2xl border border-black/10 bg-white/70 p-4"}>
+      {!bare && <SectionHeader icon={Anchor} title="Cruise Details" />}
 
       <FormField
         control={control}

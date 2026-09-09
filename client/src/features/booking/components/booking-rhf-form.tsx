@@ -19,7 +19,19 @@ import { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/
 import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues, UpsellsFormValues } from "@/features/booking/types";
 import { QuoteExtrasSection as BookingExtrasSection } from "@/features/quote/components/quote-extras-section";
 import { TRANSFER_TYPES } from "@/features/quote/types/quote-form.types";
+import { operatorCommissionPct, recomputePricing } from "@/features/quote/lib/pricing";
 import { BookingUpsellsSection } from "@/features/booking/components/BookingUpsellsSection";
+import { QuoteLodgeDetailsSection } from "@/features/quote/components/sections/QuoteLodgeDetailsSection";
+import { QuoteCruiseDetailsSection } from "@/features/quote/components/sections/QuoteCruiseDetailsSection";
+import { QuoteDestinationAccomSection } from "@/features/quote/components/sections/QuoteDestinationAccomSection";
+import {
+  QuoteDrawerOverview,
+  QuoteDrawerTravelSection,
+  QuoteDrawerFlightsSection,
+  QuoteDrawerCostingsSection,
+} from "@/features/quote/components/drawer-sections";
+import { FormDrawerSection, FormDrawerFooter, drawerLabelClass, drawerInputClass } from "@/components/shared/form-drawer";
+import { countExtras } from "@/features/quote/lib/form-extras";
 
 export { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/types";
 export type { BookingFormValues, FlightLegValue, BookingRHFFormProps } from "@/features/booking/types";
@@ -90,7 +102,7 @@ function SectionHeader({
 
 // ─── Tag Selector ─────────────────────────────────────────────────────────────
 
-function TagSelectorSection({ control }: { control: any }) {
+function TagSelectorSection({ control, bare = false }: { control: any; /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean }) {
   const { data: allTagsData = [] } = useTags();
   const allTagNames: string[] = allTagsData.map((t: any) => t.name);
   const [inputValue, setInputValue] = useState("");
@@ -134,87 +146,96 @@ function TagSelectorSection({ control }: { control: any }) {
         const filtered = allTagNames.filter(
           (t) => (!inputValue.trim() || t.toLowerCase().includes(inputValue.trim().toLowerCase())) && !selected.includes(t)
         );
-        return (
-          <FormItem>
-            <div className="rounded-2xl border border-black/10 bg-white/60 p-3">
-              <SectionHeader icon={Tag} title="Tags" />
-              {(allTagNames.length > 0 || selected.length > 0) && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {allTagNames.map((name) => {
-                    const isSelected = selected.includes(name);
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        onClick={() => toggle(name)}
-                        className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
-                          isSelected
-                            ? "border-blue-500/30 bg-blue-500/10 text-blue-700"
-                            : "border-black/10 bg-white/70 text-black/50 hover:border-black/20 hover:text-black/70"
-                        }`}
-                      >
-                        {isSelected && <span className="mr-1 text-blue-500">✓</span>}
-                        {name}
-                      </button>
-                    );
-                  })}
-                  {selected.filter((s) => !allTagNames.includes(s)).map((name) => (
+        const content = (
+          <>
+            {(allTagNames.length > 0 || selected.length > 0) && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {allTagNames.map((name) => {
+                  const isSelected = selected.includes(name);
+                  return (
                     <button
                       key={name}
                       type="button"
                       onClick={() => toggle(name)}
-                      className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-xs font-medium text-blue-700"
+                      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                        isSelected
+                          ? "border-blue-500/30 bg-blue-500/10 text-blue-700"
+                          : "border-black/10 bg-white/70 text-black/50 hover:border-black/20 hover:text-black/70"
+                      }`}
                     >
-                      <span className="mr-1 text-blue-500">✓</span>
+                      {isSelected && <span className="mr-1 text-blue-500">✓</span>}
                       {name}
-                      <X className="h-2.5 w-2.5" />
                     </button>
-                  ))}
-                </div>
-              )}
-              <div className="relative flex items-center gap-1.5">
-                <div className="relative flex-1">
-                  <Input
-                    ref={inputRef}
-                    placeholder="Add tag…"
-                    className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
-                    value={inputValue}
-                    onChange={(e) => { setInputValue(e.target.value); setShowSuggestions(true); }}
-                    onFocus={() => setShowSuggestions(true)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") { e.preventDefault(); addTag(inputValue); }
-                      if (e.key === "Escape") setShowSuggestions(false);
-                    }}
-                  />
-                  {showSuggestions && filtered.length > 0 && (
-                    <div
-                      ref={suggestionsRef}
-                      className="absolute left-0 top-full z-50 mt-1 max-h-32 w-full overflow-y-auto rounded-xl border border-black/10 bg-white shadow-lg"
-                    >
-                      {filtered.map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          className="w-full px-2.5 py-1.5 text-left text-[11px] text-black/70 transition hover:bg-black/[0.04]"
-                          onClick={() => addTag(t)}
-                        >
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <Button
-                  size="sm"
-                  type="button"
-                  className="h-7 rounded-xl bg-[#3b82f6] px-2.5 text-[10px] text-white hover:bg-[#3b82f6]/90"
-                  disabled={!inputValue.trim()}
-                  onClick={() => addTag(inputValue)}
-                >
-                  Add
-                </Button>
+                  );
+                })}
+                {selected.filter((s) => !allTagNames.includes(s)).map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => toggle(name)}
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-0.5 text-xs font-medium text-blue-700"
+                  >
+                    <span className="mr-1 text-blue-500">✓</span>
+                    {name}
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                ))}
               </div>
+            )}
+            <div className="relative flex items-center gap-1.5">
+              <div className="relative flex-1">
+                <Input
+                  ref={inputRef}
+                  placeholder="Add tag…"
+                  className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
+                  value={inputValue}
+                  onChange={(e) => { setInputValue(e.target.value); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); addTag(inputValue); }
+                    if (e.key === "Escape") setShowSuggestions(false);
+                  }}
+                />
+                {showSuggestions && filtered.length > 0 && (
+                  <div
+                    ref={suggestionsRef}
+                    className="absolute left-0 top-full z-50 mt-1 max-h-32 w-full overflow-y-auto rounded-xl border border-black/10 bg-white shadow-lg"
+                  >
+                    {filtered.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        className="w-full px-2.5 py-1.5 text-left text-[11px] text-black/70 transition hover:bg-black/[0.04]"
+                        onClick={() => addTag(t)}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button
+                size="sm"
+                type="button"
+                className="h-7 rounded-xl bg-[#3b82f6] px-2.5 text-[10px] text-white hover:bg-[#3b82f6]/90"
+                disabled={!inputValue.trim()}
+                onClick={() => addTag(inputValue)}
+              >
+                Add
+              </Button>
             </div>
+          </>
+        );
+        return (
+          <FormItem>
+            {bare ? (
+              content
+            ) : (
+              <div className="rounded-2xl border border-black/10 bg-white/60 p-3">
+                <SectionHeader icon={Tag} title="Tags" />
+                {content}
+              </div>
+            )}
           </FormItem>
         );
       }}
@@ -222,7 +243,7 @@ function TagSelectorSection({ control }: { control: any }) {
   );
 }
 
-function WalletCreditSection({ clientId, control, setValue }: { clientId: string; control: any; setValue: any }) {
+function WalletCreditSection({ clientId, control, setValue, bare = false }: { clientId: string; control: any; setValue: any; /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean }) {
   const { data, isLoading } = useQuery({
     queryKey: ["wallet-balance", clientId],
     queryFn: () => walletApi.getBalance(clientId),
@@ -232,62 +253,66 @@ function WalletCreditSection({ clientId, control, setValue }: { clientId: string
   const available = parseFloat(data ?? "0");
   const allocatedAmount = useWatch({ control, name: "walletCreditAmount" }) as number;
 
+  const content = isLoading ? (
+    <div className="h-8 w-48 animate-pulse rounded-xl bg-black/5" />
+  ) : available <= 0 ? (
+    <p className="text-xs text-black/40">No wallet balance available for this client.</p>
+  ) : (
+    <>
+      <div className="mb-3 flex items-center justify-between rounded-xl border border-black/8 bg-black/[0.02] px-3 py-2">
+        <span className="text-xs text-black/50">Available balance</span>
+        <span className="text-sm font-semibold text-black/80">£{available.toFixed(2)}</span>
+      </div>
+      <FormField
+        control={control}
+        name="walletCreditAmount"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="text-xs font-medium text-black/60">Amount to allocate (£)</FormLabel>
+            <div className="flex items-center gap-2">
+              <FormControl>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  max={available}
+                  placeholder="0.00"
+                  {...field}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    field.onChange(Math.min(val, available));
+                  }}
+                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                />
+              </FormControl>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 shrink-0 rounded-xl text-xs"
+                onClick={() => setValue("walletCreditAmount", available, { shouldDirty: true })}
+              >
+                Use all
+              </Button>
+            </div>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      {allocatedAmount > 0 && (
+        <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-50/50 p-3 text-xs text-emerald-800">
+          £{Number(allocatedAmount).toFixed(2)} will be applied as a booking credit when saved.
+        </div>
+      )}
+    </>
+  );
+
+  if (bare) return <>{content}</>;
+
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
       <SectionHeader icon={Wallet} title="Wallet Credit" />
-      {isLoading ? (
-        <div className="h-8 w-48 animate-pulse rounded-xl bg-black/5" />
-      ) : available <= 0 ? (
-        <p className="text-xs text-black/40">No wallet balance available for this client.</p>
-      ) : (
-        <>
-          <div className="mb-3 flex items-center justify-between rounded-xl border border-black/8 bg-black/[0.02] px-3 py-2">
-            <span className="text-xs text-black/50">Available balance</span>
-            <span className="text-sm font-semibold text-black/80">£{available.toFixed(2)}</span>
-          </div>
-          <FormField
-            control={control}
-            name="walletCreditAmount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-xs font-medium text-black/60">Amount to allocate (£)</FormLabel>
-                <div className="flex items-center gap-2">
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min={0}
-                      max={available}
-                      placeholder="0.00"
-                      {...field}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value) || 0;
-                        field.onChange(Math.min(val, available));
-                      }}
-                      className="h-9 rounded-xl border-black/10 bg-white/70"
-                    />
-                  </FormControl>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 shrink-0 rounded-xl text-xs"
-                    onClick={() => setValue("walletCreditAmount", available, { shouldDirty: true })}
-                  >
-                    Use all
-                  </Button>
-                </div>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          {allocatedAmount > 0 && (
-            <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-50/50 p-3 text-xs text-emerald-800">
-              £{Number(allocatedAmount).toFixed(2)} will be applied as a booking credit when saved.
-            </div>
-          )}
-        </>
-      )}
+      {content}
     </div>
   );
 }
@@ -302,11 +327,20 @@ export function BookingRHFForm({
   existingImages = [],
   initialImageUrls = [],
   clientId,
+  layout = "card",
 }: BookingRHFFormProps) {
+  const isDrawer = layout === "drawer";
   const form = useForm<BookingFormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: { ...defaultBookingFormValues, ...defaultValues },
   });
+
+  // Optional drawer sections start collapsed when the record has nothing in
+  // them. Read once at mount — it only seeds the initial open state.
+  const [initialExtrasCount] = useState(() => countExtras(form.getValues()));
+  const [initialUpsellsCount] = useState(() => (form.getValues("upsells") ?? []).length);
+  const [initialTagsCount] = useState(() => (form.getValues("tags") ?? []).length);
+
   // One ordered list — see features/quote/lib/form-images. Saved images first,
   // then anything pre-seeded from a JSON import.
   const [imageItems, setImageItems] = useState<FormImageItem[]>(() => [
@@ -684,8 +718,134 @@ export function BookingRHFForm({
           });
           scrollToFirstFormError();
         },
-      )} className="space-y-4">
+      )} className={isDrawer ? "relative" : "space-y-4"} data-form-layout={layout}>
 
+        {isDrawer ? (
+          <>
+            {/* ── DRAWER LAYOUT: teal section bars, full-bleed ─────────────── */}
+            <div className="flex items-center justify-end px-7 pt-5">
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
+                <Upload className="h-3.5 w-3.5" />
+                Import JSON
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleJsonUpload(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            <div className="grid grid-cols-2 gap-x-6 px-7 pt-4" data-testid="drawer-booking-refs">
+              <FormField
+                control={control}
+                name="haysRef"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className={drawerLabelClass}>Hays Ref</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        className={drawerInputClass}
+                        placeholder="Enter Hays reference..."
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name="supplierRef"
+                render={({ field }) => (
+                  <FormItem className="space-y-1.5">
+                    <FormLabel className={drawerLabelClass}>Supplier Ref</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        className={drawerInputClass}
+                        placeholder="Enter supplier reference..."
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <QuoteDrawerOverview titleLabel="Booking Title" showQuoteLink={false} />
+            <QuoteDrawerTravelSection showCruiseStay={isCruise} />
+            {isHotTubBreak && (
+              <FormDrawerSection title="Lodge Details" data-testid="drawer-section-lodge">
+                <QuoteLodgeDetailsSection bare />
+              </FormDrawerSection>
+            )}
+            {isCruise && (
+              <FormDrawerSection title="Cruise Details" data-testid="drawer-section-cruise">
+                <QuoteCruiseDetailsSection bare />
+              </FormDrawerSection>
+            )}
+            {!isHotTubBreak && !isCruise && <QuoteDestinationAccomSection layout="drawer" />}
+            {showFlights && <QuoteDrawerFlightsSection />}
+            {/* Cruise pre/post-stay rows are managed by an effect inside the
+                extras section, so it must stay mounted for cruises. */}
+            <FormDrawerSection
+              title="Extras"
+              defaultOpen={initialExtrasCount > 0 || isCruise}
+              collapsible={!isCruise}
+              data-testid="drawer-section-extras"
+            >
+              <BookingExtrasSection
+                bare
+                control={control as unknown as Control<ExtrasFormValues>}
+                initialAccomLabels={initialExtraAccomLabels}
+                mainTourOperatorId={tourOperatorId ?? ""}
+                isCruise={isCruise}
+              />
+            </FormDrawerSection>
+            <FormDrawerSection title="Upsells" defaultOpen={initialUpsellsCount > 0} data-testid="drawer-section-upsells">
+              <BookingUpsellsSection
+                bare
+                control={control as unknown as Control<UpsellsFormValues>}
+                setValue={setValue as unknown as UseFormSetValue<UpsellsFormValues>}
+              />
+            </FormDrawerSection>
+            <QuoteImagesSection
+              layout="drawer"
+              items={imageItems}
+              setItems={setImageItems}
+              setDeletedImageIds={setDeletedImageIds}
+            />
+            <QuoteDrawerCostingsSection />
+            {clientId && (
+              <FormDrawerSection title="Wallet Credit" data-testid="drawer-section-wallet-credit">
+                <WalletCreditSection bare clientId={clientId} control={control} setValue={setValue} />
+              </FormDrawerSection>
+            )}
+            <FormDrawerSection title="Tags" defaultOpen={initialTagsCount > 0} data-testid="drawer-section-tags">
+              <TagSelectorSection bare control={control} />
+            </FormDrawerSection>
+            <FormField
+              control={control}
+              name="is_test"
+              render={({ field }) => (
+                <FormDrawerFooter
+                  isTest={field.value}
+                  onTestChange={field.onChange}
+                  isLoading={isLoading}
+                  submitLabel={submitLabel}
+                  data-testid="drawer-footer"
+                />
+              )}
+            />
+          </>
+        ) : (
+          <>
         <div className="flex items-center justify-end">
           <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
             <Upload className="h-3.5 w-3.5" />
@@ -1957,39 +2117,28 @@ export function BookingRHFForm({
                         step="0.01"
                         {...field}
                         onChange={(e) => {
-                          // Capture the previous discount / service charge BEFORE RHF updates them,
-                          // so we can adjust commission by the delta when there is no operator base.
-                          const prevDiscount = Number(form.getValues("discount")) || 0;
-                          const prevServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-                          field.onChange(e);
-                          if (name === "price" || name === "discount" || name === "serviceCharge") {
-                            const currentPrice = name === "price" ? parseFloat(e.target.value) || 0 : Number(form.getValues("price")) || 0;
-                            const currentDiscount = name === "discount" ? parseFloat(e.target.value) || 0 : prevDiscount;
-                            const currentServiceCharge = name === "serviceCharge" ? parseFloat(e.target.value) || 0 : prevServiceCharge;
-
-                            const currentOperatorId = form.getValues("tourOperatorId");
-                            const op = currentOperatorId ? tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId) : undefined;
-
-                            if (op?.commission_percentage != null && currentPrice > 0) {
-                              // Commission = price × operator % − discount + service charge.
-                              const operatorCommission = (currentPrice * parseFloat(op.commission_percentage)) / 100;
-                              const adjustedCommission = operatorCommission - currentDiscount + currentServiceCharge;
-                              setValue("commission", parseFloat(adjustedCommission.toFixed(2)), { shouldValidate: true, shouldDirty: true });
-                            } else if (name === "discount" || name === "serviceCharge") {
-                              // No operator base to recompute from — adjust the existing commission by
-                              // the change: discount is deducted, service charge is added.
-                              const currentCommission = Number(form.getValues("commission")) || 0;
-                              const delta = name === "discount" ? prevDiscount - currentDiscount : currentServiceCharge - prevServiceCharge;
-                              setValue("commission", parseFloat((currentCommission + delta).toFixed(2)), { shouldValidate: true, shouldDirty: true });
-                            }
-
-                            // Price per person = (salesPrice − discount + serviceCharge) / (adults + children)
-                            const adults = Number(form.getValues("passengersAdults")) || 0;
-                            const children = Number(form.getValues("passengersChildren")) || 0;
-                            const total = adults + children;
-                            const netPrice = currentPrice - currentDiscount + currentServiceCharge;
-                            setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
+                          if (name !== "price" && name !== "discount" && name !== "serviceCharge") {
+                            field.onChange(e);
+                            return;
                           }
+                          // Snapshot BEFORE RHF updates the field so the no-operator
+                          // path can diff the old and new discount / service charge.
+                          const currentOperatorId = form.getValues("tourOperatorId");
+                          const op = currentOperatorId ? tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId) : undefined;
+                          const result = recomputePricing(name, parseFloat(e.target.value) || 0, {
+                            price: Number(form.getValues("price")) || 0,
+                            discount: Number(form.getValues("discount")) || 0,
+                            serviceCharge: Number(form.getValues("serviceCharge")) || 0,
+                            commission: Number(form.getValues("commission")) || 0,
+                            adults: Number(form.getValues("passengersAdults")) || 0,
+                            children: Number(form.getValues("passengersChildren")) || 0,
+                            operatorCommissionPct: operatorCommissionPct(op),
+                          });
+                          field.onChange(e);
+                          if (result.commission != null) {
+                            setValue("commission", result.commission, { shouldValidate: true, shouldDirty: true });
+                          }
+                          setValue("pricePerPerson", result.pricePerPerson);
                         }}
                         className="h-9 rounded-xl border-black/10 bg-white/70"
                         min={0}
@@ -2037,6 +2186,8 @@ export function BookingRHFForm({
             {isLoading ? "Saving..." : submitLabel}
           </Button>
         </div>
+          </>
+        )}
       </form>
     </Form>
   );

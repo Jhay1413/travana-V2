@@ -291,6 +291,27 @@ export const defaultQuoteFormValues: QuoteFormValues = {
 
 // ─── Component Prop Types ─────────────────────────────────────────────────────
 
+/** Lead-source options offered on quote and booking forms (stored as-is). */
+export const LEAD_SOURCES = ["SHOP", "FACEBOOK", "WHATSAPP", "INSTAGRAM", "PHONE_ENQUIRY"] as const;
+
+/**
+ * The fields the quote and booking forms have in common. The drawer sections
+ * under `components/drawer-sections/` are typed against this so they can be
+ * mounted inside either form; `booking-form.types.ts` asserts at compile time
+ * that `BookingFormValues` still covers it.
+ */
+export type SharedHolidayFormValues = Omit<QuoteFormValues, "quoteLink" | "status" | "not_for_social">;
+
+/**
+ * How a form is laid out. "card" is the stacked-cards look used inside modal
+ * dialogs; "drawer" is the teal-bar section look used inside the right-hand
+ * Create / Edit drawer on the client dashboard.
+ */
+export type FormLayout = "card" | "drawer";
+
+/** How an edit form is presented: a centered modal or the right-hand drawer. */
+export type FormPresentation = "dialog" | "drawer";
+
 export interface QuoteRHFFormProps {
   defaultValues?: Partial<QuoteFormValues>;
   onSubmit: (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[]; items?: FormImageItem[] }) => Promise<void> | void;
@@ -300,6 +321,7 @@ export interface QuoteRHFFormProps {
   existingImages?: { id: string; url: string }[];
   initialImageUrls?: string[];
   initialExtraAccomLabels?: string[];
+  layout?: FormLayout;
 }
 
 export interface QuoteEditDialogProps {
@@ -307,6 +329,7 @@ export interface QuoteEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  presentation?: FormPresentation;
 }
 
 export interface QuoteCreateDialogProps {
@@ -328,4 +351,5 @@ export interface QuoteCreateDialogProps {
    * the create path can't carry them, since the form never loads them.
    */
   duplicateFromQuoteId?: string;
+  presentation?: FormPresentation;
 }

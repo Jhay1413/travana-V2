@@ -200,9 +200,12 @@ function UpsellRow({
 export function BookingUpsellsSection({
   control,
   setValue,
+  bare = false,
 }: {
   control: Control<UpsellsFormValues>;
   setValue: UseFormSetValue<UpsellsFormValues>;
+  /** Render without the card wrapper and header (inside a drawer section). */
+  bare?: boolean;
 }) {
   // keyName must NOT be the default "id" — each upsell row carries its own
   // persisted `id`, and the default would overwrite it and strip it on submit,
@@ -210,10 +213,10 @@ export function BookingUpsellsSection({
   const { fields, append, remove } = useFieldArray({ control, name: "upsells", keyName: "_fieldId" });
   const { data: tourOperatorsData = [] } = useTourOperators();
 
-  return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-      <div className="mb-1 flex items-center justify-between">
-        <SectionHeader icon={PackagePlus} title="Upsells" />
+  const content = (
+    <>
+      <div className={bare ? "mb-1 flex items-center justify-end" : "mb-1 flex items-center justify-between"}>
+        {!bare && <SectionHeader icon={PackagePlus} title="Upsells" />}
         {fields.length > 0 && (
           <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-600">
             {fields.length} added
@@ -260,6 +263,10 @@ export function BookingUpsellsSection({
         <Plus className="h-3.5 w-3.5" />
         Add Upsell
       </Button>
-    </div>
+    </>
   );
+
+  if (bare) return content;
+
+  return <div className="rounded-2xl border border-black/10 bg-white/70 p-4">{content}</div>;
 }

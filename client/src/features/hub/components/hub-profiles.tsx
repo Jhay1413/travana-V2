@@ -59,6 +59,7 @@ import axiosClient from "@/api/client/axios-client";
 import { useCurrentUser, useMyProfit, useUsers } from "@/hooks/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -2087,11 +2088,11 @@ function RequestLeaveDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>From</Label>
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} data-testid="input-request-from" />
+              <DatePicker value={from} onChange={setFrom} className="h-9 rounded-md" data-testid="input-request-from" />
             </div>
             <div className="space-y-1.5">
               <Label>To</Label>
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} data-testid="input-request-to" />
+              <DatePicker value={to} min={from} onChange={setTo} className="h-9 rounded-md" data-testid="input-request-to" />
             </div>
           </div>
           <div className="space-y-1.5">

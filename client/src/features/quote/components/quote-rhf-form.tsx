@@ -39,11 +39,18 @@ import type { QuoteFormValues, QuoteRHFFormProps } from "@/features/quote/types"
 
 export { quoteFormSchema, defaultQuoteFormValues } from "@/features/quote/types";
 export type { QuoteFormValues, FlightLegValue, QuoteRHFFormProps } from "@/features/quote/types";
-import { Form } from "@/components/ui/form";
+import { Form, FormField } from "@/components/ui/form";
+import { FormDrawerSection, FormDrawerFooter, FormDrawerCheckbox } from "@/components/shared/form-drawer";
+import {
+  QuoteDrawerOverview,
+  QuoteDrawerTravelSection,
+  QuoteDrawerFlightsSection,
+  QuoteDrawerCostingsSection,
+} from "@/features/quote/components/drawer-sections";
+import { countExtras } from "@/features/quote/lib/form-extras";
 import { useAirports, useTourOperators, usePackageTypes, lookupKeys } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
 import { summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
-
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
@@ -56,11 +63,18 @@ export function QuoteRHFForm({
   existingImages = [],
   initialImageUrls = [],
   initialExtraAccomLabels = [],
+  layout = "card",
 }: QuoteRHFFormProps) {
+  const isDrawer = layout === "drawer";
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
     defaultValues: { ...defaultQuoteFormValues, ...defaultValues },
   });
+
+  // Optional drawer sections start collapsed when the record has nothing in
+  // them. Read once at mount — it only seeds the initial open state.
+  const [initialExtrasCount] = useState(() => countExtras(form.getValues()));
+  const [initialTagsCount] = useState(() => (form.getValues("tags") ?? []).length);
 
   // Saved images first, then anything pre-seeded from a JSON import. One
   // ordered list — see features/quote/lib/form-images.
@@ -316,7 +330,7 @@ export function QuoteRHFForm({
           });
           scrollToFirstFormError();
         },
-      )} className="relative space-y-4">
+      )} className={isDrawer ? "relative" : "relative space-y-4"} data-form-layout={layout}>
 
         {/* ── IMPORT LOADER (blurs the form while a JSON/URL import runs) ───── */}
         {isImporting && (
@@ -332,6 +346,86 @@ export function QuoteRHFForm({
           </div>
         )}
 
+        {isDrawer ? (
+          <>
+            {/* ── DRAWER LAYOUT: teal section bars, full-bleed ─────────────── */}
+            <div className="px-7 pt-5">
+              <QuoteImportRow
+                hideNotForSocial
+                onJsonUpload={handleJsonUpload}
+                onPageCaptureImport={handlePageCaptureImport}
+                pageCapturePending={pageCaptureImport.isPending}
+              />
+            </div>
+            <QuoteDrawerOverview />
+            <QuoteDrawerTravelSection showCruiseStay={isCruise} />
+            {isHotTubBreak && (
+              <FormDrawerSection title="Lodge Details" data-testid="drawer-section-lodge">
+                <QuoteLodgeDetailsSection bare />
+              </FormDrawerSection>
+            )}
+            {isCruise && (
+              <FormDrawerSection title="Cruise Details" data-testid="drawer-section-cruise">
+                <QuoteCruiseDetailsSection bare />
+              </FormDrawerSection>
+            )}
+            {!isHotTubBreak && !isCruise && <QuoteDestinationAccomSection layout="drawer" />}
+            {showFlights && <QuoteDrawerFlightsSection />}
+            {/* Cruise pre/post-stay rows are managed by an effect inside the
+                extras section, so it must stay mounted for cruises. */}
+            <FormDrawerSection
+              title="Extras"
+              defaultOpen={initialExtrasCount > 0 || isCruise}
+              collapsible={!isCruise}
+              data-testid="drawer-section-extras"
+            >
+              <QuoteExtrasSection
+                bare
+                control={control as unknown as Control<ExtrasFormValues>}
+                initialAccomLabels={initialExtraAccomLabels}
+                mainTourOperatorId={tourOperatorId ?? ""}
+                isCruise={isCruise}
+              />
+            </FormDrawerSection>
+            <QuoteImagesSection
+              layout="drawer"
+              items={imageItems}
+              setItems={setImageItems}
+              setDeletedImageIds={setDeletedImageIds}
+            />
+            <QuoteDrawerCostingsSection />
+            <FormDrawerSection title="Tags" defaultOpen={initialTagsCount > 0} data-testid="drawer-section-tags">
+              <QuoteTagsSection bare />
+            </FormDrawerSection>
+            <FormField
+              control={control}
+              name="is_test"
+              render={({ field }) => (
+                <FormDrawerFooter
+                  isTest={field.value}
+                  onTestChange={field.onChange}
+                  isLoading={isLoading}
+                  submitLabel={submitLabel}
+                  data-testid="drawer-footer"
+                >
+                  <FormField
+                    control={control}
+                    name="not_for_social"
+                    render={({ field: social }) => (
+                      <FormDrawerCheckbox
+                        label="Not for social"
+                        checked={!!social.value}
+                        onCheckedChange={social.onChange}
+                        data-testid="form-drawer-not-for-social"
+                      />
+                    )}
+                  />
+                </FormDrawerFooter>
+              )}
+            />
+          </>
+        ) : (
+          <>
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
         <QuoteImportRow
           onJsonUpload={handleJsonUpload}
@@ -406,6 +500,8 @@ export function QuoteRHFForm({
 
         {/* ── ACTIONS ───────────────────────────────────────────────────────── */}
         <QuoteFormActions isLoading={isLoading} submitLabel={submitLabel} onCancel={onCancel} />
+          </>
+        )}
       </form>
     </Form>
   );

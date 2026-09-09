@@ -4,6 +4,7 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/comp
 import { Input } from "@/components/ui/input";
 import { useTourOperators } from "@/hooks/queries";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
+import { operatorCommissionPct, recomputePricing } from "@/features/quote/lib/pricing";
 import type { QuoteFormValues } from "@/features/quote/types";
 
 const FIELDS = [
@@ -51,39 +52,28 @@ export function QuotePricingSection() {
                     step="0.01"
                     {...field}
                     onChange={(e) => {
-                      // Capture the previous discount / service charge BEFORE RHF updates them,
-                      // so we can adjust commission by the delta when there is no operator base.
-                      const prevDiscount = Number(getValues("discount")) || 0;
-                      const prevServiceCharge = Number(getValues("serviceCharge")) || 0;
-                      field.onChange(e);
-                      if (name === "price" || name === "discount" || name === "serviceCharge") {
-                        const nextPrice = name === "price" ? parseFloat(e.target.value) || 0 : Number(getValues("price")) || 0;
-                        const nextDiscount = name === "discount" ? parseFloat(e.target.value) || 0 : prevDiscount;
-                        const nextServiceCharge = name === "serviceCharge" ? parseFloat(e.target.value) || 0 : prevServiceCharge;
-
-                        const currentOperatorId = getValues("tourOperatorId");
-                        const op = currentOperatorId ? tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId) : undefined;
-
-                        if (op?.commission_percentage != null && nextPrice > 0) {
-                          // Commission = price × operator % − discount + service charge.
-                          const operatorCommission = (nextPrice * parseFloat(op.commission_percentage)) / 100;
-                          const adjustedCommission = operatorCommission - nextDiscount + nextServiceCharge;
-                          setValue("commission", parseFloat(adjustedCommission.toFixed(2)), { shouldValidate: true, shouldDirty: true });
-                        } else if (name === "discount" || name === "serviceCharge") {
-                          // No operator base to recompute from — adjust the existing commission by
-                          // the change: discount is deducted, service charge is added.
-                          const currentCommission = Number(getValues("commission")) || 0;
-                          const delta = name === "discount" ? prevDiscount - nextDiscount : nextServiceCharge - prevServiceCharge;
-                          setValue("commission", parseFloat((currentCommission + delta).toFixed(2)), { shouldValidate: true, shouldDirty: true });
-                        }
-
-                        const adults = Number(getValues("passengersAdults")) || 0;
-                        const children = Number(getValues("passengersChildren")) || 0;
-                        const total = adults + children;
-                        // Total price = price − discount + service charge, split across passengers.
-                        const netPrice = nextPrice - nextDiscount + nextServiceCharge;
-                        setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
+                      if (name !== "price" && name !== "discount" && name !== "serviceCharge") {
+                        field.onChange(e);
+                        return;
                       }
+                      // Snapshot BEFORE RHF updates the field so the no-operator
+                      // path can diff the old and new discount / service charge.
+                      const currentOperatorId = getValues("tourOperatorId");
+                      const op = currentOperatorId ? tourOperatorsData?.find((o: { id: string }) => o.id === currentOperatorId) : undefined;
+                      const result = recomputePricing(name, parseFloat(e.target.value) || 0, {
+                        price: Number(getValues("price")) || 0,
+                        discount: Number(getValues("discount")) || 0,
+                        serviceCharge: Number(getValues("serviceCharge")) || 0,
+                        commission: Number(getValues("commission")) || 0,
+                        adults: Number(getValues("passengersAdults")) || 0,
+                        children: Number(getValues("passengersChildren")) || 0,
+                        operatorCommissionPct: operatorCommissionPct(op),
+                      });
+                      field.onChange(e);
+                      if (result.commission != null) {
+                        setValue("commission", result.commission, { shouldValidate: true, shouldDirty: true });
+                      }
+                      setValue("pricePerPerson", result.pricePerPerson);
                     }}
                     className="h-9 rounded-xl border-black/10 bg-white/70"
                     min={0}

@@ -13,7 +13,7 @@ import type { QuoteFormValues } from "@/features/quote/types";
 /** A known tag entity (id + name) — ids are needed for rename/delete. */
 type KnownTag = { id: string; name: string };
 
-export function QuoteTagsSection() {
+export function QuoteTagsSection({ bare = false }: { /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean } = {}) {
   const { control } = useFormContext<QuoteFormValues>();
   const { data: allTagsData = [] } = useTags();
   const allTags: KnownTag[] = allTagsData.map((t: any) => ({ id: t.id, name: t.name }));
@@ -128,8 +128,8 @@ export function QuoteTagsSection() {
 
         return (
           <FormItem>
-            <div className="rounded-2xl border border-black/10 bg-white/60 p-3">
-              <SectionHeader icon={Tag} title="Tags" />
+            <div className={bare ? "" : "rounded-2xl border border-black/10 bg-white/60 p-3"}>
+              {!bare && <SectionHeader icon={Tag} title="Tags" />}
               {(allTags.length > 0 || selected.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {allTags.map((tag) => {

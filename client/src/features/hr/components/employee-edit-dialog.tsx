@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/hooks/use-role";
@@ -201,7 +202,7 @@ export function DateField({ label, value, onChange, testId }: {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <Input type="date" value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} />
+      <DatePicker value={value} onChange={onChange} className="h-9 rounded-md" data-testid={testId} />
     </div>
   );
 }

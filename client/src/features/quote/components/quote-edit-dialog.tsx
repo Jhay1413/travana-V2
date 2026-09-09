@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
+import { FormDrawer } from "@/components/shared/form-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateQuote, useUpdateTransaction } from "@/hooks/mutations";
 import { useReorderQuoteImages } from "@/features/quote/api/use-quote-image-mutations";
@@ -497,6 +498,7 @@ export function QuoteEditDialog({
   open,
   onOpenChange,
   onSuccess,
+  presentation = "dialog",
 }: QuoteEditDialogProps) {
   const { toast } = useToast();
   const updateQuote = useUpdateQuote();
@@ -599,40 +601,65 @@ export function QuoteEditDialog({
       setIsUploadingImages(false);
     }
   };
+  const isDrawer = presentation === "drawer";
+  const description = "Update quote details, accommodation, flights, and pricing.";
+
+  const status = (
+    <>
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <Spinner className="h-6 w-6" />
+        </div>
+      )}
+      {isError && (
+        <div className="py-12 text-center text-sm text-red-500">
+          Failed to load quote data.
+        </div>
+      )}
+    </>
+  );
+
+  const form = !isLoading && !isError && quoteData && (
+    <QuoteRHFForm
+      key={quoteId + open}
+      layout={isDrawer ? "drawer" : "card"}
+      defaultValues={defaultValues}
+      existingImages={existingImages}
+      initialExtraAccomLabels={initialExtraAccomLabels}
+      onSubmit={handleSubmit}
+      isLoading={isUploadingImages || updateQuote.isPending}
+      submitLabel="Save Changes"
+      onCancel={isDrawer ? undefined : () => onOpenChange(false)}
+    />
+  );
+
+  if (isDrawer) {
+    return (
+      <FormDrawer
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Create / Edit Quote"
+        description={description}
+        data-testid="quote-edit-drawer"
+      >
+        {status}
+        {form}
+      </FormDrawer>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
         <DialogHeader className="px-6 pt-6">
           <DialogTitle className="text-lg font-semibold">Edit Quote</DialogTitle>
-          <DialogDescription className="text-sm text-black/55">
-            Update quote details, accommodation, flights, and pricing.
-          </DialogDescription>
+          <DialogDescription className="text-sm text-black/55">{description}</DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-100px)]">
           <div className="px-6 pb-6">
-            {isLoading && (
-              <div className="flex items-center justify-center py-12">
-                <Spinner className="h-6 w-6" />
-              </div>
-            )}
-            {isError && (
-              <div className="py-12 text-center text-sm text-red-500">
-                Failed to load quote data.
-              </div>
-            )}
-            {!isLoading && !isError && quoteData && (
-              <QuoteRHFForm
-                key={quoteId + open}
-                defaultValues={defaultValues}
-                existingImages={existingImages}
-                initialExtraAccomLabels={initialExtraAccomLabels}
-                onSubmit={handleSubmit}
-                isLoading={isUploadingImages || updateQuote.isPending}
-                submitLabel="Save Changes"
-                onCancel={() => onOpenChange(false)}
-              />
-            )}
+            {status}
+            {form}
           </div>
         </ScrollArea>
       </DialogContent>
