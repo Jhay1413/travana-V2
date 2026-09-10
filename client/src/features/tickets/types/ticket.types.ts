@@ -28,6 +28,9 @@ export interface Ticket {
   userName?: string | null;
   assignedToName?: string | null;
   replyCount?: number;
+  // Like state for the viewer, hydrated by the list / detail endpoints.
+  likeCount?: number;
+  likedByMe?: boolean;
 }
 
 export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt" | "dueDate" | "assignedTo" | "clientId"> & {

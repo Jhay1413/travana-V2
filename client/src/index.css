@@ -157,6 +157,44 @@
 }
 
 @layer utilities {
+  /*
+   * One knob for compact dashboards. Tailwind v4's text utilities read their
+   * size from these variables (text-sm → font-size: var(--text-sm)), so
+   * redefining them on a wrapper resizes every named size inside it. Two
+   * tiers: anything under the 3xl large-desktop width (1800px) steps down one
+   * notch, and anything under xl (1280px) steps down again. The pixel sizes
+   * the client page uses (13/15/17px) are arbitrary-value utilities that
+   * bypass the variables, so they are stepped down by selector. 10px and
+   * 11px are left alone — smaller than that stops being readable.
+   */
+  .text-compact {
+    @media (width < 112.5rem) {
+      --text-xs: 0.6875rem;   /* 12px → 11px */
+      --text-sm: 0.8125rem;   /* 14px → 13px */
+      --text-base: 0.9375rem; /* 16px → 15px */
+      --text-lg: 1rem;        /* 18px → 16px */
+      --text-xl: 1.125rem;    /* 20px → 18px */
+      --text-2xl: 1.25rem;    /* 24px → 20px */
+
+      .text-\[13px\] { font-size: 0.75rem; }   /* 13px → 12px */
+      .text-\[15px\] { font-size: 0.875rem; }  /* 15px → 14px */
+      .text-\[17px\] { font-size: 1rem; }      /* 17px → 16px */
+    }
+
+    @media (width < 80rem) {
+      --text-xs: 0.6875rem;   /* 11px */
+      --text-sm: 0.75rem;     /* 12px */
+      --text-base: 0.875rem;  /* 14px */
+      --text-lg: 0.9375rem;   /* 15px */
+      --text-xl: 1rem;        /* 16px */
+      --text-2xl: 1.125rem;   /* 18px */
+
+      .text-\[13px\] { font-size: 0.75rem; }   /* 12px */
+      .text-\[15px\] { font-size: 0.8125rem; } /* 13px */
+      .text-\[17px\] { font-size: 0.9375rem; } /* 15px */
+    }
+  }
+
   .app-shell {
     min-height: 100vh;
     background: hsl(var(--background));

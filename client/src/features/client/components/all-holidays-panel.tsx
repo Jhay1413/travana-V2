@@ -240,10 +240,13 @@ function NeutralChip({ label }: { label: string }) {
 function HolidayListRow({
   row,
   selected,
+  isLast = false,
   onSelect,
 }: {
   row: HolidayRowData;
   selected: boolean;
+  /** Last row in its list — the separator hairline is dropped so the list ends clean. */
+  isLast?: boolean;
   onSelect: () => void;
 }) {
   return (
@@ -297,7 +300,7 @@ function HolidayListRow({
           <span className="truncate text-xs text-[#a195a5] dark:text-white/50">{row.dateLine}</span>
         </div>
       )}
-      {!selected && (
+      {!selected && !isLast && (
         <span className="pointer-events-none absolute bottom-0 left-3 right-3 h-px bg-black/[0.06] dark:bg-white/[0.06]" aria-hidden />
       )}
     </div>
@@ -341,7 +344,8 @@ export function AllHolidaysPanel({
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
-  const [expiredOpen, setExpiredOpen] = useState(true);
+  // Expired holidays start collapsed so the live ones lead; the toggle reopens them.
+  const [expiredOpen, setExpiredOpen] = useState(false);
   const [hasUserSelectedTab, setHasUserSelectedTab] = useState(false);
   const autoSelectedRef = useRef(false);
 
@@ -545,10 +549,11 @@ export function AllHolidaysPanel({
         ) : (
           <>
             <div className="space-y-1">
-              {activeRows.map((row) => (
+              {activeRows.map((row, index) => (
                 <HolidayListRow
                   key={row.id}
                   row={row}
+                  isLast={index === activeRows.length - 1}
                   selected={selection?.type === row.type && selection.id === row.id}
                   onSelect={() => onSelect({ type: row.type, id: row.id })}
                 />
@@ -570,10 +575,11 @@ export function AllHolidaysPanel({
                 </button>
                 {expiredOpen && (
                   <div className="mt-1 space-y-1">
-                    {expiredRows.map((row) => (
+                    {expiredRows.map((row, index) => (
                       <HolidayListRow
                         key={row.id}
                         row={row}
+                        isLast={index === expiredRows.length - 1}
                         selected={selection?.type === row.type && selection.id === row.id}
                         onSelect={() => onSelect({ type: row.type, id: row.id })}
                       />

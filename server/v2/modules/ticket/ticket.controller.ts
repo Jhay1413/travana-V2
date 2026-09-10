@@ -3,6 +3,8 @@ import { ticketService } from "./ticket.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
+import { getUserId } from "../../utils/get-user-id";
+import { AppError } from "../../utils/error-handler";
 
 export const ticketController = {
   listTickets: asyncHandler(async (req: Request, res: Response) => {
@@ -45,5 +47,12 @@ export const ticketController = {
     const id = req.params.id as string;
     await ticketService.deleteTicket(id, getScope(req));
     res.status(204).send();
+  }),
+
+  toggleLike: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    if (!userId) throw new AppError("Unauthorized", 401);
+    const result = await ticketService.toggleLike(req.params.id as string, userId, getScope(req));
+    return successResponse(res, result, "Like toggled successfully");
   }),
 };

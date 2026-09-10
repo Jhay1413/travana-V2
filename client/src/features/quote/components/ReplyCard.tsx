@@ -5,7 +5,7 @@ import { useUpdateNote, useDeleteNote } from "@/hooks/mutations";
 import type { TransactionNote } from "@/features/quote/types";
 import { formatRelativeTime } from "./quote-types";
 import { formatFullDateTime } from "@/lib/note-time";
-import { NoteEditor } from "./NoteEditor";
+import { NoteEditor } from "@/components/shared/note-editor";
 
 export function ReplyCard({ reply, quoteId }: { reply: TransactionNote; quoteId: string }) {
   const [isEditing, setIsEditing] = useState(false);

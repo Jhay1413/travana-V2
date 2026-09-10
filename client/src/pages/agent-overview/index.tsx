@@ -74,14 +74,14 @@ export default function AgentOverviewPage() {
   const userId = currentUser?.id || "";
 
   return (
-    <div className="flex gap-6">
+    <div className="text-compact flex gap-6">
       <section className="min-w-0 flex-1 space-y-4">
         <ProfitStatBoxes profitStats={profitStats} isAgentView={isAgentView} />
 
         <div className="grid gap-4 min-w-0 xl:grid-cols-[1.55fr_.7fr]">
           <DashboardCard className="min-w-0" testId="card-agent-dashboard">
             <div className="flex items-start justify-between gap-2">
-              <div className="text-[17px] font-semibold" data-testid="text-overview-title">
+              <div className="text-lg font-semibold" data-testid="text-overview-title">
                 Agent Dashboard
               </div>
               <button

@@ -4,6 +4,7 @@
 // (see docs/client-structure-migration-plan.md).
 export * from "./types";
 export * from "./lib/ticket-filters";
+export * from "./lib/author-colors";
 export { ticketApi } from "./api/ticket.api";
 export * from "./api/use-ticket-queries";
 export * from "./api/use-ticket-mutations";

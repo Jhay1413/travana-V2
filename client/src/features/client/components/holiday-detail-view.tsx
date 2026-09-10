@@ -87,10 +87,11 @@ import {
   useQuoteToFormValues,
 } from "@/features/quote/components/hooks";
 import { useBookingPin, useBookingDelete } from "@/features/booking/components/hooks";
-import { NoteEditor } from "@/features/quote/components/NoteEditor";
+import { NoteEditor } from "@/components/shared/note-editor";
 import { useQuoteViews } from "@/features/quote/api/use-quote-share-queries";
 import { sumUpsells } from "@/features/booking/types";
 import { ClientConversationBox } from "@/features/client/components/tabs/ClientChatsTab";
+import { HolidayTicketsTab } from "@/features/client/components/holiday-tickets-tab";
 import { QuoteEditDialog } from "@/features/quote/components/quote-edit-dialog";
 import { QuoteCreateDialog, buildQuotePayload } from "@/features/quote/components/quote-create-dialog";
 import { QuoteConvertDialog } from "@/features/quote/components/QuoteConvertDialog";
@@ -124,7 +125,7 @@ function Breadcrumbs({
   const [, navigate] = useLocation();
   return (
     <nav
-      className="flex flex-wrap items-center gap-1.5 text-[13px] text-black/45 3xl:text-sm"
+      className="flex flex-wrap items-center gap-1.5 text-[11px] text-black/45 3xl:text-xs"
       data-testid="holiday-detail-breadcrumbs"
     >
       <button
@@ -246,8 +247,8 @@ function FieldItem({ icon: Icon, label, value }: { icon: LucideIcon; label: stri
         <Icon className="h-4 w-4" />
       </span>
       <div className="min-w-0 truncate text-[13px] 3xl:text-sm">
-        <span className="text-black/45">{label}: </span>
-        <span className="font-normal text-black/90">{value}</span>
+        <span className="font-medium text-black/45">{label}: </span>
+        <span className="font-semibold text-black/90">{value}</span>
       </div>
     </div>
   );
@@ -907,15 +908,8 @@ function DetailTabsCard({
           <HolidayTasksTab entityId={entityId} entityType={entityType} />
         </TabsContent>
 
-        {/* No ticket source scoped to a single enquiry/quote/booking exists yet —
-            tickets live at the client level. */}
         <TabsContent value="tickets" className="mt-3" data-testid="holiday-detail-tab-panel-tickets">
-          <div
-            className="flex items-center justify-center rounded-2xl border border-dashed border-black/10 bg-black/[0.02] py-10 text-sm text-black/40"
-            data-testid="holiday-detail-tickets-placeholder"
-          >
-            Nothing here yet
-          </div>
+          <HolidayTicketsTab clientId={clientId} entityId={entityId} entityType={entityType} />
         </TabsContent>
       </Tabs>
     </Card>

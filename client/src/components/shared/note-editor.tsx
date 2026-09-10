@@ -7,7 +7,7 @@ import { Bold, Italic, List, ListOrdered, Link as LinkIcon, SmilePlus, Undo, Red
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
-import { EmojiPicker } from "./EmojiPicker";
+import { EmojiPicker } from "./emoji-picker";
 
 export function NoteEditor({
   initialContent,

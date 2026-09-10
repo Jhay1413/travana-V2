@@ -1,6 +1,7 @@
 import { ticketRepository } from "./ticket.repository";
 import { realtimeService } from "../../realtime/realtime.service";
 import { AppError } from "../../utils/error-handler";
+import { sanitizeRichText } from "../../utils/sanitize-rich-text";
 import type { Ticket, InsertTicket } from "@shared/schema";
 import type { Scope } from "../../utils/scope";
 
@@ -21,11 +22,11 @@ function publishChanged(orgId: string, ticketId: string): void {
 
 export const ticketService = {
   async listTickets(scope: Scope) {
-    return await ticketRepository.findAll(scope);
+    return await ticketRepository.findAll(scope, scope.userId ?? null);
   },
 
   async listTicketsByClient(clientId: string, scope: Scope) {
-    return await ticketRepository.findByClientId(clientId, scope);
+    return await ticketRepository.findByClientId(clientId, scope, scope.userId ?? null);
   },
 
   async listTicketsByUser(
@@ -33,11 +34,11 @@ export const ticketService = {
     scope: Scope,
     filters?: { statuses?: string[] },
   ) {
-    return await ticketRepository.findByAssignedTo(userId, scope, filters);
+    return await ticketRepository.findByAssignedTo(userId, scope, filters, scope.userId ?? null);
   },
 
   async getTicketById(id: string, scope?: Scope) {
-    const ticket = await ticketRepository.findById(id, scope);
+    const ticket = await ticketRepository.findById(id, scope, scope?.userId ?? null);
     if (!ticket) {
       throw new AppError("Ticket not found", 404);
     }
@@ -45,13 +46,15 @@ export const ticketService = {
   },
 
   async createTicket(data: InsertTicket, scope: Scope): Promise<Ticket> {
-    const ticket = await ticketRepository.create(data, scope);
+    const values = data.description ? { ...data, description: sanitizeRichText(data.description) } : data;
+    const ticket = await ticketRepository.create(values, scope);
     publishChanged(scope.orgId, ticket.id);
     return ticket;
   },
 
   async updateTicket(id: string, data: Partial<InsertTicket>, scope: Scope): Promise<Ticket> {
-    const ticket = await ticketRepository.update(id, data, scope);
+    const values = data.description ? { ...data, description: sanitizeRichText(data.description) } : data;
+    const ticket = await ticketRepository.update(id, values, scope);
     if (!ticket) {
       throw new AppError("Ticket not found", 404);
     }
@@ -67,5 +70,13 @@ export const ticketService = {
       throw new AppError("Ticket not found", 404);
     }
     publishChanged(scope.orgId, id);
+  },
+
+  async toggleLike(id: string, userId: string, scope: Scope): Promise<{ liked: boolean; likeCount: number }> {
+    const ticket = await ticketRepository.findById(id, scope);
+    if (!ticket) {
+      throw new AppError("Ticket not found", 404);
+    }
+    return ticketRepository.toggleLike(id, userId);
   },
 };

@@ -330,6 +330,20 @@
       "when": 1787877528647,
       "tag": "0046_nasty_eternals",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1789001428793,
+      "tag": "0047_nasty_mastermind",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1789018500774,
+      "tag": "0048_crazy_sentinel",
+      "breakpoints": true
     }
   ]
 }

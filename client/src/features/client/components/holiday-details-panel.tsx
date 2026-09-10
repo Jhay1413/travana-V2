@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { BadgePoundSterling, Building2, CalendarDays, Moon, Plane, Tag, Users } from "lucide-react";
+import { BadgePoundSterling, Building2, CalendarDays, Eye, FileText, Moon, Plane, Tag, Users, View } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { useQuote, useBooking } from "@/hooks/queries";
-import { transformQuoteData } from "@/features/quote/components/quote-types";
+import { currency, transformQuoteData, type QuoteDisplay } from "@/features/quote/components/quote-types";
 import { QuoteSummaryTimeline } from "@/features/quote/components/QuoteSummaryTimeline";
+import { useBookingUpsells } from "@/features/booking";
+import { sumUpsells, type UpsellRecord } from "@/features/booking/types";
+import {
+  useQuoteViews,
+  type QuoteClientViewEntry,
+  type QuotePublicViewEntry,
+  type QuoteViewStats,
+} from "@/features/quote/api/use-quote-share-queries";
+import { timeAgo } from "@/features/agent-overview/components/dashboard-ui";
 import type { Booking, EnquiryTable, Quote } from "@/features/quote/types";
 import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
 
@@ -209,6 +218,222 @@ function BookingTimelinePanel({ id }: { id: string }) {
   );
 }
 
+// ─── Costings tab ───────────────────────────────────────────────────────────
+// Ports the "Costings" tab from QuoteCostingsCard / BookingCostingsCard (the
+// standalone quote/booking pages) into a panel-sized layout, with dark-mode
+// variants added since the original cards are light-only.
+
+function CostingsHeader({ title }: { title: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <div className="text-sm font-semibold">{title}</div>
+        <div className="mt-1 text-xs text-black/55 dark:text-white/55">Commission and charges.</div>
+      </div>
+      <FileText className="h-4 w-4 text-black/35 dark:text-white/35" aria-hidden />
+    </div>
+  );
+}
+
+function CostingsRow({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2 dark:border-white/10 dark:bg-white/[0.04]",
+        emphasis && "bg-black/[0.03] dark:bg-white/[0.06]",
+      )}
+    >
+      <div className="text-xs font-semibold text-black/65 dark:text-white/65">{label}</div>
+      <div className="text-xs font-semibold text-black dark:text-white">{value}</div>
+    </div>
+  );
+}
+
+// Shared row list for both quotes and bookings — bookings additionally fold
+// active upsells (extras added after booking) into the price/commission
+// totals, mirroring BookingCostingsCard.
+function CostingsBody({
+  title,
+  costings,
+  upsells,
+}: {
+  title: string;
+  costings: QuoteDisplay;
+  upsells?: UpsellRecord[];
+}) {
+  const hasUpsells = Array.isArray(upsells) && upsells.length > 0;
+  const { price: upsellPrice, commission: upsellCommission } = sumUpsells(upsells);
+  const totalPrice = costings.commissions.price + upsellPrice;
+  const totalCommission = costings.commissions.totalCommission + upsellCommission;
+
+  return (
+    <div className="px-4 py-5 3xl:px-6">
+      <CostingsHeader title={title} />
+      <div className="mt-3 grid gap-2">
+        <CostingsRow label="Deal price" value={currency.format(costings.commissions.salesPrice)} />
+        {hasUpsells && (
+          <CostingsRow
+            label="Upsell price"
+            value={upsellPrice > 0 ? `+${currency.format(upsellPrice)}` : currency.format(0)}
+          />
+        )}
+        <CostingsRow label="Comm" value={currency.format(costings.commissions.commissionValue)} />
+        {hasUpsells && (
+          <CostingsRow
+            label="Upsell comm"
+            value={upsellCommission > 0 ? `+${currency.format(upsellCommission)}` : currency.format(0)}
+          />
+        )}
+        <CostingsRow
+          label="Discount"
+          value={costings.commissions.discounts > 0 ? `-${currency.format(costings.commissions.discounts)}` : currency.format(0)}
+        />
+        <CostingsRow
+          label="Service charge"
+          value={costings.commissions.serviceCharge > 0 ? `+${currency.format(costings.commissions.serviceCharge)}` : currency.format(0)}
+        />
+        <div className="my-1 h-px w-full bg-black/10 dark:bg-white/10" />
+        <CostingsRow label="Total price" value={currency.format(totalPrice)} emphasis />
+        <CostingsRow label="Total commission" value={currency.format(totalCommission)} emphasis />
+      </div>
+    </div>
+  );
+}
+
+function QuoteCostingsPanel({ id }: { id: string }) {
+  const { data, isLoading, isError } = useQuote(id);
+  if (isLoading) return <PanelMessage text="Loading…" />;
+  if (isError || !data) return <PanelMessage text="Unable to load quote costings." />;
+  return <CostingsBody title="Quote Costings" costings={transformQuoteData(data)} />;
+}
+
+function BookingCostingsPanel({ id }: { id: string }) {
+  const { data, isLoading, isError } = useBooking(id);
+  const { data: upsells } = useBookingUpsells(id);
+  if (isLoading) return <PanelMessage text="Loading…" />;
+  if (isError || !data) return <PanelMessage text="Unable to load booking costings." />;
+  return <CostingsBody title="Booking Costings" costings={transformQuoteData(data)} upsells={upsells} />;
+}
+
+// Entry point for the Costings tab — dispatches on selection type, same
+// pattern as the Summary tab's per-type branching in the main component.
+function HolidayCostingsPanel({ selection }: { selection: HolidaySelection | null }) {
+  if (!selection) return <PanelMessage text="Select a holiday to see its costings." />;
+  if (selection.type === "enquiry") {
+    return <PanelMessage text="Costings are available once a quote is created." />;
+  }
+  if (selection.type === "quote") {
+    return <QuoteCostingsPanel key={selection.id} id={selection.id} />;
+  }
+  return <BookingCostingsPanel key={selection.id} id={selection.id} />;
+}
+
+// ─── Views tab ──────────────────────────────────────────────────────────────
+// "Quote Engagement" view-tracking summary — only available for quotes (see
+// the ViewsPill comment on holiday-detail-view.tsx). Mirrors the visual
+// language of the agent dashboard's EngagementSection.
+
+type MergedView =
+  | { kind: "client"; id: string; viewerName: string; viewedAt: string; deviceType: string | null; browser: string | null }
+  | { kind: "public"; id: string; viewedAt: string; deviceType: string | null; browser: string | null };
+
+function mergeViews(clientViews: QuoteClientViewEntry[], publicViews: QuotePublicViewEntry[]): MergedView[] {
+  const merged: MergedView[] = [
+    ...clientViews.map((v) => ({ kind: "client" as const, ...v })),
+    ...publicViews.map((v) => ({ kind: "public" as const, ...v })),
+  ];
+  return merged.sort((a, b) => new Date(b.viewedAt).getTime() - new Date(a.viewedAt).getTime()).slice(0, 10);
+}
+
+function ViewsHeader({ stats }: { stats: QuoteViewStats }) {
+  return (
+    <div className="flex items-center justify-between">
+      <h3 className="text-[13px] font-semibold 3xl:text-sm">Quote Engagement</h3>
+      <span className="inline-flex items-center gap-2 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-800 dark:bg-sky-500/15 dark:text-sky-300">
+        <span className="inline-flex items-center gap-1">
+          <View className="h-3.5 w-3.5" />
+          {stats.totalViews}
+        </span>
+        <span className="font-medium text-sky-700/80 dark:text-sky-300/80">{timeAgo(stats.lastViewed)}</span>
+      </span>
+    </div>
+  );
+}
+
+function ViewsStatTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-[6px] border border-black/10 bg-black/[0.03] px-2 py-2 dark:border-white/10 dark:bg-white/[0.04]">
+      <div className="text-[11px] text-black/45 dark:text-white/45">{label}</div>
+      <div className="text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function ViewRow({ view }: { view: MergedView }) {
+  const deviceLabel = `${timeAgo(view.viewedAt)} · ${view.deviceType ?? "Unknown"}${view.browser ? ` · ${view.browser}` : ""}`;
+  return (
+    <div className="flex items-center gap-2 rounded-lg px-2 py-2">
+      {view.kind === "client" ? (
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-violet-100 text-xs font-bold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+          {view.viewerName.charAt(0).toUpperCase()}
+        </span>
+      ) : (
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300">
+          <Eye className="h-3.5 w-3.5" />
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            "truncate text-[13px] font-medium",
+            view.kind === "public" && "italic text-black/55 dark:text-white/55",
+          )}
+        >
+          {view.kind === "client" ? view.viewerName : "Public link"}
+        </div>
+        <div className="text-xs text-black/50 dark:text-white/50">{deviceLabel}</div>
+      </div>
+    </div>
+  );
+}
+
+function QuoteViewsPanel({ id }: { id: string }) {
+  const { data, isLoading, isError } = useQuoteViews(id);
+  if (isLoading) return <PanelMessage text="Loading…" />;
+  if (isError || !data) return <PanelMessage text="Unable to load views." />;
+  if (data.totalViews === 0) return <PanelMessage text="No views yet" />;
+
+  const merged = mergeViews(data.clientViews, data.publicViews);
+
+  return (
+    <div className="space-y-4 px-4 py-5 3xl:px-6">
+      <ViewsHeader stats={data} />
+      <div className="grid grid-cols-3 gap-2">
+        <ViewsStatTile label="Total" value={data.totalViews} />
+        <ViewsStatTile label="Client" value={data.clientViews.length} />
+        <ViewsStatTile label="Public" value={data.publicViewCount} />
+      </div>
+      <div>
+        <h4 className="text-xs font-semibold text-black/55 dark:text-white/55">Recent views</h4>
+        <div className="mt-2 space-y-1">
+          {merged.map((v) => (
+            <ViewRow key={v.id} view={v} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Entry point for the Views tab — view tracking only exists for quotes.
+function HolidayViewsPanel({ selection }: { selection: HolidaySelection | null }) {
+  if (!selection) return <PanelMessage text="Select a quote to see its views." />;
+  if (selection.type !== "quote") {
+    return <PanelMessage text="View tracking is only available for quotes." />;
+  }
+  return <QuoteViewsPanel key={selection.id} id={selection.id} />;
+}
+
 type DetailsTab = "summary" | "costings" | "views";
 
 const DETAILS_TABS: Array<{ value: DetailsTab; label: string }> = [
@@ -228,9 +453,9 @@ interface HolidayDetailsPanelProps {
 export function HolidayDetailsPanel({ selection, enquiries, quotes, bookings, className }: HolidayDetailsPanelProps) {
   const [tab, setTab] = useState<DetailsTab>("summary");
 
-  // Selecting a different holiday while parked on Costings/Views would
-  // otherwise look dead (those tabs are still "Coming soon" placeholders) —
-  // jump back to Summary so the new selection is visibly reflected.
+  // Reset to Summary whenever the selection changes, so switching holidays
+  // while parked on Costings/Views doesn't leave a stale tab showing data
+  // for the previous selection — the new selection is visibly reflected.
   useEffect(() => {
     setTab("summary");
   }, [selection?.type, selection?.id]);
@@ -276,8 +501,10 @@ export function HolidayDetailsPanel({ selection, enquiries, quotes, bookings, cl
       </div>
 
       <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto">
-        {tab !== "summary" ? (
-          <PanelMessage text="Coming soon" />
+        {tab === "costings" ? (
+          <HolidayCostingsPanel selection={selection} />
+        ) : tab === "views" ? (
+          <HolidayViewsPanel selection={selection} />
         ) : !selection || !selected ? (
           <PanelMessage text="Select a holiday to see its details." />
         ) : selection.type === "quote" ? (

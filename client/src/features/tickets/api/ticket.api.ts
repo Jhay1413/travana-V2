@@ -41,4 +41,9 @@ export const ticketApi = {
   delete: async (id: string): Promise<void> => {
     await axiosClient.delete(`/api/v2/tickets/${id}`);
   },
+
+  toggleLike: async (id: string): Promise<{ liked: boolean; likeCount: number }> => {
+    const { data } = await axiosClient.post<{ liked: boolean; likeCount: number }>(`/api/v2/tickets/${id}/like`);
+    return data;
+  },
 };

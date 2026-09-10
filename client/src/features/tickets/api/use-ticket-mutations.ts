@@ -46,3 +46,49 @@ export function useDeleteTicket() {
     },
   });
 }
+
+// A ticket can sit in several caches at once (list, byClient, byUser, detail),
+// so the optimistic like patches every cached copy by id rather than one key.
+function patchTicketEverywhere(
+  queryClient: ReturnType<typeof useQueryClient>,
+  id: string,
+  patch: (t: Ticket) => Ticket,
+) {
+  queryClient.setQueriesData<Ticket[] | Ticket | undefined>({ queryKey: ticketKeys.all }, (old) => {
+    if (!old) return old;
+    if (Array.isArray(old)) return old.map((t) => (t.id === id ? patch(t) : t));
+    return old.id === id ? patch(old) : old;
+  });
+}
+
+export function useToggleTicketLike() {
+  const queryClient = useQueryClient();
+  const mutationKey = ["tickets", "toggleLike"] as const;
+  return useMutation({
+    mutationKey,
+    mutationFn: (id: string) => ticketApi.toggleLike(id),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ticketKeys.all });
+      const previous = queryClient.getQueriesData<Ticket[] | Ticket>({ queryKey: ticketKeys.all });
+      patchTicketEverywhere(queryClient, id, (t) => ({
+        ...t,
+        likedByMe: !t.likedByMe,
+        likeCount: (t.likeCount ?? 0) + (t.likedByMe ? -1 : 1),
+      }));
+      return { previous };
+    },
+    // The server answer is authoritative — write it straight into the caches.
+    onSuccess: (result, id) => {
+      patchTicketEverywhere(queryClient, id, (t) => ({ ...t, likedByMe: result.liked, likeCount: result.likeCount }));
+    },
+    onError: (_err, _id, context) => {
+      context?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data));
+    },
+    // Only refetch once the last in-flight toggle settles.
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey }) <= 1) {
+        queryClient.invalidateQueries({ queryKey: ticketKeys.all });
+      }
+    },
+  });
+}
