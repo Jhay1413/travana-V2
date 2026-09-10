@@ -3,16 +3,20 @@ import {
   Building2,
   ChevronDown,
   Ellipsis,
+  Heart,
   Link,
   LifeBuoy,
   Loader2,
   Paperclip,
+  Pencil,
   Pin,
+  Reply as ReplyIcon,
   Share2,
   Smile,
   Trash2,
   Unlink,
   User,
+  X,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,11 +53,13 @@ import { EMOJI_CATEGORIES } from "@/lib/emoji";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, useTransactions } from "@/hooks/queries";
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
+import { NoteEditor } from "@/components/shared/note-editor";
 import { DayDivider, dayLabel } from "@/features/conversations";
 import type { User as ApiUser } from "@/features/user/types";
-import { useCreateReply, useReplies } from "@/features/reply";
+import { useCreateReply, useDeleteReply, useReplies, useToggleReplyLike, useUpdateReply } from "@/features/reply";
 import type { TicketReply } from "@/features/reply";
-import { useDeleteTicket, useUpdateTicket } from "../api/use-ticket-mutations";
+import { authorBubbleClasses } from "../lib/author-colors";
+import { useDeleteTicket, useToggleTicketLike, useUpdateTicket } from "../api/use-ticket-mutations";
 import { TICKET_STATUSES } from "../types";
 import type { Ticket } from "../types";
 
@@ -99,51 +105,92 @@ interface ThreadNote {
   authorImage: string | null;
   content: string;
   createdAt: string;
+  updatedAt: string | null;
+  // The reply row behind this note, or null for the ticket description (which
+  // likes and edits through the ticket endpoints instead).
+  reply: TicketReply | null;
+  likeCount: number;
+  likedByMe: boolean;
 }
 
-function buildNotes(ticket: Ticket, replies: TicketReply[] | undefined, users: ApiUser[]): ThreadNote[] {
+// A top-level note plus the replies nested under it (one level deep — the
+// server re-points deeper replies at the top-level parent).
+interface ThreadItem {
+  note: ThreadNote;
+  children: ThreadNote[];
+}
+
+function buildThread(ticket: Ticket, replies: TicketReply[] | undefined, users: ApiUser[]): ThreadItem[] {
   const nameFor = (userId: string, fallback?: string | null) => {
     if (fallback) return fallback;
     return users.find((u) => u.id === userId)?.name || "Unknown";
   };
-  const imageFor = (userId: string) =>
-    (users.find((u) => u.id === userId) as { image?: string | null } | undefined)?.image ?? null;
-  const notes: ThreadNote[] = [];
+  const imageFor = (userId: string) => users.find((u) => u.id === userId)?.image ?? null;
+  const byTime = (a: ThreadNote, b: ThreadNote) => Date.parse(a.createdAt) - Date.parse(b.createdAt);
+  const toNote = (r: TicketReply): ThreadNote => ({
+    id: r.id,
+    authorId: r.userId,
+    authorName: nameFor(r.userId),
+    authorImage: imageFor(r.userId),
+    content: r.content,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    reply: r,
+    likeCount: r.likeCount,
+    likedByMe: r.likedByMe,
+  });
+
+  const items: ThreadItem[] = [];
   if (ticket.description) {
-    notes.push({
-      id: `ticket-${ticket.id}`,
-      authorId: ticket.userId,
-      authorName: nameFor(ticket.userId, ticket.userName),
-      authorImage: imageFor(ticket.userId),
-      content: ticket.description,
-      createdAt: ticket.createdAt,
+    items.push({
+      note: {
+        id: `ticket-${ticket.id}`,
+        authorId: ticket.userId,
+        authorName: nameFor(ticket.userId, ticket.userName),
+        authorImage: imageFor(ticket.userId),
+        content: ticket.description,
+        createdAt: ticket.createdAt,
+        updatedAt: ticket.updatedAt,
+        reply: null,
+        likeCount: ticket.likeCount ?? 0,
+        likedByMe: !!ticket.likedByMe,
+      },
+      children: [],
     });
   }
-  for (const r of replies ?? []) {
-    notes.push({
-      id: r.id,
-      authorId: r.userId,
-      authorName: nameFor(r.userId),
-      authorImage: imageFor(r.userId),
-      content: r.content,
-      createdAt: r.createdAt,
-    });
+
+  // A reply whose parent is missing (deleted, or from before parents were
+  // tracked) is shown at top level rather than hidden.
+  const all = replies ?? [];
+  const ids = new Set(all.map((r) => r.id));
+  const topLevel = all.filter((r) => !r.parentReplyId || !ids.has(r.parentReplyId));
+  const childrenOf = new Map<string, ThreadNote[]>();
+  for (const r of all) {
+    if (!r.parentReplyId || !ids.has(r.parentReplyId)) continue;
+    const list = childrenOf.get(r.parentReplyId) ?? [];
+    list.push(toNote(r));
+    childrenOf.set(r.parentReplyId, list);
   }
-  return notes.sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+  for (const r of topLevel) {
+    items.push({ note: toNote(r), children: (childrenOf.get(r.id) ?? []).sort(byTime) });
+  }
+  return items.sort((a, b) => byTime(a.note, b.note));
 }
 
 interface NoteDayGroup {
   day: string;
-  notes: ThreadNote[];
+  items: ThreadItem[];
 }
 
-function groupNotesByDay(notes: ThreadNote[]): NoteDayGroup[] {
+// Day dividers follow the top-level notes; nested replies stay under their
+// parent whatever day they were posted.
+function groupByDay(items: ThreadItem[]): NoteDayGroup[] {
   const out: NoteDayGroup[] = [];
-  for (const n of notes) {
-    const key = dayLabel(n.createdAt);
+  for (const item of items) {
+    const key = dayLabel(item.note.createdAt);
     const last = out[out.length - 1];
-    if (last && last.day === key) last.notes.push(n);
-    else out.push({ day: key, notes: [n] });
+    if (last && last.day === key) last.items.push(item);
+    else out.push({ day: key, items: [item] });
   }
   return out;
 }
@@ -161,9 +208,63 @@ function SenderAvatar({ name, imageUrl }: { name: string; imageUrl: string | nul
   );
 }
 
-function NoteBubble({ note, isMe }: { note: ThreadNote; isMe: boolean }) {
+interface NoteActions {
+  /** Replies can be deleted from the thread; the ticket itself is deleted from its menu. */
+  canDelete: boolean;
+  onLike: () => void;
+  isLiking: boolean;
+  onReply: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  isEditing: boolean;
+  onSaveEdit: (content: string) => void;
+  onCancelEdit: () => void;
+  isSavingEdit: boolean;
+  isConfirmingDelete: boolean;
+  onConfirmDelete: () => void;
+  onCancelDelete: () => void;
+}
+
+// Inline editor for one post. Descriptions are rich-text HTML (from the create
+// dialog) and replies may be plain text — the shared note editor handles both
+// and hands back HTML, which is what the thread renders.
+function NoteEditForm({
+  initial,
+  onSave,
+  onCancel,
+  isSaving,
+}: {
+  initial: string;
+  onSave: (content: string) => void;
+  onCancel: () => void;
+  isSaving: boolean;
+}) {
   return (
-    <div className={cn("flex", isMe ? "justify-end" : "justify-start")}>
+    <div data-testid="ticket-note-edit">
+      <NoteEditor initialContent={initial} submitLabel="Save" compact isLoading={isSaving} onSubmit={onSave} onCancel={onCancel} />
+    </div>
+  );
+}
+
+
+function NoteBubble({
+  note,
+  isMe,
+  nested = false,
+  actions,
+}: {
+  note: ThreadNote;
+  isMe: boolean;
+  /** Rendered beneath a parent reply — indented to show the thread. */
+  nested?: boolean;
+  /** Absent for the ticket description, which is not a reply. */
+  actions?: NoteActions;
+}) {
+  const colors = authorBubbleClasses(note.authorId, isMe);
+  const isEdited = !!note.updatedAt && Date.parse(note.updatedAt) > Date.parse(note.createdAt) + 1000;
+
+  return (
+    <div className={cn("flex", isMe ? "justify-end" : "justify-start", nested && (isMe ? "pr-10" : "pl-10"))}>
       {/* Avatar sits flush at the bubble's very top-left corner, straddling
           the top edge — half above, half inside — mirroring the quote details
           Notes tab. mt-4 reserves room for the protruding half. */}
@@ -171,26 +272,105 @@ function NoteBubble({ note, isMe }: { note: ThreadNote; isMe: boolean }) {
         <div className="absolute -top-4 left-0">
           <SenderAvatar name={note.authorName} imageUrl={note.authorImage} />
         </div>
-        <div
-          className={cn(
-            "rounded-2xl px-4 py-2.5 text-sm",
-            isMe ? "bg-sky-100 text-black/85 dark:bg-sky-500/15 dark:text-white/90" : "bg-black/5 text-black/85 dark:bg-white/[0.08] dark:text-white/90",
-          )}
-          data-testid={`ticket-note-${note.id}`}
-        >
+        <div className={cn("rounded-2xl px-4 py-2.5 text-sm", colors.bubble)} data-testid={`ticket-note-${note.id}`}>
           {/* Only the header row is indented past the corner avatar — the
               message body below it runs the bubble's full width. */}
           <div className="mb-1 flex flex-wrap items-baseline gap-1 pl-6 text-xs">
-            <span className="font-semibold text-sky-600 dark:text-sky-400">{note.authorName}</span>
-            <span className="text-black/40 dark:text-white/40">– {formatNoteDate(note.createdAt)}</span>
+            <span className={cn("font-semibold", colors.name)}>{note.authorName}</span>
+            <span className="text-black/40 dark:text-white/40">
+              – {formatNoteDate(note.createdAt)}
+              {isEdited ? " (edited)" : ""}
+            </span>
           </div>
-          <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed 3xl:text-sm">
-            <RichTextDisplay content={note.content} />
-          </div>
+          {actions?.isEditing ? (
+            <NoteEditForm
+              initial={note.content}
+              onSave={actions.onSaveEdit}
+              onCancel={actions.onCancelEdit}
+              isSaving={actions.isSavingEdit}
+            />
+          ) : (
+            <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed 3xl:text-sm">
+              <RichTextDisplay content={note.content} />
+            </div>
+          )}
+          {actions && !actions.isEditing && (
+            <div className="mt-1.5 flex items-center gap-3 text-black/45 dark:text-white/40">
+              {actions.isConfirmingDelete ? (
+                <span className="flex items-center gap-1.5 text-[11px]">
+                  Delete this reply?
+                  <button
+                    type="button"
+                    onClick={actions.onConfirmDelete}
+                    className="font-semibold text-rose-600 hover:underline"
+                    data-testid={`ticket-note-delete-confirm-${note.id}`}
+                  >
+                    Yes
+                  </button>
+                  <button type="button" onClick={actions.onCancelDelete} className="font-semibold hover:underline">
+                    No
+                  </button>
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={actions.onLike}
+                    disabled={actions.isLiking}
+                    className={cn(
+                      "flex items-center gap-1 text-[11px] font-medium transition hover:text-rose-500 disabled:opacity-60",
+                      note.likedByMe && "text-rose-500",
+                    )}
+                    data-testid={`ticket-note-like-${note.id}`}
+                  >
+                    <Heart className={cn("h-3.5 w-3.5", note.likedByMe && "fill-current")} />
+                    {note.likeCount > 0 ? note.likeCount : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={actions.onReply}
+                    className="flex items-center gap-1 text-[11px] font-medium transition hover:text-black dark:hover:text-white"
+                    data-testid={`ticket-note-reply-${note.id}`}
+                  >
+                    <ReplyIcon className="h-3.5 w-3.5" /> Reply
+                  </button>
+                  {isMe && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={actions.onEdit}
+                        className="flex items-center gap-1 text-[11px] font-medium transition hover:text-black dark:hover:text-white"
+                        data-testid={`ticket-note-edit-${note.id}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </button>
+                      {actions.canDelete && (
+                      <button
+                        type="button"
+                        onClick={actions.onDelete}
+                        className="flex items-center gap-1 text-[11px] font-medium transition hover:text-rose-600"
+                        data-testid={`ticket-note-delete-${note.id}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Delete
+                      </button>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
+}
+
+/** Who a new reply is answering — shown as a banner above the composer. */
+interface ReplyTarget {
+  authorName: string;
+  /** Top-level reply id the new reply nests under (none for the ticket itself). */
+  parentReplyId?: string;
 }
 
 const COMPOSER_MAX_HEIGHT_PX = 140;
@@ -200,13 +380,28 @@ const COMPOSER_MAX_HEIGHT_PX = 140;
 // outline "Send ⌄" button) minus the note/reply toggle: ticket replies have no
 // note concept to switch to. Attachments aren't wired up here — see the
 // "aren't supported" title below.
-function ReplyComposer({ ticketId }: { ticketId: string }) {
+function ReplyComposer({
+  ticketId,
+  replyingTo,
+  onCancelReplyTo,
+  onSent,
+}: {
+  ticketId: string;
+  replyingTo: ReplyTarget | null;
+  onCancelReplyTo: () => void;
+  onSent: () => void;
+}) {
   const { toast } = useToast();
   const { data: currentUser } = useCurrentUser();
   const [text, setText] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const createReply = useCreateReply(ticketId);
+
+  // Picking someone to reply to puts the cursor straight into the box.
+  useEffect(() => {
+    if (replyingTo) textareaRef.current?.focus();
+  }, [replyingTo]);
 
   const submit = () => {
     const trimmed = text.trim();
@@ -216,9 +411,12 @@ function ReplyComposer({ ticketId }: { ticketId: string }) {
       return;
     }
     createReply.mutate(
-      { userId: currentUser.id, content: trimmed },
+      { userId: currentUser.id, content: trimmed, parentReplyId: replyingTo?.parentReplyId },
       {
-        onSuccess: () => setText(""),
+        onSuccess: () => {
+          setText("");
+          onSent();
+        },
         onError: () => toast({ title: "Failed to add reply", variant: "destructive" }),
       },
     );
@@ -254,6 +452,26 @@ function ReplyComposer({ ticketId }: { ticketId: string }) {
 
   return (
     <div className="flex-none border-t border-black/10 px-4 py-3 dark:border-white/10">
+      {replyingTo && (
+        <div
+          className="mb-2 flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-1.5 text-xs text-sky-800 dark:bg-sky-500/10 dark:text-sky-300"
+          data-testid="ticket-reply-replying-to"
+        >
+          <ReplyIcon className="h-3.5 w-3.5" />
+          <span>
+            Replying to <strong>{replyingTo.authorName}</strong>
+          </span>
+          <button
+            type="button"
+            onClick={onCancelReplyTo}
+            className="ml-auto text-sky-600 hover:text-sky-800 dark:text-sky-400"
+            aria-label="Cancel reply"
+            data-testid="ticket-reply-cancel-reply-to"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       <div className="rounded-xl border border-black/10 bg-white px-4 pt-3 pb-2.5 dark:border-white/10 dark:bg-white/[0.03]">
         <Textarea
           ref={textareaRef}
@@ -443,8 +661,25 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
   const deleteTicket = useDeleteTicket();
   const [linkBookingOpen, setLinkBookingOpen] = useState(false);
 
-  const notes = useMemo(() => (ticket ? buildNotes(ticket, replies, users) : []), [ticket, replies, users]);
-  const grouped = useMemo(() => groupNotesByDay(notes), [notes]);
+  const ticketId = ticket?.id ?? "";
+  const updateReply = useUpdateReply(ticketId);
+  const deleteReply = useDeleteReply(ticketId);
+  const toggleLike = useToggleReplyLike(ticketId);
+  const toggleTicketLike = useToggleTicketLike();
+  const [replyingTo, setReplyingTo] = useState<ReplyTarget | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Per-reply UI state belongs to one ticket; drop it when another is opened.
+  useEffect(() => {
+    setReplyingTo(null);
+    setEditingId(null);
+    setConfirmDeleteId(null);
+  }, [ticketId]);
+
+  const thread = useMemo(() => (ticket ? buildThread(ticket, replies, users) : []), [ticket, replies, users]);
+  const grouped = useMemo(() => groupByDay(thread), [thread]);
+  const noteCount = (replies?.length ?? 0) + (ticket?.description ? 1 : 0);
 
   // Thread scroll container: opens at the newest note (bottom) and follows it
   // down again whenever the ticket changes or a new note lands — same pattern
@@ -454,7 +689,75 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
     const el = threadScrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [ticket?.id, notes.length]);
+  }, [ticket?.id, noteCount]);
+
+  const isMine = (userId: string) => !!currentUser?.id && currentUser.id === userId;
+
+  // Builds the action handlers for one reply bubble. Replies to a nested reply
+  // attach to its top-level parent (threads are one level deep) but still
+  // name the person being answered.
+  const actionsFor = (note: ThreadNote, topLevelId: string): NoteActions | undefined => {
+    const reply = note.reply;
+    if (!reply) {
+      // The ticket description: likes and edits go through the ticket itself,
+      // a reply to it is a top-level reply, and it is deleted from the menu.
+      if (!ticket) return undefined;
+      return {
+        canDelete: false,
+        onLike: () =>
+          toggleTicketLike.mutate(ticket.id, {
+            onError: () => toast({ title: "Failed to update like", variant: "destructive" }),
+          }),
+        isLiking: toggleTicketLike.isPending && toggleTicketLike.variables === ticket.id,
+        onReply: () => setReplyingTo({ authorName: note.authorName }),
+        onEdit: () => setEditingId(note.id),
+        onDelete: () => undefined,
+        isEditing: editingId === note.id,
+        onSaveEdit: (content) =>
+          updateTicket.mutate(
+            { id: ticket.id, data: { description: content } },
+            {
+              onSuccess: () => setEditingId(null),
+              onError: () => toast({ title: "Failed to update ticket", variant: "destructive" }),
+            },
+          ),
+        onCancelEdit: () => setEditingId(null),
+        isSavingEdit: updateTicket.isPending && updateTicket.variables?.id === ticket.id,
+        isConfirmingDelete: false,
+        onConfirmDelete: () => undefined,
+        onCancelDelete: () => undefined,
+      };
+    }
+    return {
+      canDelete: true,
+      onLike: () =>
+        toggleLike.mutate(reply.id, {
+          onError: () => toast({ title: "Failed to update like", variant: "destructive" }),
+        }),
+      isLiking: toggleLike.isPending && toggleLike.variables === reply.id,
+      onReply: () => setReplyingTo({ authorName: note.authorName, parentReplyId: topLevelId }),
+      onEdit: () => setEditingId(reply.id),
+      onDelete: () => setConfirmDeleteId(reply.id),
+      isEditing: editingId === reply.id,
+      onSaveEdit: (content) =>
+        updateReply.mutate(
+          { id: reply.id, content },
+          {
+            onSuccess: () => setEditingId(null),
+            onError: () => toast({ title: "Failed to update reply", variant: "destructive" }),
+          },
+        ),
+      onCancelEdit: () => setEditingId(null),
+      isSavingEdit: updateReply.isPending && updateReply.variables?.id === reply.id,
+      isConfirmingDelete: confirmDeleteId === reply.id,
+      onConfirmDelete: () =>
+        deleteReply.mutate(reply.id, {
+          onSuccess: () => setConfirmDeleteId(null),
+          onError: () => toast({ title: "Failed to delete reply", variant: "destructive" }),
+        }),
+      onCancelDelete: () => setConfirmDeleteId(null),
+    };
+  };
 
   if (!ticket) {
     return (
@@ -610,12 +913,12 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
       </div>
 
       <div ref={threadScrollRef} className="scrollbar-none flex-1 space-y-5 overflow-y-auto px-6 py-6">
-        {repliesLoading && notes.length === 0 ? (
+        {repliesLoading && thread.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-black/30 dark:text-white/30">
             <Loader2 className="h-6 w-6 animate-spin" />
             <span className="text-xs">Loading thread…</span>
           </div>
-        ) : notes.length === 0 ? (
+        ) : thread.length === 0 ? (
           <div className="flex h-full items-center justify-center text-xs text-black/40 dark:text-white/40">
             No activity on this ticket yet
           </div>
@@ -623,15 +926,32 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
           grouped.map((group, gi) => (
             <div key={gi} className="space-y-4">
               <DayDivider label={group.day} />
-              {group.notes.map((n) => (
-                <NoteBubble key={n.id} note={n} isMe={!!currentUser?.id && currentUser.id === n.authorId} />
+              {group.items.map(({ note, children }) => (
+                <div key={note.id} className="space-y-4">
+                  <NoteBubble note={note} isMe={isMine(note.authorId)} actions={actionsFor(note, note.id)} />
+                  {children.map((child) => (
+                    <NoteBubble
+                      key={child.id}
+                      note={child}
+                      nested
+                      isMe={isMine(child.authorId)}
+                      actions={actionsFor(child, note.id)}
+                    />
+                  ))}
+                </div>
               ))}
             </div>
           ))
         )}
       </div>
 
-      <ReplyComposer key={ticket.id} ticketId={ticket.id} />
+      <ReplyComposer
+        key={ticket.id}
+        ticketId={ticket.id}
+        replyingTo={replyingTo}
+        onCancelReplyTo={() => setReplyingTo(null)}
+        onSent={() => setReplyingTo(null)}
+      />
 
       <LinkBookingDialog ticket={ticket} open={linkBookingOpen} onOpenChange={setLinkBookingOpen} />
     </Card>

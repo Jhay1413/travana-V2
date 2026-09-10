@@ -16,7 +16,7 @@ export { useCreateEnquiry, useUpdateEnquiry, useDeleteEnquiry } from "@/features
 export { useCreateNote, useUpdateNote, useDeleteNote, useCreateClientNote, useUpdateClientNote, useDeleteClientNote } from "@/features/note/api/use-note-mutations";
 export { useCreateTicket, useUpdateTicket, useDeleteTicket } from "@/features/tickets/api/use-ticket-mutations";
 export { useUploadAttachment, useDeleteAttachment } from "@/features/attachment/api/use-attachment-mutations";
-export { useCreateReply, useUpdateReply, useDeleteReply } from "@/features/reply/api/use-reply-mutations";
+export { useCreateReply, useUpdateReply, useDeleteReply, useToggleReplyLike } from "@/features/reply/api/use-reply-mutations";
 export { useMarkNotificationRead, useMarkAllNotificationsRead, useDeleteNotification } from "@/features/notifications/api/use-notification-mutations";
 export { useCreateUser, useUpdateUser, useDeleteUser } from "@/features/user/api/use-user-mutations";
 export { useCreateTourOperator, useUpdateTourOperator, useDeleteTourOperator } from "@/features/tour-operator/api/use-tour-operator-mutations";

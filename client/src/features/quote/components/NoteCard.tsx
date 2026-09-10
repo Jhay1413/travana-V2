@@ -9,7 +9,7 @@ import type { Favorite } from "@/features/favorite/api/favorite.api";
 import type { TransactionNote } from "@/features/quote/types";
 import { formatRelativeTime } from "./quote-types";
 import { formatFullDateTime } from "@/lib/note-time";
-import { NoteEditor } from "./NoteEditor";
+import { NoteEditor } from "@/components/shared/note-editor";
 import { ReplyCard } from "./ReplyCard";
 
 export function NoteCard({

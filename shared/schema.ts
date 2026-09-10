@@ -1493,6 +1493,28 @@ export const insertTicketReplySchema = createInsertSchema(ticketReplies).omit({ 
 export type InsertTicketReply = z.infer<typeof insertTicketReplySchema>;
 export type TicketReply = typeof ticketReplies.$inferSelect;
 
+export const ticketReplyLikes = pgTable("ticket_reply_likes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  replyId: varchar("reply_id").notNull().references(() => ticketReplies.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  uniqueReplyLike: unique().on(table.replyId, table.userId),
+}));
+
+export type TicketReplyLike = typeof ticketReplyLikes.$inferSelect;
+
+export const ticketLikes = pgTable("ticket_likes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  ticketId: varchar("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  uniqueTicketLike: unique().on(table.ticketId, table.userId),
+}));
+
+export type TicketLike = typeof ticketLikes.$inferSelect;
+
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),

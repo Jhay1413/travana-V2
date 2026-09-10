@@ -4,6 +4,8 @@ export interface User {
   email: string;
   role: string;
   avatar: string | null;
+  /** Uploaded profile photo URL (the field thread and note UIs display). */
+  image?: string | null;
   firstName?: string | null;
   lastName?: string | null;
   profileImageUrl?: string | null;
