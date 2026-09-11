@@ -1086,12 +1086,25 @@ function DetailError({ clientName, onBack }: { clientName: string; onBack: () =>
   );
 }
 
+// ─── Shared icon-button style ───────────────────────────────────────────────
+// Squared, bordered buttons for the client page's header actions cluster
+// (pin / link / share). The "···" trigger sits in the same row but is
+// borderless per the design, so it gets its own class.
+
+export const HEADER_ICON_BUTTON_CLASS =
+  "inline-flex h-[30px] w-[30px] items-center justify-center rounded-[4px] border border-black/15 bg-white text-black/60 transition hover:bg-black/[0.03] hover:text-black dark:border-white/15 dark:bg-white/[0.04] dark:text-white/60 dark:hover:text-white";
+
+export const HEADER_ELLIPSIS_BUTTON_CLASS =
+  "inline-flex h-[30px] w-[30px] items-center justify-center rounded-[4px] text-black/60 transition hover:bg-black/[0.04] hover:text-black dark:text-white/60 dark:hover:bg-white/[0.06] dark:hover:text-white";
+
 // ─── Quote actions menu ─────────────────────────────────────────────────────
 // Mirrors the standalone quote page's QuoteActionsRow. "Export" is left out —
 // it's a no-op on the standalone page too (onExport={() => {}}), so there's
-// nothing real to wire.
+// nothing real to wire. `trigger="icon"` renders the "···" ellipsis button used
+// by the client page's header actions cluster instead of the outline "Actions"
+// button used in the hero card.
 
-function QuoteActionsMenu({
+export function QuoteActionsMenu({
   quoteId,
   quoteData,
   quote,
@@ -1099,6 +1112,7 @@ function QuoteActionsMenu({
   clientId,
   clientName,
   onDeleted,
+  trigger = "button",
 }: {
   quoteId: string;
   quoteData: any;
@@ -1107,6 +1121,7 @@ function QuoteActionsMenu({
   clientId: string;
   clientName: string;
   onDeleted: () => void;
+  trigger?: "button" | "icon";
 }) {
   const [, setLocation] = useLocation();
   const { role } = useRole();
@@ -1148,15 +1163,26 @@ function QuoteActionsMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 rounded-md border-black/10 bg-white"
-            data-testid="holiday-detail-actions"
-          >
-            Actions
-            <ChevronDown className="ml-2 h-4 w-4" />
-          </Button>
+          {trigger === "icon" ? (
+            <button
+              type="button"
+              className={HEADER_ELLIPSIS_BUTTON_CLASS}
+              aria-label="More actions"
+              data-testid="client-header-actions"
+            >
+              <Ellipsis className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-md border-black/10 bg-white"
+              data-testid="holiday-detail-actions"
+            >
+              Actions
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 rounded-xl">
           <DropdownMenuItem onClick={() => setShowEditDialog(true)} className="gap-2 rounded-lg text-sm">
@@ -1302,15 +1328,6 @@ function QuoteHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailC
             </div>
             <div className="flex items-center gap-2">
               <ViewsPill quoteId={id} />
-              <QuoteActionsMenu
-                quoteId={id}
-                quoteData={quoteData}
-                quote={quote}
-                quoteImageUrls={quoteImageUrls}
-                clientId={clientId}
-                clientName={clientName}
-                onDeleted={onBack}
-              />
             </div>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-black/55" data-testid="holiday-detail-meta">
@@ -1336,18 +1353,21 @@ function QuoteHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailC
 
 // ─── Booking actions menu ───────────────────────────────────────────────────
 // Mirrors the standalone booking page's "···" ellipsis menu: Pin, Edit,
-// Manage Upsells, and (Admin only) Delete.
+// Manage Upsells, and (Admin only) Delete. `trigger="icon"` renders the same
+// "···" ellipsis button used by the client page's header actions cluster.
 
-function BookingActionsMenu({
+export function BookingActionsMenu({
   bookingId,
   clientId,
   booking,
   onDeleted,
+  trigger = "button",
 }: {
   bookingId: string;
   clientId: string;
   booking: QuoteDisplay;
   onDeleted: () => void;
+  trigger?: "button" | "icon";
 }) {
   const { role } = useRole();
   const isAdmin = role === "Admin";
@@ -1375,15 +1395,26 @@ function BookingActionsMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 rounded-md border-black/10 bg-white"
-            data-testid="holiday-detail-actions"
-          >
-            Actions
-            <ChevronDown className="ml-2 h-4 w-4" />
-          </Button>
+          {trigger === "icon" ? (
+            <button
+              type="button"
+              className={HEADER_ELLIPSIS_BUTTON_CLASS}
+              aria-label="More actions"
+              data-testid="client-header-actions"
+            >
+              <Ellipsis className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-md border-black/10 bg-white"
+              data-testid="holiday-detail-actions"
+            >
+              Actions
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 rounded-xl">
           <DropdownMenuItem onClick={togglePin} className="gap-2 rounded-lg text-sm">
@@ -1470,7 +1501,6 @@ function BookingHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
               >
                 Booked
               </span>
-              <BookingActionsMenu bookingId={id} clientId={clientId} booking={booking} onDeleted={onBack} />
             </div>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-black/55" data-testid="holiday-detail-meta">
@@ -1494,19 +1524,23 @@ function BookingHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
 // ─── Enquiry actions menu ───────────────────────────────────────────────────
 // Mirrors the standalone enquiry page's "···" ellipsis menu: Pin, Edit, and
 // (when not already converted) Convert to Quote. No delete item exists there.
+// `trigger="icon"` renders the same "···" ellipsis button used by the client
+// page's header actions cluster.
 
-function EnquiryActionsMenu({
+export function EnquiryActionsMenu({
   enquiryId,
   clientId,
   clientName,
   enquiry,
   destinationName,
+  trigger = "button",
 }: {
   enquiryId: string;
   clientId: string;
   clientName: string;
   enquiry: EnquiryTable;
   destinationName: string | null;
+  trigger?: "button" | "icon";
 }) {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -1577,15 +1611,26 @@ function EnquiryActionsMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 rounded-md border-black/10 bg-white"
-            data-testid="holiday-detail-actions"
-          >
-            Actions
-            <ChevronDown className="ml-2 h-4 w-4" />
-          </Button>
+          {trigger === "icon" ? (
+            <button
+              type="button"
+              className={HEADER_ELLIPSIS_BUTTON_CLASS}
+              aria-label="More actions"
+              data-testid="client-header-actions"
+            >
+              <Ellipsis className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-md border-black/10 bg-white"
+              data-testid="holiday-detail-actions"
+            >
+              Actions
+              <ChevronDown className="ml-2 h-4 w-4" />
+            </Button>
+          )}
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48 rounded-xl">
           <DropdownMenuItem
@@ -1698,13 +1743,6 @@ function EnquiryHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
                 {enquiry.status}
               </span>
             )}
-            <EnquiryActionsMenu
-              enquiryId={id}
-              clientId={clientId}
-              clientName={clientName}
-              enquiry={enquiry}
-              destinationName={destinationName}
-            />
           </div>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-black/55" data-testid="holiday-detail-meta">
