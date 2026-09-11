@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Building2,
   ChevronDown,
@@ -52,13 +52,18 @@ import { cn } from "@/lib/utils";
 import { EMOJI_CATEGORIES } from "@/lib/emoji";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, useTransactions } from "@/hooks/queries";
+import { holidayLabelOf } from "@/features/transaction";
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { NoteEditor } from "@/components/shared/note-editor";
 import { DayDivider, dayLabel } from "@/features/conversations";
 import type { User as ApiUser } from "@/features/user/types";
 import { useCreateReply, useDeleteReply, useReplies, useToggleReplyLike, useUpdateReply } from "@/features/reply";
 import type { TicketReply } from "@/features/reply";
+import { useAttachments, useDeleteAttachment, usePendingAttachments } from "@/features/attachment";
+import type { TicketAttachment } from "@/features/attachment";
 import { authorBubbleClasses } from "../lib/author-colors";
+import { ReplyThreadToggle } from "./reply-thread-toggle";
+import { TicketAttachmentList } from "./ticket-attachment-list";
 import { useDeleteTicket, useToggleTicketLike, useUpdateTicket } from "../api/use-ticket-mutations";
 import { TICKET_STATUSES } from "../types";
 import type { Ticket } from "../types";
@@ -252,23 +257,34 @@ function NoteBubble({
   isMe,
   nested = false,
   actions,
+  footer,
+  attachments,
+  onDeleteAttachment,
+  deletingAttachmentId,
 }: {
   note: ThreadNote;
   isMe: boolean;
-  /** Rendered beneath a parent reply — indented to show the thread. */
+  /** Rendered beneath a parent — indented on the parent's side to show the thread. */
   nested?: boolean;
   /** Absent for the ticket description, which is not a reply. */
   actions?: NoteActions;
+  /** Rendered under the bubble, inside its column (e.g. the replies toggle). */
+  footer?: ReactNode;
+  /** Files posted with this note (ticket-level or reply-level). */
+  attachments?: TicketAttachment[];
+  /** Present only when the viewer may remove attachments from this note. */
+  onDeleteAttachment?: (id: string) => void;
+  deletingAttachmentId?: string | null;
 }) {
   const colors = authorBubbleClasses(note.authorId, isMe);
   const isEdited = !!note.updatedAt && Date.parse(note.updatedAt) > Date.parse(note.createdAt) + 1000;
 
   return (
-    <div className={cn("flex", isMe ? "justify-end" : "justify-start", nested && (isMe ? "pr-10" : "pl-10"))}>
+    <div className={cn("flex", isMe ? "justify-end" : "justify-start", nested ? "text-[13px]" : isMe && "pr-8")}>
       {/* Avatar sits flush at the bubble's very top-left corner, straddling
           the top edge — half above, half inside — mirroring the quote details
           Notes tab. mt-4 reserves room for the protruding half. */}
-      <div className="relative mt-4 max-w-[75%]">
+      <div className={cn("relative mt-4", nested ? "max-w-full" : "max-w-[75%]")}>
         <div className="absolute -top-4 left-0">
           <SenderAvatar name={note.authorName} imageUrl={note.authorImage} />
         </div>
@@ -293,6 +309,14 @@ function NoteBubble({
             <div className="whitespace-pre-wrap break-words text-[13px] leading-relaxed 3xl:text-sm">
               <RichTextDisplay content={note.content} />
             </div>
+          )}
+          {!actions?.isEditing && attachments && attachments.length > 0 && (
+            <TicketAttachmentList
+              attachments={attachments}
+              onDelete={onDeleteAttachment}
+              deletingId={deletingAttachmentId}
+              compact
+            />
           )}
           {actions && !actions.isEditing && (
             <div className="mt-1.5 flex items-center gap-3 text-black/45 dark:text-white/40">
@@ -361,6 +385,7 @@ function NoteBubble({
             </div>
           )}
         </div>
+        {footer}
       </div>
     </div>
   );
@@ -375,11 +400,12 @@ interface ReplyTarget {
 
 const COMPOSER_MAX_HEIGHT_PX = 140;
 
+const ATTACHMENT_ACCEPT = "image/jpeg,image/png,image/gif,image/webp,application/pdf";
+
 // Composer for a ticket's replies — visually matches the conversations inbox's
 // Composer (rounded bordered box, auto-grow textarea, emoji + attach toolbar,
 // outline "Send ⌄" button) minus the note/reply toggle: ticket replies have no
-// note concept to switch to. Attachments aren't wired up here — see the
-// "aren't supported" title below.
+// note concept to switch to.
 function ReplyComposer({
   ticketId,
   replyingTo,
@@ -396,30 +422,45 @@ function ReplyComposer({
   const [text, setText] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const createReply = useCreateReply(ticketId);
+  const { files: pendingFiles, addFiles, removeFile, uploadAll } = usePendingAttachments();
 
   // Picking someone to reply to puts the cursor straight into the box.
   useEffect(() => {
     if (replyingTo) textareaRef.current?.focus();
   }, [replyingTo]);
 
+  const canSubmit = !!text.trim() || pendingFiles.length > 0;
+
   const submit = () => {
     const trimmed = text.trim();
-    if (!trimmed || createReply.isPending) return;
+    if (!canSubmit || createReply.isPending) return;
     if (!currentUser?.id) {
       toast({ title: "Please wait while loading user data", variant: "destructive" });
       return;
     }
     createReply.mutate(
-      { userId: currentUser.id, content: trimmed, parentReplyId: replyingTo?.parentReplyId },
+      { userId: currentUser.id, content: trimmed || "Attachment", parentReplyId: replyingTo?.parentReplyId },
       {
-        onSuccess: () => {
+        onSuccess: async (reply) => {
           setText("");
+          if (pendingFiles.length > 0) {
+            const { failed } = await uploadAll(ticketId, reply.id);
+            if (failed > 0) {
+              toast({ title: `${failed} attachment(s) failed to upload`, variant: "destructive" });
+            }
+          }
           onSent();
         },
         onError: () => toast({ title: "Failed to add reply", variant: "destructive" }),
       },
     );
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) addFiles(e.target.files);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // Insert at the caret rather than appending, and hand focus back so typing
@@ -528,10 +569,19 @@ function ReplyComposer({
                 </div>
               </PopoverContent>
             </Popover>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={ATTACHMENT_ACCEPT}
+              onChange={handleFileSelect}
+              className="hidden"
+              data-testid="ticket-reply-attach-input"
+            />
             <button
               type="button"
-              disabled
-              title="Attachments aren't supported on ticket replies"
+              title="Attach files"
+              onClick={() => fileInputRef.current?.click()}
               className="grid h-8 w-8 place-items-center rounded-sm transition hover:bg-black/5 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
               data-testid="ticket-reply-attach"
             >
@@ -542,7 +592,7 @@ function ReplyComposer({
           <Button
             type="button"
             onClick={submit}
-            disabled={!text.trim() || createReply.isPending}
+            disabled={!canSubmit || createReply.isPending}
             variant="outline"
             className="h-10 shrink-0 gap-2 rounded-md border-black/10 bg-black/[0.02] px-4 text-sm font-medium text-black/60 hover:bg-black/5 hover:text-black disabled:opacity-40 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/70"
             data-testid="ticket-reply-send"
@@ -552,6 +602,28 @@ function ReplyComposer({
             <ChevronDown className="h-3.5 w-3.5" />
           </Button>
         </div>
+        {pendingFiles.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {pendingFiles.map((file, index) => (
+              <div
+                key={`${file.name}-${index}`}
+                className="flex items-center gap-1.5 rounded-lg bg-black/[0.04] px-2 py-1 text-xs dark:bg-white/10"
+                data-testid={`ticket-reply-pending-${index}`}
+              >
+                <Paperclip className="h-3 w-3 text-black/40 dark:text-white/40" />
+                <span className="max-w-[140px] truncate text-black/70 dark:text-white/70">{file.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeFile(index)}
+                  className="text-black/30 hover:text-rose-600 dark:text-white/30"
+                  aria-label="Remove attachment"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -565,34 +637,54 @@ function formatBookingDate(value: string | null | undefined): string | null {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-// "Link booking" dialog opened from the thread header's overflow menu — same
-// client-bookings select as the create-ticket dialog's optional Booking field.
-function LinkBookingDialog({ ticket, open, onOpenChange }: { ticket: Ticket; open: boolean; onOpenChange: (open: boolean) => void }) {
+// "Link holiday" dialog opened from the thread header's overflow menu: attach
+// the ticket to one of this client's transactions (booking, quote, or
+// enquiry — whichever `holidayLabelOf` resolves it to). A ticket links to one
+// transaction at a time.
+type HolidayLinkOption = { id: string; label: string };
+
+const HOLIDAY_KIND_PREFIX: Record<"booking" | "quote" | "enquiry", string> = {
+  booking: "Booking",
+  quote: "Quote",
+  enquiry: "Enquiry",
+};
+
+function LinkHolidayDialog({ ticket, open, onOpenChange }: { ticket: Ticket; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
-  const [bookingId, setBookingId] = useState("");
+  const [selection, setSelection] = useState("");
   const updateTicket = useUpdateTicket();
 
   const { data: transactions } = useTransactions(
     { clientId: ticket.clientId ?? undefined },
     { enabled: open && !!ticket.clientId },
   );
-  const bookings = (transactions ?? []).filter((t) => !!t.booking).map((t) => t.booking!);
+  const options = useMemo<HolidayLinkOption[]>(() => {
+    const out: HolidayLinkOption[] = [];
+    for (const t of transactions ?? []) {
+      const { kind, title, date } = holidayLabelOf(t);
+      if (!kind) continue;
+      const formattedDate = formatBookingDate(date);
+      out.push({ id: t.id, label: `${HOLIDAY_KIND_PREFIX[kind]} · ${title}${formattedDate ? ` — ${formattedDate}` : ""}` });
+    }
+    return out;
+  }, [transactions]);
 
-  // Reseed from the ticket's current booking each time the dialog opens.
+  // Reseed from the ticket's current link each time the dialog opens.
   useEffect(() => {
-    if (open) setBookingId(ticket.bookingId ?? "");
-  }, [open, ticket.bookingId]);
+    if (!open) return;
+    setSelection(ticket.transactionId ?? "");
+  }, [open, ticket.transactionId]);
 
   const save = () => {
-    if (!bookingId) return;
+    if (!selection) return;
     updateTicket.mutate(
-      { id: ticket.id, data: { bookingId } },
+      { id: ticket.id, data: { transactionId: selection } },
       {
         onSuccess: () => {
-          toast({ title: "Booking linked" });
+          toast({ title: "Holiday linked" });
           onOpenChange(false);
         },
-        onError: () => toast({ title: "Failed to link booking", variant: "destructive" }),
+        onError: () => toast({ title: "Failed to link holiday", variant: "destructive" }),
       },
     );
   };
@@ -601,30 +693,29 @@ function LinkBookingDialog({ ticket, open, onOpenChange }: { ticket: Ticket; ope
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>Link booking</DialogTitle>
-          <DialogDescription>Attach one of this client's bookings to the ticket.</DialogDescription>
+          <DialogTitle>Link to a holiday</DialogTitle>
+          <DialogDescription>Attach one of this client's holidays to the ticket.</DialogDescription>
         </DialogHeader>
         <div className="grid gap-2 py-2">
-          <Select value={bookingId || undefined} onValueChange={setBookingId}>
-            <SelectTrigger data-testid="link-booking-select">
-              <SelectValue placeholder={bookings.length ? "Select a booking" : "No bookings for this client"} />
+          <Select value={selection || undefined} onValueChange={setSelection}>
+            <SelectTrigger data-testid="link-holiday-select">
+              <SelectValue placeholder={options.length ? "Select a holiday" : "No holidays for this client"} />
             </SelectTrigger>
             <SelectContent>
-              {bookings.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.title || "Untitled booking"}
-                  {formatBookingDate(b.travel_date) ? ` — ${formatBookingDate(b.travel_date)}` : ""}
+              {options.map((o) => (
+                <SelectItem key={o.id} value={o.id}>
+                  {o.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="link-booking-cancel">
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="link-holiday-cancel">
             Cancel
           </Button>
-          <Button onClick={save} disabled={!bookingId || updateTicket.isPending} data-testid="link-booking-save">
-            {updateTicket.isPending ? "Linking…" : "Link booking"}
+          <Button onClick={save} disabled={!selection || updateTicket.isPending} data-testid="link-holiday-save">
+            {updateTicket.isPending ? "Linking…" : "Link"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -666,15 +757,26 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
   const deleteReply = useDeleteReply(ticketId);
   const toggleLike = useToggleReplyLike(ticketId);
   const toggleTicketLike = useToggleTicketLike();
+  const { data: attachments } = useAttachments(ticketId);
+  const deleteAttachment = useDeleteAttachment(ticketId);
   const [replyingTo, setReplyingTo] = useState<ReplyTarget | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [collapsedReplies, setCollapsedReplies] = useState<Set<string>>(new Set());
+  const toggleReplies = (id: string) =>
+    setCollapsedReplies((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   // Per-reply UI state belongs to one ticket; drop it when another is opened.
   useEffect(() => {
     setReplyingTo(null);
     setEditingId(null);
     setConfirmDeleteId(null);
+    setCollapsedReplies(new Set());
   }, [ticketId]);
 
   const thread = useMemo(() => (ticket ? buildThread(ticket, replies, users) : []), [ticket, replies, users]);
@@ -692,6 +794,38 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
   }, [ticket?.id, noteCount]);
 
   const isMine = (userId: string) => !!currentUser?.id && currentUser.id === userId;
+
+  // Attachments grouped by the reply they were posted with — null groups the
+  // ticket-level ones under the description post.
+  const attachmentsByReply = useMemo(() => {
+    const map = new Map<string | null, TicketAttachment[]>();
+    for (const a of attachments ?? []) {
+      const list = map.get(a.replyId) ?? [];
+      list.push(a);
+      map.set(a.replyId, list);
+    }
+    return map;
+  }, [attachments]);
+
+  const attachmentsFor = (note: ThreadNote): TicketAttachment[] =>
+    attachmentsByReply.get(note.reply ? note.reply.id : null) ?? [];
+
+  // A reply's author may remove its attachments; the ticket-level ones may
+  // only be removed by whoever raised the ticket.
+  const canDeleteAttachmentsFor = (note: ThreadNote): boolean => {
+    if (!ticket) return false;
+    return note.reply ? isMine(note.reply.userId) : isMine(ticket.userId);
+  };
+
+  const onDeleteAttachmentFor = (note: ThreadNote) =>
+    canDeleteAttachmentsFor(note)
+      ? (id: string) =>
+          deleteAttachment.mutate(id, {
+            onError: () => toast({ title: "Failed to delete attachment", variant: "destructive" }),
+          })
+      : undefined;
+
+  const deletingAttachmentId = deleteAttachment.isPending ? (deleteAttachment.variables ?? null) : null;
 
   // Builds the action handlers for one reply bubble. Replies to a nested reply
   // attach to its top-level parent (threads are one level deep) but still
@@ -791,12 +925,12 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
       },
     );
 
-  const unlinkBooking = () =>
+  const unlinkHoliday = () =>
     updateTicket.mutate(
-      { id: ticket.id, data: { bookingId: null } },
+      { id: ticket.id, data: { transactionId: null } },
       {
-        onSuccess: () => toast({ title: "Booking unlinked" }),
-        onError: () => toast({ title: "Failed to unlink booking", variant: "destructive" }),
+        onSuccess: () => toast({ title: "Holiday unlinked" }),
+        onError: () => toast({ title: "Failed to unlink holiday", variant: "destructive" }),
       },
     );
 
@@ -888,15 +1022,15 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
                 className="gap-2 rounded-lg text-sm"
                 data-testid="ticket-link-booking"
               >
-                <Building2 className="h-4 w-4" /> Link booking
+                <Building2 className="h-4 w-4" /> Link to holiday
               </DropdownMenuItem>
-              {ticket.bookingId && (
+              {ticket.transactionId && (
                 <DropdownMenuItem
-                  onClick={unlinkBooking}
+                  onClick={unlinkHoliday}
                   className="gap-2 rounded-lg text-sm"
                   data-testid="ticket-unlink-booking"
                 >
-                  <Unlink className="h-4 w-4" /> Unlink booking
+                  <Unlink className="h-4 w-4" /> Unlink holiday
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
@@ -927,17 +1061,49 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
             <div key={gi} className="space-y-4">
               <DayDivider label={group.day} />
               {group.items.map(({ note, children }) => (
-                <div key={note.id} className="space-y-4">
-                  <NoteBubble note={note} isMe={isMine(note.authorId)} actions={actionsFor(note, note.id)} />
-                  {children.map((child) => (
-                    <NoteBubble
-                      key={child.id}
-                      note={child}
-                      nested
-                      isMe={isMine(child.authorId)}
-                      actions={actionsFor(child, note.id)}
-                    />
-                  ))}
+                <div key={note.id} className="flex flex-col space-y-3">
+                  <NoteBubble
+                    note={note}
+                    isMe={isMine(note.authorId)}
+                    actions={actionsFor(note, note.id)}
+                    attachments={attachmentsFor(note)}
+                    onDeleteAttachment={onDeleteAttachmentFor(note)}
+                    deletingAttachmentId={deletingAttachmentId}
+                    footer={
+                      children.length > 0 ? (
+                        <ReplyThreadToggle
+                          count={children.length}
+                          collapsed={collapsedReplies.has(note.id)}
+                          onToggle={() => toggleReplies(note.id)}
+                          data-testid={`ticket-note-replies-toggle-${note.id}`}
+                        />
+                      ) : undefined
+                    }
+                  />
+                  {/* Replies hang off one straight rail under the comment they answer,
+                      hugging the replies rather than the panel edge, and can be folded away. */}
+                  {children.length > 0 && !collapsedReplies.has(note.id) && (
+                    <div
+                      className={cn(
+                        "flex w-fit max-w-[88%] flex-col space-y-3 border-l-2 border-black/[0.08] pl-4 dark:border-white/10",
+                        isMine(note.authorId) ? "self-end" : "self-start ml-2",
+                      )}
+                      data-testid={`ticket-note-replies-${note.id}`}
+                    >
+                      {children.map((child) => (
+                        <NoteBubble
+                          key={child.id}
+                          note={child}
+                          nested
+                          isMe={isMine(child.authorId)}
+                          actions={actionsFor(child, note.id)}
+                          attachments={attachmentsFor(child)}
+                          onDeleteAttachment={onDeleteAttachmentFor(child)}
+                          deletingAttachmentId={deletingAttachmentId}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -953,7 +1119,7 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
         onSent={() => setReplyingTo(null)}
       />
 
-      <LinkBookingDialog ticket={ticket} open={linkBookingOpen} onOpenChange={setLinkBookingOpen} />
+      <LinkHolidayDialog ticket={ticket} open={linkBookingOpen} onOpenChange={setLinkBookingOpen} />
     </Card>
   );
 }

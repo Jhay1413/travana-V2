@@ -22,12 +22,19 @@ import {
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
 import { attachmentApi } from "@/api";
 import { useCurrentUser, useNeonClients, useTransactions, useUsers } from "@/hooks/queries";
+import { holidayLabelOf } from "@/features/transaction";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateTicket } from "../api/use-ticket-mutations";
 import { TICKET_PRIORITIES, TICKET_STATUSES, TICKET_TYPES } from "../types";
 import type { Ticket } from "../types";
 
-// "23 Jul 2026" — short date for the booking select's label.
+const HOLIDAY_KIND_PREFIX: Record<"booking" | "quote" | "enquiry", string> = {
+  booking: "Booking",
+  quote: "Quote",
+  enquiry: "Enquiry",
+};
+
+// "23 Jul 2026" — short date for the holiday select's label.
 function formatBookingDate(value: string | null | undefined): string | null {
   if (!value) return null;
   const d = new Date(value);
@@ -69,7 +76,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
   const [formData, setFormData] = useState({
     clientId: "",
     userId: "",
-    bookingId: "",
+    transactionId: "",
     type: "Sales" as (typeof TICKET_TYPES)[number],
     status: "Open" as (typeof TICKET_STATUSES)[number],
     priority: "Medium" as (typeof TICKET_PRIORITIES)[number],
@@ -83,7 +90,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
   const { data: currentUser } = useCurrentUser();
   const createTicketMutation = useCreateTicket();
 
-  // That client's bookings, for the optional "Booking" select below the
+  // That client's transactions, for the optional "Holiday" select below the
   // customer picker — Build tickets have no client, so this only ever fires
   // for Admin/Sales tickets once a customer is chosen.
   const showBookingField = formData.type !== "Build";
@@ -91,9 +98,9 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
     { clientId: formData.clientId },
     { enabled: showBookingField && !!formData.clientId },
   );
-  const clientBookings = (clientTransactions ?? [])
-    .filter((t) => !!t.booking)
-    .map((t) => t.booking!);
+  const holidayOptions = (clientTransactions ?? [])
+    .map((t) => ({ id: t.id, ...holidayLabelOf(t) }))
+    .filter((o) => o.kind !== null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -106,7 +113,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
   }, []);
 
   const resetForm = () => {
-    setFormData({ clientId: "", userId: "", bookingId: "", type: "Sales", status: "Open", priority: "Medium", subject: "", description: "", dueDate: "" });
+    setFormData({ clientId: "", userId: "", transactionId: "", type: "Sales", status: "Open", priority: "Medium", subject: "", description: "", dueDate: "" });
     setCustomerSearch("");
     setSelectedCustomerName("");
     setShowCustomerDropdown(false);
@@ -149,7 +156,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
         clientId: formData.type === "Build" ? null : formData.clientId,
         userId: currentUser?.id || formData.userId,
         assignedTo: formData.userId,
-        bookingId: formData.type === "Build" ? null : formData.bookingId || null,
+        transactionId: formData.type === "Build" ? null : formData.transactionId || null,
         type: formData.type,
         status: formData.status,
         priority: formData.priority,
@@ -207,7 +214,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
                   onChange={(e) => {
                     setCustomerSearch(e.target.value);
                     setSelectedCustomerName("");
-                    setFormData({ ...formData, clientId: "", bookingId: "" });
+                    setFormData({ ...formData, clientId: "", transactionId: "" });
                     setShowCustomerDropdown(true);
                   }}
                   onFocus={() => setShowCustomerDropdown(true)}
@@ -224,7 +231,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
                           data-testid={`customer-option-${c.id}`}
                           onClick={() => {
                             const displayName = `${c.title && c.title !== "NULL" ? c.title + " " : ""}${c.firstName || ""} ${c.surename || ""}`.trim();
-                            setFormData({ ...formData, clientId: c.id, bookingId: "" });
+                            setFormData({ ...formData, clientId: c.id, transactionId: "" });
                             setSelectedCustomerName(displayName);
                             setCustomerSearch("");
                             setShowCustomerDropdown(false);
@@ -245,18 +252,19 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
           )}
           {showBookingField && formData.clientId && (
             <div className="grid gap-2">
-              <Label htmlFor="booking">Booking</Label>
+              <Label htmlFor="booking">Holiday</Label>
               <Select
-                value={formData.bookingId || undefined}
-                onValueChange={(v) => setFormData({ ...formData, bookingId: v })}
+                value={formData.transactionId || undefined}
+                onValueChange={(v) => setFormData({ ...formData, transactionId: v })}
               >
                 <SelectTrigger data-testid="select-booking">
-                  <SelectValue placeholder={clientBookings.length ? "Select a booking (optional)" : "No bookings for this client"} />
+                  <SelectValue placeholder={holidayOptions.length ? "Select a holiday (optional)" : "No holidays for this client"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {clientBookings.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.title || "Untitled booking"}{formatBookingDate(b.travel_date) ? ` — ${formatBookingDate(b.travel_date)}` : ""}
+                  {holidayOptions.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      {HOLIDAY_KIND_PREFIX[o.kind as "booking" | "quote" | "enquiry"]} · {o.title}
+                      {formatBookingDate(o.date) ? ` — ${formatBookingDate(o.date)}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -281,7 +289,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
                     ...prev,
                     type,
                     clientId: type === "Build" ? "" : prev.clientId,
-                    bookingId: type === "Build" ? "" : prev.bookingId,
+                    transactionId: type === "Build" ? "" : prev.transactionId,
                   }));
                   if (type === "Build") {
                     setSelectedCustomerName("");

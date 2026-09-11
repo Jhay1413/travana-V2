@@ -29,7 +29,7 @@ function buildTicketWithNamesQuery(viewerUserId: string | null) {
       clientId: tickets.clientId,
       userId: tickets.userId,
       assignedTo: tickets.assignedTo,
-      bookingId: tickets.bookingId,
+      transactionId: tickets.transactionId,
       type: tickets.type,
       status: tickets.status,
       priority: tickets.priority,

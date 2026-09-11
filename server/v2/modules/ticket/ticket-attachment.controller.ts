@@ -18,9 +18,11 @@ export const ticketAttachmentController = {
     const file = req.file;
     if (!file) throw new AppError('No file uploaded', 400);
 
+    // multer puts non-file multipart fields on req.body.
+    const replyId = typeof req.body?.replyId === "string" && req.body.replyId ? req.body.replyId : null;
     const attachment = await ticketAttachmentService.uploadAndCreate(
       ticketId,
-      { buffer: file.buffer, originalName: file.originalname, mimeType: file.mimetype, size: file.size },
+      { buffer: file.buffer, originalName: file.originalname, mimeType: file.mimetype, size: file.size, replyId },
       scope,
     );
     return successResponse(res, attachment, 'Attachment uploaded successfully', 201);

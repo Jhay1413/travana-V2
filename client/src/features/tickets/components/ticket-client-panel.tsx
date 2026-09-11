@@ -10,6 +10,7 @@ import {
   MoonStar,
   Phone,
   PlaneTakeoff,
+  BadgePoundSterling,
   Tag,
   User,
   Utensils,
@@ -17,7 +18,9 @@ import {
 import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useBooking, useClient } from "@/hooks/queries";
+import { useBooking, useClient, useQuote, useTransactionDetails } from "@/hooks/queries";
+import { holidayLabelOf, mainQuoteOf } from "@/features/transaction";
+import type { EnquiryTable } from "@/features/quote/types";
 import { clientDisplayName, cn } from "@/lib/utils";
 import type { Ticket } from "../types";
 
@@ -135,6 +138,114 @@ function BookingSection({ bookingId }: { bookingId: string }) {
   );
 }
 
+// Collapsible "Quote" block — the quote counterpart of BookingSection, for
+// tickets raised against a quote rather than a booking.
+function QuoteSection({ quoteId }: { quoteId: string }) {
+  const [open, setOpen] = useState(true);
+  const { data: quote, isLoading } = useQuote(quoteId);
+
+  if (isLoading && !quote) {
+    return <p className="text-xs text-black/45 dark:text-white/45">Loading quote…</p>;
+  }
+  if (!quote) return null;
+
+  const primaryAccommodation = quote.accommodations?.find((a) => a.is_primary) ?? quote.accommodations?.[0];
+  const nights = quote.num_of_nights != null ? `${quote.num_of_nights} Night${quote.num_of_nights === 1 ? "" : "s"}` : null;
+  const price = quote.sales_price ? Number(quote.sales_price) : null;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="border-t border-black/10 pt-5 dark:border-white/10">
+      <CollapsibleTrigger className="flex w-full items-center justify-between" data-testid="ticket-quote-section-trigger">
+        <h3 className="text-[13px] font-semibold 3xl:text-sm">Quote</h3>
+        <ChevronRight className={cn("h-4 w-4 shrink-0 text-black/45 transition-transform dark:text-white/45", open && "rotate-90")} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-4 space-y-5">
+        {quote.title && <ClientField label="Quote Name" icon={Tag} value={quote.title} href={`/quotes/${quote.id}`} />}
+        {quote.quote_status && <ClientField label="Status" icon={Hash} value={quote.quote_status} />}
+        {formatBookingDate(quote.travel_date) && (
+          <ClientField label="Travel Date" icon={CalendarDays} value={formatBookingDate(quote.travel_date)!} />
+        )}
+        {nights && <ClientField label="Number Nights" icon={MoonStar} value={nights} />}
+        {quote.destination_name && <ClientField label="Destination" icon={MapPin} value={quote.destination_name} />}
+        {primaryAccommodation?.accomodation_name && (
+          <ClientField label="Hotel" icon={Hotel} value={primaryAccommodation.accomodation_name} />
+        )}
+        {price != null && price > 0 && (
+          <ClientField label="Price" icon={BadgePoundSterling} value={new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(price)} />
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function passengersLabel(enquiry: EnquiryTable): string | null {
+  const parts: string[] = [];
+  if (enquiry.adults) parts.push(`${enquiry.adults} adult${enquiry.adults === 1 ? "" : "s"}`);
+  if (enquiry.children) parts.push(`${enquiry.children} child${enquiry.children === 1 ? "" : "ren"}`);
+  if (enquiry.infants) parts.push(`${enquiry.infants} infant${enquiry.infants === 1 ? "" : "s"}`);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
+// Collapsible "Enquiry" block — the enquiry counterpart of BookingSection /
+// QuoteSection, for tickets raised against a transaction that hasn't been
+// quoted or booked yet. Rendered inline from the transaction payload rather
+// than fetched separately, since `useTransactionDetails` already carries it.
+function EnquirySection({ enquiry }: { enquiry: EnquiryTable }) {
+  const [open, setOpen] = useState(true);
+
+  const nights = enquiry.no_of_nights != null ? `${enquiry.no_of_nights} Night${enquiry.no_of_nights === 1 ? "" : "s"}` : null;
+  const passengers = passengersLabel(enquiry);
+  const budgetAmount = enquiry.budget ? Number(enquiry.budget) : null;
+  const budgetLabel =
+    budgetAmount != null && budgetAmount > 0
+      ? `${new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(budgetAmount)}${enquiry.budget_type ? ` (${enquiry.budget_type})` : ""}`
+      : null;
+  const destinations = enquiry.destinations?.map((d) => d.name).filter(Boolean).join(", ") || null;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="border-t border-black/10 pt-5 dark:border-white/10">
+      <CollapsibleTrigger className="flex w-full items-center justify-between" data-testid="ticket-enquiry-section-trigger">
+        <h3 className="text-[13px] font-semibold 3xl:text-sm">Enquiry</h3>
+        <ChevronRight className={cn("h-4 w-4 shrink-0 text-black/45 transition-transform dark:text-white/45", open && "rotate-90")} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-4 space-y-5">
+        {enquiry.title && <ClientField label="Enquiry Name" icon={Tag} value={enquiry.title} href={`/enquiries/${enquiry.id}`} />}
+        {enquiry.holiday_type_name && <ClientField label="Holiday Type" icon={Globe} value={enquiry.holiday_type_name} />}
+        {formatBookingDate(enquiry.travel_date) && (
+          <ClientField label="Travel Date" icon={CalendarDays} value={formatBookingDate(enquiry.travel_date)!} />
+        )}
+        {nights && <ClientField label="Number Nights" icon={MoonStar} value={nights} />}
+        {passengers && <ClientField label="Passengers" icon={User} value={passengers} />}
+        {budgetLabel && <ClientField label="Budget" icon={BadgePoundSterling} value={budgetLabel} />}
+        {destinations && <ClientField label="Destinations" icon={MapPin} value={destinations} />}
+        {enquiry.status && <ClientField label="Status" icon={Hash} value={enquiry.status} />}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// Resolves the ticket's linked transaction to whichever section fits its
+// current stage — booking, quote, or enquiry — same `holidayLabelOf` rule
+// used for the "Link to holiday" picker.
+function HolidaySection({ transactionId }: { transactionId: string | null | undefined }) {
+  const { data: transaction, isLoading } = useTransactionDetails(transactionId);
+
+  if (!transactionId) return null;
+  if (isLoading && !transaction) {
+    return <p className="text-xs text-black/45 dark:text-white/45">Loading holiday…</p>;
+  }
+  if (!transaction) return null;
+
+  const { kind } = holidayLabelOf(transaction);
+  if (kind === "booking" && transaction.booking) return <BookingSection bookingId={transaction.booking.id} />;
+  if (kind === "quote") {
+    const quote = mainQuoteOf(transaction);
+    if (quote) return <QuoteSection quoteId={quote.id} />;
+  }
+  if (kind === "enquiry" && transaction.enquiry) return <EnquirySection enquiry={transaction.enquiry} />;
+  return null;
+}
+
 export function TicketClientPanel({ ticket }: { ticket: Ticket | null | undefined }) {
   const { data: client, isLoading } = useClient(ticket?.clientId ?? "");
   const raw = client as unknown as RawClientRow | undefined;
@@ -171,7 +282,7 @@ export function TicketClientPanel({ ticket }: { ticket: Ticket | null | undefine
               </div>
               {contact && <ClientField label="Contact" icon={contactIcon} value={contact} />}
               {since && <ClientField label="Member Since" icon={CalendarDays} value={since} />}
-              {ticket.bookingId && <BookingSection bookingId={ticket.bookingId} />}
+              {ticket.transactionId && <HolidaySection transactionId={ticket.transactionId} />}
             </>
           ) : (
             <p className="text-xs text-black/45 dark:text-white/45">Couldn't load this client's details.</p>

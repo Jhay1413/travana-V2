@@ -19,6 +19,11 @@ export const transactionApi = {
     return data;
   },
 
+  getWithDetails: async (id: string): Promise<Transaction> => {
+    const { data } = await axiosClient.get<Transaction>(`/api/v2/transactions/${id}/details`);
+    return data;
+  },
+
   create: async (txnData: CreateTransactionData | FormData): Promise<Transaction> => {
     const config = txnData instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : {};
     const { data } = await axiosClient.post<Transaction>("/api/v2/transactions", txnData, config);

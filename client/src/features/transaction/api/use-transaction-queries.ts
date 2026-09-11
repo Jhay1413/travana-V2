@@ -8,6 +8,7 @@ export const transactionKeys = {
   list: (filters?: any) => [...transactionKeys.lists(), filters] as const,
   details: () => [...transactionKeys.all, "detail"] as const,
   detail: (id: string) => [...transactionKeys.details(), id] as const,
+  detailWithRelations: (id: string) => [...transactionKeys.details(), id, "with-details"] as const,
   stats: () => [...transactionKeys.all, "stats"] as const,
   pipeline: (status: string, agentId?: string, quoteStatus?: string) => [...transactionKeys.all, "pipeline", status, agentId, quoteStatus] as const,
   expiringQuotes: (agentId?: string) => [...transactionKeys.all, "expiring-quotes", agentId] as const,
@@ -25,6 +26,14 @@ export function useTransaction(id: string) {
   return useQuery<Transaction>({
     queryKey: transactionKeys.detail(id),
     queryFn: () => transactionApi.getById(id),
+    enabled: !!id,
+  });
+}
+
+export function useTransactionDetails(id: string | null | undefined) {
+  return useQuery<Transaction>({
+    queryKey: transactionKeys.detailWithRelations(id ?? ""),
+    queryFn: () => transactionApi.getWithDetails(id as string),
     enabled: !!id,
   });
 }

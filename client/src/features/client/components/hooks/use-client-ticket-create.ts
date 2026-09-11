@@ -22,7 +22,12 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
  * Owns the Create Ticket dialog: open state, form fields, pending file
  * attachments, file picker handlers, and the create+upload flow.
  */
-export function useClientTicketCreate(clientId: string, currentUserId: string | undefined) {
+/** Holiday a new ticket should be attached to — set when raised from a quote, booking, or enquiry. */
+export interface TicketLinkTarget {
+  transactionId?: string | null;
+}
+
+export function useClientTicketCreate(clientId: string, currentUserId: string | undefined, link?: TicketLinkTarget) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showTicketDialog, setShowTicketDialog] = useState(false);
@@ -86,6 +91,7 @@ export function useClientTicketCreate(clientId: string, currentUserId: string | 
         subject: ticketForm.subject.trim(),
         description: ticketForm.description || null,
         dueDate: ticketForm.dueDate ? new Date(ticketForm.dueDate).toISOString() : null,
+        transactionId: link?.transactionId ?? null,
       },
       {
         onSuccess: async (data: any) => {

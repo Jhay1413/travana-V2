@@ -1,0 +1,2 @@
+ALTER TABLE "ticket_attachments" ADD COLUMN "reply_id" varchar;--> statement-breakpoint
+ALTER TABLE "ticket_attachments" ADD CONSTRAINT "ticket_attachments_reply_id_ticket_replies_id_fk" FOREIGN KEY ("reply_id") REFERENCES "public"."ticket_replies"("id") ON DELETE cascade ON UPDATE no action;

@@ -48,7 +48,7 @@ export function EngagementSection() {
       <div className="text-sm font-semibold">Quote Engagement</div>
 
       <div className="mt-3">
-        <SegmentedTabs tabs={TABS} value={filter} onChange={setFilter} testIdPrefix="engagement-filter" fullWidth />
+        <SegmentedTabs tabs={TABS} value={filter} onChange={setFilter} testIdPrefix="engagement-filter" fullWidth dense />
       </div>
 
       <div className="mt-4 space-y-1">

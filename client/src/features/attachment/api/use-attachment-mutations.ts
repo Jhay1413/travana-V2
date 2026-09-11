@@ -5,8 +5,8 @@ import { attachmentKeys } from "./use-attachment-queries";
 export function useUploadAttachment() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ ticketId, file }: { ticketId: string; file: File }) =>
-      attachmentApi.upload(ticketId, file),
+    mutationFn: ({ ticketId, file, replyId }: { ticketId: string; file: File; replyId?: string }) =>
+      attachmentApi.upload(ticketId, file, replyId),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: attachmentKeys.byTicket(variables.ticketId) });
     },

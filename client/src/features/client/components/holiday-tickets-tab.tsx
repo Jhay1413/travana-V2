@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { ChevronDown, Heart, Pencil, Reply as ReplyIcon, Trash2, X } from "lucide-react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { ChevronDown, Heart, Paperclip, Pencil, Reply as ReplyIcon, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
@@ -7,7 +7,9 @@ import { NoteEditor } from "@/components/shared/note-editor";
 import { useToast } from "@/hooks/use-toast";
 import { useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
 import { useReplies, useCreateReply, useUpdateReply, useDeleteReply, useToggleReplyLike, type TicketReply } from "@/features/reply";
-import { authorBubbleClasses, useToggleTicketLike, useUpdateTicket, type Ticket } from "@/features/tickets";
+import { authorBubbleClasses, useToggleTicketLike, useUpdateTicket, ReplyThreadToggle, TicketAttachmentList, type Ticket } from "@/features/tickets";
+import { useAttachments, useDeleteAttachment, usePendingAttachments, type TicketAttachment } from "@/features/attachment";
+
 import type { User as ApiUser } from "@/features/user/types";
 
 // ─── Tickets tab ────────────────────────────────────────────────────────────
@@ -97,9 +99,18 @@ function PostBubble({
   onConfirmDelete,
   onCancelDelete,
   isLiking = false,
+  nested = false,
+  footer,
+  attachments,
+  onDeleteAttachment,
+  deletingAttachmentId,
 }: {
   post: ThreadPost;
   isMe: boolean;
+  /** Rendered under a parent comment — gets the thread rail beside it. */
+  nested?: boolean;
+  /** Rendered under the bubble, inside its column (e.g. the replies toggle). */
+  footer?: ReactNode;
   onReply?: () => void;
   onEdit?: () => void;
   onLike?: () => void;
@@ -112,14 +123,19 @@ function PostBubble({
   isConfirmingDelete?: boolean;
   onConfirmDelete?: () => void;
   onCancelDelete?: () => void;
+  /** Files posted with this post (ticket-level or reply-level). */
+  attachments?: TicketAttachment[];
+  /** Present only when the viewer may remove attachments from this post. */
+  onDeleteAttachment?: (id: string) => void;
+  deletingAttachmentId?: string | null;
 }) {
   const colors = authorBubbleClasses(post.authorId, isMe);
   const isEdited = !!post.updatedAt && Date.parse(post.updatedAt) > Date.parse(post.createdAt) + 1000;
   const reply = post.reply;
 
   return (
-    <div className={cn("flex", isMe ? "justify-end" : "justify-start")} data-testid={`ticket-reply-${post.id}`}>
-      <div className="relative mt-4 max-w-[75%]">
+    <div className={cn("flex", isMe ? "justify-end" : "justify-start", isMe && !nested && "pr-8")} data-testid={`ticket-reply-${post.id}`}>
+      <div className={cn("relative mt-4", nested ? "max-w-full" : "max-w-[75%]")}>
         <div className="absolute -top-4 left-0">
           <PostAvatar name={post.authorName} imageUrl={post.authorImage} />
         </div>
@@ -145,6 +161,16 @@ function PostBubble({
           ) : (
             <div className="whitespace-pre-wrap break-words pl-6 text-[13px] leading-relaxed 3xl:text-sm">
               <RichTextDisplay content={post.content} />
+            </div>
+          )}
+          {!isEditing && attachments && attachments.length > 0 && (
+            <div className="pl-6">
+              <TicketAttachmentList
+                attachments={attachments}
+                onDelete={onDeleteAttachment}
+                deletingId={deletingAttachmentId}
+                compact
+              />
             </div>
           )}
           {!isEditing && (
@@ -210,6 +236,7 @@ function PostBubble({
             </div>
           )}
         </div>
+        {footer}
       </div>
     </div>
   );
@@ -232,10 +259,22 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
   const toggleLike = useToggleReplyLike(ticket.id);
   const toggleTicketLike = useToggleTicketLike();
   const updateTicket = useUpdateTicket();
+  const { data: attachments } = useAttachments(ticket.id);
+  const deleteAttachment = useDeleteAttachment(ticket.id);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { files: pendingFiles, addFiles, removeFile, uploadAll } = usePendingAttachments();
 
   const [replyingTo, setReplyingTo] = useState<ReplyTarget | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [collapsedReplies, setCollapsedReplies] = useState<Set<string>>(new Set());
+  const toggleReplies = (id: string) =>
+    setCollapsedReplies((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const userName = (userId: string, fallback?: string | null) =>
@@ -293,6 +332,36 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
 
   const isMine = (userId: string) => !!currentUser?.id && currentUser.id === userId;
 
+  // Attachments grouped by the reply they were posted with — null groups the
+  // ticket-level ones under the description post.
+  const attachmentsByReply = useMemo(() => {
+    const map = new Map<string | null, TicketAttachment[]>();
+    for (const a of attachments ?? []) {
+      const list = map.get(a.replyId) ?? [];
+      list.push(a);
+      map.set(a.replyId, list);
+    }
+    return map;
+  }, [attachments]);
+
+  const attachmentsFor = (post: ThreadPost): TicketAttachment[] =>
+    attachmentsByReply.get(post.reply ? post.reply.id : null) ?? [];
+
+  // A reply's author may remove its attachments; the ticket-level ones may
+  // only be removed by whoever raised the ticket.
+  const canDeleteAttachmentsFor = (post: ThreadPost): boolean =>
+    post.reply ? isMine(post.reply.userId) : isMine(ticket.userId);
+
+  const onDeleteAttachmentFor = (post: ThreadPost) =>
+    canDeleteAttachmentsFor(post)
+      ? (id: string) =>
+          deleteAttachment.mutate(id, {
+            onError: () => toast({ title: "Failed to delete attachment", variant: "destructive" }),
+          })
+      : undefined;
+
+  const deletingAttachmentId = deleteAttachment.isPending ? (deleteAttachment.variables ?? null) : null;
+
   const replyToTopLevel = (reply: TicketReply): string =>
     topLevelIds.has(reply.id) ? reply.id : (reply.parentReplyId as string);
 
@@ -340,17 +409,35 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
     createReply.mutate(
       { userId: currentUser.id, content: html, parentReplyId: replyingTo?.parentReplyId },
       {
-        onSuccess: () => setReplyingTo(null),
+        onSuccess: async (reply) => {
+          setReplyingTo(null);
+          if (pendingFiles.length > 0) {
+            const { failed } = await uploadAll(ticket.id, reply.id);
+            if (failed > 0) {
+              toast({ title: `${failed} attachment(s) failed to upload`, variant: "destructive" });
+            }
+          }
+        },
         onError: () => toast({ title: "Failed to add reply", variant: "destructive" }),
       },
     );
   };
 
-  const renderPost = (post: ThreadPost, indent: boolean) => (
-    <div key={post.id} className={indent ? "ml-10" : ""}>
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) addFiles(e.target.files);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const renderPost = (post: ThreadPost, nested = false, footer?: ReactNode) => (
+    <div key={post.id}>
       <PostBubble
         post={post}
+        nested={nested}
+        footer={footer}
         isMe={isMine(post.authorId)}
+        attachments={attachmentsFor(post)}
+        onDeleteAttachment={onDeleteAttachmentFor(post)}
+        deletingAttachmentId={deletingAttachmentId}
         onReply={
           post.reply
             ? () => setReplyingTo({ authorName: post.authorName, parentReplyId: replyToTopLevel(post.reply!) })
@@ -379,11 +466,31 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {descriptionPost && renderPost(descriptionPost, false)}
+          {descriptionPost && renderPost(descriptionPost)}
           {topLevel.map((reply) => (
-            <div key={reply.id} className="space-y-4">
-              {renderPost(toPost(reply), false)}
-              {(childrenByParent.get(reply.id) ?? []).map((child) => renderPost(toPost(child), true))}
+            <div key={reply.id} className="flex flex-col space-y-3">
+              {renderPost(
+                toPost(reply),
+                false,
+                (childrenByParent.get(reply.id) ?? []).length > 0 ? (
+                  <ReplyThreadToggle
+                    count={(childrenByParent.get(reply.id) ?? []).length}
+                    collapsed={collapsedReplies.has(reply.id)}
+                    onToggle={() => toggleReplies(reply.id)}
+                    data-testid={`ticket-reply-replies-toggle-${reply.id}`}
+                  />
+                ) : undefined,
+              )}
+              {(childrenByParent.get(reply.id) ?? []).length > 0 && !collapsedReplies.has(reply.id) && (
+                <div
+                  className={cn(
+                    "flex w-fit max-w-[88%] flex-col space-y-3 border-l-2 border-black/[0.08] pl-4 dark:border-white/10",
+                    isMine(reply.userId) ? "self-end" : "self-start ml-2",
+                  )}
+                >
+                  {(childrenByParent.get(reply.id) ?? []).map((child) => renderPost(toPost(child), true))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -413,6 +520,48 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
           isLoading={createReply.isPending}
           onSubmit={handleComposerSubmit}
         />
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+            onChange={handleFileSelect}
+            className="hidden"
+            data-testid="ticket-reply-attach-input"
+          />
+          <button
+            type="button"
+            title="Attach files"
+            onClick={() => fileInputRef.current?.click()}
+            className="grid h-7 w-7 place-items-center rounded-md text-black/45 transition hover:bg-black/5 hover:text-black dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
+            data-testid="ticket-reply-attach"
+          >
+            <Paperclip className="h-4 w-4" />
+          </button>
+          {pendingFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {pendingFiles.map((file, index) => (
+                <div
+                  key={`${file.name}-${index}`}
+                  className="flex items-center gap-1.5 rounded-lg bg-black/[0.04] px-2 py-1 text-xs dark:bg-white/10"
+                  data-testid={`ticket-reply-pending-${index}`}
+                >
+                  <Paperclip className="h-3 w-3 text-black/40 dark:text-white/40" />
+                  <span className="max-w-[140px] truncate text-black/70 dark:text-white/70">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeFile(index)}
+                    className="text-black/30 hover:text-rose-600 dark:text-white/30"
+                    aria-label="Remove attachment"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -422,13 +571,14 @@ function TicketCard({
   ticket,
   isOpen,
   onToggle,
-  isBookingScoped,
+  scopedLabel,
   users,
 }: {
   ticket: Ticket;
   isOpen: boolean;
   onToggle: () => void;
-  isBookingScoped: boolean;
+  /** "This booking" / "This quote" / "This enquiry" when the ticket is linked to the holiday being viewed. */
+  scopedLabel: string | null;
   users: ApiUser[];
 }) {
   const assigneeName = ticket.assignedToName || users.find((u) => u.id === ticket.assignedTo)?.name || "Unassigned";
@@ -444,8 +594,8 @@ function TicketCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="truncate text-[13px] font-medium text-black/85">{ticket.subject}</span>
-            {isBookingScoped && (
-              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">This booking</span>
+            {scopedLabel && (
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{scopedLabel}</span>
             )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -472,24 +622,27 @@ function TicketCard({
 
 export function HolidayTicketsTab({
   clientId,
-  entityId,
   entityType,
+  transactionId,
 }: {
   clientId: string;
   entityId: string;
   entityType: "enquiry" | "quote" | "booking";
+  transactionId: string | null | undefined;
 }) {
   const { data: ticketsData, isLoading } = useTicketsByClient(clientId);
   const { data: users = [] } = useUsers();
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
 
+  // Tickets linked to the holiday's transaction are listed first and flagged.
+  const isScoped = useCallback((t: Ticket) => !!transactionId && t.transactionId === transactionId, [transactionId]);
+
   const sortedTickets = useMemo(() => {
     const all = [...(ticketsData ?? [])].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
-    if (entityType !== "booking") return all;
-    const scoped = all.filter((t) => t.bookingId === entityId);
-    const rest = all.filter((t) => t.bookingId !== entityId);
+    const scoped = all.filter(isScoped);
+    const rest = all.filter((t) => !isScoped(t));
     return [...scoped, ...rest];
-  }, [ticketsData, entityType, entityId]);
+  }, [ticketsData, isScoped]);
 
   // The newest ticket starts open. Pinned to its id (not its index) so a
   // re-sort doesn't silently swap which card is expanded.
@@ -520,7 +673,15 @@ export function HolidayTicketsTab({
             onToggle={() =>
               setOpenOverrides((prev) => ({ ...prev, [ticket.id]: !(prev[ticket.id] ?? ticket.id === defaultOpenId) }))
             }
-            isBookingScoped={entityType === "booking" && ticket.bookingId === entityId}
+            scopedLabel={
+              isScoped(ticket)
+                ? entityType === "booking"
+                  ? "This booking"
+                  : entityType === "quote"
+                    ? "This quote"
+                    : "This enquiry"
+                : null
+            }
             users={users}
           />
         );

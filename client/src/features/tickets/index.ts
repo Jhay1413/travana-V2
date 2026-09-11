@@ -10,3 +10,5 @@ export * from "./api/use-ticket-queries";
 export * from "./api/use-ticket-mutations";
 export { TicketsInbox } from "./components/tickets-inbox";
 export { CreateTicketDialog } from "./components/create-ticket-dialog";
+export { ReplyThreadToggle } from "./components/reply-thread-toggle";
+export { TicketAttachmentList } from "./components/ticket-attachment-list";
