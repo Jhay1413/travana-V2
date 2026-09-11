@@ -48,7 +48,8 @@ export function SegmentedTabs<T extends string>({
   return (
     <div
       className={cn(
-        "items-center gap-1 rounded-md border border-black/10 p-1.5 dark:border-white/10",
+        "items-center gap-1 rounded-[4px] border border-black/10 dark:border-white/10",
+        dense ? "p-1" : "p-1",
         transparent ? "bg-transparent" : "bg-black/[0.03] dark:bg-white/[0.03]",
         fullWidth ? "flex w-full" : "inline-flex max-w-full overflow-x-auto",
       )}
@@ -59,8 +60,8 @@ export function SegmentedTabs<T extends string>({
           type="button"
           onClick={() => onChange(t.value)}
           className={cn(
-            "rounded-sm font-semibold transition",
-            dense ? "px-2 py-1 text-xs" : "px-3 py-1 text-sm",
+            "whitespace-nowrap rounded-[2px] font-semibold transition",
+            dense ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs",
             fullWidth ? "flex-1 text-center" : "shrink-0",
             value === t.value
               ? "bg-white text-[#fe9a00] shadow-sm dark:bg-white/15 dark:text-[#fe9a00]"

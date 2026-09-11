@@ -909,7 +909,7 @@ function DetailTabsCard({
         </TabsContent>
 
         <TabsContent value="tickets" className="mt-3" data-testid="holiday-detail-tab-panel-tickets">
-          <HolidayTicketsTab clientId={clientId} entityId={entityId} entityType={entityType} />
+          <HolidayTicketsTab clientId={clientId} entityId={entityId} entityType={entityType} transactionId={transactionId} />
         </TabsContent>
       </Tabs>
     </Card>
@@ -1134,7 +1134,7 @@ function QuoteActionsMenu({
   } = useQuoteDelete(quoteId, clientId, "Quote");
 
   const quoteToFormValues = useQuoteToFormValues(quoteData);
-  const ticketCreate = useClientTicketCreate(clientId, currentUser?.id);
+  const ticketCreate = useClientTicketCreate(clientId, currentUser?.id, { transactionId: quoteData?.transaction_id ?? null });
 
   // useQuoteDelete already navigates away on success — the dashboard's
   // selection state is separate, so it also needs clearing here or the center

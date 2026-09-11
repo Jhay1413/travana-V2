@@ -4,6 +4,7 @@ import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sd
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { s3Client, S3_BUCKET } from "../../config/s3";
 import { ticketAttachmentRepository } from './ticket-attachment.repository';
+import { ticketReplyRepository } from './ticket-reply.repository';
 import { AppError } from '../../utils/error-handler';
 import type { TicketAttachment, InsertTicketAttachment } from '@shared/schema';
 import type { Scope } from '../../utils/scope';
@@ -28,6 +29,8 @@ export interface TicketAttachmentUpload {
   originalName: string;
   mimeType: string;
   size: number;
+  /** Attach to one of the ticket's replies instead of the ticket itself. */
+  replyId?: string | null;
 }
 
 type ScopeOrTrusted = Scope | { orgId: null };
@@ -81,6 +84,14 @@ export const ticketAttachmentService = {
   // On DB failure the S3 object is cleaned up so no orphan is left behind.
   async uploadAndCreate(ticketId: string, file: TicketAttachmentUpload, scope: ScopeOrTrusted): Promise<TicketAttachment> {
     await assertTicketInScope(ticketId, scope);
+    // A reply-level attachment must hang off a reply on this same ticket.
+    const replyId = file.replyId || null;
+    if (replyId) {
+      const reply = await ticketReplyRepository.findById(replyId);
+      if (!reply || reply.ticketId !== ticketId) {
+        throw new AppError("Reply does not belong to this ticket", 400);
+      }
+    }
     const ext = path.extname(file.originalName) || "";
     const s3Key = `${S3_KEY_PREFIX}/${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
 
@@ -97,6 +108,7 @@ export const ticketAttachmentService = {
     try {
       return await ticketAttachmentRepository.create({
         ticketId,
+        replyId,
         filename: s3Key,
         originalName: file.originalName,
         mimeType: file.mimeType,

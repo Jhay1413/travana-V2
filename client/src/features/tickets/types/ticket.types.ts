@@ -14,7 +14,7 @@ export interface Ticket {
   clientId: string;
   userId: string;
   assignedTo: string | null;
-  bookingId?: string | null;
+  transactionId?: string | null;
   type: string;
   status: string;
   priority: string;

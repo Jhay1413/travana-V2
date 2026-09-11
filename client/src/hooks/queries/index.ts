@@ -7,7 +7,7 @@ export {
   useDuplicatePhoneGroup,
   neonClientKeys,
 } from "@/features/client/api/use-neon-client-queries";
-export { useTransactions, usePipelineTransactions, usePipelineColumn, useTransaction, useTransactionStats, useExpiringQuotes, transactionKeys } from "@/features/transaction/api/use-transaction-queries";
+export { useTransactions, usePipelineTransactions, usePipelineColumn, useTransaction, useTransactionDetails, useTransactionStats, useExpiringQuotes, transactionKeys } from "@/features/transaction/api/use-transaction-queries";
 export { useQuotes, useQuote, useRecentQuoteEngagement, quoteKeys } from "@/features/quote/api/use-quote-queries";
 export { useBookings, useBooking, useBookingByTransaction, bookingKeys } from "@/features/booking/api/use-booking-queries";
 export { useBookingUpsells, bookingUpsellKeys } from "@/features/booking/api/use-booking-upsell-queries";

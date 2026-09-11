@@ -1440,7 +1440,10 @@ export const tickets = pgTable("tickets", {
   resolvedAt: timestamp("resolved_at"),
   orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
-  bookingId: uuid("booking_id").references(() => booking.id, { onDelete: "set null" }),
+  // The holiday this ticket is about. Linking the transaction (rather than a
+  // quote or booking id) covers enquiry, quote and booking with one column and
+  // follows the deal as it converts from one stage to the next.
+  transactionId: uuid("transaction_id").references(() => transaction.id, { onDelete: "set null" }),
 });
 
 export const insertTicketSchema = createInsertSchema(tickets).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true });
@@ -1450,6 +1453,9 @@ export type Ticket = typeof tickets.$inferSelect;
 export const ticketAttachments = pgTable("ticket_attachments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   ticketId: varchar("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+  // Set when the file was posted with a reply; null for attachments added to
+  // the ticket itself (e.g. when it was created).
+  replyId: varchar("reply_id").references((): AnyPgColumn => ticketReplies.id, { onDelete: "cascade" }),
   filename: text("filename").notNull(),
   originalName: text("original_name").notNull(),
   mimeType: text("mime_type").notNull(),

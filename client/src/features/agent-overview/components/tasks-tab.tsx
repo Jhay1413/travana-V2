@@ -138,7 +138,7 @@ export function TasksTab({ userId }: { userId: string }) {
             type="button"
             onClick={() => setFilter(f)}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+              "rounded-md px-2.5 py-1 text-[11px] font-semibold transition",
               filter === f
                 ? "bg-black text-white dark:bg-white dark:text-black"
                 : "border border-black/10 bg-black/5 text-black/70 hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:bg-white/10",
@@ -152,7 +152,7 @@ export function TasksTab({ userId }: { userId: string }) {
           type="button"
           onClick={() => setFilter("overdue")}
           className={cn(
-            "relative rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+            "relative rounded-md px-2.5 py-1 text-[11px] font-semibold transition",
             filter === "overdue"
               ? "bg-red-600 text-white"
               : "border border-red-500/30 bg-red-500/5 text-red-700 hover:bg-red-500/10 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20",
@@ -174,6 +174,7 @@ export function TasksTab({ userId }: { userId: string }) {
             value={customDate}
             onChange={(v) => setCustomDate(v)}
             placeholder="Pick a date"
+            className="h-7 w-auto rounded-md text-[11px]"
             data-testid="input-tasks-filter-date"
           />
         )}

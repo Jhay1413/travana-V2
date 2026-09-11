@@ -71,6 +71,7 @@ import { useToast } from "@/hooks/use-toast";
 import { attachmentApi } from "@/api";
 import { RichTextEditor, RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { isActiveTicket, isMyTicket } from "@/features/tickets";
+import { isImageType } from "@/features/attachment";
 import type { Ticket } from "@/features/tickets/types";
 import type { TicketReply } from "@/features/reply/types";
 import type { User as ApiUser } from "@/features/user/types";
@@ -103,10 +104,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
-
-function isImageType(mimeType: string): boolean {
-  return mimeType.startsWith("image/");
 }
 
 function timeAgo(dateString: string): string {
