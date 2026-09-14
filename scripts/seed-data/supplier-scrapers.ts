@@ -308,7 +308,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "group": 1,
             "regex": "(?:^|\\n)\\s*Guests\\s*\\n+\\s*([^\\n]+)",
             "origin": "picked",
-            "pickedAt": "2026-09-07T06:39:18.304Z",
+            "pickedAt": "2026-09-07T10:57:04.572Z",
             "strategy": "label-anchored",
             "verifiedValue": "2 Adults"
           },
@@ -371,7 +371,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "group": 1,
             "regex": "(?:^|\\n)\\s*Sign In\\s*\\n+\\s*([^\\n]+)",
             "origin": "picked",
-            "pickedAt": "2026-09-07T06:39:18.305Z",
+            "pickedAt": "2026-09-07T10:57:04.573Z",
             "strategy": "label-anchored",
             "verifiedValue": "10 Night Italy & French Riviera"
           },
@@ -380,7 +380,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "group": 1,
             "regex": "(?:^|\\n)\\s*Room Total\\s*\\n+\\s*([^\\n]+)",
             "origin": "picked",
-            "pickedAt": "2026-09-07T06:39:18.304Z",
+            "pickedAt": "2026-09-07T10:57:04.572Z",
             "strategy": "label-anchored",
             "transform": "number",
             "verifiedValue": "£2,984.00"
