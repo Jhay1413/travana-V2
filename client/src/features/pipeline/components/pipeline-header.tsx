@@ -71,7 +71,7 @@ export function PipelineHeader({
           </h2>
         )}
         <div className="flex flex-wrap items-center gap-2">
-          <SegmentedTabs<ViewTabValue>
+          <SegmentedTabs
             tabs={[
               { value: "board", label: "Board View" },
               { value: "list", label: "List View" },
@@ -83,7 +83,7 @@ export function PipelineHeader({
             accent="black"
           />
           {!embedded && (
-            <SegmentedTabs<"all" | "mine">
+            <SegmentedTabs
               tabs={[
                 { value: "mine", label: "My Deals" },
                 { value: "all", label: "All Deals" },
