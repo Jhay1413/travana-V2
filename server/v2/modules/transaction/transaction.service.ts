@@ -21,11 +21,39 @@ import type {
   InsertBooking,
   InsertBookingFlight,
   InsertBookingAccomodation,
+  DealPriority,
 } from "@shared/schema";
 
 interface EnquiryPassenger {
   type: string;
   age?: number;
+}
+
+// The pipeline board renders four+ columns per load; running the future-deal
+// activation UPDATE on every single one would be wasteful. Memoise process-wide
+// so it fires at most once per 10 minutes, regardless of how many columns/pages
+// are requested in that window.
+// NB: this memo is per-process — in a multi-instance/horizontally-scaled
+// deployment each instance runs the activation on its own 10-minute cadence
+// (so it can still fire more often than once per 10 minutes cluster-wide).
+// The underlying UPDATEs are idempotent (WHERE is_future_deal = TRUE AND
+// future_deal_date <= CURRENT_DATE), so redundant runs are harmless, just
+// slightly wasteful.
+const FUTURE_DEAL_ACTIVATION_INTERVAL_MS = 10 * 60 * 1000;
+let lastFutureDealActivationAt = 0;
+
+async function activateDueFutureDealsOnce(): Promise<void> {
+  const now = Date.now();
+  if (now - lastFutureDealActivationAt < FUTURE_DEAL_ACTIVATION_INTERVAL_MS) return;
+  lastFutureDealActivationAt = now;
+  try {
+    await Promise.all([
+      enquiryTableRepository.activateDueFutureDeals(),
+      newQuoteRepository.activateDueFutureDeals(),
+    ]);
+  } catch (err) {
+    console.warn("Failed to activate due future deals (non-fatal):", err);
+  }
 }
 
 interface CreateEnquiryPayload extends InsertEnquiryTable {
@@ -163,6 +191,7 @@ export const transactionService = {
   },
 
   async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string) {
+    await activateDueFutureDealsOnce();
     return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter);
   },
 
@@ -520,6 +549,52 @@ export const transactionService = {
   async deleteTransaction(id: string, scope: Scope) {
     const removed = await transactionRepository.remove(id, scope);
     if (!removed) throw new AppError("Transaction not found", 404);
+  },
+
+  async updatePriority(id: string, priority: DealPriority, scope: Scope) {
+    const txn = await transactionRepository.update(id, { priority }, scope);
+    if (!txn) throw new AppError("Transaction not found", 404);
+    return txn;
+  },
+
+  async setFutureDeal(id: string, futureDealDate: string | null, scope: Scope) {
+    // Branch-pinned scope check — same as updatePriority/updateTransaction's
+    // path through transactionRepository.update — so this endpoint is no
+    // looser than the others (findById alone is org-only, not branch-pinned).
+    const txn = await transactionRepository.findByIdScopedForWrite(id, scope);
+    if (!txn) throw new AppError("Transaction not found", 404);
+    if (txn.status === "on_booking") {
+      throw new AppError("A booking cannot be marked as a future deal", 400);
+    }
+
+    const isFutureDeal = futureDealDate !== null;
+
+    // Single atomic write (enquiry or quotes, depending on status) that also
+    // bumps a stale/missing expiry when the deal is returning to the pipeline.
+    const affected = await transactionRepository.applyFutureDeal(id, txn.status ?? "", futureDealDate);
+    if (affected === 0) {
+      throw new AppError("Enquiry or quote not found for this transaction", 404);
+    }
+
+    return { id, is_future_deal: isFutureDeal, future_deal_date: futureDealDate };
+  },
+
+  async setLost(id: string, lost: boolean, scope: Scope) {
+    // Branch-pinned scope check — see setFutureDeal above.
+    const txn = await transactionRepository.findByIdScopedForWrite(id, scope);
+    if (!txn) throw new AppError("Transaction not found", 404);
+    if (txn.status === "on_booking") {
+      throw new AppError("A booking cannot be marked lost via this endpoint", 400);
+    }
+
+    // Single atomic write (enquiry or quotes, depending on status) that also
+    // bumps a stale/missing expiry when the deal is being restored (lost === false).
+    const affected = await transactionRepository.applyLost(id, txn.status ?? "", lost);
+    if (affected === 0) {
+      throw new AppError("Enquiry or quote not found for this transaction", 404);
+    }
+
+    return { id, lost };
   },
 
   async getStats(scope: Scope) {

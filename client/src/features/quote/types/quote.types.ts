@@ -118,6 +118,16 @@ export interface Transaction {
   booking?: Booking | null;
   client?: { id: string; name?: string } | null;
   agent?: { id: string; name?: string } | null;
+  /** Joined client name, populated server-side on the pipeline endpoints. */
+  client_name?: string | null;
+  /** Joined deal owner, populated server-side on the pipeline endpoints. */
+  assignedUser?: { id: string; firstName: string | null; lastName: string | null; name?: string | null } | null;
+  /** Pipeline card priority (server-managed via PATCH /transactions/:id/priority). */
+  priority?: "low" | "medium" | "high";
+  /** ISO timestamp of the deal's most recent activity, used for the "No activity for N days" card line. */
+  last_activity_at?: string;
+  /** The deal's next open task, if any — drives the card's task line. */
+  next_task?: { id: string; title: string | null; due_date: string | null; user_id: string | null } | null;
 }
 
 export interface EnquiryDestination {
@@ -197,6 +207,8 @@ export interface EnquiryTable {
   email: string | null;
   user_id?: string;
   holiday_type_name?: string;
+  /** Joined destination name, populated server-side on the pipeline endpoints. */
+  destination_name?: string | null;
   destinations?: EnquiryDestination[];
   resorts?: EnquiryResort[];
   accommodations?: EnquiryAccommodation[];
@@ -247,6 +259,10 @@ export interface Quote {
   portal_added_at: string | null;
   is_featured: boolean | null;
   not_for_social: boolean | null;
+  /** Joined fields, populated server-side on the pipeline endpoints. */
+  destination_name?: string | null;
+  main_tour_operator_name?: string;
+  main_tour_operator_logo_url?: string | null;
   flights?: QuoteFlight[];
   accommodations?: QuoteAccommodation[];
   transfers?: QuoteTransfer[];
@@ -434,6 +450,10 @@ export interface Booking {
   date_created: string | null;
   price_per_person: string | null;
   wallet_credit: string | null;
+  /** Joined fields, populated server-side on the pipeline endpoints. */
+  destination_name?: string | null;
+  main_tour_operator_name?: string;
+  main_tour_operator_logo_url?: string | null;
 }
 
 // Extended types with joined data from repository
@@ -593,6 +613,8 @@ export interface CreateTransactionData {
   lead_source?: string;
   user_id: string;
   is_test?: boolean;
+  /** Only used for updates (e.g. the pipeline board's stage-transition fallback). */
+  status?: string;
   enquiry?: Partial<EnquiryTable> & EnquiryRelations;
   quote?: Partial<CreateQuoteData> & WithRelations;
   booking?: Partial<Booking> & WithRelations;

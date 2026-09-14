@@ -1,4 +1,4 @@
-import PipelineBoard from "@/features/social/components/boards/pipeline-board";
+import { PipelineBoard } from "@/features/pipeline";
 
 /**
  * The agent dashboard's Pipeline tab embeds the full standalone pipeline board,

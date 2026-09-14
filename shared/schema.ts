@@ -16,6 +16,7 @@ export const vip_tier_enum = pgEnum('vip_tier_enum', ['standard', 'gold', 'elite
 export const withdrawal_method_enum = pgEnum('withdrawal_method_enum', ['bank_transfer', 'booking_credit']);
 export const referral_payout_status_enum = pgEnum('referral_payout_status_enum', ['requested', 'approved', 'rejected']);
 export const referral_withdrawal_status_enum = pgEnum('referral_withdrawal_status_enum', ['pending', 'processed', 'rejected']);
+export const deal_priority_enum = pgEnum('deal_priority', ['low', 'medium', 'high']);
 
 // ─── Training / LMS ───────────────────────────────────────────────────────────
 export const course_status_enum = pgEnum('course_status_enum', ['draft', 'published', 'archived']);
@@ -687,6 +688,7 @@ export const transaction = pgTable('transaction', {
   created_at: timestamp().notNull().defaultNow(),
   org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   branch_id: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  priority: deal_priority_enum().default('low'),
 }, (table) => [
   // Pipeline board filters by status (+created_at sort) for the all-agents view,
   // and by user_id for the default per-agent view. See findPipelineByStatus.
@@ -697,6 +699,7 @@ export const transaction = pgTable('transaction', {
 export const insertTransactionSchema = createInsertSchema(transaction).omit({ id: true, created_at: true });
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Transaction = typeof transaction.$inferSelect;
+export type DealPriority = (typeof deal_priority_enum.enumValues)[number];
 
 export const enquiry_table = pgTable('enquiry_table', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),

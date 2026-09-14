@@ -713,6 +713,25 @@ export const newQuoteRepository = {
     await db.update(quote).set({ deleted_at: new Date(), is_active: false }).where(eq(quote.id, id));
   },
 
+  /** Bulk-update every non-copy, non-deleted, non-free quote on a transaction in
+   *  one round-trip. Used by the pipeline board's future-deal / lost toggles,
+   *  which apply to "all" of a deal's primary quotes rather than a single quote
+   *  id. Free quotes (isFreeQuote) are excluded — they aren't a customer-facing
+   *  pipeline stage and shouldn't be dragged into future/lost toggles, matching
+   *  the read-side filters in transaction.repository.ts (~401/~421). */
+  async updateNonCopyByTransactionId(transactionId: string, data: Partial<InsertQuote>): Promise<Quote[]> {
+    return db
+      .update(quote)
+      .set(data)
+      .where(and(
+        eq(quote.transaction_id, transactionId),
+        eq(quote.isQuoteCopy, false),
+        isNull(quote.deleted_at),
+        sql`(${quote.isFreeQuote} IS NOT TRUE)`,
+      ))
+      .returning();
+  },
+
   async findTokenById(id: string): Promise<{ token: string | null } | undefined> {
     const [row] = await db.select({ token: quote.quote_token }).from(quote).where(eq(quote.id, id)).limit(1);
     return row;
@@ -753,11 +772,19 @@ export const newQuoteRepository = {
     return row?.destinationName ?? null;
   },
 
-  /** Bulk-clear is_future_deal on quotes whose future_deal_date has arrived. */
+  /** Bulk-clear is_future_deal on quotes whose future_deal_date has arrived.
+   *  Also bumps a stale/missing date_expiry forward in the same UPDATE so the
+   *  now-active quote doesn't immediately fall out of the Quoted/In Play
+   *  columns' `effectiveExpiry >= DATE_TRUNC('month', NOW())` display window —
+   *  see transaction.repository.ts findPipelineByStatus. */
   async activateDueFutureDeals(): Promise<{ id: string }[]> {
     return db
       .update(quote)
-      .set({ is_future_deal: false, future_deal_date: null })
+      .set({
+        is_future_deal: false,
+        future_deal_date: null,
+        date_expiry: sql`CASE WHEN ${quote.date_expiry} IS NULL OR ${quote.date_expiry} < NOW() THEN NOW() + INTERVAL '7 days' ELSE ${quote.date_expiry} END`,
+      })
       .where(
         and(
           eq(quote.is_future_deal, true),

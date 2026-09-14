@@ -63,6 +63,21 @@ export const transactionApi = {
     return data;
   },
 
+  updatePriority: async (id: string, priority: "low" | "medium" | "high"): Promise<Transaction> => {
+    const { data } = await axiosClient.patch<Transaction>(`/api/v2/transactions/${id}/priority`, { priority });
+    return data;
+  },
+
+  setFutureDeal: async (id: string, futureDealDate: string | null): Promise<Transaction> => {
+    const { data } = await axiosClient.post<Transaction>(`/api/v2/transactions/${id}/future`, { future_deal_date: futureDealDate });
+    return data;
+  },
+
+  setLost: async (id: string, lost: boolean): Promise<Transaction> => {
+    const { data } = await axiosClient.post<Transaction>(`/api/v2/transactions/${id}/lost`, { lost });
+    return data;
+  },
+
   getExpiringQuotes: async (agentId?: string) => {
     const params = agentId ? `?agentId=${agentId}` : "";
     const { data } = await axiosClient.get(`/api/v2/transactions/expiring-quotes${params}`);

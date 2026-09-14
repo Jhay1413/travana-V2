@@ -30,6 +30,39 @@ export function useUpdateTransaction() {
   });
 }
 
+// No onSuccess invalidation here: the board (features/pipeline) already
+// patches the affected column's cache optimistically before calling this
+// mutation, so invalidating transactionKeys.all on success would reset every
+// column's paging for no reason. On failure the caller rolls back its
+// optimistic patch and invalidates the affected column key itself.
+export function useUpdateDealPriority() {
+  return useMutation({
+    mutationFn: ({ id, priority }: { id: string; priority: "low" | "medium" | "high" }) =>
+      transactionApi.updatePriority(id, priority),
+  });
+}
+
+export function useSetFutureDeal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, futureDealDate }: { id: string; futureDealDate: string | null }) =>
+      transactionApi.setFutureDeal(id, futureDealDate),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+    },
+  });
+}
+
+export function useSetDealLost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, lost }: { id: string; lost: boolean }) => transactionApi.setLost(id, lost),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
+    },
+  });
+}
+
 export function useDeleteTransaction() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -11,6 +11,7 @@ import quotePublicRoutes from "./routes/quote-public.routes";
 import websitePublicRoutes from "./routes/website-public.routes";
 import portalRoutes, { portalStaffRouter } from "./routes/portal.routes";
 import cron from "node-cron";
+import { warmPool } from "./v2/config/database";
 
 const app = express();
 const httpServer = createServer(app);
@@ -124,6 +125,10 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+
+      // Open the first DB connections one at a time now, so the first page load
+      // does not have to open a dozen in parallel (see v2/config/database.ts).
+      void warmPool();
 
       // Every 30 minutes: check due tasks and stale tickets. Runs on a cron
       // schedule (not a 60s setInterval) so the DB can scale to zero when idle.

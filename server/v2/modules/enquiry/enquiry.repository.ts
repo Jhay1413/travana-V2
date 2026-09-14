@@ -73,11 +73,19 @@ export const enquiryTableRepository = {
     await db.delete(enquiry_table).where(eq(enquiry_table.id, id));
   },
 
-  /** Bulk-clear is_future_deal on enquiries whose future_deal_date has arrived. */
+  /** Bulk-clear is_future_deal on enquiries whose future_deal_date has arrived.
+   *  Also bumps a stale/missing date_expiry forward in the same UPDATE so the
+   *  now-active enquiry doesn't immediately fall out of the Enquiry column's
+   *  `effectiveExpiry >= DATE_TRUNC('month', NOW())` display window — see
+   *  transaction.repository.ts findPipelineByStatus. */
   async activateDueFutureDeals(): Promise<{ id: string }[]> {
     return db
       .update(enquiry_table)
-      .set({ is_future_deal: false, future_deal_date: null })
+      .set({
+        is_future_deal: false,
+        future_deal_date: null,
+        date_expiry: sql`CASE WHEN ${enquiry_table.date_expiry} IS NULL OR ${enquiry_table.date_expiry} < NOW() THEN NOW() + INTERVAL '7 days' ELSE ${enquiry_table.date_expiry} END`,
+      })
       .where(
         and(
           eq(enquiry_table.is_future_deal, true),

@@ -1,14 +1,3 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-  keepAlive: true,
-  keepAliveInitialDelayMillis: 10000,
-});
-
-export const db = drizzle(pool);
-export { pool };
+// Legacy (v1) import path. Re-exports the single shared pool so v1 and v2 code
+// never run two competing connection pools against the database.
+export { db, pool } from "../v2/config/database";

@@ -45,7 +45,9 @@ export function usePipelineTransactions() {
   });
 }
 
-export function usePipelineColumn(status: string, limit: number = 10, agentId?: string, quoteStatus?: string, options?: { enabled?: boolean }) {
+export type PipelineColumnStatus = "enquiry" | "quote" | "in_play" | "booking" | "future" | "lost";
+
+export function usePipelineColumn(status: PipelineColumnStatus, limit: number = 10, agentId?: string, quoteStatus?: string, options?: { enabled?: boolean }) {
   return useInfiniteQuery({
     queryKey: transactionKeys.pipeline(status, agentId, quoteStatus),
     queryFn: ({ pageParam = 1 }) =>

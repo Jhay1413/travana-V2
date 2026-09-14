@@ -33,11 +33,14 @@ export function SegmentedTabs<T extends string>({
   fullWidth = false,
   transparent = false,
   dense = false,
+  accent = "orange",
 }: {
   tabs: Array<{ value: T; label: string }>;
   value: T;
   onChange: (v: T) => void;
   testIdPrefix: string;
+  /** Active-tab text colour: dashboard orange (default) or plain black. */
+  accent?: "orange" | "black";
   /** Stretch the control across its container, splitting it into equal segments. */
   fullWidth?: boolean;
   /** No container fill — the surface behind shows through (active pill stays white). */
@@ -64,7 +67,9 @@ export function SegmentedTabs<T extends string>({
             dense ? "px-1.5 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs",
             fullWidth ? "flex-1 text-center" : "shrink-0",
             value === t.value
-              ? "bg-white text-[#fe9a00] shadow-sm dark:bg-white/15 dark:text-[#fe9a00]"
+              ? accent === "black"
+                ? "bg-white text-black shadow-sm dark:bg-white/15 dark:text-white"
+                : "bg-white text-[#fe9a00] shadow-sm dark:bg-white/15 dark:text-[#fe9a00]"
               : "text-[#7c98b0] hover:text-[#5f7d97] dark:text-white/55 dark:hover:text-white",
           )}
           data-testid={`${testIdPrefix}-${t.value}`}

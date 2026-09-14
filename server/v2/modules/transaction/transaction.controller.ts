@@ -125,6 +125,8 @@ export const transactionController = {
       quote: "quoted",
       in_play: "in_play",
       booking: "booking",
+      future: "future",
+      lost: "lost",
     };
     const column = validStatuses[status];
     if (!column) {
@@ -198,6 +200,29 @@ export const transactionController = {
     const id = req.params.id as string;
     const txn = await transactionService.updateTransaction(id, req.body, getScope(req));
     return successResponse(res, txn, "Transaction updated successfully");
+  }),
+
+  updatePriority: asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const { priority } = req.body;
+    const txn = await transactionService.updatePriority(id, priority, getScope(req));
+    return successResponse(res, txn, "Transaction priority updated successfully");
+  }),
+
+  setFutureDeal: asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    // Validated by setFutureDealValidator — body.future_deal_date is always
+    // present (string | null) after validation, so no `?? null` fallback is needed.
+    const futureDealDate: string | null = req.body.future_deal_date;
+    const result = await transactionService.setFutureDeal(id, futureDealDate, getScope(req));
+    return successResponse(res, result, "Future deal status updated successfully");
+  }),
+
+  setLost: asyncHandler(async (req: Request, res: Response) => {
+    const id = req.params.id as string;
+    const { lost } = req.body;
+    const result = await transactionService.setLost(id, lost, getScope(req));
+    return successResponse(res, result, "Lost status updated successfully");
   }),
 
   deleteTransaction: asyncHandler(async (req: Request, res: Response) => {

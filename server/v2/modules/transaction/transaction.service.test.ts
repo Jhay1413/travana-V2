@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./transaction.repository", () => ({
   transactionRepository: {
     findById: vi.fn(),
+    findByIdScopedForWrite: vi.fn(),
     findWithDetails: vi.fn(),
     create: vi.fn(),
     createWithQuoteAndChildren: vi.fn(),
@@ -10,12 +11,16 @@ vi.mock("./transaction.repository", () => ({
     update: vi.fn(),
     remove: vi.fn(),
     findExpiringQuotes: vi.fn(),
+    applyFutureDeal: vi.fn(),
+    applyLost: vi.fn(),
   },
 }));
 vi.mock("../enquiry/enquiry.repository", () => ({
   enquiryTableRepository: {
     findByTransactionId: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
+    activateDueFutureDeals: vi.fn(),
     addDestination: vi.fn(),
     addResort: vi.fn(),
     addBoardBasis: vi.fn(),
@@ -26,6 +31,8 @@ vi.mock("../enquiry/enquiry.repository", () => ({
 vi.mock("../quote/quote.repository", () => ({
   newQuoteRepository: {
     findByTransactionId: vi.fn(),
+    updateNonCopyByTransactionId: vi.fn(),
+    activateDueFutureDeals: vi.fn(),
     replaceTransfers: vi.fn(),
     replaceCarHires: vi.fn(),
     replaceAttractionTickets: vi.fn(),
@@ -134,6 +141,119 @@ describe("transactionService.deleteTransaction", () => {
     vi.mocked(transactionRepository.remove).mockResolvedValue(true as never);
 
     await expect(transactionService.deleteTransaction("t1", SCOPE)).resolves.toBeUndefined();
+  });
+});
+
+describe("transactionService.updatePriority", () => {
+  it("throws 404 when the transaction does not exist", async () => {
+    vi.mocked(transactionRepository.update).mockResolvedValue(undefined as never);
+
+    await expect(transactionService.updatePriority("t1", "high", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("updates the transaction's priority", async () => {
+    vi.mocked(transactionRepository.update).mockResolvedValue({ id: "t1", priority: "high" } as never);
+
+    const result = await transactionService.updatePriority("t1", "high", SCOPE);
+
+    expect(transactionRepository.update).toHaveBeenCalledWith("t1", { priority: "high" }, SCOPE);
+    expect(result).toEqual({ id: "t1", priority: "high" });
+  });
+});
+
+describe("transactionService.setFutureDeal", () => {
+  it("throws 404 when the transaction does not exist", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue(undefined as never);
+
+    await expect(transactionService.setFutureDeal("t1", "2099-01-01", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("uses the branch-pinned scoped lookup (not the org-only findById)", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_enquiry" } as never);
+    vi.mocked(transactionRepository.applyFutureDeal).mockResolvedValue(1 as never);
+
+    await transactionService.setFutureDeal("t1", "2099-01-01", SCOPE);
+
+    expect(transactionRepository.findByIdScopedForWrite).toHaveBeenCalledWith("t1", SCOPE);
+    expect(transactionRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it("throws 400 for an on_booking transaction", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_booking" } as never);
+
+    await expect(transactionService.setFutureDeal("t1", "2099-01-01", SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("throws 404 when the transaction has no enquiry/quote row to update", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_enquiry" } as never);
+    vi.mocked(transactionRepository.applyFutureDeal).mockResolvedValue(0 as never);
+
+    await expect(transactionService.setFutureDeal("t1", "2099-01-01", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("applies the future-deal date atomically via the repository for on_enquiry", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_enquiry" } as never);
+    vi.mocked(transactionRepository.applyFutureDeal).mockResolvedValue(1 as never);
+
+    const result = await transactionService.setFutureDeal("t1", "2099-01-01", SCOPE);
+
+    expect(transactionRepository.applyFutureDeal).toHaveBeenCalledWith("t1", "on_enquiry", "2099-01-01");
+    expect(result).toEqual({ id: "t1", is_future_deal: true, future_deal_date: "2099-01-01" });
+  });
+
+  it("passes a null date through to the repository when clearing on_quote — this is what triggers the repo's stale-expiry bump", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_quote" } as never);
+    vi.mocked(transactionRepository.applyFutureDeal).mockResolvedValue(1 as never);
+
+    const result = await transactionService.setFutureDeal("t1", null, SCOPE);
+
+    expect(transactionRepository.applyFutureDeal).toHaveBeenCalledWith("t1", "on_quote", null);
+    expect(result).toEqual({ id: "t1", is_future_deal: false, future_deal_date: null });
+  });
+});
+
+describe("transactionService.setLost", () => {
+  it("uses the branch-pinned scoped lookup (not the org-only findById)", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_enquiry" } as never);
+    vi.mocked(transactionRepository.applyLost).mockResolvedValue(1 as never);
+
+    await transactionService.setLost("t1", true, SCOPE);
+
+    expect(transactionRepository.findByIdScopedForWrite).toHaveBeenCalledWith("t1", SCOPE);
+    expect(transactionRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it("throws 400 for an on_booking transaction", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_booking" } as never);
+
+    await expect(transactionService.setLost("t1", true, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("throws 404 when the transaction has no enquiry/quote row to update", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_quote" } as never);
+    vi.mocked(transactionRepository.applyLost).mockResolvedValue(0 as never);
+
+    await expect(transactionService.setLost("t1", true, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("marks the enquiry lost atomically via the repository for on_enquiry", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_enquiry" } as never);
+    vi.mocked(transactionRepository.applyLost).mockResolvedValue(1 as never);
+
+    const result = await transactionService.setLost("t1", true, SCOPE);
+
+    expect(transactionRepository.applyLost).toHaveBeenCalledWith("t1", "on_enquiry", true);
+    expect(result).toEqual({ id: "t1", lost: true });
+  });
+
+  it("passes lost=false through to the repository when restoring on_quote — this is what triggers the repo's stale-expiry bump", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "t1", status: "on_quote" } as never);
+    vi.mocked(transactionRepository.applyLost).mockResolvedValue(1 as never);
+
+    const result = await transactionService.setLost("t1", false, SCOPE);
+
+    expect(transactionRepository.applyLost).toHaveBeenCalledWith("t1", "on_quote", false);
+    expect(result).toEqual({ id: "t1", lost: false });
   });
 });
 
