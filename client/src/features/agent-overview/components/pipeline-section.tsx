@@ -12,7 +12,7 @@ type Stage = "in_play" | "quote" | "enquiry";
 const STAGE_BADGE: Record<Stage, { label: string; className: string; icon: React.ElementType }> = {
   in_play: {
     label: "In-Play",
-    className: "border border-[#fe9a00] bg-[#fe9a00]/10 text-[#fe9a00]",
+    className: "bg-[#fe9a00] text-white",
     icon: CircleStar,
   },
   quote: {

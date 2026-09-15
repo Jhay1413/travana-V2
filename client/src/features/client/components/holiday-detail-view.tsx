@@ -242,11 +242,12 @@ interface FieldRowSpec {
 
 function FieldItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div className="flex items-center gap-3" data-testid={`holiday-detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+    <div className="flex min-w-0 items-center gap-3" data-testid={`holiday-detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-orange-500 text-white">
         <Icon className="h-4 w-4" />
       </span>
-      <div className="min-w-0 truncate text-[13px] 3xl:text-sm">
+      {/* Long values are clipped with an ellipsis; the full text is on hover. */}
+      <div className="min-w-0 truncate text-[13px] 3xl:text-sm" title={`${label}: ${value}`}>
         <span className="font-medium text-black/45">{label}: </span>
         <span className="font-semibold text-black/90">{value}</span>
       </div>
@@ -263,14 +264,15 @@ function FieldsGrid({ left, right }: { left: FieldRowSpec[]; right: FieldRowSpec
   const split = Math.ceil(rows.length / 2);
   const leftRows = rows.slice(0, split);
   const rightRows = rows.slice(split);
+  // minmax(0,1fr) columns: a plain 1fr lets a long value widen its column into the other one.
   return (
-    <div className="mt-4 grid gap-x-6 gap-y-3 xl:grid-cols-2" data-testid="holiday-detail-fields-grid">
-      <div className="grid content-start gap-3">
+    <div className="mt-4 grid gap-x-6 gap-y-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="holiday-detail-fields-grid">
+      <div className="grid min-w-0 content-start gap-3">
         {leftRows.map((f) => (
           <FieldItem key={f.key} icon={f.icon} label={f.label} value={f.value} />
         ))}
       </div>
-      <div className="grid content-start gap-3">
+      <div className="grid min-w-0 content-start gap-3">
         {rightRows.map((f) => (
           <FieldItem key={f.key} icon={f.icon} label={f.label} value={f.value} />
         ))}
