@@ -8,6 +8,8 @@ interface ReferrerSelectorProps {
   onSelect: (clientId: string) => void;
   onClear: () => void;
   className?: string;
+  /** "field": the overview card look — a bordered input-style row with the referrer's name and phone. */
+  variant?: "chip" | "field";
 }
 
 export function ReferrerSelector({
@@ -16,6 +18,7 @@ export function ReferrerSelector({
   onSelect,
   onClear,
   className,
+  variant = "chip",
 }: ReferrerSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -57,6 +60,32 @@ export function ReferrerSelector({
     setDebouncedSearch("");
   }
 
+  if (currentReferredByClientId && currentReferrer && variant === "field") {
+    return (
+      <div
+        className={`flex h-10 items-center gap-2.5 rounded-sm border border-black/10 bg-white px-3 dark:border-white/10 dark:bg-white/[0.04] ${className ?? ""}`}
+        data-testid="referrer-field"
+      >
+        <UserRound className="h-4 w-4 shrink-0 text-[#07a9f4]" strokeWidth={1.75} />
+        <span className="truncate text-[13px] font-semibold text-black/85 dark:text-white/85">
+          {currentReferrer.firstName} {currentReferrer.surename}
+        </span>
+        {currentReferrer.phoneNumber && (
+          <span className="truncate text-[13px] text-black/45 dark:text-white/45">{currentReferrer.phoneNumber}</span>
+        )}
+        <button
+          type="button"
+          onClick={onClear}
+          className="ml-auto grid h-6 w-6 shrink-0 place-items-center rounded-sm text-black/35 transition hover:bg-black/5 hover:text-black/70"
+          title="Remove referrer"
+          data-testid="referrer-field-clear"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    );
+  }
+
   if (currentReferredByClientId && currentReferrer) {
     return (
       <div className={`flex items-center gap-2 rounded-2xl border border-green-500/20 bg-green-500/5 px-3 py-2 ${className ?? ""}`}>
@@ -88,7 +117,11 @@ export function ReferrerSelector({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="flex w-full items-center gap-1.5 rounded-2xl border border-dashed border-black/15 bg-black/[0.02] px-3 py-1.5 text-xs font-medium text-black/40 transition hover:border-black/25 hover:bg-black/[0.04] hover:text-black/60"
+          className={
+            variant === "field"
+              ? "flex h-10 w-full items-center gap-2 rounded-lg border border-dashed border-black/15 bg-white px-3 text-[13px] font-medium text-black/45 transition hover:border-black/25 hover:text-black/70 dark:border-white/15 dark:bg-white/[0.04]"
+              : "flex w-full items-center gap-1.5 rounded-2xl border border-dashed border-black/15 bg-black/[0.02] px-3 py-1.5 text-xs font-medium text-black/40 transition hover:border-black/25 hover:bg-black/[0.04] hover:text-black/60"
+          }
         >
           <Users className="h-3.5 w-3.5" />
           Set referrer

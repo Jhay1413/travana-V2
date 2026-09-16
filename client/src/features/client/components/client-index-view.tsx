@@ -1,221 +1,309 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useMemo, useState } from "react";
 import {
-  Bot,
-  BotOff,
-  CalendarDays,
-  ChevronDown,
-  Mail,
-  MapPin,
-  Merge,
+  Check,
+  CirclePoundSterling,
+  Ellipsis,
   Pencil,
-  Phone,
-  Pin,
-  PinOff,
-  type LucideIcon,
+  ShieldUser,
+  SquarePlus,
+  Trash2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { cn } from "@/lib/utils";
+import { useClientNotes, useCurrentUser } from "@/hooks/queries";
+import { useDeleteTask, useToggleTask } from "@/hooks/mutations";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import type { EnquiryTable } from "@/features/quote/types";
 import type { Ticket as ApiTicket } from "@/features/tickets/types";
 import type { User as ApiUser } from "@/features/user/types";
 import type { TaskNew, ClientFile } from "@shared/schema";
-import type { Client, QuoteWithJoins, BookingWithJoins, TicketItem, FileItem } from "@/features/client/components/client-types";
-import { ClientOverviewTab, PortalPinSection, ReferralStatsSection } from "@/features/client/components/tabs/ClientOverviewTab";
+import { currency, type Client, type QuoteWithJoins, type BookingWithJoins, type FileItem } from "@/features/client/components/client-types";
 import { ClientFilesTab } from "@/features/client/components/tabs/ClientFilesTab";
 import { ClientTicketsTab } from "@/features/client/components/tabs/ClientTicketsTab";
 import { ClientChatsTab } from "@/features/client/components/tabs/ClientChatsTab";
 import { ClientVipClubTab } from "@/features/client/components/tabs/ClientVipClubTab";
 import { ReferrerSelector } from "@/features/client/components/sections/ReferrerSelector";
+import { PortalAccessCard } from "@/features/client/components/sections/PortalAccessCard";
+import { ReferralNetworkCard } from "@/features/client/components/sections/ReferralNetworkCard";
+import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
 
-// ─── Breadcrumbs ────────────────────────────────────────────────────────────
-// "Home > Clients > <client>" — same 13px muted style as HolidayDetailView's
-// breadcrumbs, but the current client name is the terminal (non-link) crumb.
+export { composeAddress } from "@/features/client/lib/compose-address";
 
-function IndexBreadcrumbs({ clientName }: { clientName: string }) {
-  const [, navigate] = useLocation();
-  return (
-    <nav
-      className="flex flex-wrap items-center gap-1.5 text-[13px] text-black/45 3xl:text-sm"
-      data-testid="client-index-breadcrumbs"
-    >
-      <button
-        type="button"
-        onClick={() => navigate("/")}
-        className="transition hover:text-black/70 hover:underline"
-        data-testid="client-index-breadcrumb-home"
-      >
-        Home
-      </button>
-      <span aria-hidden>&gt;</span>
-      <button
-        type="button"
-        onClick={() => navigate("/clients")}
-        className="transition hover:text-black/70 hover:underline"
-        data-testid="client-index-breadcrumb-clients"
-      >
-        Clients
-      </button>
-      <span aria-hidden>&gt;</span>
-      <span className="truncate text-black/45" data-testid="client-index-breadcrumb-current" aria-disabled>
-        {clientName}
-      </span>
-    </nav>
-  );
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function shortDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
-// ─── Avatar ─────────────────────────────────────────────────────────────────
-// Large initials circle in a hashed gradient — NeonClient has no photo field
-// beyond avatarUrl, which most records don't have, so this is the primary path.
-
-const AVATAR_GRADIENTS = [
-  "from-emerald-400 to-teal-600",
-  "from-violet-400 to-purple-600",
-  "from-amber-400 to-orange-600",
-  "from-sky-400 to-blue-600",
-  "from-pink-400 to-rose-600",
-  "from-indigo-400 to-blue-700",
-];
-
-function gradientFor(id: string): string {
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
-  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
+function longDate(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function clientInitials(name: string): string {
+/** Most recent of a list of ISO dates, as dd/MM/yy. */
+function latestDate(values: Array<string | null | undefined>): string | null {
+  const times = values.map((v) => (v ? new Date(v).getTime() : NaN)).filter((t) => !isNaN(t));
+  if (times.length === 0) return null;
+  return shortDate(new Date(Math.max(...times)).toISOString());
+}
+
+function taskDueChip(due: Date): { label: string; className: string } {
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const dayDiff = Math.round((startOfDay(due) - startOfDay(new Date())) / 86_400_000);
+  if (dayDiff < 0) return { label: "Overdue", className: "bg-rose-500 text-white" };
+  if (dayDiff === 0) return { label: "Today", className: "bg-emerald-500 text-white" };
+  if (dayDiff === 1) return { label: "Tomorrow", className: "bg-sky-500 text-white" };
+  return { label: due.toLocaleDateString("en-GB", { day: "numeric", month: "short" }), className: "bg-black/5 text-black/60" };
+}
+
+function initials(name: string): string {
   return name
     .split(/\s+/)
     .filter(Boolean)
-    .map((p) => p[0])
     .slice(0, 2)
+    .map((p) => p[0])
     .join("")
     .toUpperCase();
 }
 
-function ProfileAvatar({ clientId, name, avatarUrl }: { clientId: string; name: string; avatarUrl?: string | null }) {
-  if (avatarUrl) {
-    return (
-      <img
-        src={avatarUrl}
-        alt=""
-        className="h-16 w-16 shrink-0 rounded-full object-cover 3xl:h-20 3xl:w-20"
-        data-testid="client-index-avatar-photo"
-      />
-    );
-  }
+// ─── Stats ──────────────────────────────────────────────────────────────────
+
+function StatBox({ label, value, caption, testId }: { label: string; value: string; caption: string | null; testId: string }) {
   return (
-    <div
-      className={cn(
-        "grid h-16 w-16 shrink-0 place-items-center rounded-full bg-gradient-to-br text-lg font-bold text-white 3xl:h-20 3xl:w-20 3xl:text-xl",
-        gradientFor(clientId),
-      )}
-      data-testid="client-index-avatar-initials"
-    >
-      {clientInitials(name)}
+    <div className="relative rounded-sm border border-black/10 bg-white px-4 py-3.5 dark:border-white/10 dark:bg-white/[0.04]" data-testid={testId}>
+      {/* Green pound badge straddling the corner, per the design. */}
+      <span className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-white ring-2 ring-white dark:ring-black" aria-hidden>
+        <CirclePoundSterling className="h-3.5 w-3.5" strokeWidth={2} />
+      </span>
+      <div className="text-sm font-semibold text-black/85 dark:text-white/85">{label}</div>
+      <div className="mt-1 text-4xl font-semibold leading-none tracking-tight text-black/90 dark:text-white">{value}</div>
+      <div className="mt-2 text-[11px] text-black/45 dark:text-white/45">{caption ?? " "}</div>
     </div>
   );
 }
 
-// ─── Contact field (red-icon pattern) ──────────────────────────────────────
-// Grey label above, red icon + bold value — same look as the inbox's Client
-// Details panel field rows.
+// ─── Tasks tab ──────────────────────────────────────────────────────────────
 
-function ClientField({ label, icon: Icon, value }: { label: string; icon: LucideIcon; value: string }) {
+const TASKS_PREVIEW_LIMIT = 5;
+
+/** Title + travel date of the deal a task belongs to, for the row's second line. */
+interface TaskHoliday {
+  title: string | null;
+  travelDate: string | null;
+}
+
+function TasksList({
+  clientId,
+  tasks,
+  users,
+  holidays,
+  navigate,
+}: {
+  clientId: string;
+  tasks: TaskNew[];
+  users: ApiUser[];
+  holidays: Map<string, TaskHoliday>;
+  navigate: (to: string) => void;
+}) {
+  const toggleMutation = useToggleTask("client", clientId);
+  const deleteMutation = useDeleteTask("client", clientId);
+  const [editingTask, setEditingTask] = useState<EditableTask | null>(null);
+  const userNameById = useMemo(() => new Map(users.map((u) => [u.id, u.name || u.email || ""])), [users]);
+
+  const rows = useMemo(
+    () =>
+      [...tasks]
+        .sort((a, b) => Number(a.completed) - Number(b.completed) || (a.dueDate ? new Date(a.dueDate).getTime() : 0) - (b.dueDate ? new Date(b.dueDate).getTime() : 0))
+        .slice(0, TASKS_PREVIEW_LIMIT),
+    [tasks],
+  );
+
+  if (rows.length === 0) {
+    return <p className="py-8 text-center text-[13px] text-black/40 dark:text-white/40">No tasks yet.</p>;
+  }
+
   return (
-    <div data-testid={`client-index-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
-      <div className="text-xs text-black/45">{label}</div>
-      <div className="mt-1 flex items-center gap-2.5">
-        <Icon className="h-4 w-4 shrink-0 text-[#ff0000]" strokeWidth={1.25} />
-        <span className="truncate text-sm font-bold 3xl:text-base">{value}</span>
+    <>
+      <div data-testid="client-index-tasks">
+        {rows.map((task) => {
+          const due = task.dueDate ? new Date(task.dueDate) : null;
+          const validDue = due && !isNaN(due.getTime()) ? due : null;
+          const time = validDue ? validDue.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : null;
+          const chip = validDue && !task.completed ? taskDueChip(validDue) : null;
+          const assigneeName = task.userId ? userNameById.get(task.userId) || "" : "";
+          const created = longDate(task.createdAt ? String(task.createdAt) : null);
+          const holiday = task.entityId ? holidays.get(task.entityId) : undefined;
+          const travel = holiday?.travelDate ? longDate(holiday.travelDate) : null;
+          const meta = [created ? `Created ${created}` : null, holiday?.title || null, travel ? `Travel ${travel}` : null].filter(Boolean).join(" – ");
+          return (
+            <div key={task.id} className="flex items-start gap-3 px-1 py-3.5" data-testid={`client-index-task-${task.id}`}>
+              <button
+                type="button"
+                onClick={() => toggleMutation.mutate(task.id)}
+                title={task.completed ? "Mark as pending" : "Mark as done"}
+                className={cn(
+                  "mt-1 grid h-4 w-4 shrink-0 place-items-center rounded-full border transition",
+                  task.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-black/25 hover:border-emerald-500",
+                )}
+                data-testid={`client-index-task-toggle-${task.id}`}
+              >
+                {task.completed && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2 text-sm">
+                  {time && (
+                    <>
+                      <span className="shrink-0 font-semibold text-[#fe9a00]">{time}</span>
+                      <span className="text-black/30" aria-hidden>
+                        –
+                      </span>
+                    </>
+                  )}
+                  <span className={cn("truncate font-semibold", task.completed ? "text-black/40 line-through" : "text-black/90 dark:text-white")}>
+                    {task.title}
+                  </span>
+                </div>
+                {meta && <div className="mt-0.5 truncate text-xs text-black/45 dark:text-white/45">{meta}</div>}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {chip && (
+                  <span className={cn("rounded-sm px-2.5 py-1 text-[11px] font-semibold", chip.className)} data-testid={`client-index-task-due-${task.id}`}>
+                    {chip.label}
+                  </span>
+                )}
+                {assigneeName && (
+                  <span
+                    className="grid h-6 w-6 place-items-center rounded-full bg-rose-100 text-[9px] font-bold text-rose-600"
+                    title={assigneeName}
+                    data-testid={`client-index-task-assignee-${task.id}`}
+                  >
+                    {initials(assigneeName)}
+                  </span>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="grid h-7 w-7 place-items-center rounded-sm text-black/45 transition hover:bg-black/5 hover:text-black"
+                      title="More"
+                      data-testid={`client-index-task-menu-${task.id}`}
+                    >
+                      <Ellipsis className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="rounded-sm">
+                    <DropdownMenuItem onClick={() => setEditingTask(task)} className="gap-2 rounded-sm text-sm">
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => deleteMutation.mutate(task.id)} className="gap-2 rounded-sm text-sm text-rose-600 focus:text-rose-600">
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          );
+        })}
       </div>
+      <button
+        type="button"
+        onClick={() => navigate("/tasks")}
+        className="mt-2 px-1 text-[13px] font-semibold text-[#fe9a00] transition hover:underline"
+        data-testid="client-index-view-all-tasks"
+      >
+        View All Tasks
+      </button>
+      <EditTaskDialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)} task={editingTask} entityType="client" entityId={clientId} />
+    </>
+  );
+}
+
+// ─── Notes tab ──────────────────────────────────────────────────────────────
+
+function NotesList({ clientId, users }: { clientId: string; users: ApiUser[] }) {
+  const { data: notes, isLoading } = useClientNotes(clientId);
+  const userNameById = useMemo(() => new Map(users.map((u) => [u.id, u.name || u.email || ""])), [users]);
+  const rows = useMemo(
+    () =>
+      [...(notes ?? [])]
+        .filter((n) => n.description !== "system")
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [notes],
+  );
+
+  if (isLoading) return <p className="py-8 text-center text-[13px] text-black/40">Loading…</p>;
+  if (rows.length === 0) {
+    return <p className="py-8 text-center text-[13px] text-black/40 dark:text-white/40">No notes yet. Notes are added from a quote, enquiry or booking.</p>;
+  }
+
+  return (
+    <div className="divide-y divide-black/[0.05]" data-testid="client-index-notes">
+      {rows.map((note) => {
+        const author = note.author_name || (note.user_id && userNameById.get(note.user_id)) || (note.agent_id && userNameById.get(note.agent_id)) || "Unknown";
+        return (
+          <div key={note.id} className="px-1 py-3" data-testid={`client-index-note-${note.id}`}>
+            <div className="text-xs">
+              <span className="font-semibold text-[#3b82f6]">{author}</span>
+              <span className="text-black/40"> – {longDate(note.createdAt)}</span>
+            </div>
+            <div className="prose prose-sm mt-1 max-w-none text-[13px] leading-relaxed text-black/75 dark:text-white/75">
+              <RichTextDisplay content={note.content || ""} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function memberSince(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
-}
+// ─── Dashboard tabs ─────────────────────────────────────────────────────────
 
-export function composeAddress(clientData: NeonClient | undefined): string | null {
-  if (!clientData) return null;
-  const line1 = [clientData.houseNumber, clientData.street].filter(Boolean).join(" ");
-  const line2 = [clientData.city, clientData.post_code].filter(Boolean).join(", ");
-  const parts = [line1, line2, clientData.country].filter(Boolean);
-  return parts.length ? parts.join(", ") : null;
-}
-
-// ─── Badge / pin / AI-reply chips ───────────────────────────────────────────
-// Cheap carry-over from the old ClientProfileHeader — same data, compact chips.
-
-const BADGE_OPTIONS = ["New Client", "Repeat Client", "VIP Client", "Family Member", "Time Waster", "Banned"] as const;
-
-function badgePillClass(badge: string | null | undefined): string {
-  switch (badge) {
-    case "VIP Client":
-      return "border-blue-200 bg-blue-50 text-blue-600";
-    case "Banned":
-    case "Time Waster":
-      return "border-red-200 bg-red-50 text-red-600";
-    case "Repeat Client":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    case "Family Member":
-      return "border-violet-200 bg-violet-50 text-violet-700";
-    default:
-      return "border-black/10 bg-black/[0.03] text-black/70";
-  }
-}
-
-// ─── Tabs ───────────────────────────────────────────────────────────────────
-// Enquiries/Quotes/Booked are intentionally dropped here — the left All
-// Holidays panel now covers that ground.
-
-type ClientIndexTab = "overview" | "files" | "tickets" | "chats" | "vip-club";
+type ClientIndexTab = "tasks" | "notes" | "chats" | "tickets" | "files" | "club-vip";
 
 const CLIENT_INDEX_TABS: Array<{ value: ClientIndexTab; label: string }> = [
-  { value: "overview", label: "Overview" },
-  { value: "files", label: "Files" },
-  { value: "tickets", label: "Tickets" },
+  { value: "tasks", label: "Tasks" },
+  { value: "notes", label: "Notes" },
   { value: "chats", label: "Chats" },
-  { value: "vip-club", label: "VIP Club" },
+  { value: "tickets", label: "Tickets" },
+  { value: "files", label: "Files" },
+  { value: "club-vip", label: "Club VIP" },
 ];
+
+// Older links used ?tab=overview / ?tab=vip-club — keep them landing somewhere sensible.
+const LEGACY_TAB_ALIASES: Record<string, ClientIndexTab> = { overview: "tasks", "vip-club": "club-vip" };
 
 function resolveInitialTab(): ClientIndexTab {
   const params = new URLSearchParams(window.location.search);
   const t = params.get("tab");
+  if (!t) return "tasks";
   const valid = CLIENT_INDEX_TABS.map((tab) => tab.value) as string[];
-  return t && valid.includes(t) ? (t as ClientIndexTab) : "overview";
+  if (valid.includes(t)) return t as ClientIndexTab;
+  return LEGACY_TAB_ALIASES[t] ?? "tasks";
 }
+
+// ─── View ───────────────────────────────────────────────────────────────────
 
 interface ClientIndexViewProps {
   clientId: string;
   client: Client;
   clientData: NeonClient | undefined;
-  onEdit: () => void;
-  onMerge: () => void;
-  isFavorited: boolean;
-  onToggleFavorite: () => void;
-  onChangeBadge: (badge: string | null) => void;
-  aiReplyEnabled: boolean;
-  onToggleAiReply: (enabled: boolean) => void;
   onSelectReferrer: (referredByClientId: string) => void;
   onClearReferrer: () => void;
+  onCreateTask: () => void;
   enquiries: EnquiryTable[];
   quotes: QuoteWithJoins[];
   bookings: BookingWithJoins[];
-  overviewTickets: TicketItem[];
   tasks: TaskNew[];
   navigate: (to: string) => void;
   clientFiles: ClientFile[];
@@ -232,19 +320,12 @@ export function ClientIndexView({
   clientId,
   client,
   clientData,
-  onEdit,
-  onMerge,
-  isFavorited,
-  onToggleFavorite,
-  onChangeBadge,
-  aiReplyEnabled,
-  onToggleAiReply,
   onSelectReferrer,
   onClearReferrer,
+  onCreateTask,
   enquiries,
   quotes,
   bookings,
-  overviewTickets,
   tasks,
   navigate,
   clientFiles,
@@ -257,195 +338,114 @@ export function ClientIndexView({
   onNewTicket,
 }: ClientIndexViewProps) {
   const [tab, setTab] = useState<ClientIndexTab>(resolveInitialTab);
+  const { data: currentUser } = useCurrentUser();
+  void client;
 
-  const since = memberSince(clientData?.createdAt);
-  const address = composeAddress(clientData);
+  const totalProfit = useMemo(
+    () => bookings.reduce((sum, b) => sum + (parseFloat(b.package_commission || "0") || 0), 0),
+    [bookings],
+  );
+  const avgPpb = bookings.length > 0 ? totalProfit / bookings.length : 0;
+  const dashboardOwner = currentUser?.name?.trim() || "Agent";
+
+  // Deal title + travel date by id, so a task row can say which holiday it is for.
+  const taskHolidays = useMemo(() => {
+    const map = new Map<string, TaskHoliday>();
+    for (const e of enquiries) map.set(e.id, { title: e.title, travelDate: e.travel_date });
+    for (const q of quotes) map.set(q.id, { title: q.title, travelDate: q.travel_date });
+    for (const b of bookings) map.set(b.id, { title: b.title, travelDate: b.travel_date });
+    return map;
+  }, [enquiries, quotes, bookings]);
 
   return (
-    <div data-testid="client-index-view">
-      <IndexBreadcrumbs clientName={client.name} />
-
-      <Card className="mt-3 rounded-2xl border border-black/10 bg-white p-5 shadow-sm" data-testid="client-index-profile-card">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <ProfileAvatar clientId={clientId} name={client.name} avatarUrl={clientData?.avatarUrl} />
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-bold text-black/90 3xl:text-xl" data-testid="client-index-name">
-                {client.name}
-              </h1>
-              {since && (
-                <div className="mt-1 text-[13px] text-black/45 3xl:text-sm" data-testid="client-index-member-since-line">
-                  Member since {since}
-                </div>
-              )}
-              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition hover:brightness-95",
-                        badgePillClass(clientData?.badge),
-                      )}
-                      data-testid="client-index-badge"
-                    >
-                      {clientData?.badge || "No Badge"}
-                      <ChevronDown className="h-3 w-3 opacity-70" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    {BADGE_OPTIONS.map((option) => (
-                      <DropdownMenuItem key={option} onClick={() => onChangeBadge(option)} data-testid={`client-index-badge-option-${option}`}>
-                        {option}
-                      </DropdownMenuItem>
-                    ))}
-                    <DropdownMenuItem onClick={() => onChangeBadge(null)} className="text-black/60" data-testid="client-index-badge-option-none">
-                      No Badge
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <button
-                  type="button"
-                  onClick={onToggleFavorite}
-                  aria-pressed={isFavorited}
-                  title={isFavorited ? "Unpin client" : "Pin client"}
-                  className={cn(
-                    "inline-flex h-6 w-6 items-center justify-center rounded-full border transition",
-                    isFavorited ? "border-amber-400 bg-amber-400/20 text-amber-700" : "border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100",
-                  )}
-                  data-testid="client-index-pin"
-                >
-                  {isFavorited ? <Pin className="h-3 w-3 fill-current" /> : <PinOff className="h-3 w-3" />}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onToggleAiReply(!aiReplyEnabled)}
-                  aria-pressed={aiReplyEnabled}
-                  title={
-                    aiReplyEnabled
-                      ? "AI auto-reply is ON for this client's conversations — click to turn off"
-                      : "AI auto-reply is OFF for this client's conversations — click to turn on"
-                  }
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition hover:brightness-95",
-                    aiReplyEnabled ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-black/10 bg-black/[0.03] text-black/50",
-                  )}
-                  data-testid="client-index-ai-reply"
-                >
-                  {aiReplyEnabled ? <Bot className="h-3.5 w-3.5" /> : <BotOff className="h-3.5 w-3.5" />}
-                  {aiReplyEnabled ? "AI replies on" : "AI replies off"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="outline" className="h-9 rounded-md border-black/10" onClick={onEdit} data-testid="client-index-button-edit">
-              <Pencil className="mr-1.5 h-3.5 w-3.5" />
-              Edit
-            </Button>
-            <Button variant="outline" className="h-9 rounded-md border-black/10" onClick={onMerge} data-testid="client-index-button-merge">
-              <Merge className="mr-1.5 h-3.5 w-3.5" />
-              Merge
-            </Button>
+    <div className="min-h-full rounded-sm border border-black/10 bg-[#f7f8fa] p-5 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-view">
+      {/* Two independent stacks: each column flows on its own, so the dashboard
+          card starts right under the stats instead of under the taller right column. */}
+      <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
+        {/* Left stack matches the height of the taller column: the stats keep their own height and the dashboard card grows to fill the rest, no further. */}
+        <div className="flex min-w-0 flex-col gap-5">
+        {/* ── Left column: stats ─────────────────────────────────────────── */}
+        <div className="shrink-0 rounded-sm border border-black/10 p-4 dark:border-white/10" data-testid="client-index-stats">
+          <div className="grid grid-cols-2 items-start gap-4 xl:grid-cols-4">
+            <StatBox label="Enquiries" value={String(enquiries.length)} caption={latestDate(enquiries.map((e) => e.date_created)) ? `Last enq. ${latestDate(enquiries.map((e) => e.date_created))}` : null} testId="client-index-stat-enquiries" />
+            <StatBox label="Quotes" value={String(quotes.length)} caption={latestDate(quotes.map((q) => q.date_created)) ? `Last quote ${latestDate(quotes.map((q) => q.date_created))}` : null} testId="client-index-stat-quotes" />
+            <StatBox label="Bookings" value={String(bookings.length)} caption={latestDate(bookings.map((b) => b.date_created)) ? `Last booked ${latestDate(bookings.map((b) => b.date_created))}` : null} testId="client-index-stat-bookings" />
+            <StatBox label="Total Profit" value={currency.format(totalProfit)} caption={avgPpb > 0 ? `Av. PPB ${currency.format(avgPpb)}` : null} testId="client-index-stat-total-profit" />
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 border-t border-black/10 pt-5 sm:grid-cols-2" data-testid="client-index-contact-fields">
-          {clientData?.phoneNumber && <ClientField label="Phone" icon={Phone} value={clientData.phoneNumber} />}
-          {clientData?.email && <ClientField label="Email" icon={Mail} value={clientData.email} />}
-          {address && <ClientField label="Address" icon={MapPin} value={address} />}
-          {since && <ClientField label="Member Since" icon={CalendarDays} value={since} />}
-        </div>
-      </Card>
+        {/* ── Left column: agent dashboard ──────────────────────────────── */}
+        <div className="flex flex-1 flex-col rounded-sm border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-tabs-card">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold text-black/90 dark:text-white" data-testid="client-index-dashboard-title">
+              {dashboardOwner} Dashboard
+            </h3>
+            <button
+              type="button"
+              onClick={onCreateTask}
+              title="Add task"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-black/15 text-black/60 transition hover:bg-black/5 hover:text-black dark:border-white/20 dark:text-white/60"
+              data-testid="client-index-add-task"
+            >
+              <SquarePlus className="h-4 w-4" />
+            </button>
+          </div>
 
-      <Card className="mt-4 rounded-2xl border border-black/10 bg-white p-4 shadow-sm" data-testid="client-index-stats">
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: "Enquiries", count: enquiries.length, className: "text-emerald-500" },
-            { label: "Quotes", count: quotes.length, className: "text-sky-500" },
-            { label: "Bookings", count: bookings.length, className: "text-amber-500" },
-          ].map((stat) => (
-            <div key={stat.label} className="rounded-xl border border-black/10 px-2 py-3 text-center" data-testid={`client-index-stat-${stat.label.toLowerCase()}`}>
-              <div className="text-2xl font-semibold">{stat.count}</div>
-              <div className={cn("mt-0.5 text-[13px]", stat.className)}>{stat.label}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card className="mt-4 rounded-2xl border border-black/10 bg-white p-3 shadow-sm" data-testid="client-index-tabs-card">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as ClientIndexTab)}>
-          <TabsList className="h-8 rounded-md border border-black/10 bg-black/[0.02] p-0.5">
+          <div className="mt-3 flex w-full items-center gap-1 rounded-sm border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]">
             {CLIENT_INDEX_TABS.map((t) => (
-              <TabsTrigger
+              <button
                 key={t.value}
-                value={t.value}
-                className="rounded-sm px-4 py-0.5 text-[13px] font-semibold data-[state=active]:font-bold 3xl:text-sm"
+                type="button"
+                onClick={() => setTab(t.value)}
+                className={cn(
+                  "flex-1 whitespace-nowrap rounded-sm px-2 py-1 text-center text-[13px] font-semibold transition",
+                  tab === t.value
+                    ? "border border-black/10 bg-white text-[#fe9a00] shadow-sm dark:border-white/15 dark:bg-white/15"
+                    : "text-black/55 hover:text-black dark:text-white/55 dark:hover:text-white",
+                )}
                 data-testid={`client-index-tab-${t.value}`}
               >
                 {t.label}
-              </TabsTrigger>
+              </button>
             ))}
-          </TabsList>
+          </div>
 
-          <TabsContent value="overview" className="mt-3" data-testid="client-index-tab-panel-overview">
-            <ClientOverviewTab
-              clientData={clientData}
-              client={client}
-              enquiries={enquiries}
-              quotes={quotes}
-              bookings={bookings}
-              tickets={overviewTickets}
-              tasks={tasks}
-              clientId={clientId}
-              navigate={navigate}
-            />
+          <div className="mt-2" data-testid={`client-index-tab-panel-${tab}`}>
+            {tab === "tasks" && <TasksList clientId={clientId} tasks={tasks} users={users} holidays={taskHolidays} navigate={navigate} />}
+            {tab === "notes" && <NotesList clientId={clientId} users={users} />}
+            {tab === "chats" && <ClientChatsTab clientId={clientId} />}
+            {tab === "tickets" && <ClientTicketsTab tickets={rawTickets} users={users} onNewTicket={onNewTicket} />}
+            {tab === "files" && (
+              <ClientFilesTab clientFiles={clientFiles} onDeleteFile={onDeleteFile} filteredFiles={filteredFiles} onUploadFile={onUploadFile} role={role} />
+            )}
+            {tab === "club-vip" && <ClientVipClubTab clientId={clientId} />}
+          </div>
+        </div>
 
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-black/10 bg-white/70 p-3" data-testid="client-index-referrer">
-                <div className="mb-1.5 text-[11px] font-semibold text-black/50">Referred by</div>
-                <ReferrerSelector
-                  className="w-full"
-                  currentReferredByClientId={clientData?.referredByClientId}
-                  excludeClientId={clientId}
-                  onSelect={onSelectReferrer}
-                  onClear={onClearReferrer}
-                />
-              </div>
-              <ReferralStatsSection clientId={clientId} />
+        </div>
+
+        {/* ── Right column: referred by, portal access, referral network ── */}
+        <div className="flex min-w-0 flex-col gap-4 self-start">
+          <div className="rounded-sm border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-referrer">
+            <div className="flex items-center gap-2">
+              <ShieldUser className="h-[22px] w-[22px] text-[#07a9f4]" strokeWidth={1.75} />
+              <h3 className="text-sm font-semibold text-black/90 dark:text-white">Referred By</h3>
             </div>
-
             <div className="mt-3">
-              <PortalPinSection clientId={clientId} />
+              <ReferrerSelector
+                className="w-full"
+                variant="field"
+                currentReferredByClientId={clientData?.referredByClientId}
+                excludeClientId={clientId}
+                onSelect={onSelectReferrer}
+                onClear={onClearReferrer}
+              />
             </div>
-          </TabsContent>
-
-          <TabsContent value="files" className="mt-3" data-testid="client-index-tab-panel-files">
-            <ClientFilesTab
-              clientFiles={clientFiles}
-              onDeleteFile={onDeleteFile}
-              filteredFiles={filteredFiles}
-              onUploadFile={onUploadFile}
-              role={role}
-            />
-          </TabsContent>
-
-          <TabsContent value="tickets" className="mt-3" data-testid="client-index-tab-panel-tickets">
-            <ClientTicketsTab tickets={rawTickets} users={users} onNewTicket={onNewTicket} />
-          </TabsContent>
-
-          <TabsContent value="chats" className="mt-3" data-testid="client-index-tab-panel-chats">
-            <ClientChatsTab clientId={clientId} />
-          </TabsContent>
-
-          <TabsContent value="vip-club" className="mt-3" data-testid="client-index-tab-panel-vip-club">
-            <ClientVipClubTab clientId={clientId} />
-          </TabsContent>
-        </Tabs>
-      </Card>
+          </div>
+          <PortalAccessCard clientId={clientId} />
+          <ReferralNetworkCard clientId={clientId} />
+        </div>
+      </div>
     </div>
   );
 }

@@ -241,10 +241,13 @@ function HolidayListRow({
   row,
   selected,
   isLast = false,
+  roomy = false,
   onSelect,
 }: {
   row: HolidayRowData;
   selected: boolean;
+  /** Live Deals sizing — a notch larger than the compact holidays list. */
+  roomy?: boolean;
   /** Last row in its list — the separator hairline is dropped so the list ends clean. */
   isLast?: boolean;
   onSelect: () => void;
@@ -278,15 +281,15 @@ function HolidayListRow({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <span className={cn("truncate text-[13px] font-semibold 3xl:text-sm", row.expired && "text-red-500")}>{row.title}</span>
+            <span className={cn("truncate font-semibold", roomy ? "text-[15px]" : "text-[13px] 3xl:text-sm", row.expired && "text-red-500")}>{row.title}</span>
             {row.price > 0 && (
-              <span className="shrink-0 text-[13px] font-semibold text-black/60 3xl:text-sm dark:text-white/60">
+              <span className={cn("shrink-0 font-semibold text-black/60 dark:text-white/60", roomy ? "text-[15px]" : "text-[13px] 3xl:text-sm")}>
                 {holidayCurrency.format(row.price)}
               </span>
             )}
           </div>
           {row.destinationName && (
-            <div className="mt-0.5 truncate text-xs text-[#a195a5] 3xl:text-[13px] dark:text-white/50">{row.destinationName}</div>
+            <div className={cn("mt-0.5 truncate text-[#a195a5] dark:text-white/50", roomy ? "text-[13px]" : "text-xs 3xl:text-[13px]")}>{row.destinationName}</div>
           )}
         </div>
       </div>
@@ -297,7 +300,7 @@ function HolidayListRow({
           <span className="w-9 shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 3xl:w-10 dark:text-white/30" aria-hidden>
             ···
           </span>
-          <span className="truncate text-xs text-[#a195a5] dark:text-white/50">{row.dateLine}</span>
+          <span className={cn("truncate text-[#a195a5] dark:text-white/50", roomy ? "text-[13px]" : "text-xs")}>{row.dateLine}</span>
         </div>
       )}
       {!selected && !isLast && (
@@ -328,6 +331,8 @@ interface AllHolidaysPanelProps {
   onCreate?: (kind: "enquiry" | "quote" | "booking" | "task" | "ticket") => void;
   isLoadingTransactions?: boolean;
   className?: string;
+  /** "live-deals": the overview's right-hand column (title "Live Deals", border on the left, roomier rows). */
+  variant?: "holidays" | "live-deals";
 }
 
 export function AllHolidaysPanel({
@@ -339,7 +344,9 @@ export function AllHolidaysPanel({
   onCreate,
   isLoadingTransactions,
   className,
+  variant = "holidays",
 }: AllHolidaysPanelProps) {
+  const isLiveDeals = variant === "live-deals";
   const [tab, setTab] = useState<HolidayTab>("quotes");
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -393,13 +400,14 @@ export function AllHolidaysPanel({
   return (
     <Card
       className={cn(
-        "flex flex-col overflow-hidden rounded-none border-0 border-r border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]",
+        "flex flex-col overflow-hidden rounded-none border-0 border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]",
+        isLiveDeals ? "border-l" : "border-r",
         className,
       )}
       data-testid="all-holidays-panel"
     >
       <div className="flex h-[76px] shrink-0 items-center justify-between gap-2 border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
-        <h2 className="text-sm font-semibold 3xl:text-base">All Holidays</h2>
+        <h2 className={cn("font-semibold", isLiveDeals ? "text-lg" : "text-sm 3xl:text-base")}>{isLiveDeals ? "Live Deals" : "All Holidays"}</h2>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -426,7 +434,7 @@ export function AllHolidaysPanel({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="grid h-9 w-9 place-items-center rounded-full bg-sky-500 text-white transition hover:bg-sky-600"
+                  className="grid h-9 w-9 place-items-center rounded-full bg-[#07a9f4] text-white transition hover:bg-[#0596db]"
                   title="Create…"
                   data-testid="all-holidays-new"
                 >
@@ -551,6 +559,7 @@ export function AllHolidaysPanel({
             <div className="space-y-1">
               {activeRows.map((row, index) => (
                 <HolidayListRow
+                  roomy={isLiveDeals}
                   key={row.id}
                   row={row}
                   isLast={index === activeRows.length - 1}
@@ -577,6 +586,7 @@ export function AllHolidaysPanel({
                   <div className="mt-1 space-y-1">
                     {expiredRows.map((row, index) => (
                       <HolidayListRow
+                        roomy={isLiveDeals}
                         key={row.id}
                         row={row}
                         isLast={index === expiredRows.length - 1}

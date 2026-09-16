@@ -30,7 +30,8 @@ import { AllHolidaysPanel } from "@/features/client/components/all-holidays-pane
 import { HolidayDetailsPanel } from "@/features/client/components/holiday-details-panel";
 import { HolidayDetailView } from "@/features/client/components/holiday-detail-view";
 import { HolidayHeaderActions } from "@/features/client/components/holiday-header-actions";
-import { ClientIndexView, composeAddress } from "@/features/client/components/client-index-view";
+import { ClientIndexView } from "@/features/client/components/client-index-view";
+import { ClientIndexHeader, type ClientCreateKind } from "@/features/client/components/client-index-header";
 import type { HolidaySelection } from "@/features/client/types";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/features/booking/components/booking-create-dialog";
@@ -241,8 +242,83 @@ export default function ClientPage() {
     );
   }
 
-  return (
-    <>
+  const handleCreate = (kind: ClientCreateKind) => {
+    if (kind === "enquiry") enquiryActions.setShowEnquiryWizard(true);
+    else if (kind === "quote") setShowQuoteCreateDialog(true);
+    else if (kind === "booking") setShowBookingCreateDialog(true);
+    else if (kind === "task") taskCreate.setShowTaskDialog(true);
+    else if (kind === "ticket") ticketCreate.setShowTicketDialog(true);
+  };
+
+  const saveReferrer = (referredByClientId: string | null) =>
+    editForm.updateNeonClientMutation.mutate(
+      { id: clientId, data: { referredByClientId } },
+      {
+        onSuccess: () => toast({ title: referredByClientId ? "Referrer saved" : "Referrer removed" }),
+        onError: () => toast({ title: referredByClientId ? "Failed to save referrer" : "Failed to remove referrer", variant: "destructive" }),
+      },
+    );
+
+  // Two layouts share one page: the redesigned overview (main column + "Live
+  // Deals" on the right) when nothing is selected, and the original
+  // three-column holidays / detail / details layout once a deal is opened.
+  const overviewLayout = (
+    <section
+      className="text-compact -m-4 grid h-[calc(100vh-3.5rem)] grid-cols-1 gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[1fr_290px] xl:grid-cols-[1fr_320px] 3xl:grid-cols-[1fr_360px]"
+      data-testid="section-client-profile"
+    >
+      <div className="flex min-h-0 min-w-0 flex-col">
+        <ClientIndexHeader
+          client={client}
+          clientData={clientData}
+          isFavorited={isFavorited}
+          onToggleFavorite={handleToggleClientPin}
+          onChangeBadge={handleChangeClientBadge}
+          onEdit={editForm.openEditDialog}
+          onMerge={() => setShowMergeDialog(true)}
+          aiReplyEnabled={!!clientData?.aiReplyEnabled}
+          onToggleAiReply={handleToggleAiReply}
+          onCreate={handleCreate}
+        />
+        <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto bg-white p-4 md:p-6 dark:bg-transparent">
+          <ClientIndexView
+            clientId={clientId}
+            client={client}
+            clientData={clientData}
+            onSelectReferrer={(id) => saveReferrer(id)}
+            onClearReferrer={() => saveReferrer(null)}
+            onCreateTask={() => taskCreate.setShowTaskDialog(true)}
+            enquiries={enquiries}
+            quotes={quotes}
+            bookings={bookings}
+            tasks={tasks}
+            navigate={navigate}
+            clientFiles={fileActions.clientFilesData}
+            filteredFiles={filteredFiles}
+            onDeleteFile={fileActions.deleteFile}
+            onUploadFile={() => fileActions.setShowUploadFileModal(true)}
+            role={role}
+            rawTickets={ticketsData ?? []}
+            users={usersData ?? []}
+            onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
+          />
+        </div>
+      </div>
+      <AllHolidaysPanel
+        variant="live-deals"
+        className="hidden lg:flex"
+        enquiries={enquiries}
+        quotes={quotes}
+        bookings={bookings}
+        selection={holidaySelection}
+        onSelect={setHolidaySelection}
+        onCreate={handleCreate}
+        isLoadingTransactions={isLoadingTransactions}
+      />
+    </section>
+  );
+
+  const detailLayout = (
       <section
         className="text-compact -m-4 grid h-[calc(100vh-3.5rem)] grid-cols-1 gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[250px_1fr_240px] xl:grid-cols-[300px_1fr_300px] 3xl:grid-cols-[380px_1fr_380px]"
         data-testid="section-client-profile"
@@ -254,13 +330,7 @@ export default function ClientPage() {
           bookings={bookings}
           selection={holidaySelection}
           onSelect={setHolidaySelection}
-          onCreate={(kind) => {
-            if (kind === "enquiry") enquiryActions.setShowEnquiryWizard(true);
-            else if (kind === "quote") setShowQuoteCreateDialog(true);
-            else if (kind === "booking") setShowBookingCreateDialog(true);
-            else if (kind === "task") taskCreate.setShowTaskDialog(true);
-            else if (kind === "ticket") ticketCreate.setShowTicketDialog(true);
-          }}
+          onCreate={handleCreate}
           isLoadingTransactions={isLoadingTransactions}
         />
 
@@ -276,17 +346,12 @@ export default function ClientPage() {
                 <h2 className="truncate text-sm font-semibold 3xl:text-base" data-testid="client-center-header">
                   {client.name}
                 </h2>
-                {holidaySelection && client.phone && (
+                {client.phone && (
                   <span className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                     {client.phone}
                   </span>
                 )}
               </div>
-              {!holidaySelection && (client.phone || composeAddress(clientData)) && (
-                <p className="mt-0.5 truncate text-xs text-black/45 3xl:text-[13px] dark:text-white/45" data-testid="client-center-header-contact">
-                  {[client.phone, composeAddress(clientData)].filter(Boolean).join(" · ")}
-                </p>
-              )}
             </div>
             {holidaySelection && (
               <HolidayHeaderActions
@@ -298,57 +363,12 @@ export default function ClientPage() {
             )}
           </div>
           <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3 md:px-6 md:pb-6 md:pt-4">
-        {holidaySelection ? (
+        {holidaySelection && (
           <HolidayDetailView
             clientId={clientId}
             clientName={client.name}
             selection={holidaySelection}
             onBack={() => setHolidaySelection(null)}
-          />
-        ) : (
-          <ClientIndexView
-            clientId={clientId}
-            client={client}
-            clientData={clientData}
-            onEdit={editForm.openEditDialog}
-            onMerge={() => setShowMergeDialog(true)}
-            isFavorited={isFavorited}
-            onToggleFavorite={handleToggleClientPin}
-            onChangeBadge={handleChangeClientBadge}
-            aiReplyEnabled={!!clientData?.aiReplyEnabled}
-            onToggleAiReply={handleToggleAiReply}
-            onSelectReferrer={(referredByClientId) => {
-              editForm.updateNeonClientMutation.mutate(
-                { id: clientId, data: { referredByClientId } },
-                {
-                  onSuccess: () => toast({ title: "Referrer saved" }),
-                  onError: () => toast({ title: "Failed to save referrer", variant: "destructive" }),
-                },
-              );
-            }}
-            onClearReferrer={() => {
-              editForm.updateNeonClientMutation.mutate(
-                { id: clientId, data: { referredByClientId: null } },
-                {
-                  onSuccess: () => toast({ title: "Referrer removed" }),
-                  onError: () => toast({ title: "Failed to remove referrer", variant: "destructive" }),
-                },
-              );
-            }}
-            enquiries={enquiries}
-            quotes={quotes}
-            bookings={bookings}
-            overviewTickets={tickets}
-            tasks={tasks}
-            navigate={navigate}
-            clientFiles={fileActions.clientFilesData}
-            filteredFiles={filteredFiles}
-            onDeleteFile={fileActions.deleteFile}
-            onUploadFile={() => fileActions.setShowUploadFileModal(true)}
-            role={role}
-            rawTickets={ticketsData ?? []}
-            users={usersData ?? []}
-            onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
           />
         )}
           </div>
@@ -362,6 +382,11 @@ export default function ClientPage() {
           bookings={bookings}
         />
       </section>
+  );
+
+  return (
+    <>
+      {holidaySelection ? detailLayout : overviewLayout}
       <QuoteCreateDialog
         presentation="drawer"
         transactionId={convertingFromEnquiryTxnId || undefined}
