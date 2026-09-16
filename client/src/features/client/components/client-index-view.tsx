@@ -81,14 +81,14 @@ function initials(name: string): string {
 
 function StatBox({ label, value, caption, testId }: { label: string; value: string; caption: string | null; testId: string }) {
   return (
-    <div className="relative rounded-sm border border-black/10 bg-white px-4 py-3.5 dark:border-white/10 dark:bg-white/[0.04]" data-testid={testId}>
+    <div className="relative flex h-full flex-col rounded-sm border border-black/10 bg-white px-4 py-3.5 dark:border-white/10 dark:bg-white/[0.04]" data-testid={testId}>
       {/* Green pound badge straddling the corner, per the design. */}
       <span className="absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-white ring-2 ring-white dark:ring-black" aria-hidden>
         <CirclePoundSterling className="h-3.5 w-3.5" strokeWidth={2} />
       </span>
       <div className="text-sm font-semibold text-black/85 dark:text-white/85">{label}</div>
       <div className="mt-1 text-4xl font-semibold leading-none tracking-tight text-black/90 dark:text-white">{value}</div>
-      <div className="mt-2 text-[11px] text-black/45 dark:text-white/45">{caption ?? " "}</div>
+      <div className="mt-auto truncate pt-2 text-[11px] text-black/45 dark:text-white/45" title={caption ?? undefined}>{caption ?? " "}</div>
     </div>
   );
 }
@@ -358,15 +358,15 @@ export function ClientIndexView({
   }, [enquiries, quotes, bookings]);
 
   return (
-    <div className="min-h-full rounded-sm border border-black/10 bg-[#f7f8fa] p-5 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-view">
+    <div className="min-h-full rounded-sm border border-black/10 bg-[#f7f8fa] p-3 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-view">
       {/* Two independent stacks: each column flows on its own, so the dashboard
           card starts right under the stats instead of under the taller right column. */}
-      <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
+      <div className="grid gap-3 xl:grid-cols-[1.3fr_1fr]">
         {/* Left stack matches the height of the taller column: the stats keep their own height and the dashboard card grows to fill the rest, no further. */}
-        <div className="flex min-w-0 flex-col gap-5">
+        <div className="flex min-w-0 flex-col gap-3">
         {/* ── Left column: stats ─────────────────────────────────────────── */}
-        <div className="shrink-0 rounded-sm border border-black/10 p-4 dark:border-white/10" data-testid="client-index-stats">
-          <div className="grid grid-cols-2 items-start gap-4 xl:grid-cols-4">
+        <div className="shrink-0 rounded-sm border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-stats">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <StatBox label="Enquiries" value={String(enquiries.length)} caption={latestDate(enquiries.map((e) => e.date_created)) ? `Last enq. ${latestDate(enquiries.map((e) => e.date_created))}` : null} testId="client-index-stat-enquiries" />
             <StatBox label="Quotes" value={String(quotes.length)} caption={latestDate(quotes.map((q) => q.date_created)) ? `Last quote ${latestDate(quotes.map((q) => q.date_created))}` : null} testId="client-index-stat-quotes" />
             <StatBox label="Bookings" value={String(bookings.length)} caption={latestDate(bookings.map((b) => b.date_created)) ? `Last booked ${latestDate(bookings.map((b) => b.date_created))}` : null} testId="client-index-stat-bookings" />
@@ -425,7 +425,7 @@ export function ClientIndexView({
         </div>
 
         {/* ── Right column: referred by, portal access, referral network ── */}
-        <div className="flex min-w-0 flex-col gap-4 self-start">
+        <div className="flex min-w-0 flex-col gap-3 self-start">
           <div className="rounded-sm border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-referrer">
             <div className="flex items-center gap-2">
               <ShieldUser className="h-[22px] w-[22px] text-[#07a9f4]" strokeWidth={1.75} />
