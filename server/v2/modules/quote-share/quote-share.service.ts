@@ -1,5 +1,6 @@
 import { quotePublicRepository } from '../quote/quote-public.repository';
 import { AppError } from '../../utils/error-handler';
+import type { Scope } from '../../utils/scope';
 
 export const quoteShareService = {
   async generateToken(quoteId: string) {
@@ -8,6 +9,12 @@ export const quoteShareService = {
 
   async getViewStats(quoteId: string) {
     return quotePublicRepository.getViewStats(quoteId);
+  },
+
+  /** Platform admins see across orgs; everyone else only their own org's clients. */
+  async getClientQuoteViews(clientId: string, scope: Scope) {
+    const orgId = scope.orgRole === 'platform_admin' ? null : scope.orgId || null;
+    return quotePublicRepository.getClientQuoteViews(clientId, orgId);
   },
 
   async getCustomerActions(quoteId: string) {

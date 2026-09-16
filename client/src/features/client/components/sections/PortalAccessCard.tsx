@@ -61,12 +61,12 @@ export function PortalAccessCard({ clientId, className }: { clientId: string; cl
               }
             }}
             placeholder="4 digits"
-            className="h-7 w-16 shrink-0 rounded-sm border border-black/10 bg-white text-center text-xs tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-[#07a9f4]/30 dark:border-white/10 dark:bg-white/[0.04]"
+            className="h-7 w-24 shrink-0 2xl:w-36 rounded-sm border border-black/10 bg-white text-center text-xs tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-[#07a9f4]/30 dark:border-white/10 dark:bg-white/[0.04]"
             data-testid="input-set-pin"
           />
         ) : (
           <span
-            className="inline-flex h-7 w-16 shrink-0 items-center justify-center rounded-sm border border-black/10 bg-white text-xs tracking-[0.3em] text-black/60 dark:border-white/10 dark:bg-white/[0.04]"
+            className="inline-flex h-7 w-24 shrink-0 2xl:w-36 items-center justify-center rounded-sm border border-black/10 bg-white text-xs tracking-[0.3em] text-black/60 dark:border-white/10 dark:bg-white/[0.04]"
             data-testid="portal-pin-masked"
           >
             ••••
@@ -83,7 +83,7 @@ export function PortalAccessCard({ clientId, className }: { clientId: string; cl
               data-testid="button-confirm-pin"
             >
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" strokeWidth={2.25} />}
-              <span className="hidden xl:inline">{hasPin ? "Save" : "Set PIN"}</span>
+              <span className="hidden 2xl:inline">{hasPin ? "Save" : "Set PIN"}</span>
             </button>
             {hasPin && (
               <button
@@ -95,8 +95,8 @@ export function PortalAccessCard({ clientId, className }: { clientId: string; cl
                 className="inline-flex h-7 shrink-0 items-center rounded-sm bg-black/5 px-2 text-[11px] font-semibold text-black/60 transition hover:bg-black/10"
                 data-testid="button-cancel-pin"
               >
-                <X className="h-3.5 w-3.5 xl:hidden" strokeWidth={2.25} />
-                <span className="hidden xl:inline">Cancel</span>
+                <X className="h-3.5 w-3.5 2xl:hidden" strokeWidth={2.25} />
+                <span className="hidden 2xl:inline">Cancel</span>
               </button>
             )}
           </>
@@ -112,7 +112,7 @@ export function PortalAccessCard({ clientId, className }: { clientId: string; cl
               data-testid="button-send-portal-link"
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" strokeWidth={1.75} />}
-              <span className="hidden xl:inline">Send Link</span>
+              <span className="hidden 2xl:inline">Send Link</span>
             </button>
             <button
               type="button"
@@ -121,7 +121,7 @@ export function PortalAccessCard({ clientId, className }: { clientId: string; cl
               data-testid="button-change-pin"
             >
               <KeyRound className="h-3.5 w-3.5" strokeWidth={1.75} />
-              <span className="hidden xl:inline">Change</span>
+              <span className="hidden 2xl:inline">Change</span>
             </button>
             <button
               type="button"

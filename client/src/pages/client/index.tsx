@@ -10,6 +10,7 @@ import {
   useUsers,
   useCurrentUser,
   useTasks,
+  transactionKeys,
 } from "@/hooks/queries";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
@@ -62,7 +63,10 @@ export default function ClientPage() {
   const clientId = params?.clientId ?? "";
 
   const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
-  const { data: transactionsData, isLoading: isLoadingTransactions } = useTransactions({ clientId });
+  // The overview stats and Live Deals list come from this query, so it must
+  // reflect a deal created moments ago — even when the page was left and
+  // re-entered inside the 30s default stale window.
+  const { data: transactionsData, isLoading: isLoadingTransactions } = useTransactions({ clientId }, { staleTime: 0, refetchOnMount: "always" });
   const { data: ticketsData } = useTicketsByClient(clientId);
   const { data: tasksData } = useTasks("client", clientId);
   const { data: usersData } = useUsers();
@@ -280,7 +284,7 @@ export default function ClientPage() {
           onToggleAiReply={handleToggleAiReply}
           onCreate={handleCreate}
         />
-        <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto bg-white p-4 md:p-6 dark:bg-transparent">
+        <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto bg-white p-4 md:py-6 md:pl-8 md:pr-6 dark:bg-transparent">
           <ClientIndexView
             clientId={clientId}
             client={client}
@@ -368,7 +372,11 @@ export default function ClientPage() {
             clientId={clientId}
             clientName={client.name}
             selection={holidaySelection}
-            onBack={() => setHolidaySelection(null)}
+            onBack={() => {
+              setHolidaySelection(null);
+              // A deal may have been created or converted while it was open.
+              queryClient.invalidateQueries({ queryKey: transactionKeys.list({ clientId }) });
+            }}
           />
         )}
           </div>

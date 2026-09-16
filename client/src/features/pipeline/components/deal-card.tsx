@@ -260,8 +260,9 @@ export function DealCard({
           </>
         ) : t.next_task ? (
           <>
-            <p><span className="font-medium text-black/80">Task: </span>{t.next_task.title || "Untitled task"}</p>
-            <p><span className="font-medium text-black/80">Time &amp; Date: </span>{formatDueDateTime(t.next_task.due_date)}</p>
+            {/* The next task is what the agent acts on, so it reads a step larger than the other lines. */}
+            <p className="text-[13px] 3xl:text-sm"><span className="font-medium text-black/80">Task: </span>{t.next_task.title || "Untitled task"}</p>
+            <p className="text-[13px] 3xl:text-sm"><span className="font-medium text-black/80">Time &amp; Date: </span>{formatDueDateTime(t.next_task.due_date)}</p>
           </>
         ) : (
           <>

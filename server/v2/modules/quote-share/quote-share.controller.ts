@@ -3,6 +3,8 @@ import { quoteShareService } from './quote-share.service';
 import { userRepository } from '../user/user.repository';
 import { asyncHandler } from '../../utils/async-handler';
 import { getUserId } from '../../utils/get-user-id';
+import { getScope } from '../../utils/scope';
+import { successResponse } from '../../utils/response';
 
 async function getUserRole(userId: string): Promise<string> {
   const u = await userRepository.findRoleById(userId);
@@ -10,6 +12,13 @@ async function getUserRole(userId: string): Promise<string> {
 }
 
 export const quoteShareController = {
+  getClientViews: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    const rows = await quoteShareService.getClientQuoteViews(req.params.clientId as string, getScope(req));
+    return successResponse(res, rows, 'Client quote views retrieved');
+  }),
+
   generateToken: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });

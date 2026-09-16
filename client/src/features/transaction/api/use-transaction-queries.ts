@@ -14,11 +14,21 @@ export const transactionKeys = {
   expiringQuotes: (agentId?: string) => [...transactionKeys.all, "expiring-quotes", agentId] as const,
 };
 
-export function useTransactions(filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string; branchId?: string }, options?: { enabled?: boolean }) {
+export function useTransactions(
+  filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string; branchId?: string },
+  options?: {
+    enabled?: boolean;
+    /** Override the 30s default — pass 0 for lists that must always show the latest deals. */
+    staleTime?: number;
+    refetchOnMount?: boolean | "always";
+  },
+) {
   return useQuery<Transaction[]>({
     queryKey: transactionKeys.list(filters),
     queryFn: () => transactionApi.getAll(filters),
     enabled: options?.enabled ?? true,
+    ...(options?.staleTime !== undefined ? { staleTime: options.staleTime } : {}),
+    ...(options?.refetchOnMount !== undefined ? { refetchOnMount: options.refetchOnMount } : {}),
   });
 }
 

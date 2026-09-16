@@ -12,6 +12,17 @@ import {
   notifications,
 } from "@shared/schema";
 import type { QuoteView, InsertQuoteView, QuoteCustomerAction, InsertQuoteCustomerAction } from "@shared/schema";
+
+/** One row of the client page's "Views" tab. */
+export interface ClientQuoteViewSummary {
+  quoteId: string;
+  title: string | null;
+  travelDate: string | null;
+  quoteStatus: string | null;
+  viewCount: number;
+  lastViewedAt: string;
+  lastDevice: string | null;
+}
 import { eq, desc, sql, and, inArray, or, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import crypto from "crypto";
@@ -312,6 +323,31 @@ export const quotePublicRepository = {
 
   async getViews(quoteId: string): Promise<QuoteView[]> {
     return db.select().from(quoteViewsTable).where(eq(quoteViewsTable.quoteId, quoteId)).orderBy(desc(quoteViewsTable.viewedAt));
+  },
+
+  /**
+   * Every quote of a client that has been opened at least once, with how often
+   * and when it was last viewed — the client page's "Views" tab. Scoped to an
+   * org when one is given so agents only see their own clients' quotes.
+   */
+  async getClientQuoteViews(clientId: string, orgId: string | null): Promise<ClientQuoteViewSummary[]> {
+    const lastViewed = sql<string>`max(${quoteViewsTable.viewedAt})`;
+    return db
+      .select({
+        quoteId: quote.id,
+        title: quote.title,
+        travelDate: quote.travel_date,
+        quoteStatus: quote.quote_status,
+        viewCount: sql<number>`count(${quoteViewsTable.id})::int`,
+        lastViewedAt: lastViewed,
+        lastDevice: sql<string | null>`(array_agg(${quoteViewsTable.deviceType} order by ${quoteViewsTable.viewedAt} desc))[1]`,
+      })
+      .from(quoteViewsTable)
+      .innerJoin(quote, eq(quoteViewsTable.quoteId, quote.id))
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(and(eq(transaction.client_id, clientId), ...(orgId ? [eq(transaction.org_id, orgId)] : [])))
+      .groupBy(quote.id)
+      .orderBy(desc(lastViewed));
   },
 
   async getViewStats(quoteId: string) {

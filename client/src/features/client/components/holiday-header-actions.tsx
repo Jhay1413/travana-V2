@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Link as LinkIcon, Loader2, Pin, PinOff, Share2 } from "lucide-react";
+import { Check, Eye, Pin, Share2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -13,6 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import { CircleAction } from "@/features/client/components/circle-action";
 import { useQuote, useBooking, useEnquiry, useUsers, quoteKeys, bookingKeys, enquiryKeys } from "@/hooks/queries";
 import { useUpdateTransaction } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
@@ -28,7 +29,6 @@ import {
   QuoteActionsMenu,
   BookingActionsMenu,
   EnquiryActionsMenu,
-  HEADER_ICON_BUTTON_CLASS,
 } from "@/features/client/components/holiday-detail-view";
 import type { HolidaySelection } from "@/features/client/types";
 
@@ -77,14 +77,14 @@ function AssignedAgentButton({
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="relative h-[30px] w-[30px] shrink-0 rounded-full"
+              className="relative h-9 w-9 shrink-0 rounded-full"
               aria-label="Reallocate deal"
               data-testid="client-header-agent"
             >
               {avatarUrl ? (
-                <img src={avatarUrl} alt="" className="h-[30px] w-[30px] rounded-full object-cover" />
+                <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
               ) : (
-                <span className="grid h-[30px] w-[30px] place-items-center rounded-full bg-[#3b82f6]/10 text-xs font-bold text-[#3b82f6]">
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-[#3b82f6]/10 text-xs font-bold text-[#3b82f6]">
                   {initial}
                 </span>
               )}
@@ -134,7 +134,7 @@ interface HeaderActionsProps {
 }
 
 function HeaderActionsSkeleton() {
-  return <div className="h-[30px] w-[30px] shrink-0 animate-pulse rounded-full bg-black/5 dark:bg-white/10" />;
+  return <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-black/5 dark:bg-white/10" />;
 }
 
 function QuoteHeaderActions({ id, clientId, clientName, onDeleted }: HeaderActionsProps) {
@@ -163,51 +163,9 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted }: HeaderActio
         userId={quoteData.user_id}
         onReallocated={() => queryClient.invalidateQueries({ queryKey: quoteKeys.all })}
       />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={togglePin}
-            className={cn(HEADER_ICON_BUTTON_CLASS, isFavorited && "border-amber-500/30 bg-amber-500/10 text-amber-700")}
-            aria-label={isFavorited ? "Unpin" : "Pin"}
-            data-testid="client-header-pin"
-          >
-            {isFavorited ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{isFavorited ? "Unpin" : "Pin"}</TooltipContent>
-      </Tooltip>
-      {quoteData.quote_ref && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <a
-              href={quoteData.quote_ref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={HEADER_ICON_BUTTON_CLASS}
-              aria-label="View Quote"
-              data-testid="client-header-link"
-            >
-              <LinkIcon className="h-3.5 w-3.5" />
-            </a>
-          </TooltipTrigger>
-          <TooltipContent>View Quote</TooltipContent>
-        </Tooltip>
-      )}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={openShare}
-            className={HEADER_ICON_BUTTON_CLASS}
-            aria-label="Share Quote"
-            data-testid="client-header-share"
-          >
-            <Share2 className="h-3.5 w-3.5" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>Share Quote</TooltipContent>
-      </Tooltip>
+      {quoteData.quote_ref && <CircleAction icon={Eye} label="View Quote" href={quoteData.quote_ref} testId="client-header-link" />}
+      <CircleAction icon={Share2} label="Share Quote" onClick={openShare} testId="client-header-share" />
+      <CircleAction icon={Pin} label={isFavorited ? "Unpin" : "Pin"} onClick={togglePin} active={isFavorited} testId="client-header-pin" />
       <QuoteActionsMenu
         quoteId={id}
         quoteData={quoteData}
@@ -250,20 +208,7 @@ function BookingHeaderActions({ id, clientId, clientName, onDeleted }: HeaderAct
         userId={bookingData.user_id}
         onReallocated={() => queryClient.invalidateQueries({ queryKey: bookingKeys.all })}
       />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={togglePin}
-            className={cn(HEADER_ICON_BUTTON_CLASS, isFavorited && "border-amber-500/30 bg-amber-500/10 text-amber-700")}
-            aria-label={isFavorited ? "Unpin" : "Pin"}
-            data-testid="client-header-pin"
-          >
-            {isFavorited ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{isFavorited ? "Unpin" : "Pin"}</TooltipContent>
-      </Tooltip>
+      <CircleAction icon={Pin} label={isFavorited ? "Unpin" : "Pin"} onClick={togglePin} active={isFavorited} testId="client-header-pin" />
       <BookingActionsMenu bookingId={id} clientId={clientId} booking={booking} onDeleted={onDeleted} trigger="icon" />
     </>
   );
@@ -307,20 +252,7 @@ function EnquiryHeaderActions({ id, clientId, clientName, onDeleted }: HeaderAct
         userId={enquiry.user_id}
         onReallocated={() => queryClient.invalidateQueries({ queryKey: enquiryKeys.all })}
       />
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={togglePin}
-            className={cn(HEADER_ICON_BUTTON_CLASS, isEnquiryPinned && "border-amber-500/30 bg-amber-500/10 text-amber-700")}
-            aria-label={isEnquiryPinned ? "Unpin" : "Pin"}
-            data-testid="client-header-pin"
-          >
-            {isEnquiryPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{isEnquiryPinned ? "Unpin" : "Pin"}</TooltipContent>
-      </Tooltip>
+      <CircleAction icon={Pin} label={isEnquiryPinned ? "Unpin" : "Pin"} onClick={togglePin} active={isEnquiryPinned} testId="client-header-pin" />
       <EnquiryActionsMenu
         enquiryId={id}
         clientId={clientId}
@@ -345,7 +277,7 @@ export interface HolidayHeaderActionsProps {
 export function HolidayHeaderActions({ selection, clientId, clientName, onDeleted }: HolidayHeaderActionsProps) {
   return (
     <TooltipProvider>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         {selection.type === "quote" && (
           <QuoteHeaderActions id={selection.id} clientId={clientId} clientName={clientName} onDeleted={onDeleted} />
         )}

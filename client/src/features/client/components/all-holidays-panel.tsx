@@ -187,7 +187,7 @@ const HOLIDAY_CHIP_PALETTE = ["bg-red-500", "bg-sky-500", "bg-orange-500", "bg-e
 // Colored initial chip for the quote's tour operator — same pattern as
 // ContactPanel's LiveQuoteOperatorChip in the conversations inbox, replicated
 // locally since cross-feature imports aren't allowed.
-function OperatorChip({ name }: { name: string }) {
+function OperatorChip({ name, className }: { name: string; className?: string }) {
   const label = name[0]?.toUpperCase() || "•";
   const hash = [...name].reduce((s, c) => s + c.charCodeAt(0), 0);
   return (
@@ -195,6 +195,7 @@ function OperatorChip({ name }: { name: string }) {
       className={cn(
         "grid h-9 w-9 shrink-0 place-items-center rounded-[6px] text-[13px] font-bold text-white 3xl:h-10 3xl:w-10 3xl:text-sm",
         HOLIDAY_CHIP_PALETTE[hash % HOLIDAY_CHIP_PALETTE.length],
+        className,
       )}
       title={name}
       aria-hidden
@@ -206,10 +207,10 @@ function OperatorChip({ name }: { name: string }) {
 
 // The tour operator's uploaded logo, rendered as a rounded square. Falls back
 // to the initial chip when the image fails to load (dead URL, blocked, …).
-function OperatorLogo({ name, logoUrl }: { name: string | null; logoUrl: string }) {
+function OperatorLogo({ name, logoUrl, className }: { name: string | null; logoUrl: string; className?: string }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
-    return name ? <OperatorChip name={name} /> : <NeutralChip label={name || "•"} />;
+    return name ? <OperatorChip name={name} className={className} /> : <NeutralChip label={name || "•"} className={className} />;
   }
   return (
     <img
@@ -217,17 +218,17 @@ function OperatorLogo({ name, logoUrl }: { name: string | null; logoUrl: string 
       alt={name || "Tour operator"}
       title={name || undefined}
       onError={() => setFailed(true)}
-      className="h-9 w-9 shrink-0 rounded-[6px] border border-black/5 bg-white object-contain 3xl:h-10 3xl:w-10"
+      className={cn("h-9 w-9 shrink-0 rounded-[6px] border border-black/5 bg-white object-contain 3xl:h-10 3xl:w-10", className)}
     />
   );
 }
 
 // Neutral chip used when there's no operator to hash against (enquiries, bookings).
-function NeutralChip({ label }: { label: string }) {
+function NeutralChip({ label, className }: { label: string; className?: string }) {
   const initial = label[0]?.toUpperCase() || "•";
   return (
     <span
-      className="grid h-9 w-9 shrink-0 place-items-center rounded-[6px] bg-black/10 text-[13px] font-bold text-black/60 3xl:h-10 3xl:w-10 3xl:text-sm dark:bg-white/10 dark:text-white/60"
+      className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-[6px] bg-black/10 text-[13px] font-bold text-black/60 3xl:h-10 3xl:w-10 3xl:text-sm dark:bg-white/10 dark:text-white/60", className)}
       aria-hidden
     >
       {initial}
@@ -252,6 +253,8 @@ function HolidayListRow({
   isLast?: boolean;
   onSelect: () => void;
 }) {
+  // Live Deals uses a smaller operator logo than the compact holidays list.
+  const chipSize = roomy ? "h-7 w-7 text-[11px] 2xl:h-8 2xl:w-8 2xl:text-xs 3xl:h-8 3xl:w-8 3xl:text-xs" : undefined;
   return (
     <div
       role="button"
@@ -273,11 +276,11 @@ function HolidayListRow({
     >
       <div className="flex items-start gap-3">
         {row.operatorLogoUrl ? (
-          <OperatorLogo name={row.operatorName} logoUrl={row.operatorLogoUrl} />
+          <OperatorLogo name={row.operatorName} logoUrl={row.operatorLogoUrl} className={chipSize} />
         ) : row.operatorName ? (
-          <OperatorChip name={row.operatorName} />
+          <OperatorChip name={row.operatorName} className={chipSize} />
         ) : (
-          <NeutralChip label={row.title} />
+          <NeutralChip label={row.title} className={chipSize} />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
@@ -297,7 +300,7 @@ function HolidayListRow({
           same visual language as the inbox conversation rows. */}
       {row.dateLine && (
         <div className="mt-1.5 flex items-center gap-3">
-          <span className="w-9 shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 3xl:w-10 dark:text-white/30" aria-hidden>
+          <span className={cn("shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 dark:text-white/30", roomy ? "w-7 2xl:w-8" : "w-9 3xl:w-10")} aria-hidden>
             ···
           </span>
           <span className={cn("truncate text-[#a195a5] dark:text-white/50", roomy ? "text-[13px]" : "text-xs")}>{row.dateLine}</span>

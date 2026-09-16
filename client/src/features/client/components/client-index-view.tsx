@@ -3,6 +3,7 @@ import {
   Check,
   CirclePoundSterling,
   Ellipsis,
+  Eye,
   Pencil,
   ShieldUser,
   SquarePlus,
@@ -17,6 +18,7 @@ import {
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { cn } from "@/lib/utils";
 import { useClientNotes, useCurrentUser } from "@/hooks/queries";
+import { useClientQuoteViews } from "@/features/quote";
 import { useDeleteTask, useToggleTask } from "@/hooks/mutations";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import type { EnquiryTable } from "@/features/quote/types";
@@ -267,9 +269,66 @@ function NotesList({ clientId, users }: { clientId: string; users: ApiUser[] }) 
   );
 }
 
+// ─── Views tab ──────────────────────────────────────────────────────────────
+// Which of the client's quotes they have opened, and how recently.
+
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return longDate(iso) ?? "";
+}
+
+function ViewsList({ clientId, navigate }: { clientId: string; navigate: (to: string) => void }) {
+  const { data: views, isLoading } = useClientQuoteViews(clientId);
+
+  if (isLoading) return <p className="py-8 text-center text-[13px] text-black/40">Loading…</p>;
+  if (!views || views.length === 0) {
+    return <p className="py-8 text-center text-[13px] text-black/40 dark:text-white/40">The client hasn't viewed any quotes yet.</p>;
+  }
+
+  return (
+    <div className="divide-y divide-black/[0.05]" data-testid="client-index-views">
+      {views.map((v) => {
+        const travel = longDate(v.travelDate);
+        return (
+          <button
+            key={v.quoteId}
+            type="button"
+            onClick={() => navigate(`/clients/${clientId}?holiday=quote:${v.quoteId}`)}
+            className="flex w-full items-center gap-3 px-1 py-3 text-left transition hover:bg-black/[0.02]"
+            data-testid={`client-index-view-${v.quoteId}`}
+          >
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-sm bg-sky-50 text-[#07a9f4]">
+              <Eye className="h-4 w-4" strokeWidth={1.75} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold text-black/90 dark:text-white">{v.title || "Untitled quote"}</div>
+              <div className="mt-0.5 truncate text-xs text-black/45 dark:text-white/45">
+                {[travel ? `Travel ${travel}` : null, v.lastDevice ? v.lastDevice : null].filter(Boolean).join(" – ")}
+              </div>
+            </div>
+            <div className="shrink-0 text-right">
+              <div className="text-sm font-semibold text-black/85 dark:text-white/85">
+                {v.viewCount} {v.viewCount === 1 ? "view" : "views"}
+              </div>
+              <div className="text-[11px] text-black/45 dark:text-white/45">Last {relativeTime(v.lastViewedAt)}</div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Dashboard tabs ─────────────────────────────────────────────────────────
 
-type ClientIndexTab = "tasks" | "notes" | "chats" | "tickets" | "files" | "club-vip";
+type ClientIndexTab = "tasks" | "notes" | "chats" | "tickets" | "files" | "views" | "club-vip";
 
 const CLIENT_INDEX_TABS: Array<{ value: ClientIndexTab; label: string }> = [
   { value: "tasks", label: "Tasks" },
@@ -277,6 +336,7 @@ const CLIENT_INDEX_TABS: Array<{ value: ClientIndexTab; label: string }> = [
   { value: "chats", label: "Chats" },
   { value: "tickets", label: "Tickets" },
   { value: "files", label: "Files" },
+  { value: "views", label: "Views" },
   { value: "club-vip", label: "Club VIP" },
 ];
 
@@ -361,7 +421,7 @@ export function ClientIndexView({
     <div className="min-h-full rounded-sm border border-black/10 bg-[#f7f8fa] p-3 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-view">
       {/* Two independent stacks: each column flows on its own, so the dashboard
           card starts right under the stats instead of under the taller right column. */}
-      <div className="grid gap-3 xl:grid-cols-[1.3fr_1fr]">
+      <div className="grid gap-3 xl:grid-cols-[1.9fr_.8fr] 2xl:grid-cols-[1.5fr_1fr]">
         {/* Left stack matches the height of the taller column: the stats keep their own height and the dashboard card grows to fill the rest, no further. */}
         <div className="flex min-w-0 flex-col gap-3">
         {/* ── Left column: stats ─────────────────────────────────────────── */}
@@ -415,6 +475,7 @@ export function ClientIndexView({
             {tab === "notes" && <NotesList clientId={clientId} users={users} />}
             {tab === "chats" && <ClientChatsTab clientId={clientId} />}
             {tab === "tickets" && <ClientTicketsTab tickets={rawTickets} users={users} onNewTicket={onNewTicket} />}
+            {tab === "views" && <ViewsList clientId={clientId} navigate={navigate} />}
             {tab === "files" && (
               <ClientFilesTab clientFiles={clientFiles} onDeleteFile={onDeleteFile} filteredFiles={filteredFiles} onUploadFile={onUploadFile} role={role} />
             )}

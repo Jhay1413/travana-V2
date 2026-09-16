@@ -24,49 +24,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import type { Client } from "@/features/client/components/client-types";
 import { composeAddress } from "@/features/client/lib/compose-address";
+import { CircleAction } from "@/features/client/components/circle-action";
 
 export type ClientCreateKind = "enquiry" | "quote" | "booking" | "task" | "ticket";
 
 const BADGE_OPTIONS = ["New Client", "Repeat Client", "VIP Client", "Family Member", "Time Waster", "Banned"] as const;
-
-// Round blue action button used across the header (View / Share / Pin / +).
-function CircleAction({
-  icon: Icon,
-  label,
-  onClick,
-  active = false,
-  size = "md",
-  testId,
-}: {
-  icon: typeof Eye;
-  label: string;
-  onClick?: () => void;
-  active?: boolean;
-  size?: "md" | "lg";
-  testId: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      aria-pressed={active || undefined}
-      className={cn(
-        "grid shrink-0 place-items-center rounded-full bg-[#07a9f4] text-white transition hover:bg-[#0596db]",
-        size === "lg" ? "h-10 w-10" : "h-9 w-9",
-      )}
-      data-testid={testId}
-    >
-      <Icon className={cn(size === "lg" ? "h-5 w-5" : "h-[18px] w-[18px]", active && "fill-current")} strokeWidth={1.5} />
-    </button>
-  );
-}
 
 interface ClientIndexHeaderProps {
   client: Client;
@@ -125,7 +91,7 @@ export function ClientIndexHeader({
           </h2>
           {client.phone && (
             <span
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xs bg-[#fe9a00] px-3 py-1 text-[13px] font-semibold text-white"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-[6px] bg-[#fe9a00] px-3 py-1 text-[13px] font-semibold text-white"
               data-testid="client-index-phone"
             >
               <Phone className="h-3.5 w-3.5" />
@@ -136,7 +102,7 @@ export function ClientIndexHeader({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="inline-flex shrink-0 items-center gap-1 rounded-xs bg-[#07a9f4] px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-[#0596db]"
+                className="inline-flex shrink-0 items-center gap-1 rounded-[6px] bg-[#07a9f4] pl-3.5 pr-2.5 py-1 text-xs font-semibold text-white transition hover:bg-[#0596db]"
                 data-testid="client-index-badge"
               >
                 {clientData?.badge || "No Badge"}
@@ -172,16 +138,19 @@ export function ClientIndexHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5">
+        {/* View / Share / Pin sit as one group; the create button stands apart. */}
+        <div className="flex items-center gap-2">
         <CircleAction icon={Eye} label="View client" testId="client-index-view-button" />
         <CircleAction icon={Share2} label={copied ? "Link copied" : "Share client link"} onClick={() => void share()} testId="client-index-share" />
         <CircleAction icon={Pin} label={isFavorited ? "Unpin client" : "Pin client"} onClick={onToggleFavorite} active={isFavorited} testId="client-index-pin" />
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
               type="button"
               title="Create…"
               aria-label="Create"
-              className="ml-1 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#07a9f4] text-white transition hover:bg-[#0596db]"
+              className="ml-5 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#07a9f4] text-white transition hover:bg-[#0596db]"
               data-testid="client-index-create"
             >
               <SquarePlus className="h-5 w-5" strokeWidth={1.75} />

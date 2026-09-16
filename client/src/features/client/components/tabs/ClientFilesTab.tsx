@@ -68,7 +68,7 @@ export function ClientFilesTab({
 
   return (
     <>
-      <Card className="rounded-3xl border-black/10 bg-white/70 p-4">
+      <Card className="min-w-0 overflow-hidden rounded-3xl border-black/10 bg-white/70 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-sm font-semibold" data-testid="text-files-title">
@@ -89,17 +89,17 @@ export function ClientFilesTab({
           </Button>
         </div>
 
-        <div className="mt-4 grid gap-3" data-testid="list-files">
+        <div className="mt-4 grid min-w-0 gap-3" data-testid="list-files">
           {clientFiles.map((f) => (
             <button
               key={f.id}
               type="button"
               onClick={() => setPreviewFile(f)}
-              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
+              className="flex w-full min-w-0 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
               data-testid={`row-file-uploaded-${f.id}`}
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <div className="truncate text-sm font-semibold" data-testid={`text-file-uploaded-name-${f.id}`}>
                     {f.title || f.originalName}
                   </div>
@@ -109,11 +109,16 @@ export function ClientFilesTab({
                     </span>
                   )}
                 </div>
-                <div className="mt-1 text-xs text-black/55" data-testid={`text-file-uploaded-meta-${f.id}`}>
+                {/* Long file names are clipped with an ellipsis; the full line is on hover. */}
+                <div
+                  className="mt-1 truncate text-xs text-black/55"
+                  title={`${fileExt(f.originalName)} · ${f.originalName} · ${f.allocationType || "Client level"} · ${formatDate(f.createdAt)}`}
+                  data-testid={`text-file-uploaded-meta-${f.id}`}
+                >
                   {fileExt(f.originalName)} · {f.originalName} · {f.allocationType || "Client level"} · {formatDate(f.createdAt)}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 {role === "Admin" && (
                   <span
                     role="button"
