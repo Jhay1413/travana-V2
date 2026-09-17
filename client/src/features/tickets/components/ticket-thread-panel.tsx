@@ -10,6 +10,7 @@ import {
   Paperclip,
   Pencil,
   Pin,
+  PinOff,
   Reply as ReplyIcon,
   Share2,
   Smile,
@@ -65,6 +66,7 @@ import { authorBubbleClasses } from "../lib/author-colors";
 import { ReplyThreadToggle } from "./reply-thread-toggle";
 import { TicketAttachmentList } from "./ticket-attachment-list";
 import { useDeleteTicket, useToggleTicketLike, useUpdateTicket } from "../api/use-ticket-mutations";
+import { useTicketPin } from "../api/use-ticket-pin";
 import { TICKET_STATUSES } from "../types";
 import type { Ticket } from "../types";
 
@@ -723,7 +725,20 @@ function LinkHolidayDialog({ ticket, open, onOpenChange }: { ticket: Ticket; ope
   );
 }
 
-function HeaderAction({ icon: Icon, label, onClick, disabled }: { icon: typeof Pin; label: string; onClick?: () => void; disabled?: boolean }) {
+function HeaderAction({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+  active,
+}: {
+  icon: typeof Pin;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  /** Styled as "on" — e.g. a ticket that is currently pinned. */
+  active?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -731,7 +746,12 @@ function HeaderAction({ icon: Icon, label, onClick, disabled }: { icon: typeof P
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="grid h-10 w-10 place-items-center rounded-md border border-black/10 text-black/55 transition hover:bg-black/[0.03] hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
+      className={cn(
+        "grid h-10 w-10 place-items-center rounded-md border transition disabled:cursor-not-allowed disabled:opacity-40",
+        active
+          ? "border-sky-200 bg-sky-50 text-sky-600 hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20"
+          : "border-black/10 text-black/55 hover:bg-black/[0.03] hover:text-black dark:border-white/10 dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white",
+      )}
     >
       <Icon className="h-4 w-4" />
     </button>
@@ -757,6 +777,10 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
   const deleteReply = useDeleteReply(ticketId);
   const toggleLike = useToggleReplyLike(ticketId);
   const toggleTicketLike = useToggleTicketLike();
+  const { isPinned, togglePin } = useTicketPin(ticketId, {
+    label: ticket?.subject ?? "",
+    subtitle: ticket?.clientName?.trim() && ticket.clientName !== "null" ? ticket.clientName : ticket?.type,
+  });
   const { data: attachments } = useAttachments(ticketId);
   const deleteAttachment = useDeleteAttachment(ticketId);
   const [replyingTo, setReplyingTo] = useState<ReplyTarget | null>(null);
@@ -960,7 +984,12 @@ export function TicketThreadPanel({ ticket, users, onDeleted }: TicketThreadPane
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <HeaderAction icon={Pin} label="Pin ticket (coming soon)" disabled />
+          <HeaderAction
+            icon={isPinned ? PinOff : Pin}
+            label={isPinned ? "Unpin ticket" : "Pin ticket"}
+            onClick={togglePin}
+            active={isPinned}
+          />
           <HeaderAction
             icon={Link}
             label="Copy ticket link"

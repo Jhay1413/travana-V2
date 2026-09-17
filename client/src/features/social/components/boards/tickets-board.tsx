@@ -13,6 +13,7 @@ import {
   MessageCircle,
   MoreVertical,
   Paperclip,
+  Pin,
   Plus,
   Search,
   Send,
@@ -70,7 +71,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { attachmentApi } from "@/api";
 import { RichTextEditor, RichTextDisplay } from "@/components/shared/rich-text-editor";
-import { isActiveTicket, isMyTicket } from "@/features/tickets";
+import { isActiveTicket, isMyTicket, sortPinnedFirst, usePinnedTicketIds } from "@/features/tickets";
 import { isImageType } from "@/features/attachment";
 import type { Ticket } from "@/features/tickets/types";
 import type { TicketReply } from "@/features/reply/types";
@@ -904,6 +905,7 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
 
   const { toast } = useToast();
   const { data: tickets, isLoading: ticketsLoading } = useTickets();
+  const pinnedTicketIds = usePinnedTicketIds();
   const { data: neonClientsData } = useNeonClients({ page: 1, limit: 20, search: customerSearch });
   const { data: users } = useUsers();
   const { data: currentUser } = useCurrentUser();
@@ -1033,7 +1035,9 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
     });
   };
 
-  const filteredTickets = getFilteredTickets();
+  // Pinned-first is the primary key over every other filter/sort here —
+  // applied last so it always wins.
+  const filteredTickets = sortPinnedFirst(getFilteredTickets() ?? [], pinnedTicketIds);
 
   const getClientName = (ticket: { clientName?: string | null }) => {
     const name = ticket.clientName?.trim();
@@ -1188,6 +1192,9 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
                     <div className="flex items-start justify-between mb-1 gap-2">
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div className={`w-2 h-2 rounded-full flex-none ${priorityDotColor(ticket.priority)}`} />
+                        {pinnedTicketIds.has(ticket.id) && (
+                          <Pin className="h-3 w-3 flex-none text-slate-400" aria-label="Pinned" />
+                        )}
                         <h3 className="text-sm font-semibold truncate text-slate-900">
                           {ticket.subject}
                         </h3>

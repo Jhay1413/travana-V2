@@ -482,115 +482,108 @@ export default function SocialPostsBoard() {
   return (
     <div className="space-y-4">
       <div className="glass ringed grain rounded-2xl p-4">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-64 sm:shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-black/40 dark:text-white/40" />
             <Input placeholder="Search title, hotel, destination..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10" data-testid="input-search-social-posts" />
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-            <Button
-              size="sm"
-              variant={viewMode === "scheduled" ? "default" : "outline"}
-              className={`rounded-xl text-xs font-medium ${viewMode === "scheduled" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => selectViewMode("scheduled")}
-              data-testid="button-view-scheduled"
-            >
-              <Clock className="w-3.5 h-3.5 mr-1" />Scheduled
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === "all" ? "default" : "outline"}
-              className={`rounded-xl text-xs font-medium ${viewMode === "all" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => selectViewMode("all")}
-              data-testid="button-view-all"
-            >
-              Show All
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === "portal" ? "default" : "outline"}
-              className={`rounded-xl text-xs font-medium ${viewMode === "portal" ? "bg-purple-500 hover:bg-purple-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => selectViewMode("portal")}
-              data-testid="button-view-portal"
-            >
-              <Globe className="w-3.5 h-3.5 mr-1" />Portal Posts
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === "unscheduled" ? "default" : "outline"}
-              className={`rounded-xl text-xs font-medium ${viewMode === "unscheduled" ? "bg-amber-500 hover:bg-amber-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => selectViewMode("unscheduled")}
-              data-testid="button-view-unscheduled"
-            >
-              <CalendarClock className="w-3.5 h-3.5 mr-1" />Not Scheduled
-            </Button>
-            <Button
-              size="sm"
-              className="rounded-xl text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white gap-1.5"
-              onClick={() => setCreateDialogOpen(true)}
-              data-testid="button-create-social-post"
-            >
-              <Plus className="w-3.5 h-3.5" />Create Social Post
-            </Button>
-          </div>
-        </div>
+          <Button
+            size="sm"
+            variant={viewMode === "scheduled" ? "default" : "outline"}
+            className={`rounded-xl text-xs font-medium ${viewMode === "scheduled" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
+            onClick={() => selectViewMode("scheduled")}
+            data-testid="button-view-scheduled"
+          >
+            <Clock className="w-3.5 h-3.5 mr-1" />Scheduled
+          </Button>
+          <Button
+            size="sm"
+            variant={viewMode === "all" ? "default" : "outline"}
+            className={`rounded-xl text-xs font-medium ${viewMode === "all" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
+            onClick={() => selectViewMode("all")}
+            data-testid="button-view-all"
+          >
+            Show All
+          </Button>
+          <Button
+            size="sm"
+            variant={viewMode === "portal" ? "default" : "outline"}
+            className={`rounded-xl text-xs font-medium ${viewMode === "portal" ? "bg-purple-500 hover:bg-purple-600 text-white" : "border-black/10 dark:border-white/10"}`}
+            onClick={() => selectViewMode("portal")}
+            data-testid="button-view-portal"
+          >
+            <Globe className="w-3.5 h-3.5 mr-1" />Portal Posts
+          </Button>
+          <Button
+            size="sm"
+            variant={viewMode === "unscheduled" ? "default" : "outline"}
+            className={`rounded-xl text-xs font-medium ${viewMode === "unscheduled" ? "bg-amber-500 hover:bg-amber-600 text-white" : "border-black/10 dark:border-white/10"}`}
+            onClick={() => selectViewMode("unscheduled")}
+            data-testid="button-view-unscheduled"
+          >
+            <CalendarClock className="w-3.5 h-3.5 mr-1" />Not Scheduled
+          </Button>
 
-        {viewMode === "scheduled" && (
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {scheduleFilterButtons.map((btn) => (
-              <Button
-                key={btn.value}
-                size="sm"
-                variant={scheduleFilter === btn.value ? "default" : "outline"}
-                className={`rounded-xl text-xs font-medium ${scheduleFilter === btn.value ? "bg-green-500 hover:bg-green-600 text-white" : "border-black/10 dark:border-white/10"}`}
-                onClick={() => handleScheduleFilterClick(btn.value)}
-                data-testid={`button-schedule-filter-${btn.value}`}
-              >
-                {btn.label}
-              </Button>
-            ))}
-            {scheduleFilter === "specific-date" && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  data-testid="input-date-from-filter"
-                />
-                <span className="text-xs text-black/50 dark:text-white/50">to</span>
-                <input
-                  type="date"
-                  value={dateTo}
-                  min={dateFrom}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
-                  data-testid="input-date-to-filter"
-                />
-              </div>
-            )}
-          </div>
-        )}
+          {viewMode === "scheduled" && scheduleFilterButtons.map((btn) => (
+            <Button
+              key={btn.value}
+              size="sm"
+              variant={scheduleFilter === btn.value ? "default" : "outline"}
+              className={`rounded-xl text-xs font-medium ${scheduleFilter === btn.value ? "bg-green-500 hover:bg-green-600 text-white" : "border-black/10 dark:border-white/10"}`}
+              onClick={() => handleScheduleFilterClick(btn.value)}
+              data-testid={`button-schedule-filter-${btn.value}`}
+            >
+              {btn.label}
+            </Button>
+          ))}
+          {viewMode === "scheduled" && scheduleFilter === "specific-date" && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
+                data-testid="input-date-from-filter"
+              />
+              <span className="text-xs text-black/50 dark:text-white/50">to</span>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
+                data-testid="input-date-to-filter"
+              />
+            </div>
+          )}
 
-        {viewMode === "portal" && (
-          <div className="flex items-center gap-2 mt-3 flex-wrap">
-            {portalStatusButtons.map((btn) => (
-              <Button
-                key={btn.value}
-                size="sm"
-                variant={portalStatus === btn.value ? "default" : "outline"}
-                className={`rounded-xl text-xs font-medium ${portalStatus === btn.value ? "bg-purple-500 hover:bg-purple-600 text-white" : "border-black/10 dark:border-white/10"}`}
-                onClick={() => setPortalStatus(btn.value)}
-                data-testid={`button-portal-status-${btn.value}`}
-              >
-                {btn.label}
-              </Button>
-            ))}
+          {viewMode === "portal" && portalStatusButtons.map((btn) => (
+            <Button
+              key={btn.value}
+              size="sm"
+              variant={portalStatus === btn.value ? "default" : "outline"}
+              className={`rounded-xl text-xs font-medium ${portalStatus === btn.value ? "bg-purple-500 hover:bg-purple-600 text-white" : "border-black/10 dark:border-white/10"}`}
+              onClick={() => setPortalStatus(btn.value)}
+              data-testid={`button-portal-status-${btn.value}`}
+            >
+              {btn.label}
+            </Button>
+          ))}
+          {viewMode === "portal" && (
             <span className="text-xs text-black/45 dark:text-white/45">
               Portal posts expire {PORTAL_ACTIVE_WINDOW_DAYS} days after they were added
             </span>
-          </div>
-        )}
+          )}
+
+          <Button
+            size="sm"
+            className="rounded-xl text-xs font-medium bg-blue-500 hover:bg-blue-600 text-white gap-1.5 ml-auto"
+            onClick={() => setCreateDialogOpen(true)}
+            data-testid="button-create-social-post"
+          >
+            <Plus className="w-3.5 h-3.5" />Create Social Post
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between">

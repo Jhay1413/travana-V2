@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Heart, Paperclip, Pencil, Reply as ReplyIcon, Trash2, X } from "lucide-react";
+import { ChevronDown, Heart, Paperclip, Pencil, Pin, Reply as ReplyIcon, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
@@ -7,7 +7,16 @@ import { NoteEditor } from "@/components/shared/note-editor";
 import { useToast } from "@/hooks/use-toast";
 import { useTicketsByClient, useUsers, useCurrentUser } from "@/hooks/queries";
 import { useReplies, useCreateReply, useUpdateReply, useDeleteReply, useToggleReplyLike, type TicketReply } from "@/features/reply";
-import { authorBubbleClasses, useToggleTicketLike, useUpdateTicket, ReplyThreadToggle, TicketAttachmentList, type Ticket } from "@/features/tickets";
+import {
+  authorBubbleClasses,
+  useToggleTicketLike,
+  useUpdateTicket,
+  usePinnedTicketIds,
+  sortPinnedFirst,
+  ReplyThreadToggle,
+  TicketAttachmentList,
+  type Ticket,
+} from "@/features/tickets";
 import { useAttachments, useDeleteAttachment, usePendingAttachments, type TicketAttachment } from "@/features/attachment";
 
 import type { User as ApiUser } from "@/features/user/types";
@@ -572,6 +581,7 @@ function TicketCard({
   isOpen,
   onToggle,
   scopedLabel,
+  pinned,
   users,
 }: {
   ticket: Ticket;
@@ -579,6 +589,7 @@ function TicketCard({
   onToggle: () => void;
   /** "This booking" / "This quote" / "This enquiry" when the ticket is linked to the holiday being viewed. */
   scopedLabel: string | null;
+  pinned: boolean;
   users: ApiUser[];
 }) {
   const assigneeName = ticket.assignedToName || users.find((u) => u.id === ticket.assignedTo)?.name || "Unassigned";
@@ -593,6 +604,7 @@ function TicketCard({
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-black/40 transition-transform", isOpen && "rotate-180")} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
+            {pinned && <Pin className="h-3 w-3 shrink-0 text-black/35" aria-label="Pinned" />}
             <span className="truncate text-[13px] font-medium text-black/85">{ticket.subject}</span>
             {scopedLabel && (
               <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{scopedLabel}</span>
@@ -632,6 +644,7 @@ export function HolidayTicketsTab({
 }) {
   const { data: ticketsData, isLoading } = useTicketsByClient(clientId);
   const { data: users = [] } = useUsers();
+  const pinnedTicketIds = usePinnedTicketIds();
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
 
   // Tickets linked to the holiday's transaction are listed first and flagged.
@@ -641,8 +654,11 @@ export function HolidayTicketsTab({
     const all = [...(ticketsData ?? [])].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
     const scoped = all.filter(isScoped);
     const rest = all.filter((t) => !isScoped(t));
-    return [...scoped, ...rest];
-  }, [ticketsData, isScoped]);
+    // Pinned-first is the primary key, applied last so it wins over both the
+    // date order and the "this holiday's tickets" grouping above; each
+    // group's relative order (scoped-then-rest, newest-first) is preserved.
+    return sortPinnedFirst([...scoped, ...rest], pinnedTicketIds);
+  }, [ticketsData, isScoped, pinnedTicketIds]);
 
   // The newest ticket starts open. Pinned to its id (not its index) so a
   // re-sort doesn't silently swap which card is expanded.
@@ -673,6 +689,7 @@ export function HolidayTicketsTab({
             onToggle={() =>
               setOpenOverrides((prev) => ({ ...prev, [ticket.id]: !(prev[ticket.id] ?? ticket.id === defaultOpenId) }))
             }
+            pinned={pinnedTicketIds.has(ticket.id)}
             scopedLabel={
               isScoped(ticket)
                 ? entityType === "booking"

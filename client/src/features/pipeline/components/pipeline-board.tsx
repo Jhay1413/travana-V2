@@ -501,6 +501,8 @@ export function PipelineBoard({
           activeFilter={activeFilter}
           onActiveFilterChange={(f) => {
             setActiveFilter(f);
+            // The agent filter tab only exists under All Deals; close it on the way out.
+            if (f === "mine") setShowFilters(false);
             if (f === "mine" && currentUser?.id) setSelectedAgentId(currentUser.id);
             else setSelectedAgentId("all");
           }}

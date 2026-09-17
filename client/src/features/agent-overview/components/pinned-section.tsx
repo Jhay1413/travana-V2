@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import {
   ClipboardList,
+  LifeBuoy,
   Pin,
   PinOff,
   Sparkles,
@@ -45,6 +46,8 @@ export function PinnedSection() {
                 <Sparkles className="h-3.5 w-3.5" />
               ) : fav.itemType === "note" ? (
                 <StickyNote className="h-3.5 w-3.5" />
+              ) : fav.itemType === "ticket" ? (
+                <LifeBuoy className="h-3.5 w-3.5" />
               ) : (
                 <ClipboardList className="h-3.5 w-3.5" />
               );
@@ -61,9 +64,11 @@ export function PinnedSection() {
                     ? `/enquiries/${fav.itemId}`
                     : fav.itemType === "booking"
                       ? `/clients/_/bookings/${fav.itemId}`
-                      : noteQuoteId
-                        ? `/clients/_/quotes/${noteQuoteId}`
-                        : "#";
+                      : fav.itemType === "ticket"
+                        ? `/tickets/${fav.itemId}`
+                        : noteQuoteId
+                          ? `/clients/_/quotes/${noteQuoteId}`
+                          : "#";
             let displaySubtitle =
               fav.itemType === "note" && fav.subtitle?.includes("|")
                 ? fav.subtitle.split("|").slice(1).join("|")

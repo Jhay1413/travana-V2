@@ -421,7 +421,7 @@ export function ClientIndexView({
     <div className="min-h-full rounded-sm border border-black/10 bg-[#f7f8fa] p-3 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-view">
       {/* Two independent stacks: each column flows on its own, so the dashboard
           card starts right under the stats instead of under the taller right column. */}
-      <div className="grid gap-3 xl:grid-cols-[1.9fr_.8fr] 2xl:grid-cols-[1.5fr_1fr]">
+      <div className="grid gap-3 xl:grid-cols-[1.9fr_.8fr] 2xl:grid-cols-[1.5fr_1fr] 3xl:grid-cols-[2fr_.95fr]">
         {/* Left stack matches the height of the taller column: the stats keep their own height and the dashboard card grows to fill the rest, no further. */}
         <div className="flex min-w-0 flex-col gap-3">
         {/* ── Left column: stats ─────────────────────────────────────────── */}

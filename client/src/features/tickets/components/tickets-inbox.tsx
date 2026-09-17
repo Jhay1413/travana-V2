@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { BadgePoundSterling, Check, ChevronDown, Ellipsis, Filter, LifeBuoy, Search, ShieldCheck, SquarePen, Wrench } from "lucide-react";
+import { BadgePoundSterling, Check, ChevronDown, Ellipsis, Filter, LifeBuoy, Pin, Search, ShieldCheck, SquarePen, Wrench } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,7 +13,9 @@ import { cn } from "@/lib/utils";
 import { useUsers } from "@/hooks/queries";
 import { dayLabel } from "@/features/conversations";
 import { useTickets } from "../api/use-ticket-queries";
+import { usePinnedTicketIds } from "../api/use-ticket-pin";
 import { isActiveTicket } from "../lib/ticket-filters";
+import { sortPinnedFirst } from "../lib/sort-pinned-first";
 import type { Ticket } from "../types";
 import { CreateTicketDialog } from "./create-ticket-dialog";
 import { TicketThreadPanel } from "./ticket-thread-panel";
@@ -81,7 +83,7 @@ function ticketClientName(ticket: Ticket): string | null {
   return name && name !== "null" ? name : null;
 }
 
-function TicketListRow({ ticket, active, onClick }: { ticket: Ticket; active: boolean; onClick: () => void }) {
+function TicketListRow({ ticket, active, pinned, onClick }: { ticket: Ticket; active: boolean; pinned: boolean; onClick: () => void }) {
   const clientName = ticketClientName(ticket);
   const category = typeIconFor(ticket.type);
   const lastActivity = ticket.updatedAt || ticket.createdAt;
@@ -100,8 +102,9 @@ function TicketListRow({ ticket, active, onClick }: { ticket: Ticket; active: bo
         <TicketRowChip name={clientName} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-[13px] font-semibold text-black/85 3xl:text-sm dark:text-white/85">
-              {clientName || "Internal ticket"}
+            <span className="flex min-w-0 items-center gap-1 truncate text-[13px] font-semibold text-black/85 3xl:text-sm dark:text-white/85">
+              {pinned && <Pin className="h-3 w-3 shrink-0 text-black/35 dark:text-white/40" aria-label="Pinned" />}
+              <span className="truncate">{clientName || "Internal ticket"}</span>
             </span>
             <span className="whitespace-nowrap text-xs text-black/45 dark:text-white/45">{rowTime(lastActivity)}</span>
           </div>
@@ -135,6 +138,7 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
 
   const { data: tickets, isLoading } = useTickets();
   const { data: users = [] } = useUsers();
+  const pinnedTicketIds = usePinnedTicketIds();
 
   useEffect(() => {
     if (selectedTicketId) setSelectedId(selectedTicketId);
@@ -142,14 +146,17 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (tickets ?? [])
+    const sorted = (tickets ?? [])
       .filter((t) => (tab === "open" ? isActiveTicket(t) : !isActiveTicket(t)))
       .filter((t) => !q || (t.clientName ?? "").toLowerCase().includes(q) || t.subject.toLowerCase().includes(q))
       .sort((a, b) => {
         const diff = new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime();
         return sortOrder === "newest" ? diff : -diff;
       });
-  }, [tickets, tab, search, sortOrder]);
+    // Pinned-first is the primary key even over the user's chosen
+    // newest/oldest sort — applied last so it wins.
+    return sortPinnedFirst(sorted, pinnedTicketIds);
+  }, [tickets, tab, search, sortOrder, pinnedTicketIds]);
 
   // Selects a ticket (or clears the selection) and keeps the URL in sync.
   // `replace` is used when this is a programmatic correction (e.g. the keep-
@@ -328,7 +335,13 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
           ) : (
             <div className="space-y-1">
               {filtered.map((t) => (
-                <TicketListRow key={t.id} ticket={t} active={t.id === selectedId} onClick={() => selectTicket(t.id)} />
+                <TicketListRow
+                  key={t.id}
+                  ticket={t}
+                  active={t.id === selectedId}
+                  pinned={pinnedTicketIds.has(t.id)}
+                  onClick={() => selectTicket(t.id)}
+                />
               ))}
             </div>
           )}

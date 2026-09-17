@@ -160,10 +160,13 @@ export function HeaderCreateMenu() {
             <Plus className="h-4 w-4" />
           </button>
         </DropdownMenuTrigger>
-        {/* Dark navy panel, plain text items — matches the header design. */}
+        {/* Dark navy panel, plain text items — matches the header design. The
+            trigger's bottom edge is 10px above the header's (h-14 header, h-9
+            button), so 10px would butt the panel against the header edge; 12px
+            sits it just below the edge with a 2px gap. */}
         <DropdownMenuContent
           align="start"
-          sideOffset={10}
+          sideOffset={12}
           className="z-[200] w-56 rounded-lg border-0 bg-[#2E3D50] p-3 text-white shadow-xl"
         >
           {(

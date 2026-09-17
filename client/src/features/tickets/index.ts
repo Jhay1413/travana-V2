@@ -5,9 +5,11 @@
 export * from "./types";
 export * from "./lib/ticket-filters";
 export * from "./lib/author-colors";
+export * from "./lib/sort-pinned-first";
 export { ticketApi } from "./api/ticket.api";
 export * from "./api/use-ticket-queries";
 export * from "./api/use-ticket-mutations";
+export * from "./api/use-ticket-pin";
 export { TicketsInbox } from "./components/tickets-inbox";
 export { CreateTicketDialog } from "./components/create-ticket-dialog";
 export { ReplyThreadToggle } from "./components/reply-thread-toggle";

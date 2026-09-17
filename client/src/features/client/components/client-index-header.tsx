@@ -24,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import type { Client } from "@/features/client/components/client-types";
@@ -33,6 +34,10 @@ import { CircleAction } from "@/features/client/components/circle-action";
 export type ClientCreateKind = "enquiry" | "quote" | "booking" | "task" | "ticket";
 
 const BADGE_OPTIONS = ["New Client", "Repeat Client", "VIP Client", "Family Member", "Time Waster", "Banned"] as const;
+
+// Rows of the badge dropdown: square-edged, grey text, generous left inset.
+const BADGE_ITEM_CLASS =
+  "cursor-pointer rounded-none px-6 py-1.5 text-sm font-normal text-[#5b6770] focus:bg-[#f2f6f8] focus:text-[#2f3a41] dark:text-white/70 dark:focus:bg-white/10 dark:focus:text-white";
 
 interface ClientIndexHeaderProps {
   client: Client;
@@ -79,9 +84,12 @@ export function ClientIndexHeader({
     }
   };
 
+  // Left padding = the page content padding (1rem, 2rem from md) + 13px, the
+  // grey container's 1px border and p-3, so the name starts flush with the white
+  // cards below rather than with the grey container.
   return (
     <div
-      className="flex h-[76px] shrink-0 items-center justify-between gap-4 border-b border-black/10 bg-white px-6 dark:border-white/10 dark:bg-white/[0.04]"
+      className="flex h-[76px] shrink-0 items-center justify-between gap-4 border-b border-black/10 bg-white pl-[calc(1rem_+_13px)] pr-6 md:pl-[calc(2rem_+_13px)] dark:border-white/10 dark:bg-white/[0.04]"
       data-testid="client-index-header"
     >
       <div className="min-w-0">
@@ -109,19 +117,25 @@ export function ClientIndexHeader({
                 <ChevronDown className="h-3 w-3" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="rounded-sm">
+            {/* Plain white panel per the design: thin blue-grey border, no icons,
+                roomy grey rows, left edge flush with the badge. */}
+            <DropdownMenuContent
+              align="start"
+              sideOffset={6}
+              className="min-w-[176px] rounded-[5px] border border-[#cfdde2] bg-white px-0 py-2 shadow-sm dark:border-white/15 dark:bg-[#1b2530]"
+            >
               {BADGE_OPTIONS.map((option) => (
-                <DropdownMenuItem key={option} onClick={() => onChangeBadge(option)} className="rounded-sm text-sm" data-testid={`client-index-badge-option-${option}`}>
+                <DropdownMenuItem key={option} onClick={() => onChangeBadge(option)} className={BADGE_ITEM_CLASS} data-testid={`client-index-badge-option-${option}`}>
                   {option}
                 </DropdownMenuItem>
               ))}
-              <DropdownMenuItem onClick={() => onChangeBadge(null)} className="rounded-sm text-sm text-black/60" data-testid="client-index-badge-option-none">
+              <DropdownMenuItem onClick={() => onChangeBadge(null)} className={cn(BADGE_ITEM_CLASS, "text-[#5b6770]/60")} data-testid="client-index-badge-option-none">
                 No Badge
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-2 text-[13px] text-black/50 dark:text-white/50">
+        <div className="mt-1 flex min-w-0 items-center gap-2 text-xs text-black/50 dark:text-white/50">
           <span className="truncate" data-testid="client-center-header-contact">
             {address || "No address on file"}
           </span>
@@ -140,9 +154,24 @@ export function ClientIndexHeader({
       <div className="flex shrink-0 items-center gap-2.5">
         {/* View / Share / Pin sit as one group; the create button stands apart. */}
         <div className="flex items-center gap-2">
-        <CircleAction icon={Eye} label="View client" testId="client-index-view-button" />
-        <CircleAction icon={Share2} label={copied ? "Link copied" : "Share client link"} onClick={() => void share()} testId="client-index-share" />
-        <CircleAction icon={Pin} label={isFavorited ? "Unpin client" : "Pin client"} onClick={onToggleFavorite} active={isFavorited} testId="client-index-pin" />
+        <CircleAction icon={Eye} label="View client" size="sm" testId="client-index-view-button" />
+        <CircleAction icon={Share2} label={copied ? "Link copied" : "Share client link"} onClick={() => void share()} size="sm" testId="client-index-share" />
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          title={isFavorited ? "Unpin client" : "Pin client"}
+          aria-label={isFavorited ? "Unpin client" : "Pin client"}
+          aria-pressed={isFavorited}
+          className={cn(
+            "grid h-8 w-8 shrink-0 place-items-center rounded-full border transition",
+            isFavorited
+              ? "border-[#07a9f4] text-[#07a9f4]"
+              : "border-black/15 text-black/50 hover:border-black/30 hover:text-black dark:border-white/20 dark:text-white/50",
+          )}
+          data-testid="client-index-pin"
+        >
+          <Pin className="h-4 w-4" strokeWidth={1.75} />
+        </button>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -150,10 +179,10 @@ export function ClientIndexHeader({
               type="button"
               title="Create…"
               aria-label="Create"
-              className="ml-5 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#07a9f4] text-white transition hover:bg-[#0596db]"
+              className="ml-5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#07a9f4] text-white transition hover:bg-[#0596db]"
               data-testid="client-index-create"
             >
-              <SquarePlus className="h-5 w-5" strokeWidth={1.75} />
+              <SquarePlus className="h-4 w-4" strokeWidth={1.75} />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-sm">
@@ -181,7 +210,7 @@ export function ClientIndexHeader({
               type="button"
               title="More"
               aria-label="More actions"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-black/50 transition hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-black/50 transition hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10"
               data-testid="client-index-more"
             >
               <Ellipsis className="h-4 w-4" />

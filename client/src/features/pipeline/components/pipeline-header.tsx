@@ -49,7 +49,24 @@ export function PipelineHeader({
   selectedAgentId,
   onSelectedAgentIdChange,
 }: PipelineHeaderProps) {
-  const segValue: ViewTabValue = showFilters ? "filters" : viewMode;
+  // On the pipeline page the third tab is the agent filter, which only makes
+  // sense while looking at everyone's deals. The embedded board is locked to a
+  // single agent, so it keeps its plain "Filters" tab.
+  const filtersAvailable = embedded || activeFilter === "all";
+  const filtersOpen = showFilters && filtersAvailable;
+
+  const viewTabs: Array<{ value: ViewTabValue; label: string }> = [
+    { value: "board", label: "Board View" },
+    { value: "list", label: "List View" },
+  ];
+  if (filtersAvailable) {
+    viewTabs.push({
+      value: "filters",
+      label: embedded ? "Filters" : "Agent Filter",
+    });
+  }
+
+  const segValue: ViewTabValue = filtersOpen ? "filters" : viewMode;
   const handleSegChange = (v: ViewTabValue) => {
     if (v === "filters") {
       onToggleFilters();
@@ -72,11 +89,7 @@ export function PipelineHeader({
         )}
         <div className="flex flex-wrap items-center gap-2">
           <SegmentedTabs
-            tabs={[
-              { value: "board", label: "Board View" },
-              { value: "list", label: "List View" },
-              { value: "filters", label: "Filters" },
-            ]}
+            tabs={viewTabs}
             value={segValue}
             onChange={handleSegChange}
             testIdPrefix="pipeline-view-tab"
@@ -96,8 +109,18 @@ export function PipelineHeader({
           )}
         </div>
 
-        {showFilters && (
+        {filtersOpen && (
           <div className="mt-2 flex flex-wrap items-center gap-3">
+            {!embedded && (
+              <UserReassignSelect
+                value={selectedAgentId}
+                onValueChange={onSelectedAgentIdChange}
+                allowAll
+                allLabel="All Agents"
+                className="w-[180px]"
+                data-testid="select-agent-filter"
+              />
+            )}
             <Select
               value={quoteStatusFilter}
               onValueChange={onQuoteStatusChange}
@@ -121,16 +144,6 @@ export function PipelineHeader({
                 ))}
               </SelectContent>
             </Select>
-            {!embedded && activeFilter === "all" && (
-              <UserReassignSelect
-                value={selectedAgentId}
-                onValueChange={onSelectedAgentIdChange}
-                allowAll
-                allLabel="All Agents"
-                className="w-[180px]"
-                data-testid="select-agent-filter"
-              />
-            )}
           </div>
         )}
       </div>
