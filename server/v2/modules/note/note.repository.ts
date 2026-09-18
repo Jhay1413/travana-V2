@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { notes, transaction, clientTable, user, type Note, type InsertNote } from "@shared/schema";
-import { and, eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, or, sql } from "drizzle-orm";
 
 export type NoteWithAuthor = Note & { author_name: string | null };
 
@@ -26,9 +26,19 @@ export const noteRepository = {
     return rows;
   },
 
-  async findByClientId(clientId: string): Promise<NoteWithAuthor[]> {
-    // Client-level notes only: attached directly to the client and not to a
-    // transaction (transaction notes carry their own client context elsewhere).
+  async findByClientId(clientId: string, options?: { includeDeals?: boolean }): Promise<NoteWithAuthor[]> {
+    // Client-level notes: attached directly to the client and not to a
+    // transaction. When `includeDeals` is set, notes written on any of the
+    // client's deals (transactions — enquiry/quote/booking) are merged in too,
+    // resolved via transaction.client_id since deal notes usually carry no
+    // client_id of their own.
+    const whereClause = options?.includeDeals
+      ? or(
+          and(eq(notes.client_id, clientId), sql`${notes.transaction_id} IS NULL`),
+          eq(transaction.client_id, clientId),
+        )
+      : and(eq(notes.client_id, clientId), sql`${notes.transaction_id} IS NULL`);
+
     const rows = await db
       .select({
         id: notes.id,
@@ -44,7 +54,8 @@ export const noteRepository = {
       })
       .from(notes)
       .leftJoin(user, eq(notes.agent_id, user.id))
-      .where(and(eq(notes.client_id, clientId), sql`${notes.transaction_id} IS NULL`))
+      .leftJoin(transaction, eq(notes.transaction_id, transaction.id))
+      .where(whereClause)
       .orderBy(desc(notes.createdAt));
     return rows;
   },

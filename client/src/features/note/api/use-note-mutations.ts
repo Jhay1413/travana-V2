@@ -47,10 +47,15 @@ export function useCreateClientNote(clientId: string) {
 export function useUpdateClientNote(clientId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, content }: { id: string; content: string }) =>
+    // `transactionId` is optional and only used to also refresh that deal's
+    // own notes panel when this note belongs to one of the client's deals.
+    mutationFn: ({ id, content }: { id: string; content: string; transactionId?: string | null }) =>
       noteApi.update(id, content),
-    onSuccess: () => {
+    onSuccess: (_note, variables) => {
       queryClient.invalidateQueries({ queryKey: noteKeys.byClient(clientId) });
+      if (variables.transactionId) {
+        queryClient.invalidateQueries({ queryKey: noteKeys.byTransaction(variables.transactionId) });
+      }
     },
   });
 }
@@ -58,9 +63,12 @@ export function useUpdateClientNote(clientId: string) {
 export function useDeleteClientNote(clientId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => noteApi.delete(id),
-    onSuccess: () => {
+    mutationFn: ({ id }: { id: string; transactionId?: string | null }) => noteApi.delete(id),
+    onSuccess: (_void, variables) => {
       queryClient.invalidateQueries({ queryKey: noteKeys.byClient(clientId) });
+      if (variables.transactionId) {
+        queryClient.invalidateQueries({ queryKey: noteKeys.byTransaction(variables.transactionId) });
+      }
     },
   });
 }

@@ -4,7 +4,9 @@
  * treated as UTC so the relative + absolute values stay consistent everywhere.
  */
 
-function parseTimestamp(date: string | Date): Date {
+/** Naive timestamps from the API (no timezone suffix) are treated as UTC so
+ * formatting and chronological sorting stay consistent everywhere. */
+export function parseTimestamp(date: string | Date): Date {
   if (date instanceof Date) return date;
   // Append "Z" when the string carries no timezone so it's parsed as UTC.
   return new Date(/Z|[+-]\d{2}:?\d{2}$/.test(date) ? date : date.replace(" ", "T") + "Z");
@@ -31,5 +33,14 @@ export function formatFullDateTime(date: string | Date): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+/** Date only, e.g. "18 Sep 2026". */
+export function formatNoteDate(date: string | Date): string {
+  return parseTimestamp(date).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 }

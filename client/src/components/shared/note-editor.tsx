@@ -20,7 +20,7 @@ export function NoteEditor({
 }: {
   initialContent?: string;
   placeholder?: string;
-  onSubmit: (html: string) => void;
+  onSubmit: (html: string) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
   isLoading?: boolean;
@@ -49,7 +49,20 @@ export function NoteEditor({
     if (!editor) return;
     const html = editor.getHTML();
     if (!html || html === "<p></p>") return;
-    onSubmit(html);
+    const result = onSubmit(html);
+    if (result && typeof result.then === "function") {
+      // Async caller (e.g. mutateAsync): keep the typed content until the
+      // submission actually succeeds, so a failed create/edit doesn't lose it.
+      result.then(
+        () => {
+          if (!editor.isDestroyed) editor.commands.clearContent();
+        },
+        () => {
+          // Swallow — the caller is responsible for surfacing the error (toast).
+        },
+      );
+      return;
+    }
     editor.commands.clearContent();
   }, [editor, onSubmit]);
 

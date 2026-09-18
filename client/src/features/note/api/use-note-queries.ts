@@ -16,10 +16,12 @@ export function useNotes(transactionId: string) {
   });
 }
 
-export function useClientNotes(clientId: string) {
+export function useClientNotes(clientId: string, opts?: { includeDeals?: boolean }) {
   return useQuery<TransactionNote[]>({
-    queryKey: noteKeys.byClient(clientId),
-    queryFn: () => noteApi.getByClient(clientId),
+    // The option is appended AFTER clientId so `noteKeys.byClient(clientId)`
+    // still prefix-matches this key for mutation invalidation.
+    queryKey: [...noteKeys.byClient(clientId), { includeDeals: !!opts?.includeDeals }],
+    queryFn: () => noteApi.getByClient(clientId, opts),
     enabled: !!clientId,
   });
 }

@@ -15,9 +15,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { cn } from "@/lib/utils";
-import { useClientNotes, useCurrentUser } from "@/hooks/queries";
+import { useCurrentUser } from "@/hooks/queries";
 import { useClientQuoteViews } from "@/features/quote";
 import { useDeleteTask, useToggleTask } from "@/hooks/mutations";
 import type { NeonClient } from "@/features/client/types/neon-client";
@@ -34,6 +33,7 @@ import { ReferrerSelector } from "@/features/client/components/sections/Referrer
 import { PortalAccessCard } from "@/features/client/components/sections/PortalAccessCard";
 import { ReferralNetworkCard } from "@/features/client/components/sections/ReferralNetworkCard";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
+import { ClientNotesList, type DealLabelLookup } from "@/features/client/components/client-notes-list";
 
 export { composeAddress } from "@/features/client/lib/compose-address";
 
@@ -231,44 +231,6 @@ function TasksList({
   );
 }
 
-// ─── Notes tab ──────────────────────────────────────────────────────────────
-
-function NotesList({ clientId, users }: { clientId: string; users: ApiUser[] }) {
-  const { data: notes, isLoading } = useClientNotes(clientId);
-  const userNameById = useMemo(() => new Map(users.map((u) => [u.id, u.name || u.email || ""])), [users]);
-  const rows = useMemo(
-    () =>
-      [...(notes ?? [])]
-        .filter((n) => n.description !== "system")
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [notes],
-  );
-
-  if (isLoading) return <p className="py-8 text-center text-[13px] text-black/40">Loading…</p>;
-  if (rows.length === 0) {
-    return <p className="py-8 text-center text-[13px] text-black/40 dark:text-white/40">No notes yet. Notes are added from a quote, enquiry or booking.</p>;
-  }
-
-  return (
-    <div className="divide-y divide-black/[0.05]" data-testid="client-index-notes">
-      {rows.map((note) => {
-        const author = note.author_name || (note.user_id && userNameById.get(note.user_id)) || (note.agent_id && userNameById.get(note.agent_id)) || "Unknown";
-        return (
-          <div key={note.id} className="px-1 py-3" data-testid={`client-index-note-${note.id}`}>
-            <div className="text-xs">
-              <span className="font-semibold text-[#3b82f6]">{author}</span>
-              <span className="text-black/40"> – {longDate(note.createdAt)}</span>
-            </div>
-            <div className="prose prose-sm mt-1 max-w-none text-[13px] leading-relaxed text-black/75 dark:text-white/75">
-              <RichTextDisplay content={note.content || ""} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // ─── Views tab ──────────────────────────────────────────────────────────────
 // Which of the client's quotes they have opened, and how recently.
 
@@ -437,6 +399,23 @@ export function ClientIndexView({
     return map;
   }, [enquiries, quotes, bookings]);
 
+  // transaction_id → deal label, so a note written on one of the customer's
+  // deals can carry a small pill naming it. Same "Untitled …" fallback
+  // AllHolidaysPanel uses for its rows.
+  const dealsByTransactionId = useMemo<DealLabelLookup>(() => {
+    const map: DealLabelLookup = new Map();
+    for (const e of enquiries) {
+      if (e.transaction_id) map.set(e.transaction_id, { kind: "enquiry", id: e.id, title: e.title || "Untitled enquiry" });
+    }
+    for (const q of quotes) {
+      if (q.transaction_id) map.set(q.transaction_id, { kind: "quote", id: q.id, title: q.title || "Untitled quote" });
+    }
+    for (const b of bookings) {
+      if (b.transaction_id) map.set(b.transaction_id, { kind: "booking", id: b.id, title: b.title || "Untitled booking" });
+    }
+    return map;
+  }, [enquiries, quotes, bookings]);
+
   return (
     <div className="min-h-full rounded-sm border border-black/10 bg-[#f7f8fa] p-3 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-view">
       {/* Two independent stacks: each column flows on its own, so the dashboard
@@ -493,7 +472,9 @@ export function ClientIndexView({
 
           <div className="mt-2" data-testid={`client-index-tab-panel-${tab}`}>
             {tab === "tasks" && <TasksList clientId={clientId} tasks={tasks} users={users} holidays={taskHolidays} navigate={navigate} />}
-            {tab === "notes" && <NotesList clientId={clientId} users={users} />}
+            {tab === "notes" && (
+              <ClientNotesList clientId={clientId} users={users} dealsByTransactionId={dealsByTransactionId} navigate={navigate} />
+            )}
             {tab === "chats" && <ClientChatsTab clientId={clientId} />}
             {tab === "tickets" && <ClientTicketsTab tickets={rawTickets} users={users} onNewTicket={onNewTicket} />}
             {tab === "views" && <ViewsList clientId={clientId} navigate={navigate} />}

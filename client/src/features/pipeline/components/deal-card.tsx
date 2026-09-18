@@ -125,9 +125,69 @@ export function DealCard({
     >
       {/* Row 1: title + operator logo/hover actions */}
       <div className="flex items-start justify-between gap-2">
-        <h4 className="min-w-0 flex-1 truncate text-[13px] font-semibold text-[#2196c4] 3xl:text-[15px]" data-testid={`pipeline-title-${t.id}`}>
-          {getTransactionTitle(t)}
-        </h4>
+        {/* Title + its copy-quote badge: the badge rides right after the title text
+            and opens the list of quote variants. */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <h4 className="min-w-0 truncate text-[13px] font-semibold text-[#2196c4] 3xl:text-[15px]" data-testid={`pipeline-title-${t.id}`}>
+            {getTransactionTitle(t)}
+          </h4>
+          {duplicateCount > 0 && (stage === "Quoted" || stage === "In Play") && (
+            <div className="relative shrink-0" ref={quotesRef}>
+              <button
+                type="button"
+                className="flex items-center justify-center rounded-full bg-[#2196c4] px-1 text-[10px] font-bold leading-none text-white shadow-sm hover:bg-[#2196c4]/90"
+                style={{ minWidth: 18, height: 18 }}
+                onClick={(e) => { e.stopPropagation(); setShowQuotes((v) => !v); }}
+                title={`${duplicateCount} duplicate quote${duplicateCount > 1 ? "s" : ""}`}
+                data-testid={`button-duplicate-quotes-${t.id}`}
+              >
+                +{duplicateCount}
+              </button>
+              {showQuotes && (
+                <div className="absolute left-0 top-full z-50 mt-1 w-60 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
+                  {quoteVariants.map((q) => {
+                    const isPrimary = q.isQuoteCopy === false;
+                    return (
+                      <div key={q.id} className="group/qv flex w-full items-center gap-1 rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-50">
+                        <button
+                          type="button"
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowQuotes(false);
+                            if (t.client_id) setLocation(`/clients/${t.client_id}?holiday=quote:${q.id}`);
+                          }}
+                        >
+                          <span className="truncate text-xs text-gray-700">{q.title || "Untitled quote"}</span>
+                          {isPrimary && (
+                            <span className="ml-auto shrink-0 rounded-full bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600">Primary</span>
+                          )}
+                        </button>
+                        {!isPrimary && (
+                          <button
+                            type="button"
+                            className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium text-gray-400 opacity-0 transition-colors hover:bg-indigo-50 hover:text-indigo-600 group-hover/qv:opacity-100"
+                            title="Set as main"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowQuotes(false);
+                              setPrimaryQuoteMutation.mutate(q.id, {
+                                onSuccess: () => toast({ title: "Primary quote updated" }),
+                                onError: () => toast({ title: "Failed to set primary", variant: "destructive" }),
+                              });
+                            }}
+                          >
+                            Set as main
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
             <button
@@ -179,70 +239,13 @@ export function DealCard({
         )}
       </div>
 
-      {duplicateCount > 0 && (stage === "Quoted" || stage === "In Play") && (
-        <div className="relative mt-1" ref={quotesRef}>
-          <button
-            type="button"
-            className="flex items-center justify-center rounded-full bg-[#2196c4] px-1.5 text-[11px] font-bold text-white shadow-sm hover:bg-[#2196c4]/90"
-            style={{ minWidth: 22, height: 22 }}
-            onClick={(e) => { e.stopPropagation(); setShowQuotes((v) => !v); }}
-            title={`${duplicateCount} duplicate quote${duplicateCount > 1 ? "s" : ""}`}
-            data-testid={`button-duplicate-quotes-${t.id}`}
-          >
-            +{duplicateCount}
-          </button>
-          {showQuotes && (
-            <div className="absolute left-0 top-full z-50 mt-1 w-60 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
-              {quoteVariants.map((q) => {
-                const isPrimary = q.isQuoteCopy === false;
-                return (
-                  <div key={q.id} className="group/qv flex w-full items-center gap-1 rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-50">
-                    <button
-                      type="button"
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowQuotes(false);
-                        if (t.client_id) setLocation(`/clients/${t.client_id}?holiday=quote:${q.id}`);
-                      }}
-                    >
-                      <span className="truncate text-xs text-gray-700">{q.title || "Untitled quote"}</span>
-                      {isPrimary && (
-                        <span className="ml-auto shrink-0 rounded-full bg-indigo-50 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-600">Primary</span>
-                      )}
-                    </button>
-                    {!isPrimary && (
-                      <button
-                        type="button"
-                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-medium text-gray-400 opacity-0 transition-colors hover:bg-indigo-50 hover:text-indigo-600 group-hover/qv:opacity-100"
-                        title="Set as main"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowQuotes(false);
-                          setPrimaryQuoteMutation.mutate(q.id, {
-                            onSuccess: () => toast({ title: "Primary quote updated" }),
-                            onError: () => toast({ title: "Failed to set primary", variant: "destructive" }),
-                          });
-                        }}
-                      >
-                        Set as main
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="my-2 h-px bg-black/10 3xl:my-2.5" />
 
       {/* Footer: assignee + task indicator | priority / nice one */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <InitialsAvatar name={getAssigneeName(t)} solid className="h-5 w-5 text-[10px] 3xl:h-6 3xl:w-6 3xl:text-xs" />
-          {t.next_task && <CalendarCheck className="h-3.5 w-3.5 text-[#2196c4]" />}
+          {t.next_task && <CalendarCheck className="h-[18px] w-[18px] text-[#2196c4] 3xl:h-5 3xl:w-5" />}
         </div>
         {stage === "Booked" ? (
           <NiceOneBadge />

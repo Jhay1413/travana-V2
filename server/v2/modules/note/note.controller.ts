@@ -16,7 +16,8 @@ export const noteController = {
   listByClientId: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const clientId = req.params.clientId as string;
-    const notes = await noteService.listByClientId(clientId, scope);
+    const includeDeals = req.query.includeDeals === "true";
+    const notes = await noteService.listByClientId(clientId, scope, { includeDeals });
     return successResponse(res, notes, "Notes retrieved successfully");
   }),
 

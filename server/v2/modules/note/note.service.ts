@@ -47,9 +47,13 @@ export const noteService = {
     return noteRepository.findByTransactionId(transactionId);
   },
 
-  async listByClientId(clientId: string, scope: ScopeOrTrusted): Promise<NoteWithAuthor[]> {
+  async listByClientId(
+    clientId: string,
+    scope: ScopeOrTrusted,
+    options?: { includeDeals?: boolean },
+  ): Promise<NoteWithAuthor[]> {
     await assertClientInScope(clientId, scope);
-    return noteRepository.findByClientId(clientId);
+    return noteRepository.findByClientId(clientId, options);
   },
 
   async getNote(id: string, scope: ScopeOrTrusted): Promise<Note> {

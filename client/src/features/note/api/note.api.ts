@@ -14,8 +14,10 @@ export const noteApi = {
     return data;
   },
 
-  getByClient: async (clientId: string): Promise<TransactionNote[]> => {
-    const { data } = await axiosClient.get<TransactionNote[]>(`/api/v2/notes/client/${clientId}`);
+  getByClient: async (clientId: string, opts?: { includeDeals?: boolean }): Promise<TransactionNote[]> => {
+    const { data } = await axiosClient.get<TransactionNote[]>(`/api/v2/notes/client/${clientId}`, {
+      params: opts?.includeDeals ? { includeDeals: "true" } : undefined,
+    });
     return data;
   },
 

@@ -56,9 +56,12 @@ export function ClientNotesSection({ clientId }: ClientNotesSectionProps) {
 
   const handleDelete = (id: string) => {
     if (deleteNote.isPending) return;
-    deleteNote.mutate(id, {
-      onError: () => toast({ title: "Failed to delete note", variant: "destructive" }),
-    });
+    deleteNote.mutate(
+      { id },
+      {
+        onError: () => toast({ title: "Failed to delete note", variant: "destructive" }),
+      },
+    );
   };
 
   const startEdit = (note: TransactionNote) => {
