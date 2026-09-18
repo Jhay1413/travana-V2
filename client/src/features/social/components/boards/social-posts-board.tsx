@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Search,
   Eye,
@@ -42,6 +43,11 @@ import { PORTAL_ACTIVE_WINDOW_DAYS } from "@/features/quote/types";
 import type { TravelDeal } from "@/features/social/api/social-post.api";
 
 type ViewMode = "scheduled" | "all" | "portal" | "unscheduled";
+
+// Filter dropdown trigger: same height and surface as the search input beside
+// it; sized to its content so the row stays compact.
+const FILTER_TRIGGER_CLASS =
+  "h-9 w-auto min-w-[150px] gap-2 rounded-xl border-black/10 bg-black/5 text-xs font-medium dark:border-white/10 dark:bg-white/5";
 type ScheduleFilter = "none" | "today" | "tomorrow" | "this-week" | "next-week" | "next-month" | "specific-date";
 
 /** Whole days a portal post has been live, or null when it was never stamped. */
@@ -463,6 +469,15 @@ export default function SocialPostsBoard() {
     if (mode !== "portal") setPortalStatus("all");
   }
 
+  // The toolbar's filters are three dropdowns: the view, plus the one
+  // sub-filter that applies to it (schedule window or portal status).
+  const viewModeOptions: { label: string; value: ViewMode; icon?: typeof Clock }[] = [
+    { label: "Scheduled", value: "scheduled", icon: Clock },
+    { label: "Show All", value: "all" },
+    { label: "Portal Posts", value: "portal", icon: Globe },
+    { label: "Not Scheduled", value: "unscheduled", icon: CalendarClock },
+  ];
+
   const portalStatusButtons: { label: string; value: PortalStatus }[] = [
     { label: "All Portal Posts", value: "all" },
     { label: "Active", value: "active" },
@@ -487,55 +502,50 @@ export default function SocialPostsBoard() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-black/40 dark:text-white/40" />
             <Input placeholder="Search title, hotel, destination..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10" data-testid="input-search-social-posts" />
           </div>
-          <Button
-            size="sm"
-            variant={viewMode === "scheduled" ? "default" : "outline"}
-            className={`rounded-xl text-xs font-medium ${viewMode === "scheduled" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
-            onClick={() => selectViewMode("scheduled")}
-            data-testid="button-view-scheduled"
+          <Select
+            value={viewMode}
+            onValueChange={(v) => {
+              const next = viewModeOptions.find((o) => o.value === v);
+              if (next) selectViewMode(next.value);
+            }}
           >
-            <Clock className="w-3.5 h-3.5 mr-1" />Scheduled
-          </Button>
-          <Button
-            size="sm"
-            variant={viewMode === "all" ? "default" : "outline"}
-            className={`rounded-xl text-xs font-medium ${viewMode === "all" ? "bg-blue-500 hover:bg-blue-600 text-white" : "border-black/10 dark:border-white/10"}`}
-            onClick={() => selectViewMode("all")}
-            data-testid="button-view-all"
-          >
-            Show All
-          </Button>
-          <Button
-            size="sm"
-            variant={viewMode === "portal" ? "default" : "outline"}
-            className={`rounded-xl text-xs font-medium ${viewMode === "portal" ? "bg-purple-500 hover:bg-purple-600 text-white" : "border-black/10 dark:border-white/10"}`}
-            onClick={() => selectViewMode("portal")}
-            data-testid="button-view-portal"
-          >
-            <Globe className="w-3.5 h-3.5 mr-1" />Portal Posts
-          </Button>
-          <Button
-            size="sm"
-            variant={viewMode === "unscheduled" ? "default" : "outline"}
-            className={`rounded-xl text-xs font-medium ${viewMode === "unscheduled" ? "bg-amber-500 hover:bg-amber-600 text-white" : "border-black/10 dark:border-white/10"}`}
-            onClick={() => selectViewMode("unscheduled")}
-            data-testid="button-view-unscheduled"
-          >
-            <CalendarClock className="w-3.5 h-3.5 mr-1" />Not Scheduled
-          </Button>
+            <SelectTrigger className={FILTER_TRIGGER_CLASS} data-testid="select-view-mode">
+              <span className="text-black/45 dark:text-white/45">View</span>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              {viewModeOptions.map(({ label, value, icon: Icon }) => (
+                <SelectItem key={value} value={value} className="rounded-lg text-xs" data-testid={`button-view-${value}`}>
+                  <span className="flex items-center gap-1.5">
+                    {Icon && <Icon className="h-3.5 w-3.5 opacity-70" />}
+                    {label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          {viewMode === "scheduled" && scheduleFilterButtons.map((btn) => (
-            <Button
-              key={btn.value}
-              size="sm"
-              variant={scheduleFilter === btn.value ? "default" : "outline"}
-              className={`rounded-xl text-xs font-medium ${scheduleFilter === btn.value ? "bg-green-500 hover:bg-green-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => handleScheduleFilterClick(btn.value)}
-              data-testid={`button-schedule-filter-${btn.value}`}
+          {viewMode === "scheduled" && (
+            <Select
+              value={scheduleFilter}
+              onValueChange={(v) => {
+                const next = scheduleFilterButtons.find((o) => o.value === v);
+                if (next) handleScheduleFilterClick(next.value);
+              }}
             >
-              {btn.label}
-            </Button>
-          ))}
+              <SelectTrigger className={FILTER_TRIGGER_CLASS} data-testid="select-schedule-filter">
+                <span className="text-black/45 dark:text-white/45">When</span>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {scheduleFilterButtons.map((btn) => (
+                  <SelectItem key={btn.value} value={btn.value} className="rounded-lg text-xs" data-testid={`button-schedule-filter-${btn.value}`}>
+                    {btn.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {viewMode === "scheduled" && scheduleFilter === "specific-date" && (
             <div className="flex items-center gap-2 flex-wrap">
               <input
@@ -557,18 +567,27 @@ export default function SocialPostsBoard() {
             </div>
           )}
 
-          {viewMode === "portal" && portalStatusButtons.map((btn) => (
-            <Button
-              key={btn.value}
-              size="sm"
-              variant={portalStatus === btn.value ? "default" : "outline"}
-              className={`rounded-xl text-xs font-medium ${portalStatus === btn.value ? "bg-purple-500 hover:bg-purple-600 text-white" : "border-black/10 dark:border-white/10"}`}
-              onClick={() => setPortalStatus(btn.value)}
-              data-testid={`button-portal-status-${btn.value}`}
+          {viewMode === "portal" && (
+            <Select
+              value={portalStatus}
+              onValueChange={(v) => {
+                const next = portalStatusButtons.find((o) => o.value === v);
+                if (next) setPortalStatus(next.value);
+              }}
             >
-              {btn.label}
-            </Button>
-          ))}
+              <SelectTrigger className={FILTER_TRIGGER_CLASS} data-testid="select-portal-status">
+                <span className="text-black/45 dark:text-white/45">Status</span>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                {portalStatusButtons.map((btn) => (
+                  <SelectItem key={btn.value} value={btn.value} className="rounded-lg text-xs" data-testid={`button-portal-status-${btn.value}`}>
+                    {btn.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {viewMode === "portal" && (
             <span className="text-xs text-black/45 dark:text-white/45">
               Portal posts expire {PORTAL_ACTIVE_WINDOW_DAYS} days after they were added

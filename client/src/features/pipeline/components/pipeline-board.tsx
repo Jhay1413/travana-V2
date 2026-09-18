@@ -99,9 +99,7 @@ export function PipelineBoard({
   // Seed from the persisted auth store so we know the current agent on the very
   // first render (no empty window) and never fire an all-agents fetch by accident.
   const [selectedAgentId, setSelectedAgentId] = useState<string>(() => agentId ?? useAuthStore.getState().user?.id ?? "");
-  const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "mine">("mine");
-  const [showFilters, setShowFilters] = useState(false);
   const [collapsed, setCollapsed] = useState<Partial<Record<PipelineStage, boolean>>>(() => {
     const stored = loadCollapsedState();
     const initial: Partial<Record<PipelineStage, boolean>> = {};
@@ -138,13 +136,12 @@ export function PipelineBoard({
   }, []);
 
   const agentFilter = selectedAgentId && selectedAgentId !== "all" ? selectedAgentId : undefined;
-  const quoteStatusParam = quoteStatusFilter !== "all" ? quoteStatusFilter : undefined;
   // Don't fetch until the agent selection is resolved — avoids a spurious
   // all-agents fetch while selectedAgentId is still "".
   const agentResolved = !!selectedAgentId;
 
   const enquiryQ = usePipelineColumn("enquiry", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
-  const quoteQ = usePipelineColumn("quote", PIPELINE_PAGE_SIZE, agentFilter, quoteStatusParam, { enabled: agentResolved });
+  const quoteQ = usePipelineColumn("quote", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
   const inPlayQ = usePipelineColumn("in_play", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
   const bookingQ = usePipelineColumn("booking", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved && !hideBooked });
   const futureQ = usePipelineColumn("future", PIPELINE_PAGE_SIZE, agentFilter, undefined, { enabled: agentResolved });
@@ -186,8 +183,8 @@ export function PipelineBoard({
   const getName = useCallback((id: string | null) => (id ? clientMap.get(id) || "Unknown Client" : "Unknown Client"), [clientMap]);
 
   const keyForStage = useCallback(
-    (stage: PipelineStage) => transactionKeys.pipeline(STAGE_STATUS[stage], agentFilter, stage === "Quoted" ? quoteStatusParam : undefined),
-    [agentFilter, quoteStatusParam],
+    (stage: PipelineStage) => transactionKeys.pipeline(STAGE_STATUS[stage], agentFilter, undefined),
+    [agentFilter],
   );
 
   const handleDragStart = useCallback((_t: Transaction, s: PipelineStage) => {
@@ -496,18 +493,12 @@ export function PipelineBoard({
           embedded={embedded}
           viewMode={viewMode}
           onViewModeChange={setViewMode}
-          showFilters={showFilters}
-          onToggleFilters={() => setShowFilters((v) => !v)}
           activeFilter={activeFilter}
           onActiveFilterChange={(f) => {
             setActiveFilter(f);
-            // The agent filter tab only exists under All Deals; close it on the way out.
-            if (f === "mine") setShowFilters(false);
             if (f === "mine" && currentUser?.id) setSelectedAgentId(currentUser.id);
             else setSelectedAgentId("all");
           }}
-          quoteStatusFilter={quoteStatusFilter}
-          onQuoteStatusChange={setQuoteStatusFilter}
           selectedAgentId={selectedAgentId}
           onSelectedAgentIdChange={setSelectedAgentId}
         />

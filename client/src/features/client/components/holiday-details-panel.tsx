@@ -434,6 +434,19 @@ function HolidayViewsPanel({ selection }: { selection: HolidaySelection | null }
   return <QuoteViewsPanel key={selection.id} id={selection.id} />;
 }
 
+// Small count pill shown on the Views tab label — total times the quote was opened.
+function TabCountBadge({ count, testId }: { count: number; testId: string }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="ml-1.5 inline-flex min-w-[18px] items-center justify-center rounded-full bg-black/10 px-1.5 py-px text-[10px] font-bold leading-4 text-black/70 dark:bg-white/15 dark:text-white/80"
+      data-testid={testId}
+    >
+      {count}
+    </span>
+  );
+}
+
 type DetailsTab = "summary" | "costings" | "views";
 
 const DETAILS_TABS: Array<{ value: DetailsTab; label: string }> = [
@@ -452,6 +465,10 @@ interface HolidayDetailsPanelProps {
 
 export function HolidayDetailsPanel({ selection, enquiries, quotes, bookings, className }: HolidayDetailsPanelProps) {
   const [tab, setTab] = useState<DetailsTab>("summary");
+
+  // View tracking only exists for quotes — the hook is disabled (empty id) otherwise.
+  const { data: viewStats } = useQuoteViews(selection?.type === "quote" ? selection.id : "");
+  const totalViews = selection?.type === "quote" ? (viewStats?.totalViews ?? 0) : 0;
 
   // Reset to Summary whenever the selection changes, so switching holidays
   // while parked on Costings/Views doesn't leave a stale tab showing data
@@ -495,6 +512,7 @@ export function HolidayDetailsPanel({ selection, enquiries, quotes, bookings, cl
               data-testid={`holiday-details-tab-${t.value}`}
             >
               {t.label}
+              {t.value === "views" && <TabCountBadge count={totalViews} testId="holiday-details-tab-views-count" />}
             </button>
           ))}
         </div>

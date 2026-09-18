@@ -328,6 +328,19 @@ function ViewsList({ clientId, navigate }: { clientId: string; navigate: (to: st
 
 // ─── Dashboard tabs ─────────────────────────────────────────────────────────
 
+// Small count pill shown on a tab label (e.g. total quote views).
+function TabCountBadge({ count, testId }: { count: number; testId: string }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className="ml-1.5 inline-flex min-w-[18px] items-center justify-center rounded-full bg-[#fe9a00]/15 px-1.5 py-px text-[10px] font-bold leading-4 text-[#fe9a00]"
+      data-testid={testId}
+    >
+      {count}
+    </span>
+  );
+}
+
 type ClientIndexTab = "tasks" | "notes" | "chats" | "tickets" | "files" | "views" | "club-vip";
 
 const CLIENT_INDEX_TABS: Array<{ value: ClientIndexTab; label: string }> = [
@@ -401,6 +414,13 @@ export function ClientIndexView({
   const { data: currentUser } = useCurrentUser();
   void client;
 
+  // Total times the client has opened any of their quotes — shown as a badge on the Views tab.
+  const { data: clientQuoteViews } = useClientQuoteViews(clientId);
+  const totalQuoteViews = useMemo(
+    () => (clientQuoteViews ?? []).reduce((sum, v) => sum + v.viewCount, 0),
+    [clientQuoteViews],
+  );
+
   const totalProfit = useMemo(
     () => bookings.reduce((sum, b) => sum + (parseFloat(b.package_commission || "0") || 0), 0),
     [bookings],
@@ -466,6 +486,7 @@ export function ClientIndexView({
                 data-testid={`client-index-tab-${t.value}`}
               >
                 {t.label}
+                {t.value === "views" && <TabCountBadge count={totalQuoteViews} testId="client-index-tab-views-count" />}
               </button>
             ))}
           </div>

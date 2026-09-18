@@ -156,22 +156,14 @@ export function ClientIndexHeader({
         <div className="flex items-center gap-2">
         <CircleAction icon={Eye} label="View client" size="sm" testId="client-index-view-button" />
         <CircleAction icon={Share2} label={copied ? "Link copied" : "Share client link"} onClick={() => void share()} size="sm" testId="client-index-share" />
-        <button
-          type="button"
+        <CircleAction
+          icon={Pin}
+          label={isFavorited ? "Unpin client" : "Pin client"}
           onClick={onToggleFavorite}
-          title={isFavorited ? "Unpin client" : "Pin client"}
-          aria-label={isFavorited ? "Unpin client" : "Pin client"}
-          aria-pressed={isFavorited}
-          className={cn(
-            "grid h-8 w-8 shrink-0 place-items-center rounded-full border transition",
-            isFavorited
-              ? "border-[#07a9f4] text-[#07a9f4]"
-              : "border-black/15 text-black/50 hover:border-black/30 hover:text-black dark:border-white/20 dark:text-white/50",
-          )}
-          data-testid="client-index-pin"
-        >
-          <Pin className="h-4 w-4" strokeWidth={1.75} />
-        </button>
+          active={isFavorited}
+          size="sm"
+          testId="client-index-pin"
+        />
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
