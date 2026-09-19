@@ -20,6 +20,7 @@ import { useCurrentUser } from "@/hooks/queries";
 import { useClientQuoteViews } from "@/features/quote";
 import { useDeleteTask, useToggleTask } from "@/hooks/mutations";
 import type { NeonClient } from "@/features/client/types/neon-client";
+import type { HolidaySelection } from "@/features/client/types";
 import type { EnquiryTable } from "@/features/quote/types";
 import type { Ticket as ApiTicket } from "@/features/tickets/types";
 import type { User as ApiUser } from "@/features/user/types";
@@ -341,6 +342,8 @@ interface ClientIndexViewProps {
   bookings: BookingWithJoins[];
   tasks: TaskNew[];
   navigate: (to: string) => void;
+  /** Opens a deal in the three-column detail layout — same handler AllHolidaysPanel's onSelect uses. */
+  onOpenDeal: (selection: HolidaySelection) => void;
   clientFiles: ClientFile[];
   filteredFiles: FileItem[];
   onDeleteFile: (id: string) => void;
@@ -363,6 +366,7 @@ export function ClientIndexView({
   bookings,
   tasks,
   navigate,
+  onOpenDeal,
   clientFiles,
   filteredFiles,
   onDeleteFile,
@@ -400,19 +404,44 @@ export function ClientIndexView({
   }, [enquiries, quotes, bookings]);
 
   // transaction_id → deal label, so a note written on one of the customer's
-  // deals can carry a small pill naming it. Same "Untitled …" fallback
+  // deals can carry a small pill naming it. The label reflects the deal's
+  // CURRENT stage, so when a transaction has moved through more than one
+  // stage the later one wins: booking > quote > enquiry (each loop below
+  // overwrites the previous stage's entry). Same "Untitled …" fallback
   // AllHolidaysPanel uses for its rows.
+  //
+  // A transaction_id is NOT unique on quote rows — a transaction can have
+  // several quote variants/copies. Among a transaction's quotes the primary
+  // (non-copy) one wins, same `isQuoteCopy === false` check the pipeline
+  // deal card uses to find the primary quote; if there's no primary (or a
+  // tie), the most recently created quote wins.
   const dealsByTransactionId = useMemo<DealLabelLookup>(() => {
     const map: DealLabelLookup = new Map();
+
     for (const e of enquiries) {
       if (e.transaction_id) map.set(e.transaction_id, { kind: "enquiry", id: e.id, title: e.title || "Untitled enquiry" });
     }
+
+    const quotesByTransactionId = new Map<string, QuoteWithJoins[]>();
     for (const q of quotes) {
-      if (q.transaction_id) map.set(q.transaction_id, { kind: "quote", id: q.id, title: q.title || "Untitled quote" });
+      if (!q.transaction_id) continue;
+      const group = quotesByTransactionId.get(q.transaction_id);
+      if (group) group.push(q);
+      else quotesByTransactionId.set(q.transaction_id, [q]);
     }
+    for (const [transactionId, group] of quotesByTransactionId) {
+      const winner = [...group].sort((a, b) => {
+        const primaryDiff = Number(a.isQuoteCopy === false ? 0 : 1) - Number(b.isQuoteCopy === false ? 0 : 1);
+        if (primaryDiff !== 0) return primaryDiff; // primary (0) before copy (1)
+        return new Date(b.date_created || 0).getTime() - new Date(a.date_created || 0).getTime();
+      })[0];
+      map.set(transactionId, { kind: "quote", id: winner.id, title: winner.title || "Untitled quote" });
+    }
+
     for (const b of bookings) {
       if (b.transaction_id) map.set(b.transaction_id, { kind: "booking", id: b.id, title: b.title || "Untitled booking" });
     }
+
     return map;
   }, [enquiries, quotes, bookings]);
 
@@ -473,7 +502,7 @@ export function ClientIndexView({
           <div className="mt-2" data-testid={`client-index-tab-panel-${tab}`}>
             {tab === "tasks" && <TasksList clientId={clientId} tasks={tasks} users={users} holidays={taskHolidays} navigate={navigate} />}
             {tab === "notes" && (
-              <ClientNotesList clientId={clientId} users={users} dealsByTransactionId={dealsByTransactionId} navigate={navigate} />
+              <ClientNotesList clientId={clientId} users={users} dealsByTransactionId={dealsByTransactionId} onOpenDeal={onOpenDeal} />
             )}
             {tab === "chats" && <ClientChatsTab clientId={clientId} />}
             {tab === "tickets" && <ClientTicketsTab tickets={rawTickets} users={users} onNewTicket={onNewTicket} />}

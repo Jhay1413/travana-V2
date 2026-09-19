@@ -1,6 +1,7 @@
 import { db } from "../../config/database";
 import { notes, transaction, clientTable, user, type Note, type InsertNote } from "@shared/schema";
 import { and, eq, desc, or, sql } from "drizzle-orm";
+import { buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export type NoteWithAuthor = Note & { author_name: string | null };
 
@@ -26,16 +27,29 @@ export const noteRepository = {
     return rows;
   },
 
-  async findByClientId(clientId: string, options?: { includeDeals?: boolean }): Promise<NoteWithAuthor[]> {
+  async findByClientId(
+    clientId: string,
+    scope: ScopeOrTrusted,
+    options?: { includeDeals?: boolean },
+  ): Promise<NoteWithAuthor[]> {
     // Client-level notes: attached directly to the client and not to a
     // transaction. When `includeDeals` is set, notes written on any of the
     // client's deals (transactions — enquiry/quote/booking) are merged in too,
     // resolved via transaction.client_id since deal notes usually carry no
-    // client_id of their own.
+    // client_id of their own. The deal branch also applies the same
+    // record-level scope conditions the client's deal LIST already uses
+    // (transaction.repository.ts findAll, clientId case) — org-wide for staff,
+    // pinned to transaction.user_id for homeworkers — so a homeworker can't
+    // see notes on a colleague's deal via this merged list. System notes are
+    // excluded here so the (often numerous) automation rows aren't shipped
+    // just to be filtered out client-side.
     const whereClause = options?.includeDeals
-      ? or(
-          and(eq(notes.client_id, clientId), sql`${notes.transaction_id} IS NULL`),
-          eq(transaction.client_id, clientId),
+      ? and(
+          or(
+            and(eq(notes.client_id, clientId), sql`${notes.transaction_id} IS NULL`),
+            and(eq(transaction.client_id, clientId), ...buildTransactionRecordScopeConds(scope)),
+          ),
+          sql`${notes.description} IS DISTINCT FROM 'system'`,
         )
       : and(eq(notes.client_id, clientId), sql`${notes.transaction_id} IS NULL`);
 

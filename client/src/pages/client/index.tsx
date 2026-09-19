@@ -297,6 +297,7 @@ export default function ClientPage() {
             bookings={bookings}
             tasks={tasks}
             navigate={navigate}
+            onOpenDeal={setHolidaySelection}
             clientFiles={fileActions.clientFilesData}
             filteredFiles={filteredFiles}
             onDeleteFile={fileActions.deleteFile}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyScalarOverrides, runExtractionSpec } from "./extraction.interpreter";
 import type { ScrapedQuoteJson } from "../../easyjet/easyjet.types";
 import type { ExtractionSpec } from "./extraction.types";
+import { supplierScraperSeed } from "../../../../../scripts/seed-data/supplier-scrapers";
 
 // Regression: the AI-generated spec for a supplier can be overfitted to the one
 // example deal it was generated from (board_basis regex literally "Half Board",
@@ -1800,5 +1801,250 @@ describe("cruise title doubles as the quote title", () => {
     const spec = { version: 1, constants: { accommodation: "Plaza Prague Hotel" }, fields: {} } as unknown as ExtractionSpec;
     const q = runExtractionSpec(spec, { title: "", text: "Plaza Prague Hotel", url: "https://x.test/d" }, "x");
     expect(q.quote_title).toBe("Plaza Prague Hotel");
+  });
+});
+
+// Regression: importing a Jet2holidays deal for "2 Adults" only produced a
+// quote with children/infants > 0. The seeded spec's children/infants rules
+// were "(\d+) Children?" / "(\d+) Infants?" against the whole page text (no
+// anchor), so the FIRST match anywhere on the page won — and Jet2 prints room
+// capacity as "Sleeps: Minimum 2 | Maximum 2 (plus 1 infant(s))" further down
+// the same page, which that regex cannot tell apart from the real party line.
+// Fixed by anchoring both rules to the "N Adults ... for N nights" party
+// summary sentence, where Jet2 actually states the party's children/infants
+// ("2 Adults, 1 Child and 1 Infant for 7 nights"). Loaded from the real seed
+// file (not a hand-rolled spec) so this test fails again if the seed
+// regresses to the old regex.
+describe("Jet2holidays: children/infants come from the party line, not room capacity", () => {
+  const jet2Seed = supplierScraperSeed.find((s) => s.supplierKey === "jet2holidays");
+  if (!jet2Seed?.config.extraction) throw new Error("jet2holidays seed spec is missing");
+  const spec = jet2Seed.config.extraction as ExtractionSpec;
+
+  const url =
+    "https://trade.jet2holidays.com/beach/greece/corfu/agios-ioannis-corfu/valmar-corfu-by-louis-hotels" +
+    "?duration=7&airport=5&date=08-05-2027&occupancy=r2c&board=8&oflight=1478374&iflight=1478377" +
+    "&rooms=105774&gtmsearchtype=Smart%20Search&smartsearchid=58e653ab-80e5-4955-bb1b-c454e8a14bff";
+  const title = "Valmar Corfu by Louis Hotels - Agios Ioannis - Corfu hotels | Jet2holidays";
+
+  // Trimmed to the parts of a real capture that matter here: the party-summary
+  // sentence near the top, and the room-capacity cards further down whose
+  // "(plus 1 infant(s))" wording used to be misread as the party's infants.
+  const TWO_ADULTS_TEXT = [
+    "Holidays for everyone",
+    "Free Child Places",
+    "Valmar Corfu by Louis Hotels",
+    "Agios Ioannis - Corfu, Corfu",
+    "Read reviews (467)",
+    "Your holiday to Corfu",
+    "",
+    "2 Adults for 7 nights from Sat 08 May 2027",
+    "",
+    "Included in your holiday",
+    "",
+    "Children's Facilities",
+    "2 restaurants with highchairs",
+    "Children's club (4-12yrs) - arts and crafts, small team games, sports, water-based and story time.",
+    "Rooms",
+    "Room 1: 2 Adults",
+    "Superior room with Mountain View",
+    "Your room",
+    "Sleeps:",
+    "",
+    "Minimum 2 | Maximum 2",
+    "",
+    "(plus 1 infant(s))",
+    "",
+    "Family suite with Sea View",
+    "Only 5 left",
+    "Sleeps:",
+    "",
+    "Minimum 2 | Maximum 4",
+    "",
+    "(plus 1 infant(s))",
+  ].join("\n");
+
+  it("does not read room-capacity 'plus N infant(s)' as the party's infants", () => {
+    const q = runExtractionSpec(spec, { title, text: TWO_ADULTS_TEXT, url }, "x");
+    expect(q.adults).toBe(2);
+    expect(q.children).toBe(0);
+    expect(q.infants).toBe(0);
+  });
+
+  it("still reads children/infants when Jet2 states them in the party line", () => {
+    const withFamily = TWO_ADULTS_TEXT.replace(
+      "2 Adults for 7 nights from Sat 08 May 2027",
+      "2 Adults, 1 Child and 1 Infant for 7 nights from Sat 08 May 2027",
+    );
+    const q = runExtractionSpec(spec, { title, text: withFamily, url }, "x");
+    expect(q.adults).toBe(2);
+    expect(q.children).toBe(1);
+    expect(q.infants).toBe(1);
+  });
+
+  it("reads a single child with no infant, and a single infant with no child", () => {
+    const childOnly = TWO_ADULTS_TEXT.replace(
+      "2 Adults for 7 nights from Sat 08 May 2027",
+      "2 Adults and 1 Child for 7 nights from Sat 08 May 2027",
+    );
+    expect(runExtractionSpec(spec, { title, text: childOnly, url }, "x").children).toBe(1);
+
+    const infantOnly = TWO_ADULTS_TEXT.replace(
+      "2 Adults for 7 nights from Sat 08 May 2027",
+      "2 Adults and 1 Infant for 7 nights from Sat 08 May 2027",
+    );
+    expect(runExtractionSpec(spec, { title, text: infantOnly, url }, "x").infants).toBe(1);
+  });
+
+  // Second cause of the same reported bug: adults/children/infants ALL point at
+  // the identical jsonPath (0.ecommerce.detail.products[0].dimension9) — an
+  // AI-generated spec produced from one example page, never verified against
+  // three genuinely different values. resolveField tries jsonPath BEFORE the
+  // text regex whenever the capture carries apiJson (extraction.interpreter.ts
+  // resolveField, ~line 149), and the page-capture bookmarklet's bestScriptJson()
+  // scores a GA "dataLayer" blob — exactly this ecommerce.detail.products[]
+  // shape — highest of any script tag, so a real capture routinely DOES carry
+  // one. One dimension cannot correctly answer three different questions: on a
+  // 2-adults-only deal it reads "2" and every one of adults/children/infants
+  // came back 2. jsonPath is removed from all three rules below so the party
+  // is read only from the anchored party-line regex, which is the one place
+  // Jet2 actually states children/infants distinctly from adults.
+  it("does not read children/infants off the same dataLayer dimension as adults, when apiJson is present", () => {
+    const apiJson = [{ ecommerce: { detail: { products: [{ dimension9: "2" }] } } }];
+
+    const q = runExtractionSpec(spec, { title, text: TWO_ADULTS_TEXT, url, apiJson }, "x");
+    expect(q.adults).toBe(2);
+    expect(q.children).toBe(0);
+    expect(q.infants).toBe(0);
+
+    const withFamily = TWO_ADULTS_TEXT.replace(
+      "2 Adults for 7 nights from Sat 08 May 2027",
+      "2 Adults, 1 Child and 1 Infant for 7 nights from Sat 08 May 2027",
+    );
+    const qFamily = runExtractionSpec(spec, { title, text: withFamily, url, apiJson }, "x");
+    expect(qFamily.adults).toBe(2);
+    expect(qFamily.children).toBe(1);
+    expect(qFamily.infants).toBe(1);
+  });
+});
+
+// Third cause, and the one the user actually asked to be fixed: this is NOT a
+// Jet2 quirk. Every supplier's children/infants rule in the seed is a bare
+// "(\d+) Children?" / "(\d+) Infants?" shape with no anchor of its own (see
+// resolvePartyField's comment in extraction.interpreter.ts), so ANY page that
+// mentions children/infants lower down — room capacity, a kids'-club blurb, a
+// review, a "free child places" policy line — can win over the real party.
+// Fixed generically in the interpreter (not per-spec): children/infants are
+// only ever read from a match sitting near wherever `adults` matched.
+// `adults` itself is untouched — it's the field a picker element can be
+// verified against (picker-spec.ts), so children/infants must trust that same
+// spot rather than search the page on their own.
+describe("party-anchored children/infants (generic — every supplier, not just Jet2)", () => {
+  // A plain, un-anchored spec — exactly the shape most suppliers actually
+  // store (agoda/easyjet/celebritycruises all use "(\d+) Children?" /
+  // "(\d+) Infants?" verbatim).
+  const GENERIC_SPEC = {
+    version: 1,
+    fields: {
+      adults: { from: "text", regex: "(\\d+) Adults?", group: 1, transform: "number" },
+      children: { from: "text", regex: "(\\d+) Children?", group: 1, transform: "number" },
+      infants: { from: "text", regex: "(\\d+) Infants?", group: 1, transform: "number" },
+    },
+  } as unknown as ExtractionSpec;
+
+  // Deliberately long — far more than PARTY_WINDOW_CHARS — so the room
+  // capacity/kids'-club/policy noise below sits well outside the window
+  // around the party line above it, exactly like a real deal page's length.
+  const LOWER_PAGE_NOISE = [
+    ...Array.from({ length: 20 }, (_, i) => `Line of unrelated marketing copy number ${i} padding the page out.`),
+    "Room 1: Superior Room",
+    "Sleeps:",
+    "Minimum 2 | Maximum 4",
+    "(plus 1 infant(s))",
+    "Children's club - 2 children's pools and a splash park",
+    "Family rooms available, up to 2 children stay free",
+  ].join("\n");
+
+  it("reads 0/0 when the party is 2 adults only, ignoring room-capacity/kids'-club noise far below", () => {
+    const text = ["Some Holidays", "Your holiday to Somewhere", "", "2 Adults", "", "Included in your holiday", LOWER_PAGE_NOISE].join("\n");
+    const q = runExtractionSpec(GENERIC_SPEC, { title: "", text, url: "https://example.test/deal" }, "x");
+    expect(q.adults).toBe(2);
+    expect(q.children).toBe(0);
+    expect(q.infants).toBe(0);
+  });
+
+  it("reads the real children/infants from a single-line party sentence, over the same noise", () => {
+    const text = ["Some Holidays", "Your holiday to Somewhere", "", "2 Adults, 2 Children, 1 Infant", "", "Included in your holiday", LOWER_PAGE_NOISE].join("\n");
+    const q = runExtractionSpec(GENERIC_SPEC, { title: "", text, url: "https://example.test/deal" }, "x");
+    expect(q.adults).toBe(2);
+    expect(q.children).toBe(2);
+    expect(q.infants).toBe(1);
+  });
+
+  it("reads the real children/infants from a stacked 'Guests' block, over the same noise", () => {
+    const text = ["Some Holidays", "Your holiday to Somewhere", "", "Guests", "2 Adults", "2 Children", "1 Infant", "", "Included in your holiday", LOWER_PAGE_NOISE].join("\n");
+    const q = runExtractionSpec(GENERIC_SPEC, { title: "", text, url: "https://example.test/deal" }, "x");
+    expect(q.adults).toBe(2);
+    expect(q.children).toBe(2);
+    expect(q.infants).toBe(1);
+  });
+
+  it("rejects capacity phrasing and accepts a genuine sentence when the page has no 'Adults' anchor at all", () => {
+    const text = [
+      "Welcome to Some Resort",
+      "Rooms",
+      "Superior Room",
+      "Sleeps:",
+      "Minimum 2 | Maximum 4",
+      "(plus 1 infant(s))", // capacity noise — must be rejected even with no anchor to compare against
+      "Your booking",
+      "The booking has 2 Children accompanying the adults.", // genuine — no anchor exists, but this isn't capacity phrasing
+    ].join("\n");
+    const q = runExtractionSpec(GENERIC_SPEC, { title: "", text, url: "https://example.test/deal" }, "x");
+    // No "N Adults" anywhere on this page — the spec rule matches nothing, so
+    // the interpreter's own generic default (2, no occupancy in the URL
+    // either) is what the quote carries; the point of this test is the
+    // children/infants behaviour below, not this fallback.
+    expect(q.adults).toBe(2);
+    expect(q.children).toBe(2); // the genuine sentence, not rejected
+    expect(q.infants).toBe(0); // the only candidate was "(plus 1 infant(s))" — rejected as capacity noise
+  });
+
+  // picker-spec.ts's label-anchored strategy (an agent clicking the "Guests"
+  // element) never produces a plain "(\d+) Adults?" rule — it captures the
+  // WHOLE line after the label verbatim: "(?:^|\n)\s*Guests\s*\n+\s*([^\n]+)",
+  // exactly as stored for celebritycruises/royalcaribbean in the seed. The
+  // anchor logic only ever uses that rule's MATCH SPAN, never its capture
+  // group or resolved value, so a picked rule anchors children/infants just
+  // as well as a bare text regex does.
+  it("anchors against a picker-derived (label-anchored) adults rule, not just a plain regex", () => {
+    const PICKED_ADULTS_SPEC = {
+      version: 1,
+      fields: {
+        adults: {
+          from: "text",
+          regex: "(?:^|\\n)\\s*Guests\\s*\\n+\\s*([^\\n]+)",
+          group: 1,
+          origin: "picked",
+          strategy: "label-anchored",
+          verifiedValue: "2 Adults",
+        },
+        children: { from: "text", regex: "(\\d+)\\s+Children?", group: 1, transform: "number" },
+        infants: { from: "text", regex: "(\\d+)\\s+Infants?", group: 1, transform: "number" },
+      },
+    } as unknown as ExtractionSpec;
+
+    const text = [
+      "5-Night Hamburg Cruise",
+      "Leaving from", "Southampton, England",
+      "Onboard", "Freedom of the Seas",
+      "Dates", "21 Jun 2027", "26 Jun 2027",
+      "Guests", "2 Adults", "2 Children", "1 Infants",
+      "Trip total", "GBP1,102.00",
+      LOWER_PAGE_NOISE,
+    ].join("\n");
+
+    const q = runExtractionSpec(PICKED_ADULTS_SPEC, { title: "", text, url: "https://example.test/deal" }, "x");
+    expect(q.children).toBe(2);
+    expect(q.infants).toBe(1);
   });
 });

@@ -858,15 +858,13 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "infants": {
             "from": "text",
             "group": 1,
-            "regex": "(\\d+) Infants?",
-            "jsonPath": "0.ecommerce.detail.products[0].dimension9",
+            "regex": "(\\d+)[^\\S\\n]*Infants?\\b[^\\n]*?for[^\\S\\n]+\\d+[^\\S\\n]+nights?",
             "transform": "number"
           },
           "children": {
             "from": "text",
             "group": 1,
-            "regex": "(\\d+) Children?",
-            "jsonPath": "0.ecommerce.detail.products[0].dimension9",
+            "regex": "(\\d+)[^\\S\\n]*Child(?:ren)?\\b[^\\n]*?for[^\\S\\n]+\\d+[^\\S\\n]+nights?",
             "transform": "number"
           },
           "room_type": {

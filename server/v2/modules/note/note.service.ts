@@ -53,7 +53,7 @@ export const noteService = {
     options?: { includeDeals?: boolean },
   ): Promise<NoteWithAuthor[]> {
     await assertClientInScope(clientId, scope);
-    return noteRepository.findByClientId(clientId, options);
+    return noteRepository.findByClientId(clientId, scope, options);
   },
 
   async getNote(id: string, scope: ScopeOrTrusted): Promise<Note> {

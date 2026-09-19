@@ -14,7 +14,9 @@ export const updateNoteValidator = z.object({
 
 export const listByClientValidator = z.object({
   params: z.object({
-    clientId: z.string(),
+    // client_table.id is a uuid column — reject malformed ids as a 400 here
+    // instead of letting them reach Postgres as a 22P02 (→ 500).
+    clientId: z.string().uuid(),
   }),
   query: z.object({
     // Opt-in flag: when "true", the customer's deal (transaction) notes are

@@ -194,6 +194,176 @@ function resolveField(
   return out;
 }
 
+// ─── Party-anchored children/infants (generic — every supplier, not just one) ─
+//
+// A supplier's children/infants rule is almost always a bare "<count> <word>"
+// regex with no anchor of its own — scripts/seed-data/supplier-scrapers.ts has
+// agoda's "(\d+)\s*children?", easyjet's "(\d+) children",
+// celebritycruises'/royalcaribbean's "(\d+)\s+Children?" — and resolveField
+// above takes the FIRST match anywhere on the WHOLE page. Jet2holidays hit
+// this for real: a hotel room card printed capacity as "Sleeps: Minimum 2 |
+// Maximum 2 (plus 1 infant(s))" far below the actual "2 Adults for 7 nights"
+// deal summary, and "(\d+) Infants?" matched THAT instead, reporting an
+// infant on a 2-adults-only booking (Jet2's own rule is now anchored to its
+// own party sentence — see the seed file — but the same failure shape is
+// latent in every OTHER supplier's bare rule too, so the fix belongs here).
+//
+// children/infants are deliberately read next to wherever `adults` was read,
+// never independently: `adults` is the one field an agent can verify by
+// clicking (picker-spec.ts), so children/infants have to trust that same spot
+// on the page rather than go hunting on their own. `adults` itself, and every
+// jsonPath/url/title/images/headings rule, is untouched by any of this.
+
+// How far (characters) a children/infants match may sit from the adults
+// anchor and still count as the same party-summary block. Picked from the
+// real shapes in the seed file:
+//  - single-line party sentences ("2 Adults, 1 Child and 1 Infant for 7
+//    nights", agoda's "2 adults, 0 children, 1 infants") — tens of chars.
+//  - stacked "Guests\n2 Adults\n1 Children\n0 Infants" blocks
+//    (celebritycruises/royalcaribbean) and labelled counters ("Adults
+//    (18+)\n2\nChildren (2-17)\n0", hoseasons) — under 100 chars; the
+//    royalcaribbean/tui children/infants rules already start their OWN match
+//    at the same "Guests"/"Room1:" token adults does, so those overlap at
+//    distance 0 regardless of window size.
+// Against that, the Jet2 bug fixture measures 311 characters from the end of
+// "2 Adults for 7 nights…" to the room card's "(plus 1 infant(s))" — well
+// outside this window, so it's rejected while every legitimate case above
+// sits nowhere close to it.
+const PARTY_WINDOW_CHARS = 200;
+
+// Generic "N Adults" scan, used only when the spec's own adults rule has no
+// usable text regex to replay (see findPartyAnchorSpan). Case-insensitive,
+// like every other spec regex here (safeRegex above).
+const GENERIC_ADULTS_RE = /\b\d+\s*Adults?\b/i;
+
+// Facility/capacity phrasing that states a count without it being the PARTY:
+// room-capacity blurbs ("(plus 1 infant(s))", "Sleeps… Maximum 2", "up to 2
+// children"), an age-range label ("Children's club (4-12yrs)"), or an
+// under-age qualifier ("under 12s go free"). Deliberately short — this only
+// runs as the LAST resort, when the page has no "Adults" anchor to measure
+// against at all (see resolvePartyField below).
+const CAPACITY_CONTEXT_RE =
+  /\bplus\b|\bsleeps?\b|\bmax(?:imum)?\.?\b|\bup to\b|\bunder\s+\d+|\(s\)|\(\d{1,2}\s*[-–]\s*\d{1,2}\s*yrs?\)/i;
+
+function safeGlobalRegex(pattern: string): RegExp | null {
+  try {
+    return new RegExp(pattern, 'gi');
+  } catch {
+    return null;
+  }
+}
+
+// Distance between two [start, end) spans in the same string — 0 when they
+// overlap. This is how a children/infants rule that starts its OWN match at
+// the same "Guests"/"Room1:" token as `adults` (royalcaribbean, tui) always
+// wins outright, with no window needed.
+function spanDistance(aStart: number, aEnd: number, bStart: number, bEnd: number): number {
+  if (aStart <= bEnd && bStart <= aEnd) return 0;
+  return aStart > bEnd ? aStart - bEnd : bStart - aEnd;
+}
+
+// Whether the LINE a candidate match sits on reads like room/facility
+// capacity rather than the party itself — see CAPACITY_CONTEXT_RE. Checked
+// against the whole line, not just the match, since the tell ("plus",
+// "Sleeps", "up to"…) routinely sits earlier on the line than the count.
+function isCapacityNoise(source: string, start: number, end: number): boolean {
+  const lineStart = source.lastIndexOf('\n', start) + 1;
+  const nextBreak = source.indexOf('\n', end);
+  const lineEnd = nextBreak === -1 ? source.length : nextBreak;
+  return CAPACITY_CONTEXT_RE.test(source.slice(lineStart, lineEnd));
+}
+
+// Where `adults` was actually read from, in THIS source string — the anchor
+// children/infants must stay near. Tries the spec's own adults rule first,
+// replaying its regex against the same source (only the match's SPAN is
+// used, never its resolved value or capture group, so a picker-derived rule
+// like "(?:^|\n)\s*Guests\s*\n+\s*([^\n]+)" works here exactly as well as a
+// plain "(\d+) Adults?" one). Falls back to a generic "N Adults" scan when
+// the spec's adults rule has no text/deepText regex, or doesn't match this
+// particular source (adults and children/infants can legitimately point at
+// different sources).
+function findPartyAnchorSpan(source: string, adultsRule: FieldRule | undefined): { start: number; end: number } | null {
+  const adultsUsesTextSource = adultsRule?.from == null || adultsRule.from === 'text' || adultsRule.from === 'deepText';
+  if (adultsUsesTextSource && adultsRule?.regex) {
+    const re = safeRegex(adultsRule.regex);
+    const m = re ? re.exec(source) : null;
+    if (m) return { start: m.index, end: m.index + m[0].length };
+  }
+  const generic = GENERIC_ADULTS_RE.exec(source);
+  return generic ? { start: generic.index, end: generic.index + generic[0].length } : null;
+}
+
+// children/infants, read next to the party anchor rather than independently.
+// Only text/deepText regex rules get this treatment — jsonPath, url, title,
+// images and headings rules behave exactly as resolveField has always run
+// them (this function still runs the API-first jsonPath step unchanged, and
+// falls through to plain resolveField for every other source).
+function resolvePartyField(
+  rule: FieldRule,
+  ctx: {
+    title: string;
+    text: string;
+    url: string;
+    apiJson?: unknown;
+    imagesText?: string;
+    headingsText?: string;
+    deepText?: string;
+  },
+  adultsRule: FieldRule | undefined,
+): string | number {
+  // 1. API first — identical to resolveField; untouched.
+  if (rule.jsonPath && ctx.apiJson != null) {
+    const v = getByPath(ctx.apiJson, rule.jsonPath);
+    if (v != null && v !== '') {
+      const out = finalize(String(v), rule);
+      if (!isEmpty(out)) return out;
+    }
+  }
+
+  const usesTextSource = rule.from == null || rule.from === 'text' || rule.from === 'deepText';
+  if (!usesTextSource || !rule.regex) return resolveField(rule, ctx);
+
+  const source = rule.from === 'deepText' ? (ctx.deepText ?? '') : ctx.text;
+  const globalRe = safeGlobalRegex(rule.regex);
+  if (!globalRe) return resolveField(rule, ctx);
+
+  const matches = [...source.matchAll(globalRe)];
+  let chosen: RegExpMatchArray | null = null;
+
+  if (matches.length > 0) {
+    const anchor = findPartyAnchorSpan(source, adultsRule);
+    if (anchor) {
+      let best = Infinity;
+      for (const m of matches) {
+        const start = m.index ?? 0;
+        const end = start + m[0].length;
+        const distance = spanDistance(start, end, anchor.start, anchor.end);
+        if (distance <= PARTY_WINDOW_CHARS && distance < best) {
+          best = distance;
+          chosen = m;
+        }
+      }
+    } else {
+      // No "Adults" anywhere on the page to anchor against — keep today's
+      // first-match behaviour, but skip anything that reads as room/facility
+      // capacity rather than the party itself (Jet2's "(plus 1 infant(s))"
+      // room card is exactly this shape).
+      for (const m of matches) {
+        const start = m.index ?? 0;
+        if (!isCapacityNoise(source, start, start + m[0].length)) {
+          chosen = m;
+          break;
+        }
+      }
+    }
+  }
+
+  const raw = chosen ? (chosen[rule.group ?? 1] ?? '') : '';
+  const out = finalize(raw, rule);
+  if (isEmpty(out) && rule.fallback != null) return rule.fallback;
+  return out;
+}
+
 /**
  * Applies a spec's scalar field rules ON TOP of an already-mapped quote —
  * the config-override path for CODE-based adapters (easyjet): the structured
@@ -229,7 +399,13 @@ export function applyScalarOverrides(
   }
   for (const [key, rule] of Object.entries(spec.fields ?? {})) {
     if (!isOverridableKey(key)) continue;
-    const value = resolveField(rule, resolveCtx);
+    // children/infants can be overridden here too (both are numeric scalars
+    // on ScrapedQuoteJson), so they get the same party-anchored read as the
+    // main interpreter loop below — see resolvePartyField's comment.
+    const value =
+      key === 'children' || key === 'infants'
+        ? resolvePartyField(rule, resolveCtx, spec.fields?.adults)
+        : resolveField(rule, resolveCtx);
     if (!isEmpty(value)) out[key] = coerce(key, value);
   }
   return out as unknown as ScrapedQuoteJson;
@@ -1485,7 +1661,14 @@ export function runExtractionSpec(
 
   const f: Record<string, string | number> = { ...(spec.constants ?? {}) };
   for (const [key, rule] of Object.entries(spec.fields ?? {})) {
-    const value = resolveField(rule, c);
+    // children/infants are read next to wherever `adults` was read, never
+    // independently — see resolvePartyField's comment for why (the Jet2
+    // room-capacity bug this exists to close). `adults` itself always goes
+    // through plain resolveField, unchanged.
+    const value =
+      key === 'children' || key === 'infants'
+        ? resolvePartyField(rule, c, spec.fields?.adults)
+        : resolveField(rule, c);
     // A rule that matched NOTHING must not wipe a constant of the same name.
     // The AI writes both — it is told to declare tour_operator/currency as
     // constants AND to try to extract every common field — so a spec routinely

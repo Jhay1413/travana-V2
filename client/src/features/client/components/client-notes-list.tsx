@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatNoteDate, parseTimestamp } from "@/lib/note-time";
 import type { TransactionNote } from "@/features/quote/types";
 import type { User as ApiUser } from "@/features/user/types";
+import type { HolidaySelection } from "@/features/client/types";
 
 /** Which kind of deal (transaction) a note belongs to. */
 export type DealKind = "enquiry" | "quote" | "booking";
@@ -25,7 +26,7 @@ export type DealKind = "enquiry" | "quote" | "booking";
 /** Everything a note row needs to render + open the deal it belongs to. */
 export interface DealLabelInfo {
   kind: DealKind;
-  /** The enquiry/quote/booking's own id — NOT the transaction id — used to deep-link via `?holiday=kind:id`. */
+  /** The enquiry/quote/booking's own id — NOT the transaction id — passed to onOpenDeal as `{ type: kind, id }`. */
   id: string;
   title: string;
 }
@@ -42,34 +43,41 @@ const DEAL_KIND_LABEL: Record<DealKind, string> = {
 /** Small pill naming the deal a note was written on — clickable when the deal is in the lookup. */
 function DealPill({
   dealInfo,
-  clientId,
-  navigate,
+  onOpenDeal,
   "data-testid": testId,
 }: {
   dealInfo: DealLabelInfo | null;
-  clientId: string;
-  navigate?: (to: string) => void;
+  onOpenDeal?: (selection: HolidaySelection) => void;
   "data-testid"?: string;
 }) {
   const text = dealInfo ? `${DEAL_KIND_LABEL[dealInfo.kind]}: ${dealInfo.title}` : "Deal";
-  const className =
-    "ml-2 inline-flex max-w-[160px] shrink-0 items-center truncate rounded-full bg-black/5 px-2 py-0.5 align-middle text-[10px] font-semibold text-black/60 dark:bg-white/10 dark:text-white/60";
-  if (dealInfo && navigate) {
+  const wrapperClassName =
+    "ml-2 inline-flex max-w-[160px] shrink-0 items-center align-middle rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-semibold text-black/60 dark:bg-white/10 dark:text-white/60";
+  // Truncation with an ellipsis needs to be on an inner block-level node with
+  // `min-w-0` — a flex item's default `min-width: auto` otherwise keeps it
+  // sized to its content, so `truncate` on the flex wrapper itself never
+  // actually clips anything.
+  const label = (
+    <span className="min-w-0 truncate" title={text}>
+      {text}
+    </span>
+  );
+  if (dealInfo && onOpenDeal) {
     return (
       <button
         type="button"
-        onClick={() => navigate(`/clients/${clientId}?holiday=${dealInfo.kind}:${dealInfo.id}`)}
+        onClick={() => onOpenDeal({ type: dealInfo.kind, id: dealInfo.id })}
         title={text}
-        className={`${className} transition hover:bg-black/10 dark:hover:bg-white/15`}
+        className={`${wrapperClassName} transition hover:bg-black/10 dark:hover:bg-white/15`}
         data-testid={testId}
       >
-        {text}
+        {label}
       </button>
     );
   }
   return (
-    <span title={text} className={className} data-testid={testId}>
-      {text}
+    <span title={text} className={wrapperClassName} data-testid={testId}>
+      {label}
     </span>
   );
 }
@@ -80,14 +88,14 @@ function ClientNoteRow({
   note,
   authorName,
   dealInfo,
-  navigate,
+  onOpenDeal,
 }: {
   clientId: string;
   note: TransactionNote;
   authorName: string;
   /** Resolved deal label when the note has a transaction_id; null falls back to a generic "Deal" pill. */
   dealInfo: DealLabelInfo | null;
-  navigate?: (to: string) => void;
+  onOpenDeal?: (selection: HolidaySelection) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -100,9 +108,12 @@ function ClientNoteRow({
       await updateMutation.mutateAsync({ id: note.id, content: html, transactionId: note.transaction_id });
       setIsEditing(false);
       toast({ title: "Note updated" });
-    } catch {
-      // Keep the user in edit mode with their text intact; the toast surfaces the failure.
+    } catch (err) {
+      // Keep the user in edit mode with their text intact: NoteEditor only
+      // clears the editor when the onSubmit promise RESOLVES, so re-throw
+      // after the toast rather than swallowing the failure here.
       toast({ title: "Failed to update note", variant: "destructive" });
+      throw err;
     }
   };
 
@@ -134,7 +145,7 @@ function ClientNoteRow({
             </span>
           )}
           {note.transaction_id && (
-            <DealPill dealInfo={dealInfo} clientId={clientId} navigate={navigate} data-testid={`client-index-note-deal-${note.id}`} />
+            <DealPill dealInfo={dealInfo} onOpenDeal={onOpenDeal} data-testid={`client-index-note-deal-${note.id}`} />
           )}
         </div>
         {!isEditing && (
@@ -218,14 +229,14 @@ export function ClientNotesList({
   clientId,
   users,
   dealsByTransactionId,
-  navigate,
+  onOpenDeal,
 }: {
   clientId: string;
   users: ApiUser[];
   /** transaction_id → deal label, built by the page from its already-loaded enquiries/quotes/bookings. */
   dealsByTransactionId?: DealLabelLookup;
-  /** Opens a deal's pill — same deep-link the page's other holiday links use (`?holiday=kind:id`). */
-  navigate?: (to: string) => void;
+  /** Opens a deal's pill in the detail layout — the same handler AllHolidaysPanel's onSelect uses (not a URL navigation: the page's `?holiday=` parsing only re-runs when clientId changes, so a same-page URL update alone wouldn't open anything). */
+  onOpenDeal?: (selection: HolidaySelection) => void;
 }) {
   const { data: notes, isLoading, isError, refetch } = useClientNotes(clientId, { includeDeals: true });
   const { toast } = useToast();
@@ -245,8 +256,12 @@ export function ClientNotesList({
     try {
       await createMutation.mutateAsync({ content: html });
       toast({ title: "Note added" });
-    } catch {
+    } catch (err) {
+      // Re-throw so NoteEditor keeps the typed content instead of clearing it
+      // (it only clears on a resolved promise) — the toast is the only thing
+      // the user sees, the rejection itself is swallowed by NoteEditor.
       toast({ title: "Failed to add note", variant: "destructive" });
+      throw err;
     }
   };
 
@@ -286,7 +301,7 @@ export function ClientNotesList({
                 note={note}
                 authorName={authorName}
                 dealInfo={dealInfo}
-                navigate={navigate}
+                onOpenDeal={onOpenDeal}
               />
             );
           })}
