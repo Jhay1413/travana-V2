@@ -321,7 +321,7 @@ function getSeasonIcon(month: string) {
   return <Wind className="h-3 w-3 text-emerald-400" />;
 }
 
-function getBarColor(temp: number) {
+export function getBarColor(temp: number) {
   if (temp >= 35) return "#ef4444";
   if (temp >= 30) return "#f97316";
   if (temp >= 25) return "#eab308";

@@ -659,6 +659,7 @@ export default function SocialPostsBoard() {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         socialPost
+        presentation="drawer"
         onSuccess={() => setCreateDialogOpen(false)}
       />
     </div>

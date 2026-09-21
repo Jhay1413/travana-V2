@@ -65,6 +65,7 @@ export function QuoteRHFForm({
   initialImageUrls = [],
   initialExtraAccomLabels = [],
   layout = "card",
+  socialPost = false,
 }: QuoteRHFFormProps) {
   const isDrawer = layout === "drawer";
   const form = useForm<QuoteFormValues>({
@@ -359,6 +360,32 @@ export function QuoteRHFForm({
                 onPageCaptureImport={handlePageCaptureImport}
                 pageCapturePending={pageCaptureImport.isPending}
               />
+
+              {/* ── IMPORT VALIDATION (errors/warnings from the last capture import) */}
+              {importValidation && (
+                <div className="mt-3">
+                  <ImportValidationPanel validation={importValidation} onDismiss={() => setImportValidation(null)} />
+                </div>
+              )}
+
+              {/* ── FIELD PICKS APPLIED — same feedback the card/dialog layout
+                   shows, so a drawer import doesn't silently drop it. */}
+              {importPicks && (
+                <div className="mt-3 space-y-2 rounded-xl border border-black/10 bg-white/70 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-black/70">Field picks applied to this supplier's spec</p>
+                    <button
+                      type="button"
+                      onClick={() => setImportPicks(null)}
+                      aria-label="Dismiss field-pick results"
+                      className="text-black/40 transition hover:text-black/70"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <SupplierScraperPicksResultView result={importPicks} />
+                </div>
+              )}
             </div>
             <QuoteDrawerOverview />
             <QuoteDrawerTravelSection showCruiseStay={isCruise} />
@@ -411,18 +438,20 @@ export function QuoteRHFForm({
                   submitLabel={submitLabel}
                   data-testid="drawer-footer"
                 >
-                  <FormField
-                    control={control}
-                    name="not_for_social"
-                    render={({ field: social }) => (
-                      <FormDrawerCheckbox
-                        label="Not for social"
-                        checked={!!social.value}
-                        onCheckedChange={social.onChange}
-                        data-testid="form-drawer-not-for-social"
-                      />
-                    )}
-                  />
+                  {!socialPost && (
+                    <FormField
+                      control={control}
+                      name="not_for_social"
+                      render={({ field: social }) => (
+                        <FormDrawerCheckbox
+                          label="Not for social"
+                          checked={!!social.value}
+                          onCheckedChange={social.onChange}
+                          data-testid="form-drawer-not-for-social"
+                        />
+                      )}
+                    />
+                  )}
                 </FormDrawerFooter>
               )}
             />
@@ -431,6 +460,7 @@ export function QuoteRHFForm({
           <>
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
         <QuoteImportRow
+          hideNotForSocial={socialPost}
           onJsonUpload={handleJsonUpload}
           onPageCaptureImport={handlePageCaptureImport}
           pageCapturePending={pageCaptureImport.isPending}

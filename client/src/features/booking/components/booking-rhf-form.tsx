@@ -4,7 +4,7 @@ import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import type { UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2 } from "lucide-react";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2, type LucideIcon } from "lucide-react";
 import { walletApi } from "@/features/wallet/api/wallet.api";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { QuoteImagesSection } from "@/features/quote/components/sections/QuoteImagesSection";
@@ -89,7 +89,7 @@ function SectionHeader({
   icon: Icon,
   title,
 }: {
-  icon: React.ElementType;
+  icon: LucideIcon;
   title: string;
 }) {
   return (

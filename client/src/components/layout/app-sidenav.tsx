@@ -9,9 +9,10 @@ import {
   PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useRoles } from "@/hooks/use-role";
+import { useRole, useRoles } from "@/hooks/use-role";
 import { useCurrentUser, useUnreadNotifications } from "@/hooks/queries";
-import { getNavForRoles, isNavItem, type NavBadgeKey, type NavItem, type NavSection } from "@/config/nav";
+import { getNavForRoles, NAV_BY_ROLE, isNavItem, type NavBadgeKey, type NavItem, type NavSection } from "@/config/nav";
+import { ADMIN_MENU_ROLES, useMenuMode } from "@/components/layout/menu-mode-context";
 import { useTicketsByUser, countMyActiveTickets } from "@/features/tickets";
 // Imported from the module rather than the feature barrel on purpose: the
 // barrel re-exports ConversationsInbox, and since the sidebar lives in the main
@@ -341,8 +342,20 @@ function SidenavInner({
   sticky?: boolean;
 }) {
   const { roles } = useRoles();
+  const { orgRole } = useRole();
+  const { mode } = useMenuMode();
   const [location] = useLocation();
-  const sections = getNavForRoles(roles);
+  const sections = useMemo(() => {
+    // The override only ever applies to admin-eligible users. The stored mode
+    // is per-browser, not per-user, so without this guard a stale value left
+    // by a previous session would hijack the next user's menu (e.g. a
+    // referral_agent getting AGENT_NAV instead of REFERRAL_NAV).
+    if (!ADMIN_MENU_ROLES.includes(orgRole)) return getNavForRoles(roles);
+    // Admin-eligible users default to the agent menu and opt into the admin one
+    // from the header dropdown, so mode === null is treated as "agent".
+    if (mode === "admin") return NAV_BY_ROLE[orgRole];
+    return NAV_BY_ROLE.agent;
+  }, [roles, mode, orgRole]);
   const sectionParent = useMemo(() => buildSectionParentMap(sections), [sections]);
   const [expandedSections, setExpandedSections] = useState<string[]>(() => {
     // Accordion: open only the branch containing the current route (the active
@@ -496,53 +509,54 @@ function SidenavInner({
                 count={badgeCountFor(item, badgeCounts)}
               />
             ))
-          : sections.map((section) => (
-              <SectionBlock
-                key={section.id}
-                section={section}
-                currentPath={currentPath}
-                currentSearch={currentSearch}
-                collapsed={false}
-                expandedIds={expandedSections}
-                onToggle={toggleSection}
-                badgeCounts={badgeCounts}
-              />
-            ))}
-      </nav>
+          : (
+            <>
+              {sections.map((section) => (
+                <SectionBlock
+                  key={section.id}
+                  section={section}
+                  currentPath={currentPath}
+                  currentSearch={currentSearch}
+                  collapsed={false}
+                  expandedIds={expandedSections}
+                  onToggle={toggleSection}
+                  badgeCounts={badgeCounts}
+                />
+              ))}
 
-      {/* Sits below the scrolling nav, so on a tall screen it rests at the
-          bottom of the panel and stays reachable without scrolling. */}
-      {!collapsed && (
-        <>
-          <div className="my-3 h-px shrink-0 bg-white/10" />
-          <Link
-            href="/hub"
-            className="flex shrink-0 items-center justify-between rounded-xl px-3 py-2.5 text-left transition hover:bg-white/10 no-underline"
-            data-testid="link-hub"
-          >
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Blocks className="h-4.5 w-4.5 text-[#8FA0B5]" strokeWidth={1.75} />
-                {hubUnreadCount > 0 && (
-                  <span
-                    className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white shadow-sm"
-                    data-testid="badge-hub-unread"
-                  >
-                    {hubUnreadCount > 99 ? "99+" : hubUnreadCount}
-                  </span>
-                )}
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-white/90" data-testid="text-support-title">TheHub</div>
-                <div className="text-xs text-white/50" data-testid="text-support-sub">
-                  Profile, News & Training
+              {/* Last entry in the nav itself, so it sits directly under the
+                  final menu item for both the agent and admin menus rather
+                  than floating at the bottom of the panel. */}
+              <div className="my-3 h-px shrink-0 bg-white/10" />
+              <Link
+                href="/hub"
+                className="flex shrink-0 items-center justify-between rounded-xl px-3 py-2.5 text-left transition hover:bg-white/10 no-underline"
+                data-testid="link-hub"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Blocks className="h-4.5 w-4.5 text-[#8FA0B5]" strokeWidth={1.75} />
+                    {hubUnreadCount > 0 && (
+                      <span
+                        className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white shadow-sm"
+                        data-testid="badge-hub-unread"
+                      >
+                        {hubUnreadCount > 99 ? "99+" : hubUnreadCount}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-white/90" data-testid="text-support-title">TheHub</div>
+                    <div className="text-xs text-white/50" data-testid="text-support-sub">
+                      Profile, News &amp; Training
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <ChevronRight className="h-4 w-4 text-white/40" />
-          </Link>
-        </>
-      )}
+                <ChevronRight className="h-4 w-4 text-white/40" />
+              </Link>
+            </>
+          )}
+      </nav>
 
       {onToggleCollapsed && (
         <div className={cn("shrink-0 pt-2", collapsed ? "" : "flex justify-start")}>

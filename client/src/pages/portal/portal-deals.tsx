@@ -7,6 +7,7 @@ import {
   usePortalDeals,
   usePortalDealFilters,
   usePortalForYouDeals,
+  usePortalHasTags,
   useSubmitInterest,
   type PortalDeal,
 } from "@/hooks/use-portal-api";
@@ -143,7 +144,21 @@ export default function PortalDealsPage() {
   const [selectedTag, setSelectedTag] = useState<string | undefined>();
   const [selectedCountry, setSelectedCountry] = useState<string | undefined>();
   const [tab, setTab] = useState<DealsTab>(initialTab);
-  const { data: apiDeals, isLoading, refetch: refetchDeals } = usePortalDeals(selectedCountry, selectedTag);
+  // "Latest Deals" (this tab, the browse page's default list) is filtered to the
+  // client's Travel Interests by default, server-side — removable via a chip so
+  // the client can still see everything.
+  const [matchInterests, setMatchInterests] = useState(true);
+  const { data: hasTagsData, isLoading: hasTagsLoading } = usePortalHasTags();
+  const hasInterests = hasTagsData?.hasTags ?? false;
+  const {
+    data: apiDeals,
+    isLoading,
+    refetch: refetchDeals,
+    // Hold the deals fetch off until we know whether the client has saved
+    // interests — otherwise it fires once unfiltered (default hasInterests to
+    // false while hasTagsData is loading), then again filtered once hasTags
+    // resolves, flashing the unfiltered list first.
+  } = usePortalDeals(selectedCountry, selectedTag, matchInterests && hasInterests, !hasTagsLoading);
   const {
     data: apiForYouDeals,
     isLoading: forYouLoading,
@@ -157,7 +172,8 @@ export default function PortalDealsPage() {
   // Both lists come back already filtered to deals still live on the portal, and
   // unlike the home teasers they aren't capped — this is the "view all" surface.
   const deals = (isForYou ? apiForYouDeals : apiDeals) ?? [];
-  const loading = isForYou ? forYouLoading : isLoading;
+  const loading = isForYou ? forYouLoading : (hasTagsLoading || isLoading);
+  const isFilteringByInterests = !isForYou && hasInterests && matchInterests;
 
   const markInterested = (dealId: string) => {
     if (interestedDeals.has(dealId)) return;
@@ -165,6 +181,19 @@ export default function PortalDealsPage() {
       onSuccess: () => setInterestedDeals((prev) => new Set(prev).add(dealId)),
     });
   };
+
+  // An explicit tag chip is a request for that exact tag — AND-ing it with the
+  // interest filter can silently zero out results for a tag outside the
+  // client's saved interests (the interest filter already narrowed to their
+  // own tags). Selecting a tag turns the interest filter off; clearing the tag
+  // restores the interests-first default.
+  function selectTag(tag: string) {
+    setSelectedTag((prev) => {
+      const next = prev === tag ? undefined : tag;
+      setMatchInterests(next === undefined);
+      return next;
+    });
+  }
 
   const popularTags = filters?.popularTags ?? [];
   const countries = filters?.countries ?? [];
@@ -239,7 +268,7 @@ export default function PortalDealsPage() {
               {popularTags.map(({ tag }) => (
                 <button
                   key={tag}
-                  onClick={() => setSelectedTag(selectedTag === tag ? undefined : tag)}
+                  onClick={() => selectTag(tag)}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                     selectedTag === tag
                       ? "bg-amber-500 text-white"
@@ -280,12 +309,23 @@ export default function PortalDealsPage() {
         )}
 
         {/* Active filters summary */}
-        {!isForYou && (selectedTag || selectedCountry) && (
+        {!isForYou && (isFilteringByInterests || selectedTag || selectedCountry) && (
           <div className="flex items-center gap-2 mb-4 flex-wrap">
+            {isFilteringByInterests && (
+              <span
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-500/20 text-purple-300 text-xs font-medium"
+                data-testid="chip-matching-interests"
+              >
+                <Sparkles className="w-3 h-3" /> Matching your interests
+                <button onClick={() => setMatchInterests(false)} data-testid="button-clear-matching-interests">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
             {selectedTag && (
               <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-medium">
                 #{selectedTag}
-                <button onClick={() => setSelectedTag(undefined)}><X className="w-3 h-3" /></button>
+                <button onClick={() => selectTag(selectedTag)}><X className="w-3 h-3" /></button>
               </span>
             )}
             {selectedCountry && (
@@ -294,7 +334,10 @@ export default function PortalDealsPage() {
                 <button onClick={() => setSelectedCountry(undefined)}><X className="w-3 h-3" /></button>
               </span>
             )}
-            <button onClick={() => { setSelectedTag(undefined); setSelectedCountry(undefined); }} className="text-white/30 text-xs hover:text-white/60">
+            <button
+              onClick={() => { setSelectedTag(undefined); setSelectedCountry(undefined); setMatchInterests(true); }}
+              className="text-white/30 text-xs hover:text-white/60"
+            >
               Clear all
             </button>
           </div>
@@ -322,6 +365,27 @@ export default function PortalDealsPage() {
                 >
                   Choose your interests
                 </button>
+              </>
+            ) : isFilteringByInterests ? (
+              <>
+                <p className="text-white/60 font-medium mb-1" data-testid="text-empty-deals">No deals match your travel interests yet</p>
+                <p className="text-white/40 text-sm mb-3">Try browsing all deals, or update what you're into</p>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setMatchInterests(false)}
+                    className="px-4 py-2 rounded-2xl text-sm font-semibold bg-white/[0.08] text-white/70 hover:bg-white/[0.14] transition-all"
+                    data-testid="button-empty-latest-browse-all"
+                  >
+                    Browse all deals
+                  </button>
+                  <button
+                    onClick={() => setLocation("/portal/tags")}
+                    className="px-4 py-2 rounded-2xl text-sm font-semibold bg-gradient-to-r from-purple-500/80 to-pink-500/80 text-white hover:from-purple-500 hover:to-pink-500 transition-all"
+                    data-testid="button-empty-latest-edit-interests"
+                  >
+                    Edit interests
+                  </button>
+                </div>
               </>
             ) : (
               <>

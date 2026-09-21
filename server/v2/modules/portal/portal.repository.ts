@@ -35,6 +35,17 @@ const portalDealActiveWhere = () =>
     eq(quote.isFreeQuote, true),
   );
 
+/** EXISTS filter: true when the quote has at least one of the given tag ids.
+ *  Shared by findDeals's opt-in interest filter and findForYouDeals's mandatory
+ *  one, so their tag-match semantics can't drift apart. Caller must ensure
+ *  tagIds is non-empty. */
+const quoteHasAnyTag = (tagIds: string[]) =>
+  exists(
+    db.select({ one: sql`1` })
+      .from(quoteTags)
+      .where(and(eq(quoteTags.quoteId, quote.id), inArray(quoteTags.tagId, tagIds))),
+  );
+
 export interface PortalDealRow {
   id: string;
   token: string | null;
@@ -387,11 +398,7 @@ export const portalRepository = {
       eq(quote.is_active, true),
       isNotNull(quote.quote_token),
       eq(quote.isFreeQuote, true),
-      exists(
-        db.select({ one: sql`1` })
-          .from(quoteTags)
-          .where(and(eq(quoteTags.quoteId, quote.id), inArray(quoteTags.tagId, clientTagIds))),
-      ),
+      quoteHasAnyTag(clientTagIds),
     ];
     // Same recency window as findDeals: a deal that has aged out of the portal is
     // expired everywhere, including a client's personalised list.
@@ -425,7 +432,17 @@ export const portalRepository = {
       .limit(limit);
   },
 
-  async findDeals(opts: { country?: string; tag?: string; limit: number; recentDays?: number }): Promise<PortalDealRow[]> {
+  async findDeals(opts: {
+    country?: string;
+    tag?: string;
+    limit: number;
+    recentDays?: number;
+    /** Restrict to deals sharing at least one tag with these tag ids — the portal
+     *  client's saved Travel Interests (client_tags.tag_id, same `tags` table as
+     *  quote_tags.tag_id, so this is an exact id match, no name mapping needed).
+     *  Pass undefined/empty to skip the filter (e.g. client has no interests). */
+    clientTagIds?: string[];
+  }): Promise<PortalDealRow[]> {
     const conds: SQL[] = [
       eq(quote.is_active, true),
       isNotNull(quote.quote_token),
@@ -449,6 +466,11 @@ export const portalRepository = {
             .where(and(eq(quoteTags.quoteId, quote.id), ilike(tags.name, opts.tag))),
         ),
       );
+    }
+    if (opts.clientTagIds && opts.clientTagIds.length > 0) {
+      // EXISTS (not a join) so a deal matching several of the client's interests
+      // still returns once — no DISTINCT needed.
+      conds.push(quoteHasAnyTag(opts.clientTagIds));
     }
 
     return db

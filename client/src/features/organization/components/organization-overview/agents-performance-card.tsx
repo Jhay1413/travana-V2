@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Users,
   UtensilsCrossed,
+  type LucideIcon,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -33,7 +34,7 @@ type TabKey =
   | "revenue-analytics"
   | "tour-operators";
 
-const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
+const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "agent-performance", label: "Agents", icon: Users },
   { key: "revenue-analytics", label: "Conversion Stats", icon: BarChart3 },
   { key: "tour-operators", label: "Tour Operators", icon: Plane },

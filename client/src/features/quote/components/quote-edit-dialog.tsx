@@ -638,7 +638,7 @@ export function QuoteEditDialog({
       <FormDrawer
         open={open}
         onOpenChange={onOpenChange}
-        title="Create / Edit Quote"
+        title="Edit Quote"
         description={description}
         data-testid="quote-edit-drawer"
       >

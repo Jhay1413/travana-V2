@@ -99,7 +99,8 @@ import {
   useUpdateConversation,
 } from "../api/use-conversations-mutations";
 import { useCurrentUser, useUsers, useClientNotes, useTransactions } from "@/hooks/queries";
-import type { Quote, Transaction } from "@/features/quote/types";
+import type { EnquiryTable, Quote, Transaction } from "@/features/quote/types";
+import { isQuoteExpired, isEnquiryExpired } from "@/lib/deal-expiry";
 import { useMessages, useSendMessage, useCreateInternalNote, useUploadAttachment } from "../api/use-messages";
 import { MAX_ATTACHMENT_BYTES, messageTypeForContentType } from "../api/messages.api";
 import { useConversationsRealtimeState } from "./conversations-realtime-provider";
@@ -628,14 +629,142 @@ function liveQuoteReturnDate(travelDate: string | null | undefined, nights: numb
 }
 
 // Picks each transaction's primary quote (the non-copy one, falling back to the
-// first) and keeps only those still "live" (not lost/archived/won), newest first.
+// first) and keeps only those still "live" (not lost/archived/won, and not
+// expired — expired quotes surface in the Expired section instead), newest first.
 function selectLiveQuotes(transactions: Transaction[] | undefined): LiveQuoteRecord[] {
   const primaries = (transactions ?? [])
     .map((t) => (t.quotes?.find((q) => !q.isQuoteCopy) || t.quotes?.[0]) as LiveQuoteRecord | undefined)
-    .filter((q): q is LiveQuoteRecord => !!q && isLiveQuoteStatus(q.quote_status));
+    .filter((q): q is LiveQuoteRecord => !!q && isLiveQuoteStatus(q.quote_status) && !isQuoteExpired(q));
   return [...primaries]
     .sort((a, b) => new Date(b.date_created || 0).getTime() - new Date(a.date_created || 0).getTime())
     .slice(0, 5);
+}
+
+// ─── Expired ────────────────────────────────────────────────────────────────
+
+interface ExpiredDealRow {
+  id: string;
+  kind: "quote" | "enquiry";
+  title: string;
+  price: number;
+  operatorName: string | null;
+  operatorLogoUrl: string | null;
+  destinationName: string | null;
+  dateLine: string | null;
+  createdAt: string | null;
+}
+
+// Each transaction's primary quote, when expired (and not won — a won quote is
+// converted, not expired), plus its enquiry when expired — newest first.
+function selectExpiredDeals(transactions: Transaction[] | undefined): ExpiredDealRow[] {
+  const rows: ExpiredDealRow[] = [];
+
+  for (const t of transactions ?? []) {
+    const q = (t.quotes?.find((quote) => !quote.isQuoteCopy) || t.quotes?.[0]) as LiveQuoteRecord | undefined;
+    if (q && isQuoteExpired(q) && q.quote_status?.toLowerCase() !== "won") {
+      const departureDate = liveQuoteFormatDate(q.travel_date);
+      const returnDate = liveQuoteReturnDate(q.travel_date, q.num_of_nights);
+      const dateRange = [departureDate, returnDate].filter(Boolean).join(" → ");
+      const code = q.departing_airport_code || q.departing_airport_name || null;
+      rows.push({
+        id: q.id,
+        kind: "quote",
+        title: q.title || "Untitled quote",
+        price: parseFloat(q.sales_price || "0") || 0,
+        operatorName: q.main_tour_operator_name ?? null,
+        operatorLogoUrl: q.main_tour_operator_logo_url ?? null,
+        destinationName: q.destination_name ?? null,
+        dateLine: [code, dateRange || null].filter(Boolean).join(" - ") || null,
+        createdAt: q.date_created,
+      });
+    }
+
+    const e = t.enquiry as EnquiryTable | null | undefined;
+    if (e && isEnquiryExpired(e)) {
+      const departureDate = liveQuoteFormatDate(e.travel_date);
+      const returnDate = liveQuoteReturnDate(e.travel_date, e.no_of_nights);
+      const dateRange = [departureDate, returnDate].filter(Boolean).join(" → ");
+      rows.push({
+        id: e.id,
+        kind: "enquiry",
+        title: e.title || "Untitled enquiry",
+        price: 0,
+        operatorName: null,
+        operatorLogoUrl: null,
+        destinationName: e.destinations?.[0]?.name ?? null,
+        dateLine: dateRange || null,
+        createdAt: e.date_created,
+      });
+    }
+  }
+
+  return rows
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .slice(0, 5);
+}
+
+interface ClientDealRowData {
+  id: string;
+  title: string;
+  price: number;
+  operatorName: string | null;
+  operatorLogoUrl: string | null;
+  destinationName: string | null;
+  dateLine: string | null;
+}
+
+// Shared row markup for both the Live Quotes and Expired lists — only the
+// title colour (red when expired) and the click target differ between them.
+function ClientDealRow({
+  row,
+  expired,
+  onOpen,
+  testId,
+}: {
+  row: ClientDealRowData;
+  expired: boolean;
+  onOpen: () => void;
+  testId: string;
+}) {
+  return (
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="cursor-pointer rounded-lg p-3 transition hover:bg-[#e9f8ff] dark:hover:bg-white/[0.05]"
+      data-testid={testId}
+    >
+      <div className="flex items-start gap-3">
+        <LiveQuoteOperatorMark name={row.operatorName} logoUrl={row.operatorLogoUrl} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className={cn("truncate text-sm font-semibold 3xl:text-base", expired && "text-red-500")}>{row.title}</span>
+            {row.price > 0 && (
+              <span className="shrink-0 text-sm font-semibold text-black/60 dark:text-white/60">
+                {liveQuoteCurrency.format(row.price)}
+              </span>
+            )}
+          </div>
+          {row.destinationName && (
+            <div className="mt-0.5 truncate text-[13px] text-[#a195a5] dark:text-white/50">
+              {row.destinationName}
+            </div>
+          )}
+          {row.dateLine && (
+            <div className="mt-0.5 truncate text-xs text-[#a195a5] dark:text-white/50">
+              {row.dateLine}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ContactPanel({ conversation }: { conversation: Conversation }) {
@@ -645,6 +774,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   const [notesOpen, setNotesOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [liveQuotesOpen, setLiveQuotesOpen] = useState(true);
+  const [expiredOpen, setExpiredOpen] = useState(false);
 
   // Shares the cached contact-link query with ClientLinkSection (keyed by
   // contact id). When linked, the panel shows the CRM client's record.
@@ -657,6 +787,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
     { enabled: !!client?.id },
   );
   const liveQuotes = useMemo(() => (client ? selectLiveQuotes(transactions) : []), [client, transactions]);
+  const expiredDeals = useMemo(() => (client ? selectExpiredDeals(transactions) : []), [client, transactions]);
   // Lifetime counts for the History tiles — same shapes the client profile page
   // derives from this endpoint (enquiries/quotes/bookings across transactions).
   const historyCounts = useMemo(() => {
@@ -777,47 +908,55 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
                     const dateRange = [departureDate, returnDate].filter(Boolean).join(" → ");
                     const departureLine = [q.departing_airport_code || q.departing_airport_name || null, dateRange || null].filter(Boolean).join(" - ");
                     return (
-                      <div
+                      <ClientDealRow
                         key={q.id}
-                        role="link"
-                        tabIndex={0}
-                        onClick={() => navigate(`/clients/${client.id}/quotes/${q.id}`)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            navigate(`/clients/${client.id}/quotes/${q.id}`);
-                          }
+                        testId={`client-live-quote-${q.id}`}
+                        expired={false}
+                        onOpen={() => navigate(`/clients/${client.id}/quotes/${q.id}`)}
+                        row={{
+                          id: q.id,
+                          title: q.title || "Untitled quote",
+                          price,
+                          operatorName: q.main_tour_operator_name ?? null,
+                          operatorLogoUrl: q.main_tour_operator_logo_url ?? null,
+                          destinationName: q.destination_name ?? null,
+                          dateLine: departureLine || null,
                         }}
-                        className="cursor-pointer rounded-lg p-3 transition hover:bg-[#e9f8ff] dark:hover:bg-white/[0.05]"
-                        data-testid={`client-live-quote-${q.id}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <LiveQuoteOperatorMark name={q.main_tour_operator_name ?? null} logoUrl={q.main_tour_operator_logo_url ?? null} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="truncate text-sm font-semibold 3xl:text-base">{q.title || "Untitled quote"}</span>
-                              {price > 0 && (
-                                <span className="shrink-0 text-sm font-semibold text-black/60 dark:text-white/60">
-                                  {liveQuoteCurrency.format(price)}
-                                </span>
-                              )}
-                            </div>
-                            {q.destination_name && (
-                              <div className="mt-0.5 truncate text-[13px] text-[#a195a5] dark:text-white/50">
-                                {q.destination_name}
-                              </div>
-                            )}
-                            {departureLine && (
-                              <div className="mt-0.5 truncate text-xs text-[#a195a5] dark:text-white/50">
-                                {departureLine}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      />
                     );
                   })
                 )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {client && expiredDeals.length > 0 && (
+          <div className="border-t border-black/10 dark:border-white/10" data-testid="client-expired-deals">
+            <button
+              type="button"
+              onClick={() => setExpiredOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-5 text-left 3xl:px-6"
+              data-testid="client-expired-deals-toggle"
+            >
+              <span className="text-sm font-semibold">Expired</span>
+              <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", expiredOpen && "rotate-90")} />
+            </button>
+            {expiredOpen && (
+              <div className="space-y-1 px-4 pb-5 3xl:px-6">
+                {expiredDeals.map((row) => (
+                  <ClientDealRow
+                    key={row.id}
+                    testId={`client-expired-deal-${row.id}`}
+                    expired
+                    onOpen={() =>
+                      row.kind === "quote"
+                        ? navigate(`/clients/${client.id}/quotes/${row.id}`)
+                        : navigate(`/clients/${client.id}?holiday=enquiry:${row.id}`)
+                    }
+                    row={row}
+                  />
+                ))}
               </div>
             )}
           </div>

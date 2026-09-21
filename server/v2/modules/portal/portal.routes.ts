@@ -7,12 +7,15 @@ import { tagService } from '../tag/tag.service';
 import { pushNotificationService } from '../notification/push-notification.service';
 import { quotePublicRepository } from '../quote/quote-public.repository';
 import { portalRepository } from './portal.repository';
+import { getPortalDeals } from './portal.service';
 import { neonClientRepository } from '../neon-client/neon-client.repository';
 import { fireAutoTriggerForClient } from '../sms/sms.service';
 import { bridgePortalMessageToChat } from '../../../services/portal-chat-bridge';
 import { getUserId } from '../../utils/get-user-id';
 import { signPortalToken, verifyPortalToken, DEFAULT_PORTAL_PIN } from './portal-auth';
 import { portalLoginTokenRepository } from './portal-login-token.repository';
+import { validate } from '../../middlewares/validation.middleware';
+import { listPortalDealsValidator } from './portal.validator';
 import bcrypt from 'bcryptjs';
 
 const portalRouter = Router();
@@ -311,7 +314,7 @@ portalRouter.get('/deals/for-you', portalAuth, async (req: Request, res: Respons
   }
 });
 
-portalRouter.get('/deals', async (req: Request, res: Response) => {
+portalRouter.get('/deals', validate(listPortalDealsValidator), async (req: Request, res: Response) => {
   try {
     const filterCountry = ((req.query.country as string) || '').trim();
     const filterTag = ((req.query.tag as string) || '').trim();
@@ -320,15 +323,21 @@ portalRouter.get('/deals', async (req: Request, res: Response) => {
     // show an expired deal; omitting it still returns everything, for any caller
     // that genuinely wants the full history.
     const recentOnly = ((req.query.recent as string) || '') === '1';
+    // ?interests=1 restricts Latest Deals to deals sharing at least one tag with
+    // the logged-in client's saved Travel Interests. Silently ignored (no
+    // filter) for unauthenticated callers or clients with no saved interests,
+    // so the section never blanks out for a brand-new client.
+    const matchInterests = ((req.query.interests as string) || '') === '1';
 
-    const results = await portalRepository.findDeals({
+    const results = await getPortalDeals({
       country: filterCountry || undefined,
       tag: filterTag || undefined,
-      limit: 50,
       recentDays: recentOnly ? PORTAL_DEAL_WINDOW_DAYS : undefined,
+      matchInterests,
+      authorizationHeader: req.headers.authorization,
     });
     res.json(await enrichDealRows(results));
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error fetching portal deals:', err);
     res.status(500).json({ error: 'Failed to load deals' });
   }

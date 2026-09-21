@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { BadgePoundSterling, CalendarCheck, Target } from "lucide-react";
+import { BadgePoundSterling, CalendarCheck, Target, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { currency } from "./helpers";
@@ -13,7 +13,7 @@ function StatCard({
   testId,
 }: {
   label: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   iconClass: string;
   children: React.ReactNode;
   testId: string;

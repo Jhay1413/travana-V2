@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronRight, CircleStar, Landmark, SquarePlus } from "lucide-react";
+import { ChevronRight, CircleStar, Landmark, SquarePlus, type LucideIcon } from "lucide-react";
 import { usePipelineColumn } from "@/hooks/queries";
 import type { Transaction } from "@/features/quote/types";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { DashboardCard, InitialsAvatar, timeAgo } from "./dashboard-ui";
 
 type Stage = "in_play" | "quote" | "enquiry";
 
-const STAGE_BADGE: Record<Stage, { label: string; className: string; icon: React.ElementType }> = {
+const STAGE_BADGE: Record<Stage, { label: string; className: string; icon: LucideIcon }> = {
   in_play: {
     label: "In-Play",
     className: "bg-[#fe9a00] text-white",

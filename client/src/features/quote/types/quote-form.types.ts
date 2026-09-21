@@ -322,6 +322,12 @@ export interface QuoteRHFFormProps {
   initialImageUrls?: string[];
   initialExtraAccomLabels?: string[];
   layout?: FormLayout;
+  /**
+   * Set when this form creates a social post (`QuoteCreateDialog`'s
+   * `socialPost` mode). Hides "Not For Social" — checking it there makes
+   * `createSocialQuote` reject the submission (quote.service.ts).
+   */
+  socialPost?: boolean;
 }
 
 export interface QuoteEditDialogProps {

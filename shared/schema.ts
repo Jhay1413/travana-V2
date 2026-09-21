@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, pgEnum, text, varchar, integer, bigint, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, uniqueIndex, vector, check, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, bigint, decimal, numeric, doublePrecision, timestamp, boolean, index, jsonb, uuid, date, unique, uniqueIndex, vector, check, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -2361,10 +2361,17 @@ export const destinationGuruTable = pgTable("destination_guru", {
   country: text().notNull(),
   data: jsonb().notNull(),
   createdBy: text("created_by"),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  // 'ai' | 'backfill' | 'manual' | null — how the coordinates were obtained.
+  coordinatesSource: text("coordinates_source"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
-  unique("destination_guru_destination_unique").on(table.destination)
+  unique("destination_guru_destination_unique").on(table.destination),
+  check("destination_guru_lat_range", sql`${table.latitude} BETWEEN -90 AND 90`),
+  check("destination_guru_lng_range", sql`${table.longitude} BETWEEN -180 AND 180`),
+  check("destination_guru_coords_pair", sql`(${table.latitude} IS NULL) = (${table.longitude} IS NULL)`),
 ]);
 
 export const insertDestinationGuruSchema = createInsertSchema(destinationGuruTable).omit({ id: true, createdAt: true, updatedAt: true });

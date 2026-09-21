@@ -11,6 +11,7 @@ import { useRole } from "@/hooks/use-role";
 import { BrandingApplier } from "@/components/branding-applier";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RoleRoute } from "@/components/role-route";
+import { ADMIN_MENU_ROLES, MenuModeProvider, useMenuMode } from "@/components/layout/menu-mode-context";
 // EmailInbox lives in components/ (not pages/) — kept as a static import.
 import EmailInbox from "@/features/email/components/email-inbox";
 // PortalPinGate is a named export used as a layout wrapper — kept static.
@@ -115,17 +116,22 @@ function LoadingScreen() {
 
 function AuthenticatedRouter() {
   const { orgRole } = useRole();
+  const { mode } = useMenuMode();
   const [location] = useLocation();
+  // Admin-eligible users default to the agent menu (see menu-mode-context), so
+  // "/" lands them on the agent dashboard unless they've switched to admin —
+  // otherwise they'd land on the agency dashboard with an agent sidebar.
+  const isAdminMenuActive = ADMIN_MENU_ROLES.includes(orgRole) && mode === "admin";
   const homePath =
     orgRole === "referral_agent"
       ? "/referral-hub"
-      : orgRole === "platform_admin"
-        ? "/platform-admin"
-        : orgRole === "org_admin"
-          ? "/agency/overview"
-          : orgRole === "branch_manager"
-            ? "/branch-overview"
-            : "/agent-overview";
+      : isAdminMenuActive
+        ? orgRole === "platform_admin"
+          ? "/platform-admin"
+          : "/agency/overview"
+        : orgRole === "branch_manager"
+          ? "/branch-overview"
+          : "/agent-overview";
 
   // TheHUB ships its own full-page shell (HubShell) and must NOT inherit the CRM
   // AppLayout chrome. Render it standalone — still auth-gated (we're inside
@@ -325,9 +331,11 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <AuthSync />
-        <Suspense fallback={<LoadingScreen />}>
-          <AppRouter />
-        </Suspense>
+        <MenuModeProvider>
+          <Suspense fallback={<LoadingScreen />}>
+            <AppRouter />
+          </Suspense>
+        </MenuModeProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

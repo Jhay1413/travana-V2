@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { BarChart3, ChevronLeft, FileText, Percent, Receipt, Wallet } from "lucide-react";
+import { BarChart3, ChevronLeft, FileText, Percent, Receipt, Wallet, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -45,7 +45,7 @@ function MiniStat({
 }: {
   label: string;
   value: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   color: string;
 }) {
   return (

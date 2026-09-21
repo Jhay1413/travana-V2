@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { isQuoteExpired, isEnquiryExpired, isBookingExpired } from "@/lib/deal-expiry";
 import type { EnquiryTable, Quote } from "@/features/quote/types";
 import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
 import { isPrimaryQuote } from "@/features/client/components/client-types";
@@ -46,12 +47,6 @@ function netPrice(sales: string | null | undefined, discounts: string | null | u
   return parseFloat(sales || "0") - parseFloat(discounts || "0") + parseFloat(serviceCharge || "0");
 }
 
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function formatShortDate(value: string | null | undefined): string | null {
   if (!value) return null;
   const d = new Date(value);
@@ -76,31 +71,6 @@ function buildDateLine(code: string | null, travelDate: string | null | undefine
   const dateRange = [departureDate, returnDate].filter(Boolean).join(" → ");
   const line = [code, dateRange || null].filter(Boolean).join(" - ");
   return line || null;
-}
-
-// ─── Active / expired classification ───────────────────────────────────────
-
-const QUOTE_INACTIVE_STATUSES = new Set(["lost", "archived"]);
-
-function isQuoteExpired(q: QuoteRow): boolean {
-  const statusInactive = !!q.quote_status && QUOTE_INACTIVE_STATUSES.has(q.quote_status.toLowerCase());
-  const dateExpired = !!q.date_expiry && new Date(q.date_expiry).getTime() < startOfToday().getTime();
-  return statusInactive || dateExpired;
-}
-
-const ENQUIRY_INACTIVE_STATUSES = new Set(["lost", "expired", "inactive", "converted", "closed"]);
-
-function isEnquiryExpired(e: EnquiryTable): boolean {
-  const statusInactive = !!e.status && ENQUIRY_INACTIVE_STATUSES.has(e.status.toLowerCase());
-  const dateExpired = !!e.date_expiry && new Date(e.date_expiry).getTime() < startOfToday().getTime();
-  return statusInactive || dateExpired;
-}
-
-function isBookingExpired(b: HolidayBooking): boolean {
-  if (!b.travel_date) return false;
-  const d = new Date(b.travel_date);
-  if (isNaN(d.getTime())) return false;
-  return d.getTime() < startOfToday().getTime();
 }
 
 // ─── Row model ──────────────────────────────────────────────────────────────

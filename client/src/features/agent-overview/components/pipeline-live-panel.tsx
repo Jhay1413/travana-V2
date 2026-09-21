@@ -253,7 +253,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
         <div className="text-sm font-semibold">Pipeline Live!</div>
         <Select value={view} onValueChange={(v) => handleViewChange(v as LiveView)}>
           <SelectTrigger
-            className="h-7 w-[136px] rounded-lg border-black/10 bg-black/5 px-2 text-xs dark:border-white/10 dark:bg-white/5"
+            className="h-7 w-[136px] rounded-[6px] border-black/10 bg-black/5 px-2 text-xs dark:border-white/10 dark:bg-white/5"
             data-testid="select-pipeline-live-view"
           >
             <SelectValue />
