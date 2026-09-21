@@ -293,7 +293,8 @@ export default function QuotePage() {
                               <QuoteExpiryPill
                                 dateExpiry={(quoteData as any)?.date_expiry}
                                 dateCreated={(quoteData as any)?.date_created}
-                                onUpdateExpiry={openExpiryDialog}
+                                isLost={quote.status === "lost"}
+                                onUpdateExpiry={() => openExpiryDialog((quoteData as any)?.date_expiry)}
                               />
                             </div>
                           </div>

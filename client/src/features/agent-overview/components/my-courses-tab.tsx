@@ -9,6 +9,7 @@ import {
   GraduationCap,
   PlayCircle,
   Trophy,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -59,7 +60,7 @@ function StatPill({
   value,
   tone,
 }: {
-  icon: React.ElementType;
+  icon: LucideIcon;
   label: string;
   value: number | string;
   tone: "blue" | "amber" | "emerald";

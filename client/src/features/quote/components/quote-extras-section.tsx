@@ -12,6 +12,7 @@ import {
   X,
   Plus,
   PackagePlus,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,7 @@ import {
 
 type ExtraType = "transfer" | "carHire" | "attractionTicket" | "loungePass" | "airportParking" | "extraAccommodation";
 
-const EXTRA_OPTIONS: { type: ExtraType; label: string; icon: React.ElementType; color: string }[] = [
+const EXTRA_OPTIONS: { type: ExtraType; label: string; icon: LucideIcon; color: string }[] = [
   { type: "transfer", label: "Transfer", icon: ArrowLeftRight, color: "text-sky-600" },
   { type: "carHire", label: "Car Hire", icon: Car, color: "text-amber-600" },
   { type: "attractionTicket", label: "Attraction Ticket", icon: Ticket, color: "text-purple-600" },
@@ -52,7 +53,7 @@ const EXTRA_OPTIONS: { type: ExtraType; label: string; icon: React.ElementType; 
 
 // ─── Section Header ───────────────────────────────────────────────────────────
 
-function SectionHeader({ icon: Icon, title, className = "" }: { icon: React.ElementType; title: string; className?: string }) {
+function SectionHeader({ icon: Icon, title, className = "" }: { icon: LucideIcon; title: string; className?: string }) {
   return (
     <div className={`flex items-center gap-2 text-sm font-semibold ${className}`}>
       <Icon className="h-4 w-4" />
@@ -64,7 +65,7 @@ function SectionHeader({ icon: Icon, title, className = "" }: { icon: React.Elem
 // ─── Extra Card Wrapper ───────────────────────────────────────────────────────
 
 function ExtraCard({ icon: Icon, title, iconColor, onRemove, children }: {
-  icon: React.ElementType;
+  icon: LucideIcon;
   title: string;
   iconColor: string;
   onRemove: () => void;

@@ -1,6 +1,7 @@
 import { notificationRepository } from '../notification/notification.repository';
 import { pushNotificationService } from '../notification/push-notification.service';
-import { portalRepository } from './portal.repository';
+import { portalRepository, type PortalDealRow } from './portal.repository';
+import { verifyPortalToken } from './portal-auth';
 
 const PORTAL_SENDER_PREFIX = 'portal-client:';
 
@@ -182,4 +183,47 @@ export async function bridgeAgentReplyToPortal(
   } catch (err) {
     console.error('Agent-to-portal bridge error:', err);
   }
+}
+
+// ── Deals ────────────────────────────────────────────────────────────────
+
+/** Best-effort portal auth: decodes a bearer token if one was sent, without
+ *  requiring it — /deals stays reachable for unauthenticated callers. Never
+ *  trusts a client id from anywhere but a verified token. Returns null on a
+ *  missing/invalid/expired token rather than throwing. */
+function resolveOptionalPortalClientId(authorizationHeader: string | undefined): string | null {
+  if (!authorizationHeader?.startsWith('Bearer ')) return null;
+  const payload = verifyPortalToken(authorizationHeader.slice(7));
+  return payload?.clientId ?? null;
+}
+
+export interface GetPortalDealsOptions {
+  country?: string;
+  tag?: string;
+  recentDays?: number;
+  /** Restrict to deals sharing a tag with the caller's saved Travel Interests,
+   *  when they can be resolved (valid bearer token + at least one saved tag).
+   *  No-op otherwise, so an unauthenticated caller or one with no saved
+   *  interests still sees the unfiltered list. */
+  matchInterests: boolean;
+  authorizationHeader: string | undefined;
+}
+
+export async function getPortalDeals(options: GetPortalDealsOptions): Promise<PortalDealRow[]> {
+  let clientTagIds: string[] | undefined;
+  if (options.matchInterests) {
+    const clientId = resolveOptionalPortalClientId(options.authorizationHeader);
+    if (clientId) {
+      const tagIds = await portalRepository.findClientTagIds(clientId);
+      if (tagIds.length > 0) clientTagIds = tagIds;
+    }
+  }
+
+  return portalRepository.findDeals({
+    country: options.country,
+    tag: options.tag,
+    limit: 50,
+    recentDays: options.recentDays,
+    clientTagIds,
+  });
 }

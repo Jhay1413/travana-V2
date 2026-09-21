@@ -235,7 +235,7 @@ export function ClientNotesList({
   users: ApiUser[];
   /** transaction_id → deal label, built by the page from its already-loaded enquiries/quotes/bookings. */
   dealsByTransactionId?: DealLabelLookup;
-  /** Opens a deal's pill in the detail layout — the same handler AllHolidaysPanel's onSelect uses (not a URL navigation: the page's `?holiday=` parsing only re-runs when clientId changes, so a same-page URL update alone wouldn't open anything). */
+  /** Opens a deal's pill in the detail layout — the same handler AllHolidaysPanel's onSelect uses (not a URL navigation: the page's `?holiday=` parsing is a separate code path and calling it directly here is simpler than round-tripping through a URL update). */
   onOpenDeal?: (selection: HolidaySelection) => void;
 }) {
   const { data: notes, isLoading, isError, refetch } = useClientNotes(clientId, { includeDeals: true });

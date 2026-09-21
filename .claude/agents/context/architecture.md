@@ -15,15 +15,15 @@
 
 <!-- AUTO:START -->
 <!-- Run `npm run docs:arch` to regenerate this block from the live codebase. -->
-**Last refreshed:** 2026-09-01 (auto-generated — do not edit by hand)
+**Last refreshed:** 2026-09-21 (auto-generated — do not edit by hand)
 
 | Fact | Value |
 |------|-------|
 | Backend modules (`server/v2/modules/`) | **69** |
-| Tables defined (`pgTable`) in schema.ts | 158 |
-| Enums (`pgEnum`) in schema.ts | 27 |
+| Tables defined (`pgTable`) in schema.ts | 160 |
+| Enums (`pgEnum`) in schema.ts | 28 |
 | `orgId`/`org_id` references in schema.ts | 91 |
-| Migrations (`migrations/*.sql`) | 44 (latest: `0043_soft_ezekiel.sql`) |
+| Migrations (`migrations/*.sql`) | 55 (latest: `0053_silent_bloodstrike.sql`) |
 | Client pages (`client/src/pages`) | ~48 |
 | Automated test runner | ✅ present |
 | Legacy v1 backend (`server/`) present | ⚠️ yes (alongside v2) |

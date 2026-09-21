@@ -13,6 +13,7 @@ import {
   Sparkles,
   TrendingUp,
   Utensils,
+  type LucideIcon,
 } from "lucide-react";
 import { HubSectionHeader, HubBadge, HubAvatar } from "@/features/hub/components/hub-components";
 import { destinations } from "@/data/hub-mock";
@@ -20,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { DestinationIntel } from "@/data/hub-mock";
 
-function DataCard({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) {
+function DataCard({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">

@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import {
+  AlertTriangle,
   ArrowRight,
   BadgePoundSterling,
+  Ban,
   BedDouble,
   Bus,
+  CalendarClock,
   CalendarDays,
   Check,
   CheckSquare,
@@ -28,6 +32,7 @@ import {
   PlaneTakeoff,
   RefreshCw,
   Reply,
+  RotateCcw,
   Smile,
   SquareArrowRight,
   Tag,
@@ -59,13 +64,23 @@ import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useQuote, useBooking, useEnquiry, useNotes, useTasks, useUsers, useCurrentUser, usePackageTypes } from "@/hooks/queries";
+import { useQuote, useBooking, useEnquiry, useNotes, useTasks, useUsers, useCurrentUser, usePackageTypes, quoteKeys, enquiryKeys } from "@/hooks/queries";
 import {
   useCreateNote,
   useUpdateNote,
@@ -75,6 +90,7 @@ import {
   useCreateTask,
   useCreateQuote,
   useUpdateEnquiry,
+  useSetDealLost,
 } from "@/hooks/mutations";
 import { useRole } from "@/hooks/use-role";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
@@ -85,7 +101,10 @@ import {
   useQuoteConvert,
   useQuoteDelete,
   useQuoteToFormValues,
+  useLiveNow,
 } from "@/features/quote/components/hooks";
+import { QuoteExpiryPill } from "@/features/quote/components/QuoteExpiryPill";
+import { getQuoteExpiryInfo } from "@/features/quote/lib/quote-expiry";
 import { useBookingPin, useBookingDelete } from "@/features/booking/components/hooks";
 import { NoteEditor } from "@/components/shared/note-editor";
 import { useQuoteViews } from "@/features/quote/api/use-quote-share-queries";
@@ -98,6 +117,7 @@ import { QuoteConvertDialog } from "@/features/quote/components/QuoteConvertDial
 import { QuoteDeleteDialog } from "@/features/quote/components/QuoteDeleteDialog";
 import { QuoteRHFForm } from "@/features/quote/components/quote-rhf-form";
 import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
+import { CruiseItinerary } from "@/features/quote/components/CruiseItinerary";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import { useClientTicketCreate } from "@/features/client/components/hooks";
 import { BookingEditDialog } from "@/features/booking/components/booking-edit-dialog";
@@ -242,7 +262,7 @@ interface FieldRowSpec {
 
 function FieldItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-3" data-testid={`holiday-detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+    <div className="flex min-w-0 items-center gap-4" data-testid={`holiday-detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-orange-500 text-white">
         <Icon className="h-4 w-4" />
       </span>
@@ -1114,6 +1134,7 @@ export function QuoteActionsMenu({
   clientId,
   clientName,
   onDeleted,
+  onOpenExpiryDialog,
   trigger = "button",
 }: {
   quoteId: string;
@@ -1123,6 +1144,10 @@ export function QuoteActionsMenu({
   clientId: string;
   clientName: string;
   onDeleted: () => void;
+  /** Opens the single, shared "Update Expiry" dialog owned by the page (see
+   *  pages/client/index.tsx) — keeps exactly one <QuoteExpiryDialog> mounted
+   *  even though both this menu and the hero card's banner can trigger it. */
+  onOpenExpiryDialog: (dateExpiry: string | Date | null | undefined) => void;
   trigger?: "button" | "icon";
 }) {
   const [, setLocation] = useLocation();
@@ -1136,6 +1161,7 @@ export function QuoteActionsMenu({
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
   const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
+  const [showLostConfirm, setShowLostConfirm] = useState(false);
 
   const {
     showConvertDialog, setShowConvertDialog,
@@ -1149,6 +1175,55 @@ export function QuoteActionsMenu({
     deleteReason, setDeleteReason,
     adminDeleteQuoteMutation, openDeleteDialog, confirmDelete,
   } = useQuoteDelete(quoteId, clientId, "Quote");
+
+  const setDealLostMutation = useSetDealLost();
+  const isLost = quote.status === "lost";
+  // "accepted" isn't a real quote_status value (enum is quoted/in_play/lost/
+  // archived) — this mirrors the same (largely vestigial) guard the "Convert
+  // to Booking" item already used, so both items stay consistent. It won't
+  // catch every case where the deal has since become a booking (the quote
+  // row has no direct signal for that), so handleConfirmMarkLost also
+  // surfaces the server's specific 400 for that case below.
+  const isBookedLikely = quote.status === "accepted";
+
+  function handleConfirmMarkLost() {
+    if (!quoteData?.transaction_id) return;
+    setDealLostMutation.mutate(
+      { id: quoteData.transaction_id, lost: true },
+      {
+        onSuccess: () => {
+          setShowLostConfirm(false);
+          queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+          toast({ title: "Quote marked as lost" });
+        },
+        onError: (error) => {
+          if (isAxiosError(error) && error.response?.status === 400) {
+            toast({
+              title: "Can't mark this deal as lost",
+              description: "This deal has already been converted to a booking.",
+              variant: "destructive",
+            });
+          } else {
+            toast({ title: "Failed to mark quote as lost", variant: "destructive" });
+          }
+        },
+      },
+    );
+  }
+
+  function handleReopen() {
+    if (!quoteData?.transaction_id) return;
+    setDealLostMutation.mutate(
+      { id: quoteData.transaction_id, lost: false },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+          toast({ title: "Quote reopened" });
+        },
+        onError: () => toast({ title: "Failed to reopen quote", variant: "destructive" }),
+      },
+    );
+  }
 
   const quoteToFormValues = useQuoteToFormValues(quoteData);
   const ticketCreate = useClientTicketCreate(clientId, currentUser?.id, { transactionId: quoteData?.transaction_id ?? null });
@@ -1190,7 +1265,7 @@ export function QuoteActionsMenu({
           <DropdownMenuItem onClick={() => setShowEditDialog(true)} className="gap-2 rounded-lg text-sm">
             <Pencil className="h-3.5 w-3.5" /> Edit Quote
           </DropdownMenuItem>
-          {quote.status !== "accepted" && (
+          {!isBookedLikely && !isLost && (
             <DropdownMenuItem onClick={() => setShowConvertDialog(true)} className="gap-2 rounded-lg text-sm">
               <RefreshCw className="h-3.5 w-3.5" /> Convert to Booking
             </DropdownMenuItem>
@@ -1198,12 +1273,30 @@ export function QuoteActionsMenu({
           <DropdownMenuItem onClick={() => setShowCopyDialog(true)} className="gap-2 rounded-lg text-sm">
             <Copy className="h-3.5 w-3.5" /> Duplicate Quote
           </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onOpenExpiryDialog(quoteData?.date_expiry)}
+            className="gap-2 rounded-lg text-sm"
+          >
+            <CalendarClock className="h-3.5 w-3.5" /> Update Expiry
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => ticketCreate.setShowTicketDialog(true)} className="gap-2 rounded-lg text-sm">
             <TicketIcon className="h-3.5 w-3.5" /> Ticket
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setShowAddTaskDialog(true)} className="gap-2 rounded-lg text-sm">
             <CheckSquare className="h-3.5 w-3.5" /> Add Task
           </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {isLost ? (
+            <DropdownMenuItem onClick={handleReopen} className="gap-2 rounded-lg text-sm">
+              <RotateCcw className="h-3.5 w-3.5" /> Reopen Quote
+            </DropdownMenuItem>
+          ) : (
+            !isBookedLikely && (
+              <DropdownMenuItem onClick={() => setShowLostConfirm(true)} className="gap-2 rounded-lg text-sm text-rose-600 focus:text-rose-600">
+                <Ban className="h-3.5 w-3.5" /> Mark as Lost
+              </DropdownMenuItem>
+            )
+          )}
           {isAdmin && (
             <>
               <DropdownMenuSeparator />
@@ -1264,6 +1357,30 @@ export function QuoteActionsMenu({
         onConfirm={confirmDelete}
       />
 
+      <AlertDialog open={showLostConfirm} onOpenChange={setShowLostConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark this quote as lost?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This moves the deal into the pipeline&apos;s Lost column. You can reopen it again later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={setDealLostMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmMarkLost();
+              }}
+              disabled={setDealLostMutation.isPending}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              {setDealLostMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Mark as Lost"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <HolidayAddTaskDialog
         open={showAddTaskDialog}
         onOpenChange={setShowAddTaskDialog}
@@ -1296,17 +1413,35 @@ export function QuoteActionsMenu({
 
 // ─── Quote ──────────────────────────────────────────────────────────────────
 
-function QuoteHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailContentProps) {
+function QuoteHolidayDetail({
+  id,
+  clientId,
+  clientName,
+  onBack,
+  onOpenExpiryDialog,
+}: HolidayDetailContentProps & {
+  /** Opens the single, shared "Update Expiry" dialog owned by the page (see
+   *  pages/client/index.tsx) — keeps exactly one <QuoteExpiryDialog> mounted
+   *  even though both this banner and the header's action menu can trigger it. */
+  onOpenExpiryDialog: (dateExpiry: string | Date | null | undefined) => void;
+}) {
   const { data: quoteData, isLoading, error } = useQuote(id);
   const { primaryImage, galleryImages, quoteImageUrls } = useQuoteImages(quoteData);
 
   const quote = useMemo(() => (quoteData ? transformQuoteData(quoteData) : null), [quoteData]);
+
+  // Re-derives every minute so a quote crossing its expiry while the page is
+  // left open re-badges the banner without waiting for a refetch.
+  const now = useLiveNow();
 
   if (isLoading) return <DetailLoading clientName={clientName} onBack={onBack} />;
   if (error || !quote) return <DetailError clientName={clientName} onBack={onBack} />;
 
   const fields = buildQuoteLikeFields(quote);
   const title = quote.quoteTitle || "Untitled quote";
+  const isLost = quote.status === "lost";
+  const expiryInfo = isLost ? null : getQuoteExpiryInfo(quoteData?.date_expiry, quoteData?.date_created, now);
+  const isExpired = expiryInfo?.status === "expired";
 
   return (
     <>
@@ -1329,6 +1464,20 @@ function QuoteHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailC
               )}
             </div>
             <div className="flex items-center gap-2">
+              {isLost && (
+                <span
+                  className="inline-flex items-center rounded-full border border-rose-500/25 bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold text-rose-700"
+                  data-testid="holiday-detail-lost-badge"
+                >
+                  Lost
+                </span>
+              )}
+              <QuoteExpiryPill
+                dateExpiry={quoteData?.date_expiry}
+                dateCreated={quoteData?.date_created}
+                isLost={isLost}
+                onUpdateExpiry={() => onOpenExpiryDialog(quoteData?.date_expiry)}
+              />
               <ViewsPill quoteId={id} />
             </div>
           </div>
@@ -1344,7 +1493,33 @@ function QuoteHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailC
             <span className="text-black/25">•</span>
             <span>Created {formatUKDate(quote.createdAt)}</span>
           </div>
+          {isExpired && (
+            <div
+              className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-red-500/10 px-3 py-2.5 text-red-700"
+              data-testid="holiday-detail-expired-banner"
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p className="text-xs">
+                  This quote expired{quoteData?.date_expiry ? ` on ${formatUKDate(quoteData.date_expiry)}` : ""}. Extend
+                  the expiry date to keep it active.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 shrink-0 rounded-xl border-red-500/30 bg-white/70 px-3 text-xs font-semibold text-red-700 hover:bg-red-500/10"
+                onClick={() => onOpenExpiryDialog(quoteData?.date_expiry)}
+                data-testid="button-extend-expiry"
+              >
+                Extend expiry
+              </Button>
+            </div>
+          )}
           <FieldsGrid left={fields.left} right={fields.right} />
+          {quote.cruise?.itinerary && quote.cruise.itinerary.length > 0 && (
+            <CruiseItinerary itinerary={quote.cruise.itinerary} />
+          )}
         </div>
       </Card>
       <DetailTabsCard transactionId={quote.transaction_id} entityId={id} entityType="quote" clientId={clientId} />
@@ -1515,6 +1690,9 @@ function BookingHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
             <span>Created {formatUKDate(booking.createdAt)}</span>
           </div>
           <FieldsGrid left={fields.left} right={fields.right} />
+          {booking.cruise?.itinerary && booking.cruise.itinerary.length > 0 && (
+            <CruiseItinerary itinerary={booking.cruise.itinerary} />
+          )}
         </div>
       </Card>
       <DetailTabsCard transactionId={booking.transaction_id} entityId={id} entityType="booking" clientId={clientId} />
@@ -1545,20 +1723,71 @@ export function EnquiryActionsMenu({
   trigger?: "button" | "icon";
 }) {
   const [, navigate] = useLocation();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const updateEnquiryMutation = useUpdateEnquiry();
   const createQuoteMutation = useCreateQuote();
   const { data: packageTypesData } = usePackageTypes();
+  const setDealLostMutation = useSetDealLost();
 
   const [showEditWizard, setShowEditWizard] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
+  const [showLostConfirm, setShowLostConfirm] = useState(false);
 
   const isEnquiryPinned = useMemo(
     () => userFavorites?.some((f: Favorite) => f.itemType === "enquiry" && f.itemId === enquiryId) ?? false,
     [userFavorites, enquiryId],
   );
+
+  const isLost = enquiry.status === "LOST";
+  // Once an enquiry is converted, its transaction has moved past on_enquiry
+  // (to on_quote, and possibly on_booking from there) — applyLost's
+  // on_enquiry branch (server/v2/modules/transaction/transaction.repository.ts)
+  // no longer applies to it, and confirming Lost here would silently flip
+  // whatever quote/booking the transaction now holds instead, while toasting
+  // "Enquiry marked as lost". Hide the action entirely once converted.
+  const isConverted = enquiry.status === "Converted";
+
+  function handleConfirmMarkLost() {
+    if (!enquiry.transaction_id) return;
+    setDealLostMutation.mutate(
+      { id: enquiry.transaction_id, lost: true },
+      {
+        onSuccess: () => {
+          setShowLostConfirm(false);
+          queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
+          toast({ title: "Enquiry marked as lost" });
+        },
+        onError: (error) => {
+          if (isAxiosError(error) && error.response?.status === 400) {
+            toast({
+              title: "Can't mark this deal as lost",
+              description: "This deal has already moved on to a quote or booking.",
+              variant: "destructive",
+            });
+          } else {
+            toast({ title: "Failed to mark enquiry as lost", variant: "destructive" });
+          }
+        },
+      },
+    );
+  }
+
+  function handleReopen() {
+    if (!enquiry.transaction_id) return;
+    setDealLostMutation.mutate(
+      { id: enquiry.transaction_id, lost: false },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
+          toast({ title: "Enquiry reopened" });
+        },
+        onError: () => toast({ title: "Failed to reopen enquiry", variant: "destructive" }),
+      },
+    );
+  }
 
   const convertDefaultValues = useMemo<Partial<QuoteFormValues>>(
     () => buildQuoteInitialValuesFromEnquiry(enquiry),
@@ -1658,10 +1887,27 @@ export function EnquiryActionsMenu({
           <DropdownMenuItem onClick={() => setShowEditWizard(true)} className="gap-2 rounded-lg text-sm">
             <Pencil className="h-3.5 w-3.5" /> Edit Enquiry
           </DropdownMenuItem>
-          {enquiry.status !== "Converted" && (
+          {!isConverted && !isLost && (
             <DropdownMenuItem onClick={() => setShowConvertModal(true)} className="gap-2 rounded-lg text-sm">
               <ArrowRight className="h-3.5 w-3.5" /> Convert to Quote
             </DropdownMenuItem>
+          )}
+          {/* Once converted, the transaction is no longer "on_enquiry" — Lost/
+              Reopen would mis-target whatever quote/booking it now holds (see
+              isConverted's comment above), so hide both entirely. */}
+          {!isConverted && (
+            <>
+              <DropdownMenuSeparator />
+              {isLost ? (
+                <DropdownMenuItem onClick={handleReopen} className="gap-2 rounded-lg text-sm">
+                  <RotateCcw className="h-3.5 w-3.5" /> Reopen Enquiry
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem onClick={() => setShowLostConfirm(true)} className="gap-2 rounded-lg text-sm text-rose-600 focus:text-rose-600">
+                  <Ban className="h-3.5 w-3.5" /> Mark as Lost
+                </DropdownMenuItem>
+              )}
+            </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>
@@ -1697,6 +1943,30 @@ export function EnquiryActionsMenu({
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showLostConfirm} onOpenChange={setShowLostConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mark this enquiry as lost?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This moves the deal into the pipeline&apos;s Lost column. You can reopen it again later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={setDealLostMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmMarkLost();
+              }}
+              disabled={setDealLostMutation.isPending}
+              className="bg-rose-600 hover:bg-rose-700"
+            >
+              {setDealLostMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Mark as Lost"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
@@ -1739,10 +2009,15 @@ function EnquiryHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
           <div className="flex items-center gap-2">
             {enquiry.status && (
               <span
-                className="inline-flex items-center rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-700"
+                className={cn(
+                  "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                  enquiry.status === "LOST"
+                    ? "border-rose-500/25 bg-rose-500/10 text-rose-700"
+                    : "border-blue-500/25 bg-blue-500/10 text-blue-700",
+                )}
                 data-testid="holiday-detail-enquiry-status"
               >
-                {enquiry.status}
+                {enquiry.status === "LOST" ? "Lost" : enquiry.status}
               </span>
             )}
           </div>
@@ -1788,13 +2063,23 @@ export interface HolidayDetailViewProps {
   clientName: string;
   selection: HolidaySelection;
   onBack: () => void;
+  /** Opens the single, shared "Update Expiry" dialog owned by the page (see
+   *  pages/client/index.tsx) — only used for the quote variant. */
+  onOpenExpiryDialog: (dateExpiry: string | Date | null | undefined) => void;
 }
 
-export function HolidayDetailView({ clientId, clientName, selection, onBack }: HolidayDetailViewProps) {
+export function HolidayDetailView({ clientId, clientName, selection, onBack, onOpenExpiryDialog }: HolidayDetailViewProps) {
   return (
     <div data-testid="holiday-detail-view">
       {selection.type === "quote" && (
-        <QuoteHolidayDetail key={selection.id} id={selection.id} clientId={clientId} clientName={clientName} onBack={onBack} />
+        <QuoteHolidayDetail
+          key={selection.id}
+          id={selection.id}
+          clientId={clientId}
+          clientName={clientName}
+          onBack={onBack}
+          onOpenExpiryDialog={onOpenExpiryDialog}
+        />
       )}
       {selection.type === "booking" && (
         <BookingHolidayDetail key={selection.id} id={selection.id} clientId={clientId} clientName={clientName} onBack={onBack} />

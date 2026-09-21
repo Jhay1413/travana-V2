@@ -9,7 +9,29 @@ const assignedUser = alias(user, "assigned_user");
 
 export type TicketWithNames = TicketWithLikes;
 
-function buildTicketScopeConds(scope?: Scope): SQL[] {
+/** Which slice of their scope a caller wants back from `findAll`. */
+export type TicketListMode = "mine" | "raised" | "all";
+
+/**
+ * What the caller is trying to do — the security boundary below is stricter
+ * for `delete` than for `read`/`update`.
+ */
+type TicketScopeOp = "read" | "update" | "delete";
+
+// The security boundary: what an agent/homeworker may see, or act on, at all,
+// regardless of which `TicketListMode` a list query later narrows to.
+//
+// read/update: tickets they raised OR were assigned — NOT just tickets they
+// raised. Using creator alone here made a ticket assigned to someone else by
+// a colleague invisible to the assignee (404 on the detail page, absent from
+// every list/badge) and unreplyable/unreassignable by them, since this same
+// function also gates findById/findByClientId/findByAssignedTo/update.
+//
+// delete: creator-only, same as before this fix. Widening delete the same
+// way as read/update would hand an assignee (who may not have raised the
+// ticket) the right to delete someone else's ticket — a different, higher-
+// stakes boundary than "can view/reply/reassign".
+function buildTicketScopeConds(scope?: Scope, op: TicketScopeOp = "read"): SQL[] {
   const conds: SQL[] = [];
   if (!scope || scope.orgRole === "platform_admin") return conds;
   conds.push(eq(tickets.orgId, scope.orgId));
@@ -17,7 +39,11 @@ function buildTicketScopeConds(scope?: Scope): SQL[] {
     conds.push(eq(tickets.branchId, scope.branchId));
   }
   if ((scope.orgRole === "agent" || scope.orgRole === "homeworker") && scope.userId) {
-    conds.push(eq(tickets.userId, scope.userId));
+    conds.push(
+      op === "delete"
+        ? eq(tickets.userId, scope.userId)
+        : or(eq(tickets.assignedTo, scope.userId), eq(tickets.userId, scope.userId))!,
+    );
   }
   return conds;
 }
@@ -63,8 +89,32 @@ export const ticketRepository = {
     return results[0];
   },
 
-  async findAll(scope?: Scope, viewerUserId: string | null = null): Promise<TicketWithNames[]> {
+  async findAll(scope?: Scope, viewerUserId: string | null = null, mode: TicketListMode = "mine"): Promise<TicketWithNames[]> {
     const conds = buildTicketScopeConds(scope);
+    // Narrows the security boundary above down to the requested view.
+    //
+    // "mine" fetches the same candidate set findByAssignedTo uses (assigned to
+    // me OR raised by me) — the client then applies the shared isMyTicket()
+    // predicate (features/tickets/lib/ticket-filters.ts) to match the sidebar
+    // badge's definition exactly, rather than this query re-deriving a
+    // second, divergent notion of "mine" in SQL.
+    //
+    // "all" adds nothing further (the service only allows it for admin-tier
+    // roles, for whom the boundary above is already org/branch-wide with no
+    // personal restriction — agent/homeworker can't reach "all" at all).
+    //
+    // A personal mode ("mine"/"raised") with no userId to key off — should
+    // never happen once auth has run — fails CLOSED (no rows) rather than
+    // silently degrading to the full org/branch list.
+    if (mode === "mine" || mode === "raised") {
+      if (!scope?.userId) {
+        conds.push(sql`false`);
+      } else if (mode === "mine") {
+        conds.push(or(eq(tickets.assignedTo, scope.userId), eq(tickets.userId, scope.userId))!);
+      } else {
+        conds.push(eq(tickets.userId, scope.userId));
+      }
+    }
     const query = buildTicketWithNamesQuery(viewerUserId);
     return conds.length > 0
       ? await query.where(and(...conds)).orderBy(desc(tickets.createdAt))
@@ -106,13 +156,13 @@ export const ticketRepository = {
   },
 
   async update(id: string, ticket: Partial<InsertTicket>, scope?: Scope): Promise<Ticket | undefined> {
-    const conds: SQL[] = [eq(tickets.id, id), ...buildTicketScopeConds(scope)];
+    const conds: SQL[] = [eq(tickets.id, id), ...buildTicketScopeConds(scope, "update")];
     const [result] = await db.update(tickets).set({ ...ticket, updatedAt: new Date() }).where(and(...conds)).returning();
     return result;
   },
 
   async remove(id: string, scope?: Scope): Promise<boolean> {
-    const conds: SQL[] = [eq(tickets.id, id), ...buildTicketScopeConds(scope)];
+    const conds: SQL[] = [eq(tickets.id, id), ...buildTicketScopeConds(scope, "delete")];
     const result = await db.delete(tickets).where(and(...conds)).returning({ id: tickets.id });
     return result.length > 0;
   },

@@ -1,9 +1,25 @@
-import { ticketRepository } from "./ticket.repository";
+import { ticketRepository, type TicketListMode } from "./ticket.repository";
 import { realtimeService } from "../../realtime/realtime.service";
 import { AppError } from "../../utils/error-handler";
 import { sanitizeRichText } from "../../utils/sanitize-rich-text";
 import type { Ticket, InsertTicket } from "@shared/schema";
-import type { Scope } from "../../utils/scope";
+import { hasAnyRole, type OrgRole, type Scope } from "../../utils/scope";
+
+// Roles allowed to request the unfiltered ("all") ticket list — everyone else
+// is confined to "mine"/"raised", enforced here rather than trusting the
+// client, since the query param is caller-controlled.
+const ADMIN_TICKET_ROLES: OrgRole[] = ["org_admin", "branch_manager", "platform_admin"];
+
+// Fields a PATCH must never move: which org/branch a ticket belongs to, or
+// who raised it, are not editable via the ticket update form — stripped here
+// (not just relied on the client to omit them) so a crafted request can't use
+// this endpoint to move a ticket cross-tenant or rewrite its creator.
+type EditableTicketFields = Omit<Partial<InsertTicket>, "orgId" | "branchId" | "userId">;
+
+function stripImmutableFields(data: Partial<InsertTicket>): EditableTicketFields {
+  const { orgId: _orgId, branchId: _branchId, userId: _userId, ...editable } = data;
+  return editable;
+}
 
 // Fans a ticket write out to every agent in the org over SSE, so the sidebar's
 // open-ticket badge and any open ticket list move without a reload — a ticket
@@ -21,8 +37,11 @@ function publishChanged(orgId: string, ticketId: string): void {
 }
 
 export const ticketService = {
-  async listTickets(scope: Scope) {
-    return await ticketRepository.findAll(scope, scope.userId ?? null);
+  async listTickets(scope: Scope, mode: TicketListMode = "mine") {
+    if (mode === "all" && !hasAnyRole(scope.orgRoles, ADMIN_TICKET_ROLES)) {
+      throw new AppError("You do not have permission to view all tickets", 403);
+    }
+    return await ticketRepository.findAll(scope, scope.userId ?? null, mode);
   },
 
   async listTicketsByClient(clientId: string, scope: Scope) {
@@ -53,7 +72,8 @@ export const ticketService = {
   },
 
   async updateTicket(id: string, data: Partial<InsertTicket>, scope: Scope): Promise<Ticket> {
-    const values = data.description ? { ...data, description: sanitizeRichText(data.description) } : data;
+    const editable = stripImmutableFields(data);
+    const values = editable.description ? { ...editable, description: sanitizeRichText(editable.description) } : editable;
     const ticket = await ticketRepository.update(id, values, scope);
     if (!ticket) {
       throw new AppError("Ticket not found", 404);

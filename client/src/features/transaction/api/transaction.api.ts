@@ -50,10 +50,12 @@ export const transactionApi = {
     limit: number,
     agentId?: string,
     quoteStatus?: string,
+    sort?: "newest" | "oldest" | "oldest-activity",
   ): Promise<{ items: Transaction[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> => {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (agentId) params.append("agentId", agentId);
     if (quoteStatus) params.append("quoteStatus", quoteStatus);
+    if (sort) params.append("sort", sort);
     const { data } = await axiosClient.get(`/api/v2/transactions/pipeline/${status}?${params.toString()}`);
     return data as { items: Transaction[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number };
   },

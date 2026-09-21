@@ -37,6 +37,7 @@ import {
   Droplets,
   Plug,
   Info,
+  type LucideIcon,
 } from "lucide-react";
 import {
   usePublicQuote,
@@ -335,7 +336,7 @@ function ClimateBar({ entry, maxHigh }: { entry: GuruMonthTemp; maxHigh: number 
   );
 }
 
-function EssentialRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+function EssentialRow({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-white/[0.06] last:border-0">
       <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 mt-0.5">

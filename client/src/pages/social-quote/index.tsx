@@ -575,6 +575,7 @@ export default function SocialQuotePage() {
         quoteId={quoteId}
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
+        presentation="drawer"
         onSuccess={() => {
           setShowEditDialog(false);
           queryClient.invalidateQueries({ queryKey: ["quotes", quoteId] });

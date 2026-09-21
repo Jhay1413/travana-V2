@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Hotel, ArrowLeftRight, Coffee, ParkingSquare, Receipt, PackagePlus } from "lucide-react";
+import { Hotel, ArrowLeftRight, Coffee, ParkingSquare, Receipt, PackagePlus, type LucideIcon } from "lucide-react";
 import type { UpsellItemValue } from "./booking-form.types";
 
 // ─── Upsell types ─────────────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ export type UpsellType = (typeof UPSELL_TYPES)[number];
 export const UPSELL_TYPE_OPTIONS: {
   value: UpsellType;
   label: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   color: string;
 }[] = [
   { value: "EXTRA_NIGHTS", label: "Extra Nights", icon: Hotel, color: "text-blue-600" },

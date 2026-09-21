@@ -7,11 +7,10 @@
 // number of rows the page showed under the same filter, with no way to tell
 // which was right. One predicate, used by both, is the fix.
 //
-// NOTE — this aligns the two numbers, it does not make either correct for the
-// `agent`/`homeworker` roles. Their queries are still scoped on tickets.userId
-// (the CREATOR) in ticket.repository.ts, so a ticket someone else assigned to
-// them reaches neither the list nor this count. That is a separate server-side
-// fix; both sides being consistently wrong is the point of doing this first.
+// The server-side half of this (ticket.repository.ts's buildTicketScopeConds
+// scoping `agent`/`homeworker` to tickets.userId — the CREATOR — instead of
+// creator-or-assignee) is now fixed too, so a ticket someone else assigned to
+// you reaches both the badge and the "My tickets" list.
 
 import type { Ticket } from "../types";
 

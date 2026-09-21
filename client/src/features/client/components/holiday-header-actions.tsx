@@ -137,7 +137,9 @@ function HeaderActionsSkeleton() {
   return <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-black/5 dark:bg-white/10" />;
 }
 
-function QuoteHeaderActions({ id, clientId, clientName, onDeleted }: HeaderActionsProps) {
+function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryDialog }: HeaderActionsProps & {
+  onOpenExpiryDialog: (dateExpiry: string | Date | null | undefined) => void;
+}) {
   const queryClient = useQueryClient();
   const { data: quoteData, isLoading } = useQuote(id);
   const { quoteImageUrls } = useQuoteImages(quoteData);
@@ -174,6 +176,7 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted }: HeaderActio
         clientId={clientId}
         clientName={clientName}
         onDeleted={onDeleted}
+        onOpenExpiryDialog={onOpenExpiryDialog}
         trigger="icon"
       />
       <QuoteShareDialog
@@ -272,14 +275,23 @@ export interface HolidayHeaderActionsProps {
   clientId: string;
   clientName: string;
   onDeleted: () => void;
+  /** Opens the single, shared "Update Expiry" dialog owned by the page (see
+   *  pages/client/index.tsx) — only used for the quote variant. */
+  onOpenExpiryDialog: (dateExpiry: string | Date | null | undefined) => void;
 }
 
-export function HolidayHeaderActions({ selection, clientId, clientName, onDeleted }: HolidayHeaderActionsProps) {
+export function HolidayHeaderActions({ selection, clientId, clientName, onDeleted, onOpenExpiryDialog }: HolidayHeaderActionsProps) {
   return (
     <TooltipProvider>
       <div className="flex items-center gap-2.5">
         {selection.type === "quote" && (
-          <QuoteHeaderActions id={selection.id} clientId={clientId} clientName={clientName} onDeleted={onDeleted} />
+          <QuoteHeaderActions
+            id={selection.id}
+            clientId={clientId}
+            clientName={clientName}
+            onDeleted={onDeleted}
+            onOpenExpiryDialog={onOpenExpiryDialog}
+          />
         )}
         {selection.type === "booking" && (
           <BookingHeaderActions id={selection.id} clientId={clientId} clientName={clientName} onDeleted={onDeleted} />

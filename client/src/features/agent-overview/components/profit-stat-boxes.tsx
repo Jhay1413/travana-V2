@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { BadgePoundSterling, CalendarCheck, Target } from "lucide-react";
+import { BadgePoundSterling, CalendarCheck, Target, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { currency } from "./helpers";
@@ -13,7 +13,7 @@ function StatCard({
   testId,
 }: {
   label: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   iconClass: string;
   children: React.ReactNode;
   testId: string;
@@ -49,6 +49,44 @@ export interface ProfitStats {
   totalOpenQuotesValue: number;
   bookingsCount: number;
   quotesCount: number;
+  todayBookingsCount?: number;
+  weekBookingsCount?: number;
+  monthBookingsCount?: number;
+  monthAvgBookingValue?: number;
+  todayUpsellsCount?: number;
+  weekUpsellsCount?: number;
+  monthUpsellsCount?: number;
+}
+
+function bookingWord(count: number): string {
+  return count === 1 ? "Booking" : "Bookings";
+}
+
+function upsellWord(count: number): string {
+  return count === 1 ? "Upsell" : "Upsells";
+}
+
+function BookingCountSubtext({
+  count,
+  upsellCount,
+  period,
+}: {
+  count: number;
+  upsellCount?: number;
+  period: string;
+}) {
+  return (
+    <>
+      <span className="font-semibold text-[#fe9a00]">{count}</span> {bookingWord(count)}
+      {!!upsellCount && (
+        <>
+          {" · "}
+          <span className="font-semibold text-[#fe9a00]">{upsellCount}</span> {upsellWord(upsellCount)}
+        </>
+      )}{" "}
+      {period}
+    </>
+  );
 }
 
 export function ProfitStatBoxes({
@@ -62,8 +100,22 @@ export function ProfitStatBoxes({
   const pct = target > 0 ? Math.round((profitStats.monthProfit / target) * 100) : 0;
   const toTargetPct = Math.max(0, 100 - pct);
   const remaining = Math.max(0, target - profitStats.monthProfit);
-  const ppb = Math.round(profitStats.avgBookingValue);
+  const monthAvg = profitStats.monthAvgBookingValue ?? 0;
+  const ppb = Math.round(monthAvg > 0 ? monthAvg : profitStats.avgBookingValue);
   const bookingsToTarget = ppb > 0 ? Math.ceil(remaining / ppb) : 0;
+
+  let runToTargetText: string;
+  if (target <= 0) {
+    runToTargetText = "No target set";
+  } else if (remaining <= 0) {
+    runToTargetText = "Target reached";
+  } else if (ppb <= 0) {
+    runToTargetText = "No bookings yet to estimate";
+  } else {
+    runToTargetText = `${bookingsToTarget} ${bookingWord(bookingsToTarget)} at ${currency.format(ppb)}ppb`;
+  }
+
+  const monthBookingsCount = profitStats.monthBookingsCount ?? profitStats.bookingsCount;
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -71,14 +123,34 @@ export function ProfitStatBoxes({
         <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-todays-profit">
           {currency.format(profitStats.todayProfit)}
         </p>
-        <p className="mt-2 text-xs text-muted-foreground">Total from today's bookings</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {profitStats.todayBookingsCount !== undefined ? (
+            <BookingCountSubtext
+              count={profitStats.todayBookingsCount}
+              upsellCount={profitStats.todayUpsellsCount}
+              period="today"
+            />
+          ) : (
+            "Total from today's bookings"
+          )}
+        </p>
       </StatCard>
 
       <StatCard label="This Weeks Profit" icon={BadgePoundSterling} iconClass="text-blue-500" testId="stat-box-weeks-profit">
         <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-weeks-profit">
           {currency.format(profitStats.weekProfit)}
         </p>
-        <p className="mt-2 text-xs text-muted-foreground">Total from this week's bookings</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {profitStats.weekBookingsCount !== undefined ? (
+            <BookingCountSubtext
+              count={profitStats.weekBookingsCount}
+              upsellCount={profitStats.weekUpsellsCount}
+              period="this week"
+            />
+          ) : (
+            "Total from this week's bookings"
+          )}
+        </p>
       </StatCard>
 
       <StatCard label="This Month" icon={CalendarCheck} iconClass="text-emerald-500" testId="stat-box-this-month">
@@ -86,8 +158,11 @@ export function ProfitStatBoxes({
           {currency.format(profitStats.monthProfit)}
         </p>
         <p className="mt-2 text-xs text-muted-foreground">
-          <span className="font-semibold text-[#fe9a00]">{profitStats.bookingsCount}</span>{" "}
-          Bookings this Month
+          <BookingCountSubtext
+            count={monthBookingsCount}
+            upsellCount={profitStats.monthUpsellsCount}
+            period="this Month"
+          />
         </p>
       </StatCard>
 
@@ -119,11 +194,7 @@ export function ProfitStatBoxes({
             / {currency.format(target)}
           </span>
         </p>
-        <p className="mt-2 text-xs font-semibold text-[#ff0015]">
-          {bookingsToTarget > 0 && ppb > 0
-            ? `${bookingsToTarget} Bookings at ${currency.format(ppb)}ppb`
-            : "Target reached"}
-        </p>
+        <p className="mt-2 text-xs font-semibold text-[#ff0015]">{runToTargetText}</p>
       </StatCard>
     </div>
   );

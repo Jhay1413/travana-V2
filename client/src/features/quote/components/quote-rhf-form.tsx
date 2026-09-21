@@ -11,6 +11,7 @@ import {
   type ImportValidation,
 } from "@/features/quote/api/use-page-capture-import";
 import { withMoneyFieldsQuarantined } from "@/features/quote/lib/import-validation";
+import { pricePerPersonFor } from "@/features/quote/lib/pricing";
 import { ImportValidationPanel } from "@/features/quote/components/sections/ImportValidationPanel";
 import { SupplierScraperPicksResultView, type SupplierScraperPicksResult } from "@/features/supplier-scraper";
 import {
@@ -64,6 +65,7 @@ export function QuoteRHFForm({
   initialImageUrls = [],
   initialExtraAccomLabels = [],
   layout = "card",
+  socialPost = false,
 }: QuoteRHFFormProps) {
   const isDrawer = layout === "drawer";
   const form = useForm<QuoteFormValues>({
@@ -168,17 +170,19 @@ export function QuoteRHFForm({
   }, [passengersChildren, setValue, form]);
 
   // ── Price per person calculation ──────────────────────────────────────────
+  // Derived from price/discount/serviceCharge/traveller counts via the shared
+  // helper (features/quote/lib/pricing) so this recomputes the same way whether
+  // those fields changed from typing OR from a deal import's setValue calls.
+  // `price` must be a dependency, not just read off getValues — otherwise an
+  // import that sets price without changing the traveller counts (which start
+  // at the same default) never re-fires this effect and price-per-person is
+  // left stale until the agent edits price/discount/service charge by hand.
   useEffect(() => {
-    const price = Number(form.getValues("price")) || 0;
-    const currentDiscount = Number(form.getValues("discount")) || 0;
-    const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-    const adults = Number(passengersAdults) || 0;
-    const children = Number(passengersChildren) || 0;
-    const total = adults + children;
-    // Total price = price − discount + service charge, split across all passengers.
-    const netPrice = price - currentDiscount + currentServiceCharge;
-    setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+    setValue(
+      "pricePerPerson",
+      pricePerPersonFor(price, discount, serviceCharge, passengersAdults, passengersChildren),
+    );
+  }, [price, passengersAdults, passengersChildren, discount, serviceCharge, setValue]);
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   // Commission = price × operator % − discount + service charge. The discount is
@@ -356,6 +360,32 @@ export function QuoteRHFForm({
                 onPageCaptureImport={handlePageCaptureImport}
                 pageCapturePending={pageCaptureImport.isPending}
               />
+
+              {/* ── IMPORT VALIDATION (errors/warnings from the last capture import) */}
+              {importValidation && (
+                <div className="mt-3">
+                  <ImportValidationPanel validation={importValidation} onDismiss={() => setImportValidation(null)} />
+                </div>
+              )}
+
+              {/* ── FIELD PICKS APPLIED — same feedback the card/dialog layout
+                   shows, so a drawer import doesn't silently drop it. */}
+              {importPicks && (
+                <div className="mt-3 space-y-2 rounded-xl border border-black/10 bg-white/70 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-black/70">Field picks applied to this supplier's spec</p>
+                    <button
+                      type="button"
+                      onClick={() => setImportPicks(null)}
+                      aria-label="Dismiss field-pick results"
+                      className="text-black/40 transition hover:text-black/70"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <SupplierScraperPicksResultView result={importPicks} />
+                </div>
+              )}
             </div>
             <QuoteDrawerOverview />
             <QuoteDrawerTravelSection showCruiseStay={isCruise} />
@@ -408,18 +438,20 @@ export function QuoteRHFForm({
                   submitLabel={submitLabel}
                   data-testid="drawer-footer"
                 >
-                  <FormField
-                    control={control}
-                    name="not_for_social"
-                    render={({ field: social }) => (
-                      <FormDrawerCheckbox
-                        label="Not for social"
-                        checked={!!social.value}
-                        onCheckedChange={social.onChange}
-                        data-testid="form-drawer-not-for-social"
-                      />
-                    )}
-                  />
+                  {!socialPost && (
+                    <FormField
+                      control={control}
+                      name="not_for_social"
+                      render={({ field: social }) => (
+                        <FormDrawerCheckbox
+                          label="Not for social"
+                          checked={!!social.value}
+                          onCheckedChange={social.onChange}
+                          data-testid="form-drawer-not-for-social"
+                        />
+                      )}
+                    />
+                  )}
                 </FormDrawerFooter>
               )}
             />
@@ -428,6 +460,7 @@ export function QuoteRHFForm({
           <>
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
         <QuoteImportRow
+          hideNotForSocial={socialPost}
           onJsonUpload={handleJsonUpload}
           onPageCaptureImport={handlePageCaptureImport}
           pageCapturePending={pageCaptureImport.isPending}

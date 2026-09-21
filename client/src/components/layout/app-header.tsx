@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import {
+  ArrowLeft,
   ChevronDown,
   LogOut,
   Search,
   Settings2,
+  Shield,
   Sparkles,
   User2,
 } from "lucide-react";
@@ -20,11 +22,15 @@ import {
 import { NotificationsDropdown } from "@/features/notifications/components/notifications-dropdown";
 import { HeaderCreateMenu } from "@/components/layout/header-create-menu";
 import { BrandMark, MobileSidenav } from "./app-sidenav";
+import { ADMIN_MENU_ROLES, useMenuMode } from "@/components/layout/menu-mode-context";
 import { useAuth } from "@/hooks/use-auth";
+import { useRole } from "@/hooks/use-role";
 import { useGlobalSearch } from "@/features/search/api/use-search-queries";
 
 export function AppHeader() {
   const { user, logout } = useAuth();
+  const { orgRole } = useRole();
+  const { mode, setMode } = useMenuMode();
   const [, navigate] = useLocation();
   const [query, setQuery] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -89,6 +95,23 @@ export function AppHeader() {
 
   const userName = user?.firstName || user?.name || "";
   const userAvatar = user?.image || user?.avatar || user?.profileImageUrl;
+
+  // Only users whose PRIMARY role is admin-capable ever see the switch — see
+  // ADMIN_MENU_ROLES for why this must be orgRole, not the multi-role union.
+  const isAdminEligible = ADMIN_MENU_ROLES.includes(orgRole);
+  // Admins default to the agent menu, so only an explicit "admin" mode counts
+  // as being in the admin menu.
+  const isAdminMenuActive = isAdminEligible && mode === "admin";
+
+  const handleSwitchToAdmin = () => {
+    setMode("admin");
+    navigate(orgRole === "platform_admin" ? "/platform-admin" : "/agency/overview");
+  };
+
+  const handleSwitchToAgent = () => {
+    setMode("agent");
+    navigate("/agent-overview");
+  };
 
   return (
     <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 bg-[#2E3D50] px-4">
@@ -230,10 +253,36 @@ export function AppHeader() {
                 <Settings2 className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>
+              {isAdminEligible && (
+                isAdminMenuActive ? (
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={handleSwitchToAgent}
+                    data-testid="menu-item-back-to-agent"
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back to Agent
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={handleSwitchToAdmin}
+                    data-testid="menu-item-admin"
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    Admin
+                  </DropdownMenuItem>
+                )
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="cursor-pointer text-red-600 focus:text-red-600"
-                onClick={() => logout()}
+                onClick={() => {
+                  // The menu mode is stored per-browser, not per-user — drop it
+                  // so it can't carry over into whoever signs in next.
+                  setMode(null);
+                  logout();
+                }}
                 data-testid="menu-item-logout"
               >
                 <LogOut className="mr-2 h-4 w-4" />

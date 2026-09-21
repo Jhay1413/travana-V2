@@ -798,7 +798,22 @@ export default function PortalHomePage() {
             ) : deals.length === 0 ? (
               <GlassCard className="p-6 text-center">
                 <Tag className="w-8 h-8 text-white/15 mx-auto mb-2" />
-                <p className="text-white/50 text-sm">No deals right now — check back soon!</p>
+                {myTags.length > 0 ? (
+                  <>
+                    <p className="text-white/50 text-sm mb-2" data-testid="text-empty-latest-deals">
+                      No deals match your travel interests yet
+                    </p>
+                    <button
+                      onClick={() => setLocation("/portal/tags")}
+                      className="text-purple-400 text-xs font-semibold hover:text-purple-300 transition-colors"
+                      data-testid="link-empty-latest-deals-edit-interests"
+                    >
+                      Edit your interests
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-white/50 text-sm">No deals right now — check back soon!</p>
+                )}
               </GlassCard>
             ) : (
               <div className="space-y-3">

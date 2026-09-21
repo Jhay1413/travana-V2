@@ -6,6 +6,19 @@ import type { Quote as ApiQuote, Booking, DealImage } from "@/features/quote/typ
 export type QuoteWithJoins = ApiQuote & { holiday_type_name?: string };
 export type BookingWithJoins = Booking & { images?: DealImage[]; holiday_type_name?: string; user_id?: string };
 
+/**
+ * A quote row counts as one of the client's real quotes only when it's not a
+ * copy — a transaction can carry several quote variants, and AllHolidaysPanel's
+ * "Live Deals"/"All Holidays" list (buildQuoteRows) already filters copies out
+ * before rendering. ClientIndexView's "Quotes" stat tile must use this same
+ * predicate: without it, a client whose only live quote is an `isQuoteCopy`
+ * variant (its primary soft-deleted) shows "1 quote" on the tile while the
+ * list right next to it renders nothing.
+ */
+export function isPrimaryQuote<T extends { isQuoteCopy?: boolean | null }>(quote: T): boolean {
+  return !quote.isQuoteCopy;
+}
+
 export type Stage = "Enquiry" | "Quote" | "Booked";
 
 export type ClientTier = "Platinum" | "Gold" | "Standard";

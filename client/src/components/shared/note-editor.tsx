@@ -37,8 +37,17 @@ export function NoteEditor({
     content: initialContent || "",
     editorProps: {
       attributes: {
+        // `prose`/`prose-sm`/`max-w-none` are no-ops (typography plugin isn't
+        // registered) — `[overflow-wrap:anywhere]` forces wrapping explicitly
+        // so a long pasted/typed unbroken string doesn't overflow the editor
+        // box (kept alone, not paired with `break-words`: both set
+        // overflow-wrap and only one wins in the generated CSS). No
+        // `whitespace-pre-wrap` here — Tiptap's Editor auto-injects a
+        // <style> tag with `.ProseMirror { white-space: pre-wrap/break-spaces }`
+        // (see injectCSS() in @tiptap/core), so this editable element already
+        // gets it for free.
         class: cn(
-          "prose prose-sm max-w-none outline-none",
+          "prose prose-sm max-w-none outline-none [overflow-wrap:anywhere]",
           compact ? "min-h-[36px] p-1.5" : "min-h-[44px] p-2"
         ),
       },

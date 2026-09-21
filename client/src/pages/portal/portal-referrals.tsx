@@ -4,6 +4,7 @@ import {
   Gift, Home, ChevronRight, Star, Crown, Shield, Clock, CheckCircle,
   Wallet, TrendingUp, User, CreditCard, Banknote, X, AlertCircle,
   ChevronDown, Inbox, ArrowDownToLine, ArrowUpFromLine, History,
+  type LucideIcon,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import PortalLayout from "./portal-layout";
@@ -55,7 +56,7 @@ type Tier = "not_enrolled" | "standard" | "gold" | "elite";
 
 const TIER_CONFIG: Record<Tier, {
   label: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   gradient: string;
   badge: string;
   ring: string;
@@ -105,7 +106,7 @@ const TIER_CONFIG: Record<Tier, {
   },
 };
 
-const STATUS_CONFIG: Record<PortalReferral["referralStatus"], { label: string; color: string; bg: string; icon: React.ElementType }> = {
+const STATUS_CONFIG: Record<PortalReferral["referralStatus"], { label: string; color: string; bg: string; icon: LucideIcon }> = {
   PENDING: { label: "Pending", color: "text-amber-400", bg: "bg-amber-500/15", icon: Clock },
   IN_WALLET: { label: "In Your Wallet", color: "text-emerald-400", bg: "bg-emerald-500/15", icon: Wallet },
   PAID: { label: "Paid Out", color: "text-blue-400", bg: "bg-blue-500/15", icon: CheckCircle },

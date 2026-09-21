@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Award, Building2, Crown, Medal, Trophy, Users } from "lucide-react";
+import { Award, Building2, Crown, Medal, Trophy, Users, type LucideIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useRole } from "@/hooks/use-role";
@@ -18,7 +18,7 @@ import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOn
 
 type ScopeKey = "agents" | "branches";
 
-const SCOPES: { key: ScopeKey; label: string; icon: React.ElementType }[] = [
+const SCOPES: { key: ScopeKey; label: string; icon: LucideIcon }[] = [
   { key: "agents", label: "Agents", icon: Users },
   { key: "branches", label: "Branches", icon: Building2 },
 ];

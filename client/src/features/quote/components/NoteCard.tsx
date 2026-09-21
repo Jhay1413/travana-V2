@@ -138,7 +138,18 @@ export function NoteCard({
           </div>
         ) : (
           <div
-            className="mt-1 prose prose-sm max-w-none text-[11px] leading-relaxed text-black/70 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3"
+            // `prose`/`prose-sm`/`max-w-none` are no-ops here (no typography
+            // plugin registered) — `[overflow-wrap:anywhere]` alone forces
+            // long unbroken strings to wrap (not paired with `break-words`:
+            // same CSS property set twice, no dedupe). `whitespace-pre-wrap`
+            // is kept: `note.content` here isn't guaranteed to be Tiptap
+            // HTML — AI-extracted enquiry notes are saved as raw text with
+            // literal "\n" (see noteContents/noteRepository.create in
+            // server/v2/modules/transaction/transaction.service.ts:308-313,
+            // sourced from the plain-text `notes` summary in
+            // server/v2/modules/ai-enquiry/ai-enquiry.types.ts:24), so the
+            // line breaks need pre-wrap to render instead of collapsing.
+            className="mt-1 prose prose-sm max-w-none whitespace-pre-wrap [overflow-wrap:anywhere] text-[11px] leading-relaxed text-black/70 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3"
             dangerouslySetInnerHTML={{ __html: note.content || "" }}
             data-testid={`note-content-${note.id}`}
           />

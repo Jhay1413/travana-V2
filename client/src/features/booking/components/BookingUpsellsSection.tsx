@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useFieldArray, useWatch, type Control, type UseFormSetValue } from "react-hook-form";
-import { Plus, X, PackagePlus } from "lucide-react";
+import { Plus, X, PackagePlus, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -23,7 +23,7 @@ import type { TourOperator } from "@/features/tour-operator/types";
 
 // ─── Section Header (mirrors quote-extras-section) ────────────────────────────
 
-function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
+function SectionHeader({ icon: Icon, title }: { icon: LucideIcon; title: string }) {
   return (
     <div className="flex items-center gap-2 text-sm font-semibold">
       <Icon className="h-4 w-4" />

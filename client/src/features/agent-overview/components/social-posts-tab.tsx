@@ -97,11 +97,11 @@ export function SocialPostsTab({
   );
 
   const overviewSocialPosts = useMemo(() => {
-    if (!freeQuotesData) return [] as { quote: EnrichedQuote; clientId: string }[];
-    const posts: { quote: EnrichedQuote; clientId: string }[] = [];
+    if (!freeQuotesData) return [] as { quote: EnrichedQuote }[];
+    const posts: { quote: EnrichedQuote }[] = [];
     for (const page of freeQuotesData.pages) {
       for (const q of page.quotes) {
-        posts.push({ quote: q as EnrichedQuote, clientId: (q as any).client_id || "" });
+        posts.push({ quote: q as EnrichedQuote });
       }
     }
     return posts;
@@ -179,7 +179,7 @@ export function SocialPostsTab({
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <AnimatePresence mode="popLayout">
-            {filteredOverviewSocialPosts.slice(0, 8).map(({ quote, clientId }) => {
+            {filteredOverviewSocialPosts.slice(0, 8).map(({ quote }) => {
               const imageUrl = spGetFirstImage(quote);
               const tourOp = quote.main_tour_operator_name;
               const pricePerPerson = quote.price_per_person
@@ -370,7 +370,7 @@ export function SocialPostsTab({
                     )}
 
                     <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8 flex flex-col gap-3">
-                      <Link href={`/clients/${clientId}/quotes/${quote.id}`}>
+                      <Link href={`/social-posts/quotes/${quote.id}`}>
                         <Button
                           variant="outline"
                           className="w-full rounded-xl text-sm font-medium gap-2"

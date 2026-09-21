@@ -11,6 +11,13 @@ export interface AgentStats {
   monthProfit: number;
   bookingsCount: number;
   avgBookingValue: number;
+  todayBookingsCount: number;
+  weekBookingsCount: number;
+  monthBookingsCount: number;
+  monthAvgBookingValue: number;
+  todayUpsellsCount: number;
+  weekUpsellsCount: number;
+  monthUpsellsCount: number;
   totalOpenQuotesValue: number;
   quotesCount: number;
 }

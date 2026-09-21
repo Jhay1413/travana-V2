@@ -45,6 +45,7 @@ import {
   Video,
   X,
   Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { type LeaveType, type LeaveEntry } from "@/features/hr/api/hr.api";
 import { useMyHrRecord } from "@/hooks/queries";
@@ -1135,7 +1136,7 @@ export default function HubProfiles() {
   const holidayLeft = Math.max(0, holidayAllowance - holidayUsed);
   const trophyCount = MOCK_ACHIEVEMENTS.filter((a) => a.earned).length;
 
-  const tabs: { key: ProfileTab; label: string; icon: React.ElementType }[] = [
+  const tabs: { key: ProfileTab; label: string; icon: LucideIcon }[] = [
     { key: "timeline", label: "Timeline", icon: FileText },
     { key: "knowledge", label: "Knowledge", icon: BookOpen },
     { key: "training", label: "Training", icon: GraduationCap },

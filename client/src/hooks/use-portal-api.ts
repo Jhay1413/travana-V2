@@ -173,7 +173,8 @@ export const portalKeys = {
   user: ["portal", "user"] as const,
   quotes: ["portal", "quotes"] as const,
   bookings: ["portal", "bookings"] as const,
-  deals: (country?: string, tag?: string) => ["portal", "deals", country ?? "", tag ?? ""] as const,
+  deals: (country?: string, tag?: string, matchInterests?: boolean) =>
+    ["portal", "deals", country ?? "", tag ?? "", matchInterests ? "interests" : "all"] as const,
   latestDeals: ["portal", "latestDeals"] as const,
   forYouDeals: ["portal", "forYouDeals"] as const,
   dealFilters: ["portal", "dealFilters"] as const,
@@ -236,18 +237,24 @@ export function usePortalBookings() {
   });
 }
 
-/** Browse Deals page. v2 route with recent=1: shows every deal still inside the
- *  portal window, so expired free quotes are excluded here exactly as they are
- *  from the home "Latest Deals" strip. */
-export function usePortalDeals(country?: string, tag?: string) {
+/** Browse Deals page ("Latest Deals" tab). v2 route with recent=1: shows every
+ *  deal still inside the portal window, so expired free quotes are excluded
+ *  here exactly as they are from the home "Latest Deals" strip. `matchInterests`
+ *  restricts to deals sharing a tag with the client's saved Travel Interests —
+ *  it's the tab's default (server-side) but removable via a chip in the UI.
+ *  `enabled` lets the caller hold the fetch off (e.g. until it knows whether the
+ *  client has saved interests) so the query key doesn't flip from "all" to
+ *  "interests" after an unfiltered list has already rendered. */
+export function usePortalDeals(country?: string, tag?: string, matchInterests?: boolean, enabled = true) {
   const params = new URLSearchParams({ recent: "1" });
   if (country) params.set("country", country);
   if (tag) params.set("tag", tag);
+  if (matchInterests) params.set("interests", "1");
   return useQuery<PortalDeal[]>({
-    queryKey: portalKeys.deals(country, tag),
+    queryKey: portalKeys.deals(country, tag, matchInterests),
     queryFn: () => portalFetch(`/api/v2/portal/deals?${params.toString()}`),
     retry: false,
-    enabled: !!getPortalToken(),
+    enabled: !!getPortalToken() && enabled,
     refetchOnWindowFocus: true,
     refetchOnMount: "always",
     staleTime: 0,
@@ -255,11 +262,12 @@ export function usePortalDeals(country?: string, tag?: string) {
 }
 
 /** Home "Latest Deals" — v2 route, limited to deals added to the portal in the last
- *  7 days. Distinct from usePortalDeals (browse page), which shows all portal deals. */
+ *  7 days and (server-side) to ones matching the client's saved Travel Interests.
+ *  Distinct from usePortalDeals (browse page), which shows all portal deals. */
 export function usePortalLatestDeals() {
   return useQuery<PortalDeal[]>({
     queryKey: portalKeys.latestDeals,
-    queryFn: () => portalFetch("/api/v2/portal/deals?recent=1"),
+    queryFn: () => portalFetch("/api/v2/portal/deals?recent=1&interests=1"),
     retry: false,
     enabled: !!getPortalToken(),
     refetchOnWindowFocus: true,
@@ -419,8 +427,11 @@ export function useSavePortalTags() {
       queryClient.setQueryData(portalKeys.hasTags, { hasTags: true });
       queryClient.invalidateQueries({ queryKey: portalKeys.myTags });
       queryClient.invalidateQueries({ queryKey: portalKeys.hasTags });
-      // Interests changed → "For You" (personalized) and "Latest Deals" must refresh.
+      // Interests changed → "For You" (personalized) and both "Latest Deals"
+      // surfaces (home widget + browse page tab, both now interest-filtered
+      // server-side) must refresh.
       queryClient.invalidateQueries({ queryKey: portalKeys.forYouDeals });
+      queryClient.invalidateQueries({ queryKey: portalKeys.latestDeals });
       queryClient.invalidateQueries({ queryKey: ["portal", "deals"] });
     },
   });

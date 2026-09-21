@@ -428,6 +428,7 @@ export function QuoteCreateDialog({
       submitLabel={socialPost ? "Create Social Post" : "Create Quote"}
       onCancel={isDrawer ? undefined : () => onOpenChange(false)}
       initialImageUrls={initialImages}
+      socialPost={socialPost}
     />
   );
 

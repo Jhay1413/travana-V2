@@ -332,6 +332,13 @@ export const dashboardRepository = {
     monthProfit: number;
     bookingsCount: number;
     avgBookingValue: number;
+    todayBookingsCount: number;
+    weekBookingsCount: number;
+    monthBookingsCount: number;
+    monthAvgBookingValue: number;
+    todayUpsellsCount: number;
+    weekUpsellsCount: number;
+    monthUpsellsCount: number;
     totalOpenQuotesValue: number;
     quotesCount: number;
   }> {
@@ -357,6 +364,9 @@ export const dashboardRepository = {
         monthProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${commission} ELSE 0 END), 0)`,
         totalBookingValue: sql<number>`COALESCE(SUM(${commission}), 0)`,
         bookingsCount: sql<number>`COUNT(*)`,
+        todayBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${todayStart.toISOString()})`,
+        weekBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${weekStart.toISOString()})`,
+        monthBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()})`,
       })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
@@ -386,6 +396,9 @@ export const dashboardRepository = {
         todayUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${todayStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
         weekUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${weekStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
         monthUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${monthStart.toISOString()} AND ${booking_upsell.added_at} < ${monthEnd.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+        todayUpsellsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking_upsell.added_at} >= ${todayStart.toISOString()})`,
+        weekUpsellsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking_upsell.added_at} >= ${weekStart.toISOString()})`,
+        monthUpsellsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking_upsell.added_at} >= ${monthStart.toISOString()} AND ${booking_upsell.added_at} < ${monthEnd.toISOString()})`,
       })
         .from(booking_upsell)
         .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
@@ -403,13 +416,22 @@ export const dashboardRepository = {
     const ua = upsellAgg[0];
     const bookingsCount = Number(ba.bookingsCount);
     const totalBookingValue = Number(ba.totalBookingValue);
+    const monthBookingsCount = Number(ba.monthBookingsCount);
+    const monthProfit = Number(ba.monthProfit) + Number(ua.monthUpsell);
 
     return {
       todayProfit: Number(ba.todayProfit) + Number(ua.todayUpsell),
       weekProfit: Number(ba.weekProfit) + Number(ua.weekUpsell),
-      monthProfit: Number(ba.monthProfit) + Number(ua.monthUpsell),
+      monthProfit,
       bookingsCount,
       avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0,
+      todayBookingsCount: Number(ba.todayBookingsCount),
+      weekBookingsCount: Number(ba.weekBookingsCount),
+      monthBookingsCount,
+      monthAvgBookingValue: monthBookingsCount > 0 ? monthProfit / monthBookingsCount : 0,
+      todayUpsellsCount: Number(ua.todayUpsellsCount),
+      weekUpsellsCount: Number(ua.weekUpsellsCount),
+      monthUpsellsCount: Number(ua.monthUpsellsCount),
       totalOpenQuotesValue: Number(oq.totalOpenQuotesValue),
       quotesCount: Number(oq.quotesCount),
     };

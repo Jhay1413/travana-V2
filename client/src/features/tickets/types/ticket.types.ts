@@ -39,3 +39,7 @@ export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "
   dueDate?: string | null;
   assignedTo?: string | null;
 };
+
+// Which slice of GET /tickets to fetch — mirrors the server's TicketListMode.
+// "all" is admin-only; the server rejects it for anyone else.
+export type TicketListScope = "mine" | "raised" | "all";

@@ -4,7 +4,7 @@ import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import type { UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2 } from "lucide-react";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2, type LucideIcon } from "lucide-react";
 import { walletApi } from "@/features/wallet/api/wallet.api";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { QuoteImagesSection } from "@/features/quote/components/sections/QuoteImagesSection";
@@ -19,7 +19,7 @@ import { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/
 import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues, UpsellsFormValues } from "@/features/booking/types";
 import { QuoteExtrasSection as BookingExtrasSection } from "@/features/quote/components/quote-extras-section";
 import { TRANSFER_TYPES } from "@/features/quote/types/quote-form.types";
-import { operatorCommissionPct, recomputePricing } from "@/features/quote/lib/pricing";
+import { operatorCommissionPct, recomputePricing, pricePerPersonFor } from "@/features/quote/lib/pricing";
 import { BookingUpsellsSection } from "@/features/booking/components/BookingUpsellsSection";
 import { QuoteLodgeDetailsSection } from "@/features/quote/components/sections/QuoteLodgeDetailsSection";
 import { QuoteCruiseDetailsSection } from "@/features/quote/components/sections/QuoteCruiseDetailsSection";
@@ -89,7 +89,7 @@ function SectionHeader({
   icon: Icon,
   title,
 }: {
-  icon: React.ElementType;
+  icon: LucideIcon;
   title: string;
 }) {
   return (
@@ -460,17 +460,19 @@ export function BookingRHFForm({
   }, [passengersChildren, setValue, form]);
 
   // ── Price per person calculation ──────────────────────────────────────────
+  // Derived from price/discount/serviceCharge/traveller counts via the shared
+  // helper (features/quote/lib/pricing) so this recomputes the same way whether
+  // those fields changed from typing OR from an import's setValue calls.
+  // `price` must be a dependency, not just read off getValues — otherwise an
+  // import that sets price without changing the traveller counts (which start
+  // at the same default) never re-fires this effect and price-per-person is
+  // left stale until the agent edits price/discount/service charge by hand.
   useEffect(() => {
-    const price = Number(form.getValues("price")) || 0;
-    const currentDiscount = Number(form.getValues("discount")) || 0;
-    const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-    const adults = Number(passengersAdults) || 0;
-    const children = Number(passengersChildren) || 0;
-    const total = adults + children;
-    // Total price = price − discount + service charge, split across all passengers.
-    const netPrice = price - currentDiscount + currentServiceCharge;
-    setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+    setValue(
+      "pricePerPerson",
+      pricePerPersonFor(price, discount, serviceCharge, passengersAdults, passengersChildren),
+    );
+  }, [price, passengersAdults, passengersChildren, discount, serviceCharge, setValue]);
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   // Commission = price × operator % − discount + service charge. The discount is
