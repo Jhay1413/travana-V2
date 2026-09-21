@@ -2,14 +2,14 @@ import { Router } from "express";
 import multer from "multer";
 import { transactionController } from "./transaction.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { updatePriorityValidator, setFutureDealValidator, setLostValidator } from "./transaction.validator";
+import { updatePriorityValidator, setFutureDealValidator, setLostValidator, listPipelineByStatusValidator } from "./transaction.validator";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 router.get("/", transactionController.listTransactions);
 router.get("/pipeline", transactionController.listTransactionsLightweight);
-router.get("/pipeline/:status", transactionController.listPipelineByStatus);
+router.get("/pipeline/:status", validate(listPipelineByStatusValidator), transactionController.listPipelineByStatus);
 router.get("/expiring-quotes", transactionController.getExpiringQuotes);
 router.get("/stats", transactionController.getStats);
 // Registered before the generic /:id routes below so these specific-path

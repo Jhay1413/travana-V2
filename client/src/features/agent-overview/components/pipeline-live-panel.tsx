@@ -4,6 +4,8 @@ import { User } from "lucide-react";
 import { usePipelineColumn } from "@/hooks/queries";
 import type { Transaction } from "@/features/quote/types";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { SortBy } from "@/features/opportunities";
 import { currency } from "./helpers";
 import { SegmentedTabs } from "./dashboard-ui";
 
@@ -14,6 +16,48 @@ const TABS: Array<{ value: LiveTab; label: string }> = [
   { value: "quotes", label: "Quotes" },
   { value: "bookings", label: "Bookings" },
 ];
+
+// How the panel's list is ordered/filtered. "newest"/"oldest" reuse the same
+// sort VALUES (and semantics) as the Opportunities list's sortByOptions, with
+// shorter labels to fit this panel's compact header — "price-high"/"price-low"
+// are excluded because this panel only ever shows a small top-N slice per
+// stage, so a true price sort isn't available without fetching (and pricing)
+// the entire pipeline. "oldest-activity" sorts by last_activity_at (deals
+// with no/stale activity first) — computed server-side from notes/tasks/
+// quote/enquiry/booking timestamps, not the same as "oldest" (by created_at).
+// "In Play" reuses the existing pipeline stage concept (see
+// PipelineColumnStatus / PipelineStage "In Play") as a filter, applicable
+// only within the Quotes tab.
+// `Extract<SortBy, ...>` ties "newest"/"oldest" to the shared sortByOptions
+// values at compile time (source of truth); the panel uses its own, shorter
+// display labels below rather than sortByOptions' full "Newest First"/"Oldest First".
+type LiveView = Extract<SortBy, "newest" | "oldest"> | "oldest-activity" | "in_play";
+
+const VIEW_OPTIONS: Array<{ value: LiveView; label: string }> = [
+  { value: "newest", label: "Latest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "oldest-activity", label: "Oldest Activity" },
+  { value: "in_play", label: "In Play" },
+];
+
+const VIEW_STORAGE_KEY = "pipeline-live.view";
+
+function loadView(): LiveView {
+  try {
+    const raw = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    return raw === "oldest" || raw === "oldest-activity" || raw === "in_play" ? raw : "newest";
+  } catch {
+    return "newest";
+  }
+}
+
+function saveView(view: LiveView) {
+  try {
+    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+  } catch {
+    // Storage may be unavailable (private mode, quota) — the choice just won't persist.
+  }
+}
 
 const CHIP_PALETTE = [
   "bg-red-500",
@@ -120,38 +164,109 @@ function dealHref(t: Transaction, tab: LiveTab): string {
 export function PipelineLivePanel({ userId, className }: { userId: string; className?: string }) {
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<LiveTab>("quotes");
+  const [view, setView] = useState<LiveView>(loadView);
   const enabled = !!userId;
 
-  const enquiryQ = usePipelineColumn("enquiry", 10, userId, undefined, { enabled });
-  const quoteQ = usePipelineColumn("quote", 10, userId, undefined, { enabled: enabled && tab === "quotes" });
-  const inPlayQ = usePipelineColumn("in_play", 10, userId, undefined, { enabled: enabled && tab === "quotes" });
-  const bookingQ = usePipelineColumn("booking", 10, userId, undefined, { enabled: enabled && tab === "bookings" });
+  // "In Play" is a filter (only meaningful within the Quotes tab, whose data
+  // already blends the "quote" and "in_play" pipeline stages); "oldest"/
+  // "oldest-activity" are a real sort, threaded through to the server so the
+  // top-8 slice is drawn from the correctly-ordered rows rather than re-sorting
+  // an already newest-first page (see transaction.repository.ts findPipelineByStatus
+  // / findPipelineCandidates and transaction.service.ts listPipelineByOldestActivity).
+  // The default view passes `sort: undefined` (not "newest") so its query key
+  // matches the no-sort-param call other pipeline consumers (e.g.
+  // pipeline-section.tsx) already make, instead of caching a duplicate copy.
+  const sort: "oldest" | "oldest-activity" | undefined =
+    view === "oldest" ? "oldest" : view === "oldest-activity" ? "oldest-activity" : undefined;
+  const showInPlayOnly = view === "in_play";
+  const byOldestActivity = view === "oldest-activity";
+
+  // enquiryQ has always fired regardless of the active tab (a prefetch so
+  // switching to Enquiry feels instant) — kept for the cheap newest/oldest
+  // sorts, but the "oldest activity" candidate fetch is expensive (a capped
+  // full-column enrichment, see listPipelineByOldestActivity), so it's only
+  // enabled for the tab that's actually showing it. "In Play" never shows
+  // enquiry/booking-tab data (see `items` below), so those queries — and the
+  // Quotes tab's plain `quote` query, unused while showing In Play only —
+  // don't fire at all in that view.
+  const enquiryEnabled = enabled && !showInPlayOnly && (tab === "enquiry" || !byOldestActivity);
+  const quoteEnabled = enabled && tab === "quotes" && !showInPlayOnly;
+  const inPlayEnabled = enabled && tab === "quotes";
+  const bookingEnabled = enabled && tab === "bookings" && !showInPlayOnly;
+
+  const enquiryQ = usePipelineColumn("enquiry", 10, userId, undefined, { enabled: enquiryEnabled }, sort);
+  const quoteQ = usePipelineColumn("quote", 10, userId, undefined, { enabled: quoteEnabled }, sort);
+  const inPlayQ = usePipelineColumn("in_play", 10, userId, undefined, { enabled: inPlayEnabled }, sort);
+  const bookingQ = usePipelineColumn("booking", 10, userId, undefined, { enabled: bookingEnabled }, sort);
+
+  const handleViewChange = (next: LiveView) => {
+    setView(next);
+    saveView(next);
+  };
 
   const items = useMemo(() => {
     const flat = (q: typeof enquiryQ) => q.data?.pages.flatMap((p) => p.items) ?? [];
+    // In-play deals only ever surface inside the Quotes tab's data — the
+    // Enquiry/Bookings tabs have nothing to show for this filter, so they
+    // fall through to the panel's existing empty state.
     const list =
       tab === "enquiry"
-        ? flat(enquiryQ)
+        ? showInPlayOnly ? [] : flat(enquiryQ)
         : tab === "quotes"
-          ? [...flat(quoteQ), ...flat(inPlayQ)]
-          : flat(bookingQ);
+          ? showInPlayOnly ? flat(inPlayQ) : [...flat(quoteQ), ...flat(inPlayQ)]
+          : showInPlayOnly ? [] : flat(bookingQ);
+    // "Oldest Activity" merges two already last_activity_at-sorted pages (Quotes
+    // tab's quote + in_play queries) the same way "newest"/"oldest" merge two
+    // already created_at-sorted pages — no/stale activity first, nulls first.
+    if (byOldestActivity) {
+      return [...list]
+        .sort((a, b) => {
+          const at = a.last_activity_at ? new Date(a.last_activity_at).getTime() : null;
+          const bt = b.last_activity_at ? new Date(b.last_activity_at).getTime() : null;
+          if (at === null && bt === null) return 0;
+          if (at === null) return -1;
+          if (bt === null) return 1;
+          return at - bt;
+        })
+        .slice(0, 8);
+    }
     return [...list]
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .sort((a, b) => {
+        const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return view === "oldest" ? -diff : diff;
+      })
       .slice(0, 8);
-  }, [tab, enquiryQ.data, quoteQ.data, inPlayQ.data, bookingQ.data]);
+  }, [tab, view, byOldestActivity, showInPlayOnly, enquiryQ.data, quoteQ.data, inPlayQ.data, bookingQ.data]);
 
   const isLoading =
     tab === "enquiry"
-      ? enquiryQ.isLoading
+      ? showInPlayOnly ? false : enquiryQ.isLoading
       : tab === "quotes"
-        ? quoteQ.isLoading || inPlayQ.isLoading
-        : bookingQ.isLoading;
+        ? showInPlayOnly ? inPlayQ.isLoading : quoteQ.isLoading || inPlayQ.isLoading
+        : showInPlayOnly ? false : bookingQ.isLoading;
 
   return (
     <div className={className} data-testid="panel-pipeline-live">
       {/* Horizontal padding lives on the sections, not the panel, so the
           separator under the title spans the full panel width. */}
-      <div className="px-5 text-sm font-semibold">Pipeline Live!</div>
+      <div className="flex items-center justify-between gap-2 px-5">
+        <div className="text-sm font-semibold">Pipeline Live!</div>
+        <Select value={view} onValueChange={(v) => handleViewChange(v as LiveView)}>
+          <SelectTrigger
+            className="h-7 w-[136px] rounded-lg border-black/10 bg-black/5 px-2 text-xs dark:border-white/10 dark:bg-white/5"
+            data-testid="select-pipeline-live-view"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end">
+            {VIEW_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value} className="text-xs" data-testid={`option-pipeline-live-view-${o.value}`}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="mt-4 border-t border-black/10 px-5 pt-4 dark:border-white/10">
         <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} testIdPrefix="pipeline-live-tab" fullWidth transparent />
@@ -160,6 +275,8 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
       <div className="mt-4 space-y-2 px-4">
         {isLoading ? (
           <div className="py-6 text-center text-xs text-muted-foreground">Loading…</div>
+        ) : showInPlayOnly && tab !== "quotes" ? (
+          <div className="py-6 text-center text-xs text-muted-foreground">In Play applies to quotes only</div>
         ) : items.length === 0 ? (
           <div className="py-6 text-center text-xs text-muted-foreground">
             No {tab === "enquiry" ? "enquiries" : tab} yet

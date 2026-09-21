@@ -11,6 +11,7 @@ import {
   type ImportValidation,
 } from "@/features/quote/api/use-page-capture-import";
 import { withMoneyFieldsQuarantined } from "@/features/quote/lib/import-validation";
+import { pricePerPersonFor } from "@/features/quote/lib/pricing";
 import { ImportValidationPanel } from "@/features/quote/components/sections/ImportValidationPanel";
 import { SupplierScraperPicksResultView, type SupplierScraperPicksResult } from "@/features/supplier-scraper";
 import {
@@ -168,17 +169,19 @@ export function QuoteRHFForm({
   }, [passengersChildren, setValue, form]);
 
   // ── Price per person calculation ──────────────────────────────────────────
+  // Derived from price/discount/serviceCharge/traveller counts via the shared
+  // helper (features/quote/lib/pricing) so this recomputes the same way whether
+  // those fields changed from typing OR from a deal import's setValue calls.
+  // `price` must be a dependency, not just read off getValues — otherwise an
+  // import that sets price without changing the traveller counts (which start
+  // at the same default) never re-fires this effect and price-per-person is
+  // left stale until the agent edits price/discount/service charge by hand.
   useEffect(() => {
-    const price = Number(form.getValues("price")) || 0;
-    const currentDiscount = Number(form.getValues("discount")) || 0;
-    const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-    const adults = Number(passengersAdults) || 0;
-    const children = Number(passengersChildren) || 0;
-    const total = adults + children;
-    // Total price = price − discount + service charge, split across all passengers.
-    const netPrice = price - currentDiscount + currentServiceCharge;
-    setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+    setValue(
+      "pricePerPerson",
+      pricePerPersonFor(price, discount, serviceCharge, passengersAdults, passengersChildren),
+    );
+  }, [price, passengersAdults, passengersChildren, discount, serviceCharge, setValue]);
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   // Commission = price × operator % − discount + service charge. The discount is

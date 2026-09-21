@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { ticketController } from "./ticket.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { createTicketValidator, updateTicketValidator, ticketIdValidator } from "./ticket.validator";
+import { createTicketValidator, updateTicketValidator, ticketIdValidator, listTicketsValidator } from "./ticket.validator";
 
 const router = Router();
 
-router.get("/", ticketController.listTickets);
+router.get("/", validate(listTicketsValidator), ticketController.listTickets);
 router.get("/:id", ticketController.getTicketById);
 router.get("/client/:clientId", ticketController.listTicketsByClient);
 router.get("/user/:userId", ticketController.listTicketsByUser);

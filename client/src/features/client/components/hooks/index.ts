@@ -1,4 +1,5 @@
 export { useClientEditForm, type ClientEditForm } from "./use-client-edit-form";
+export { useClientCreateForm, type ClientCreateForm } from "./use-client-create-form";
 export { useClientFiles } from "./use-client-files";
 export { useClientTaskCreate } from "./use-client-task-create";
 export { useClientTicketCreate } from "./use-client-ticket-create";

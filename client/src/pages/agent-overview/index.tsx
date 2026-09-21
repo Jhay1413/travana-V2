@@ -64,6 +64,13 @@ export default function AgentOverviewPage() {
       totalOpenQuotesValue: agentStats?.totalOpenQuotesValue ?? 0,
       bookingsCount: agentStats?.bookingsCount ?? 0,
       quotesCount: agentStats?.quotesCount ?? 0,
+      todayBookingsCount: agentStats?.todayBookingsCount,
+      weekBookingsCount: agentStats?.weekBookingsCount,
+      monthBookingsCount: agentStats?.monthBookingsCount,
+      monthAvgBookingValue: agentStats?.monthAvgBookingValue ?? 0,
+      todayUpsellsCount: agentStats?.todayUpsellsCount,
+      weekUpsellsCount: agentStats?.weekUpsellsCount,
+      monthUpsellsCount: agentStats?.monthUpsellsCount,
     };
   }, [agentStats, shopTargetsData, agentTargetsData]);
 

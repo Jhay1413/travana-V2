@@ -5,7 +5,7 @@ import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, getTableC
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
 import { buildTransactionRecordScopeConds } from "../../utils/scope-conditions";
-import type { NextTask } from "./transaction.types";
+import type { NextTask, PipelineCandidateItem } from "./transaction.types";
 
 interface ConnectingLeg extends Partial<InsertQuoteFlight> {}
 interface BookingConnectingLeg extends Partial<InsertBookingFlight> {}
@@ -601,6 +601,172 @@ function bumpStaleExpirySql(column: Column) {
   return sql`CASE WHEN ${column} IS NULL OR ${column} < NOW() THEN NOW() + INTERVAL '7 days' ELSE ${column} END`;
 }
 
+const PIPELINE_COLUMNS = ["enquiry", "quoted", "in_play", "booking", "future", "lost"] as const;
+
+// Shared by findPipelineByStatus and findPipelineCandidates so both the
+// normal (SQL-ordered) path and the "oldest activity" candidate-fetch path
+// (see transaction.service.ts) filter identically. Column keys are the board
+// column identifiers; callers must validate `column` against PIPELINE_COLUMNS
+// before calling. Phase 3: status-derivation model — each column maps purely
+// to transaction.status + (for quoted/in_play) the primary quote's quote_status.
+// No time-window filters; expiry is display-only.
+function buildPipelineConditions(scope: Scope | undefined, column: string, agentId?: string, quoteStatusFilter?: string): SQL {
+  // Base conditions shared by every column.
+  const conditions: SQL[] = [
+    sql`${transaction.client_id} IS NOT NULL`,
+    eq(transaction.is_test, false),
+    ...buildTxnScopeConds(scope),
+  ];
+  if (agentId) conditions.push(eq(transaction.user_id, agentId));
+
+  // Display filter for the Enquiry / Quoted / In Play columns, derived from dates the
+  // same way as server/v2/utils/expiry.ts (effectiveExpiry = date_expiry, else date_created + 7d).
+  // We show items that are EITHER not yet expired (effectiveExpiry >= NOW()) OR expired but
+  // within the current calendar month (effectiveExpiry >= start-of-month). Those two cases
+  // collapse to a single bound: effectiveExpiry >= DATE_TRUNC('month', NOW()). Expired-this-month
+  // cards still surface so the agent can act on them (the client pulses their border); anything
+  // that expired in a previous month drops off the board.
+  // NOTE: this filters DISPLAY only — it never mutates quote_status / enquiry.status.
+  const enquiryVisible = sql`(
+    (e.date_expiry IS NOT NULL AND e.date_expiry >= DATE_TRUNC('month', NOW()))
+    OR (e.date_expiry IS NULL AND e.date_created >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
+  )`;
+  const quoteVisible = sql`(
+    (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= DATE_TRUNC('month', NOW()))
+    OR (${quote.date_expiry} IS NULL AND ${quote.date_created} >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
+  )`;
+
+  if (column === "enquiry") {
+    // Enquiry column: an active, non-lost, non-expired, non-future enquiry is still pending.
+    conditions.push(eq(transaction.status, "on_enquiry"));
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM ${enquiry_table} e
+      WHERE e.transaction_id = ${transaction.id}
+        AND e.is_active IS NOT FALSE
+        AND e.status <> 'LOST'
+        AND e.is_future_deal IS NOT TRUE
+        AND ${enquiryVisible}
+    )`);
+  } else if (column === "quoted") {
+    // Quoted column: deal is on_quote AND its primary quote is 'quoted', not expired, not a future deal.
+    conditions.push(eq(transaction.status, "on_quote"));
+    // Legacy quoteStatusFilter: if provided, it overrides the default 'quoted' match
+    // in the EXISTS. Kept for backwards compat but largely redundant post-Phase 3.
+    const quotedStatus = (quoteStatusFilter && quoteStatusFilter === "in_play") ? "in_play" : "quoted";
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM ${quote}
+      WHERE ${quote.transaction_id} = ${transaction.id}
+        AND ${quote.isQuoteCopy} = FALSE
+        AND ${quote.deleted_at} IS NULL
+        AND ${quote.quote_status}::text = ${quotedStatus}
+        AND ${quote.is_future_deal} IS NOT TRUE
+        AND ${quoteVisible}
+    )`);
+  } else if (column === "in_play") {
+    // In Play column: deal is on_quote AND its primary quote is 'in_play', not expired, not a future deal.
+    conditions.push(eq(transaction.status, "on_quote"));
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM ${quote}
+      WHERE ${quote.transaction_id} = ${transaction.id}
+        AND ${quote.isQuoteCopy} = FALSE
+        AND ${quote.deleted_at} IS NULL
+        AND ${quote.quote_status}::text = 'in_play'
+        AND ${quote.is_future_deal} IS NOT TRUE
+        AND ${quoteVisible}
+    )`);
+  } else if (column === "booking") {
+    // booking column: transaction.status = 'on_booking', limited to bookings
+    // created in the current calendar month (keeps the column focused on recent wins).
+    // Excludes LOST bookings so a booking can't appear in both Booked and Lost.
+    conditions.push(eq(transaction.status, "on_booking"));
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM ${booking}
+      WHERE ${booking.transaction_id} = ${transaction.id}
+        AND ${booking.date_created} >= DATE_TRUNC('month', NOW())
+        AND ${booking.booking_status}::text IS DISTINCT FROM 'LOST'
+    )`);
+  } else if (column === "future") {
+    // Future column: an enquiry/quote earmarked for a future date. No expiry window.
+    conditions.push(sql`(
+      (${transaction.status} = 'on_enquiry' AND EXISTS (
+        SELECT 1 FROM ${enquiry_table} e
+        WHERE e.transaction_id = ${transaction.id}
+          AND e.is_active IS NOT FALSE
+          AND e.is_future_deal = TRUE
+          AND e.status <> 'LOST'
+      ))
+      OR (${transaction.status} = 'on_quote' AND EXISTS (
+        SELECT 1 FROM ${quote}
+        WHERE ${quote.transaction_id} = ${transaction.id}
+          AND ${quote.isQuoteCopy} = FALSE
+          AND ${quote.deleted_at} IS NULL
+          AND ${quote.quote_status}::text != 'lost'
+          AND ${quote.is_future_deal} = TRUE
+      ))
+    )`);
+  } else {
+    // lost column: an enquiry/primary-quote/booking explicitly marked lost. No expiry window.
+    // Free quotes (isFreeQuote) are excluded from lost detection entirely — they
+    // aren't a customer-facing stage and shouldn't drive the deal's pipeline column.
+    // NULL quote_status is treated as "not lost" throughout (matches the eq() below
+    // and the IS DISTINCT FROM check, both of which are NULL-safe).
+    conditions.push(sql`(
+      (${transaction.status} = 'on_enquiry' AND EXISTS (
+        SELECT 1 FROM ${enquiry_table} e
+        WHERE e.transaction_id = ${transaction.id} AND e.status = 'LOST'
+      ))
+      OR (${transaction.status} = 'on_quote' AND EXISTS (
+        SELECT 1 FROM ${quote}
+        WHERE ${quote.transaction_id} = ${transaction.id}
+          AND ${quote.isQuoteCopy} = FALSE
+          AND ${quote.deleted_at} IS NULL
+          AND ${quote.isFreeQuote} IS NOT TRUE
+          AND ${quote.quote_status}::text = 'lost'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM ${quote}
+        WHERE ${quote.transaction_id} = ${transaction.id}
+          AND ${quote.isQuoteCopy} = FALSE
+          AND ${quote.deleted_at} IS NULL
+          AND ${quote.isFreeQuote} IS NOT TRUE
+          AND (${quote.quote_status}::text IS DISTINCT FROM 'lost')
+      ))
+      OR (${transaction.status} = 'on_booking' AND EXISTS (
+        SELECT 1 FROM ${booking}
+        WHERE ${booking.transaction_id} = ${transaction.id} AND ${booking.booking_status}::text = 'LOST'
+      ))
+    )`);
+  }
+
+  return and(...conditions)!;
+}
+
+// "oldest" reverses the default newest-first order (used by the agent
+// dashboard's Pipeline Live "Oldest" view); "oldest-activity" is handled
+// separately (see findPipelineCandidates + transaction.service.ts, since
+// last_activity_at is computed in JS, not a SQL column) and never reaches
+// this function. The future column overrides this with its own ordering.
+function buildPipelineOrderBy(column: string, sort?: "newest" | "oldest"): SQL {
+  if (column === "future") {
+    // Sort by the earmarked future date, soonest first, falling back to created_at.
+    const futureDealDateExpr = sql`(
+      CASE WHEN ${transaction.status} = 'on_enquiry'
+        THEN (
+          SELECT e.future_deal_date FROM ${enquiry_table} e
+          WHERE e.transaction_id = ${transaction.id} AND e.is_future_deal = TRUE
+          ORDER BY e.date_created DESC LIMIT 1
+        )
+        ELSE (
+          SELECT ${quote.future_deal_date} FROM ${quote}
+          WHERE ${quote.transaction_id} = ${transaction.id} AND ${quote.isQuoteCopy} = FALSE AND ${quote.deleted_at} IS NULL
+          ORDER BY ${quote.future_deal_date} ASC NULLS LAST LIMIT 1
+        )
+      END
+    )`;
+    return sql`${futureDealDateExpr} ASC NULLS LAST, ${transaction.created_at} DESC`;
+  }
+  return sort === "oldest" ? sql`${transaction.created_at} ASC` : sql`${transaction.created_at} DESC`;
+}
+
 export const transactionRepository = {
   async findById(id: string, scope?: Scope): Promise<Transaction | undefined> {
     // Record-level access: staff may open any deal in their org (no branch
@@ -726,162 +892,16 @@ export const transactionRepository = {
     return enrichTransactionsLightweight(txns);
   },
 
-  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
-    // Phase 3: status-derivation model. Column keys: enquiry | quoted | in_play | booking | future | lost.
-    // Each column maps purely to transaction.status + (for quoted/in_play) the primary
-    // quote's quote_status. No time-window filters; expiry is display-only.
-
+  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest"): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
     const emptyPage = { items: [] as any[], total: 0, page, hasMore: false, totalProfit: 0, totalValue: 0 };
 
-    if (!["enquiry", "quoted", "in_play", "booking", "future", "lost"].includes(column)) {
+    if (!(PIPELINE_COLUMNS as readonly string[]).includes(column)) {
       return emptyPage;
     }
 
-    // Base conditions shared by every column.
-    const conditions: SQL[] = [
-      sql`${transaction.client_id} IS NOT NULL`,
-      eq(transaction.is_test, false),
-      ...buildTxnScopeConds(scope),
-    ];
-    if (agentId) conditions.push(eq(transaction.user_id, agentId));
+    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter);
+    const orderByClause = buildPipelineOrderBy(column, sort);
 
-    // Display filter for the Enquiry / Quoted / In Play columns, derived from dates the
-    // same way as server/v2/utils/expiry.ts (effectiveExpiry = date_expiry, else date_created + 7d).
-    // We show items that are EITHER not yet expired (effectiveExpiry >= NOW()) OR expired but
-    // within the current calendar month (effectiveExpiry >= start-of-month). Those two cases
-    // collapse to a single bound: effectiveExpiry >= DATE_TRUNC('month', NOW()). Expired-this-month
-    // cards still surface so the agent can act on them (the client pulses their border); anything
-    // that expired in a previous month drops off the board.
-    // NOTE: this filters DISPLAY only — it never mutates quote_status / enquiry.status.
-    const enquiryVisible = sql`(
-      (e.date_expiry IS NOT NULL AND e.date_expiry >= DATE_TRUNC('month', NOW()))
-      OR (e.date_expiry IS NULL AND e.date_created >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
-    )`;
-    const quoteVisible = sql`(
-      (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= DATE_TRUNC('month', NOW()))
-      OR (${quote.date_expiry} IS NULL AND ${quote.date_created} >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
-    )`;
-
-    let orderByClause: SQL = sql`${transaction.created_at} DESC`;
-
-    if (column === "enquiry") {
-      // Enquiry column: an active, non-lost, non-expired, non-future enquiry is still pending.
-      conditions.push(eq(transaction.status, "on_enquiry"));
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM ${enquiry_table} e
-        WHERE e.transaction_id = ${transaction.id}
-          AND e.is_active IS NOT FALSE
-          AND e.status <> 'LOST'
-          AND e.is_future_deal IS NOT TRUE
-          AND ${enquiryVisible}
-      )`);
-    } else if (column === "quoted") {
-      // Quoted column: deal is on_quote AND its primary quote is 'quoted', not expired, not a future deal.
-      conditions.push(eq(transaction.status, "on_quote"));
-      // Legacy quoteStatusFilter: if provided, it overrides the default 'quoted' match
-      // in the EXISTS. Kept for backwards compat but largely redundant post-Phase 3.
-      const quotedStatus = (quoteStatusFilter && quoteStatusFilter === "in_play") ? "in_play" : "quoted";
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM ${quote}
-        WHERE ${quote.transaction_id} = ${transaction.id}
-          AND ${quote.isQuoteCopy} = FALSE
-          AND ${quote.deleted_at} IS NULL
-          AND ${quote.quote_status}::text = ${quotedStatus}
-          AND ${quote.is_future_deal} IS NOT TRUE
-          AND ${quoteVisible}
-      )`);
-    } else if (column === "in_play") {
-      // In Play column: deal is on_quote AND its primary quote is 'in_play', not expired, not a future deal.
-      conditions.push(eq(transaction.status, "on_quote"));
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM ${quote}
-        WHERE ${quote.transaction_id} = ${transaction.id}
-          AND ${quote.isQuoteCopy} = FALSE
-          AND ${quote.deleted_at} IS NULL
-          AND ${quote.quote_status}::text = 'in_play'
-          AND ${quote.is_future_deal} IS NOT TRUE
-          AND ${quoteVisible}
-      )`);
-    } else if (column === "booking") {
-      // booking column: transaction.status = 'on_booking', limited to bookings
-      // created in the current calendar month (keeps the column focused on recent wins).
-      // Excludes LOST bookings so a booking can't appear in both Booked and Lost.
-      conditions.push(eq(transaction.status, "on_booking"));
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM ${booking}
-        WHERE ${booking.transaction_id} = ${transaction.id}
-          AND ${booking.date_created} >= DATE_TRUNC('month', NOW())
-          AND ${booking.booking_status}::text IS DISTINCT FROM 'LOST'
-      )`);
-    } else if (column === "future") {
-      // Future column: an enquiry/quote earmarked for a future date. No expiry window.
-      conditions.push(sql`(
-        (${transaction.status} = 'on_enquiry' AND EXISTS (
-          SELECT 1 FROM ${enquiry_table} e
-          WHERE e.transaction_id = ${transaction.id}
-            AND e.is_active IS NOT FALSE
-            AND e.is_future_deal = TRUE
-            AND e.status <> 'LOST'
-        ))
-        OR (${transaction.status} = 'on_quote' AND EXISTS (
-          SELECT 1 FROM ${quote}
-          WHERE ${quote.transaction_id} = ${transaction.id}
-            AND ${quote.isQuoteCopy} = FALSE
-            AND ${quote.deleted_at} IS NULL
-            AND ${quote.quote_status}::text != 'lost'
-            AND ${quote.is_future_deal} = TRUE
-        ))
-      )`);
-      // Sort by the earmarked future date, soonest first, falling back to created_at.
-      const futureDealDateExpr = sql`(
-        CASE WHEN ${transaction.status} = 'on_enquiry'
-          THEN (
-            SELECT e.future_deal_date FROM ${enquiry_table} e
-            WHERE e.transaction_id = ${transaction.id} AND e.is_future_deal = TRUE
-            ORDER BY e.date_created DESC LIMIT 1
-          )
-          ELSE (
-            SELECT ${quote.future_deal_date} FROM ${quote}
-            WHERE ${quote.transaction_id} = ${transaction.id} AND ${quote.isQuoteCopy} = FALSE AND ${quote.deleted_at} IS NULL
-            ORDER BY ${quote.future_deal_date} ASC NULLS LAST LIMIT 1
-          )
-        END
-      )`;
-      orderByClause = sql`${futureDealDateExpr} ASC NULLS LAST, ${transaction.created_at} DESC`;
-    } else {
-      // lost column: an enquiry/primary-quote/booking explicitly marked lost. No expiry window.
-      // Free quotes (isFreeQuote) are excluded from lost detection entirely — they
-      // aren't a customer-facing stage and shouldn't drive the deal's pipeline column.
-      // NULL quote_status is treated as "not lost" throughout (matches the eq() below
-      // and the IS DISTINCT FROM check, both of which are NULL-safe).
-      conditions.push(sql`(
-        (${transaction.status} = 'on_enquiry' AND EXISTS (
-          SELECT 1 FROM ${enquiry_table} e
-          WHERE e.transaction_id = ${transaction.id} AND e.status = 'LOST'
-        ))
-        OR (${transaction.status} = 'on_quote' AND EXISTS (
-          SELECT 1 FROM ${quote}
-          WHERE ${quote.transaction_id} = ${transaction.id}
-            AND ${quote.isQuoteCopy} = FALSE
-            AND ${quote.deleted_at} IS NULL
-            AND ${quote.isFreeQuote} IS NOT TRUE
-            AND ${quote.quote_status}::text = 'lost'
-        ) AND NOT EXISTS (
-          SELECT 1 FROM ${quote}
-          WHERE ${quote.transaction_id} = ${transaction.id}
-            AND ${quote.isQuoteCopy} = FALSE
-            AND ${quote.deleted_at} IS NULL
-            AND ${quote.isFreeQuote} IS NOT TRUE
-            AND (${quote.quote_status}::text IS DISTINCT FROM 'lost')
-        ))
-        OR (${transaction.status} = 'on_booking' AND EXISTS (
-          SELECT 1 FROM ${booking}
-          WHERE ${booking.transaction_id} = ${transaction.id} AND ${booking.booking_status}::text = 'LOST'
-        ))
-      )`);
-    }
-
-    const where = and(...conditions);
     const [countResult] = await db.select({ total: count() }).from(transaction).where(where);
     const total = countResult?.total || 0;
 
@@ -891,6 +911,35 @@ export const transactionRepository = {
     const txns = await db.select().from(transaction).where(where).orderBy(orderByClause).limit(limit).offset((page - 1) * limit);
     const enriched = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
     return { items: enriched, total, page, hasMore: page * limit < total, totalProfit, totalValue };
+  },
+
+  // Enriched candidate set for a pipeline column with no SQL-level order or
+  // page/limit applied beyond `cap` — used for the "oldest activity" view
+  // (see transaction.service.ts), which sorts by last_activity_at (a value
+  // computed in JS during enrichment, not a SQL column) and paginates itself.
+  // `transaction` has no updated_at/activity column to order by, so rows are
+  // capped to the `cap` OLDEST-created matches (ASC), not newest — last_activity_at
+  // only ever moves forward from created_at, so the oldest-created rows are the
+  // ones most likely to include the genuinely stalest-activity deals; capping
+  // by newest-created would systematically exclude exactly the rows this view
+  // is trying to surface. This is still an approximation: a deal created just
+  // outside the cap with zero activity since could rank ahead of one included
+  // here — acceptable for a live dashboard "oldest activity" view, not a
+  // general-purpose paginated listing. `total` is the true, uncapped count of
+  // matching rows (see listPipelineByOldestActivity for how it's reconciled
+  // with the capped page actually served).
+  async findPipelineCandidates(scope: Scope | undefined, column: string, agentId: string | undefined, quoteStatusFilter: string | undefined, cap: number): Promise<{ items: PipelineCandidateItem[]; total: number }> {
+    if (!(PIPELINE_COLUMNS as readonly string[]).includes(column)) {
+      return { items: [], total: 0 };
+    }
+
+    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter);
+    const [countResult] = await db.select({ total: count() }).from(transaction).where(where);
+    const total = countResult?.total || 0;
+
+    const txns = await db.select().from(transaction).where(where).orderBy(sql`${transaction.created_at} ASC`).limit(cap);
+    const items = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
+    return { items, total };
   },
 
   async create(data: InsertTransaction, scope?: Scope): Promise<Transaction> {

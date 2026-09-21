@@ -10,13 +10,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useUsers } from "@/hooks/queries";
+import { useCurrentUser, useUsers } from "@/hooks/queries";
+import { useRoles } from "@/hooks/use-role";
 import { dayLabel } from "@/features/conversations";
-import { useTickets } from "../api/use-ticket-queries";
+import { useTicket, useTickets } from "../api/use-ticket-queries";
 import { usePinnedTicketIds } from "../api/use-ticket-pin";
-import { isActiveTicket } from "../lib/ticket-filters";
+import { isActiveTicket, isMyTicket } from "../lib/ticket-filters";
 import { sortPinnedFirst } from "../lib/sort-pinned-first";
-import type { Ticket } from "../types";
+import type { Ticket, TicketListScope } from "../types";
 import { CreateTicketDialog } from "./create-ticket-dialog";
 import { TicketThreadPanel } from "./ticket-thread-panel";
 import { TicketClientPanel } from "./ticket-client-panel";
@@ -26,6 +27,16 @@ import { TicketClientPanel } from "./ticket-client-panel";
 // a thread in the centre, and client details on the right.
 
 type TicketTab = "open" | "closed";
+
+// Roles that may switch the list scope to "all" (server-enforced too — see
+// ADMIN_TICKET_ROLES in ticket.service.ts).
+const ADMIN_TICKET_ROLES = ["org_admin", "branch_manager", "platform_admin"] as const;
+
+const LIST_SCOPE_LABEL: Record<TicketListScope, string> = {
+  mine: "My tickets",
+  raised: "Raised by me",
+  all: "All tickets",
+};
 
 const CHIP_PALETTE = ["bg-red-500", "bg-sky-500", "bg-orange-500", "bg-emerald-600", "bg-indigo-500"];
 
@@ -135,9 +146,14 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [selectedId, setSelectedId] = useState<string | null>(selectedTicketId ?? null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [listScope, setListScope] = useState<TicketListScope>("mine");
 
-  const { data: tickets, isLoading } = useTickets();
+  const { hasAnyRole } = useRoles();
+  const canViewAllTickets = hasAnyRole([...ADMIN_TICKET_ROLES]);
+
+  const { data: tickets, isLoading } = useTickets(listScope);
   const { data: users = [] } = useUsers();
+  const { data: currentUser } = useCurrentUser();
   const pinnedTicketIds = usePinnedTicketIds();
 
   useEffect(() => {
@@ -147,6 +163,11 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const sorted = (tickets ?? [])
+      // The server's "mine" mode returns assigned-to-me OR raised-by-me (the
+      // same candidate set findByAssignedTo uses for the sidebar badge); this
+      // applies the same isMyTicket() predicate the badge counts with, so the
+      // two never disagree on what counts as "mine".
+      .filter((t) => (listScope !== "mine" ? true : isMyTicket(t, currentUser?.id)))
       .filter((t) => (tab === "open" ? isActiveTicket(t) : !isActiveTicket(t)))
       .filter((t) => !q || (t.clientName ?? "").toLowerCase().includes(q) || t.subject.toLowerCase().includes(q))
       .sort((a, b) => {
@@ -156,7 +177,7 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
     // Pinned-first is the primary key even over the user's chosen
     // newest/oldest sort — applied last so it wins.
     return sortPinnedFirst(sorted, pinnedTicketIds);
-  }, [tickets, tab, search, sortOrder, pinnedTicketIds]);
+  }, [tickets, tab, search, sortOrder, pinnedTicketIds, listScope, currentUser?.id]);
 
   // Selects a ticket (or clears the selection) and keeps the URL in sync.
   // `replace` is used when this is a programmatic correction (e.g. the keep-
@@ -177,6 +198,17 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
     selectTicket(null, { replace: true });
   };
 
+  // A selection not present in the current "mine"/"raised"/"all" list — e.g.
+  // a deep link (whats-on-tab, pinned-section, agent-overview's tickets-tab,
+  // the thread panel's "copy link") to a ticket that's outside the page's
+  // current filter. Fetched directly by id rather than assumed missing, so
+  // opening one never silently redirects to filtered[0] — an unrelated
+  // ticket. The server's own read-scope check on GET /tickets/:id still
+  // applies, so this can't be used to see a ticket outside the caller's org.
+  const inCurrentList = tickets?.find((t) => t.id === selectedId) ?? null;
+  const needsByIdFetch = !isLoading && !!tickets && !!selectedId && !inCurrentList;
+  const { data: byIdTicket, isError: byIdError } = useTicket(selectedId ?? "", { enabled: needsByIdFetch });
+
   // Keep a valid selection without ever dropping one that still exists.
   //
   // Bails out while `tickets` hasn't loaded yet — otherwise this ran against an
@@ -188,7 +220,9 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
   // tab is wrong (e.g. resolving/closing the open ticket you're looking at
   // moves it from Open to Done). Switch to the tab that has it instead of
   // dropping the selection. Only a selection that has truly vanished (deleted,
-  // or never existed) falls back to the first row of the current tab, or null.
+  // or never existed, or 404/403s on the by-id fetch) falls back to the first
+  // row of the current tab, or null — a selection outside the list that the
+  // by-id fetch is still resolving (or resolved successfully) is left alone.
   useEffect(() => {
     if (isLoading || !tickets) return;
 
@@ -202,6 +236,7 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
         }
         return;
       }
+      if (!byIdError) return;
     }
 
     if (filtered.length === 0) {
@@ -209,9 +244,12 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
     } else if (!filtered.some((t) => t.id === selectedId)) {
       selectTicket(filtered[0].id, { replace: true });
     }
-  }, [tickets, isLoading, filtered, selectedId, tab]);
+  }, [tickets, isLoading, filtered, selectedId, tab, byIdError]);
 
-  const selected = useMemo(() => tickets?.find((t) => t.id === selectedId) ?? null, [tickets, selectedId]);
+  const selected = useMemo(
+    () => inCurrentList ?? (byIdTicket && byIdTicket.id === selectedId ? byIdTicket : null),
+    [inCurrentList, byIdTicket, selectedId],
+  );
 
   return (
     <section
@@ -305,17 +343,38 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {/* Filter and overflow are visual placeholders from the design — no
-              behaviour is specced for them yet, same as AllHolidaysPanel. */}
+          {/* Overflow is a visual placeholder from the design — no behaviour is
+              specced for it yet, same as AllHolidaysPanel. Filter now switches
+              which slice of the caller's tickets the list shows. */}
           <div className="flex items-center gap-1 text-black/40 dark:text-white/40">
-            <button
-              type="button"
-              className="grid h-7 w-7 place-items-center rounded-md transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"
-              title="Filter"
-              data-testid="ticket-filter"
-            >
-              <Filter className="h-4 w-4" />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "grid h-7 w-7 place-items-center rounded-md transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white",
+                    listScope !== "mine" && "bg-black/5 text-black dark:bg-white/10 dark:text-white",
+                  )}
+                  title={LIST_SCOPE_LABEL[listScope]}
+                  data-testid="ticket-filter"
+                >
+                  <Filter className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-xl">
+                <DropdownMenuItem onClick={() => setListScope("mine")} className="flex items-center justify-between gap-3 rounded-lg text-sm" data-testid="ticket-filter-mine">
+                  My tickets {listScope === "mine" && <Check className="h-3.5 w-3.5" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setListScope("raised")} className="flex items-center justify-between gap-3 rounded-lg text-sm" data-testid="ticket-filter-raised">
+                  Raised by me {listScope === "raised" && <Check className="h-3.5 w-3.5" />}
+                </DropdownMenuItem>
+                {canViewAllTickets && (
+                  <DropdownMenuItem onClick={() => setListScope("all")} className="flex items-center justify-between gap-3 rounded-lg text-sm" data-testid="ticket-filter-all">
+                    All tickets {listScope === "all" && <Check className="h-3.5 w-3.5" />}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               type="button"
               className="grid h-7 w-7 place-items-center rounded-md transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"

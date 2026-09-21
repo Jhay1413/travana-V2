@@ -8,7 +8,7 @@ import {
   type NeonClient,
   type InsertClientTable,
 } from "@shared/schema";
-import { eq, desc, asc, sql, count, or, and, ilike, inArray, getTableColumns, type SQL } from "drizzle-orm";
+import { eq, desc, asc, sql, count, or, and, ilike, inArray, isNull, getTableColumns, type SQL } from "drizzle-orm";
 import type { Scope } from "../../utils/scope";
 import { phoneDigitsCondition } from "../../utils/phone-search";
 import { clientNameCondition } from "../../utils/client-name-search";
@@ -265,6 +265,19 @@ export const neonClientRepository = {
   // several quotes, so joining all three tables at once fans out into a cross
   // product and a plain count(*) would multiply the enquiry and booking totals
   // by the number of quotes.
+  //
+  // The quote join also excludes soft-deleted rows (deleted_at IS NOT NULL) —
+  // without it, a client whose only quote was deleted still showed "1 quote"
+  // here even though the client-details page (which filters the same way, see
+  // transaction.repository.ts's enrichTransactions) correctly shows none. The
+  // filter has to live in the JOIN's ON clause, not a WHERE, so a client with
+  // zero non-deleted quotes still gets a NULL-joined row (count 0) instead of
+  // being dropped from the group entirely.
+  //
+  // It also excludes quote copies (isQuoteCopy = true) — same `isPrimaryQuote`
+  // predicate the client page's Quotes tile and AllHolidaysPanel's quotes list
+  // filter by (client-types.ts). isQuoteCopy defaults to false and can be NULL
+  // on older rows, so this treats NULL as "not a copy" (IS NOT TRUE), not `= false`.
   async countDealsByClientIds(clientIds: string[]): Promise<ClientDealCounts[]> {
     if (clientIds.length === 0) return [];
     return db
@@ -277,7 +290,14 @@ export const neonClientRepository = {
       })
       .from(transaction)
       .leftJoin(enquiry_table, eq(enquiry_table.transaction_id, transaction.id))
-      .leftJoin(quote, eq(quote.transaction_id, transaction.id))
+      .leftJoin(
+        quote,
+        and(
+          eq(quote.transaction_id, transaction.id),
+          isNull(quote.deleted_at),
+          sql`${quote.isQuoteCopy} IS NOT TRUE`,
+        ),
+      )
       .leftJoin(booking, eq(booking.transaction_id, transaction.id))
       .where(inArray(transaction.client_id, clientIds))
       .groupBy(transaction.client_id);

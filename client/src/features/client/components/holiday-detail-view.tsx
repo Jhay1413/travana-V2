@@ -98,6 +98,7 @@ import { QuoteConvertDialog } from "@/features/quote/components/QuoteConvertDial
 import { QuoteDeleteDialog } from "@/features/quote/components/QuoteDeleteDialog";
 import { QuoteRHFForm } from "@/features/quote/components/quote-rhf-form";
 import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
+import { CruiseItinerary } from "@/features/quote/components/CruiseItinerary";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import { useClientTicketCreate } from "@/features/client/components/hooks";
 import { BookingEditDialog } from "@/features/booking/components/booking-edit-dialog";
@@ -242,7 +243,7 @@ interface FieldRowSpec {
 
 function FieldItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-3" data-testid={`holiday-detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+    <div className="flex min-w-0 items-center gap-4" data-testid={`holiday-detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-orange-500 text-white">
         <Icon className="h-4 w-4" />
       </span>
@@ -1345,6 +1346,9 @@ function QuoteHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailC
             <span>Created {formatUKDate(quote.createdAt)}</span>
           </div>
           <FieldsGrid left={fields.left} right={fields.right} />
+          {quote.cruise?.itinerary && quote.cruise.itinerary.length > 0 && (
+            <CruiseItinerary itinerary={quote.cruise.itinerary} />
+          )}
         </div>
       </Card>
       <DetailTabsCard transactionId={quote.transaction_id} entityId={id} entityType="quote" clientId={clientId} />
@@ -1515,6 +1519,9 @@ function BookingHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
             <span>Created {formatUKDate(booking.createdAt)}</span>
           </div>
           <FieldsGrid left={fields.left} right={fields.right} />
+          {booking.cruise?.itinerary && booking.cruise.itinerary.length > 0 && (
+            <CruiseItinerary itinerary={booking.cruise.itinerary} />
+          )}
         </div>
       </Card>
       <DetailTabsCard transactionId={booking.transaction_id} entityId={id} entityType="booking" clientId={clientId} />

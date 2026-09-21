@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { EnquiryTable, Quote } from "@/features/quote/types";
 import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
+import { isPrimaryQuote } from "@/features/client/components/client-types";
 
 // Quote joins (destination, departing airport, operator name) aren't declared on the
 // base `Quote` type, but the transactions API returns them alongside it — same shape
@@ -120,7 +121,7 @@ interface HolidayRowData {
 function buildQuoteRows(quotes: Quote[]): HolidayRowData[] {
   return quotes
     // Copies are internal duplicates of the primary quote, not separate holidays.
-    .filter((q) => !q.isQuoteCopy)
+    .filter(isPrimaryQuote)
     .map((q) => {
       const qr = q as QuoteRow;
       const code = qr.departing_airport_code || qr.departing_airport_name || null;

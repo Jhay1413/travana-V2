@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { commissionForOperator, operatorCommissionPct, recomputePricing, type PricingSnapshot } from "./pricing";
+import { commissionForOperator, operatorCommissionPct, pricePerPersonFor, recomputePricing, type PricingSnapshot } from "./pricing";
 
 const base: PricingSnapshot = {
   price: 1000,
@@ -49,6 +49,25 @@ describe("recomputePricing", () => {
       commission: 33.33,
       pricePerPerson: 111.11,
     });
+  });
+});
+
+describe("pricePerPersonFor", () => {
+  it("splits (price − discount + service charge) across adults and children", () => {
+    expect(pricePerPersonFor(1000, 0, 0, 2, 0)).toBe(500);
+    expect(pricePerPersonFor(1200, 100, 20, 2, 2)).toBe(280);
+  });
+
+  it("returns 0 rather than dividing by zero when there are no travellers", () => {
+    expect(pricePerPersonFor(1000, 0, 0, 0, 0)).toBe(0);
+  });
+
+  it("treats missing/non-numeric inputs as zero", () => {
+    expect(pricePerPersonFor(undefined, null, "", 2, 0)).toBe(0);
+  });
+
+  it("rounds to pennies", () => {
+    expect(pricePerPersonFor(333.33, 0, 0, 3, 0)).toBe(111.11);
   });
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useRoute, useSearch } from "wouter";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 
 import { transformNeonClientData, transformTicket, filesFor } from "@/features/client/components/client-types";
-import { EditClientDialog } from "@/features/client/components/modals/EditClientDialog";
+import { ClientFormDrawer } from "@/features/client/components/modals/ClientFormDrawer";
 import { MergeClientDialog } from "@/features/client/components/modals/MergeClientDialog";
 import { UploadFileDialog } from "@/features/client/components/modals/UploadFileDialog";
 import { AllHolidaysPanel } from "@/features/client/components/all-holidays-panel";
@@ -49,6 +49,7 @@ import {
 export default function ClientPage() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/clients/:clientId");
+  const search = useSearch();
   const { toast } = useToast();
 
   const { role } = useRole();
@@ -99,10 +100,14 @@ export default function ClientPage() {
   // Deep-link support: /clients/:id?holiday=quote:<id> (or booking:/enquiry:)
   // opens the client page with that holiday selected in the center detail view —
   // the pipeline board and Pipeline Live link here instead of the old
-  // standalone pages. Re-parses on client change so stale selections never
-  // leak across clients.
+  // standalone pages. Keyed on the search string too (via wouter's useSearch,
+  // not window.location.search) so a same-page link that only changes the
+  // query string — e.g. another `navigate(...?holiday=...)` call while
+  // already on this route — re-parses instead of being a no-op, since
+  // clientId alone wouldn't change and wouter doesn't re-render on a
+  // search-only change otherwise.
   useEffect(() => {
-    const raw = new URLSearchParams(window.location.search).get("holiday");
+    const raw = new URLSearchParams(search).get("holiday");
     if (raw) {
       const [type, id] = raw.split(":");
       if ((type === "quote" || type === "booking" || type === "enquiry") && id) {
@@ -111,7 +116,7 @@ export default function ClientPage() {
       }
     }
     setHolidaySelection(null);
-  }, [clientId]);
+  }, [clientId, search]);
 
   async function handleConvertEnquiryToQuote(enq: EnquiryTable) {
     if (!enq.transaction_id) {
@@ -468,7 +473,9 @@ export default function ClientPage() {
         setUploadFile={fileActions.setUploadFile}
         onUpload={fileActions.handleUploadFile}
       />
-      <EditClientDialog
+      <ClientFormDrawer
+        mode="edit"
+        presentation="drawer"
         open={editForm.showEditClient}
         onOpenChange={editForm.setShowEditClient}
         editForm={editForm.editForm}

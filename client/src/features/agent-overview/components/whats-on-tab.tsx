@@ -110,7 +110,13 @@ export function WhatsOnTab({
     statuses: ["open", "in_progress"],
   });
   const { data: allTasksRaw } = useAllTasksExtended();
-  const { data: allTicketsRaw } = useTickets();
+  // Only fetched/used for the "all agents" branch below, and only that branch
+  // needs org/branch-wide tickets rather than just the viewer's own — this
+  // widget lives on branch/org overview pages, restricted to admin-tier roles,
+  // which is exactly who the server allows to request "all". Gated with
+  // `enabled` so the per-agent view (allUsers false, the common case) never
+  // fires this request — its result isn't read below when allUsers is false.
+  const { data: allTicketsRaw } = useTickets("all", { enabled: allUsers });
 
   const overdueTasks = useMemo(() => {
     const source = allUsers ? allTasksRaw : overdueTasksData;

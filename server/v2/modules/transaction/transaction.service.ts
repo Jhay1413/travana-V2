@@ -12,6 +12,7 @@ import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
 import { effectiveExpiry } from "../../utils/expiry";
+import type { PipelineCandidateItem } from "./transaction.types";
 import type {
   InsertTransaction,
   InsertEnquiryTable,
@@ -172,6 +173,57 @@ function normalizeFlightInput(input: unknown): Partial<InsertQuoteFlight> {
   };
 }
 
+// "Oldest activity" can't be pushed into SQL: last_activity_at is computed
+// in JS during enrichment (transaction.repository.ts, enrichTransactionsLightweight —
+// it derives from notes/tasks/enquiry/quote/booking timestamps, not a single
+// column). Repository returns a capped, enriched candidate set for the column
+// (uncapped total, capped fetch); this does the actual sort + page/limit slicing.
+// The panel this feeds (Pipeline Live) only ever renders 8 cards and is scoped
+// to the viewing agent's own deals (agentId = their userId), so 60 is a
+// generous ceiling for that use case, not a general-purpose paginated listing.
+const OLDEST_ACTIVITY_CANDIDATE_CAP = 60;
+
+async function listPipelineByOldestActivity(
+  scope: Scope,
+  column: string,
+  page: number,
+  limit: number,
+  agentId?: string,
+  quoteStatusFilter?: string,
+) {
+  const { items, total } = await transactionRepository.findPipelineCandidates(
+    scope,
+    column,
+    agentId,
+    quoteStatusFilter,
+    OLDEST_ACTIVITY_CANDIDATE_CAP,
+  );
+
+  // No activity at all (null/undefined last_activity_at) sorts first, then
+  // ascending by last_activity_at — the deal that has gone longest without
+  // activity leads the list.
+  const sorted: PipelineCandidateItem[] = [...items].sort((a, b) => {
+    const at = a.last_activity_at ? new Date(a.last_activity_at).getTime() : null;
+    const bt = b.last_activity_at ? new Date(b.last_activity_at).getTime() : null;
+    if (at === null && bt === null) return 0;
+    if (at === null) return -1;
+    if (bt === null) return 1;
+    return at - bt;
+  });
+
+  // The cap bounds how far pagination can reach for this sort — pages beyond
+  // the capped candidate set simply aren't available. `total` is reported as
+  // the capped total (not the true DB count) so it stays consistent with what
+  // pagination can actually serve for this sort — callers that page off of
+  // `total`/`hasMore` (e.g. getNextPageParam) won't be told there's more than
+  // there really is.
+  const cappedTotal = Math.min(total, OLDEST_ACTIVITY_CANDIDATE_CAP);
+  const start = (page - 1) * limit;
+  const pageItems = sorted.slice(start, start + limit);
+
+  return { items: pageItems, total: cappedTotal, page, hasMore: start + limit < cappedTotal, totalProfit: 0, totalValue: 0 };
+}
+
 export const transactionService = {
   async listTransactions(
     scope: Scope,
@@ -190,9 +242,12 @@ export const transactionService = {
     return await transactionRepository.findAllLightweight(scope);
   },
 
-  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string) {
+  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest" | "oldest-activity") {
     await activateDueFutureDealsOnce();
-    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter);
+    if (sort === "oldest-activity") {
+      return await listPipelineByOldestActivity(scope, column, page, limit, agentId, quoteStatusFilter);
+    }
+    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter, sort);
   },
 
   async getTransactionById(id: string, scope: Scope) {

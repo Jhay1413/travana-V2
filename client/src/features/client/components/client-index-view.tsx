@@ -16,7 +16,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { useCurrentUser } from "@/hooks/queries";
 import { useClientQuoteViews } from "@/features/quote";
 import { useDeleteTask, useToggleTask } from "@/hooks/mutations";
 import type { NeonClient } from "@/features/client/types/neon-client";
@@ -25,7 +24,7 @@ import type { EnquiryTable } from "@/features/quote/types";
 import type { Ticket as ApiTicket } from "@/features/tickets/types";
 import type { User as ApiUser } from "@/features/user/types";
 import type { TaskNew, ClientFile } from "@shared/schema";
-import { currency, type Client, type QuoteWithJoins, type BookingWithJoins, type FileItem } from "@/features/client/components/client-types";
+import { currency, isPrimaryQuote, type Client, type QuoteWithJoins, type BookingWithJoins, type FileItem } from "@/features/client/components/client-types";
 import { ClientFilesTab } from "@/features/client/components/tabs/ClientFilesTab";
 import { ClientTicketsTab } from "@/features/client/components/tabs/ClientTicketsTab";
 import { ClientChatsTab } from "@/features/client/components/tabs/ClientChatsTab";
@@ -247,7 +246,13 @@ function relativeTime(iso: string): string {
   return longDate(iso) ?? "";
 }
 
-function ViewsList({ clientId, navigate }: { clientId: string; navigate: (to: string) => void }) {
+function ViewsList({
+  clientId,
+  onOpenDeal,
+}: {
+  clientId: string;
+  onOpenDeal: (selection: HolidaySelection) => void;
+}) {
   const { data: views, isLoading } = useClientQuoteViews(clientId);
 
   if (isLoading) return <p className="py-8 text-center text-[13px] text-black/40">Loading…</p>;
@@ -263,8 +268,8 @@ function ViewsList({ clientId, navigate }: { clientId: string; navigate: (to: st
           <button
             key={v.quoteId}
             type="button"
-            onClick={() => navigate(`/clients/${clientId}?holiday=quote:${v.quoteId}`)}
-            className="flex w-full items-center gap-3 px-1 py-3 text-left transition hover:bg-black/[0.02]"
+            onClick={() => onOpenDeal({ type: "quote", id: v.quoteId })}
+            className="flex w-full cursor-pointer items-center gap-3 px-1 py-3 text-left transition hover:bg-black/[0.02]"
             data-testid={`client-index-view-${v.quoteId}`}
           >
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-sm bg-sky-50 text-[#07a9f4]">
@@ -377,8 +382,6 @@ export function ClientIndexView({
   onNewTicket,
 }: ClientIndexViewProps) {
   const [tab, setTab] = useState<ClientIndexTab>(resolveInitialTab);
-  const { data: currentUser } = useCurrentUser();
-  void client;
 
   // Total times the client has opened any of their quotes — shown as a badge on the Views tab.
   const { data: clientQuoteViews } = useClientQuoteViews(clientId);
@@ -387,12 +390,20 @@ export function ClientIndexView({
     [clientQuoteViews],
   );
 
+  // Same "not a copy" filter AllHolidaysPanel's buildQuoteRows applies before
+  // rendering the quotes list — without it, a client whose only live quote is
+  // an isQuoteCopy variant (its primary soft-deleted) shows "1 quote" here
+  // while the Live Deals/All Holidays list right next to it renders nothing.
+  const primaryQuotes = useMemo(() => quotes.filter(isPrimaryQuote), [quotes]);
+
   const totalProfit = useMemo(
     () => bookings.reduce((sum, b) => sum + (parseFloat(b.package_commission || "0") || 0), 0),
     [bookings],
   );
   const avgPpb = bookings.length > 0 ? totalProfit / bookings.length : 0;
-  const dashboardOwner = currentUser?.name?.trim() || "Agent";
+  // Same name the center header and ClientIndexHeader use (transformNeonClientData's
+  // firstName + surename, falling back to "Unknown").
+  const dashboardOwner = client.name;
 
   // Deal title + travel date by id, so a task row can say which holiday it is for.
   const taskHolidays = useMemo(() => {
@@ -456,13 +467,13 @@ export function ClientIndexView({
         <div className="shrink-0 rounded-sm border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-stats">
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <StatBox label="Enquiries" value={String(enquiries.length)} caption={latestDate(enquiries.map((e) => e.date_created)) ? `Last enq. ${latestDate(enquiries.map((e) => e.date_created))}` : null} testId="client-index-stat-enquiries" />
-            <StatBox label="Quotes" value={String(quotes.length)} caption={latestDate(quotes.map((q) => q.date_created)) ? `Last quote ${latestDate(quotes.map((q) => q.date_created))}` : null} testId="client-index-stat-quotes" />
+            <StatBox label="Quotes" value={String(primaryQuotes.length)} caption={latestDate(primaryQuotes.map((q) => q.date_created)) ? `Last quote ${latestDate(primaryQuotes.map((q) => q.date_created))}` : null} testId="client-index-stat-quotes" />
             <StatBox label="Bookings" value={String(bookings.length)} caption={latestDate(bookings.map((b) => b.date_created)) ? `Last booked ${latestDate(bookings.map((b) => b.date_created))}` : null} testId="client-index-stat-bookings" />
             <StatBox label="Total Profit" value={currency.format(totalProfit)} caption={avgPpb > 0 ? `Av. PPB ${currency.format(avgPpb)}` : null} testId="client-index-stat-total-profit" />
           </div>
         </div>
 
-        {/* ── Left column: agent dashboard ──────────────────────────────── */}
+        {/* ── Left column: client dashboard ─────────────────────────────── */}
         <div className="flex flex-1 flex-col rounded-sm border border-black/10 bg-white p-4 dark:border-white/10 dark:bg-white/[0.04]" data-testid="client-index-tabs-card">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-black/90 dark:text-white" data-testid="client-index-dashboard-title">
@@ -506,7 +517,7 @@ export function ClientIndexView({
             )}
             {tab === "chats" && <ClientChatsTab clientId={clientId} />}
             {tab === "tickets" && <ClientTicketsTab tickets={rawTickets} users={users} onNewTicket={onNewTicket} />}
-            {tab === "views" && <ViewsList clientId={clientId} navigate={navigate} />}
+            {tab === "views" && <ViewsList clientId={clientId} onOpenDeal={onOpenDeal} />}
             {tab === "files" && (
               <ClientFilesTab clientFiles={clientFiles} onDeleteFile={onDeleteFile} filteredFiles={filteredFiles} onUploadFile={onUploadFile} role={role} />
             )}

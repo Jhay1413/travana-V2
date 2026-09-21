@@ -10,7 +10,7 @@ export const transactionKeys = {
   detail: (id: string) => [...transactionKeys.details(), id] as const,
   detailWithRelations: (id: string) => [...transactionKeys.details(), id, "with-details"] as const,
   stats: () => [...transactionKeys.all, "stats"] as const,
-  pipeline: (status: string, agentId?: string, quoteStatus?: string) => [...transactionKeys.all, "pipeline", status, agentId, quoteStatus] as const,
+  pipeline: (status: string, agentId?: string, quoteStatus?: string, sort?: string) => [...transactionKeys.all, "pipeline", status, agentId, quoteStatus, sort] as const,
   expiringQuotes: (agentId?: string) => [...transactionKeys.all, "expiring-quotes", agentId] as const,
 };
 
@@ -57,11 +57,11 @@ export function usePipelineTransactions() {
 
 export type PipelineColumnStatus = "enquiry" | "quote" | "in_play" | "booking" | "future" | "lost";
 
-export function usePipelineColumn(status: PipelineColumnStatus, limit: number = 10, agentId?: string, quoteStatus?: string, options?: { enabled?: boolean }) {
+export function usePipelineColumn(status: PipelineColumnStatus, limit: number = 10, agentId?: string, quoteStatus?: string, options?: { enabled?: boolean }, sort?: "newest" | "oldest" | "oldest-activity") {
   return useInfiniteQuery({
-    queryKey: transactionKeys.pipeline(status, agentId, quoteStatus),
+    queryKey: transactionKeys.pipeline(status, agentId, quoteStatus, sort),
     queryFn: ({ pageParam = 1 }) =>
-      transactionApi.getPipelineByStatus(status, pageParam as number, limit, agentId, quoteStatus),
+      transactionApi.getPipelineByStatus(status, pageParam as number, limit, agentId, quoteStatus, sort),
     initialPageParam: 1,
     getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.page + 1 : undefined,
     enabled: options?.enabled ?? true,

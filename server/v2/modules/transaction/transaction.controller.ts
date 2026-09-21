@@ -7,6 +7,7 @@ import { getScope } from "../../utils/scope";
 import { authStorage } from "../../middlewares/auth";
 import { normalizeEnquiry } from "../../utils/enum-normalizers";
 import { uploadImageToS3 } from "../../utils/image-storage";
+import type { ListPipelineByStatusQuery } from "./transaction.validator";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   // New-enum identity pass-through
@@ -136,7 +137,11 @@ export const transactionController = {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
     const agentId = req.query.agentId as string | undefined;
     const quoteStatusFilter = req.query.quoteStatus as string | undefined;
-    const result = await transactionService.listPipelineByStatus(getScope(req), column, page, limit, agentId || undefined, quoteStatusFilter || undefined);
+    // Already validated against the enum by listPipelineByStatusValidator —
+    // validate() checks req.query but doesn't reassign it, so this reads the
+    // raw query typed against the validator's own inferred shape.
+    const { sort } = req.query as unknown as ListPipelineByStatusQuery;
+    const result = await transactionService.listPipelineByStatus(getScope(req), column, page, limit, agentId || undefined, quoteStatusFilter || undefined, sort);
     return successResponse(res, result, "Pipeline data retrieved");
   }),
 
