@@ -76,6 +76,8 @@ export function CreateTaskDialog({
                 value={taskForm.dueDate}
                 onChange={(dueDate) => setTaskForm((f) => ({ ...f, dueDate }))}
                 className={drawerControlClass}
+                modal
+                data-testid="input-task-due-date"
               />
             </DrawerField>
             <DrawerField label="Due Time" className="w-[140px]">
@@ -129,6 +131,8 @@ export function CreateTaskDialog({
                 value={taskForm.dueDate}
                 onChange={(dueDate) => setTaskForm((f) => ({ ...f, dueDate }))}
                 className="h-9 rounded-2xl"
+                modal
+                data-testid="input-task-due-date"
               />
             </div>
             <div className="grid gap-1.5">

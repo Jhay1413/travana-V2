@@ -21,6 +21,8 @@ interface DatePickerProps {
   /** Show a "Clear" action in the calendar footer (default true). */
   allowClear?: boolean;
   disabled?: boolean;
+  /** Use a modal popover when the picker is rendered inside a modal dialog or sheet. */
+  modal?: boolean;
   id?: string;
   "data-testid"?: string;
 }
@@ -64,6 +66,7 @@ function DatePicker({
   max,
   allowClear = true,
   disabled = false,
+  modal = false,
   id,
   "data-testid": testId,
 }: DatePickerProps) {
@@ -94,7 +97,7 @@ function DatePicker({
   const todayAllowed = (!minDate || today >= minDate) && (!maxDate || today <= maxDate);
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={false}>
+    <Popover open={open} onOpenChange={setOpen} modal={modal}>
       <PopoverTrigger asChild>
         <Button
           id={id}
