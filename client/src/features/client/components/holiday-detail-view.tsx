@@ -731,6 +731,7 @@ function HolidayAddTaskDialog({
               onChange={(v) => setDueDate(v)}
               placeholder="Pick a date"
               className={drawerControlClass}
+              modal
               data-testid="holiday-input-task-due-date"
             />
           </DrawerField>
@@ -1725,16 +1726,20 @@ export function EnquiryActionsMenu({
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { data: currentUser } = useCurrentUser();
+  const { data: usersData } = useUsers();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const updateEnquiryMutation = useUpdateEnquiry();
   const createQuoteMutation = useCreateQuote();
   const { data: packageTypesData } = usePackageTypes();
-  const setDealLostMutation = useSetDealLost();
 
   const [showEditWizard, setShowEditWizard] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
-  const [showLostConfirm, setShowLostConfirm] = useState(false);
+  const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
+  const ticketCreate = useClientTicketCreate(clientId, currentUser?.id, {
+    transactionId: enquiry.transaction_id ?? null,
+  });
 
   const isEnquiryPinned = useMemo(
     () => userFavorites?.some((f: Favorite) => f.itemType === "enquiry" && f.itemId === enquiryId) ?? false,
@@ -1749,45 +1754,6 @@ export function EnquiryActionsMenu({
   // whatever quote/booking the transaction now holds instead, while toasting
   // "Enquiry marked as lost". Hide the action entirely once converted.
   const isConverted = enquiry.status === "Converted";
-
-  function handleConfirmMarkLost() {
-    if (!enquiry.transaction_id) return;
-    setDealLostMutation.mutate(
-      { id: enquiry.transaction_id, lost: true },
-      {
-        onSuccess: () => {
-          setShowLostConfirm(false);
-          queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
-          toast({ title: "Enquiry marked as lost" });
-        },
-        onError: (error) => {
-          if (isAxiosError(error) && error.response?.status === 400) {
-            toast({
-              title: "Can't mark this deal as lost",
-              description: "This deal has already moved on to a quote or booking.",
-              variant: "destructive",
-            });
-          } else {
-            toast({ title: "Failed to mark enquiry as lost", variant: "destructive" });
-          }
-        },
-      },
-    );
-  }
-
-  function handleReopen() {
-    if (!enquiry.transaction_id) return;
-    setDealLostMutation.mutate(
-      { id: enquiry.transaction_id, lost: false },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: enquiryKeys.detail(enquiryId) });
-          toast({ title: "Enquiry reopened" });
-        },
-        onError: () => toast({ title: "Failed to reopen enquiry", variant: "destructive" }),
-      },
-    );
-  }
 
   const convertDefaultValues = useMemo<Partial<QuoteFormValues>>(
     () => buildQuoteInitialValuesFromEnquiry(enquiry),
@@ -1892,23 +1858,12 @@ export function EnquiryActionsMenu({
               <ArrowRight className="h-3.5 w-3.5" /> Convert to Quote
             </DropdownMenuItem>
           )}
-          {/* Once converted, the transaction is no longer "on_enquiry" — Lost/
-              Reopen would mis-target whatever quote/booking it now holds (see
-              isConverted's comment above), so hide both entirely. */}
-          {!isConverted && (
-            <>
-              <DropdownMenuSeparator />
-              {isLost ? (
-                <DropdownMenuItem onClick={handleReopen} className="gap-2 rounded-lg text-sm">
-                  <RotateCcw className="h-3.5 w-3.5" /> Reopen Enquiry
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem onClick={() => setShowLostConfirm(true)} className="gap-2 rounded-lg text-sm text-rose-600 focus:text-rose-600">
-                  <Ban className="h-3.5 w-3.5" /> Mark as Lost
-                </DropdownMenuItem>
-              )}
-            </>
-          )}
+          <DropdownMenuItem onClick={() => ticketCreate.setShowTicketDialog(true)} className="gap-2 rounded-lg text-sm">
+            <TicketIcon className="h-3.5 w-3.5" /> Create Ticket
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setShowAddTaskDialog(true)} className="gap-2 rounded-lg text-sm">
+            <CheckSquare className="h-3.5 w-3.5" /> Create Task
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -1944,29 +1899,32 @@ export function EnquiryActionsMenu({
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={showLostConfirm} onOpenChange={setShowLostConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Mark this enquiry as lost?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This moves the deal into the pipeline&apos;s Lost column. You can reopen it again later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={setDealLostMutation.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                handleConfirmMarkLost();
-              }}
-              disabled={setDealLostMutation.isPending}
-              className="bg-rose-600 hover:bg-rose-700"
-            >
-              {setDealLostMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Mark as Lost"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <HolidayAddTaskDialog
+        open={showAddTaskDialog}
+        onOpenChange={setShowAddTaskDialog}
+        entityId={enquiryId}
+        entityType="enquiry"
+        assignedUserId={enquiry.user_id}
+      />
+
+      <CreateTicketDialog
+        presentation="drawer"
+        open={ticketCreate.showTicketDialog}
+        onOpenChange={ticketCreate.setShowTicketDialog}
+        clientName={clientName || enquiry.title || "this client"}
+        ticketForm={ticketCreate.ticketForm}
+        setTicketForm={ticketCreate.setTicketForm}
+        ticketPendingFiles={ticketCreate.ticketPendingFiles}
+        ticketFileInputRef={ticketCreate.ticketFileInputRef}
+        isUploading={ticketCreate.isTicketUploading}
+        isPending={ticketCreate.createTicketMutation.isPending}
+        users={usersData ?? []}
+        onFileSelect={ticketCreate.handleTicketFileSelect}
+        removePendingFile={ticketCreate.removeTicketPendingFile}
+        formatFileSize={ticketCreate.formatTicketFileSize}
+        onConfirm={ticketCreate.handleCreateTicket}
+        onReset={ticketCreate.resetTicketForm}
+      />
     </>
   );
 }
