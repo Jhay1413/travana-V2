@@ -334,6 +334,21 @@ export function AllHolidaysPanel({
   const quoteRows = useMemo(() => buildQuoteRows(quotes), [quotes]);
   const bookingRows = useMemo(() => buildBookingRows(bookings), [bookings]);
 
+  // A deep link or pipeline selection must reveal the selected deal's own
+  // category. Otherwise the detail view can show an enquiry while this panel
+  // remains on its default Quotes tab, hiding the active row.
+  useEffect(() => {
+    if (!selection) return;
+    autoSelectedRef.current = true;
+    setTab(
+      selection.type === "enquiry"
+        ? "enquiry"
+        : selection.type === "booking"
+          ? "bookings"
+          : "quotes",
+    );
+  }, [selection]);
+
   // Once data has arrived, default to the first of quotes → bookings → enquiry
   // that actually has rows — the enquiry tab is empty for most converted
   // clients (the API only returns an enquiry for status "on_enquiry"). Never
