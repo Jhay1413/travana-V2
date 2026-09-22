@@ -6,7 +6,6 @@ import {
   Eye,
   Pencil,
   ShieldUser,
-  SquarePlus,
   Trash2,
 } from "lucide-react";
 import {
@@ -483,10 +482,10 @@ export function ClientIndexView({
               type="button"
               onClick={onCreateTask}
               title="Add task"
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-black/15 text-black/60 transition hover:bg-black/5 hover:text-black dark:border-white/20 dark:text-white/60"
+              className="h-8 shrink-0 rounded-md border border-black/15 px-3 text-xs font-semibold text-black/60 transition hover:bg-black/5 hover:text-black dark:border-white/20 dark:text-white/60"
               data-testid="client-index-add-task"
             >
-              <SquarePlus className="h-4 w-4" />
+              Add Task
             </button>
           </div>
 

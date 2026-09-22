@@ -821,7 +821,15 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
           {client ? (
             <>
               <div className="flex items-start justify-between gap-3">
-                <ClientField label="Name" icon={User} value={clientDisplayName(client)} />
+                <button
+                  type="button"
+                  onClick={() => navigate(`/clients/${client.id}`)}
+                  className="min-w-0 rounded-md text-left transition hover:text-[#ff0000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0000]/30"
+                  title="Open client details"
+                  data-testid="inbox-linked-client-name"
+                >
+                  <ClientField label="Name" icon={User} value={clientDisplayName(client)} />
+                </button>
                 <div className="flex shrink-0 items-center gap-2 pt-0.5">
                   <span className="rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white" data-testid="client-linked-badge">
                     Linked
