@@ -236,12 +236,21 @@ export function TasksTab({ userId }: { userId: string }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <span className="shrink-0 text-sm font-medium text-[#fe9a00]">
+                       {pill.label}{" "}
                       {new Date(task.dueDate || 0).toLocaleTimeString("en-GB", {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
                     </span>
-                    <span className="text-black/30 dark:text-white/30">–</span>
+                     {task.clientName && (
+                       <>
+                         <span className="text-black/30 dark:text-white/30">–</span>
+                         <span className="shrink-0 text-sm font-semibold text-black/70 dark:text-white/70">
+                           {task.clientName}
+                         </span>
+                       </>
+                     )}
+                     <span className="text-black/30 dark:text-white/30">–</span>
                     <span className="truncate text-sm font-medium" data-testid={`text-dashboard-task-title-${task.id}`}>
                       {task.title}
                     </span>
@@ -251,12 +260,6 @@ export function TasksTab({ userId }: { userId: string }) {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <span
-                    className={cn("rounded-sm px-2.5 py-1 text-[11px] font-semibold", pill.className)}
-                    data-testid={`pill-dashboard-task-due-${task.id}`}
-                  >
-                    {pill.label}
-                  </span>
                   <InitialsAvatar name={task.clientName || task.title} className="h-6 w-6" />
                   <button
                     type="button"
