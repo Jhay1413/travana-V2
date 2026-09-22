@@ -478,15 +478,17 @@ export function ClientIndexView({
             <h3 className="text-sm font-semibold text-black/90 dark:text-white" data-testid="client-index-dashboard-title">
               {dashboardOwner} Dashboard
             </h3>
-            <button
-              type="button"
-              onClick={onCreateTask}
-              title="Add task"
-              className="h-8 shrink-0 rounded-md border border-black/15 px-3 text-xs font-semibold text-black/60 transition hover:bg-black/5 hover:text-black dark:border-white/20 dark:text-white/60"
-              data-testid="client-index-add-task"
-            >
-              Add Task
-            </button>
+            {tab === "tasks" && (
+              <button
+                type="button"
+                onClick={onCreateTask}
+                title="Add task"
+                className="h-8 shrink-0 rounded-md border border-black/15 px-3 text-xs font-semibold text-black/60 transition hover:bg-black/5 hover:text-black dark:border-white/20 dark:text-white/60"
+                data-testid="client-index-add-task"
+              >
+                Add Task
+              </button>
+            )}
           </div>
 
           <div className="mt-3 flex w-full items-center gap-1 rounded-sm border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]">
