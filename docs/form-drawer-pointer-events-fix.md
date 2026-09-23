@@ -146,98 +146,120 @@ the whole thing is a no-op.
 
 ## 6. Second symptom: dropdown opens but is dead (search boxes)
 
-> Same underlying Radix race as above, different visible outcome. Relevant files:
-> `client/src/components/ui/searchable-select.tsx`,
+> Not the same race as sections 1–5. This one is a focus/scroll ownership conflict
+> between a portaled, non-modal `Popover` and the `Dialog` it renders inside. Relevant
+> files: `client/src/components/ui/searchable-select.tsx`,
 > `client/src/components/ui/multi-searchable-select.tsx`.
 
 ### Symptom
 
 Inside a `FormDrawer` (the enquiry/quote/booking drawers), a `SearchableSelect` or
-`MultiSearchableSelect` dropdown opens and renders normally, but typing in it and
-clicking its items does nothing — no filtering, no selection. Replit-only; not
-reproducible on a fast local machine. The dropdown is not closed or missing, it is
-simply inert.
+`MultiSearchableSelect` dropdown opens and renders normally, but you cannot click into
+its search box (so typing does nothing) and you cannot scroll its list. Outside these
+drawer forms, the same components work fine.
+
+### Dead end: the pointer-events theory (disproved, keeping this on record)
+
+The first hypothesis was that this was the same class of bug as sections 1–5:
+`@radix-ui/react-dismissable-layer` computes each layer's own `pointer-events`
+synchronously at render time and applies it as an inline style, and it was suspected
+that a registration race could cause the popover to paint with `pointer-events: none`
+baked in. The fix under that theory was to force `style={{ pointerEvents: "auto" }}`
+onto both `PopoverContent`s.
+
+**The user tested this on Replit — the actual environment where the bug reproduces —
+and it did not fix the dropdown.** That disproves the theory. In hindsight, reading
+`react-dismissable-layer`'s source confirms why it could never have been the cause
+here: a layer's `pointer-events` only computes to `"none"` when it sits *below* the
+highest layer that has `disableOutsidePointerEvents: true`. The non-modal `Popover`
+these components used never set `disableOutsidePointerEvents`, and it always mounted
+*after* (i.e. on top of, index-wise) the drawer's own `Dialog` layer — so it was always
+the topmost layer and always resolved to `pointer-events: auto` on its own, with or
+without the forced `style`. The dropdown was never actually receiving
+`pointer-events: none`; something else was swallowing the input. This is recorded here
+so nobody retries the same theory.
 
 ### Root cause
 
-Sections 1–3 above cover the **body-level** pointer-events lock, which is effect-based
-(set/restored in a `useEffect`, keyed off a module-level `originalBodyPointerEvents`).
-That is not what's at play here.
+`node_modules/@radix-ui/react-popover/dist/index.js` implements `PopoverContent` as one
+of two variants, chosen by the `Popover` root's `modal` prop:
 
-Separately, `@radix-ui/react-dismissable-layer` also computes **each layer's own**
-`pointer-events` — including the `Popover`'s — synchronously at **render** time, and
-applies it as an inline style:
+- `PopoverContentNonModal` (~line 213) — the default (`modal` defaults to `false`) —
+  passes `trapFocus: false` and `disableOutsidePointerEvents: false` to its
+  `DismissableLayer`/`FocusScope`, and does not wrap its content in `RemoveScroll`.
+- `PopoverContentModal` (~line 173) — used when the `Popover` root has `modal` — wraps
+  its content in `RemoveScroll` (`as: Slot, allowPinchZoom: true`), passes
+  `trapFocus: context.open` and `disableOutsidePointerEvents: true`, and calls
+  `hideOthers(content)`.
 
-```js
-// node_modules/@radix-ui/react-dismissable-layer/dist/index.js
-style: {
-  pointerEvents: isBodyPointerEventsDisabled ? (isPointerEventsEnabled ? "auto" : "none") : void 0,
-  ...props.style
-}
-```
+`SearchableSelect` and `MultiSearchableSelect` both used the default, non-modal
+`Popover`, and `PopoverContent` is portaled to `document.body` — i.e. it renders
+*outside* the drawer's own DOM subtree. The drawer itself is a Radix `Dialog`
+(`SheetContent`) with its own `FocusScope` (`trapFocus`) and its own
+`react-remove-scroll`, both scoped to the Dialog's content node.
 
-`isPointerEventsEnabled` depends on the popover's index in a layer-set that lives in a
-shared context (`DismissableLayerContext`, a single module-level object). When the
-popover mounts, it isn't in that set yet; it only gets added inside a `useEffect`, which
-then calls `dispatchUpdate()` — a `document`-level `"dismissableLayer.update"` custom
-event every mounted layer listens for and re-renders on. So there's a real gap between
-"popover paints" and "popover's layer is registered and its own render reflects that."
-On a fast machine that gap closes within the same tick/frame, invisibly. On a slow one
-(Replit), if the popover's DOM paints before the registration + re-render round-trip
-lands, it paints with `pointer-events: none` baked into its `style` attribute —
-looks completely normal, swallows every pointer and (because pointer-events also gates
-whether the element can be focused by click) keyboard interaction inside it.
+For a portaled, non-modal popover mounted while that Dialog is open:
 
-**A CSS class cannot fix this.** Because the value is applied as an inline `style`, not
-a class, any `pointer-events-auto` utility class loses to it on specificity — it would
-be a silent no-op in exactly the case that matters.
+- the Dialog's `FocusScope` keeps pulling focus back inside *its own* node, so the
+  popover's `CommandInput` can never hold focus — clicking into it does nothing, and
+  nothing typed goes anywhere;
+- the Dialog's `RemoveScroll` blocks wheel/touch scroll events that originate outside
+  its own node, so the popover's list — mounted elsewhere in the DOM via the portal —
+  can't be scrolled.
+
+Both effects look identical to "the dropdown is dead," which is why the earlier,
+disproved pointer-events theory seemed plausible before it was tested.
 
 ### The fix
 
-Both `SearchableSelect` and `MultiSearchableSelect` pass their `PopoverContent` an
-explicit `style={{ pointerEvents: "auto" }}`. This works — beating Radix's own inline
-value — because of how `PopoverContent` is assembled: `FocusScope` and `DismissableLayer`
-both wrap their child via `asChild`, which Radix implements with
-`@radix-ui/react-slot`'s `mergeProps(slotProps, childProps)`. For a `style` key, that
-merge is `{ ...slotPropValue, ...childPropValue }` — the **child's** value is spread
-last and wins. Our `style` prop flows down through `popover.tsx`'s `{...props}` spread
-into `contentProps` on the innermost `PopperPrimitive.Content`, which is the "child" in
-every `asChild` merge in this chain — so it overrides whatever `DismissableLayer`
-computed for itself, regardless of which way the registration race went.
+Both components now expose a `modal` prop on their `Popover` root, **defaulting to
+`true`**:
 
-This is deliberately **not** a `!important` override: it forces `auto` unconditionally,
-which would be wrong if this popover could ever legitimately be non-interactive because
-a *different*, actually-topmost modal was stacked on top of it while this one was still
-mounted. Both components avoid that: `SearchableSelect` closes itself (`setOpen(false)`)
-before invoking `onAddNew`, and `MultiSearchableSelect`'s "Add new" button was fixed to
-do the same (previously it left the popover mounted while opening the nested "Add"
-dialog on top — the one gap where forcing `auto` here could have let clicks leak through
-to a popover that should have been covered). With both components always closing before
-anything else can open on top of them, this popover is the top layer for its entire
-mounted lifetime, so forcing it interactive is safe rather than a stacking hazard.
+```tsx
+<Popover open={open} onOpenChange={setOpen} modal={modal}>
+```
 
-Scoped to these two components only — `components/ui/popover.tsx`, `dialog.tsx`, and
-`sheet.tsx` are untouched, so every other popover/dialog/sheet in the app keeps Radix's
-default (race-prone-only-in-the-body-lock-sense, otherwise correct) behavior.
+With `modal`, Radix renders `PopoverContentModal` instead: it gets its own
+`FocusScope` trap and its own `RemoveScroll` (scoped to the popover, with
+`allowPinchZoom`), so it stops fighting the Dialog's for either focus or scroll. This
+fixes both parts of the symptom with one change, and needs no special-casing for
+`onAddNew`/`setOpen(false)` beyond what already existed (see below).
+
+`disableOutsidePointerEvents: true` also becomes active. Per the mechanism above
+(confirmed by re-reading `react-dismissable-layer`'s source), this legitimately makes
+the popover the layer that disables outside pointer events — the correct, intended use
+of that mechanism, not a workaround — and there was never a need to force `style` on
+the `PopoverContent`, so the old `style={{ pointerEvents: "auto" }}` and its
+explanatory comment were removed from both components. It was solving a problem that,
+per the dead end above, never actually existed for these popovers.
+
+This also means these popovers now participate in the **body-level** pointer-events
+locking described in sections 1–3 (`disableOutsidePointerEvents: true` sets
+`document.body.style.pointerEvents = "none"` while open) — i.e. slightly more exposure
+to the freeze race, already mitigated by the `FormDrawer` cleanup in section 4.
+
+### Trade-off: `modal` changes behavior outside dialogs too
+
+Defaulting `modal` to `true` is a real behavior change for every existing usage of
+`SearchableSelect`/`MultiSearchableSelect`, not just the ones inside `FormDrawer`. While
+either dropdown is open, the page's scroll now locks, focus is trapped inside the
+popover, and the rest of the page becomes `aria-hidden` — everywhere these components
+are used, including places with no surrounding `Dialog`. For a combobox, that is normal
+and generally expected behavior, and any call site that needs the old, non-trapping
+behavior can opt out with `modal={false}` — but it is a behavior change beyond the
+reported drawer bug, and is being called out explicitly here rather than left implicit.
 
 ### Verifying this one
 
-Like the freeze bug, this was fixed by reasoning about the mechanism, not by reproducing
-it — it didn't reproduce locally either. If it resurfaces on Replit, check in the
-console right after the dropdown fails to respond:
-
-```js
-document.querySelector('[cmdk-input-wrapper] input')?.parentElement?.closest('[role="dialog"]')?.style.pointerEvents
-```
-
-- **`""` (empty)** → our forced `style` is in effect; the input itself, or something
-  else entirely (e.g. a different overlay absorbing the click — see section 5's "empty
-  string" case), is the culprit instead.
-- Anything else → the `style` prop isn't reaching the rendered node for some reason;
-  re-trace the `asChild`/`mergeProps` chain in `popover.tsx` → `PopoverContentImpl` →
-  `DismissableLayer` → `PopperPrimitive.Content` against the then-installed
-  `@radix-ui/react-popover`/`@radix-ui/react-slot` versions, in case an upgrade changed
-  the merge order.
+Not reproducible on a fast local machine — same as the rest of this doc. The `modal`
+fix has not yet been verified at runtime; that verification is deferred to the user
+testing on Replit, the same way the earlier pointer-events theory was tested (and
+disproved) there. If it resurfaces, check whether the search box can hold focus
+(`document.activeElement` after clicking it should be the `CommandInput`, not something
+inside the Dialog) and whether the list scrolls — if either still fails with `modal`
+already in effect, re-check that the `Popover` root is actually receiving
+`modal={true}` (e.g. a call site passing `modal={false}` unintentionally) before
+looking elsewhere.
 
 ---
 

@@ -35,6 +35,18 @@ interface SearchableSelectProps {
   addNewLabel?: string;
   /** Disable the trigger (e.g. while loading or until an upstream value is chosen) */
   disabled?: boolean;
+  /**
+   * Whether the popover traps focus and locks page scroll while open (Radix's
+   * `Popover` `modal` prop). Defaults to `true`: this popover is portaled to
+   * `document.body`, so when it's rendered inside a Radix `Dialog` (e.g. a
+   * form drawer), the Dialog's own `FocusScope`/`RemoveScroll` fight a
+   * non-modal popover for focus and scroll — you can't click into the search
+   * box or scroll the list. Modal gives the popover its own focus trap and
+   * its own scroll-lock scoped to itself, so it stops fighting the Dialog.
+   * Set to `false` to opt out for a call site that isn't inside a Dialog and
+   * doesn't want the scroll-lock/focus-trap/`aria-hidden` side effects.
+   */
+  modal?: boolean;
 }
 
 export function SearchableSelect({
@@ -53,13 +65,14 @@ export function SearchableSelect({
   onAddNew,
   addNewLabel = "Add new",
   disabled,
+  modal = true,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
 
   const resolvedLabel = selectedLabel || options.find((opt) => opt.value === value)?.label;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={modal}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -83,20 +96,6 @@ export function SearchableSelect({
         side="bottom"
         sideOffset={4}
         collisionPadding={8}
-        // `@radix-ui/react-dismissable-layer` computes this popover's
-        // `pointer-events` at RENDER time from a shared layer-set context, then
-        // applies it as an inline style — the same layer bookkeeping that races
-        // on slow environments (see docs/form-drawer-pointer-events-fix.md). If
-        // this popover renders before the context finishes propagating that it's
-        // the active layer, it inlines `pointer-events: none`: the dropdown
-        // paints normally but swallows every click/keystroke. A Tailwind class
-        // can't fix this (inline styles win), but `style` props are merged in
-        // via Radix's `asChild`/Slot with the *child's* value winning on
-        // conflict, so this forces it back to `auto` regardless of which way
-        // that race went. Safe here because `onValueChange`/`onAddNew` always
-        // close this popover before anything else can open on top of it, so it
-        // is never legitimately meant to be non-interactive while mounted.
-        style={{ pointerEvents: "auto" }}
       >
         <Command
           {...(onSearch
