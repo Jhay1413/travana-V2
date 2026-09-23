@@ -1,15 +1,9 @@
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Check, ChevronsUpDown, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useFixedDropdownPosition } from "@/hooks/use-fixed-dropdown-position";
+import { useCloseOnOutsideOrEscape } from "@/hooks/use-close-on-outside-or-escape";
 
 interface SearchableSelectOption {
   value: string;
@@ -40,19 +34,6 @@ interface SearchableSelectProps {
   /** Disable the trigger (e.g. while loading or until an upstream value is chosen) */
   disabled?: boolean;
 }
-
-/** Computed placement for the dropdown, in viewport (`position: fixed`) coordinates. */
-interface DropdownPosition {
-  left: number;
-  width: number;
-  top?: number;
-  bottom?: number;
-  maxHeight: number;
-}
-
-const VIEWPORT_PADDING = 8; // mirrors the old Popover's `collisionPadding={8}`
-const TRIGGER_OFFSET = 4; // mirrors the old Popover's `sideOffset={4}`
-const MIN_DROPDOWN_HEIGHT = 150; // below this much room, prefer flipping above the trigger
 
 /**
  * A combobox-style select with an in-place search input.
@@ -95,7 +76,6 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
-  const [position, setPosition] = useState<DropdownPosition | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -114,60 +94,10 @@ export function SearchableSelect({
     return options.filter((opt) => opt.label.toLowerCase().includes(term));
   }, [options, search, onSearch]);
 
-  // Compute (and, while open, keep recomputing) the dropdown's fixed-position
-  // coordinates from the trigger's current bounding rect. useLayoutEffect so the
-  // first paint after opening already has the right position — no flash at (0, 0).
-  useLayoutEffect(() => {
-    if (!open) return;
+  const position = useFixedDropdownPosition(triggerRef, open);
 
-    const updatePosition = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) return;
-
-      const rect = trigger.getBoundingClientRect();
-      const viewportHeight = window.innerHeight;
-      const viewportWidth = window.innerWidth;
-
-      const spaceBelow = viewportHeight - rect.bottom - VIEWPORT_PADDING;
-      const spaceAbove = rect.top - VIEWPORT_PADDING;
-      const placeAbove = spaceBelow < MIN_DROPDOWN_HEIGHT && spaceAbove > spaceBelow;
-
-      let left = rect.left;
-      const width = rect.width;
-      if (left + width > viewportWidth - VIEWPORT_PADDING) {
-        left = viewportWidth - VIEWPORT_PADDING - width;
-      }
-      if (left < VIEWPORT_PADDING) left = VIEWPORT_PADDING;
-
-      setPosition(
-        placeAbove
-          ? {
-              left,
-              width,
-              bottom: viewportHeight - rect.top + TRIGGER_OFFSET,
-              maxHeight: Math.max(100, spaceAbove),
-            }
-          : {
-              left,
-              width,
-              top: rect.bottom + TRIGGER_OFFSET,
-              maxHeight: Math.max(100, spaceBelow),
-            }
-      );
-    };
-
-    updatePosition();
-
-    // The drawer's own container scrolls (not the window), and `position: fixed`
-    // coordinates go stale as soon as that happens — `capture: true` catches scroll
-    // events from any ancestor scroll container, not just `window`.
-    document.addEventListener("scroll", updatePosition, true);
-    window.addEventListener("resize", updatePosition);
-    return () => {
-      document.removeEventListener("scroll", updatePosition, true);
-      window.removeEventListener("resize", updatePosition);
-    };
-  }, [open]);
+  // Close on outside pointerdown or Escape; Escape also returns focus to the trigger.
+  useCloseOnOutsideOrEscape(open, () => setOpen(false), [triggerRef, dropdownRef], triggerRef);
 
   // Reset search + highlight on every open, and focus the search input. This is the
   // fix for the bug this component was rewritten to solve, made explicit: no portal
@@ -177,22 +107,6 @@ export function SearchableSelect({
     setSearch("");
     setHighlightedIndex(0);
     inputRef.current?.focus();
-  }, [open]);
-
-  // Close on outside pointerdown. Listening for `pointerdown` (not `click`) and only
-  // attaching this while `open` is what keeps the click that *opens* the dropdown from
-  // being immediately treated as an "outside" click: by the time this listener is
-  // attached (after the open state commits), that pointerdown has already happened.
-  useEffect(() => {
-    if (!open) return;
-    const handlePointerDown = (e: PointerEvent) => {
-      const target = e.target as Node;
-      if (triggerRef.current?.contains(target)) return;
-      if (dropdownRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
   // Reset the active-option highlight whenever the filtered list changes.
@@ -227,11 +141,6 @@ export function SearchableSelect({
         }
         break;
       }
-      case "Escape":
-        e.preventDefault();
-        setOpen(false);
-        triggerRef.current?.focus();
-        break;
       default:
         break;
     }

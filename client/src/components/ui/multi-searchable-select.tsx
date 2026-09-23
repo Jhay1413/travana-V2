@@ -1,22 +1,20 @@
-import { useState } from "react";
-import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-} from "@/components/ui/command";
+import { useFixedDropdownPosition } from "@/hooks/use-fixed-dropdown-position";
+import { useCloseOnOutsideOrEscape } from "@/hooks/use-close-on-outside-or-escape";
+
+interface MultiSearchableSelectOption {
+  value: string;
+  label: string;
+}
 
 interface MultiSearchableSelectProps {
   value: string[];
   onValueChange: (value: string[]) => void;
-  options: { value: string; label: string }[];
+  options: MultiSearchableSelectOption[];
   placeholder?: string;
   searchPlaceholder?: string;
   emptyMessage?: string;
@@ -36,20 +34,19 @@ interface MultiSearchableSelectProps {
   addNewLabel?: string;
   /** Maximum number of chips to render before collapsing to a "+N more" count (default: 3) */
   maxChips?: number;
-  /**
-   * Whether the popover traps focus and locks page scroll while open (Radix's
-   * `Popover` `modal` prop). Defaults to `true`: this popover is portaled to
-   * `document.body`, so when it's rendered inside a Radix `Dialog` (e.g. a
-   * form drawer), the Dialog's own `FocusScope`/`RemoveScroll` fight a
-   * non-modal popover for focus and scroll — you can't click into the search
-   * box or scroll the list. Modal gives the popover its own focus trap and
-   * its own scroll-lock scoped to itself, so it stops fighting the Dialog.
-   * Set to `false` to opt out for a call site that isn't inside a Dialog and
-   * doesn't want the scroll-lock/focus-trap/`aria-hidden` side effects.
-   */
-  modal?: boolean;
 }
 
+/**
+ * A multi-select combobox with an in-place search input, chips for selected values, and
+ * toggle (not replace) selection.
+ *
+ * Rendered the same way as `SearchableSelect` — see that component's doc comment and
+ * `docs/form-drawer-pointer-events-fix.md` (section 6) for why: the dropdown is a plain
+ * sibling in this component's own JSX (not a Radix `Popover` portaled to `document.body`),
+ * positioned with `position: fixed` from the trigger's `getBoundingClientRect()`. Shares
+ * its position and dismiss logic with `SearchableSelect` via `useFixedDropdownPosition`
+ * and `useCloseOnOutsideOrEscape`.
+ */
 export function MultiSearchableSelect({
   value,
   onValueChange,
@@ -66,9 +63,19 @@ export function MultiSearchableSelect({
   onAddNew,
   addNewLabel = "Add new",
   maxChips = 3,
-  modal = true,
 }: MultiSearchableSelectProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const optionRefs = useRef<Array<HTMLDivElement | null>>([]);
+
+  const baseId = useId();
+  const listboxId = `${baseId}-listbox`;
+  const getOptionId = (index: number) => `${baseId}-option-${index}`;
 
   const labelFor = (val: string) =>
     selectedLabels?.[val] || options.find((opt) => opt.value === val)?.label || val;
@@ -86,80 +93,173 @@ export function MultiSearchableSelect({
   const visible = value.slice(0, maxChips);
   const overflow = value.length - visible.length;
 
+  const filteredOptions = useMemo(() => {
+    if (onSearch || !search) return options;
+    const term = search.toLowerCase();
+    return options.filter((opt) => opt.label.toLowerCase().includes(term));
+  }, [options, search, onSearch]);
+
+  const position = useFixedDropdownPosition(triggerRef, open);
+
+  // Close on outside pointerdown or Escape; Escape also returns focus to the trigger.
+  useCloseOnOutsideOrEscape(open, () => setOpen(false), [triggerRef, dropdownRef], triggerRef);
+
+  // Reset search + highlight on every open, and focus the search input.
+  useEffect(() => {
+    if (!open) return;
+    setSearch("");
+    setHighlightedIndex(0);
+    inputRef.current?.focus();
+  }, [open]);
+
+  // Reset the active-option highlight whenever the filtered list changes.
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [filteredOptions]);
+
+  // Keep the highlighted option scrolled into view.
+  useEffect(() => {
+    if (!open) return;
+    optionRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [open, highlightedIndex]);
+
+  const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        if (filteredOptions.length === 0) return;
+        setHighlightedIndex((i) => (i + 1) % filteredOptions.length);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        if (filteredOptions.length === 0) return;
+        setHighlightedIndex((i) => (i - 1 + filteredOptions.length) % filteredOptions.length);
+        break;
+      case "Enter": {
+        e.preventDefault();
+        const opt = filteredOptions[highlightedIndex];
+        // Toggle, not replace — unlike SearchableSelect, Enter keeps the dropdown open so
+        // more options can be picked.
+        if (opt) toggle(opt.value);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={modal}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className={cn(
-            "h-auto min-h-9 w-full justify-between rounded-xl border-black/10 bg-white/70 py-1.5 font-normal",
-            className
-          )}
-          data-testid={dataTestId}
-        >
-          {value.length === 0 ? (
-            <span className="text-muted-foreground">{placeholder}</span>
-          ) : (
-            <span className="flex flex-wrap items-center gap-1">
-              {visible.map((val) => (
-                <Badge
-                  key={val}
-                  variant="secondary"
-                  className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium"
-                >
-                  <span className="max-w-[120px] truncate">{labelFor(val)}</span>
-                  <span
-                    role="button"
-                    tabIndex={-1}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      remove(val);
-                    }}
-                    className="rounded-sm opacity-60 hover:opacity-100"
-                  >
-                    <X className="h-3 w-3" />
-                  </span>
-                </Badge>
-              ))}
-              {overflow > 0 && (
-                <Badge variant="secondary" className="rounded-md px-1.5 py-0.5 text-[11px] font-medium">
-                  +{overflow} more
-                </Badge>
-              )}
-            </span>
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="z-[500] w-[--radix-popover-trigger-width] p-0"
-        align="start"
-        side="bottom"
+    <>
+      <Button
+        ref={triggerRef}
+        type="button"
+        variant="outline"
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-controls={listboxId}
+        className={cn(
+          "h-auto min-h-9 w-full justify-between rounded-xl border-black/10 bg-white/70 py-1.5 font-normal",
+          className
+        )}
+        data-testid={dataTestId}
+        onClick={() => setOpen((prev) => !prev)}
       >
-        <Command
-          {...(onSearch
-            ? { shouldFilter: false }
-            : { filter: (val, search) => (val.toLowerCase().includes(search.toLowerCase()) ? 1 : 0) }
-          )}
+        {value.length === 0 ? (
+          <span className="text-muted-foreground">{placeholder}</span>
+        ) : (
+          <span className="flex flex-wrap items-center gap-1">
+            {visible.map((val) => (
+              <Badge
+                key={val}
+                variant="secondary"
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+              >
+                <span className="max-w-[120px] truncate">{labelFor(val)}</span>
+                <span
+                  role="button"
+                  tabIndex={-1}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    remove(val);
+                  }}
+                  className="rounded-sm opacity-60 hover:opacity-100"
+                >
+                  <X className="h-3 w-3" />
+                </span>
+              </Badge>
+            ))}
+            {overflow > 0 && (
+              <Badge variant="secondary" className="rounded-md px-1.5 py-0.5 text-[11px] font-medium">
+                +{overflow} more
+              </Badge>
+            )}
+          </span>
+        )}
+        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+      </Button>
+
+      {open && position && (
+        <div
+          ref={dropdownRef}
+          id={listboxId}
+          role="listbox"
+          aria-multiselectable="true"
+          className="fixed z-[500] flex flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md outline-none dark:border-white/10"
+          style={{
+            left: position.left,
+            width: position.width,
+            maxHeight: position.maxHeight,
+            top: position.top,
+            bottom: position.bottom,
+          }}
         >
-          <CommandInput
-            placeholder={searchPlaceholder}
-            onValueChange={(val) => {
-              if (onSearch) onSearch(val);
-              if (onSearchCapture) onSearchCapture(val);
-            }}
-          />
-          <CommandList>
-            <CommandEmpty>{isLoading ? "Searching…" : emptyMessage}</CommandEmpty>
-            <CommandGroup>
-              {options.map((opt) => (
-                <CommandItem
+          <div className="flex items-center border-b px-3 dark:border-white/10">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <input
+              ref={inputRef}
+              value={search}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearch(val);
+                if (onSearch) onSearch(val);
+                if (onSearchCapture) onSearchCapture(val);
+              }}
+              onKeyDown={handleInputKeyDown}
+              placeholder={searchPlaceholder}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
+              aria-autocomplete="list"
+              aria-controls={listboxId}
+              aria-activedescendant={
+                filteredOptions.length > 0 ? getOptionId(highlightedIndex) : undefined
+              }
+              className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            />
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-1">
+            {filteredOptions.length === 0 ? (
+              <div className="py-6 text-center text-sm">
+                {isLoading ? "Searching…" : emptyMessage}
+              </div>
+            ) : (
+              filteredOptions.map((opt, index) => (
+                <div
                   key={opt.value}
-                  value={opt.label}
-                  onSelect={() => toggle(opt.value)}
+                  id={getOptionId(index)}
+                  ref={(el) => {
+                    optionRefs.current[index] = el;
+                  }}
+                  role="option"
+                  aria-selected={value.includes(opt.value)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  onClick={() => toggle(opt.value)}
+                  className={cn(
+                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+                    index === highlightedIndex && "bg-accent text-accent-foreground"
+                  )}
                 >
                   <Check
                     className={cn(
@@ -168,22 +268,20 @@ export function MultiSearchableSelect({
                     )}
                   />
                   {opt.label}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
+                </div>
+              ))
+            )}
+          </div>
           {onAddNew && (
-            <div className="border-t border-black/10 p-1">
+            <div className="border-t border-black/10 p-1 dark:border-white/10">
               <button
                 type="button"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  // Close before opening the "Add new" dialog on top — this
-                  // popover is modal (see the `modal` prop above), so it holds
-                  // its own focus trap while mounted. Opening `AddAirportModal`
-                  // on top of a still-open popover would leave two competing
-                  // focus traps; closing first avoids that.
+                  // Close before calling onAddNew — it opens a modal on top, and the
+                  // ordering matters the same way it did with the old Popover-based
+                  // implementation.
                   setOpen(false);
                   onAddNew();
                 }}
@@ -194,8 +292,8 @@ export function MultiSearchableSelect({
               </button>
             </div>
           )}
-        </Command>
-      </PopoverContent>
-    </Popover>
+        </div>
+      )}
+    </>
   );
 }
