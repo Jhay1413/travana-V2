@@ -1,8 +1,14 @@
-# Frozen page after closing a create drawer
+# Frozen page after closing a create drawer / dead search dropdowns
 
-> Why `FormDrawer` clears `document.body.style.pointerEvents` on close, what the
-> underlying Radix defect is, and what to check if the freeze ever comes back.
-> Relevant file: `client/src/components/shared/form-drawer/form-drawer.tsx`.
+> Two symptoms, one underlying Radix defect: `@radix-ui/react-dismissable-layer`'s
+> layer bookkeeping racing on slow environments (Replit; not reproducible on a fast
+> local machine). Section 1–5 & 7 cover the page-freeze-on-close symptom and why
+> `FormDrawer` clears `document.body.style.pointerEvents` on close. Section 6 covers a
+> second symptom — a `SearchableSelect`/`MultiSearchableSelect` dropdown that opens but
+> doesn't respond to typing or clicks — and why it needed a different fix.
+> Relevant files: `client/src/components/shared/form-drawer/form-drawer.tsx`,
+> `client/src/components/ui/searchable-select.tsx`,
+> `client/src/components/ui/multi-searchable-select.tsx`.
 
 ---
 
@@ -138,7 +144,104 @@ the whole thing is a no-op.
 
 ---
 
-## 6. If it comes back
+## 6. Second symptom: dropdown opens but is dead (search boxes)
+
+> Same underlying Radix race as above, different visible outcome. Relevant files:
+> `client/src/components/ui/searchable-select.tsx`,
+> `client/src/components/ui/multi-searchable-select.tsx`.
+
+### Symptom
+
+Inside a `FormDrawer` (the enquiry/quote/booking drawers), a `SearchableSelect` or
+`MultiSearchableSelect` dropdown opens and renders normally, but typing in it and
+clicking its items does nothing — no filtering, no selection. Replit-only; not
+reproducible on a fast local machine. The dropdown is not closed or missing, it is
+simply inert.
+
+### Root cause
+
+Sections 1–3 above cover the **body-level** pointer-events lock, which is effect-based
+(set/restored in a `useEffect`, keyed off a module-level `originalBodyPointerEvents`).
+That is not what's at play here.
+
+Separately, `@radix-ui/react-dismissable-layer` also computes **each layer's own**
+`pointer-events` — including the `Popover`'s — synchronously at **render** time, and
+applies it as an inline style:
+
+```js
+// node_modules/@radix-ui/react-dismissable-layer/dist/index.js
+style: {
+  pointerEvents: isBodyPointerEventsDisabled ? (isPointerEventsEnabled ? "auto" : "none") : void 0,
+  ...props.style
+}
+```
+
+`isPointerEventsEnabled` depends on the popover's index in a layer-set that lives in a
+shared context (`DismissableLayerContext`, a single module-level object). When the
+popover mounts, it isn't in that set yet; it only gets added inside a `useEffect`, which
+then calls `dispatchUpdate()` — a `document`-level `"dismissableLayer.update"` custom
+event every mounted layer listens for and re-renders on. So there's a real gap between
+"popover paints" and "popover's layer is registered and its own render reflects that."
+On a fast machine that gap closes within the same tick/frame, invisibly. On a slow one
+(Replit), if the popover's DOM paints before the registration + re-render round-trip
+lands, it paints with `pointer-events: none` baked into its `style` attribute —
+looks completely normal, swallows every pointer and (because pointer-events also gates
+whether the element can be focused by click) keyboard interaction inside it.
+
+**A CSS class cannot fix this.** Because the value is applied as an inline `style`, not
+a class, any `pointer-events-auto` utility class loses to it on specificity — it would
+be a silent no-op in exactly the case that matters.
+
+### The fix
+
+Both `SearchableSelect` and `MultiSearchableSelect` pass their `PopoverContent` an
+explicit `style={{ pointerEvents: "auto" }}`. This works — beating Radix's own inline
+value — because of how `PopoverContent` is assembled: `FocusScope` and `DismissableLayer`
+both wrap their child via `asChild`, which Radix implements with
+`@radix-ui/react-slot`'s `mergeProps(slotProps, childProps)`. For a `style` key, that
+merge is `{ ...slotPropValue, ...childPropValue }` — the **child's** value is spread
+last and wins. Our `style` prop flows down through `popover.tsx`'s `{...props}` spread
+into `contentProps` on the innermost `PopperPrimitive.Content`, which is the "child" in
+every `asChild` merge in this chain — so it overrides whatever `DismissableLayer`
+computed for itself, regardless of which way the registration race went.
+
+This is deliberately **not** a `!important` override: it forces `auto` unconditionally,
+which would be wrong if this popover could ever legitimately be non-interactive because
+a *different*, actually-topmost modal was stacked on top of it while this one was still
+mounted. Both components avoid that: `SearchableSelect` closes itself (`setOpen(false)`)
+before invoking `onAddNew`, and `MultiSearchableSelect`'s "Add new" button was fixed to
+do the same (previously it left the popover mounted while opening the nested "Add"
+dialog on top — the one gap where forcing `auto` here could have let clicks leak through
+to a popover that should have been covered). With both components always closing before
+anything else can open on top of them, this popover is the top layer for its entire
+mounted lifetime, so forcing it interactive is safe rather than a stacking hazard.
+
+Scoped to these two components only — `components/ui/popover.tsx`, `dialog.tsx`, and
+`sheet.tsx` are untouched, so every other popover/dialog/sheet in the app keeps Radix's
+default (race-prone-only-in-the-body-lock-sense, otherwise correct) behavior.
+
+### Verifying this one
+
+Like the freeze bug, this was fixed by reasoning about the mechanism, not by reproducing
+it — it didn't reproduce locally either. If it resurfaces on Replit, check in the
+console right after the dropdown fails to respond:
+
+```js
+document.querySelector('[cmdk-input-wrapper] input')?.parentElement?.closest('[role="dialog"]')?.style.pointerEvents
+```
+
+- **`""` (empty)** → our forced `style` is in effect; the input itself, or something
+  else entirely (e.g. a different overlay absorbing the click — see section 5's "empty
+  string" case), is the culprit instead.
+- Anything else → the `style` prop isn't reaching the rendered node for some reason;
+  re-trace the `asChild`/`mergeProps` chain in `popover.tsx` → `PopoverContentImpl` →
+  `DismissableLayer` → `PopperPrimitive.Content` against the then-installed
+  `@radix-ui/react-popover`/`@radix-ui/react-slot` versions, in case an upgrade changed
+  the merge order.
+
+---
+
+## 7. If the freeze comes back
 
 Reproduce on Replit — open each of the three drawers from the client details page,
 interact with a dropdown or date picker inside, then close without saving via the X, via
