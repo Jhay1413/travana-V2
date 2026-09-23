@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -95,12 +95,6 @@ export function FormDrawer({
   className,
   "data-testid": testId,
 }: FormDrawerProps) {
-  // Pending timer id for the stuck-pointer-events check below; tracked in a
-  // ref (rather than left as a bare local in the effect) so the mount-only
-  // effect further down can cancel it if the component unmounts before it
-  // fires.
-  const stuckPointerEventsTimeoutRef = useRef<number | null>(null);
-
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
     if (!open) return undefined;
@@ -108,26 +102,22 @@ export function FormDrawer({
     // This effect is only "armed" while the drawer is open. Its cleanup
     // therefore fires exactly when we care about: the drawer closing
     // (`open` flips to false) or the drawer unmounting while still open
-    // (e.g. the page navigates away mid-close). Either way, schedule the
+    // (e.g. a save navigates away mid-close). Either way, schedule the
     // orphan check once the close animation has had time to finish.
+    //
+    // Deliberately fire-and-forget: the timer isn't cancelled on unmount.
+    // It only ever touches `document.body` (valid long after this
+    // component is gone) via `clearStuckPointerEventsIfOrphaned`, which is
+    // already a no-op whenever it shouldn't act — including when another
+    // drawer/dialog opened in the meantime. Cancelling it here would kill
+    // the unmount-while-open case, which is the one that matters most:
+    // e.g. `BookingCreateDialog`'s `onSuccess` navigates away immediately,
+    // unmounting the drawer (and everything that could otherwise clean up
+    // after it) while it may still be mid-close.
     return () => {
-      stuckPointerEventsTimeoutRef.current = window.setTimeout(() => {
-        stuckPointerEventsTimeoutRef.current = null;
-        clearStuckPointerEventsIfOrphaned();
-      }, POINTER_EVENTS_CHECK_DELAY_MS);
+      window.setTimeout(clearStuckPointerEventsIfOrphaned, POINTER_EVENTS_CHECK_DELAY_MS);
     };
   }, [open]);
-
-  useEffect(() => {
-    // Runs only on unmount, after the effect above, so it can cancel a
-    // check that was just scheduled by that effect's own teardown — avoids
-    // the timer firing (or leaking) once this drawer is gone for good.
-    return () => {
-      if (stuckPointerEventsTimeoutRef.current !== null) {
-        window.clearTimeout(stuckPointerEventsTimeoutRef.current);
-      }
-    };
-  }, []);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
