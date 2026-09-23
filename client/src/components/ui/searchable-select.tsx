@@ -83,6 +83,20 @@ export function SearchableSelect({
         side="bottom"
         sideOffset={4}
         collisionPadding={8}
+        // `@radix-ui/react-dismissable-layer` computes this popover's
+        // `pointer-events` at RENDER time from a shared layer-set context, then
+        // applies it as an inline style — the same layer bookkeeping that races
+        // on slow environments (see docs/form-drawer-pointer-events-fix.md). If
+        // this popover renders before the context finishes propagating that it's
+        // the active layer, it inlines `pointer-events: none`: the dropdown
+        // paints normally but swallows every click/keystroke. A Tailwind class
+        // can't fix this (inline styles win), but `style` props are merged in
+        // via Radix's `asChild`/Slot with the *child's* value winning on
+        // conflict, so this forces it back to `auto` regardless of which way
+        // that race went. Safe here because `onValueChange`/`onAddNew` always
+        // close this popover before anything else can open on top of it, so it
+        // is never legitimately meant to be non-interactive while mounted.
+        style={{ pointerEvents: "auto" }}
       >
         <Command
           {...(onSearch

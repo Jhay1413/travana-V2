@@ -121,7 +121,25 @@ export function MultiSearchableSelect({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="z-[500] w-[--radix-popover-trigger-width] p-0" align="start" side="bottom">
+      <PopoverContent
+        className="z-[500] w-[--radix-popover-trigger-width] p-0"
+        align="start"
+        side="bottom"
+        // `@radix-ui/react-dismissable-layer` computes this popover's
+        // `pointer-events` at RENDER time from a shared layer-set context, then
+        // applies it as an inline style — the same layer bookkeeping that races
+        // on slow environments (see docs/form-drawer-pointer-events-fix.md). If
+        // this popover renders before the context finishes propagating that it's
+        // the active layer, it inlines `pointer-events: none`: the dropdown
+        // paints normally but swallows every click/keystroke. A Tailwind class
+        // can't fix this (inline styles win), but `style` props are merged in
+        // via Radix's `asChild`/Slot with the *child's* value winning on
+        // conflict, so this forces it back to `auto` regardless of which way
+        // that race went. Safe here because the "Add new" button below closes
+        // this popover before opening anything on top of it, so it is never
+        // legitimately meant to be non-interactive while mounted.
+        style={{ pointerEvents: "auto" }}
+      >
         <Command
           {...(onSearch
             ? { shouldFilter: false }
@@ -162,6 +180,12 @@ export function MultiSearchableSelect({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  // Close before opening the "Add new" dialog on top — this
+                  // popover's `pointer-events` is forced to `auto` above, so
+                  // leaving it open underneath a real modal would let clicks
+                  // leak through to it while the modal is supposed to be the
+                  // only interactive layer.
+                  setOpen(false);
                   onAddNew();
                 }}
                 className="flex w-full items-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
