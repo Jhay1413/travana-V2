@@ -3,41 +3,57 @@ import { useLocation, useRoute } from "wouter";
 import {
   ChevronLeft,
   Copy,
+  Ellipsis,
+  Eye,
   FileText,
+  Globe,
   Pencil,
   PinOff,
   Pin,
   Search,
-  Sparkles,
-  Tag,
   Trash2,
-  X,
 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
-import { useUpdateQuote, useDeleteQuote } from "@/hooks/mutations";
+import { useDeleteQuote } from "@/hooks/mutations";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
 import { useQuote, useCurrentUser } from "@/hooks/queries";
 import { StatusPill } from "@/features/social/components/social-quote";
 import { transformQuoteData, currency, formatUKDate } from "@/features/quote/components/quote-types";
-import { QuoteItinerarySpecs } from "@/features/quote/components/QuoteItinerarySpecs";
-import { QuoteMediaPanel } from "@/features/quote/components/QuoteMediaPanel";
-import { QuoteCostingsCard } from "@/features/quote/components/QuoteCostingsCard";
 import { QuoteGuruSheet } from "@/features/quote/components/QuoteGuruSheet";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { QuoteEditDialog } from "@/features/quote/components/quote-edit-dialog";
+import { QuoteExpiryDialog } from "@/features/quote/components/QuoteExpiryDialog";
 import { useNeonClients } from "@/features/client/api/use-neon-client-queries";
 import type { NeonClient } from "@/features/client/types/neon-client/neon-client.types";
 import { normalizeTransferType } from "@/features/quote/types/quote-form.types";
-import { useQuoteImages, useQuoteImageActions, useQuoteGuru } from "@/features/quote/components/hooks";
+import { useQuoteImages, useQuoteGuru, useQuoteExpiry } from "@/features/quote/components/hooks";
+import { HolidayDetailView, HEADER_ELLIPSIS_BUTTON_CLASS } from "@/features/client/components/holiday-detail-view";
+import { HolidayDetailsPanel } from "@/features/client/components/holiday-details-panel";
+import { CircleAction } from "@/features/client/components/circle-action";
 
 export default function SocialQuotePage() {
   const [, setLocation] = useLocation();
@@ -51,24 +67,18 @@ export default function SocialQuotePage() {
 
   const quote = useMemo(() => (rawData ? transformQuoteData(rawData) : null), [rawData]);
 
-  const { primaryImage, galleryImages, quoteImageUrls } = useQuoteImages(rawData);
-  const {
-    imageInputRef,
-    uploadImagesMutation,
-    setPrimary: setPrimaryImage,
-    removeImage: deleteImage,
-    uploadFiles: uploadImageFiles,
-    openFilePicker: openImageFilePicker,
-    reorderImages: reorderImageOrder,
-    reorderImagesMutation,
-  } = useQuoteImageActions(quoteId);
+  // Only the copy flow's initialImages still needs this — gallery display/
+  // editing now lives inside HolidayDetailView's own hero card.
+  const { quoteImageUrls } = useQuoteImages(rawData);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
-  const [newTag, setNewTag] = useState("");
-  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const isFavorited = useMemo(
+    () => userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ?? false,
+    [userFavorites, quoteId]
+  );
   const [showClientPicker, setShowClientPicker] = useState(false);
   const [clientSearch, setClientSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState<NeonClient | null>(null);
@@ -86,10 +96,20 @@ export default function SocialQuotePage() {
     guruDestination, guruRecord, generateGuruMutation,
   } = useQuoteGuru(quote, rawData);
 
-  const updateQuoteMutation = useUpdateQuote();
+  // Single shared "Update Expiry" dialog for this quote — mirrors the client
+  // page's pattern (see pages/client/index.tsx) so the expired-banner button
+  // inside the deal-view body and any future trigger here share one dialog.
+  const quoteExpiry = useQuoteExpiry(quoteId);
+
   const deleteQuoteMutation = useDeleteQuote();
 
-  const pageLabel = "Quote";
+  // Free social quotes are created on their own client-less transaction (see
+  // newQuoteService.createSocialQuote), so client_id is typically absent —
+  // fall back to "" the same way a client-less holiday flows through the
+  // deal-view components. "Social Posts" doubles as the breadcrumb label and
+  // its click target (back to this page), mirroring the back button above.
+  const clientId = rawData?.client_id ?? "";
+  const clientName = "Social Posts";
 
   if (isLoading) {
     return (
@@ -117,296 +137,171 @@ export default function SocialQuotePage() {
     );
   }
 
+  function handleTogglePin() {
+    if (!quote) return;
+    toggleFavoriteMutation.mutate(
+      {
+        itemType: "quote",
+        itemId: quoteId,
+        label: quote.quoteTitle,
+        subtitle: quote.destinationName ? ` · ${quote.destinationName}` : "",
+      },
+      {
+        onSuccess: (data: { favorited?: boolean }) => {
+          toast({
+            title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard",
+          });
+        },
+      }
+    );
+  }
+
+  async function handleConfirmDelete() {
+    try {
+      await deleteQuoteMutation.mutateAsync(quoteId);
+      toast({ title: "Quote deleted" });
+      setLocation("/social-posts");
+    } catch {
+      toast({ title: "Failed to delete quote", variant: "destructive" });
+      setShowDeleteConfirm(false);
+    }
+  }
+
   return (
     <>
-      <div className="px-5 pb-8 pt-5" data-testid="page-social-quote">
-        {/* Header */}
-        <div
-          className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"
-          data-testid="row-social-quote-header"
-        >
-          <div className="flex items-start gap-3">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 rounded-2xl border-black/10 bg-white/70"
-              data-testid="button-back-social-posts"
-              onClick={() => setLocation("/social-posts")}
-            >
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Social Posts
-            </Button>
-
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="text-base font-semibold" data-testid="text-social-quote-title">
-                  {quote.quoteTitle},{" "}
-                  <span className="text-sm font-semibold text-[#000000]">
-                    {currency.format(quote.pricePerPerson)}pp
-                  </span>
-                </div>
-                <StatusPill status={quote.status} />
-                {rawData?.quote_ref && (
-                  <a
-                    href={rawData.quote_ref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-500 hover:underline"
-                    data-testid="link-view-social-quote"
-                  >
-                    View
-                  </a>
-                )}
-              </div>
-              <div
-                className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55"
-                data-testid="text-social-quote-meta"
-              >
-                <span data-testid="text-social-quote-meta-destination">{quote.destinationName || quote.destination}</span>
-                <span className="text-black/25">•</span>
-                <span data-testid="text-social-quote-meta-dates">
-                  {formatUKDate(quote.travelDate)} → {formatUKDate(quote.returnDate)}
-                </span>
-                <span className="text-black/25">•</span>
-                <span data-testid="text-social-quote-meta-created">
-                  Created {formatUKDate(quote.createdAt)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2" data-testid="row-social-quote-actions">
-            <button
-              type="button"
-              onClick={() =>
-                toggleFavoriteMutation.mutate(
-                  {
-                    itemType: "quote",
-                    itemId: quoteId,
-                    label: quote.quoteTitle,
-                    subtitle: quote.destinationName ? ` · ${quote.destinationName}` : "",
-                  },
-                  {
-                    onSuccess: (data: { favorited?: boolean }) => {
-                      toast({
-                        title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard",
-                      });
-                    },
-                  }
-                )
-              }
-              className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition ${
-                userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId)
-                  ? "border-amber-500/30 bg-amber-500/10 text-amber-700 hover:bg-amber-500/15"
-                  : "border-black/10 bg-white/70 text-black/75 hover:bg-black/[0.03]"
-              }`}
-              data-testid="button-pin-social-quote"
-            >
-              {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId) ? (
-                <PinOff className="h-4 w-4" />
-              ) : (
-                <Pin className="h-4 w-4" />
-              )}
-              {userFavorites?.some((f: Favorite) => f.itemType === "quote" && f.itemId === quoteId)
-                ? "Unpin"
-                : "Pin"}
-            </button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 rounded-2xl border-black/10 bg-white/70"
-              data-testid="button-edit-social-quote"
-              onClick={() => setShowEditDialog(true)}
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit
-            </Button>
-            {!showDeleteConfirm ? (
+      <section
+        className="text-compact -m-4 grid h-[calc(100vh-3.5rem)] grid-cols-1 gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[1fr_240px] xl:grid-cols-[1fr_300px] 3xl:grid-cols-[1fr_380px]"
+        data-testid="page-social-quote"
+      >
+        <div className="flex min-h-0 min-w-0 flex-col">
+          {/* Header */}
+          <div
+            className="shrink-0 flex flex-col gap-3 px-5 pb-4 pt-5 md:flex-row md:items-start md:justify-between"
+            data-testid="row-social-quote-header"
+          >
+            <div className="flex items-start gap-3">
               <Button
                 size="sm"
                 variant="outline"
-                className="h-9 rounded-2xl border-red-200 bg-white/70 text-red-600 hover:bg-red-50 hover:border-red-300"
-                data-testid="button-delete-social-quote"
-                onClick={() => setShowDeleteConfirm(true)}
+                className="h-9 rounded-2xl border-black/10 bg-white/70"
+                data-testid="button-back-social-posts"
+                onClick={() => setLocation("/social-posts")}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
+                <ChevronLeft className="mr-2 h-4 w-4" />
+                Social Posts
               </Button>
-            ) : (
-              <div className="flex items-center gap-1">
-                <Button
-                  size="sm"
-                  className="h-9 rounded-2xl bg-red-600 text-white hover:bg-red-700"
-                  data-testid="button-delete-social-quote-confirm"
-                  disabled={deleteQuoteMutation.isPending}
-                  onClick={async () => {
-                    try {
-                      await deleteQuoteMutation.mutateAsync(quoteId);
-                      toast({ title: "Quote deleted" });
-                      setLocation("/social-posts");
-                    } catch {
-                      toast({ title: "Failed to delete quote", variant: "destructive" });
-                      setShowDeleteConfirm(false);
-                    }
-                  }}
-                >
-                  {deleteQuoteMutation.isPending ? "Deleting..." : "Confirm"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 rounded-2xl border-black/10 bg-white/70"
-                  data-testid="button-delete-social-quote-cancel"
-                  onClick={() => setShowDeleteConfirm(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            )}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-9 rounded-2xl border-black/10 bg-white/70"
-              data-testid="button-copy-social-quote"
-              onClick={() => {
-                setSelectedClient(null);
-                setClientSearch("");
-                setShowClientPicker(true);
-              }}
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              Copy
-            </Button>
-            <Button
-              size="sm"
-              className="h-9 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-3 text-white hover:from-amber-600 hover:to-orange-600 shadow-sm"
-              data-testid="button-destination-guru-social-quote"
-              onClick={() => setShowGuruSheet(true)}
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Destination Guru
-            </Button>
-            <Button
-              size="sm"
-              className="h-9 rounded-2xl bg-[#3b82f6] px-3 text-white hover:bg-[#3b82f6]/90"
-              data-testid="button-export-social-quote"
-              onClick={() => {}}
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              Export
-            </Button>
-          </div>
-        </div>
 
-        {/* Main Content */}
-        <div className="mt-4" data-testid="layout-social-quote-body">
-          <div className="grid gap-3 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_340px]" data-testid="grid-social-quote-sections">
-            {/* Main Content - Itinerary */}
-            <Card
-              className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4"
-              data-testid="card-social-quote-itinerary"
-            >
-              <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-social-quote-itinerary-hero">
-                {/* Images */}
-                <div className="grid content-start gap-1.5" data-testid="col-social-quote-media">
-                  <QuoteMediaPanel
-                    primaryImage={primaryImage}
-                    galleryImages={galleryImages}
-                    imageInputRef={imageInputRef}
-                    isUploading={uploadImagesMutation.isPending}
-                    setPrimary={setPrimaryImage}
-                    deleteImage={deleteImage}
-                    uploadFiles={uploadImageFiles}
-                    openFilePicker={openImageFilePicker}
-                    reorderImages={reorderImageOrder}
-                    isReordering={reorderImagesMutation.isPending}
-                  />
-
-                  {/* Tags */}
-                  <div
-                    className="mt-3 rounded-2xl border border-black/10 bg-white/60 p-2.5"
-                    data-testid="card-social-quote-tags-inline"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="text-[11px] font-semibold" data-testid="text-social-quote-tags-title">
-                        Tags
-                      </div>
-                      <Tag className="h-3 w-3 text-black/35" aria-hidden />
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5" data-testid="list-social-quote-tags">
-                      {quote.tags.map((t) => (
-                        <span
-                          key={t}
-                          className="group inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-black/70"
-                          data-testid={`pill-social-quote-tag-${t}`}
-                        >
-                          {t}
-                          <button
-                            type="button"
-                            className="ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-black/35 transition hover:bg-black/[0.06] hover:text-black/60"
-                            data-testid={`button-remove-social-quote-tag-${t}`}
-                            onClick={() => {
-                              const updated = quote.tags.filter((tag) => tag !== t);
-                              updateQuoteMutation.mutate(
-                                { id: quoteId, data: { tags: updated } },
-                                {
-                                  onSuccess: () =>
-                                    queryClient.invalidateQueries({ queryKey: ["quotes"] }),
-                                }
-                              );
-                            }}
-                          >
-                            <X className="h-2.5 w-2.5" aria-hidden />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                    <div className="relative mt-2 flex items-center gap-1.5" data-testid="row-add-social-quote-tag">
-                      <div className="relative flex-1">
-                        <Input
-                          placeholder="Add tag…"
-                          className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
-                          data-testid="input-add-social-quote-tag"
-                          value={newTag}
-                          onChange={(e) => {
-                            setNewTag(e.target.value);
-                            setShowTagSuggestions(true);
-                          }}
-                          onFocus={() => setShowTagSuggestions(true)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && newTag.trim()) {
-                              const updated = [...quote.tags, newTag.trim()];
-                              updateQuoteMutation.mutate(
-                                { id: quoteId, data: { tags: updated } },
-                                {
-                                  onSuccess: () => {
-                                    setNewTag("");
-                                    setShowTagSuggestions(false);
-                                    queryClient.invalidateQueries({ queryKey: ["quotes"] });
-                                  },
-                                }
-                              );
-                            }
-                          }}
-                        />
-                      </div>
-                    </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-base font-semibold" data-testid="text-social-quote-title">
+                    {quote.quoteTitle},{" "}
+                    <span className="text-sm font-semibold text-[#000000]">
+                      {currency.format(quote.pricePerPerson)}pp
+                    </span>
                   </div>
+                  <StatusPill status={quote.status} />
                 </div>
-
-                {/* Quote Details — mirror the client quote page (package holiday / cruise / hot tub) */}
-                <div className="min-w-0" data-testid="col-social-quote-details">
-                  <QuoteItinerarySpecs quote={quote} quoteData={rawData} />
+                <div
+                  className="mt-1 flex flex-wrap items-center gap-2 text-xs text-black/55"
+                  data-testid="text-social-quote-meta"
+                >
+                  <span data-testid="text-social-quote-meta-destination">{quote.destinationName || quote.destination}</span>
+                  <span className="text-black/25">•</span>
+                  <span data-testid="text-social-quote-meta-dates">
+                    {formatUKDate(quote.travelDate)} → {formatUKDate(quote.returnDate)}
+                  </span>
+                  <span className="text-black/25">•</span>
+                  <span data-testid="text-social-quote-meta-created">
+                    Created {formatUKDate(quote.createdAt)}
+                  </span>
                 </div>
               </div>
-            </Card>
+            </div>
 
-            <div className="grid gap-3 text-sm xl:text-base" data-testid="col-quote-right">
-              <QuoteCostingsCard quote={quote} pageLabel={pageLabel} />
+            <div className="flex flex-wrap items-center gap-2" data-testid="row-social-quote-actions">
+              {rawData?.quote_ref && (
+                <CircleAction icon={Eye} label="View Quote" href={rawData.quote_ref} testId="link-view-social-quote" />
+              )}
+              <CircleAction
+                icon={Globe}
+                label="Destination Guru"
+                onClick={() => setShowGuruSheet(true)}
+                testId="button-destination-guru-social-quote"
+              />
+              <CircleAction
+                icon={Copy}
+                label="Copy to client"
+                onClick={() => {
+                  setSelectedClient(null);
+                  setClientSearch("");
+                  setShowClientPicker(true);
+                }}
+                testId="button-copy-social-quote"
+              />
+              <CircleAction icon={FileText} label="Export" onClick={() => {}} testId="button-export-social-quote" />
+              <CircleAction
+                icon={isFavorited ? PinOff : Pin}
+                label={isFavorited ? "Unpin" : "Pin"}
+                onClick={handleTogglePin}
+                active={isFavorited}
+                testId="button-pin-social-quote"
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={HEADER_ELLIPSIS_BUTTON_CLASS}
+                    aria-label="More actions"
+                    data-testid="button-more-social-quote-actions"
+                  >
+                    <Ellipsis className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                  <DropdownMenuItem
+                    onClick={() => setShowEditDialog(true)}
+                    className="gap-2 rounded-lg text-sm"
+                    data-testid="button-edit-social-quote"
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="gap-2 rounded-lg text-sm text-red-600 focus:bg-red-50 focus:text-red-600"
+                    data-testid="button-delete-social-quote"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
+
+          {/* Main Content — the client details deal view's centre body */}
+          <div
+            className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-5 pb-8"
+            data-testid="layout-social-quote-body"
+          >
+            <HolidayDetailView
+              clientId={clientId}
+              clientName={clientName}
+              selection={{ type: "quote", id: quoteId }}
+              onBack={() => setLocation("/social-posts")}
+              onOpenExpiryDialog={quoteExpiry.openExpiryDialog}
+              showDetailTabs={false}
+            />
+          </div>
         </div>
-      </div>
+
+        <HolidayDetailsPanel
+          className="hidden lg:flex"
+          selection={{ type: "quote", id: quoteId }}
+          enquiries={[]}
+          quotes={rawData ? [rawData] : []}
+          bookings={[]}
+        />
+      </section>
+
       <QuoteEditDialog
         quoteId={quoteId}
         open={showEditDialog}
@@ -424,6 +319,45 @@ export default function SocialQuotePage() {
         guruDestination={guruDestination}
         guruRecord={guruRecord as any}
         generateGuruMutation={generateGuruMutation}
+      />
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this quote?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              data-testid="button-delete-social-quote-cancel"
+              disabled={deleteQuoteMutation.isPending}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="button-delete-social-quote-confirm"
+              disabled={deleteQuoteMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmDelete();
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteQuoteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <QuoteExpiryDialog
+        open={quoteExpiry.showExpiryDialog}
+        onOpenChange={quoteExpiry.setShowExpiryDialog}
+        expiryDate={quoteExpiry.expiryDate}
+        onExpiryDateChange={quoteExpiry.setExpiryDate}
+        isPending={quoteExpiry.updateQuoteExpiryMutation.isPending}
+        onConfirm={quoteExpiry.confirmExpiry}
       />
 
       {/* Client picker — step 1 of copy flow */}

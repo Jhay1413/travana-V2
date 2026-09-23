@@ -1429,6 +1429,7 @@ function QuoteHolidayDetail({
   clientName,
   onBack,
   onOpenExpiryDialog,
+  showDetailTabs = true,
 }: HolidayDetailContentProps & {
   /** Opens the single, shared "Update Expiry" dialog owned by the page (see
    *  pages/client/index.tsx) — keeps exactly one <QuoteExpiryDialog> mounted
@@ -1580,7 +1581,9 @@ function QuoteHolidayDetail({
           )}
         </div>
       </Card>
-      <DetailTabsCard transactionId={quote.transaction_id} entityId={id} entityType="quote" clientId={clientId} />
+      {showDetailTabs && (
+        <DetailTabsCard transactionId={quote.transaction_id} entityId={id} entityType="quote" clientId={clientId} />
+      )}
       <HolidayComposer transactionId={quote.transaction_id} />
     </>
   );
@@ -1695,7 +1698,7 @@ export function BookingActionsMenu({
 
 // ─── Booking ────────────────────────────────────────────────────────────────
 
-function BookingHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailContentProps) {
+function BookingHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs = true }: HolidayDetailContentProps) {
   const { data: bookingData, isLoading, error } = useBooking(id);
   const { primaryImage, galleryImages } = useQuoteImages(bookingData);
 
@@ -1753,7 +1756,9 @@ function BookingHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
           )}
         </div>
       </Card>
-      <DetailTabsCard transactionId={booking.transaction_id} entityId={id} entityType="booking" clientId={clientId} />
+      {showDetailTabs && (
+        <DetailTabsCard transactionId={booking.transaction_id} entityId={id} entityType="booking" clientId={clientId} />
+      )}
       <HolidayComposer transactionId={booking.transaction_id} />
     </>
   );
@@ -1993,7 +1998,7 @@ function formatBudgetType(budgetType?: string | null): string {
   return budgetType === "PER_PERSON" ? "pp" : ` ${budgetType.toLowerCase()}`;
 }
 
-function EnquiryHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetailContentProps) {
+function EnquiryHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs = true }: HolidayDetailContentProps) {
   const { data: enquiry, isLoading, error } = useEnquiry(id);
 
   if (isLoading) return <DetailLoading clientName={clientName} onBack={onBack} />;
@@ -2058,7 +2063,9 @@ function EnquiryHolidayDetail({ id, clientId, clientName, onBack }: HolidayDetai
         <FieldsGrid left={fields.left} right={fields.right} />
         </div>
       </Card>
-      <DetailTabsCard transactionId={enquiry.transaction_id} entityId={id} entityType="enquiry" clientId={clientId} />
+      {showDetailTabs && (
+        <DetailTabsCard transactionId={enquiry.transaction_id} entityId={id} entityType="enquiry" clientId={clientId} />
+      )}
       <HolidayComposer transactionId={enquiry.transaction_id} />
     </>
   );
@@ -2071,6 +2078,9 @@ interface HolidayDetailContentProps {
   clientId: string;
   clientName: string;
   onBack: () => void;
+  /** Shows the Notes / Inbox / Tasks / Tickets tabs card. Defaults to true so
+   *  every existing caller keeps rendering it unchanged. */
+  showDetailTabs?: boolean;
 }
 
 export interface HolidayDetailViewProps {
@@ -2081,9 +2091,20 @@ export interface HolidayDetailViewProps {
   /** Opens the single, shared "Update Expiry" dialog owned by the page (see
    *  pages/client/index.tsx) — only used for the quote variant. */
   onOpenExpiryDialog: (dateExpiry: string | Date | null | undefined) => void;
+  /** Shows the Notes / Inbox / Tasks / Tickets tabs card. Defaults to true,
+   *  which preserves today's rendering (e.g. pages/client/index.tsx). The
+   *  social-post quote page passes false to hide it. */
+  showDetailTabs?: boolean;
 }
 
-export function HolidayDetailView({ clientId, clientName, selection, onBack, onOpenExpiryDialog }: HolidayDetailViewProps) {
+export function HolidayDetailView({
+  clientId,
+  clientName,
+  selection,
+  onBack,
+  onOpenExpiryDialog,
+  showDetailTabs = true,
+}: HolidayDetailViewProps) {
   return (
     <div data-testid="holiday-detail-view">
       {selection.type === "quote" && (
@@ -2094,13 +2115,28 @@ export function HolidayDetailView({ clientId, clientName, selection, onBack, onO
           clientName={clientName}
           onBack={onBack}
           onOpenExpiryDialog={onOpenExpiryDialog}
+          showDetailTabs={showDetailTabs}
         />
       )}
       {selection.type === "booking" && (
-        <BookingHolidayDetail key={selection.id} id={selection.id} clientId={clientId} clientName={clientName} onBack={onBack} />
+        <BookingHolidayDetail
+          key={selection.id}
+          id={selection.id}
+          clientId={clientId}
+          clientName={clientName}
+          onBack={onBack}
+          showDetailTabs={showDetailTabs}
+        />
       )}
       {selection.type === "enquiry" && (
-        <EnquiryHolidayDetail key={selection.id} id={selection.id} clientId={clientId} clientName={clientName} onBack={onBack} />
+        <EnquiryHolidayDetail
+          key={selection.id}
+          id={selection.id}
+          clientId={clientId}
+          clientName={clientName}
+          onBack={onBack}
+          showDetailTabs={showDetailTabs}
+        />
       )}
     </div>
   );
