@@ -9,6 +9,7 @@ vi.mock("./quote.repository", () => ({
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
+    promoteSiblingAndRemove: vi.fn(),
     findLostSiblings: vi.fn(),
     countActiveSiblings: vi.fn(),
     replaceChildPassengers: vi.fn(),
@@ -121,6 +122,47 @@ describe("newQuoteService.createQuote", () => {
       price_per_person: "999.99",
     });
   });
+
+  it("excludes discounts and service_charge from a free quote, computing price_per_person from the undiscounted figures", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, status: "on_quote" } as never);
+    vi.mocked(newQuoteRepository.create).mockResolvedValue({ id: "q1" } as never);
+
+    await newQuoteService.createQuote(
+      {
+        transaction_id: "t1", isFreeQuote: true, sales_price: "600", adult: 2, child: 0,
+        discounts: "100", service_charge: "50",
+      } as never,
+      TRUSTED,
+    );
+
+    expect(vi.mocked(newQuoteRepository.create).mock.calls[0][0]).toMatchObject({
+      discounts: null,
+      service_charge: null,
+      price_per_person: "300.00", // 600 / 2 — undiscounted, not (600-100+50)/2
+    });
+  });
+
+  it("overrides a caller-supplied price_per_person when a free quote's discount/service_charge is actually cleared", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, status: "on_quote" } as never);
+    vi.mocked(newQuoteRepository.create).mockResolvedValue({ id: "q1" } as never);
+
+    await newQuoteService.createQuote(
+      {
+        transaction_id: "t1", isFreeQuote: true, sales_price: "600", adult: 2, child: 0,
+        discounts: "100", service_charge: "50", price_per_person: "999.99",
+      } as never,
+      TRUSTED,
+    );
+
+    // The supplied 999.99 was computed WITH the discount/service charge — once
+    // those are stripped for a free quote, it's stale and must be recomputed
+    // from the undiscounted figures, not preserved.
+    expect(vi.mocked(newQuoteRepository.create).mock.calls[0][0]).toMatchObject({
+      discounts: null,
+      service_charge: null,
+      price_per_person: "300.00", // 600 / 2
+    });
+  });
 });
 
 describe("newQuoteService.updateQuote", () => {
@@ -193,6 +235,125 @@ describe("newQuoteService.deleteQuote", () => {
 
     await expect(newQuoteService.deleteQuote("q1", TRUSTED)).resolves.not.toThrow();
     expect(newQuoteRepository.remove).toHaveBeenCalledWith("q1");
+  });
+
+  describe("primary-with-siblings guard", () => {
+    it("deletes a primary quote with no live siblings cleanly, no prompt needed", async () => {
+      vi.mocked(newQuoteRepository.findById).mockResolvedValue({
+        id: "q1", transaction_id: "t1", isQuoteCopy: false,
+      } as never);
+      vi.mocked(newQuoteRepository.countActiveSiblings).mockResolvedValue(0 as never);
+
+      await newQuoteService.deleteQuote("q1", TRUSTED);
+
+      expect(newQuoteRepository.remove).toHaveBeenCalledWith("q1");
+      expect(newQuoteRepository.promoteSiblingAndRemove).not.toHaveBeenCalled();
+    });
+
+    it("throws 400 when deleting a primary with siblings and no newPrimaryQuoteId", async () => {
+      vi.mocked(newQuoteRepository.findById).mockResolvedValue({
+        id: "q1", transaction_id: "t1", isQuoteCopy: false,
+      } as never);
+      vi.mocked(newQuoteRepository.countActiveSiblings).mockResolvedValue(1 as never);
+
+      await expect(newQuoteService.deleteQuote("q1", TRUSTED)).rejects.toMatchObject({
+        statusCode: 400,
+        message: "NEW_PRIMARY_REQUIRED",
+      });
+      expect(newQuoteRepository.remove).not.toHaveBeenCalled();
+      expect(newQuoteRepository.promoteSiblingAndRemove).not.toHaveBeenCalled();
+    });
+
+    it("promotes the chosen sibling and removes the old primary when a valid newPrimaryQuoteId is given", async () => {
+      vi.mocked(newQuoteRepository.findById)
+        .mockResolvedValueOnce({ id: "q1", transaction_id: "t1", isQuoteCopy: false } as never) // target
+        .mockResolvedValueOnce({ id: "q2", transaction_id: "t1", isQuoteCopy: true, quote_status: "quoted" } as never); // candidate
+      vi.mocked(newQuoteRepository.countActiveSiblings).mockResolvedValue(1 as never);
+
+      await newQuoteService.deleteQuote("q1", TRUSTED, "q2");
+
+      expect(newQuoteRepository.promoteSiblingAndRemove).toHaveBeenCalledWith("q2", "q1", expect.any(Date));
+      expect(newQuoteRepository.remove).not.toHaveBeenCalled();
+    });
+
+    it("rejects a newPrimaryQuoteId that belongs to a different transaction", async () => {
+      vi.mocked(newQuoteRepository.findById)
+        .mockResolvedValueOnce({ id: "q1", transaction_id: "t1", isQuoteCopy: false } as never)
+        .mockResolvedValueOnce({ id: "q9", transaction_id: "t-other", isQuoteCopy: true, quote_status: "quoted" } as never);
+      vi.mocked(newQuoteRepository.countActiveSiblings).mockResolvedValue(1 as never);
+
+      await expect(newQuoteService.deleteQuote("q1", TRUSTED, "q9")).rejects.toMatchObject({
+        statusCode: 400,
+        message: "INVALID_NEW_PRIMARY",
+      });
+      expect(newQuoteRepository.promoteSiblingAndRemove).not.toHaveBeenCalled();
+      expect(newQuoteRepository.remove).not.toHaveBeenCalled();
+    });
+
+    it("rejects a newPrimaryQuoteId that is soft-deleted", async () => {
+      vi.mocked(newQuoteRepository.findById)
+        .mockResolvedValueOnce({ id: "q1", transaction_id: "t1", isQuoteCopy: false } as never)
+        .mockResolvedValueOnce({
+          id: "q2", transaction_id: "t1", isQuoteCopy: true, quote_status: "quoted", deleted_at: new Date(),
+        } as never);
+      vi.mocked(newQuoteRepository.countActiveSiblings).mockResolvedValue(1 as never);
+
+      await expect(newQuoteService.deleteQuote("q1", TRUSTED, "q2")).rejects.toMatchObject({
+        statusCode: 400,
+        message: "INVALID_NEW_PRIMARY",
+      });
+      expect(newQuoteRepository.promoteSiblingAndRemove).not.toHaveBeenCalled();
+      expect(newQuoteRepository.remove).not.toHaveBeenCalled();
+    });
+
+    it("deletes a non-primary copy without triggering the guard", async () => {
+      vi.mocked(newQuoteRepository.findById).mockResolvedValue({
+        id: "q2", transaction_id: "t1", isQuoteCopy: true,
+      } as never);
+
+      await newQuoteService.deleteQuote("q2", TRUSTED);
+
+      expect(newQuoteRepository.countActiveSiblings).not.toHaveBeenCalled();
+      expect(newQuoteRepository.remove).toHaveBeenCalledWith("q2");
+      expect(newQuoteRepository.promoteSiblingAndRemove).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe("newQuoteService.createQuote — auto free social copy", () => {
+  // createFreeSocialCopy is fire-and-forget from createQuote — wait for its
+  // microtask chain rather than the awaited createQuote call.
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("excludes the source's discount/service_charge from the free copy and recomputes price_per_person from the undiscounted figures", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, status: "on_quote", is_test: false } as never);
+    vi.mocked(newQuoteRepository.create)
+      .mockResolvedValueOnce({ id: "q1" } as never) // primary quote
+      .mockResolvedValueOnce({ id: "freeQ1" } as never); // auto-generated free copy
+    vi.mocked(transactionRepository.create).mockResolvedValue({ id: "freeTxn1" } as never);
+
+    await newQuoteService.createQuote(
+      {
+        transaction_id: "t1", isFreeQuote: false, sales_price: "600", adult: 2, child: 0,
+        discounts: "100", service_charge: "50", price_per_person: "275.00",
+      } as never,
+      TRUSTED,
+    );
+    await flush();
+
+    // The primary (non-free) quote keeps its own discount/service charge and
+    // the caller-supplied price_per_person untouched.
+    expect(vi.mocked(newQuoteRepository.create).mock.calls[0][0]).toMatchObject({
+      discounts: "100", service_charge: "50", price_per_person: "275.00",
+    });
+    // The free copy excludes both and recomputes price_per_person from the
+    // undiscounted sales price — not the inherited 275.00.
+    expect(vi.mocked(newQuoteRepository.create).mock.calls[1][0]).toMatchObject({
+      isFreeQuote: true,
+      discounts: null,
+      service_charge: null,
+      price_per_person: "300.00", // 600 / 2
+    });
   });
 });
 

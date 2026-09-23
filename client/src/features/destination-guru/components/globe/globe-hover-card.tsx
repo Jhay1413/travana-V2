@@ -25,13 +25,7 @@ export const GlobeHoverCard = forwardRef<HTMLDivElement, GlobeHoverCardProps>(fu
       ref={ref}
       data-testid="guru-hover-card"
       className={cn(
-        // Border/shadow bumped up from the original (border-black/10,
-        // shadow-xl): the stage is dark again, but the globe itself (land/
-        // ocean) stays light, and a hovered pin can sit anywhere from deep
-        // in the light land/ocean to right at the limb against the dark
-        // stage — kept the stronger definition since it reads well against
-        // either backdrop, not just the one it was originally tuned for.
-        "absolute left-0 top-0 z-10 w-64 overflow-hidden border-black/15 bg-white/95 p-3 opacity-0 shadow-2xl backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/95",
+        "absolute left-0 top-0 z-10 w-64 overflow-hidden border-black/10 bg-white/95 p-3 opacity-0 shadow-xl backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/95",
         isTouch ? "pointer-events-auto" : "pointer-events-none",
       )}
       style={{ willChange: "transform, opacity" }}

@@ -93,6 +93,7 @@ export function SocialPostsTab({
     false,
     false,
     "all",
+    [],
     { enabled: tab === "calendar" },
   );
 

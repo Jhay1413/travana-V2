@@ -86,28 +86,60 @@ interface HolidayRowData {
   dateLine: string | null;
   createdAt: string | null;
   expired: boolean;
+  /** True for a quote duplicated from another — rendered nested with a "Copy" pill. */
+  isCopy: boolean;
+  /** Copies duplicated from this row, nested underneath it. Empty for enquiries/bookings/copies. */
+  copies: HolidayRowData[];
+}
+
+function buildQuoteRow(qr: QuoteRow): HolidayRowData {
+  const code = qr.departing_airport_code || qr.departing_airport_name || null;
+  return {
+    id: qr.id,
+    type: "quote" as const,
+    title: qr.title || "Untitled quote",
+    price: netPrice(qr.sales_price, qr.discounts, qr.service_charge),
+    operatorName: qr.main_tour_operator_name ?? null,
+    operatorLogoUrl: qr.main_tour_operator_logo_url ?? null,
+    destinationName: qr.destination_name ?? null,
+    dateLine: buildDateLine(code, qr.travel_date, qr.num_of_nights),
+    createdAt: qr.date_created,
+    expired: isQuoteExpired(qr),
+    isCopy: Boolean(qr.isQuoteCopy),
+    copies: [],
+  };
 }
 
 function buildQuoteRows(quotes: Quote[]): HolidayRowData[] {
-  return quotes
-    // Copies are internal duplicates of the primary quote, not separate holidays.
-    .filter(isPrimaryQuote)
-    .map((q) => {
-      const qr = q as QuoteRow;
-      const code = qr.departing_airport_code || qr.departing_airport_name || null;
-      return {
-        id: qr.id,
-        type: "quote" as const,
-        title: qr.title || "Untitled quote",
-        price: netPrice(qr.sales_price, qr.discounts, qr.service_charge),
-        operatorName: qr.main_tour_operator_name ?? null,
-        operatorLogoUrl: qr.main_tour_operator_logo_url ?? null,
-        destinationName: qr.destination_name ?? null,
-        dateLine: buildDateLine(code, qr.travel_date, qr.num_of_nights),
-        createdAt: qr.date_created,
-        expired: isQuoteExpired(qr),
-      };
-    });
+  const quoteRows = quotes as QuoteRow[];
+  const primaries = quoteRows.filter(isPrimaryQuote);
+  const copies = quoteRows.filter((q) => q.isQuoteCopy);
+
+  const primaryRowsById = new Map(primaries.map((q) => [q.id, buildQuoteRow(q)]));
+  // Group copies under the primary they belong to; older copies may not have
+  // parent_quote_id set, so fall back to matching by transaction — a copy
+  // always shares its origin transaction with the primary it was duplicated
+  // from. If neither resolves (e.g. the primary was soft-deleted), the copy
+  // is rendered as its own top-level row so it never disappears.
+  const primaryByTransactionId = new Map<string, QuoteRow>();
+  for (const q of primaries) {
+    if (!primaryByTransactionId.has(q.transaction_id)) primaryByTransactionId.set(q.transaction_id, q);
+  }
+
+  const orphanCopyRows: HolidayRowData[] = [];
+  for (const copy of copies) {
+    const parentId = copy.parent_quote_id && primaryRowsById.has(copy.parent_quote_id)
+      ? copy.parent_quote_id
+      : primaryByTransactionId.get(copy.transaction_id)?.id;
+    const parentRow = parentId ? primaryRowsById.get(parentId) : undefined;
+    if (parentRow) {
+      parentRow.copies.push(buildQuoteRow(copy));
+    } else {
+      orphanCopyRows.push(buildQuoteRow(copy));
+    }
+  }
+
+  return [...primaryRowsById.values(), ...orphanCopyRows];
 }
 
 function buildEnquiryRows(enquiries: EnquiryTable[]): HolidayRowData[] {
@@ -122,6 +154,8 @@ function buildEnquiryRows(enquiries: EnquiryTable[]): HolidayRowData[] {
     dateLine: buildDateLine(null, e.travel_date, e.no_of_nights),
     createdAt: e.date_created,
     expired: isEnquiryExpired(e),
+    isCopy: false,
+    copies: [],
   }));
 }
 
@@ -140,15 +174,19 @@ function buildBookingRows(bookings: HolidayBooking[]): HolidayRowData[] {
       dateLine: buildDateLine(null, b.travel_date, b.num_of_nights),
       createdAt: b.date_created,
       expired: isBookingExpired(b),
+      isCopy: false,
+      copies: [],
     };
   });
 }
 
 function sortRows(rows: HolidayRowData[], order: "newest" | "oldest"): HolidayRowData[] {
-  return [...rows].sort((a, b) => {
-    const diff = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-    return order === "newest" ? diff : -diff;
-  });
+  return [...rows]
+    .map((row) => (row.copies.length > 0 ? { ...row, copies: sortRows(row.copies, order) } : row))
+    .sort((a, b) => {
+      const diff = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      return order === "newest" ? diff : -diff;
+    });
 }
 
 // ─── Chips ──────────────────────────────────────────────────────────────────
@@ -209,11 +247,23 @@ function NeutralChip({ label, className }: { label: string; className?: string }
 
 // ─── Row ────────────────────────────────────────────────────────────────────
 
+// Small "Copy" pill shown next to a copy row's title — same rounded-pill
+// idiom as the rest of the panel's chips, tinted sky to read as informational
+// rather than a status/warning.
+function CopyPill() {
+  return (
+    <span className="shrink-0 rounded-full border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">
+      Copy
+    </span>
+  );
+}
+
 function HolidayListRow({
   row,
   selected,
   isLast = false,
   roomy = false,
+  isCopyRow = false,
   onSelect,
 }: {
   row: HolidayRowData;
@@ -222,10 +272,17 @@ function HolidayListRow({
   roomy?: boolean;
   /** Last row in its list — the separator hairline is dropped so the list ends clean. */
   isLast?: boolean;
+  /** Nested "Copy" variant — slightly smaller, carries a "Copy" pill next to the title. */
+  isCopyRow?: boolean;
   onSelect: () => void;
 }) {
-  // Live Deals uses a smaller operator logo than the compact holidays list.
-  const chipSize = roomy ? "h-7 w-7 text-[11px] 2xl:h-8 2xl:w-8 2xl:text-xs 3xl:h-8 3xl:w-8 3xl:text-xs" : undefined;
+  // Live Deals uses a smaller operator logo than the compact holidays list;
+  // copy rows drop a size further still since they're nested and secondary.
+  const chipSize = isCopyRow
+    ? "h-6 w-6 text-[10px]"
+    : roomy
+      ? "h-7 w-7 text-[11px] 2xl:h-8 2xl:w-8 2xl:text-xs 3xl:h-8 3xl:w-8 3xl:text-xs"
+      : undefined;
   return (
     <div
       role="button"
@@ -238,7 +295,8 @@ function HolidayListRow({
         }
       }}
       className={cn(
-        "relative cursor-pointer rounded-2xl border p-3 transition",
+        "relative cursor-pointer rounded-2xl border transition",
+        isCopyRow ? "p-2.5" : "p-3",
         selected
           ? "border-sky-100 bg-sky-50 dark:border-sky-500/20 dark:bg-sky-500/10"
           : "border-transparent hover:bg-black/[0.02] dark:hover:bg-white/[0.03]",
@@ -255,9 +313,20 @@ function HolidayListRow({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <span className={cn("truncate font-semibold", roomy ? "text-[15px]" : "text-[13px] 3xl:text-sm", row.expired && "text-red-500")}>{row.title}</span>
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span
+                className={cn(
+                  "truncate font-semibold",
+                  isCopyRow ? "text-[13px]" : roomy ? "text-[15px]" : "text-[13px] 3xl:text-sm",
+                  row.expired && "text-red-500",
+                )}
+              >
+                {row.title}
+              </span>
+              {isCopyRow && <CopyPill />}
+            </span>
             {row.price > 0 && (
-              <span className={cn("shrink-0 font-semibold text-black/60 dark:text-white/60", roomy ? "text-[15px]" : "text-[13px] 3xl:text-sm")}>
+              <span className={cn("shrink-0 font-semibold text-black/60 dark:text-white/60", isCopyRow ? "text-[13px]" : roomy ? "text-[15px]" : "text-[13px] 3xl:text-sm")}>
                 {holidayCurrency.format(row.price)}
               </span>
             )}
@@ -279,6 +348,51 @@ function HolidayListRow({
       )}
       {!selected && !isLast && (
         <span className="pointer-events-none absolute bottom-0 left-3 right-3 h-px bg-black/[0.06] dark:bg-white/[0.06]" aria-hidden />
+      )}
+    </div>
+  );
+}
+
+// A parent row plus its nested copies — the hairline under the parent is
+// always suppressed when it has copies (the indented copy list follows
+// directly beneath it instead), and reappears only on the group's own last row.
+function HolidayGroupRow({
+  row,
+  selection,
+  isLast,
+  roomy,
+  onSelect,
+}: {
+  row: HolidayRowData;
+  selection: HolidaySelection | null;
+  isLast: boolean;
+  roomy: boolean;
+  onSelect: (selection: HolidaySelection) => void;
+}) {
+  const hasCopies = row.copies.length > 0;
+  return (
+    <div>
+      <HolidayListRow
+        roomy={roomy}
+        row={row}
+        isLast={hasCopies || isLast}
+        selected={selection?.type === row.type && selection.id === row.id}
+        onSelect={() => onSelect({ type: row.type, id: row.id })}
+      />
+      {hasCopies && (
+        <div className="ml-[22px] space-y-1 border-l border-black/[0.08] pl-3 pt-1 dark:border-white/[0.08]">
+          {row.copies.map((copy, index) => (
+            <HolidayListRow
+              key={copy.id}
+              roomy={roomy}
+              isCopyRow
+              row={copy}
+              isLast={index === row.copies.length - 1 && isLast}
+              selected={selection?.type === copy.type && selection.id === copy.id}
+              onSelect={() => onSelect({ type: copy.type, id: copy.id })}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -357,9 +471,10 @@ export function AllHolidaysPanel({
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter(
-      (r) => r.title.toLowerCase().includes(q) || (r.destinationName ?? "").toLowerCase().includes(q),
-    );
+    const matches = (r: HolidayRowData) => r.title.toLowerCase().includes(q) || (r.destinationName ?? "").toLowerCase().includes(q);
+    // A group survives the filter if the parent OR any of its copies matches —
+    // the whole group is shown together rather than hiding sibling copies.
+    return rows.filter((r) => matches(r) || r.copies.some(matches));
   }, [rows, search]);
 
   const activeRows = useMemo(
@@ -532,13 +647,13 @@ export function AllHolidaysPanel({
           <>
             <div className="space-y-1">
               {activeRows.map((row, index) => (
-                <HolidayListRow
+                <HolidayGroupRow
                   roomy={isLiveDeals}
                   key={row.id}
                   row={row}
                   isLast={index === activeRows.length - 1}
-                  selected={selection?.type === row.type && selection.id === row.id}
-                  onSelect={() => onSelect({ type: row.type, id: row.id })}
+                  selection={selection}
+                  onSelect={onSelect}
                 />
               ))}
             </div>
@@ -559,13 +674,13 @@ export function AllHolidaysPanel({
                 {expiredOpen && (
                   <div className="mt-1 space-y-1">
                     {expiredRows.map((row, index) => (
-                      <HolidayListRow
+                      <HolidayGroupRow
                         roomy={isLiveDeals}
                         key={row.id}
                         row={row}
                         isLast={index === expiredRows.length - 1}
-                        selected={selection?.type === row.type && selection.id === row.id}
-                        onSelect={() => onSelect({ type: row.type, id: row.id })}
+                        selection={selection}
+                        onSelect={onSelect}
                       />
                     ))}
                   </div>

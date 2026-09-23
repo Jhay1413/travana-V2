@@ -11,8 +11,8 @@ import type { GuruDestinationItem } from "../../types";
 import { DestinationPins } from "./destination-pins";
 
 // Close enough to tell apart tightly-clustered destinations (e.g. the Greek
-// islands, Balearics, Canaries) while still keeping the filled country
-// land legible.
+// islands, Balearics, Canaries) while still keeping the hex-dot land
+// legible.
 const MIN_DISTANCE = 150;
 const MAX_DISTANCE = 420;
 const MIN_POLAR_ANGLE = 0.12 * Math.PI;
@@ -20,19 +20,9 @@ const MAX_POLAR_ANGLE = 0.88 * Math.PI;
 const AUTO_ROTATE_SPEED = 0.6;
 const AUTO_ROTATE_RESUME_MS = 3000;
 const FLIGHT_DURATION_MS = 1200;
-// Filled country polygons sit at 1.006R (see PIN_ALTITUDE_RADIUS in
-// destination-pins.tsx, which was raised above this so pins aren't buried
-// inside the raised land). The occluder only needs to sit below the
-// lowest possible opaque surface (the bare ocean sphere at exactly
-// GLOBE_RADIUS) to guarantee every near-side ray hits *something* with a
-// pointer handler before reaching far-side pins — 0.998R comfortably
-// clears that regardless of land altitude, so it didn't need to change.
 const OCCLUDER_RADIUS = GLOBE_RADIUS * 0.998;
-const LAND_ALTITUDE = 0.006; // in units of globe radius
-const POLYGON_CAP_CURVATURE_RESOLUTION = 6; // degrees; coarser than three-globe's default (5) — cheaper, imperceptible at our camera distances
-// Well below three-globe's default (0.15) — just enough rim-light to soften
-// the limb against the dark stage, not the "planet in space" glow effect.
-const ATMOSPHERE_ALTITUDE = 0.06;
+const HEX_POLYGON_RESOLUTION = 3;
+const HEX_POLYGON_MARGIN = 0.7;
 const ROTATE_SPEED_BASE = 0.7;
 const ZOOM_SPEED_BASE = 1;
 // Slow rotate/zoom proportionally as the camera nears MIN_DISTANCE so
@@ -238,10 +228,8 @@ export function GlobeScene({
   const scratchStepQuat = useRef(new Quaternion());
   const scratchDir = useRef(new Vector3());
 
-  // Build the ThreeGlobe instance once, after first paint — filled-polygon
-  // init blocks the main thread (comparable to, or a bit heavier than, the
-  // old hex-dot init, since it builds a ConicPolygonGeometry cap per
-  // country instead of a shared hex grid), so we defer it via
+  // Build the ThreeGlobe instance once, after first paint — hex-polygon init
+  // blocks the main thread for ~0.5-1.5s, so we defer it via
   // requestIdleCallback (falling back to a macrotask). useState (not
   // useMemo) + effect cleanup below so this survives StrictMode's
   // mount/unmount/remount without leaking an orphaned instance.
@@ -261,40 +249,19 @@ export function GlobeScene({
 
         instance = new ThreeGlobe();
         instance
-          // polygonGeoJsonGeometry defaults to the string accessor
-          // 'geometry', which reads each item's `.geometry` — our fetched
-          // GeoJSON Features already have that shape, so no accessor
-          // override or per-feature `properties` data is needed for a
-          // uniform fill (properties are still stripped to `{}` in the
-          // downloaded asset; per-country hover/highlight would need them
-          // restored, but that's explicitly out of scope for now).
-          .polygonsData(features as object[])
-          .polygonCapColor(() => theme.landColor)
-          // No polygonSideColor/polygonSideMaterial set (left undefined)
-          // — three-globe only builds side-wall geometry when a side
-          // color/material accessor is truthy (see PolygonsLayerKapsule's
-          // `hasSide` check), so omitting it entirely skips that geometry
-          // for a real, not just cosmetic, perf win across 177 countries.
-          // At this altitude the walls would be imperceptibly thin anyway.
-          .polygonStrokeColor(() => theme.borderColor)
-          .polygonAltitude(LAND_ALTITUDE)
-          .polygonCapCurvatureResolution(POLYGON_CAP_CURVATURE_RESOLUTION)
-          // Re-enabled at a low altitude: a light land/ocean globe against
-          // the (restored) dark stage has a hard, high-contrast silhouette
-          // without it. three-globe's atmosphere is a Fresnel GlowMesh
-          // rendered outside the sphere (hollowRadius: GLOBE_RADIUS) — it
-          // only softens the limb, it doesn't touch land/border rendering,
-          // so this stays a subtle rim-light rather than the "planet in
-          // space" glow the flat map look originally dropped.
+          .hexPolygonsData(features as object[])
+          .hexPolygonResolution(HEX_POLYGON_RESOLUTION)
+          .hexPolygonMargin(HEX_POLYGON_MARGIN)
+          .hexPolygonColor(() => theme.polygonColor)
           .showAtmosphere(true)
           .atmosphereColor(theme.atmosphereColor)
-          .atmosphereAltitude(ATMOSPHERE_ALTITUDE);
+          .atmosphereAltitude(0.18);
 
         const material = instance.globeMaterial() as unknown as ThreeGlobeMaterial;
         material.color = new Color(theme.globeColor);
         material.emissive = new Color(theme.globeColor);
-        material.emissiveIntensity = 0.1;
-        material.shininess = 0.4;
+        material.emissiveIntensity = 0.15;
+        material.shininess = 0.7;
 
         if (cancelled) {
           disposeGlobe(instance);
@@ -321,10 +288,9 @@ export function GlobeScene({
     const material = globe.globeMaterial() as unknown as ThreeGlobeMaterial;
     material.color.set(theme.globeColor);
     material.emissive.set(theme.globeColor);
-    globe.polygonCapColor(() => theme.landColor);
-    globe.polygonStrokeColor(() => theme.borderColor);
     globe.atmosphereColor(theme.atmosphereColor);
-  }, [globe, theme.globeColor, theme.landColor, theme.borderColor, theme.atmosphereColor]);
+    globe.hexPolygonColor(() => theme.polygonColor);
+  }, [globe, theme.globeColor, theme.atmosphereColor, theme.polygonColor]);
 
   const handleControlsStart = () => {
     isDraggingRef.current = true;
@@ -473,8 +439,6 @@ export function GlobeScene({
         onPinClick={onPinClick}
         pinColor={theme.pinColor}
         pinSelectedColor={theme.pinSelectedColor}
-        pinOutlineColor={theme.pinOutlineColor}
-        pinHaloColor={theme.pinHaloColor}
         hoverCardRef={hoverCardRef}
         containerSize={containerSize}
       />

@@ -1,21 +1,18 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import {
   ChevronLeft,
   Copy,
   FileText,
-  Loader2,
   Pencil,
   PinOff,
   Pin,
   Search,
   Sparkles,
-  Star,
   Tag,
   Trash2,
   X,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -27,24 +24,20 @@ import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import { useUpdateQuote, useDeleteQuote } from "@/hooks/mutations";
-import { useSetPrimaryQuoteImage } from "@/features/quote/api/use-quote-image-mutations";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
-import { useQuoteData } from "@/features/social/components/social-quote/hooks";
-import { currency, formatUKDate } from "@/features/social/components/social-quote/utils";
-import { StatusPill, QuoteSummaryTimeline } from "@/features/social/components/social-quote";
+import { useQuote, useCurrentUser } from "@/hooks/queries";
+import { StatusPill } from "@/features/social/components/social-quote";
+import { transformQuoteData, currency, formatUKDate } from "@/features/quote/components/quote-types";
 import { QuoteItinerarySpecs } from "@/features/quote/components/QuoteItinerarySpecs";
+import { QuoteMediaPanel } from "@/features/quote/components/QuoteMediaPanel";
+import { QuoteCostingsCard } from "@/features/quote/components/QuoteCostingsCard";
+import { QuoteGuruSheet } from "@/features/quote/components/QuoteGuruSheet";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { QuoteEditDialog } from "@/features/quote/components/quote-edit-dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { DestinationGuru } from "@/features/destination-guru/components/destination-guru";
-import type { DestinationGuruData } from "@/features/destination-guru/components/destination-guru";
-import { useDestinationGuruSearch } from "@/features/destination-guru/api/use-destination-guru-queries";
-import { useGenerateDestinationGuru } from "@/features/destination-guru/api/use-destination-guru-mutations";
 import { useNeonClients } from "@/features/client/api/use-neon-client-queries";
-import { useCurrentUser } from "@/hooks/queries";
 import type { NeonClient } from "@/features/client/types/neon-client/neon-client.types";
-import type { EnrichedQuote } from "@/features/quote/types";
 import { normalizeTransferType } from "@/features/quote/types/quote-form.types";
+import { useQuoteImages, useQuoteImageActions, useQuoteGuru } from "@/features/quote/components/hooks";
 
 export default function SocialQuotePage() {
   const [, setLocation] = useLocation();
@@ -53,30 +46,25 @@ export default function SocialQuotePage() {
   const { role } = useRole();
   const quoteId = params?.quoteId ?? "";
 
-  // This page only ever renders quotes (isBooking=false), so narrow the
-  // quote|booking union the hook returns to EnrichedQuote.
-  const { quote, rawData: rawDataUnion, isLoading, error, images, primaryImage, galleryImages } = useQuoteData(quoteId, "", false);
-  const rawData = rawDataUnion as EnrichedQuote | undefined;
+  const quoteQuery = useQuote(quoteId);
+  const { data: rawData, isLoading, error } = quoteQuery;
 
-  // Seeds the copy dialog's image picker. Copying a social deal into a client
-  // quote goes through create-with-transaction, which clones nothing server
-  // side — so unless the deal's gallery is handed to the form the new quote is
-  // created with no images at all. Stored order is display order (position 0 is
-  // the main photo), so it is preserved as-is.
-  const dealImageUrls = useMemo(
-    () => images.map((img: { url: string }) => img.url).filter(Boolean),
-    [images],
-  );
+  const quote = useMemo(() => (rawData ? transformQuoteData(rawData) : null), [rawData]);
 
-  const discounts = parseFloat(rawData?.discounts || "0");
-  const serviceCharge = parseFloat(rawData?.service_charge || "0");
-  // package_commission already stores the total commission (operator % − discount + service charge).
-  const packageCommission = parseFloat(rawData?.package_commission || "0");
-  const totalCommission = packageCommission;
+  const { primaryImage, galleryImages, quoteImageUrls } = useQuoteImages(rawData);
+  const {
+    imageInputRef,
+    uploadImagesMutation,
+    setPrimary: setPrimaryImage,
+    removeImage: deleteImage,
+    uploadFiles: uploadImageFiles,
+    openFilePicker: openImageFilePicker,
+    reorderImages: reorderImageOrder,
+    reorderImagesMutation,
+  } = useQuoteImageActions(quoteId);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const setPrimaryImage = useSetPrimaryQuoteImage();
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const [newTag, setNewTag] = useState("");
@@ -87,59 +75,21 @@ export default function SocialQuotePage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showGuruSheet, setShowGuruSheet] = useState(false);
 
   const { data: currentUser } = useCurrentUser();
   const { data: clientResults, isLoading: clientsLoading } = useNeonClients(
     showClientPicker ? { search: clientSearch, limit: 10 } : undefined
   );
 
-  const isHotTub = (rawData as any)?.quote_type === "hot_tub_break" || quote?.packageType?.toLowerCase().includes("hot tub");
-  const isCruise = !!quote?.cruise || !!quote?.packageType?.toLowerCase().includes("cruise");
-  const isLodge = isHotTub || !!quote?.lodge || !!quote?.packageType?.toLowerCase().includes("lodge");
-  // Reuse the client quote's itinerary spec renderer so the social post shows the
-  // exact same package holiday / cruise / hot tub layout. QuoteItinerarySpecs consumes
-  // the quote-feature cruise shape (itinerary uses `day`), so adapt the social
-  // display shape (itinerary uses `dayNumber`) before handing it over.
-  const quoteForSpecs = quote
-    ? {
-        ...quote,
-        cruise: quote.cruise
-          ? {
-              ...quote.cruise,
-              itinerary: (quote.cruise.itinerary ?? []).map((i) => ({
-                day: i.dayNumber ?? 0,
-                description: i.description ?? "",
-                subDescription: i.subDescription ?? "",
-              })),
-            }
-          : undefined,
-      }
-    : quote;
-  const guruDestination = isHotTub
-    ? [quote?.lodge?.parkName, quote?.lodge?.parkLocation].filter(Boolean).join(", ")
-    : quote?.destinationName || quote?.destination || "";
-  const { data: guruRecord } = useDestinationGuruSearch(guruDestination);
-  const generateGuruMutation = useGenerateDestinationGuru();
-  const tagInputRef = useRef<HTMLInputElement>(null);
-  const tagSuggestionsRef = useRef<HTMLDivElement>(null);
+  const {
+    showGuruSheet, setShowGuruSheet,
+    guruDestination, guruRecord, generateGuruMutation,
+  } = useQuoteGuru(quote, rawData);
+
   const updateQuoteMutation = useUpdateQuote();
   const deleteQuoteMutation = useDeleteQuote();
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        tagSuggestionsRef.current &&
-        !tagSuggestionsRef.current.contains(e.target as Node) &&
-        tagInputRef.current &&
-        !tagInputRef.current.contains(e.target as Node)
-      ) {
-        setShowTagSuggestions(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  const pageLabel = "Quote";
 
   if (isLoading) {
     return (
@@ -192,14 +142,11 @@ export default function SocialQuotePage() {
                 <div className="text-base font-semibold" data-testid="text-social-quote-title">
                   {quote.quoteTitle},{" "}
                   <span className="text-sm font-semibold text-[#000000]">
-                    {currency.format(
-                      quote.commissions.price / (quote.passengers.adults + quote.passengers.children || 1)
-                    )}
-                    pp
+                    {currency.format(quote.pricePerPerson)}pp
                   </span>
                 </div>
                 <StatusPill status={quote.status} />
-                {rawData && 'quote_ref' in rawData && rawData.quote_ref && (
+                {rawData?.quote_ref && (
                   <a
                     href={rawData.quote_ref}
                     target="_blank"
@@ -353,7 +300,7 @@ export default function SocialQuotePage() {
 
         {/* Main Content */}
         <div className="mt-4" data-testid="layout-social-quote-body">
-          <div className="grid gap-3 lg:grid-cols-[1fr_340px]" data-testid="grid-social-quote-sections">
+          <div className="grid gap-3 lg:grid-cols-[1fr_280px] xl:grid-cols-[1fr_340px]" data-testid="grid-social-quote-sections">
             {/* Main Content - Itinerary */}
             <Card
               className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4"
@@ -362,80 +309,18 @@ export default function SocialQuotePage() {
               <div className="grid gap-4 md:grid-cols-[220px_1fr]" data-testid="layout-social-quote-itinerary-hero">
                 {/* Images */}
                 <div className="grid content-start gap-1.5" data-testid="col-social-quote-media">
-                  <div
-                    className="relative aspect-square overflow-hidden rounded-2xl border border-black/10 bg-black/[0.03]"
-                    data-testid="img-social-quote-hero"
-                  >
-                    {primaryImage ? (
-                      <>
-                        <img
-                          src={primaryImage.url}
-                          alt=""
-                          className="absolute inset-0 h-full w-full object-cover"
-                          data-testid="img-social-quote-hero-photo"
-                        />
-                        <div
-                          className="absolute inset-0 bg-gradient-to-t from-black/20 via-black/0 to-black/0"
-                          aria-hidden
-                        />
-                        <div
-                          className="absolute left-2 top-2 flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white"
-                          data-testid="badge-social-quote-main-image"
-                        >
-                          <Star className="h-3 w-3 fill-current" /> Main
-                        </div>
-                      </>
-                    ) : (
-                      <div
-                        className="flex h-full items-center justify-center text-xs text-black/40"
-                        data-testid="placeholder-social-quote-no-hero"
-                      >
-                        No images
-                      </div>
-                    )}
-                  </div>
-
-                  {galleryImages.length > 0 && (
-                    <div className="grid grid-cols-3 gap-1.5" data-testid="grid-social-quote-gallery">
-                      {galleryImages.map((img: { id: string; url: string; isPrimary: boolean | null; ownerType?: string }, idx: number) => {
-                        const isQuoteOwned = !img.ownerType || img.ownerType === "quote";
-                        return (
-                        <button
-                          key={img.id}
-                          type="button"
-                          className={`group relative aspect-square overflow-hidden rounded-xl border border-black/10 bg-black/[0.03] transition hover:shadow-[0_12px_30px_-18px_rgba(0,0,0,0.35)] ${isQuoteOwned ? "active:scale-[0.99] cursor-pointer" : "cursor-default"}`}
-                          data-testid={`button-social-quote-gallery-image-${idx}`}
-                          disabled={setPrimaryImage.isPending || !isQuoteOwned}
-                          onClick={() => {
-                            if (!isQuoteOwned) return;
-                            setPrimaryImage.mutate(
-                              { quoteId, imageId: img.id },
-                              {
-                                onSuccess: () => toast({ title: "Main image updated" }),
-                                onError: () => toast({ title: "Failed to update main image", variant: "destructive" }),
-                              }
-                            );
-                          }}
-                          title={isQuoteOwned ? "Set as main image" : "Cannot set accommodation image as main"}
-                        >
-                          <img
-                            src={img.url}
-                            alt=""
-                            className="absolute inset-0 h-full w-full object-cover"
-                            data-testid={`img-social-quote-gallery-${idx}`}
-                          />
-                          <div className="absolute inset-0 flex items-end justify-center bg-black/0 pb-1.5 opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
-                            {isQuoteOwned && (
-                              <span className="flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-semibold text-white">
-                                <Star className="h-2.5 w-2.5" /> Set Main
-                              </span>
-                            )}
-                          </div>
-                        </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <QuoteMediaPanel
+                    primaryImage={primaryImage}
+                    galleryImages={galleryImages}
+                    imageInputRef={imageInputRef}
+                    isUploading={uploadImagesMutation.isPending}
+                    setPrimary={setPrimaryImage}
+                    deleteImage={deleteImage}
+                    uploadFiles={uploadImageFiles}
+                    openFilePicker={openImageFilePicker}
+                    reorderImages={reorderImageOrder}
+                    isReordering={reorderImagesMutation.isPending}
+                  />
 
                   {/* Tags */}
                   <div
@@ -479,7 +364,6 @@ export default function SocialQuotePage() {
                     <div className="relative mt-2 flex items-center gap-1.5" data-testid="row-add-social-quote-tag">
                       <div className="relative flex-1">
                         <Input
-                          ref={tagInputRef}
                           placeholder="Add tag…"
                           className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
                           data-testid="input-add-social-quote-tag"
@@ -512,61 +396,13 @@ export default function SocialQuotePage() {
 
                 {/* Quote Details — mirror the client quote page (package holiday / cruise / hot tub) */}
                 <div className="min-w-0" data-testid="col-social-quote-details">
-                  <QuoteItinerarySpecs quote={quoteForSpecs} quoteData={rawData} />
+                  <QuoteItinerarySpecs quote={quote} quoteData={rawData} />
                 </div>
               </div>
             </Card>
 
-            {/* Sidebar - Summary & Costings */}
-            <div className="space-y-3" data-testid="col-social-quote-sidebar">
-              {quote && (
-                <Card className="glass ringed grain rounded-3xl border-black/10 bg-white/70 p-4" data-testid="card-social-quote-summary-right">
-                  <Tabs defaultValue="summary" className="w-full">
-                    <TabsList className="mb-3 w-full rounded-2xl border border-black/10 bg-white/70 p-1">
-                      <TabsTrigger value="summary" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-social-quote-summary">Quote Summary</TabsTrigger>
-                      <TabsTrigger value="costings" className="flex-1 rounded-xl px-3 py-1.5 text-xs font-semibold data-[state=active]:bg-black data-[state=active]:text-white" data-testid="tab-social-quote-costings">Quote Costings</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="summary" className="mt-0">
-                      <QuoteSummaryTimeline quote={quote} />
-                    </TabsContent>
-
-                    <TabsContent value="costings" className="mt-0">
-                      <div className="flex items-center justify-between" data-testid="row-social-quote-costings-header">
-                        <div>
-                          <div className="text-sm font-semibold" data-testid="text-social-quote-costings-title">Quote Costings</div>
-                          <div className="mt-1 text-xs text-black/55" data-testid="text-social-quote-costings-subtitle">Commission and charges.</div>
-                        </div>
-                        <FileText className="h-4 w-4 text-black/35" aria-hidden />
-                      </div>
-
-                      <div className="mt-3 grid gap-2" data-testid="list-social-quote-costings">
-                        <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-total-price">
-                          <div className="text-xs font-semibold text-black/65">Total price</div>
-                          <div className="text-xs font-semibold text-black">{currency.format(quote.commissions.price)}</div>
-                        </div>
-                        <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-commission">
-                          <div className="text-xs font-semibold text-black/65">Comm</div>
-                          <div className="text-xs font-semibold text-black">{currency.format(quote.commissions.commissionValue)}</div>
-                        </div>
-                        <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-discount">
-                          <div className="text-xs font-semibold text-black/65">Discount</div>
-                          <div className="text-xs font-semibold text-black">{currency.format(discounts)}</div>
-                        </div>
-                        <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-white/70 px-3 py-2" data-testid="row-social-quote-service-charge">
-                          <div className="text-xs font-semibold text-black/65">Service charge</div>
-                          <div className="text-xs font-semibold text-black">{currency.format(serviceCharge)}</div>
-                        </div>
-                        <div className="my-1 h-px w-full bg-black/10" />
-                        <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.03] px-3 py-2" data-testid="row-social-quote-total-commission">
-                          <div className="text-xs font-semibold text-black/70">Total commission</div>
-                          <div className="text-xs font-semibold text-black">{currency.format(totalCommission)}</div>
-                        </div>
-                      </div>
-                    </TabsContent>
-                  </Tabs>
-                </Card>
-              )}
+            <div className="grid gap-3 text-sm xl:text-base" data-testid="col-quote-right">
+              <QuoteCostingsCard quote={quote} pageLabel={pageLabel} />
             </div>
           </div>
         </div>
@@ -582,57 +418,13 @@ export default function SocialQuotePage() {
         }}
       />
 
-      <Sheet open={showGuruSheet} onOpenChange={setShowGuruSheet}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto p-0 border-l border-black/10 bg-[#f8f8f8] dark:bg-[#0a0a0a]">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Destination Guru</SheetTitle>
-          </SheetHeader>
-          <div className="p-5 pt-10">
-            {guruRecord ? (
-              <DestinationGuru
-                destination={guruDestination}
-                externalData={(guruRecord as any).data as DestinationGuruData}
-                compact
-                onClose={() => setShowGuruSheet(false)}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <Sparkles className="h-10 w-10 text-amber-500 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No intel yet for {guruDestination || "this destination"}</h3>
-                <p className="text-sm text-black/50 dark:text-white/50 mb-6 max-w-sm">
-                  Generate AI-powered destination intelligence including weather, flight times, travel tips, and top activities.
-                </p>
-                <Button
-                  className="rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 text-white hover:from-amber-600 hover:to-orange-600"
-                  disabled={!guruDestination || generateGuruMutation.isPending}
-                  data-testid="button-generate-guru-sheet-social-quote"
-                  onClick={() => {
-                    generateGuruMutation.mutate(guruDestination, {
-                      onSuccess: () => {
-                        toast({ title: `Destination intel generated for ${guruDestination}` });
-                      },
-                      onError: (err: any) => {
-                        toast({ title: "Failed to generate", description: err?.message, variant: "destructive" });
-                      },
-                    });
-                  }}
-                >
-                  {generateGuruMutation.isPending ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating…</>
-                  ) : (
-                    <><Sparkles className="mr-2 h-4 w-4" />Generate Intel</>
-                  )}
-                </Button>
-                {generateGuruMutation.isPending && (
-                  <p className="text-xs text-black/40 dark:text-white/40 mt-4 animate-pulse">
-                    AI is researching this destination. This may take 10-20 seconds…
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <QuoteGuruSheet
+        open={showGuruSheet}
+        onOpenChange={setShowGuruSheet}
+        guruDestination={guruDestination}
+        guruRecord={guruRecord as any}
+        generateGuruMutation={generateGuruMutation}
+      />
 
       {/* Client picker — step 1 of copy flow */}
       <Dialog open={showClientPicker} onOpenChange={(open) => { if (!open) { setShowClientPicker(false); setClientSearch(""); } }}>
@@ -723,13 +515,13 @@ export default function SocialQuotePage() {
             clientId={selectedClient.id}
             userId={currentUser?.id || ""}
             markAsCopy={false}
-            initialImages={dealImageUrls}
+            initialImages={quoteImageUrls}
             initialValues={{
               packageType: rawData.holiday_type_id || "",
               quoteTitle: rawData.title || "",
               // The supplier link the post was built from — the client's copy is
               // worked from the same page, so it has to come across too.
-              quoteLink: ('quote_ref' in rawData && rawData.quote_ref) || "",
+              quoteLink: rawData.quote_ref || "",
               leadSource: rawData.lead_source || "",
               status: rawData.quote_status || "draft",
               tourOperatorId: rawData.main_tour_operator_id || "",

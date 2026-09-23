@@ -148,6 +148,39 @@ function calcPricePerPerson(salesPrice: unknown, adult: unknown, child: unknown,
   return total > 0 ? (netPrice / total).toFixed(2) : "0.00";
 }
 
+// "Was there really a discount/service charge?" — nullable numeric columns
+// arrive here as strings, so null/undefined/""/"0"/"0.00" all mean "none" and
+// must NOT be treated as a discount that needs stripping out of a derived price.
+function hasMeaningfulAmount(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string" && value.trim() === "") return false;
+  const num = parseFloat(String(value));
+  return Number.isFinite(num) && num !== 0;
+}
+
+// Business rule: a FREE quote (client-less, used for social posting) never
+// carries a discount or a service charge. Cleared to null — the same "no
+// value" representation the columns already carry for any quote where no
+// discount/service charge was entered (both are nullable, no-default numeric
+// columns) — rather than "0.00", so a free quote reads identically to one
+// that was simply never given a discount.
+//
+// MUST be called before calcPricePerPerson/calcTotalPrice read these fields,
+// otherwise a free quote's derived price leaks a discount it doesn't have.
+// Mutates in place and is shared by every free-quote insert path (createQuote
+// and createFreeSocialCopy) so the rule can't drift between the two.
+//
+// Returns whether a real (non-empty, non-zero) discount/service charge was
+// actually cleared — callers use this to decide whether an already-derived
+// price_per_person needs recomputing: clearing a field that was already
+// empty/zero changes nothing about the correct price.
+function clearFreeQuoteDiscountFields(fields: { discounts?: unknown; service_charge?: unknown }): boolean {
+  const hadDiscount = hasMeaningfulAmount(fields.discounts) || hasMeaningfulAmount(fields.service_charge);
+  fields.discounts = null;
+  fields.service_charge = null;
+  return hadDiscount;
+}
+
 function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
   if (!Array.isArray(images)) return [];
   return images
@@ -312,7 +345,24 @@ async function createFreeSocialCopy(
 ): Promise<void> {
   const { tags, ...sections } = relations;
   const freeTxn = await transactionRepository.create({ status: 'on_quote', user_id: txn.user_id, is_test: txn.is_test ?? false } as InsertTransaction);
-  const freeQ = await newQuoteRepository.create({ ...quoteFields, transaction_id: freeTxn.id, isFreeQuote: true, isQuoteCopy: false });
+
+  // This copy bypasses createQuote (and its own free-quote discount clearing +
+  // conditional price_per_person derivation), so both have to happen here:
+  // clear the discount/service charge the source quote had, then recompute
+  // price_per_person from the zeroed values — the inherited value was
+  // computed WITH the source's discount/service charge and would otherwise
+  // leak into the "free" copy.
+  const freeQuoteFields = { ...quoteFields };
+  clearFreeQuoteDiscountFields(freeQuoteFields);
+  freeQuoteFields.price_per_person = calcPricePerPerson(
+    freeQuoteFields.sales_price,
+    freeQuoteFields.adult,
+    freeQuoteFields.child,
+    freeQuoteFields.discounts,
+    freeQuoteFields.service_charge,
+  );
+
+  const freeQ = await newQuoteRepository.create({ ...freeQuoteFields, transaction_id: freeTxn.id, isFreeQuote: true, isQuoteCopy: false });
   await writeQuoteSections(freeQ.id, { ...sections, linkImagesToInventory: false });
   if (tags && Array.isArray(tags) && tags.length > 0) await tagService.addQuoteTags(freeQ.id, tags);
   // Tag the auto-generated free copy with the ORIGINAL transaction's org —
@@ -334,8 +384,8 @@ export const newQuoteService = {
     return newQuoteRepository.findByStatus(status, scope);
   },
 
-  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all") {
-    return newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus);
+  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all", tagNames: string[] = []) {
+    return newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus, tagNames);
   },
 
   async getQuoteById(id: string, scope: ScopeOrTrusted) {
@@ -378,7 +428,22 @@ export const newQuoteService = {
       throw new AppError("Transaction not found", 404);
     }
 
-    if (!quoteFields.price_per_person || quoteFields.price_per_person === "0.00" || quoteFields.price_per_person === "0") {
+    // A free quote never carries a discount or service charge — clear both
+    // BEFORE the price_per_person derivation below reads them, so a computed
+    // price never reflects a discount the free quote doesn't have.
+    let freeQuoteDiscountCleared = false;
+    if (quoteFields.isFreeQuote) {
+      freeQuoteDiscountCleared = clearFreeQuoteDiscountFields(quoteFields);
+    }
+
+    // A caller-supplied price_per_person is normally trusted as-is (see the
+    // fallback below). But if this is a free quote that actually HAD a
+    // discount/service charge we just stripped, that supplied value was
+    // computed WITH the discount and is now stale — force a recompute from
+    // the undiscounted figures rather than persisting an inconsistent row.
+    if (freeQuoteDiscountCleared) {
+      quoteFields.price_per_person = calcPricePerPerson(quoteFields.sales_price, quoteFields.adult, quoteFields.child, quoteFields.discounts, quoteFields.service_charge);
+    } else if (!quoteFields.price_per_person || quoteFields.price_per_person === "0.00" || quoteFields.price_per_person === "0") {
       quoteFields.price_per_person = calcPricePerPerson(quoteFields.sales_price, quoteFields.adult, quoteFields.child, quoteFields.discounts, quoteFields.service_charge);
     }
 
@@ -660,11 +725,47 @@ export const newQuoteService = {
     return (await newQuoteRepository.findById(id)) ?? q;
   },
 
-  async deleteQuote(id: string, scope: ScopeOrTrusted) {
+  /** Deleting a transaction's primary quote must never leave it with zero
+   *  primaries. If the target is primary (isQuoteCopy=false) and the
+   *  transaction still has other live (non-lost/archived, non-deleted)
+   *  quotes, the caller must supply `newPrimaryQuoteId` naming one of them —
+   *  it is promoted to primary (with a fresh 6-day expiry, same as
+   *  setPrimaryQuote) and the old primary is soft-deleted, atomically, via
+   *  newQuoteRepository.promoteSiblingAndRemove. A copy (isQuoteCopy=true)
+   *  being deleted is unaffected by this guard. */
+  async deleteQuote(id: string, scope: ScopeOrTrusted, newPrimaryQuoteId?: string) {
     await assertQuoteInScope(id, scope);
     const existing = await newQuoteRepository.findById(id);
     if (!existing) throw new AppError("Quote not found", 404);
-    await newQuoteRepository.remove(id);
+
+    if (existing.isQuoteCopy === false) {
+      const siblingCount = await newQuoteRepository.countActiveSiblings(existing.transaction_id, id);
+      if (siblingCount > 0) {
+        if (!newPrimaryQuoteId) throw new AppError("NEW_PRIMARY_REQUIRED", 400);
+
+        // Mirrors the same predicate in auditService.deleteQuote — keep them in
+        // sync if either changes. findById already filters deleted_at at the DB
+        // level, but the explicit check here makes the invariant visible at the
+        // call site instead of relying on that filter implicitly (and matches
+        // setPrimaryQuote's own explicit deleted_at guard above).
+        const candidate = await newQuoteRepository.findById(newPrimaryQuoteId);
+        const isValidSibling = !!candidate
+          && !candidate.deleted_at
+          && candidate.transaction_id === existing.transaction_id
+          && candidate.id !== id
+          && candidate.quote_status !== 'lost'
+          && candidate.quote_status !== 'archived';
+        if (!isValidSibling) throw new AppError("INVALID_NEW_PRIMARY", 400);
+
+        const SIX_DAYS_MS = 6 * 24 * 60 * 60 * 1000;
+        await newQuoteRepository.promoteSiblingAndRemove(newPrimaryQuoteId, id, new Date(Date.now() + SIX_DAYS_MS));
+      } else {
+        await newQuoteRepository.remove(id);
+      }
+    } else {
+      await newQuoteRepository.remove(id);
+    }
+
     if (existing.isFreeQuote) {
       removeFreeQuoteEmbedding(id);
     }

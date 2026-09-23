@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Eye, Pin, Share2 } from "lucide-react";
+import { Check, Eye, Globe, Pin, Share2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -22,9 +22,10 @@ import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutation
 import type { Favorite } from "@/features/favorite/api/favorite.api";
 import type { User } from "@/features/user/types";
 import { transformQuoteData } from "@/features/quote/components/quote-types";
-import { useQuoteImages, useQuotePin, useQuoteShare } from "@/features/quote/components/hooks";
+import { useQuoteGuru, useQuoteImages, useQuotePin, useQuoteShare } from "@/features/quote/components/hooks";
 import { useBookingPin } from "@/features/booking/components/hooks";
 import { QuoteShareDialog } from "@/features/quote/components/QuoteShareDialog";
+import { QuoteGuruSheet } from "@/features/quote/components/QuoteGuruSheet";
 import {
   QuoteActionsMenu,
   BookingActionsMenu,
@@ -156,6 +157,11 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryD
     openShare, copyShareLink,
   } = useQuoteShare(id);
 
+  const {
+    showGuruSheet, setShowGuruSheet,
+    guruDestination, guruRecord, generateGuruMutation,
+  } = useQuoteGuru(quote, quoteData);
+
   if (isLoading || !quoteData || !quote) return <HeaderActionsSkeleton />;
 
   return (
@@ -167,6 +173,14 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryD
       />
       {quoteData.quote_ref && <CircleAction icon={Eye} label="View Quote" href={quoteData.quote_ref} testId="client-header-link" />}
       <CircleAction icon={Share2} label="Share Quote" onClick={openShare} testId="client-header-share" />
+      {guruDestination && (
+        <CircleAction
+          icon={Globe}
+          label="Destination Guru"
+          onClick={() => setShowGuruSheet(true)}
+          testId="client-header-guru"
+        />
+      )}
       <CircleAction icon={Pin} label={isFavorited ? "Unpin" : "Pin"} onClick={togglePin} active={isFavorited} testId="client-header-pin" />
       <QuoteActionsMenu
         quoteId={id}
@@ -187,6 +201,13 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryD
         shareLoading={shareLoading}
         onCopy={copyShareLink}
         clientId={clientId || undefined}
+      />
+      <QuoteGuruSheet
+        open={showGuruSheet}
+        onOpenChange={setShowGuruSheet}
+        guruDestination={guruDestination}
+        guruRecord={guruRecord}
+        generateGuruMutation={generateGuruMutation}
       />
     </>
   );

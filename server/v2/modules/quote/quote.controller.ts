@@ -84,8 +84,11 @@ export const quoteController = {
     const portalStatusParam = req.query.portalStatus as string;
     const portalStatus: PortalStatus =
       portalStatusParam === "active" || portalStatusParam === "expired" ? portalStatusParam : "all";
+    // Comma-separated tag names, e.g. ?tags=Summer,Beach. Empty/absent ⇒ no tag filtering.
+    const tagsParam = req.query.tags as string;
+    const tags = tagsParam ? tagsParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
 
-    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus);
+    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus, tags);
 
     return successResponse(res, { quotes, page, pageSize, hasMore: quotes.length === pageSize }, "Free quotes retrieved successfully");
   }),
@@ -161,7 +164,8 @@ export const quoteController = {
   deleteQuote: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const id = req.params.id as string;
-    await newQuoteService.deleteQuote(id, scope);
+    const newPrimaryQuoteId = typeof req.body?.newPrimaryQuoteId === "string" ? req.body.newPrimaryQuoteId : undefined;
+    await newQuoteService.deleteQuote(id, scope, newPrimaryQuoteId);
     res.status(204).send();
   }),
 

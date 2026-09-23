@@ -17,7 +17,7 @@ import type {
   InsertQuoteTransfer, InsertQuoteCarHire, InsertQuoteAttractionTicket,
   InsertQuoteLoungePass, InsertQuoteAirportParking, InsertPassenger,
 } from "@shared/schema";
-import { eq, asc, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike, ne } from "drizzle-orm";
+import { eq, asc, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike, ne, exists } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 import type { QuoteEmbeddingDetails } from "./quote-embedding";
@@ -285,7 +285,7 @@ export const newQuoteRepository = {
     return rows.map((r) => r.quote);
   },
 
-  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all") {
+  async findFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all", tagNames: string[] = []) {
     const scopeConds = buildTransactionScopeConds(scope);
     const offset = page * pageSize;
     const searchPattern = search.trim() ? `%${search.trim().toLowerCase()}%` : null;
@@ -333,6 +333,20 @@ export const newQuoteRepository = {
         : []),
       ...(showOnPortal && portalStatus === "expired"
         ? [sql`(${quote.portal_added_at} IS NULL OR ${quote.portal_added_at} < now() - make_interval(days => ${PORTAL_ACTIVE_WINDOW_DAYS}))`]
+        : []),
+      // Tag filter: OR semantics — a quote matches if it carries ANY of the
+      // requested tag names. EXISTS (rather than a join) so this composes with
+      // the other conditions above without multiplying rows and corrupting the
+      // pagination/count. Applied here (the id-selection phase), NOT in the
+      // hydration select below, so it actually restricts which quotes are paged.
+      ...(tagNames.length > 0
+        ? [exists(
+            db
+              .select({ one: sql`1` })
+              .from(quoteTags)
+              .innerJoin(tags, eq(quoteTags.tagId, tags.id))
+              .where(and(eq(quoteTags.quoteId, quote.id), inArray(tags.name, tagNames)))
+          )]
         : []),
     ];
 
@@ -549,6 +563,7 @@ export const newQuoteRepository = {
           park_location: row.park_location ?? null,
           lodge_code: row.lodge_code ?? null,
           cruises: [],
+          tags: [],
           flights: [],
           accommodations: row.accommodation_id ? [{
             id: row.accommodation_id,
@@ -623,6 +638,18 @@ export const newQuoteRepository = {
     for (const c of cruiseRows) {
       const q = c.quote_id ? quoteMap.get(c.quote_id) : undefined;
       if (q) q.cruises.push(c);
+    }
+
+    // Attach tag names so the social-post board can filter/display by tag —
+    // same junction-table shape findWithDetails() uses for a single quote.
+    const tagRows = await db
+      .select({ quoteId: quoteTags.quoteId, tagName: tags.name })
+      .from(quoteTags)
+      .innerJoin(tags, eq(quoteTags.tagId, tags.id))
+      .where(inArray(quoteTags.quoteId, ids));
+    for (const t of tagRows) {
+      const q = t.quoteId ? quoteMap.get(t.quoteId) : undefined;
+      if (q) q.tags.push(t.tagName);
     }
 
     // Return quotes in the original order
@@ -711,6 +738,17 @@ export const newQuoteRepository = {
 
   async remove(id: string): Promise<void> {
     await db.update(quote).set({ deleted_at: new Date(), is_active: false }).where(eq(quote.id, id));
+  },
+
+  /** Atomically promote a sibling quote to primary (isQuoteCopy=false, with a
+   *  refreshed expiry) and soft-delete the old primary, in one DB transaction —
+   *  so the transaction is never briefly left with zero primaries. Used when
+   *  deleting a transaction's primary quote that still has live siblings. */
+  async promoteSiblingAndRemove(newPrimaryId: string, oldPrimaryId: string, newPrimaryExpiry: Date): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.update(quote).set({ isQuoteCopy: false, date_expiry: newPrimaryExpiry }).where(eq(quote.id, newPrimaryId));
+      await tx.update(quote).set({ deleted_at: new Date(), is_active: false }).where(eq(quote.id, oldPrimaryId));
+    });
   },
 
   /** Bulk-update every non-copy, non-deleted, non-free quote on a transaction in

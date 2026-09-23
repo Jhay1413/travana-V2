@@ -40,11 +40,12 @@ export function useFreeQuotesInfinite(
   unscheduledOnly = false,
   showOnPortal = false,
   portalStatus: PortalStatus = "all",
+  tags: string[] = [],
   options?: { enabled?: boolean },
 ) {
   return useInfiniteQuery({
-    queryKey: [...quoteKeys.freeQuotes(), scheduledOnly ? "scheduled" : "all", scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal, portalStatus],
-    queryFn: ({ pageParam = 0 }) => quoteApi.getFreeQuotes(pageParam, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal, portalStatus),
+    queryKey: [...quoteKeys.freeQuotes(), scheduledOnly ? "scheduled" : "all", scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal, portalStatus, tags],
+    queryFn: ({ pageParam = 0 }) => quoteApi.getFreeQuotes(pageParam, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, unscheduledOnly, showOnPortal, portalStatus, tags),
     getNextPageParam: (lastPage) => {
       return lastPage.hasMore ? lastPage.page + 1 : undefined;
     },

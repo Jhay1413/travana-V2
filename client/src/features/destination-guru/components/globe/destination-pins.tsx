@@ -4,15 +4,12 @@ import { DoubleSide, Group, Mesh, MeshBasicMaterial, Quaternion, Vector3 } from 
 import { GLOBE_RADIUS, isFacingCamera, latLngToVector3 } from "../../lib/geo";
 import type { GuruDestinationItem } from "../../types";
 
-// Pins sit above the filled country land, which now sits proud of the
-// ocean sphere at LAND_ALTITUDE = 0.006 * GLOBE_RADIUS (see
-// globe-scene.tsx) for the political-map look — so pins need to clear
-// 1.006R, not just the near-flat 1.001R the old hex dots used. The
-// selected pin sits slightly higher still + draws with a higher
-// renderOrder so it stays legible on top of near neighbours in dense
-// clusters (e.g. the Greek islands / Balearics).
-const PIN_ALTITUDE_RADIUS = GLOBE_RADIUS * 1.01;
-const PIN_ALTITUDE_RADIUS_SELECTED = GLOBE_RADIUS * 1.018;
+// Pins sit a hair above the hex-polygon land surface so they don't z-fight
+// with it. The selected pin sits slightly higher still + draws with a
+// higher renderOrder so it stays legible on top of near neighbours in
+// dense clusters (e.g. the Greek islands / Balearics).
+const PIN_ALTITUDE_RADIUS = GLOBE_RADIUS * 1.005;
+const PIN_ALTITUDE_RADIUS_SELECTED = GLOBE_RADIUS * 1.012;
 const DRAG_THRESHOLD_PX = 8;
 const HOVER_CARD_OFFSET_Y = 18;
 const UP = new Vector3(0, 1, 0);
@@ -66,8 +63,6 @@ interface DestinationPinsProps {
   onPinClick: (key: string) => void;
   pinColor: string;
   pinSelectedColor: string;
-  pinOutlineColor: string;
-  pinHaloColor: string;
   hoverCardRef: RefObject<HTMLDivElement | null>;
   containerSize: { width: number; height: number };
 }
@@ -82,8 +77,6 @@ export function DestinationPins({
   onPinClick,
   pinColor,
   pinSelectedColor,
-  pinOutlineColor,
-  pinHaloColor,
   hoverCardRef,
   containerSize,
 }: DestinationPinsProps) {
@@ -111,8 +104,6 @@ export function DestinationPins({
           onPinClick={onPinClick}
           pinColor={pinColor}
           pinSelectedColor={pinSelectedColor}
-          pinOutlineColor={pinOutlineColor}
-          pinHaloColor={pinHaloColor}
           nearestNeighborDistance={nearestNeighborDistances.get(item.key) ?? Infinity}
         />
       ))}
@@ -129,8 +120,6 @@ interface PinProps {
   onPinClick: (key: string) => void;
   pinColor: string;
   pinSelectedColor: string;
-  pinOutlineColor: string;
-  pinHaloColor: string;
   nearestNeighborDistance: number;
 }
 
@@ -142,8 +131,6 @@ function Pin({
   onPinClick,
   pinColor,
   pinSelectedColor,
-  pinOutlineColor,
-  pinHaloColor,
   nearestNeighborDistance,
 }: PinProps) {
   const groupRef = useRef<Group>(null);
@@ -241,19 +228,6 @@ function Pin({
   const coneRadius = isSelected ? 1.3 : 1;
   const coneHeight = isSelected ? 3.6 : 2.8;
   const renderOrder = isSelected ? 3 : 1;
-  // A slightly larger dark cone rendered behind the coloured one, so every
-  // pin keeps a legible silhouette against both the mid-tone ocean and the
-  // light land fill regardless of the tenant's brand pin colour.
-  const outlineRadius = coneRadius * 1.3;
-  const outlineHeight = coneHeight * 1.12;
-  // And a light halo behind THAT: pins near the limb can visually back
-  // onto the dark stage peeking around the globe's curved edge, where the
-  // near-black outline above would otherwise disappear. The halo is the
-  // inverse case — it's barely visible over the light land/ocean, but
-  // keeps every pin legible right up to where the facing-camera check
-  // hides it.
-  const haloRadius = coneRadius * 1.6;
-  const haloHeight = coneHeight * 1.25;
 
   // Cap the hit sphere so overlapping neighbours in dense clusters (Greek
   // islands, Balearics, Canaries…) don't swallow each other's hit areas:
@@ -265,14 +239,6 @@ function Pin({
 
   return (
     <group ref={groupRef} position={[position.x, position.y, position.z]} quaternion={quaternion}>
-      <mesh renderOrder={renderOrder}>
-        <coneGeometry args={[haloRadius, haloHeight, 12]} />
-        <meshBasicMaterial color={pinHaloColor} depthTest={false} />
-      </mesh>
-      <mesh renderOrder={renderOrder}>
-        <coneGeometry args={[outlineRadius, outlineHeight, 12]} />
-        <meshBasicMaterial color={pinOutlineColor} depthTest={false} />
-      </mesh>
       <mesh renderOrder={renderOrder}>
         <coneGeometry args={[coneRadius, coneHeight, 12]} />
         <meshBasicMaterial color={isSelected ? pinSelectedColor : pinColor} depthTest={false} />

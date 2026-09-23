@@ -14,6 +14,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useTags } from "@/features/tag";
+import { cn } from "@/lib/utils";
+import {
   Search,
   Eye,
   CalendarClock,
@@ -311,6 +320,24 @@ export default function SocialPostsBoard() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const generatePost = useGeneratePost();
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { data: availableTags } = useTags();
+  const [selectedTagNames, setSelectedTagNames] = useState<string[]>([]);
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
+  const [tagMenuWidth, setTagMenuWidth] = useState<number | undefined>(undefined);
+  const searchWrapperRef = useRef<HTMLDivElement>(null);
+  const tagsTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // The tags dropdown reads wide (spanning from the search box to the trigger)
+  // rather than hugging the trigger like a normal menu — measured on open so
+  // it tracks the toolbar's actual layout instead of a hardcoded width.
+  const handleTagMenuOpenChange = useCallback((open: boolean) => {
+    setTagMenuOpen(open);
+    if (open && searchWrapperRef.current && tagsTriggerRef.current) {
+      const left = searchWrapperRef.current.getBoundingClientRect().left;
+      const right = tagsTriggerRef.current.getBoundingClientRect().right;
+      setTagMenuWidth(Math.max(right - left, 200));
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
@@ -352,11 +379,12 @@ export default function SocialPostsBoard() {
     if (r) { rangeStart = r.rangeStart; rangeEnd = r.rangeEnd; }
   }
 
-  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, rangeStart, rangeEnd, viewMode === "unscheduled", viewMode === "portal", activePortalStatus);
+  const { data, isLoading, isError, fetchNextPage, hasNextPage, isFetchingNextPage } = useFreeQuotesInfinite(12, viewMode === "scheduled", activeFilter, debouncedSearch, rangeStart, rangeEnd, viewMode === "unscheduled", viewMode === "portal", activePortalStatus, selectedTagNames);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  // Portal filtering is now server-side (showOnPortal param) so it covers the
-  // full dataset across pages, not just the loaded ones — just flatten here.
+  // Portal filtering and tag filtering are both server-side (showOnPortal and
+  // tags params), so they cover the full dataset across pages, not just the
+  // loaded ones — just flatten here.
   const filteredPosts = useMemo<SocialPost[]>(() => {
     if (!data?.pages) return [];
     const allQuotes: SocialPost[] = [];
@@ -498,7 +526,7 @@ export default function SocialPostsBoard() {
     <div className="space-y-4">
       <div className="glass ringed grain rounded-2xl p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-64 sm:shrink-0">
+          <div ref={searchWrapperRef} className="relative w-full sm:w-64 sm:shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-black/40 dark:text-white/40" />
             <Input placeholder="Search title, hotel, destination..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 rounded-xl bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10" data-testid="input-search-social-posts" />
           </div>
@@ -593,6 +621,65 @@ export default function SocialPostsBoard() {
               Portal posts expire {PORTAL_ACTIVE_WINDOW_DAYS} days after they were added
             </span>
           )}
+
+          <DropdownMenu open={tagMenuOpen} onOpenChange={handleTagMenuOpenChange}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                ref={tagsTriggerRef}
+                variant="ghost"
+                size="sm"
+                className={cn(FILTER_TRIGGER_CLASS, "justify-between")}
+                data-testid="button-filter-tags"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Tag className="h-3.5 w-3.5 opacity-70" />
+                  <span className="text-black/45 dark:text-white/45">Tags</span>
+                  {selectedTagNames.length > 0 && (
+                    <span className="font-semibold text-black/80 dark:text-white/80">· {selectedTagNames.length}</span>
+                  )}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="rounded-xl max-h-80 overflow-y-auto"
+              style={{ width: tagMenuWidth ? `${tagMenuWidth}px` : undefined, maxWidth: "calc(100vw - 2rem)" }}
+              data-testid="menu-filter-tags"
+            >
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <span className="text-xs font-medium text-black/60 dark:text-white/60">Filter by tag</span>
+                {selectedTagNames.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTagNames([])}
+                    className="text-xs text-blue-500 hover:underline dark:text-blue-400"
+                    data-testid="button-clear-tag-filter"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <DropdownMenuSeparator />
+              {!availableTags || availableTags.length === 0 ? (
+                <div className="px-2 py-3 text-xs text-black/45 dark:text-white/45">No tags yet</div>
+              ) : (
+                availableTags.map((tag) => (
+                  <DropdownMenuCheckboxItem
+                    key={tag.id}
+                    checked={selectedTagNames.includes(tag.name)}
+                    onSelect={(e) => e.preventDefault()}
+                    onCheckedChange={(checked) => {
+                      setSelectedTagNames((prev) => (checked ? [...prev, tag.name] : prev.filter((name) => name !== tag.name)));
+                    }}
+                    className="rounded-lg text-xs"
+                    data-testid={`checkbox-tag-filter-${tag.id}`}
+                  >
+                    {tag.name}
+                  </DropdownMenuCheckboxItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button
             size="sm"

@@ -100,7 +100,11 @@ export default function QuotePage() {
     showDeleteDialog, setShowDeleteDialog,
     deleteReason, setDeleteReason,
     adminDeleteQuoteMutation, openDeleteDialog, confirmDelete,
-  } = useQuoteDelete(quoteId, clientId, "Quote");
+    siblings: deleteSiblings, newPrimaryQuoteId, setNewPrimaryQuoteId,
+  } = useQuoteDelete(quoteId, clientId, "Quote", {
+    transactionId: quoteData?.transaction_id,
+    isPrimary: quoteData?.isQuoteCopy === false,
+  });
   const {
     showExpiryDialog, setShowExpiryDialog,
     expiryDate, setExpiryDate,
@@ -521,6 +525,9 @@ export default function QuotePage() {
         onReasonChange={setDeleteReason}
         isPending={adminDeleteQuoteMutation.isPending}
         onConfirm={confirmDelete}
+        siblings={deleteSiblings}
+        newPrimaryQuoteId={newPrimaryQuoteId}
+        onNewPrimaryQuoteIdChange={setNewPrimaryQuoteId}
       />
 
       <QuoteExpiryDialog

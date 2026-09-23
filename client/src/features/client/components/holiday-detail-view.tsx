@@ -35,6 +35,7 @@ import {
   RotateCcw,
   Smile,
   SquareArrowRight,
+  Star,
   Tag,
   Ticket as TicketIcon,
   Trash2,
@@ -91,6 +92,7 @@ import {
   useCreateQuote,
   useUpdateEnquiry,
   useSetDealLost,
+  useSetPrimaryQuote,
 } from "@/hooks/mutations";
 import { useRole } from "@/hooks/use-role";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
@@ -262,9 +264,9 @@ interface FieldRowSpec {
 
 function FieldItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-4" data-testid={`holiday-detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
-      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[6px] bg-orange-500 text-white">
-        <Icon className="h-4 w-4" />
+    <div className="flex min-w-0 items-center gap-2.5" data-testid={`holiday-detail-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-[6px] bg-orange-500 text-white">
+        <Icon className="h-3.5 w-3.5" />
       </span>
       {/* Long values are clipped with an ellipsis; the full text is on hover. */}
       <div className="min-w-0 truncate text-[13px] 3xl:text-sm" title={`${label}: ${value}`}>
@@ -286,13 +288,13 @@ function FieldsGrid({ left, right }: { left: FieldRowSpec[]; right: FieldRowSpec
   const rightRows = rows.slice(split);
   // minmax(0,1fr) columns: a plain 1fr lets a long value widen its column into the other one.
   return (
-    <div className="mt-4 grid gap-x-6 gap-y-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="holiday-detail-fields-grid">
-      <div className="grid min-w-0 content-start gap-3">
+    <div className="mt-3 grid gap-x-5 gap-y-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]" data-testid="holiday-detail-fields-grid">
+      <div className="grid min-w-0 content-start gap-2">
         {leftRows.map((f) => (
           <FieldItem key={f.key} icon={f.icon} label={f.label} value={f.value} />
         ))}
       </div>
-      <div className="grid min-w-0 content-start gap-3">
+      <div className="grid min-w-0 content-start gap-2">
         {rightRows.map((f) => (
           <FieldItem key={f.key} icon={f.icon} label={f.label} value={f.value} />
         ))}
@@ -1174,7 +1176,11 @@ export function QuoteActionsMenu({
     showDeleteDialog, setShowDeleteDialog,
     deleteReason, setDeleteReason,
     adminDeleteQuoteMutation, openDeleteDialog, confirmDelete,
-  } = useQuoteDelete(quoteId, clientId, "Quote");
+    siblings: deleteSiblings, newPrimaryQuoteId, setNewPrimaryQuoteId,
+  } = useQuoteDelete(quoteId, clientId, "Quote", {
+    transactionId: quoteData?.transaction_id,
+    isPrimary: quoteData?.isQuoteCopy === false,
+  });
 
   const setDealLostMutation = useSetDealLost();
   const isLost = quote.status === "lost";
@@ -1355,6 +1361,9 @@ export function QuoteActionsMenu({
         onReasonChange={setDeleteReason}
         isPending={adminDeleteQuoteMutation.isPending}
         onConfirm={confirmDelete}
+        siblings={deleteSiblings}
+        newPrimaryQuoteId={newPrimaryQuoteId}
+        onNewPrimaryQuoteIdChange={setNewPrimaryQuoteId}
       />
 
       <AlertDialog open={showLostConfirm} onOpenChange={setShowLostConfirm}>
@@ -1427,6 +1436,9 @@ function QuoteHolidayDetail({
 }) {
   const { data: quoteData, isLoading, error } = useQuote(id);
   const { primaryImage, galleryImages, quoteImageUrls } = useQuoteImages(quoteData);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const setPrimaryQuoteMutation = useSetPrimaryQuote();
 
   const quote = useMemo(() => (quoteData ? transformQuoteData(quoteData) : null), [quoteData]);
 
@@ -1442,6 +1454,27 @@ function QuoteHolidayDetail({
   const isLost = quote.status === "lost";
   const expiryInfo = isLost ? null : getQuoteExpiryInfo(quoteData?.date_expiry, quoteData?.date_created, now);
   const isExpired = expiryInfo?.status === "expired";
+
+  // Mirrors the standalone quote page's "Set as main quote" action (see
+  // pages/quote/index.tsx handleSetAsMainQuote) — same mutation, same
+  // toast/invalidation behavior, just triggered from this deal view instead.
+  function handleSetAsMainQuote() {
+    if (setPrimaryQuoteMutation.isPending) return;
+    setPrimaryQuoteMutation.mutate(id, {
+      onSuccess: () => {
+        toast({ title: "Set as main quote", description: "This quote is now the main quote." });
+        queryClient.invalidateQueries({ queryKey: quoteKeys.detail(id) });
+      },
+      onError: (err: unknown) => {
+        const message = isAxiosError(err) ? (err.response?.data as { message?: string } | undefined)?.message : undefined;
+        toast({
+          title: "Couldn't set as main quote",
+          description: message || "Please try again.",
+          variant: "destructive",
+        });
+      },
+    });
+  }
 
   return (
     <>
@@ -1461,6 +1494,30 @@ function QuoteHolidayDetail({
               </span>
               {quote.pricePerPerson > 0 && (
                 <span className="text-base font-semibold ">{currency.format(quote.pricePerPerson)}pp</span>
+              )}
+              {quote.isCopyQuote && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-500/20 focus:outline-none dark:border-sky-400/25 dark:bg-sky-400/10 dark:text-sky-300 dark:hover:bg-sky-400/20"
+                      data-testid="pill-holiday-quote-copy"
+                    >
+                      Copy Quote
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-44 rounded-xl">
+                    <DropdownMenuItem
+                      onClick={handleSetAsMainQuote}
+                      disabled={setPrimaryQuoteMutation.isPending}
+                      data-testid="button-holiday-set-as-main-quote"
+                    >
+                      <Star className="mr-2 h-4 w-4" />
+                      Set as main quote
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
             </div>
             <div className="flex items-center gap-2">
