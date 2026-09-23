@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,6 +33,46 @@ export const drawerControlClass =
 /** Sub-heading inside a section (e.g. "Outbound" / "Inbound"). */
 export const drawerSubheadingClass = "flex items-center gap-2 text-[15px] font-medium text-black/80";
 
+// ─── Stuck body pointer-events workaround ──────────────────────────────────
+//
+// Radix's DismissableLayer sets `document.body.style.pointerEvents = "none"`
+// while a modal layer is open and restores the value it saw *before* doing
+// so once that layer unwinds. When a Select/combobox/date-picker inside this
+// drawer opens its own dismissable layer nested under the drawer's, that
+// inner layer can capture "none" (set by the drawer) as the value to
+// restore. If the drawer is closed while that race is in flight, the inner
+// layer restores "none" instead of the original empty string, leaving the
+// whole page unclickable until a refresh. This only shows up when several
+// dialog roots are mounted at once (as on the client details page) and is
+// timing-dependent — it needs the drawer's close animation to still be
+// running, so it reproduces on slower environments and not on a fast dev
+// machine.
+//
+// The check below is deliberately conservative: it only fires after the
+// close animation has had time to finish, and only clears the style when no
+// Radix modal layer is still legitimately open. When Radix cleans up
+// correctly (the common case), the guard in `clearStuckPointerEventsIfOrphaned`
+// is a no-op.
+
+/** Close animation on SheetContent is 300ms; leave some margin before checking. */
+const POINTER_EVENTS_CHECK_DELAY_MS = 400;
+
+function hasOpenRadixLayer(): boolean {
+  if (typeof document === "undefined") return false;
+  return (
+    document.querySelector('[role="dialog"][data-state="open"]') !== null ||
+    document.querySelector("[data-radix-popper-content-wrapper]") !== null
+  );
+}
+
+/** Only clears `pointer-events: none` on the body if it's stuck with nothing left to own it. */
+function clearStuckPointerEventsIfOrphaned(): void {
+  if (typeof document === "undefined") return;
+  if (document.body.style.pointerEvents !== "none") return;
+  if (hasOpenRadixLayer()) return;
+  document.body.style.removeProperty("pointer-events");
+}
+
 // ─── Drawer shell ───────────────────────────────────────────────────────────
 
 interface FormDrawerProps {
@@ -55,6 +95,40 @@ export function FormDrawer({
   className,
   "data-testid": testId,
 }: FormDrawerProps) {
+  // Pending timer id for the stuck-pointer-events check below; tracked in a
+  // ref (rather than left as a bare local in the effect) so the mount-only
+  // effect further down can cancel it if the component unmounts before it
+  // fires.
+  const stuckPointerEventsTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    if (!open) return undefined;
+
+    // This effect is only "armed" while the drawer is open. Its cleanup
+    // therefore fires exactly when we care about: the drawer closing
+    // (`open` flips to false) or the drawer unmounting while still open
+    // (e.g. the page navigates away mid-close). Either way, schedule the
+    // orphan check once the close animation has had time to finish.
+    return () => {
+      stuckPointerEventsTimeoutRef.current = window.setTimeout(() => {
+        stuckPointerEventsTimeoutRef.current = null;
+        clearStuckPointerEventsIfOrphaned();
+      }, POINTER_EVENTS_CHECK_DELAY_MS);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    // Runs only on unmount, after the effect above, so it can cancel a
+    // check that was just scheduled by that effect's own teardown — avoids
+    // the timer firing (or leaking) once this drawer is gone for good.
+    return () => {
+      if (stuckPointerEventsTimeoutRef.current !== null) {
+        window.clearTimeout(stuckPointerEventsTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
