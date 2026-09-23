@@ -1338,7 +1338,9 @@ export function QuoteActionsMenu({
             setShowCopyDialog(false);
             queryClient.invalidateQueries({ queryKey: ["quotes"] });
             toast({ title: "Quote copied successfully" });
-            setLocation(`/clients/${clientId}/quotes/${newQuoteId}`);
+            setLocation(
+              clientId ? `/clients/${clientId}?holiday=quote:${newQuoteId}` : `/quotes/${newQuoteId}`,
+            );
           }}
         />
       )}
@@ -1860,7 +1862,13 @@ export function EnquiryActionsMenu({
         updateEnquiryMutation.mutate({ id: enquiryId, data: { status: "Converted" } });
         setShowConvertModal(false);
         toast({ title: "Enquiry converted to quote!" });
-        navigate(`/clients/${clientId}/quotes/${newQuote.id}`);
+        // Converting drops the enquiry out of the holidays list immediately
+        // (the transactions API stops returning `enquiry` once it leaves
+        // on_enquiry) — land on the new quote, selected in the client
+        // dashboard's deal view, instead of the old standalone quote page.
+        navigate(
+          clientId ? `/clients/${clientId}?holiday=quote:${newQuote.id}` : `/quotes/${newQuote.id}`,
+        );
       },
       onError: () => toast({ title: "Failed to convert enquiry to quote", variant: "destructive" }),
     });

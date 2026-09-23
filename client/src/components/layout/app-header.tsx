@@ -151,7 +151,7 @@ export function AppHeader() {
                     onClick={() => {
                       navigate(
                         b.clientId
-                          ? `/clients/${b.clientId}/bookings/${b.id}`
+                          ? `/clients/${b.clientId}?holiday=booking:${b.id}`
                           : `/bookings/${b.id}`,
                       );
                       setShowSearchResults(false);
