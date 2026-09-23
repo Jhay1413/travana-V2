@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLocation } from "wouter";
+import { useLocation, Link as RouterLink } from "wouter";
 import {
   Search,
   Plus,
@@ -397,6 +397,28 @@ function ConversationTypeControl({ conversation }: { conversation: Conversation 
   );
 }
 
+// ─── Thread header contact name ───────────────────────────────────────────────
+// The contact's name in the thread header — same sky-blue clickable treatment as
+// the tickets inbox's client panel (ticket-client-panel.tsx's ClientField) when
+// this conversation is linked to a CRM client; plain text otherwise. Shares the
+// contact-link query (and its cache) with LinkedClientPhonePill/ContactPanel.
+function ConversationHeaderName({ conversation }: { conversation: Conversation }) {
+  const { data: link } = useContactLink(conversation.contact.id, contactLinkMatch(conversation));
+  const clientId = link?.linkedClient?.id;
+  if (clientId) {
+    return (
+      <RouterLink
+        href={`/clients/${clientId}`}
+        className="truncate text-sm font-semibold text-sky-600 hover:underline 3xl:text-base dark:text-sky-400"
+        data-testid="conversation-client-name-link"
+      >
+        {conversation.contact.displayName}
+      </RouterLink>
+    );
+  }
+  return <span className="truncate text-sm font-semibold 3xl:text-base">{conversation.contact.displayName}</span>;
+}
+
 // ─── Linked client phone ──────────────────────────────────────────────────────
 // The pill beside the contact's name shows the CRM client's phone number —
 // only when the conversation is linked to a client. Unlinked conversations
@@ -526,13 +548,27 @@ function DetailField({ label, value, icon: Icon }: { label: string; value: strin
 }
 
 // One labelled value in the Client Details panel: grey label, red icon, bold value.
-function ClientField({ label, icon: Icon, value }: { label: string; icon: typeof User; value: string }) {
+// When `href` is set (a linked CRM client), the value renders as the same
+// blue clickable link used by the tickets inbox's client panel
+// (ticket-client-panel.tsx's ClientField) — replicated locally since that
+// component isn't part of this feature's public surface.
+function ClientField({ label, icon: Icon, value, href }: { label: string; icon: typeof User; value: string; href?: string }) {
   return (
     <div>
       <div className="text-xs text-black/45 dark:text-white/45">{label}</div>
       <div className="mt-1 flex items-center gap-2.5">
         <Icon className="h-4 w-4 shrink-0 text-[#ff0000]" strokeWidth={1.25} />
-        <span className="truncate text-[13px] font-normal 3xl:text-sm">{value}</span>
+        {href ? (
+          <RouterLink
+            href={href}
+            className="truncate text-[13px] font-medium text-sky-600 hover:underline 3xl:text-sm dark:text-sky-400"
+            data-testid="conversation-client-name-link"
+          >
+            {value}
+          </RouterLink>
+        ) : (
+          <span className="truncate text-[13px] font-normal 3xl:text-sm">{value}</span>
+        )}
       </div>
     </div>
   );
@@ -821,15 +857,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
           {client ? (
             <>
               <div className="flex items-start justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => navigate(`/clients/${client.id}`)}
-                  className="min-w-0 rounded-md text-left transition hover:text-[#ff0000] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff0000]/30"
-                  title="Open client details"
-                  data-testid="inbox-linked-client-name"
-                >
-                  <ClientField label="Name" icon={User} value={clientDisplayName(client)} />
-                </button>
+                <ClientField label="Name" icon={User} value={clientDisplayName(client)} href={`/clients/${client.id}`} />
                 <div className="flex shrink-0 items-center gap-2 pt-0.5">
                   <span className="rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold text-white" data-testid="client-linked-badge">
                     Linked
@@ -2043,7 +2071,7 @@ export default function ConversationsInbox() {
               <div className="flex min-w-0 items-center gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-3">
-                    <span className="truncate text-sm font-semibold 3xl:text-base">{selected.contact.displayName}</span>
+                    <ConversationHeaderName conversation={selected} />
                     <LinkedClientPhonePill conversation={selected} />
                   </div>
                   <div className="mt-1 flex items-center gap-1.5">

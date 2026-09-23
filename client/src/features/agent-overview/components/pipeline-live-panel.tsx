@@ -36,7 +36,7 @@ type LiveView = Extract<SortBy, "newest" | "oldest"> | "oldest-activity" | "in_p
 const VIEW_OPTIONS: Array<{ value: LiveView; label: string }> = [
   { value: "newest", label: "Latest" },
   { value: "oldest", label: "Oldest" },
-  { value: "oldest-activity", label: "Oldest Activity" },
+  { value: "oldest-activity", label: "Activity" },
   { value: "in_play", label: "In Play" },
 ];
 
@@ -253,7 +253,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
         <div className="text-sm font-semibold">Pipeline Live!</div>
         <Select value={view} onValueChange={(v) => handleViewChange(v as LiveView)}>
           <SelectTrigger
-            className="h-7 w-[136px] rounded-[6px] border-black/10 bg-black/5 px-2 text-xs dark:border-white/10 dark:bg-white/5"
+            className="h-7 w-[84px] rounded-[6px] border-black/10 bg-white px-2 text-xs text-[#7c98b0] shadow-none dark:border-white/10 dark:bg-white/5 dark:text-white/55"
             data-testid="select-pipeline-live-view"
           >
             <SelectValue />
