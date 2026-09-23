@@ -149,6 +149,10 @@ function dealValue(t: Transaction): number {
 
 // Client-linked deals open in the client dashboard's new detail view (via the
 // ?holiday= deep link); only client-less deals fall back to the standalone pages.
+// Note: lib/deal-links.ts's `dealDeepLinkHref` implements the same mapping for
+// entityType/entityId task rows — kept separate here since this operates on a
+// full `Transaction` and picks the primary quote; keep the two in sync if this
+// logic changes.
 function dealHref(t: Transaction, tab: LiveTab): string {
   if (tab === "enquiry" && t.enquiry) {
     return t.client_id ? `/clients/${t.client_id}?holiday=enquiry:${t.enquiry.id}` : `/enquiries/${t.enquiry.id}`;

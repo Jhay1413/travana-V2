@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronRight, View } from "lucide-react";
 import { useLocation } from "wouter";
 import { useRecentQuoteEngagement } from "@/hooks/queries";
+import { dealTypeHref } from "@/lib/deal-links";
 import { DashboardCard, SegmentedTabs, timeAgo } from "./dashboard-ui";
 
 type EngagementFilter = "today" | "yesterday" | "week" | "all";
@@ -60,9 +61,7 @@ export function EngagementSection() {
           </div>
         ) : (
           sortedRows.map((row) => {
-            const quoteHref = row.clientId
-              ? `/clients/${row.clientId}/quotes/${row.quoteId}`
-              : `/quotes/${row.quoteId}`;
+            const quoteHref = dealTypeHref("quote", row.quoteId, row.clientId);
             const hasRealClientName = row.clientName && row.clientName !== "Unknown";
             const fallbackViewerName = row.views.find((v) => v.viewerName)?.viewerName;
             const displayName = hasRealClientName

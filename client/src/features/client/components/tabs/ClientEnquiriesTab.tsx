@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { EnquiryTable } from "@/features/quote/types";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
+import { dealTypeHref } from "@/lib/deal-links";
 import type { Client } from "../client-types";
 
 interface ClientEnquiriesTabProps {
@@ -69,7 +70,7 @@ export function ClientEnquiriesTab({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.18) }}
-            onClick={() => navigate(`/clients/${clientId}/enquiries/${enq.id}`)}
+            onClick={() => navigate(dealTypeHref("enquiry", enq.id, clientId))}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">

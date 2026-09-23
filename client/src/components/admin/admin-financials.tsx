@@ -517,7 +517,7 @@ export default function AdminFinancials() {
               {sortedBookings.map((b, i) => (
                 <div
                   key={b.id}
-                  onClick={() => navigate(`/clients/${b.clientId}/bookings/${b.bookingId}`)}
+                  onClick={() => navigate(`/clients/${b.clientId}?holiday=booking:${b.bookingId}`)}
                   className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-black/5 bg-white p-3 transition-colors hover:border-blue-500/20 hover:bg-blue-500/5 dark:border-white/5 dark:bg-white/5 dark:hover:border-blue-500/20 dark:hover:bg-blue-500/10"
                   data-testid={`booking-detail-${i}`}
                 >

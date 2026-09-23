@@ -8,6 +8,7 @@ import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDi
 import { Separator } from "@/components/ui/separator";
 import { useAllTasksExtended, useUserTasks } from "@/hooks/queries";
 import { useTickets, useTicketsByUser } from "@/features/tickets/api/use-ticket-queries";
+import { dealDeepLinkHref } from "@/lib/deal-links";
 import { currency } from "./helpers";
 
 export type WhatsOnFilter = "all" | "today" | "tomorrow" | "this-week" | "custom" | "overdue";
@@ -269,22 +270,7 @@ export function WhatsOnTab({
             const overdue = isTaskOverdue(task);
             // Pulse the border for any overdue task, regardless of the active filter.
             const showOverduePulse = overdue;
-            let taskHref: string | null = null;
-            if (task.entityType === "quote" && task.entityId) {
-              taskHref = task.clientId
-                ? `/clients/${task.clientId}/quotes/${task.entityId}`
-                : `/quotes/${task.entityId}`;
-            } else if (task.entityType === "booking" && task.entityId) {
-              taskHref = task.clientId
-                ? `/clients/${task.clientId}/bookings/${task.entityId}`
-                : `/bookings/${task.entityId}`;
-            } else if (task.entityType === "enquiry" && task.entityId) {
-              taskHref = task.clientId
-                ? `/clients/${task.clientId}/enquiries/${task.entityId}`
-                : `/enquiries/${task.entityId}`;
-            } else if (task.entityType === "client" && task.clientId) {
-              taskHref = `/clients/${task.clientId}`;
-            }
+            const taskHref = dealDeepLinkHref(task.entityType, task.entityId, task.clientId);
             return (
               <motion.button
                 key={task.id}

@@ -948,7 +948,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
                         key={q.id}
                         testId={`client-live-quote-${q.id}`}
                         expired={false}
-                        onOpen={() => navigate(`/clients/${client.id}/quotes/${q.id}`)}
+                        onOpen={() => navigate(`/clients/${client.id}?holiday=quote:${q.id}`)}
                         row={{
                           id: q.id,
                           title: q.title || "Untitled quote",
@@ -987,7 +987,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
                     expired
                     onOpen={() =>
                       row.kind === "quote"
-                        ? navigate(`/clients/${client.id}/quotes/${row.id}`)
+                        ? navigate(`/clients/${client.id}?holiday=quote:${row.id}`)
                         : navigate(`/clients/${client.id}?holiday=enquiry:${row.id}`)
                     }
                     row={row}

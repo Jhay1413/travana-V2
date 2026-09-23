@@ -5,6 +5,7 @@ import { useUserTasks } from "@/hooks/queries";
 import { EditTaskDialog } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
+import { dealDeepLinkHref } from "@/lib/deal-links";
 import { currency } from "./helpers";
 import { InitialsAvatar } from "./dashboard-ui";
 
@@ -118,16 +119,8 @@ export function TasksTab({ userId }: { userId: string }) {
     );
   }, [filter, tasksData, overdueTasks]);
 
-  const taskHref = (task: any): string | null => {
-    if (task.entityType === "quote" && task.entityId)
-      return task.clientId ? `/clients/${task.clientId}/quotes/${task.entityId}` : `/quotes/${task.entityId}`;
-    if (task.entityType === "booking" && task.entityId)
-      return task.clientId ? `/clients/${task.clientId}/bookings/${task.entityId}` : `/bookings/${task.entityId}`;
-    if (task.entityType === "enquiry" && task.entityId)
-      return task.clientId ? `/clients/${task.clientId}/enquiries/${task.entityId}` : `/enquiries/${task.entityId}`;
-    if (task.entityType === "client" && task.clientId) return `/clients/${task.clientId}`;
-    return null;
-  };
+  const taskHref = (task: any): string | null =>
+    dealDeepLinkHref(task.entityType, task.entityId, task.clientId);
 
   return (
     <div className="flex min-h-[300px] flex-col" data-testid="panel-dashboard-tasks">

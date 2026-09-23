@@ -22,6 +22,7 @@ import { useBooking, useClient, useQuote, useTransactionDetails } from "@/hooks/
 import { holidayLabelOf, mainQuoteOf } from "@/features/transaction";
 import type { EnquiryTable } from "@/features/quote/types";
 import { clientDisplayName, cn } from "@/lib/utils";
+import { dealTypeHref } from "@/lib/deal-links";
 import type { Ticket } from "../types";
 
 // Right panel of the tickets inbox — "Client Details". Same visual language as
@@ -140,7 +141,7 @@ function BookingSection({ bookingId }: { bookingId: string }) {
 
 // Collapsible "Quote" block — the quote counterpart of BookingSection, for
 // tickets raised against a quote rather than a booking.
-function QuoteSection({ quoteId }: { quoteId: string }) {
+function QuoteSection({ quoteId, clientId }: { quoteId: string; clientId?: string | null }) {
   const [open, setOpen] = useState(true);
   const { data: quote, isLoading } = useQuote(quoteId);
 
@@ -160,7 +161,9 @@ function QuoteSection({ quoteId }: { quoteId: string }) {
         <ChevronRight className={cn("h-4 w-4 shrink-0 text-black/45 transition-transform dark:text-white/45", open && "rotate-90")} />
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-4 space-y-5">
-        {quote.title && <ClientField label="Quote Name" icon={Tag} value={quote.title} href={`/quotes/${quote.id}`} />}
+        {quote.title && (
+          <ClientField label="Quote Name" icon={Tag} value={quote.title} href={dealTypeHref("quote", quote.id, clientId)} />
+        )}
         {quote.quote_status && <ClientField label="Status" icon={Hash} value={quote.quote_status} />}
         {formatBookingDate(quote.travel_date) && (
           <ClientField label="Travel Date" icon={CalendarDays} value={formatBookingDate(quote.travel_date)!} />
@@ -190,7 +193,7 @@ function passengersLabel(enquiry: EnquiryTable): string | null {
 // QuoteSection, for tickets raised against a transaction that hasn't been
 // quoted or booked yet. Rendered inline from the transaction payload rather
 // than fetched separately, since `useTransactionDetails` already carries it.
-function EnquirySection({ enquiry }: { enquiry: EnquiryTable }) {
+function EnquirySection({ enquiry, clientId }: { enquiry: EnquiryTable; clientId?: string | null }) {
   const [open, setOpen] = useState(true);
 
   const nights = enquiry.no_of_nights != null ? `${enquiry.no_of_nights} Night${enquiry.no_of_nights === 1 ? "" : "s"}` : null;
@@ -209,7 +212,9 @@ function EnquirySection({ enquiry }: { enquiry: EnquiryTable }) {
         <ChevronRight className={cn("h-4 w-4 shrink-0 text-black/45 transition-transform dark:text-white/45", open && "rotate-90")} />
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-4 space-y-5">
-        {enquiry.title && <ClientField label="Enquiry Name" icon={Tag} value={enquiry.title} href={`/enquiries/${enquiry.id}`} />}
+        {enquiry.title && (
+          <ClientField label="Enquiry Name" icon={Tag} value={enquiry.title} href={dealTypeHref("enquiry", enquiry.id, clientId)} />
+        )}
         {enquiry.holiday_type_name && <ClientField label="Holiday Type" icon={Globe} value={enquiry.holiday_type_name} />}
         {formatBookingDate(enquiry.travel_date) && (
           <ClientField label="Travel Date" icon={CalendarDays} value={formatBookingDate(enquiry.travel_date)!} />
@@ -227,7 +232,13 @@ function EnquirySection({ enquiry }: { enquiry: EnquiryTable }) {
 // Resolves the ticket's linked transaction to whichever section fits its
 // current stage — booking, quote, or enquiry — same `holidayLabelOf` rule
 // used for the "Link to holiday" picker.
-function HolidaySection({ transactionId }: { transactionId: string | null | undefined }) {
+function HolidaySection({
+  transactionId,
+  clientId,
+}: {
+  transactionId: string | null | undefined;
+  clientId?: string | null;
+}) {
   const { data: transaction, isLoading } = useTransactionDetails(transactionId);
 
   if (!transactionId) return null;
@@ -240,9 +251,9 @@ function HolidaySection({ transactionId }: { transactionId: string | null | unde
   if (kind === "booking" && transaction.booking) return <BookingSection bookingId={transaction.booking.id} />;
   if (kind === "quote") {
     const quote = mainQuoteOf(transaction);
-    if (quote) return <QuoteSection quoteId={quote.id} />;
+    if (quote) return <QuoteSection quoteId={quote.id} clientId={clientId} />;
   }
-  if (kind === "enquiry" && transaction.enquiry) return <EnquirySection enquiry={transaction.enquiry} />;
+  if (kind === "enquiry" && transaction.enquiry) return <EnquirySection enquiry={transaction.enquiry} clientId={clientId} />;
   return null;
 }
 
@@ -282,7 +293,9 @@ export function TicketClientPanel({ ticket }: { ticket: Ticket | null | undefine
               </div>
               {contact && <ClientField label="Contact" icon={contactIcon} value={contact} />}
               {since && <ClientField label="Member Since" icon={CalendarDays} value={since} />}
-              {ticket.transactionId && <HolidaySection transactionId={ticket.transactionId} />}
+              {ticket.transactionId && (
+                <HolidaySection transactionId={ticket.transactionId} clientId={ticket.clientId} />
+              )}
             </>
           ) : (
             <p className="text-xs text-black/45 dark:text-white/45">Couldn't load this client's details.</p>

@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { useOpportunityQuotes } from "@/hooks/queries";
+import { dealTypeHref } from "@/lib/deal-links";
 import { FilterBar } from "./filter-bar";
 import { Pagination } from "./pagination";
 import { StatusBadge } from "./status-badge";
@@ -38,7 +39,7 @@ export function QuotesPage() {
                 <div
                   key={item.id}
                   className="grid grid-cols-[1.3fr_1fr_.8fr_.6fr_.6fr_.6fr_.6fr_.5fr] gap-2 px-4 py-2.5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition cursor-pointer items-center"
-                  onClick={() => navigate(`/clients/${item.clientId || "_"}/quotes/${item.id}`)}
+                  onClick={() => navigate(dealTypeHref("quote", item.id, item.clientId))}
                   data-testid={`row-opportunity-quote-${item.id}`}
                 >
                   <div className="min-w-0">

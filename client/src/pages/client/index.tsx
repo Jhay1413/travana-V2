@@ -427,12 +427,22 @@ export default function ClientPage() {
             setConvertingEnquiryInitialValues(undefined);
           }
         }}
-        onSuccess={() => {
+        onSuccess={(newQuoteId) => {
+          // Only jump the selection when this was actually a conversion (not
+          // a plain "create quote" from the "+" menu, where convertingEnquiryId
+          // is never set). The dialog calls onOpenChange(false) before
+          // onSuccess, but that only schedules the convertingEnquiryId reset —
+          // this closure still sees the value captured at render time.
           if (convertingEnquiryId) {
             enquiryActions.updateEnquiryMutation.mutate({
               id: convertingEnquiryId,
               data: { status: "Converted" },
             });
+            // Converting drops the enquiry out of the holidays list immediately
+            // (the transactions API stops returning `enquiry` once it leaves
+            // on_enquiry) — select the new quote instead of leaving the
+            // selection pointing at something no longer in the list.
+            setHolidaySelection({ type: "quote", id: newQuoteId });
           }
         }}
         initialValues={convertingEnquiryInitialValues}
@@ -443,7 +453,7 @@ export default function ClientPage() {
         open={showBookingCreateDialog}
         onOpenChange={setShowBookingCreateDialog}
         onSuccess={(bookingId) => {
-          navigate(`/clients/${clientId}/bookings/${bookingId}`);
+          navigate(`/clients/${clientId}?holiday=booking:${bookingId}`);
         }}
       />
 

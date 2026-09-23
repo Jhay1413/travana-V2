@@ -110,8 +110,11 @@ function buildQuoteRow(qr: QuoteRow): HolidayRowData {
   };
 }
 
-function buildQuoteRows(quotes: Quote[]): HolidayRowData[] {
-  const quoteRows = quotes as QuoteRow[];
+// A quote's transaction that has already progressed to a booking is superseded —
+// the API still returns the quote row alongside the booking (it isn't deleted,
+// just won), so it must be dropped here or it lingers in the Quotes tab forever.
+function buildQuoteRows(quotes: Quote[], bookedTransactionIds: Set<string>): HolidayRowData[] {
+  const quoteRows = (quotes as QuoteRow[]).filter((q) => !bookedTransactionIds.has(q.transaction_id));
   const primaries = quoteRows.filter(isPrimaryQuote);
   const copies = quoteRows.filter((q) => q.isQuoteCopy);
 
@@ -444,8 +447,13 @@ export function AllHolidaysPanel({
   const [hasUserSelectedTab, setHasUserSelectedTab] = useState(false);
   const autoSelectedRef = useRef(false);
 
+  // Note: converted enquiries don't need an equivalent exclusion here — the
+  // transactions API only ever returns `enquiry` while the transaction is
+  // still status "on_enquiry", so an enquiry that became a quote/booking is
+  // already gone from the `enquiries` prop before it reaches this panel.
   const enquiryRows = useMemo(() => buildEnquiryRows(enquiries), [enquiries]);
-  const quoteRows = useMemo(() => buildQuoteRows(quotes), [quotes]);
+  const bookedTransactionIds = useMemo(() => new Set(bookings.map((b) => b.transaction_id)), [bookings]);
+  const quoteRows = useMemo(() => buildQuoteRows(quotes, bookedTransactionIds), [quotes, bookedTransactionIds]);
   const bookingRows = useMemo(() => buildBookingRows(bookings), [bookings]);
 
   // A deep link or pipeline selection must reveal the selected deal's own

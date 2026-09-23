@@ -13,6 +13,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useRemoveFavorite } from "@/features/favorite/api/use-favorite-mutations";
+import { dealTypeHref } from "@/lib/deal-links";
 
 export function PinnedSection() {
   const [, navigate] = useLocation();
@@ -59,15 +60,15 @@ export function PinnedSection() {
               fav.itemType === "client"
                 ? `/clients/${fav.itemId}`
                 : fav.itemType === "quote"
-                  ? `/clients/_/quotes/${fav.itemId}`
+                  ? dealTypeHref("quote", fav.itemId, fav.clientId)
                   : fav.itemType === "enquiry"
-                    ? `/enquiries/${fav.itemId}`
+                    ? dealTypeHref("enquiry", fav.itemId, fav.clientId)
                     : fav.itemType === "booking"
-                      ? `/clients/_/bookings/${fav.itemId}`
+                      ? dealTypeHref("booking", fav.itemId, fav.clientId)
                       : fav.itemType === "ticket"
                         ? `/tickets/${fav.itemId}`
                         : noteQuoteId
-                          ? `/clients/_/quotes/${noteQuoteId}`
+                          ? dealTypeHref("quote", noteQuoteId, fav.clientId)
                           : "#";
             let displaySubtitle =
               fav.itemType === "note" && fav.subtitle?.includes("|")

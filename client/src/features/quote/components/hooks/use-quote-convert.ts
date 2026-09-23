@@ -31,7 +31,7 @@ export function useQuoteConvert(quoteId: string, clientId: string) {
           toast({ title: "Quote converted to booking" });
           const targetClientId = clientId || booking?.client_id;
           if (targetClientId) {
-            setLocation(`/clients/${targetClientId}/bookings/${booking.id}`);
+            setLocation(`/clients/${targetClientId}?holiday=booking:${booking.id}`);
           } else {
             setLocation(`/bookings/${booking.id}`);
           }

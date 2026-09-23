@@ -94,7 +94,7 @@ export function VipTransactionHistory({ ledger, clientId, navigate }: VipTransac
                   {isBookingCredit && entry.booking_id && (
                     <button
                       type="button"
-                      onClick={() => navigate(`/clients/${clientId}/bookings/${entry.booking_id}`)}
+                      onClick={() => navigate(`/clients/${clientId}?holiday=booking:${entry.booking_id}`)}
                       className="inline-flex items-center rounded-md border border-blue-200 px-2 py-0.5 text-[10px] font-semibold leading-none text-blue-700 hover:bg-blue-50"
                     >
                       View booking
