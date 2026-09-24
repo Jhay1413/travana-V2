@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { smsController } from './sms.controller';
 import { isAuthenticated } from '../../middlewares/auth';
 import { orgBranchScope } from '../../middlewares/org-branch-scope';
+import { validate } from '../../middlewares/validation.middleware';
+import { sendSmsValidator } from './sms.validator';
 
 const router = Router();
 
@@ -13,7 +15,7 @@ router.post('/templates', smsController.createTemplate);
 router.put('/templates/:id', smsController.updateTemplate);
 router.delete('/templates/:id', smsController.deleteTemplate);
 router.post('/preview-recipients', smsController.previewRecipients);
-router.post('/send', smsController.send);
+router.post('/send', validate(sendSmsValidator), smsController.send);
 router.get('/messages', smsController.listMessages);
 router.get('/credits/summary', smsController.creditsSummary);
 router.put('/clients/:id/opt-in', smsController.setOptIn);

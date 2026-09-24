@@ -239,6 +239,27 @@ export const smsRepository = {
     return row || undefined;
   },
 
+  /**
+   * Find a specific quote's share token, scoped to the given client — used to
+   * validate a caller-supplied quote id before texting its link. Returns
+   * undefined (not just a missing token) if the quote doesn't belong to this
+   * client, so callers never trust an id from the request.
+   */
+  async findTokenedQuoteForClient(clientId: string, quoteId: string) {
+    const [row] = await db
+      .select({ token: quoteTable.quote_token, id: quoteTable.id })
+      .from(quoteTable)
+      .innerJoin(transactionTable, eq(quoteTable.transaction_id, transactionTable.id))
+      .where(and(
+        eq(quoteTable.id, quoteId),
+        eq(transactionTable.client_id, clientId),
+        eq(transactionTable.is_active, true),
+        isNotNull(quoteTable.quote_token),
+      ))
+      .limit(1);
+    return row || undefined;
+  },
+
   async findClientByIdInOrg(id: string, orgId: string) {
     const [row] = await db
       .select()

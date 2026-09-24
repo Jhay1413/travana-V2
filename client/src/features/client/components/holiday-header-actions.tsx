@@ -201,6 +201,7 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryD
         shareLoading={shareLoading}
         onCopy={copyShareLink}
         clientId={clientId || undefined}
+        quoteId={id}
       />
       <QuoteGuruSheet
         open={showGuruSheet}
@@ -307,6 +308,7 @@ export function HolidayHeaderActions({ selection, clientId, clientName, onDelete
       <div className="flex items-center gap-2.5">
         {selection.type === "quote" && (
           <QuoteHeaderActions
+            key={selection.id}
             id={selection.id}
             clientId={clientId}
             clientName={clientName}

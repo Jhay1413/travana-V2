@@ -504,6 +504,7 @@ export default function QuotePage() {
         shareLoading={shareLoading}
         onCopy={copyShareLink}
         clientId={clientId || undefined}
+        quoteId={quoteId}
       />
 
       <QuoteConvertDialog
