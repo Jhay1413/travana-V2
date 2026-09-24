@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute, Redirect } from "wouter";
-import { ChevronLeft, ChevronDown, Link as LinkIcon, Pin, PinOff, Share2, Sparkles, Star } from "lucide-react";
+import { ChevronLeft, ChevronDown, Link as LinkIcon, Pin, PinOff, Share2, Star, TreePalm } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
@@ -400,7 +400,7 @@ export default function QuotePage() {
                                 onClick={() => setShowGuruSheet(true)}
                                 aria-label="Destination Guru"
                               >
-                                <Sparkles className="xl:mr-2 h-4 w-4" />
+                                <TreePalm className="xl:mr-2 h-4 w-4" />
 
                               </Button>
                             </TooltipTrigger>

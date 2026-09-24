@@ -531,18 +531,27 @@ export const taskRepository = {
       );
   },
 
-  async checkAndNotifyDueTasks(): Promise<void> {
+  /**
+   * `userId`, when provided, scopes the scan to that user's own tasks —
+   * used by the on-demand notification-load trigger so each request only
+   * pays for a cheap, indexed per-user query instead of a full table scan.
+   * Omitting it preserves the old global-scan behaviour (e.g. for the
+   * removed cron / any future admin-triggered sweep).
+   */
+  async checkAndNotifyDueTasks(userId?: string): Promise<void> {
     const now = new Date();
+    const conds: SQL[] = [
+      eq(tasks.completed, false),
+      eq(tasks.notified, false),
+      lte(tasks.dueDate, now),
+    ];
+    if (userId) {
+      conds.push(eq(tasks.userId, userId));
+    }
     const dueTasks = await db
       .select()
       .from(tasks)
-      .where(
-        and(
-          eq(tasks.completed, false),
-          eq(tasks.notified, false),
-          lte(tasks.dueDate, now)
-        )
-      );
+      .where(and(...conds));
 
     if (dueTasks.length === 0) return;
 

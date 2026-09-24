@@ -6,12 +6,12 @@ import {
   Ellipsis,
   Eye,
   FileText,
-  Globe,
   Pencil,
   PinOff,
   Pin,
   Search,
   Trash2,
+  TreePalm,
 } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
@@ -223,7 +223,7 @@ export default function SocialQuotePage() {
                 <CircleAction icon={Eye} label="View Quote" href={rawData.quote_ref} testId="link-view-social-quote" />
               )}
               <CircleAction
-                icon={Globe}
+                icon={TreePalm}
                 label="Destination Guru"
                 onClick={() => setShowGuruSheet(true)}
                 testId="button-destination-guru-social-quote"

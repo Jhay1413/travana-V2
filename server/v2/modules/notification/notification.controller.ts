@@ -56,4 +56,10 @@ export const notificationController = {
     await notificationService.deleteNotification(id);
     res.status(204).send();
   }),
+
+  clearAll: asyncHandler(async (req: Request, res: Response) => {
+    const userId = requireUserId(req);
+    await notificationService.clearAll(userId);
+    res.status(204).send();
+  }),
 };

@@ -1,10 +1,15 @@
 import { ticketRepository } from "./ticket.repository";
 import { notificationRepository } from "../notification/notification.repository";
 
-export async function checkStaleTickets(): Promise<void> {
+/**
+ * `userId`, when provided, scopes the scan to that user's own tickets (see
+ * `ticketRepository.findStale`). Omitting it preserves the old global-scan
+ * behaviour (e.g. for the removed cron / any future admin-triggered sweep).
+ */
+export async function checkStaleTickets(userId?: string): Promise<void> {
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
-  const staleTickets = await ticketRepository.findStale(cutoff);
+  const staleTickets = await ticketRepository.findStale(cutoff, userId);
   if (staleTickets.length === 0) return;
 
   const links = staleTickets.map((t) => `/tickets/${t.id}`);

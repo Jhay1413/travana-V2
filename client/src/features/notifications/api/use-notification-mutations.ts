@@ -31,3 +31,13 @@ export function useDeleteNotification(userId: string) {
     },
   });
 }
+
+export function useClearAllNotifications(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => notificationApi.clearAll(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+    },
+  });
+}

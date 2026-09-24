@@ -209,9 +209,21 @@ export const ticketRepository = {
 
   /**
    * Find tickets that are still open (not Closed/Resolved) and haven't been
-   * touched since `cutoff`. Used by the stale-ticket reminder job.
+   * touched since `cutoff`. Used by the stale-ticket reminder check.
+   *
+   * `userId`, when provided, scopes the scan to tickets owned by that user —
+   * used by the on-demand notification-load trigger so each request only
+   * pays for a cheap, indexed per-user query instead of a full table scan.
    */
-  async findStale(cutoff: Date) {
+  async findStale(cutoff: Date, userId?: string) {
+    const conds: SQL[] = [
+      not(eq(tickets.status, "Closed")),
+      not(eq(tickets.status, "Resolved")),
+      lt(tickets.updatedAt, cutoff),
+    ];
+    if (userId) {
+      conds.push(eq(tickets.userId, userId));
+    }
     return db
       .select({
         id: tickets.id,
@@ -221,12 +233,6 @@ export const ticketRepository = {
         updatedAt: tickets.updatedAt,
       })
       .from(tickets)
-      .where(
-        and(
-          not(eq(tickets.status, "Closed")),
-          not(eq(tickets.status, "Resolved")),
-          lt(tickets.updatedAt, cutoff),
-        ),
-      );
+      .where(and(...conds));
   },
 };
