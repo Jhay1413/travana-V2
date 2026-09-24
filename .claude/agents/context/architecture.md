@@ -15,7 +15,7 @@
 
 <!-- AUTO:START -->
 <!-- Run `npm run docs:arch` to regenerate this block from the live codebase. -->
-**Last refreshed:** 2026-09-23 (auto-generated — do not edit by hand)
+**Last refreshed:** 2026-09-24 (auto-generated — do not edit by hand)
 
 | Fact | Value |
 |------|-------|

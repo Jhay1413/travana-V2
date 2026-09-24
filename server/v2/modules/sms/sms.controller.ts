@@ -11,6 +11,7 @@ import {
   normalisePhone,
   consumeSmsCredit,
   attachChargeToMessage,
+  resolveQuoteToken,
 } from './sms.service';
 import {
   platformAdminCreditsRepository,
@@ -152,7 +153,10 @@ function generatePin(): string {
   return String(crypto.randomInt(0, 10000)).padStart(4, '0');
 }
 
-async function buildContextForClient(client: any, opts?: { ensurePin?: boolean; autoLoginQuote?: boolean; publicQuoteLink?: boolean }) {
+async function buildContextForClient(
+  client: any,
+  opts?: { ensurePin?: boolean; autoLoginQuote?: boolean; publicQuoteLink?: boolean; quoteId?: string },
+) {
   const ctx: any = {
     first_name: client.firstName, last_name: client.surename, portal_link: buildPortalLink(),
     company_name: "Tina's Travel", destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '', quote_url: '',
@@ -206,7 +210,13 @@ async function buildContextForClient(client: any, opts?: { ensurePin?: boolean; 
     }
   } catch { /* best-effort */ }
   try {
-    const quoteRow = await smsRepository.findLatestTokenedQuoteForClient(client.id);
+    // Resolves to the caller-specified quote (validated as belonging to this
+    // client) when `opts.quoteId` is supplied — e.g. the Share dialog's Send
+    // buttons — otherwise falls back to the client's latest tokened quote,
+    // same as before. See resolveQuoteToken() for why this matters: without
+    // it, texting a copy quote's link could silently resolve to a different
+    // (more recently tokened) quote for the same client.
+    const quoteRow = await resolveQuoteToken(client.id, opts?.quoteId);
     if (quoteRow?.token) {
       ctx.quote_url = opts?.publicQuoteLink
         ? buildPublicQuoteUrl(quoteRow.token)
@@ -214,7 +224,12 @@ async function buildContextForClient(client: any, opts?: { ensurePin?: boolean; 
         ? await buildAutoLoginQuoteUrl(client.id, quoteRow.token)
         : buildQuoteUrl(quoteRow.token);
     }
-  } catch { /* best-effort */ }
+  } catch (err) {
+    // A caller-supplied quote that doesn't belong to this client is a real
+    // rejection, not a best-effort miss — let it propagate as the 400 it is.
+    if (err instanceof AppError) throw err;
+    /* otherwise best-effort: leave quote_url blank */
+  }
   return ctx;
 }
 
@@ -275,7 +290,7 @@ export const smsController = {
     const { user, userId } = await requireSenderAccess(req);
     const scope = getScope(req);
     const orgId = effectiveOrgId(scope);
-    const { templateId, bodyOverride, recipients, triggerSource, confirmBulk, category, publicQuoteLink } = req.body as any;
+    const { templateId, bodyOverride, recipients, triggerSource, confirmBulk, category, publicQuoteLink, quoteId } = req.body as any;
     const usePublicQuoteLink = publicQuoteLink === true;
 
     let template: { id?: string; name?: string; body: string } | null = null;
@@ -324,7 +339,12 @@ export const smsController = {
     const results: any[] = [];
 
     for (const c of clients) {
-      const ctx = await buildContextForClient(c, { ensurePin: wantsPin, autoLoginQuote: wantsQuoteUrl, publicQuoteLink: usePublicQuoteLink });
+      const ctx = await buildContextForClient(c, {
+        ensurePin: wantsPin,
+        autoLoginQuote: wantsQuoteUrl,
+        publicQuoteLink: usePublicQuoteLink,
+        quoteId: typeof quoteId === 'string' && quoteId ? quoteId : undefined,
+      });
       const body = mergeTemplate(baseBody, ctx);
       const phone = normalisePhone(c.phoneNumber);
       const clientName = `${c.firstName ?? ''} ${c.surename ?? ''}`.trim();

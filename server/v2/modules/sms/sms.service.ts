@@ -1,5 +1,6 @@
 import { smsRepository } from './sms.repository';
 import { getPublicBaseUrl } from '../../utils/public-url';
+import { AppError } from '../../utils/error-handler';
 import {
   platformAdminCreditsRepository,
   startOfMonthUtc,
@@ -185,6 +186,38 @@ function buildPortalLink(): string {
 function buildQuoteUrl(token: string): string {
   // Portal quote view (requires portal login), not the public /view-quote page.
   return `${getPublicBaseUrl()}/portal/quote/${token}`;
+}
+
+/**
+ * Resolve which quote's share token to use for a client's SMS context.
+ *
+ * Callers that know exactly which quote is being shared (e.g. the Share
+ * Quote dialog's "Send" / "Send via SMS" buttons) should pass `quoteId`, so
+ * that quote's token is used even if a newer quote for the same client (e.g.
+ * a copy made after it) has since been tokened too — otherwise the org's
+ * most-recently-tokened quote always wins, and the agent can end up copying
+ * one quote's link while the client is texted a different one. `quoteId` is
+ * never trusted blindly: it's looked up scoped to `clientId` via
+ * `findTokenedQuoteForClient`, so a quote belonging to a different client is
+ * rejected with an `AppError` rather than silently used or silently ignored.
+ *
+ * Every caller that omits `quoteId` — including `fireAutoTriggerForClient`'s
+ * auto-fire templates, which never have a "viewed quote" to point at — keeps
+ * the original latest-tokened-quote fallback unchanged.
+ */
+export async function resolveQuoteToken(
+  clientId: string,
+  quoteId?: string,
+): Promise<{ id: string; token: string } | undefined> {
+  if (quoteId) {
+    const row = await smsRepository.findTokenedQuoteForClient(clientId, quoteId);
+    if (!row?.token) {
+      throw new AppError('Quote does not belong to this client', 400);
+    }
+    return { id: row.id, token: row.token };
+  }
+  const row = await smsRepository.findLatestTokenedQuoteForClient(clientId);
+  return row?.token ? { id: row.id, token: row.token } : undefined;
 }
 
 /**

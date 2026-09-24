@@ -59,6 +59,13 @@ export interface SendSmsInput {
   confirmBulk?: boolean;
   /** Send the PUBLIC /view-quote link instead of the portal one (no login/PIN). */
   publicQuoteLink?: boolean;
+  /**
+   * The quote whose link should be texted. Without this, the server falls
+   * back to the client's most-recently-tokened quote — which, once a copy
+   * quote gets tokened, is no longer necessarily the quote the agent is
+   * looking at (see the Share dialog's copy-vs-primary regression).
+   */
+  quoteId?: string;
 }
 
 export interface SendSmsResult {

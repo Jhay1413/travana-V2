@@ -20,6 +20,10 @@ interface QuoteShareDialogProps {
   shareLoading: boolean;
   onCopy: (opts?: { silent?: boolean }) => void;
   clientId?: string;
+  /** The quote this dialog is sharing — threaded through to the SMS send so
+   *  the server texts *this* quote's link rather than falling back to the
+   *  client's most-recently-tokened quote (which may be a different one). */
+  quoteId?: string;
 }
 
 export function QuoteShareDialog({
@@ -30,6 +34,7 @@ export function QuoteShareDialog({
   shareLoading,
   onCopy,
   clientId,
+  quoteId,
 }: QuoteShareDialogProps) {
   const { toast } = useToast();
   const sendSms = useSendSms();
@@ -82,6 +87,7 @@ export function QuoteShareDialog({
         publicQuoteLink: true,
         recipients: { mode: "client", clientId },
         triggerSource: "manual.quote_share_public",
+        quoteId,
       },
       {
         onSuccess: (data) => smsResultToast(data, "Quote link sent via SMS"),
@@ -101,6 +107,7 @@ export function QuoteShareDialog({
         category: "quote_link",
         recipients: { mode: "client", clientId },
         triggerSource: "manual.quote_share",
+        quoteId,
       },
       {
         onSuccess: (data) => smsResultToast(data, "Quote link sent via SMS"),
