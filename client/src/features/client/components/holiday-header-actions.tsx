@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Eye, Globe, Pin, Share2 } from "lucide-react";
+import { Check, Eye, Pin, Share2, TreePalm } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -175,7 +175,7 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryD
       <CircleAction icon={Share2} label="Share Quote" onClick={openShare} testId="client-header-share" />
       {guruDestination && (
         <CircleAction
-          icon={Globe}
+          icon={TreePalm}
           label="Destination Guru"
           onClick={() => setShowGuruSheet(true)}
           testId="client-header-guru"

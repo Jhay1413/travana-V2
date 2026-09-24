@@ -80,10 +80,18 @@ export function ClientTicketsTab({ tickets, users, onNewTicket }: ClientTicketsT
         </div>
 
         {tickets.length === 0 ? (
-          <div className="rounded-3xl border border-black/10 bg-white/60 py-10 text-center">
-            <LifeBuoy className="mx-auto mb-2 h-8 w-8 text-black/20" />
-            <p className="text-sm font-medium text-black/50">No tickets yet</p>
-            <p className="mt-1 text-xs text-black/35">Create the first ticket for this client</p>
+          <div className="rounded-3xl border border-black/10 bg-white/60 py-10 text-center dark:border-white/10 dark:bg-white/[0.04]">
+            <LifeBuoy className="mx-auto mb-2 h-8 w-8 text-black/20 dark:text-white/20" />
+            <p className="text-sm font-medium text-black/50 dark:text-white/50">No tickets yet</p>
+            <p className="mt-1 text-xs text-black/35 dark:text-white/35">Create the first ticket for this client</p>
+            <button
+              type="button"
+              onClick={onNewTicket}
+              className="mt-3 rounded-lg bg-blue-500 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600"
+              data-testid="client-index-tickets-empty-add"
+            >
+              Add Ticket
+            </button>
           </div>
         ) : (
           tickets.map((t) => {

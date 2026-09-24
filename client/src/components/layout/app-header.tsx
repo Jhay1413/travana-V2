@@ -19,7 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { NotificationsDropdown } from "@/features/notifications/components/notifications-dropdown";
+import { NotificationsPanel } from "@/features/notifications/components/notifications-panel";
 import { HeaderCreateMenu } from "@/components/layout/header-create-menu";
 import { BrandMark, MobileSidenav } from "./app-sidenav";
 import { ADMIN_MENU_ROLES, useMenuMode } from "@/components/layout/menu-mode-context";
@@ -218,7 +218,7 @@ export function AppHeader() {
 
         <div className="h-6 w-px bg-white/20" aria-hidden />
 
-        {user && <NotificationsDropdown userId={user.id} />}
+        {user && <NotificationsPanel userId={user.id} />}
 
         <div className="h-6 w-px bg-white/20" aria-hidden />
 

@@ -1,17 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, Image, Search, Upload, User, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -20,6 +10,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import {
+  DrawerField,
+  FormDrawer,
+  FormDrawerFooter,
+  FormDrawerSection,
+  drawerControlClass,
+  drawerInputClass,
+} from "@/components/shared/form-drawer";
+import { useFixedDropdownPosition } from "@/hooks/use-fixed-dropdown-position";
+import { cn } from "@/lib/utils";
 import { attachmentApi } from "@/api";
 import { useCurrentUser, useNeonClients, useTransactions, useUsers } from "@/hooks/queries";
 import { holidayLabelOf } from "@/features/transaction";
@@ -45,6 +45,13 @@ function formatBookingDate(value: string | null | undefined): string | null {
 // Extracted from the legacy tickets-board.tsx create dialog so the new 3-panel
 // tickets inbox can reuse it as the compose flow behind the header's
 // round SquarePen button, without cross-importing the whole social board.
+//
+// Renders as the standard right-hand FormDrawer (see
+// client/src/features/client/components/modals/CreateTicketDialog.tsx for the
+// dialog/drawer dual-presentation reference this was modelled on). This
+// component has exactly one caller (tickets-inbox.tsx) and that caller only
+// ever wants the drawer, so there's no `presentation` prop here — unlike the
+// reference component, a centred-dialog mode would be dead code.
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -72,6 +79,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const customerDropdownRef = useRef<HTMLDivElement>(null);
+  const customerInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     clientId: "",
@@ -101,6 +109,13 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
   const holidayOptions = (clientTransactions ?? [])
     .map((t) => ({ id: t.id, ...holidayLabelOf(t) }))
     .filter((o) => o.kind !== null);
+
+  const showCustomerOptions = showCustomerDropdown && customerSearch.length >= 1;
+  // The dropdown is a plain (non-portaled) sibling of the input, so inside the
+  // drawer's `overflow-y-auto` scroll container it would otherwise be clipped
+  // by that ancestor's `overflow`. `position: fixed`, computed from the
+  // input's rect, escapes that the same way `searchable-select.tsx` does.
+  const customerDropdownPosition = useFixedDropdownPosition(customerInputRef, showCustomerOptions);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -194,176 +209,269 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated }: CreateTick
     );
   };
 
-  return (
-    <Dialog open={open} onOpenChange={(v) => (v ? onOpenChange(true) : close())}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Create New Ticket</DialogTitle>
-          <DialogDescription>Create a support ticket for a client</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          {formData.type !== "Build" && (
-            <div className="grid gap-2">
-              <Label htmlFor="client">Customer *</Label>
-              <div className="relative" ref={customerDropdownRef}>
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  data-testid="select-client"
-                  placeholder="Search customers..."
-                  value={selectedCustomerName || customerSearch}
-                  onChange={(e) => {
-                    setCustomerSearch(e.target.value);
-                    setSelectedCustomerName("");
-                    setFormData({ ...formData, clientId: "", transactionId: "" });
-                    setShowCustomerDropdown(true);
-                  }}
-                  onFocus={() => setShowCustomerDropdown(true)}
-                  className="pl-9"
-                />
-                {showCustomerDropdown && customerSearch.length >= 1 && (
-                  <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-black/10 bg-white shadow-lg">
-                    {neonClientsData?.clients && neonClientsData.clients.length > 0 ? (
-                      neonClientsData.clients.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-black/5"
-                          data-testid={`customer-option-${c.id}`}
-                          onClick={() => {
-                            const displayName = `${c.title && c.title !== "NULL" ? c.title + " " : ""}${c.firstName || ""} ${c.surename || ""}`.trim();
-                            setFormData({ ...formData, clientId: c.id, transactionId: "" });
-                            setSelectedCustomerName(displayName);
-                            setCustomerSearch("");
-                            setShowCustomerDropdown(false);
-                          }}
-                        >
-                          <User className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span>{c.title && c.title !== "NULL" ? c.title + " " : ""}{c.firstName} {c.surename}</span>
-                          {c.phoneNumber && <span className="ml-auto text-xs text-muted-foreground">{c.phoneNumber}</span>}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">No customers found</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          {showBookingField && formData.clientId && (
-            <div className="grid gap-2">
-              <Label htmlFor="booking">Holiday</Label>
-              <Select
-                value={formData.transactionId || undefined}
-                onValueChange={(v) => setFormData({ ...formData, transactionId: v })}
-              >
-                <SelectTrigger data-testid="select-booking">
-                  <SelectValue placeholder={holidayOptions.length ? "Select a holiday (optional)" : "No holidays for this client"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {holidayOptions.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      {HOLIDAY_KIND_PREFIX[o.kind as "booking" | "quote" | "enquiry"]} · {o.title}
-                      {formatBookingDate(o.date) ? ` — ${formatBookingDate(o.date)}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div className="grid gap-2">
-            <Label htmlFor="user">Assigned To *</Label>
-            <Select value={formData.userId} onValueChange={(v) => setFormData({ ...formData, userId: v })}>
-              <SelectTrigger data-testid="select-user"><SelectValue placeholder="Select user" /></SelectTrigger>
-              <SelectContent>{users?.map((user) => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="grid gap-2">
-              <Label>Type</Label>
-              <Select
-                value={formData.type}
-                onValueChange={(v) => {
-                  const type = v as (typeof TICKET_TYPES)[number];
-                  setFormData((prev) => ({
-                    ...prev,
-                    type,
-                    clientId: type === "Build" ? "" : prev.clientId,
-                    transactionId: type === "Build" ? "" : prev.transactionId,
-                  }));
-                  if (type === "Build") {
-                    setSelectedCustomerName("");
-                    setCustomerSearch("");
-                  }
+  const typeField = (
+    <Select
+      value={formData.type}
+      onValueChange={(v) => {
+        const type = v as (typeof TICKET_TYPES)[number];
+        setFormData((prev) => ({
+          ...prev,
+          type,
+          clientId: type === "Build" ? "" : prev.clientId,
+          transactionId: type === "Build" ? "" : prev.transactionId,
+        }));
+        if (type === "Build") {
+          setSelectedCustomerName("");
+          setCustomerSearch("");
+        }
+      }}
+    >
+      <SelectTrigger data-testid="select-type" className={drawerControlClass}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="z-[600]">
+        {TICKET_TYPES.map((t) => (
+          <SelectItem key={t} value={t}>{t}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const assignedField = (
+    <Select value={formData.userId} onValueChange={(v) => setFormData({ ...formData, userId: v })}>
+      <SelectTrigger data-testid="select-user" className={drawerControlClass}>
+        <SelectValue placeholder="Select user" />
+      </SelectTrigger>
+      <SelectContent className="z-[600]">
+        {users?.map((user) => (
+          <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const customerField = (
+    <div className="relative" ref={customerDropdownRef}>
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/35 dark:text-white/35" />
+      <Input
+        ref={customerInputRef}
+        data-testid="select-client"
+        placeholder="Search customers..."
+        value={selectedCustomerName || customerSearch}
+        onChange={(e) => {
+          setCustomerSearch(e.target.value);
+          setSelectedCustomerName("");
+          setFormData({ ...formData, clientId: "", transactionId: "" });
+          setShowCustomerDropdown(true);
+        }}
+        onFocus={() => setShowCustomerDropdown(true)}
+        className={cn(drawerInputClass, "w-full pl-9")}
+      />
+      {showCustomerOptions && customerDropdownPosition && (
+        <div
+          className="fixed z-[600] overflow-y-auto rounded-xl border border-black/10 bg-white shadow-lg dark:border-white/10 dark:bg-neutral-900"
+          style={{
+            left: customerDropdownPosition.left,
+            width: customerDropdownPosition.width,
+            top: customerDropdownPosition.top,
+            bottom: customerDropdownPosition.bottom,
+            maxHeight: Math.min(192, customerDropdownPosition.maxHeight),
+          }}
+        >
+          {neonClientsData?.clients && neonClientsData.clients.length > 0 ? (
+            neonClientsData.clients.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-black/5 dark:hover:bg-white/5"
+                data-testid={`customer-option-${c.id}`}
+                onClick={() => {
+                  const displayName = `${c.title && c.title !== "NULL" ? c.title + " " : ""}${c.firstName || ""} ${c.surename || ""}`.trim();
+                  setFormData({ ...formData, clientId: c.id, transactionId: "" });
+                  setSelectedCustomerName(displayName);
+                  setCustomerSearch("");
+                  setShowCustomerDropdown(false);
                 }}
               >
-                <SelectTrigger data-testid="select-type"><SelectValue /></SelectTrigger>
-                <SelectContent>{TICKET_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Status</Label>
-              <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as (typeof TICKET_STATUSES)[number] })}>
-                <SelectTrigger data-testid="select-status"><SelectValue /></SelectTrigger>
-                <SelectContent>{TICKET_STATUSES.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Priority</Label>
-              <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v as (typeof TICKET_PRIORITIES)[number] })}>
-                <SelectTrigger data-testid="select-priority"><SelectValue /></SelectTrigger>
-                <SelectContent>{TICKET_PRIORITIES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="subject">Subject *</Label>
-            <Input id="subject" value={formData.subject} onChange={(e) => setFormData({ ...formData, subject: e.target.value })} placeholder="Brief summary of the issue" data-testid="input-subject" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="dueDate">Due Date</Label>
-            <DatePicker id="dueDate" value={formData.dueDate} onChange={(dueDate) => setFormData({ ...formData, dueDate })} className="h-9 rounded-md" data-testid="input-due-date" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="description">Description</Label>
-            <RichTextEditor content={formData.description ?? ""} onChange={(html) => setFormData({ ...formData, description: html })} placeholder="Detailed description of the ticket" data-testid="input-description" />
-          </div>
-          <div className="grid gap-2">
-            <Label>Attachments</Label>
-            <input ref={fileInputRef} type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" onChange={handleFileSelect} className="hidden" data-testid="input-file-attachment" />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-xl border-2 border-dashed border-black/20 bg-black/[0.02] p-4 text-center hover:border-black/40 hover:bg-black/[0.04] transition-colors cursor-pointer"
-              data-testid="button-add-attachment"
-            >
-              <Upload className="h-5 w-5 mx-auto text-black/40 mb-1" />
-              <p className="text-sm text-black/60 font-medium">Click to attach files</p>
-              <p className="text-xs text-black/40 mt-0.5">Images (JPG, PNG, GIF, WebP) and PDF - max 10MB each</p>
-            </button>
-            {pendingFiles.length > 0 && (
-              <div className="space-y-1.5 mt-1">
-                {pendingFiles.map((file, index) => (
-                  <div key={`${file.name}-${index}`} className="flex items-center gap-2 rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2" data-testid={`attachment-file-${index}`}>
-                    {getFileIcon(file.type)}
-                    <span className="text-sm text-black/70 flex-1 truncate">{file.name}</span>
-                    <span className="text-xs text-black/40">{formatFileSize(file.size)}</span>
-                    <button type="button" onClick={() => removePendingFile(index)} className="text-black/30 hover:text-red-500 transition-colors" data-testid={`button-remove-file-${index}`}>
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>{c.title && c.title !== "NULL" ? c.title + " " : ""}{c.firstName} {c.surename}</span>
+                {c.phoneNumber && <span className="ml-auto text-xs text-muted-foreground">{c.phoneNumber}</span>}
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-muted-foreground">No customers found</div>
+          )}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={close} data-testid="button-cancel">Cancel</Button>
-          <Button onClick={handleCreate} disabled={createTicketMutation.isPending || isUploading} data-testid="button-submit-create">
-            {isUploading ? "Uploading files..." : createTicketMutation.isPending ? "Creating..." : "Create Ticket"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      )}
+    </div>
+  );
+
+  const statusField = (
+    <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as (typeof TICKET_STATUSES)[number] })}>
+      <SelectTrigger data-testid="select-status" className={drawerControlClass}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="z-[600]">
+        {TICKET_STATUSES.map((s) => (
+          <SelectItem key={s} value={s}>{s}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const priorityField = (
+    <Select value={formData.priority} onValueChange={(v) => setFormData({ ...formData, priority: v as (typeof TICKET_PRIORITIES)[number] })}>
+      <SelectTrigger data-testid="select-priority" className={drawerControlClass}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="z-[600]">
+        {TICKET_PRIORITIES.map((p) => (
+          <SelectItem key={p} value={p}>{p}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const holidayField = (
+    <Select
+      value={formData.transactionId || undefined}
+      onValueChange={(v) => setFormData({ ...formData, transactionId: v })}
+    >
+      <SelectTrigger data-testid="select-booking" className={drawerControlClass}>
+        <SelectValue placeholder={holidayOptions.length ? "Select a holiday (optional)" : "No holidays for this client"} />
+      </SelectTrigger>
+      <SelectContent className="z-[600]">
+        {holidayOptions.map((o) => (
+          <SelectItem key={o.id} value={o.id}>
+            {HOLIDAY_KIND_PREFIX[o.kind as "booking" | "quote" | "enquiry"]} · {o.title}
+            {formatBookingDate(o.date) ? ` — ${formatBookingDate(o.date)}` : ""}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+
+  const subjectField = (
+    <Input
+      data-testid="input-subject"
+      value={formData.subject}
+      onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+      placeholder="Brief summary of the issue"
+      className={cn(drawerInputClass, "w-full")}
+    />
+  );
+
+  const dueDateField = (
+    <DatePicker
+      value={formData.dueDate}
+      onChange={(dueDate) => setFormData({ ...formData, dueDate })}
+      className={drawerControlClass}
+      data-testid="input-due-date"
+    />
+  );
+
+  const descriptionField = (
+    <RichTextEditor
+      content={formData.description ?? ""}
+      onChange={(html) => setFormData({ ...formData, description: html })}
+      placeholder="Detailed description of the ticket"
+      data-testid="input-description"
+    />
+  );
+
+  const attachmentsField = (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+        onChange={handleFileSelect}
+        className="hidden"
+        data-testid="input-file-attachment"
+      />
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        className="cursor-pointer rounded-xl border-2 border-dashed border-black/20 bg-[#f4f5f7] p-4 text-center transition-colors hover:border-black/40 hover:bg-black/[0.04] dark:border-white/20 dark:bg-white/5 dark:hover:border-white/40 dark:hover:bg-white/10"
+        data-testid="button-add-attachment"
+      >
+        <Upload className="mx-auto mb-1 h-5 w-5 text-black/40 dark:text-white/40" />
+        <p className="text-sm font-medium text-black/60 dark:text-white/60">Click to attach files</p>
+        <p className="mt-0.5 text-xs text-black/40 dark:text-white/40">Images (JPG, PNG, GIF, WebP) and PDF - max 10MB each</p>
+      </button>
+      {pendingFiles.length > 0 && (
+        <div className="mt-1 space-y-1.5">
+          {pendingFiles.map((file, index) => (
+            <div
+              key={`${file.name}-${index}`}
+              className="flex items-center gap-2 rounded-lg border border-black/10 bg-black/[0.02] px-3 py-2 dark:border-white/10 dark:bg-white/5"
+              data-testid={`attachment-file-${index}`}
+            >
+              {getFileIcon(file.type)}
+              <span className="flex-1 truncate text-sm text-black/70 dark:text-white/70">{file.name}</span>
+              <span className="text-xs text-black/40 dark:text-white/40">{formatFileSize(file.size)}</span>
+              <button
+                type="button"
+                onClick={() => removePendingFile(index)}
+                className="text-black/30 transition-colors hover:text-red-500 dark:text-white/30"
+                data-testid={`button-remove-file-${index}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <FormDrawer
+      open={open}
+      onOpenChange={(v) => (v ? onOpenChange(true) : close())}
+      title="Create New Ticket"
+      description="Create a support ticket for a client"
+      data-testid="create-ticket-drawer"
+    >
+      <div className="space-y-5 px-7 pb-6 pt-6">
+        <DrawerField label="Type" className="max-w-[420px]">
+          {typeField}
+        </DrawerField>
+        <DrawerField label="Assigned To *" className="max-w-[420px]">
+          {assignedField}
+        </DrawerField>
+        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+          {formData.type !== "Build" && (
+            <DrawerField label="Customer *">{customerField}</DrawerField>
+          )}
+          <DrawerField label="Status">{statusField}</DrawerField>
+          <DrawerField label="Priority">{priorityField}</DrawerField>
+        </div>
+        {showBookingField && formData.clientId && (
+          <DrawerField label="Holiday" className="max-w-[420px]">
+            {holidayField}
+          </DrawerField>
+        )}
+        <DrawerField label="Subject *" className="max-w-[420px]">
+          {subjectField}
+        </DrawerField>
+        <DrawerField label="Due Date" className="max-w-[420px]">
+          {dueDateField}
+        </DrawerField>
+      </div>
+      <FormDrawerSection title="Description" data-testid="drawer-section-ticket-description">
+        {descriptionField}
+      </FormDrawerSection>
+      <FormDrawerSection title="Attachments" data-testid="drawer-section-ticket-attachments">
+        <div className="grid gap-2">{attachmentsField}</div>
+      </FormDrawerSection>
+      <FormDrawerFooter
+        submitLabel="Create Ticket"
+        isLoading={createTicketMutation.isPending || isUploading}
+        onSubmit={handleCreate}
+        data-testid="drawer-footer"
+      />
+    </FormDrawer>
   );
 }

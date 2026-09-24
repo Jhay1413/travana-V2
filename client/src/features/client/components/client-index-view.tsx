@@ -110,12 +110,14 @@ function TasksList({
   users,
   holidays,
   navigate,
+  onCreateTask,
 }: {
   clientId: string;
   tasks: TaskNew[];
   users: ApiUser[];
   holidays: Map<string, TaskHoliday>;
   navigate: (to: string) => void;
+  onCreateTask: () => void;
 }) {
   const toggleMutation = useToggleTask("client", clientId);
   const deleteMutation = useDeleteTask("client", clientId);
@@ -131,7 +133,19 @@ function TasksList({
   );
 
   if (rows.length === 0) {
-    return <p className="py-8 text-center text-[13px] text-black/40 dark:text-white/40">No tasks yet.</p>;
+    return (
+      <div className="py-8 text-center">
+        <p className="text-[13px] text-black/40 dark:text-white/40">No tasks yet.</p>
+        <button
+          type="button"
+          onClick={onCreateTask}
+          className="mt-2 rounded-lg bg-blue-500 px-2.5 py-1 text-xs font-medium text-white transition hover:bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-600"
+          data-testid="client-index-tasks-empty-add"
+        >
+          Add Task
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -512,7 +526,7 @@ export function ClientIndexView({
           </div>
 
           <div className="mt-2" data-testid={`client-index-tab-panel-${tab}`}>
-            {tab === "tasks" && <TasksList clientId={clientId} tasks={tasks} users={users} holidays={taskHolidays} navigate={navigate} />}
+            {tab === "tasks" && <TasksList clientId={clientId} tasks={tasks} users={users} holidays={taskHolidays} navigate={navigate} onCreateTask={onCreateTask} />}
             {tab === "notes" && (
               <ClientNotesList clientId={clientId} users={users} dealsByTransactionId={dealsByTransactionId} onOpenDeal={onOpenDeal} />
             )}

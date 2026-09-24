@@ -34,6 +34,10 @@ export const notificationRepository = {
     await db.delete(notifications).where(eq(notifications.id, id));
   },
 
+  async removeAllByUserId(userId: string): Promise<void> {
+    await db.delete(notifications).where(eq(notifications.userId, userId));
+  },
+
   /**
    * Find existing (userId, link) pairs for a given notification type, used to
    * dedupe reminder fan-outs (e.g. don't send two stale-ticket reminders for

@@ -4,8 +4,12 @@ import { createServer } from "http";
 import routes from "./routes/index";
 import { setupAuth, registerAuthRoutes } from "./middlewares/auth";
 import { errorHandler } from "./middlewares/error.middleware";
-import { taskRepository } from "./modules/task/task.repository";
-import { checkStaleTickets } from "./modules/ticket/ticket-notification.service";
+// taskRepository / checkStaleTickets used to be driven from a node-cron
+// schedule below (every 30 min). That cron was removed in favor of an
+// on-demand trigger from the notifications endpoint — see
+// server/v2/modules/notification/notification.service.ts.
+// import { taskRepository } from "./modules/task/task.repository";
+// import { checkStaleTickets } from "./modules/ticket/ticket-notification.service";
 import { runDaysBeforeDepartureSweep } from "./modules/sms/sms.cron";
 import quotePublicRoutes from "./modules/quote/quote-public.routes";
 import websitePublicRoutes from "./modules/website-public/website-public.routes";
@@ -120,20 +124,28 @@ app.use((req, res, next) => {
     () => {
       log(`serving on port ${port}`);
 
-      // Every 30 minutes: check due tasks and stale tickets. Runs on a cron
-      // schedule (not a 60s setInterval) so the DB can scale to zero when idle.
-      cron.schedule("*/30 * * * *", async () => {
-        try {
-          await taskRepository.checkAndNotifyDueTasks();
-        } catch (err) {
-          console.error("Task notification check failed:", err);
-        }
-        try {
-          await checkStaleTickets();
-        } catch (err) {
-          console.error("Ticket notification check failed:", err);
-        }
-      });
+      // Disabled: this used to check due tasks + stale tickets every 30
+      // minutes via cron, but on Neon (scale-to-zero) that meant waking the
+      // database 48x/day regardless of whether anyone was using the app.
+      // Replaced with an on-demand, per-user, throttled trigger that runs
+      // when a signed-in user loads their notifications (login or page
+      // refresh) — see runDueChecksForUser in
+      // server/v2/modules/notification/notification.service.ts.
+      // Left commented (not deleted) so it's easy to restore if the
+      // on-demand approach ever proves insufficient.
+      //
+      // cron.schedule("*/30 * * * *", async () => {
+      //   try {
+      //     await taskRepository.checkAndNotifyDueTasks();
+      //   } catch (err) {
+      //     console.error("Task notification check failed:", err);
+      //   }
+      //   try {
+      //     await checkStaleTickets();
+      //   } catch (err) {
+      //     console.error("Ticket notification check failed:", err);
+      //   }
+      // });
 
       // 09:00 UTC daily: fire SMS templates with autoTrigger='days_before_departure'
       // for bookings whose travel_date matches today + triggerDaysBefore.

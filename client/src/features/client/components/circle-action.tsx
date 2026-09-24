@@ -27,13 +27,11 @@ export function CircleAction({
   const className = cn(
     "grid shrink-0 place-items-center rounded-full bg-[#07a9f4] text-white transition hover:bg-[#0596db]",
     size === "lg" ? "h-10 w-10" : size === "sm" ? "h-8 w-8" : "h-9 w-9",
+    // Pinned (or otherwise "active") state gets a ring instead of a filled icon, so it stays
+    // outline like every other action but is still visually distinguishable at a glance.
+    active && "ring-2 ring-white ring-offset-1 ring-offset-[#07a9f4]",
   );
-  const icon = (
-    <Icon
-      className={cn(size === "lg" ? "h-5 w-5" : size === "sm" ? "h-4 w-4" : "h-[18px] w-[18px]", active && "fill-current")}
-      strokeWidth={1.5}
-    />
-  );
+  const icon = <Icon className={cn(size === "lg" ? "h-5 w-5" : size === "sm" ? "h-4 w-4" : "h-[18px] w-[18px]")} strokeWidth={1.5} />;
 
   if (href) {
     return (
