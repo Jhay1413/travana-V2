@@ -160,7 +160,18 @@ export function QuoteRHFForm({
   }, [parkId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Child ages sync ───────────────────────────────────────────────────────
+  // Only reconciles childAges with the children count on a genuine change to
+  // that count during this session — never on mount. A loaded quote/booking
+  // can legitimately have a childAges array whose length doesn't match its
+  // stored child count (e.g. AI-extracted enquiries, legacy data); running
+  // this on the initial render would "helpfully" pad/truncate that array
+  // and silently wipe out real ages the moment an edit form opens.
+  const isChildAgesFirstRender = useRef(true);
   useEffect(() => {
+    if (isChildAgesFirstRender.current) {
+      isChildAgesFirstRender.current = false;
+      return;
+    }
     const currentAges = form.getValues("childAges");
     const count = Number(passengersChildren) || 0;
     if (currentAges.length !== count) {

@@ -28,7 +28,10 @@ const DASHBOARD_TABS: Array<{ value: DashboardTab; label: string }> = [
   { value: "tickets", label: "Tickets" },
   { value: "conversations", label: "Latest Inbox" },
   { value: "my-courses", label: "My Courses" },
-  { value: "notes", label: "Notes" },
+  // Label is "Goals" (renamed from "Notes"); the "notes" value is kept as-is
+  // since it isn't persisted or referenced elsewhere, but changing it isn't
+  // required to fix the user-visible label.
+  { value: "notes", label: "Goals" },
 ];
 
 export default function AgentOverviewPage() {
@@ -94,11 +97,12 @@ export default function AgentOverviewPage() {
               <button
                 type="button"
                 onClick={() => setCreatingTask(true)}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-black/15 text-black/60 transition hover:bg-black/5 hover:text-black dark:border-white/20 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white"
-                aria-label="Add task"
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-xl bg-blue-500 px-3 text-xs font-medium text-white transition hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500"
+                aria-label="New task"
                 data-testid="button-dashboard-add"
               >
-                <SquarePlus className="h-4 w-4" />
+                <SquarePlus className="h-3.5 w-3.5" />
+                New Task
               </button>
             </div>
 

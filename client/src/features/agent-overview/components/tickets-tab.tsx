@@ -2,6 +2,9 @@ import { useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { ChevronRight } from "lucide-react";
 import { useTicketsByUser } from "@/features/tickets/api/use-ticket-queries";
+import type { Ticket } from "@/features/tickets";
+import { useUsers } from "@/features/user/api/use-user-queries";
+import type { User } from "@/features/user";
 import { cn } from "@/lib/utils";
 import { InitialsAvatar, timeAgo } from "./dashboard-ui";
 
@@ -13,9 +16,53 @@ function statusPill(status: string): string {
   return "bg-black/10 text-black/60 dark:bg-white/10 dark:text-white/60";
 }
 
+/**
+ * Ticket row avatar. `assignedTo` on a ticket always references a staff
+ * `user` (see shared/schema.ts) — never a client — so its presence is what
+ * distinguishes a staff-assigned ticket from one that's just about a
+ * customer. When assigned, show that user's profile picture (same
+ * image -> profileImageUrl -> avatar fallback order as AssignedAgentButton
+ * in holiday-header-actions.tsx), falling back to their initials rendered in
+ * the `solid` (dark) style so it reads visually distinct from the
+ * colour-coded customer-initials avatar used for unassigned tickets.
+ */
+function TicketAvatar({ ticket, assignedUser }: { ticket: Ticket; assignedUser: User | undefined }) {
+  if (ticket.assignedTo) {
+    const avatarUrl = assignedUser?.image ?? assignedUser?.profileImageUrl ?? assignedUser?.avatar ?? null;
+    if (avatarUrl) {
+      return (
+        <img
+          src={avatarUrl}
+          alt=""
+          className="h-8 w-8 shrink-0 rounded-full object-cover"
+          data-testid={`img-dashboard-ticket-assignee-${ticket.id}`}
+        />
+      );
+    }
+    const name = assignedUser?.name ?? ticket.assignedToName ?? "?";
+    return <InitialsAvatar name={name} className="h-8 w-8 text-[11px]" solid />;
+  }
+  return <InitialsAvatar name={ticket.clientName || ticket.subject} className="h-8 w-8 text-[11px]" />;
+}
+
 export function TicketsTab({ userId }: { userId: string }) {
   const [, navigate] = useLocation();
-  const { data: ticketsData } = useTicketsByUser(userId, { statuses: ["open", "in_progress"] });
+  const { data: ticketsData } = useTicketsByUser(userId, {
+    statuses: ["open", "in_progress"],
+    // "My tickets" on this personal panel means tickets assigned to me —
+    // not tickets I raised for someone else. `findByAssignedTo`'s default
+    // (creator-or-assignee) still backs other callers of this same endpoint
+    // (sidebar badge, "what's on" widget), so this is opted in explicitly
+    // rather than changing that shared default.
+    assignedOnly: true,
+  });
+  const { data: usersData } = useUsers();
+
+  const usersById = useMemo(() => {
+    const map = new Map<string, User>();
+    (usersData ?? []).forEach((u) => map.set(u.id, u));
+    return map;
+  }, [usersData]);
 
   const tickets = useMemo(() => {
     if (!ticketsData || !Array.isArray(ticketsData)) return [];
@@ -35,7 +82,7 @@ export function TicketsTab({ userId }: { userId: string }) {
             No open tickets
           </div>
         ) : (
-          tickets.map((ticket: any) => (
+          tickets.map((ticket) => (
             <div
               key={ticket.id}
               role="link"
@@ -50,7 +97,7 @@ export function TicketsTab({ userId }: { userId: string }) {
               className="group flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
               data-testid={`row-dashboard-ticket-${ticket.id}`}
             >
-              <InitialsAvatar name={ticket.clientName || ticket.subject} className="h-8 w-8 text-[11px]" />
+              <TicketAvatar ticket={ticket} assignedUser={ticket.assignedTo ? usersById.get(ticket.assignedTo) : undefined} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
                   <span className="truncate text-sm font-medium">{ticket.subject}</span>

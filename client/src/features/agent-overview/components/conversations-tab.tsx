@@ -111,10 +111,25 @@ function statusPill(c: any): { label: string; className: string } | null {
   return null;
 }
 
+// A snooze is only active while `snoozed_until` is in the future — same rule
+// as the inbox's own map.ts (isSnoozeActive), duplicated here since that
+// helper isn't exported and this widget works off the raw list item rather
+// than the mapped UI Conversation.
+function isSnoozed(c: any): boolean {
+  const until = c.snoozed_until ? Date.parse(c.snoozed_until) : NaN;
+  return !Number.isNaN(until) && until > Date.now();
+}
+
 export function ConversationsTab() {
   const [, navigate] = useLocation();
-  const { data } = useConversations({ pageSize: 8 });
-  const conversations = data?.items ?? [];
+  // "Latest Inbox" only makes sense for conversations still awaiting action —
+  // closed and snoozed ones would otherwise clutter the widget. `status: "open"`
+  // filters server-side, but the provider still reports snoozed conversations
+  // under the "open" status (snoozing never changes `status`, only
+  // `snoozed_until` — see conversations/types.ts), so a client-side check on
+  // top is required to actually exclude them.
+  const { data } = useConversations({ pageSize: 8, status: "open" });
+  const conversations = (data?.items ?? []).filter((c: any) => !isSnoozed(c));
 
   return (
     <div className="flex min-h-[300px] flex-col" data-testid="panel-dashboard-conversations">
@@ -136,11 +151,11 @@ export function ConversationsTab() {
                 key={c.id}
                 role="link"
                 tabIndex={0}
-                onClick={() => navigate("/conversations")}
+                onClick={() => navigate(`/conversations?conversation=${c.id}`)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    navigate("/conversations");
+                    navigate(`/conversations?conversation=${c.id}`);
                   }
                 }}
                 className="group flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
@@ -182,7 +197,7 @@ export function ConversationsTab() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate("/conversations");
+                      navigate(`/conversations?conversation=${c.id}`);
                     }}
                     className="grid h-7 w-7 place-items-center rounded-full text-black/50 transition hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
                     aria-label="Open conversation"

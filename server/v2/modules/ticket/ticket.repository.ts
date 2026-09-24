@@ -134,12 +134,20 @@ export const ticketRepository = {
   async findByAssignedTo(
     userId: string,
     scope?: Scope,
-    filters?: { statuses?: string[] },
+    filters?: { statuses?: string[]; assignedOnly?: boolean },
     viewerUserId: string | null = null,
   ): Promise<TicketWithNames[]> {
     const scopeConds = buildTicketScopeConds(scope);
-    const assignedOr = or(eq(tickets.assignedTo, userId), eq(tickets.userId, userId))!;
-    const conds: SQL[] = [assignedOr, ...scopeConds];
+    // Default: creator-or-assignee, matching the shared client-side isMyTicket()
+    // definition used by the sidebar badge / "what's on" widget. Callers that
+    // want strictly "assigned to this person" (e.g. the dashboard's personal
+    // ticket panel, which must not surface tickets the user merely raised for
+    // someone else) opt in via `assignedOnly` rather than this changing for
+    // every existing caller of this endpoint.
+    const ownerCond = filters?.assignedOnly
+      ? eq(tickets.assignedTo, userId)
+      : or(eq(tickets.assignedTo, userId), eq(tickets.userId, userId))!;
+    const conds: SQL[] = [ownerCond, ...scopeConds];
     if (filters?.statuses && filters.statuses.length > 0) {
       const lowered = filters.statuses.map((s) => s.toLowerCase().replace("_", " "));
       conds.push(sql`LOWER(REPLACE(${tickets.status}::text, '_', ' ')) IN (${sql.join(lowered.map((s) => sql`${s}`), sql`, `)})`);

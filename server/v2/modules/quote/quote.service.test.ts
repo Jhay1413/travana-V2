@@ -203,6 +203,32 @@ describe("newQuoteService.updateQuote", () => {
     expect(newQuoteRepository.update).toHaveBeenCalledWith("q1", { is_active: false });
     expect(transactionRepository.update).toHaveBeenCalledWith("t1", { is_active: false });
   });
+
+  it("persists childAges when an edit submits them, so ages survive the round trip", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({
+      id: "q1",
+      transaction_id: "t1",
+      quote_status: "quoted",
+    } as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ id: "q1" } as never);
+
+    await newQuoteService.updateQuote("q1", { childAges: [5, 8] } as never, TRUSTED);
+
+    expect(newQuoteRepository.replaceChildPassengers).toHaveBeenCalledWith("q1", "quote", [5, 8]);
+  });
+
+  it("clears childAges when an edit explicitly submits an empty array", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({
+      id: "q1",
+      transaction_id: "t1",
+      quote_status: "quoted",
+    } as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ id: "q1" } as never);
+
+    await newQuoteService.updateQuote("q1", { childAges: [] } as never, TRUSTED);
+
+    expect(newQuoteRepository.replaceChildPassengers).toHaveBeenCalledWith("q1", "quote", []);
+  });
 });
 
 describe("newQuoteService.deleteQuote", () => {

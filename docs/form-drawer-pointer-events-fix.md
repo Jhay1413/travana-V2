@@ -5,7 +5,10 @@
 > local machine). Section 1–5 & 7 cover the page-freeze-on-close symptom and why
 > `FormDrawer` clears `document.body.style.pointerEvents` on close. Section 6 covers a
 > second symptom — a `SearchableSelect`/`MultiSearchableSelect` dropdown that opens but
-> doesn't respond to typing or clicks — and why it needed a different fix.
+> doesn't respond to typing or clicks — and why it needed a different fix. **Section 8
+> records that the §4 mitigation was reported as still failing** — both on plain
+> open/close and after a successful create — and what replaced it: a page-wide
+> `MutationObserver` + interval watchdog instead of a single 400ms one-shot check.
 > Relevant files: `client/src/components/shared/form-drawer/form-drawer.tsx`,
 > `client/src/components/ui/searchable-select.tsx`,
 > `client/src/components/ui/multi-searchable-select.tsx`.
@@ -300,3 +303,143 @@ document.querySelectorAll('[data-radix-popper-content-wrapper]')
 
 A Radix upgrade is the proper long-term fix. When one lands, re-test on a slow
 environment and delete this workaround if the race is gone.
+
+---
+
+## 8. §4 mitigation reported as still failing — stale popper wrapper + one-shot design
+
+### The report
+
+After §4 shipped, the user reported the freeze **still happening on Replit**, on both
+of the original triggers: opening a create drawer and closing it without saving, *and*
+a new one — the page freezing after a **successful** enquiry create. Symptom
+unchanged: everything renders, nothing is clickable, only a reload clears it. The §4
+mitigation had never been runtime-verified (§5 said so explicitly), so this was the
+first real evidence about whether it worked, and it said no.
+
+### Investigating the leading suspicion: was `hasOpenRadixLayer` always bailing out?
+
+Yes — reading Radix's source (pinned versions, from `node_modules`) confirms it
+mechanistically. `hasOpenRadixLayer`'s second condition was:
+
+```ts
+document.querySelector("[data-radix-popper-content-wrapper]") !== null
+```
+
+`[data-radix-popper-content-wrapper]` is the wrapper `<div>` that
+`@radix-ui/react-popper`'s `PopperContent` renders (`node_modules/@radix-ui/react-popper/dist/index.js`).
+It carries no `data-state` attribute of its own — ever. The actual open/closed state
+(`getState(context.open)`) is set as a prop on the *content* element nested inside it,
+confirmed in `@radix-ui/react-popover`, `@radix-ui/react-select`, and
+`@radix-ui/react-tooltip`'s `dist/index.js`, all of which follow the same pattern:
+render `<Presence present={forceMount || context.open}>` around a
+`PopperPrimitive.Content` that receives `"data-state": getState(context.open)`.
+
+Two consequences follow:
+
+1. **Radix's `Popover` (used by `client/src/components/ui/date-picker.tsx`, via
+   `client/src/components/ui/popover.tsx`) keeps its `[data-radix-popper-content-wrapper]`
+   mounted for the entire close animation.** `Presence`'s `present` prop stays true
+   until the exit animation's `animationend` fires, and `PopoverContent`'s base
+   classes (`data-[state=closed]:animate-out …`) mean that animation is real, not
+   instant. Any drawer field using a date picker — and the enquiry/quote/booking
+   drawers all have several ("Outbound"/"Inbound" per §3) — leaves this wrapper in the
+   DOM well past the moment the picker visually looks closed, with **only its inner
+   content** carrying `data-state="closed"`. The wrapper element itself gives no signal.
+2. Radix `Select` (`@radix-ui/react-select`) turned out *not* to have this specific
+   problem — reading its source shows `SelectContent` swaps to an off-DOM
+   `DocumentFragment` **synchronously** the instant `context.open` goes false; it does
+   not use `Presence` for exit animation, so its popper wrapper disappears immediately
+   on close, not gradually. The wrapper-presence bug is real, but it is a `Popover`
+   (and by the same pattern, `Tooltip`/`DropdownMenu`) problem specifically, not a
+   `Select` one — worth recording since it narrows where the residue actually comes
+   from.
+
+So the theory held, but sharper than originally framed: it's not that *any* stale
+wrapper anywhere in the session blocks the guard forever (that would require a Radix
+`Presence`/teardown bug leaving the node orphaned indefinitely, which is plausible on a
+slow/throttled tab but unproven); it's that **the guard's single 400ms check routinely
+lands while a legitimately-closing `Popover` is still mid-animation**, and the guard
+had no way to tell "closing" from "open" because it only checked for the wrapper's
+existence.
+
+### What is actually left behind
+
+Two things, and they matter differently:
+
+- `document.body.style.pointerEvents === "none"` — confirmed as the mechanism per §3;
+  nothing in this investigation contradicts it, and §7's own diagnostic snippet (read
+  `document.body.style.pointerEvents` while frozen) was not re-run here per this task's
+  instructions not to attempt reproduction. **Not independently re-verified this
+  round** — see "What remains unproven" below.
+- A `[data-radix-popper-content-wrapper]` node whose *content* is `data-state="closed"`
+  — a legitimately-closing (or, on Replit, possibly stuck) `Popover`. This is what was
+  making the guard bail; it is not itself the thing blocking clicks (it's a small,
+  positioned element, not full-page), the body style is.
+
+### What changed and why it's more robust
+
+Two independent fixes, both in `client/src/components/shared/form-drawer/form-drawer.tsx`:
+
+1. **`hasOpenRadixLayer` now requires an actual open state, not just presence.** For
+   the popper-wrapper check, it now does
+   `poppers[i].querySelector('[data-state="open"]') !== null` for each
+   `[data-radix-popper-content-wrapper]` on the page, instead of treating the wrapper's
+   existence as proof of an open layer. A `Popover`/date picker mid-close (content
+   `data-state="closed"`) no longer blocks the cleanup; a genuinely open one
+   (`data-state="open"`) still does. The dialog half of the check was already correct
+   in this respect (`[role="dialog"][data-state="open"]`) — this brings the popper half
+   in line with it, which is exactly what the task asked to verify.
+2. **Replaced the single 400ms `setTimeout` with a page-wide, self-correcting watchdog**
+   (`startPointerEventsWatchdog`, `pollUntilPointerEventsSettle`): a `MutationObserver`
+   watches `document.body`'s `style` attribute and starts polling
+   (`setInterval`, 200ms) the instant `pointer-events` becomes `"none"`; each tick
+   re-checks `hasOpenRadixLayer()` and either clears the style and stops, or leaves it
+   and tries again next tick. It never "gives up" after one look. This is strictly more
+   robust than the one-shot check for reasons the task specifically flagged:
+   - It no longer depends on a single drawer's `open`/close/unmount lifecycle at all —
+     it is started once (idempotently) from every `FormDrawer` mount and reacts to the
+     *actual* DOM mutation Radix makes, so the create-and-navigate-away path (§4's
+     point 2, `BookingCreateDialog`'s `onSuccess` navigating away mid-close) is covered
+     the same way as an ordinary close, with no special-casing needed.
+   - If, at one poll tick, a sibling dialog on `client/src/pages/client/index.tsx`'s
+     nine mounted roots happens to be genuinely open, the very next tick (200ms later)
+     re-evaluates instead of the page staying stuck for the rest of the session — this
+     directly addresses the "single one-shot check may be the design flaw" concern.
+   - It starts polling immediately when `pointer-events` becomes `"none"` — which
+     Radix sets for a modal's *entire* open duration, not just while closing — so in
+     the common case (an open dialog with an open nested layer) it polls a few times
+     as a no-op and stops the moment nothing legitimate owns the style anymore, rather
+     than waiting a fixed margin past an assumed close-animation duration.
+
+### What this does not change
+
+- `hasOpenRadixLayer`'s dialog check (`[role="dialog"][data-state="open"]`) was
+  already correct and is untouched.
+- The underlying Radix defect (§3) is still not fixed — this remains a residue-cleanup
+  workaround, not a fix to `DismissableLayer` itself.
+- `SearchableSelect`/`MultiSearchableSelect` no longer use Radix `Popover` at all
+  (§6), so they were never part of this wrapper-presence problem; the audit note at
+  the end of §6 (`Select`, date pickers, other `Popover` usages "have not been
+  audited") is now partially answered for `Select` (confirmed not affected, per above)
+  and confirmed *is* the mechanism for `Popover`/date pickers.
+
+### What remains unproven
+
+- **Not reproduced or verified at runtime.** Per this task's explicit instruction, no
+  attempt was made to reproduce on Replit or locally. Whether the freeze actually stops
+  is deferred to the user testing on Replit — exactly the environment where this bug
+  and the prior mitigation attempt both showed different results than local reasoning
+  predicted.
+- Whether `document.body.style.pointerEvents === "none"` is *still* the correct
+  mechanism for the after-create freeze specifically (as opposed to some other residue,
+  e.g. a `react-remove-scroll` lock or `aria-hidden` left on the page root) was not
+  re-checked against a live repro this round — §7's own diagnostic (read
+  `document.body.style.pointerEvents` while frozen) is the way to confirm this if the
+  freeze is reported again after this change.
+- Whether a genuinely-orphaned (not just mid-animation) `[data-radix-popper-content-wrapper]`
+  ever occurs in practice — i.e. one whose content never reaches `data-state="closed"`
+  at all due to a stuck `Presence` teardown — was reasoned about as plausible on a slow
+  tab but not confirmed. The new guard does not depend on this either way: it only
+  ever needs the *open* state to be absent to proceed, so a wrapper stuck at
+  `data-state="closed"` forever is handled identically to one that closed cleanly.

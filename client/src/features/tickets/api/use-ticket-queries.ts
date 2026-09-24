@@ -39,7 +39,7 @@ export function useTicketsByClient(clientId: string) {
   });
 }
 
-export function useTicketsByUser(userId: string, filters?: { statuses?: string[] }) {
+export function useTicketsByUser(userId: string, filters?: { statuses?: string[]; assignedOnly?: boolean }) {
   return useQuery<Ticket[]>({
     queryKey: [...ticketKeys.byUser(userId), filters ?? {}] as const,
     queryFn: () => ticketApi.getByUser(userId, filters),

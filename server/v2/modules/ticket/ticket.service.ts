@@ -51,7 +51,7 @@ export const ticketService = {
   async listTicketsByUser(
     userId: string,
     scope: Scope,
-    filters?: { statuses?: string[] },
+    filters?: { statuses?: string[]; assignedOnly?: boolean },
   ) {
     return await ticketRepository.findByAssignedTo(userId, scope, filters, scope.userId ?? null);
   },

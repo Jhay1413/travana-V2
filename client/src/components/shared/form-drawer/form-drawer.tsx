@@ -48,29 +48,107 @@ export const drawerSubheadingClass = "flex items-center gap-2 text-[15px] font-m
 // running, so it reproduces on slower environments and not on a fast dev
 // machine.
 //
-// The check below is deliberately conservative: it only fires after the
-// close animation has had time to finish, and only clears the style when no
-// Radix modal layer is still legitimately open. When Radix cleans up
-// correctly (the common case), the guard in `clearStuckPointerEventsIfOrphaned`
-// is a no-op.
+// This was originally a one-shot check, scheduled 400ms after close from an
+// effect armed only while a given drawer was `open`. It was reported as
+// still failing in production (Replit). Two bugs were found in it (see
+// docs/form-drawer-pointer-events-fix.md §7 for the write-up):
+//
+// 1. `hasOpenRadixLayer` treated the mere *presence* of a
+//    `[data-radix-popper-content-wrapper]` node as "something is still
+//    open". Radix's `Popover`/`Select`/`Tooltip`/date-picker content is kept
+//    mounted by `Presence` for the whole close animation, and that wrapper
+//    element never carries a `data-state` attribute itself — only its
+//    content descendant does. So a `Select` or date-picker that was merely
+//    *closing* (or, on a slow/throttled tab, stuck mid-teardown) made the
+//    guard bail out and never retry, permanently. On a page like
+//    `client/src/pages/client/index.tsx` that mounts nine dialog roots plus
+//    per-field date pickers, some such wrapper is almost always present
+//    shortly after a create-and-close.
+// 2. It only ever looked once. If a genuinely open sibling dialog happened
+//    to still be `[data-state="open"]` at that single 400ms checkpoint, the
+//    guard bailed and nothing ever tried again.
+//
+// The fix below addresses both: `hasOpenRadixLayer` now requires an actual
+// `[data-state="open"]` descendant inside a popper wrapper, not just the
+// wrapper's presence; and the check is no longer a single timed peek. A
+// `MutationObserver` watches `document.body`'s `style` attribute and starts
+// polling the instant `pointer-events` becomes `"none"`, re-checking on a
+// short interval until it's either safe to clear or genuinely still owned —
+// it never gives up after one look, and it self-corrects on the very next
+// tick if it was wrong. When Radix cleans up correctly (the common case),
+// the poll clears itself within one interval tick and this is a no-op.
 
-/** Close animation on SheetContent is 300ms; leave some margin before checking. */
-const POINTER_EVENTS_CHECK_DELAY_MS = 400;
+/** How often to re-check while `document.body` is `pointer-events: none`. */
+const POINTER_EVENTS_POLL_INTERVAL_MS = 200;
 
 function hasOpenRadixLayer(): boolean {
   if (typeof document === "undefined") return false;
-  return (
-    document.querySelector('[role="dialog"][data-state="open"]') !== null ||
-    document.querySelector("[data-radix-popper-content-wrapper]") !== null
-  );
+  if (document.querySelector('[role="dialog"][data-state="open"]') !== null) return true;
+
+  // A `[data-radix-popper-content-wrapper]` (Select/Popover/date picker)
+  // never carries `data-state` itself — Presence keeps the wrapper mounted
+  // for the whole exit animation (or, on a slow tab, longer than that if a
+  // teardown gets stuck), so its mere presence proves nothing. The actual
+  // open/closed state lives on a descendant inside it; require that to be
+  // `[data-state="open"]` before treating the layer as still owning the
+  // page.
+  const poppers = document.querySelectorAll("[data-radix-popper-content-wrapper]");
+  for (let i = 0; i < poppers.length; i++) {
+    if (poppers[i].querySelector('[data-state="open"]') !== null) return true;
+  }
+  return false;
 }
 
-/** Only clears `pointer-events: none` on the body if it's stuck with nothing left to own it. */
-function clearStuckPointerEventsIfOrphaned(): void {
-  if (typeof document === "undefined") return;
-  if (document.body.style.pointerEvents !== "none") return;
-  if (hasOpenRadixLayer()) return;
+/**
+ * Checks the stuck-body-style condition once.
+ * @returns true once "settled" (either nothing was stuck, or it just got
+ * cleared) — i.e. the caller can stop polling. false means it's still
+ * legitimately owned and should be checked again.
+ */
+function clearStuckPointerEventsIfOrphaned(): boolean {
+  if (typeof document === "undefined") return true;
+  if (document.body.style.pointerEvents !== "none") return true;
+  if (hasOpenRadixLayer()) return false;
   document.body.style.removeProperty("pointer-events");
+  return true;
+}
+
+let pointerEventsWatchdogStarted = false;
+let pointerEventsPollHandle: number | null = null;
+
+/** Starts (once) polling on an interval until the stuck style clears or stops being stuck. */
+function pollUntilPointerEventsSettle(): void {
+  if (pointerEventsPollHandle !== null) return; // already polling
+  pointerEventsPollHandle = window.setInterval(() => {
+    const settled = clearStuckPointerEventsIfOrphaned();
+    if (settled && pointerEventsPollHandle !== null) {
+      window.clearInterval(pointerEventsPollHandle);
+      pointerEventsPollHandle = null;
+    }
+  }, POINTER_EVENTS_POLL_INTERVAL_MS);
+}
+
+/**
+ * Starts a page-wide watchdog, idempotent and safe to call from every
+ * `FormDrawer` mount. Reacts the instant `document.body` gets
+ * `pointer-events: none` (which Radix sets for the entire lifetime of an
+ * open modal layer, not just while closing) and keeps re-checking on an
+ * interval rather than taking one fixed-delay look and giving up. This is
+ * decoupled from any single drawer's `open` prop or its close/unmount
+ * timing, so it also covers the create-and-navigate-away path without
+ * depending on that callback ordering.
+ */
+function startPointerEventsWatchdog(): void {
+  if (pointerEventsWatchdogStarted) return;
+  if (typeof document === "undefined" || typeof MutationObserver === "undefined") return;
+  pointerEventsWatchdogStarted = true;
+
+  if (document.body.style.pointerEvents === "none") pollUntilPointerEventsSettle();
+
+  const observer = new MutationObserver(() => {
+    if (document.body.style.pointerEvents === "none") pollUntilPointerEventsSettle();
+  });
+  observer.observe(document.body, { attributes: true, attributeFilter: ["style"] });
 }
 
 // ─── Drawer shell ───────────────────────────────────────────────────────────
@@ -95,29 +173,12 @@ export function FormDrawer({
   className,
   "data-testid": testId,
 }: FormDrawerProps) {
+  // Idempotent and independent of `open`/close/unmount ordering — see the
+  // watchdog's own docs above. Every `FormDrawer` instance calls this on
+  // mount; only the first one actually does anything.
   useEffect(() => {
-    if (typeof document === "undefined") return undefined;
-    if (!open) return undefined;
-
-    // This effect is only "armed" while the drawer is open. Its cleanup
-    // therefore fires exactly when we care about: the drawer closing
-    // (`open` flips to false) or the drawer unmounting while still open
-    // (e.g. a save navigates away mid-close). Either way, schedule the
-    // orphan check once the close animation has had time to finish.
-    //
-    // Deliberately fire-and-forget: the timer isn't cancelled on unmount.
-    // It only ever touches `document.body` (valid long after this
-    // component is gone) via `clearStuckPointerEventsIfOrphaned`, which is
-    // already a no-op whenever it shouldn't act — including when another
-    // drawer/dialog opened in the meantime. Cancelling it here would kill
-    // the unmount-while-open case, which is the one that matters most:
-    // e.g. `BookingCreateDialog`'s `onSuccess` navigates away immediately,
-    // unmounting the drawer (and everything that could otherwise clean up
-    // after it) while it may still be mid-close.
-    return () => {
-      window.setTimeout(clearStuckPointerEventsIfOrphaned, POINTER_EVENTS_CHECK_DELAY_MS);
-    };
-  }, [open]);
+    startPointerEventsWatchdog();
+  }, []);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

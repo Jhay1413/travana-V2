@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLocation, Link as RouterLink } from "wouter";
+import { useLocation, useSearch, Link as RouterLink } from "wouter";
 import {
   Search,
   Plus,
@@ -51,6 +51,8 @@ import {
   Pin,
   Link,
   Share2,
+  ListTodo,
+  Ticket,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -107,6 +109,13 @@ import { useConversationsRealtimeState } from "./conversations-realtime-provider
 import { useInboxes } from "../api/use-inboxes";
 import type { SsInbox } from "../api/inboxes.api";
 import type { Conversation, ConversationMessage, ConversationTag, InboxTab } from "../types";
+// Reused as-is from the client dashboard (pages/client/index.tsx) and the
+// quote page — no new dialogs, just wired to this conversation's linked
+// client. Cross-feature import is intentional here (same pattern those pages
+// already use for these specific hooks/dialogs).
+import { useClientTaskCreate, useClientTicketCreate } from "@/features/client/components/hooks";
+import { CreateTaskDialog } from "@/features/client/components/modals/CreateTaskDialog";
+import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 
 // How often the composer re-announces that this agent is still typing. The
 // server's indicator outlives one ping, so this is about keeping it alive, not
@@ -817,6 +826,14 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   const { data: link } = useContactLink(conversation.contact.id, contactLinkMatch(conversation));
   const client = link?.linkedClient ?? null;
   const unlinkContact = useUnlinkContact(conversation.contact.id);
+  const { data: currentUser } = useCurrentUser();
+  const { data: staff = [] } = useUsers();
+  // "New Task" / "New Ticket" for the linked client — same hooks + dialogs the
+  // client dashboard and quote pages use, just scoped to whatever client this
+  // conversation is linked to. Only meaningful once linked (see the header
+  // buttons below), but hooks can't be called conditionally.
+  const taskCreate = useClientTaskCreate(client?.id ?? "", currentUser?.id);
+  const ticketCreate = useClientTicketCreate(client?.id ?? "", currentUser?.id);
   const { data: notes = [] } = useClientNotes(client?.id ?? "");
   const { data: transactions, isLoading: isLoadingLiveQuotes } = useTransactions(
     { clientId: client?.id ?? "" },
@@ -847,9 +864,32 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   const since = client ? memberSince(client.createdAt) : null;
 
   return (
+    <>
     <Card className="flex flex-col overflow-hidden rounded-none border-0 border-l border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]">
-      <div className="flex h-[76px] shrink-0 items-center border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
+      <div className="flex h-[76px] shrink-0 items-center justify-between border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
         <h2 className="text-sm font-semibold 3xl:text-base">Client Details</h2>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => taskCreate.setShowTaskDialog(true)}
+            disabled={!client}
+            title={client ? "Create a task for this client" : "Link this contact to a client first"}
+            className="grid h-8 w-8 place-items-center rounded-md border border-black/10 text-black/55 transition hover:bg-black/[0.03] hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
+            data-testid="conversation-create-task"
+          >
+            <ListTodo className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => ticketCreate.setShowTicketDialog(true)}
+            disabled={!client}
+            title={client ? "Create a ticket for this client" : "Link this contact to a client first"}
+            className="grid h-8 w-8 place-items-center rounded-md border border-black/10 text-black/55 transition hover:bg-black/[0.03] hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/10 dark:text-white/60 dark:hover:bg-white/[0.04] dark:hover:text-white"
+            data-testid="conversation-create-ticket"
+          >
+            <Ticket className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -1034,6 +1074,36 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
         </div>
       </div>
     </Card>
+    {client && (
+      <>
+        <CreateTaskDialog
+          open={taskCreate.showTaskDialog}
+          onOpenChange={taskCreate.setShowTaskDialog}
+          taskForm={taskCreate.taskForm}
+          setTaskForm={taskCreate.setTaskForm}
+          isPending={taskCreate.createTaskMutation.isPending}
+          onConfirm={taskCreate.confirmCreateTask}
+        />
+        <CreateTicketDialog
+          open={ticketCreate.showTicketDialog}
+          onOpenChange={ticketCreate.setShowTicketDialog}
+          clientName={clientDisplayName(client)}
+          ticketForm={ticketCreate.ticketForm}
+          setTicketForm={ticketCreate.setTicketForm}
+          ticketPendingFiles={ticketCreate.ticketPendingFiles}
+          ticketFileInputRef={ticketCreate.ticketFileInputRef}
+          isUploading={ticketCreate.isTicketUploading}
+          isPending={ticketCreate.createTicketMutation.isPending}
+          users={staff}
+          onFileSelect={ticketCreate.handleTicketFileSelect}
+          removePendingFile={ticketCreate.removeTicketPendingFile}
+          formatFileSize={ticketCreate.formatTicketFileSize}
+          onConfirm={ticketCreate.handleCreateTicket}
+          onReset={ticketCreate.resetTicketForm}
+        />
+      </>
+    )}
+    </>
   );
 }
 
@@ -1510,6 +1580,26 @@ export default function ConversationsInbox() {
   // or the draft empties out.
   const [draftTags, setDraftTags] = useState<Record<string, string>>({});
 
+  // Deep-link support: /conversations?conversation=<id> opens straight to that
+  // thread — the Dashboard's Latest Inbox links here per row (see
+  // conversations-tab.tsx) and the thread header's "Copy conversation link"
+  // action builds this same URL. Keyed on wouter's `useSearch` (not
+  // window.location.search) and applied once per id rather than once per
+  // mount, mirroring the ?holiday= convention in pages/client/index.tsx: a
+  // second link to a different conversation while already on this page is
+  // only a search-string change, which wouter doesn't remount for, so relying
+  // on a mount-only read would miss it.
+  const urlSearch = useSearch();
+  const appliedDeepLinkId = useRef<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(urlSearch).get("conversation");
+    if (id && id !== appliedDeepLinkId.current) {
+      appliedDeepLinkId.current = id;
+      setTab("open");
+      setSelectedId(id);
+    }
+  }, [urlSearch]);
+
   const { orgRole } = useRole();
   const canManageChannels = orgRole === "org_admin" || orgRole === "branch_manager" || orgRole === "platform_admin";
   // Same roles as the AI test-flow gate (server-enforced too).
@@ -1537,8 +1627,9 @@ export default function ConversationsInbox() {
     inboxId: inboxId ?? undefined,
   });
   const { data: badges } = useConversationBadgeCounts();
-  // Same rule as the sidebar nav badge — see unreadBadgeCount.
-  const unreadCount = unreadBadgeCount(badges);
+  // Count of open conversations — same rule as the sidebar nav badge, see
+  // unreadBadgeCount (the name is legacy; it now reflects `open_count`).
+  const openCount = unreadBadgeCount(badges);
   const qc = useQueryClient();
   const snoozeMutation = useSnoozeConversation();
   const { toast } = useToast();
@@ -1600,14 +1691,19 @@ export default function ConversationsInbox() {
   const activeInbox = inboxId ? (inboxList.find((i) => i.id === inboxId) ?? null) : null;
   const inboxNameById = useMemo(() => new Map(inboxList.map((i) => [i.id, i.name])), [inboxList]);
 
-  // Keep a valid selection: if the current pick fell out of the list, select the first.
+  // Keep a valid selection: if the current pick fell out of the list, select the
+  // first. Skipped while the first page is still loading — `filtered` is
+  // briefly empty then, and this would otherwise immediately clear a selection
+  // just set from a `?conversation=` deep link before the list has had a
+  // chance to load and include it.
   useEffect(() => {
+    if (isLoading) return;
     if (filtered.length === 0) {
       if (selectedId !== null) setSelectedId(null);
     } else if (!filtered.some((c) => c.id === selectedId)) {
       setSelectedId(filtered[0].id);
     }
-  }, [filtered, selectedId]);
+  }, [filtered, selectedId, isLoading]);
 
   // Presence for the OPEN thread only — the inbox list stays quiet.
   const typingHere = selectedId ? typingByConversation[selectedId] : undefined;
@@ -1987,7 +2083,7 @@ export default function ConversationsInbox() {
                     data-testid="conversation-realtime-indicator"
                   />
                   {realtimeConnected ? "Live updates on" : "Reconnecting…"}
-                  {unreadCount > 0 && <span className="ml-auto font-semibold">{unreadCount} unread</span>}
+                  {openCount > 0 && <span className="ml-auto font-semibold">{openCount} open</span>}
                 </DropdownMenuItem>
                 {canManageChannels && (
                   <>

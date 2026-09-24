@@ -8,13 +8,15 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { DatePicker } from "@/components/ui/date-picker";
 import type { Enquiry } from "@/features/enquiry/types";
 import type { EnquiryTable } from "@/features/quote/types";
 import type { FormPresentation } from "@/features/quote/types";
 import type { EnquiryIntent } from "@/features/conversations/api/ai-enquiry.api";
-import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useBoardBasis, useAirports, useAccommodationTypes } from "@/hooks/queries";
+import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useBoardBasis, useAirportsByCountries, useAccommodationTypes } from "@/hooks/queries";
+import type { LookupCountry } from "@/features/lookups/api/lookup.api";
 import { useEnquiry } from "@/features/enquiry/api/use-enquiry-queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
@@ -202,6 +204,19 @@ type LookupSets = {
 };
 
 const normLower = (s: string | null | undefined) => (s || "").trim().toLowerCase();
+
+// Resolves the UK country row by name or ISO code rather than a hardcoded id —
+// mirrors the "united kingdom" / "uk" matching already used server-side in
+// public-deals.repository.ts, since seed/prod data doesn't reliably use one
+// single spelling. Returns undefined (never throws) if the row isn't present,
+// e.g. on a fresh environment whose lookup data hasn't been seeded yet.
+function findUkCountry(countries: LookupCountry[] | undefined): LookupCountry | undefined {
+  return (countries || []).find((c) => {
+    const name = normLower(c.country_name);
+    const code = normLower(c.country_code);
+    return name === "united kingdom" || name === "uk" || code === "gb" || code === "uk";
+  });
+}
 
 // Maps an AI-extracted enquiry intent onto the wizard form: resolves country /
 // destination / board-basis / airport / holiday-type names to IDs, keeps scalars,
@@ -457,7 +472,12 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
     resortSearch || primaryDestination ? undefined : primaryCountry || undefined,
   );
   const { data: boardBasisData } = useBoardBasis();
-  const { data: airportsData } = useAirports();
+  // Departure airports are UK-only (old platform behaviour) — resolve the UK
+  // country row from `countriesData` (by name/code, never a hardcoded id) and
+  // fetch only its airports. If the row can't be found (e.g. unseeded lookup
+  // data), the query stays disabled and this list is simply empty — no crash.
+  const ukCountry = useMemo(() => findUkCountry(countriesData), [countriesData]);
+  const { data: airportsData } = useAirportsByCountries(ukCountry ? [ukCountry.id] : []);
   const { data: packageTypesData } = usePackageTypes();
   const { data: accommodationTypesData } = useAccommodationTypes();
 
@@ -607,7 +627,11 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
     });
   };
 
-  // Every airport, so an imported or hand-picked departure is always selectable.
+  // UK airports only (`airportsData` is already scoped to the UK country via
+  // `ukCountry` above). `form.labels` is seeded from the enquiry's own airport
+  // records in `formFromEnquiry`/`resolveIntentToForm`, so a previously
+  // selected non-UK airport (e.g. on an older enquiry) still renders its label
+  // as a selected chip even though it's excluded from the selectable options.
   const airportOptions = (airportsData || []).map((a) => ({
     value: a.id,
     label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
@@ -834,7 +858,12 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
             />
           </div>
           <div className="space-y-1.5">
-            <Label className={labelCls}>Flexibility</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label className={cn(labelCls, "cursor-help")}>Flexibility</Label>
+              </TooltipTrigger>
+              <TooltipContent>How much the cruise departure date can move, from an exact date up to any time.</TooltipContent>
+            </Tooltip>
             <Select value={form.flexibility} onValueChange={(v) => set("flexibility", v)}>
               <SelectTrigger className={controlCls} data-testid="select-flexibility">
                 <SelectValue placeholder="Select flexibility..." />
@@ -1145,6 +1174,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
           open={showAddAirport}
           onOpenChange={setShowAddAirport}
           initialName={airportSearch}
+          initialCountryId={ukCountry?.id}
           onSuccess={(airport) => {
             const label = `${airport.airport_name}${airport.airport_code ? ` (${airport.airport_code})` : ""}`;
             setAddedAirportLabels((prev) => ({ ...prev, [airport.id]: label }));
@@ -1168,7 +1198,12 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
           />
         </div>
         <div className="space-y-1.5">
-          <Label className={labelCls}>Flexibility</Label>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Label className={cn(labelCls, "cursor-help")}>Flexibility</Label>
+            </TooltipTrigger>
+            <TooltipContent>How much the travel dates can move, from an exact date up to anytime in the month.</TooltipContent>
+          </Tooltip>
           <Select value={form.flexibility} onValueChange={(v) => set("flexibility", v)}>
             <SelectTrigger className={controlCls} data-testid="select-flexibility">
               <SelectValue placeholder="Select flexibility..." />
@@ -1401,7 +1436,12 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
           controlClassName={isDrawer ? controlCls : undefined}
         />
         <div className="space-y-1.5">
-          <Label className={labelCls}>Min Star Rating</Label>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Label className={cn(labelCls, "cursor-help")}>Min Star Rating</Label>
+            </TooltipTrigger>
+            <TooltipContent>The minimum accommodation star rating (2–5 stars) to consider when sourcing options.</TooltipContent>
+          </Tooltip>
           <Select value={form.starRating} onValueChange={(v) => set("starRating", v)}>
             <SelectTrigger className={controlCls} data-testid="select-star-rating">
               <SelectValue placeholder="Select rating..." />
@@ -1481,37 +1521,40 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
 
   if (isDrawer) {
     return (
-      <FormDrawer
-        open={open}
-        onOpenChange={onOpenChange}
-        title="Create / Edit Enquiry"
-        description={steps[0].description}
-        data-testid="enquiry-drawer"
-      >
-        <FormDrawerSection title={steps[0].title} data-testid="enquiry-drawer-section-0">
-          <div className="grid gap-4 sm:grid-cols-2">{step0Content}</div>
-        </FormDrawerSection>
-        <FormDrawerSection title={steps[1].title} data-testid="enquiry-drawer-section-1">
-          <div className="grid gap-4 sm:grid-cols-2">{step1Content}</div>
-        </FormDrawerSection>
-        <FormDrawerSection title={steps[2].title} data-testid="enquiry-drawer-section-2">
-          <div className="grid gap-4 sm:grid-cols-2">{step2Content}</div>
-        </FormDrawerSection>
-        <FormDrawerFooter
-          isTest={form.is_test}
-          onTestChange={(v) => set("is_test", v)}
-          isLoading={isSaving}
-          disabled={!isStep0Valid}
-          hint={isStep0Valid ? undefined : "Enter a title and holiday type to save."}
-          submitLabel={isEdit ? "Save Changes" : "Create Enquiry"}
-          onSubmit={handleSubmit}
-          data-testid="drawer-footer"
-        />
-      </FormDrawer>
+      <TooltipProvider>
+        <FormDrawer
+          open={open}
+          onOpenChange={onOpenChange}
+          title="Create / Edit Enquiry"
+          description={steps[0].description}
+          data-testid="enquiry-drawer"
+        >
+          <FormDrawerSection title={steps[0].title} data-testid="enquiry-drawer-section-0">
+            <div className="grid gap-4 sm:grid-cols-2">{step0Content}</div>
+          </FormDrawerSection>
+          <FormDrawerSection title={steps[1].title} data-testid="enquiry-drawer-section-1">
+            <div className="grid gap-4 sm:grid-cols-2">{step1Content}</div>
+          </FormDrawerSection>
+          <FormDrawerSection title={steps[2].title} data-testid="enquiry-drawer-section-2">
+            <div className="grid gap-4 sm:grid-cols-2">{step2Content}</div>
+          </FormDrawerSection>
+          <FormDrawerFooter
+            isTest={form.is_test}
+            onTestChange={(v) => set("is_test", v)}
+            isLoading={isSaving}
+            disabled={!isStep0Valid}
+            hint={isStep0Valid ? undefined : "Enter a title and holiday type to save."}
+            submitLabel={isEdit ? "Save Changes" : "Create Enquiry"}
+            onSubmit={handleSubmit}
+            data-testid="drawer-footer"
+          />
+        </FormDrawer>
+      </TooltipProvider>
     );
   }
 
   return (
+    <TooltipProvider>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg overflow-hidden rounded-3xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-enquiry-wizard">
         <DialogHeader>
@@ -1634,5 +1677,6 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
         </div>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   );
 }

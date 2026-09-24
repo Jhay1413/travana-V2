@@ -1325,6 +1325,7 @@ export function QuoteActionsMenu({
 
       {quoteData && (
         <QuoteCreateDialog
+          presentation="drawer"
           transactionId={quoteData.transaction_id}
           clientId={clientId}
           userId={currentUser?.id}

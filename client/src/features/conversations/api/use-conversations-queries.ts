@@ -43,24 +43,25 @@ export function useConversationBadgeCounts(inboxId?: string) {
 }
 
 /**
- * The number to show on an unread badge. Deliberately just `total_unanswered`:
- * it's the only badge-counts field whose meaning is unambiguous, and it matches
- * what the conversation list itself calls unread (`needs_reply`).
+ * The number to show on the Inbox nav badge (and the inbox's own header
+ * badge, which shares this function so the two can never disagree): the count
+ * of conversations currently open, i.e. `open_count`.
+ *
+ * Previously this returned `total_unanswered` (conversations awaiting a
+ * reply). That read as "unread", but it under-counts against what an agent
+ * actually sees on the Open tab — a conversation already replied to, or one
+ * with no reply expected yet, is still sitting in that list, so the badge
+ * disagreed with the list it's meant to summarise. `open_count` is the field
+ * that matches the Open tab 1:1.
  *
  * Do NOT "improve" this to `unanswered_assigned_to_me + unassigned_count` for
- * multi-agent workspaces. SendSeven's guide describes the badge that way in
+ * multi-agent workspaces. SendSeven's guide describes a badge that way in
  * prose, but it never defines the response fields, and `unassigned_count` is
  * not filtered by reply state — so the sum counts unassigned conversations that
  * have already been answered and reads high. Tried it; it overcounted.
- *
- * Note this counts conversations awaiting a REPLY, not unread messages —
- * `needs_reply` is derived server-side from message direction and there is no
- * mark-as-read endpoint, so the count drops when you answer, not when you open.
- * A conversation you've opened but not replied to is still counted here, while
- * the list clears its dot locally: that gap is expected, not a bug.
  */
 export function unreadBadgeCount(counts: SsBadgeCounts | undefined): number {
-  return counts?.total_unanswered ?? 0;
+  return counts?.open_count ?? 0;
 }
 
 export function useConversationSummary(id: string | null, enabled = true) {

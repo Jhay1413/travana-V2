@@ -33,7 +33,10 @@ export const ticketController = {
     const userId = req.params.userId as string;
     const statusRaw = req.query.status as string | undefined;
     const statuses = statusRaw ? statusRaw.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
-    const tickets = await ticketService.listTicketsByUser(userId, getScope(req), { statuses });
+    // Opt-in — defaults to the existing creator-or-assignee behaviour that
+    // other callers (sidebar badge, "what's on" widget) already depend on.
+    const assignedOnly = req.query.assignedOnly === "true";
+    const tickets = await ticketService.listTicketsByUser(userId, getScope(req), { statuses, assignedOnly });
     return successResponse(res, tickets, "Tickets retrieved successfully");
   }),
 

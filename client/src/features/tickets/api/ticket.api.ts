@@ -17,10 +17,13 @@ export const ticketApi = {
     return data;
   },
 
-  getByUser: async (userId: string, filters?: { statuses?: string[] }): Promise<Ticket[]> => {
+  getByUser: async (userId: string, filters?: { statuses?: string[]; assignedOnly?: boolean }): Promise<Ticket[]> => {
     const params = new URLSearchParams();
     if (filters?.statuses && filters.statuses.length > 0) {
       params.set("status", filters.statuses.join(","));
+    }
+    if (filters?.assignedOnly) {
+      params.set("assignedOnly", "true");
     }
     const qs = params.toString();
     const url = `/api/v2/tickets/user/${userId}${qs ? `?${qs}` : ""}`;
