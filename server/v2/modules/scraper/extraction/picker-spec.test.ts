@@ -255,6 +255,69 @@ describe('deriveSpecFromPicks — ambiguity downgrades confidence', () => {
   });
 });
 
+describe('deriveSpecFromPicks — money transform inference', () => {
+  // A picked money value very often carries its label with it ("Total Price
+  // £2124.06", not a bare "£2124.06") because the picker captures the whole
+  // element's visible text, not just the digits. inferTransform must find the
+  // currency amount anywhere in the value, not only when it's the very first
+  // character — otherwise the rule gets no 'number' transform, the raw label
+  // string reaches nbr() (extraction.interpreter.ts) as Number(str) || 0, and
+  // the price silently becomes 0 (which checkMoney then quarantines away).
+  it.each([
+    'Total Price £2124.06',
+    '£2,124.06',
+    'from £999',
+    'Price: $1,200.00',
+  ])('derives a number transform for %j', (value) => {
+    const text = ['Trip total', value, 'Taxes and fees included'].join('\n');
+    const ctx: PickerCaptureContext = { url: 'https://example.com/booking/confirm', title: 'Booking Confirmation', text };
+    const p = pick({
+      field: 'sales_price',
+      value,
+      textIndex: text.indexOf(value),
+      lineIndex: 1,
+      linesBefore: ['Trip total'],
+      linesAfter: ['Taxes and fees included'],
+    });
+
+    const result = deriveSpecFromPicks([p], ctx);
+
+    expect(result.problems).toEqual([]);
+    expect(result.derived).toHaveLength(1);
+    expect(result.derived[0].rule.transform).toBe('number');
+  });
+
+  // Values that merely contain digits, but are not a money amount, must NOT
+  // be inferred as numbers — inferTransform's INTEGER_RE branch already
+  // handles bare counts ("7" nights, "2" adults) deliberately; these are the
+  // shapes that must stay untouched strings instead of getting mangled by a
+  // wrongly-inferred 'number' transform.
+  it.each([
+    ['2 adults', 'occupancy'],
+    ['Room 2', 'room_number'],
+    ['7 nights', 'nights'],
+    ['Flight BA2490', 'flight_number'],
+    ['Deck 12, Cabin 4021', 'cabin'],
+  ])('does NOT infer a number transform for %j (field: %s)', (value, field) => {
+    const text = ['Trip details', value, 'More info'].join('\n');
+    const ctx: PickerCaptureContext = { url: 'https://example.com/booking/confirm', title: 'Booking Confirmation', text };
+    const p = pick({
+      field,
+      value,
+      textIndex: text.indexOf(value),
+      lineIndex: 1,
+      linesBefore: ['Trip details'],
+      linesAfter: ['More info'],
+    });
+
+    const result = deriveSpecFromPicks([p], ctx);
+
+    expect(result.problems).toEqual([]);
+    expect(result.derived).toHaveLength(1);
+    expect(result.derived[0].rule.transform).toBeUndefined();
+  });
+});
+
 describe('deriveSpecFromPicks — unlocatable picks', () => {
   it('records a DerivationProblem and emits no rule when textIndex is -1', () => {
     const text = ['Some page text', 'that does not contain the picked value'].join('\n');

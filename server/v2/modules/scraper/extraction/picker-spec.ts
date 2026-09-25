@@ -286,7 +286,17 @@ function tryLineOffset(pick: PickedField, ctx: PickerCaptureContext): { rule: Fi
 // itself always captures the raw substring (that's what was verified above);
 // the transform is what the interpreter applies to it afterwards, at read
 // time, exactly as it does for AI-generated specs.
-const MONEY_SYMBOL_RE = /^[£$€]\s?\d/;
+// Deliberately NOT anchored with ^ — a picked money value very often carries
+// its label along with it ("Total Price £2124.06", not a bare "£2124.06"),
+// because the picker captures the element's whole visible text, not just the
+// digits. Anchoring at the start missed every one of those and left the rule
+// with no transform at all, so applyTransform's 'number' branch (which DOES
+// parse a labelled amount fine) never even ran — the price silently became 0
+// downstream. A currency symbol immediately followed by a digit is a strong
+// enough signal on its own that it's safe to look for anywhere in the value;
+// none of the non-money shapes this must keep rejecting ("Deck 12, Cabin
+// 4021", "Flight BA2490", "Room 2", "2 adults") contain a £/$/€ at all.
+const MONEY_SYMBOL_RE = /[£$€]\s?\d/;
 const MONEY_THOUSANDS_RE = /\d{1,3}(?:,\d{3})+(?:\.\d+)?/;
 const DATE_ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_NUMERIC_RE = /^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/;

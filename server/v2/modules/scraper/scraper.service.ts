@@ -1,6 +1,6 @@
 import { AppError } from '../../utils/error-handler';
 import { encrypt, decrypt } from '../../utils/encryption';
-import { hasAnyRole, type Scope } from '../../utils/scope';
+import { type Scope } from '../../utils/scope';
 import { scraperRepository } from './scraper.repository';
 import { getAdapter } from './adapters';
 import { extractionAiService, loginConfigAiService } from './extraction/extraction-ai.service';
@@ -131,9 +131,11 @@ export interface SavePicksResult {
   applied: MergeResult['applied'];
   problems: DerivationProblem[];
   preserved: string[];
-  // Always true (see scraperService.savePicks) — picking is open to any
-  // authenticated agent, not just a platform admin, so its output is never
-  // auto-trusted the way a platform admin's own approved edit is.
+  // Always false (see scraperService.savePicks) — a picked field is verified
+  // against the live capture by deriveSpecFromPicks (a human clicked the
+  // actual element on the real page), which is treated as at least as
+  // trustworthy as a platform admin's own sign-off, so picked output is
+  // immediately usable and never flagged for a review step.
   specNeedsReview: boolean;
 }
 
@@ -249,13 +251,23 @@ function toView(row: SupplierScraper): SupplierScraperView {
 }
 
 // Shared by importFromPage and savePicks: turns click-verified field picks
-// into a merged extraction spec, with the SAME approved-spec protection and
-// pre-merge archive either path needs. Factored out specifically so the two
-// entry points cannot drift — the whole reason importFromPage needed this fix
-// in the first place is that a second, independent path (parseCapture's
-// client-side whitelist) silently dropped `picked` while this one worked
-// fine; duplicating the merge/protect/archive logic instead of sharing it
-// would just create a new place for the same class of bug to happen again.
+// into a merged extraction spec, with the SAME pre-merge archive either path
+// needs. Factored out specifically so the two entry points cannot drift —
+// the whole reason importFromPage needed this fix in the first place is that
+// a second, independent path (parseCapture's client-side whitelist) silently
+// dropped `picked` while this one worked fine; duplicating the merge/archive
+// logic instead of sharing it would just create a new place for the same
+// class of bug to happen again.
+//
+// A verified pick is always merged in, even over a rule on a spec a platform
+// admin already approved: deriveSpecFromPicks re-checks every candidate rule
+// against THIS capture before it's trusted, so a human clicking the actual
+// field on the real page outranks an AI-generated rule someone signed off on
+// without it ever being checked against the page it now needs to match.
+// (This used to be gated — only a platform admin could overwrite an existing
+// rule on an approved spec, and anyone else's pick was silently rejected into
+// `problems` instead — which is itself a likely cause of "I picked it but it
+// still doesn't scrape.")
 //
 // Deliberately does NOT call `resolved.persistConfig` — the two callers
 // persist at different points (savePicks persists the merged spec directly;
@@ -265,7 +277,6 @@ async function applyPickedFields(
   resolved: ResolvedScraper,
   picked: PickedField[],
   ctx: Omit<PickerCaptureContext, 'headings'> & { headings?: string[] },
-  scope: Scope,
 ): Promise<{ spec: ExtractionSpec; result: AppliedPicksResult }> {
   const existingSpec = resolved.config.extraction;
   const deepLink = resolved.config.deepLink;
@@ -274,58 +285,35 @@ async function applyPickedFields(
   // deriveSpecFromPicks — an unverifiable pick becomes a DerivationProblem,
   // never a guessed rule (see picker-spec.ts's module comment).
   const { spec: pickedSpec, derived, problems: derivationProblems } = deriveSpecFromPicks(picked, ctx);
+  const problems: DerivationProblem[] = [...derivationProblems];
 
   const hostIncludes = deepLink?.hostIncludes ?? '';
-  const archived = await scraperRepository.findArchivedSpec(hostIncludes);
-  const specIsApproved = archived?.approved === true;
-  const isPlatformAdmin = hasAnyRole(scope.orgRoles, ['platform_admin']);
-
-  // Split the verified picks into what's allowed to merge and what's blocked
-  // because it would overwrite a reviewed rule. A field the approved spec
-  // doesn't already have is never blocked — this only protects EXISTING
-  // rules, not the whole spec from ever growing.
-  const problems: DerivationProblem[] = [...derivationProblems];
-  const allowedDerived = derived.filter((d) => {
-    const existingRule = existingSpec?.fields?.[d.field];
-    if (!existingRule || !specIsApproved || isPlatformAdmin) return true;
-    problems.push({
-      field: d.field,
-      reason:
-        `this supplier's extraction spec is APPROVED (supplier_spec_archive) — only a platform admin can ` +
-        `overwrite an existing rule in it, so "${d.field}" was left unchanged. Pick a field the approved ` +
-        'spec doesn\'t already cover, or have a platform admin review and apply this change.',
-    });
-    return false;
-  });
-  const allowedFields = Object.fromEntries(allowedDerived.map((d) => [d.field, d.rule]));
-  const allowedPickedSpec: ExtractionSpec = { ...pickedSpec, fields: allowedFields };
 
   // Archive the PRE-merge spec before writing, reusing the same archiveSpec
   // path approveSpec/remove use, so a bad picking session is recoverable —
   // the archive keeps whatever `approved` status it already had.
   if (existingSpec && hostIncludes) {
+    const archived = await scraperRepository.findArchivedSpec(hostIncludes);
     await scraperRepository.archiveSpec({
       hostIncludes,
       supplierKey: resolved.supplierKey,
       extraction: existingSpec,
-      approved: specIsApproved,
+      approved: archived?.approved === true,
     });
   }
 
-  const { spec: mergedSpec, applied, preserved } = mergePickedIntoSpec(existingSpec, allowedPickedSpec, allowedDerived);
+  const { spec: mergedSpec, applied, preserved } = mergePickedIntoSpec(existingSpec, pickedSpec, derived);
 
   // Silent-discard guard (EXTRACTION_AUDIT.md — "one paste should do both
   // things", and the bug this whole fix exists for): picks were POSTED, but
   // nothing was applied and nothing was reported as a problem either. That
   // combination must never look like an empty, quiet success — surface it so
-  // a future regression in deriveSpecFromPicks/the approved-spec filter is
-  // visible instead of indistinguishable from "nothing to do".
+  // a future regression in deriveSpecFromPicks is visible instead of
+  // indistinguishable from "nothing to do".
   if (picked.length > 0 && applied.length === 0 && problems.length === 0) {
     problems.push({
       field: '(all picked fields)',
-      reason:
-        'none of the picked fields could be verified against this capture, and none were blocked by an ' +
-        'approved spec — nothing was applied. This should not happen; treat it as a bug.',
+      reason: 'none of the picked fields could be verified against this capture — nothing was applied. This should not happen; treat it as a bug.',
     });
   }
 
@@ -742,15 +730,22 @@ export const scraperService = {
     // applyPickedFields's own silent-discard guard).
     let picks: AppliedPicksResult | undefined;
     if (input.picked && input.picked.length > 0) {
-      const applied = await applyPickedFields(
-        resolved,
-        input.picked,
-        { url: input.url, title, text: input.text, headings: input.headings, packageType: input.packageType },
-        scope,
-      );
+      const applied = await applyPickedFields(resolved, input.picked, {
+        url: input.url,
+        title,
+        text: input.text,
+        headings: input.headings,
+        packageType: input.packageType,
+      });
       spec = applied.spec;
       if (resolved.persistConfig) {
-        await resolved.persistConfig({ extraction: applied.spec, specNeedsReview: true });
+        // Deliberately NOT forcing specNeedsReview here — a verified pick
+        // never makes a spec need MORE review than it already did. Leave
+        // whatever was set above (true for a spec this same call just
+        // generated/restored as unreviewed, unchanged otherwise) so a pick
+        // applied on top of an already-approved spec doesn't get re-flagged
+        // just because picking touched it.
+        await resolved.persistConfig({ extraction: applied.spec });
       }
       picks = applied.result;
     }
@@ -854,20 +849,22 @@ export const scraperService = {
   // `itineraryRegex`, `luggageRegex` and the image config — mergePickedIntoSpec
   // exists specifically to merge instead of replace.
   //
-  // Access control (EXTRACTION_AUDIT.md §1.5 gated scraper MUTATIONS behind
+  // Access control (EXTRACTION_AUDIT.md §1.5) gated scraper MUTATIONS behind
   // requirePlatformAdmin because supplier_scraper is platform-wide — one
   // tenant's bad edit breaks every tenant. Picking is different: it's an
   // ordinary agent's workflow while looking at a deal page, not a config-
   // management action, so gating it the same way would make the feature
   // unusable for the people it's built for. The route (scraper.routes.ts)
-  // stays open to any authenticated agent. What still needs protecting is
-  // reviewed work: a spec archived with `approved: true`
-  // (supplier_spec_archive) represents rules a platform admin has already
-  // read and signed off — an ordinary agent's click must not silently
-  // overwrite one of THOSE, even though it's free to add a rule for a field
-  // the approved spec never covered. And because picking is now open to
-  // anyone, its output is never auto-trusted: specNeedsReview is unconditionally
-  // true, exactly like a freshly AI-generated spec.
+  // stays open to any authenticated agent, and a verified pick is now allowed
+  // to overwrite an existing rule — even one on a spec a platform admin
+  // already approved — without needing admin sign-off first (see
+  // applyPickedFields): deriveSpecFromPicks re-checks every pick against the
+  // live capture before it's trusted, so a human clicking the actual field on
+  // the real page is treated as at least as strong a verification as an
+  // AI-generated rule someone signed off on without seeing the page it now
+  // has to match. For the same reason, picked output is never flagged for
+  // review either — specNeedsReview is unconditionally false: a picked spec
+  // has already been reviewed, by the person who picked it.
   async savePicks(input: SavePicksInput, scope: Scope, userId?: string): Promise<SavePicksResult> {
     let resolved: ResolvedScraper;
     if (input.supplierKey) {
@@ -904,17 +901,18 @@ export const scraperService = {
 
     const title = input.title ?? '';
 
-    // Derive → merge → protect-approved → archive, shared with importFromPage
-    // via applyPickedFields so the two entry points cannot drift.
-    const { spec: mergedSpec, result } = await applyPickedFields(
-      resolved,
-      input.picked,
-      { url: input.url, title, text: input.text, headings: input.headings, packageType: input.packageType },
-      scope,
-    );
+    // Derive → merge → archive, shared with importFromPage via
+    // applyPickedFields so the two entry points cannot drift.
+    const { spec: mergedSpec, result } = await applyPickedFields(resolved, input.picked, {
+      url: input.url,
+      title,
+      text: input.text,
+      headings: input.headings,
+      packageType: input.packageType,
+    });
 
     if (resolved.persistConfig) {
-      await resolved.persistConfig({ extraction: mergedSpec, specNeedsReview: true });
+      await resolved.persistConfig({ extraction: mergedSpec, specNeedsReview: false });
     }
 
     return {
@@ -922,7 +920,7 @@ export const scraperService = {
       applied: result.applied,
       problems: result.problems,
       preserved: result.preserved,
-      specNeedsReview: true,
+      specNeedsReview: false,
     };
   },
 };
