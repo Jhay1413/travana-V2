@@ -30,7 +30,7 @@ describe("getMoneyFieldsNeedingAttention", () => {
 
   it("does not flag a money field on a warning — warnings still populate", () => {
     const v = validation([
-      { code: "CURRENCY_UNVERIFIED", level: "warn", field: "currency", message: "m" },
+      { code: "NIGHTS_SOURCE_CONFLICT", level: "warn", field: "no_of_nights", message: "m" },
     ]);
     expect(getMoneyFieldsNeedingAttention(v).size).toBe(0);
   });
@@ -60,7 +60,7 @@ describe("withMoneyFieldsQuarantined", () => {
 
   it("leaves money fields populated when the only issues are warnings", () => {
     const quote = { sales_price: 1200 };
-    const v = validation([{ code: "CURRENCY_UNVERIFIED", level: "warn", field: "currency", message: "m" }]);
+    const v = validation([{ code: "NIGHTS_SOURCE_CONFLICT", level: "warn", field: "no_of_nights", message: "m" }]);
     expect(withMoneyFieldsQuarantined(quote, v)).toEqual(quote);
   });
 

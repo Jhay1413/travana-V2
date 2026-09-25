@@ -110,7 +110,7 @@ export const specSchema = z.object({
 // type — the AI only includes the fields it actually finds.
 const COMMON_FIELDS = [
   'adults', 'children', 'infants', 'no_of_nights', 'travel_date',
-  'price_per_person', 'sales_price', 'tourist_tax_total', 'currency',
+  'price_per_person', 'sales_price', 'tourist_tax_total',
   'tour_operator', 'country', 'destination', 'resort', 'quote_title',
 ];
 const PACKAGE_HOLIDAY_FIELDS = [
@@ -141,7 +141,7 @@ Output ONLY a JSON object with this shape:
   "version": 1,
   "packageType": "cruise"|"package-holiday"|"lodge",
   "wait": { "textMatches": "<regex that appears once the priced quote has rendered, e.g. a currency amount>", "timeoutMs": 30000 },
-  "constants": { "tour_operator": "<operator name>", "currency": "GBP" },
+  "constants": { "tour_operator": "<operator name>" },
   "fields": {
     "<fieldName>": { "from": "text"|"title"|"url"|"images"|"headings"|"deepText", "regex": "<JS regex; capture group 1 is the value>", "group": 1, "transform": "number"|"date"|"titleCase"|null, "urlSegment": <int, only for from:url>, "map": {"raw":"canonical"}, "fallback": <value> }
   },

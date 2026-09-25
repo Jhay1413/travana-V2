@@ -1670,8 +1670,8 @@ export function runExtractionSpec(
         ? resolvePartyField(rule, c, spec.fields?.adults)
         : resolveField(rule, c);
     // A rule that matched NOTHING must not wipe a constant of the same name.
-    // The AI writes both — it is told to declare tour_operator/currency as
-    // constants AND to try to extract every common field — so a spec routinely
+    // The AI writes both — it is told to declare tour_operator as a constant
+    // AND to try to extract every common field — so a spec routinely
     // carries a constant and a rule for one key. The rule then returned '' on
     // any page whose wording it didn't fit, blanking a value the spec author
     // had stated outright. `tour_operator` blanking this way is what left the
@@ -1838,7 +1838,15 @@ export function runExtractionSpec(
     infants: nbr(f.infants),
     sales_price: total,
     price_per_person: pricePerPerson,
-    currency: str(f.currency) || 'GBP',
+    // Hardcoded, not read from the spec: this business is UK-only/GBP-only
+    // (deal capture also restricts departure airports to the UK for the same
+    // reason), so there is no per-deal currency to detect. The AI is no
+    // longer told to extract or declare one (extraction-ai.service.ts), and a
+    // spec stored before this change may still carry a "currency" field rule
+    // or constant (e.g. Royal Caribbean's old selectedCurrencyCode rule) —
+    // that value is deliberately never read here, so it sits inert rather
+    // than needing to be stripped from every stored spec.
+    currency: 'GBP',
     discount: nbr(f.discount),
     tourist_tax_total: nbr(f.tourist_tax_total),
     promotion_code: str(f.promotion_code),

@@ -44,9 +44,6 @@ function baseQuote(overrides: Partial<ScrapedQuoteJson> = {}): ScrapedQuoteJson 
   };
 }
 
-// Default URL deliberately uses an unmapped TLD (not .com/.co.uk/etc.) so
-// tests unrelated to currency don't accidentally trip CURRENCY_UNVERIFIED via
-// the domain-inference fallback — currency tests below set their own url/text.
 function ctx(overrides: Partial<ValidationContext> = {}): ValidationContext {
   return { url: "https://example.internal/deal", text: "", ...overrides };
 }
@@ -87,54 +84,6 @@ describe("validateQuote — money", () => {
     const quote = baseQuote({ sales_price: 500, price_per_person: 1000, adults: 2 });
     const result = validateQuote(quote, ctx());
     expect(result.issues).toContainEqual(expect.objectContaining({ code: "PRICE_BELOW_PER_PERSON", level: "error" }));
-  });
-});
-
-describe("validateQuote — currency", () => {
-  it("flags a mismatch against an explicit ISO code stated on the page", () => {
-    const quote = baseQuote({ currency: "GBP" });
-    const result = validateQuote(quote, ctx({ text: "Rates are in USD. Total price: 3000" }));
-    expect(result.issues).toContainEqual(expect.objectContaining({ code: "CURRENCY_MISMATCH", level: "error" }));
-  });
-
-  it("flags a mismatch against Royal Caribbean's selectedCurrencyCode URL param", () => {
-    const quote = baseQuote({ currency: "GBP" });
-    const result = validateQuote(quote, ctx({ url: "https://www.royalcaribbean.com/deal?selectedCurrencyCode=USD" }));
-    expect(result.issues).toContainEqual(expect.objectContaining({ code: "CURRENCY_MISMATCH", level: "error" }));
-  });
-
-  it("flags a mismatch against Carnival's currency URL param — the $3,000-imported-as-GBP bug", () => {
-    const quote = baseQuote({ currency: "GBP", sales_price: 3000 });
-    const result = validateQuote(quote, ctx({ url: "https://www.carnival.com/deal?currency=USD" }));
-    expect(result.issues).toContainEqual(expect.objectContaining({ code: "CURRENCY_MISMATCH", level: "error" }));
-  });
-
-  it("flags a mismatch against a currency symbol actually printed in the text", () => {
-    const quote = baseQuote({ currency: "GBP" });
-    const result = validateQuote(quote, ctx({ text: "Total price: $2,499 per couple" }));
-    expect(result.issues).toContainEqual(expect.objectContaining({ code: "CURRENCY_MISMATCH", level: "error" }));
-  });
-
-  it("does not flag a currency that agrees with the strongest available evidence", () => {
-    const quote = baseQuote({ currency: "USD" });
-    const result = validateQuote(quote, ctx({ text: "Rates are in USD.", url: "https://www.carnival.com/deal" }));
-    expect(result.issues.some((i) => i.code === "CURRENCY_MISMATCH")).toBe(false);
-    expect(result.issues.some((i) => i.code === "CURRENCY_UNVERIFIED")).toBe(false);
-  });
-
-  it("warns (not errors) when currency can only be resolved from the domain TLD", () => {
-    // .co.uk implies GBP, but nothing on the page/URL actually states a currency.
-    const quote = baseQuote({ currency: "GBP" });
-    const result = validateQuote(quote, ctx({ url: "https://www.example.co.uk/deal", text: "A lovely holiday" }));
-    expect(result.issues).toContainEqual(expect.objectContaining({ code: "CURRENCY_UNVERIFIED", level: "warn" }));
-    expect(result.issues.some((i) => i.code === "CURRENCY_MISMATCH")).toBe(false);
-    expect(result.level).toBe("warn");
-  });
-
-  it("warns when no currency evidence exists at all — this is what the interpreter's `|| 'GBP'` default hides", () => {
-    const quote = baseQuote({ currency: "GBP" });
-    const result = validateQuote(quote, ctx({ url: "https://not-a-real-tld.zzz/deal", text: "A lovely holiday" }));
-    expect(result.issues).toContainEqual(expect.objectContaining({ code: "CURRENCY_UNVERIFIED", level: "warn" }));
   });
 });
 
@@ -452,16 +401,7 @@ describe("validateQuote — spec coverage", () => {
 
 describe("validateQuote — overall level and issue collection", () => {
   it("returns 'ok' with no issues for a clean quote", () => {
-    // A quote is only genuinely "clean" if every check has what it needs to
-    // agree with it — including currency, which the default ctx() deliberately
-    // starves of evidence (see the ctx() comment above) so unrelated tests
-    // don't trip CURRENCY_UNVERIFIED by accident. That default ctx() is
-    // therefore not itself a "clean" fixture: with no currency evidence
-    // anywhere, "warns when no currency evidence exists at all" (above) proves
-    // CURRENCY_UNVERIFIED is the intended, correct outcome for it. So this
-    // fixture supplies the missing evidence (page text stating the same
-    // currency as the quote) instead of weakening the currency check.
-    const result = validateQuote(baseQuote(), ctx({ text: "All prices shown are in GBP." }));
+    const result = validateQuote(baseQuote(), ctx());
     expect(result).toEqual({ level: "ok", issues: [] });
   });
 

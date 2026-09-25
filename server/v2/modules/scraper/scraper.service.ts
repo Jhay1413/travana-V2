@@ -849,8 +849,8 @@ export const scraperService = {
   // either restoring one wholesale or generating one from scratch), a picker
   // session only ever verifies the handful of fields an agent clicked
   // (deriveSpecFromPicks — picker-spec.ts). Storing that wholesale would
-  // DELETE the AI's rules for every other field, `constants` (tour_operator,
-  // currency), `wait.textMatches` (the CAPTURE_INCOMPLETE validation gate),
+  // DELETE the AI's rules for every other field, `constants` (tour_operator),
+  // `wait.textMatches` (the CAPTURE_INCOMPLETE validation gate),
   // `itineraryRegex`, `luggageRegex` and the image config — mergePickedIntoSpec
   // exists specifically to merge instead of replace.
   //

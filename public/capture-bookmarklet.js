@@ -492,7 +492,7 @@
   // up filled in.
   var COMMON_FIELD_GROUP = {
     name: 'Always',
-    fields: ['sales_price', 'price_per_person', 'travel_date', 'no_of_nights', 'adults', 'quote_title', 'tour_operator', 'currency'],
+    fields: ['sales_price', 'price_per_person', 'travel_date', 'no_of_nights', 'adults', 'quote_title', 'tour_operator'],
   };
   // Keyed by the exact `packageType` value the server's ExtractionSpec expects
   // (extraction.types.ts) — 'cruise' | 'package-holiday' | 'lodge' — so the

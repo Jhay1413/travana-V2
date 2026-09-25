@@ -133,129 +133,6 @@ function checkMoney(quote: ScrapedQuoteJson, ctx: ValidationContext, issues: Iss
   }
 }
 
-// ─── Currency ─────────────────────────────────────────────────────────────
-// interpreter.ts:1503 hard-defaults `currency: str(f.currency) || 'GBP'`, so a
-// FAILURE to detect currency is indistinguishable from a genuine GBP deal
-// (EXTRACTION_AUDIT.md §1.1) — a $3,000 Carnival cruise lands in a
-// GBP-assumed field as "3000", a ~25-30% silent error on every US-market deal.
-// This does NOT change the schema or the interpreter's default (out of scope
-// for this module and explicitly not to be touched) — it only detects and
-// reports the disagreement/uncertainty so the client can surface it.
-//
-// Resolved in strength order: an explicit ISO code stated on the page, a
-// currency query param in the URL, a currency SYMBOL actually printed in the
-// text, and — weakest, last resort — the domain's TLD/market segment. Only
-// the first three are something the page or URL actually SAID; the TLD is an
-// inference about the market, not a statement of currency, so resolving from
-// it alone is never more than a warning.
-const KNOWN_CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'CAD', 'NZD', 'CHF', 'JPY', 'SGD', 'HKD', 'ZAR', 'AED', 'INR'] as const;
-
-const CURRENCY_SYMBOLS: { symbol: string; code: string }[] = [
-  { symbol: '£', code: 'GBP' },
-  { symbol: '$', code: 'USD' },
-  { symbol: '€', code: 'EUR' },
-];
-
-// Royal Caribbean's deep links carry "selectedCurrencyCode"; Carnival's carry
-// "currency". Matched case-insensitively, like every other URL-param reader in
-// this pipeline (portals spell keys every which way).
-const CURRENCY_URL_PARAMS = ['selectedcurrencycode', 'currencycode', 'currency', 'curr'];
-
-// Registrable-suffix → currency, for the market-segment fallback. ".com" alone
-// is genuinely ambiguous (easyJet.com is UK, Carnival.com is US) but is kept as
-// a USD default since every ".com"-only operator seen in this pipeline's
-// supplier set (Carnival, Celebrity, Princess) is a US operator — and because
-// this tier only ever produces a WARNING, a wrong guess here costs nothing
-// more than a flagged-for-review quote, never a silently wrong price.
-const TLD_CURRENCY: Record<string, string> = {
-  'co.uk': 'GBP', uk: 'GBP',
-  'com.au': 'AUD', au: 'AUD',
-  'co.nz': 'NZD', nz: 'NZD',
-  ca: 'CAD',
-  ch: 'CHF',
-  ie: 'EUR', de: 'EUR', fr: 'EUR', es: 'EUR', it: 'EUR', nl: 'EUR', pt: 'EUR', at: 'EUR', be: 'EUR', fi: 'EUR', lu: 'EUR',
-  com: 'USD', us: 'USD',
-};
-
-interface CurrencyResolution {
-  code: string;
-  source: 'text' | 'url' | 'symbol' | 'tld';
-}
-
-function currencyFromTld(url: string): string | null {
-  try {
-    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
-    const labels = host.split('.').filter(Boolean);
-    if (labels.length === 0) return null;
-    const last2 = labels.slice(-2).join('.');
-    const last1 = labels[labels.length - 1];
-    return TLD_CURRENCY[last2] ?? TLD_CURRENCY[last1] ?? null;
-  } catch {
-    return null; // not a URL
-  }
-}
-
-function resolveExpectedCurrency(ctx: ValidationContext): CurrencyResolution | null {
-  if (ctx.text) {
-    const re = new RegExp(`\\b(${KNOWN_CURRENCIES.join('|')})\\b`, 'i');
-    const m = re.exec(ctx.text);
-    if (m) return { code: m[1].toUpperCase(), source: 'text' };
-  }
-
-  try {
-    const params = new URL(ctx.url).searchParams;
-    const byLowerKey = new Map<string, string>();
-    for (const [k, v] of params) if (!byLowerKey.has(k.toLowerCase())) byLowerKey.set(k.toLowerCase(), v);
-    for (const key of CURRENCY_URL_PARAMS) {
-      const v = byLowerKey.get(key);
-      if (v && /^[a-z]{3}$/i.test(v)) return { code: v.toUpperCase(), source: 'url' };
-    }
-  } catch {
-    /* not a URL */
-  }
-
-  if (ctx.text) {
-    for (const { symbol, code } of CURRENCY_SYMBOLS) {
-      if (ctx.text.includes(symbol)) return { code, source: 'symbol' };
-    }
-  }
-
-  const tld = currencyFromTld(ctx.url);
-  if (tld) return { code: tld, source: 'tld' };
-
-  return null;
-}
-
-function checkCurrency(quote: ScrapedQuoteJson, ctx: ValidationContext, issues: Issue[]): void {
-  const resolved = resolveExpectedCurrency(ctx);
-
-  if (!resolved || resolved.source === 'tld') {
-    // Nothing on the page or in the URL stated a currency — either resolved
-    // only from the weakest source (the domain's market segment) or not
-    // resolved at all. Either way, quote.currency (very possibly the
-    // interpreter's `|| 'GBP'` default) cannot be told apart from a genuine
-    // GBP deal — warn rather than trust it silently.
-    issues.push({
-      code: 'CURRENCY_UNVERIFIED',
-      level: 'warn',
-      field: 'currency',
-      message: resolved
-        ? `Currency could only be inferred from the site's domain (${resolved.code}) — nothing on the page or in the URL stated it; "${quote.currency}" is unverified.`
-        : `No currency evidence found on the page, in the URL, or from the domain — "${quote.currency}" is unverified (may be the interpreter's GBP default masking an undetected currency).`,
-    });
-    return;
-  }
-
-  if (quote.currency.toUpperCase() !== resolved.code) {
-    issues.push({
-      code: 'CURRENCY_MISMATCH',
-      level: 'error',
-      field: 'currency',
-      message: `Quote currency is "${quote.currency}" but the page/URL indicates ${resolved.code} (via ${resolved.source}) — e.g. a $3,000 Carnival cruise landing in a GBP-assumed field.`,
-    });
-  }
-}
-
 // ─── Dates ────────────────────────────────────────────────────────────────
 // Bans the exact shape EXTRACTION_AUDIT.md §1.6 calls out: z.coerce.date() and
 // bare new Date(string) both silently accept garbage ("Route 66" → 1966,
@@ -632,7 +509,6 @@ export function validateQuote(quote: ScrapedQuoteJson, ctx: ValidationContext): 
   const issues: Issue[] = [];
 
   checkMoney(quote, ctx, issues);
-  checkCurrency(quote, ctx, issues);
   checkDates(quote, issues);
   checkItineraryNights(quote, ctx, issues);
   checkCruiseItineraryMissing(quote, ctx, issues);
