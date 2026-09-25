@@ -431,8 +431,6 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
         : "Some values need attention",
       description: idMapping.warnings.join(", "),
     });
-  } else {
-    toast({ title: "JSON imported successfully", description: "All values mapped to database IDs" });
   }
 
   const idOnlyFields = new Set([
