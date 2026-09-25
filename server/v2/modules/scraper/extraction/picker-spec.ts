@@ -122,8 +122,29 @@ function extractRaw(rule: Pick<FieldRule, 'from' | 'regex' | 'group'>, ctx: { ti
   return m[rule.group ?? 1] ?? null;
 }
 
+// Candidate rules capture `[^\n]+` up to the next newline, greedily, which
+// includes anything sitting between the value and the line break: a stray
+// trailing space left in the source markup, a \r from a captured line ending
+// (some captures preserve \r\n), or an &nbsp; rendered into text as  .
+// `pick.value` is documented as the element's trimmed visible text (see
+// PickedField.value above), so a byte-for-byte `===` against a raw, untrimmed
+// capture rejects a rule that is actually correct — and, critically, that
+// rejection happens ONLY here: extraction.interpreter.ts's finalize() trims
+// every extracted value unconditionally before it's used at real scrape time
+// (see applyTransform there), so the padding this strips would have been
+// harmless in production anyway. Normalising both sides the same way finalize
+// does keeps verify() from being stricter than the interpreter it's meant to
+// predict. This is ONLY a trim — it does not collapse internal whitespace —
+// so it cannot make a candidate match text it wouldn't otherwise match; it
+// only tolerates the leading/trailing padding production already discards.
+function normalizeForVerify(s: string): string {
+  return s.trim();
+}
+
 function verify(rule: FieldRule, ctx: { title: string; text: string; url: string; headingsText: string }, expected: string): boolean {
-  return extractRaw(rule, ctx) === expected;
+  const raw = extractRaw(rule, ctx);
+  if (raw == null) return false;
+  return normalizeForVerify(raw) === normalizeForVerify(expected);
 }
 
 // A picker-derived rule must clear the same bar the AI generator's output does
@@ -383,8 +404,8 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
 // clicked — it has no visibility into the rest of the supplier's spec, so its
 // output is `{ version, fields: <only what was picked> }` and NOTHING else.
 // Storing that wholesale would DELETE, for every field the agent didn't pick:
-// the AI's rules for those fields, `constants` (tour_operator and currency
-// live there), `wait.textMatches` (the CAPTURE_INCOMPLETE validation check in
+// the AI's rules for those fields, `constants` (tour_operator lives there),
+// `wait.textMatches` (the CAPTURE_INCOMPLETE validation check in
 // extraction.validate.ts re-applies it as a post-hoc capture gate — losing it
 // silently disables that check), `itineraryRegex`, `luggageRegex`, and the
 // image config (`imageUrlIncludes`/`imageContainerIncludes`). A field picker

@@ -15,7 +15,7 @@ const JET2_URL =
 // Mirrors the overfitted rules found in the stored "jet" spec.
 const OVERFITTED_SPEC: ExtractionSpec = {
   version: 1,
-  constants: { tour_operator: "Jet2holidays", currency: "GBP" },
+  constants: { tour_operator: "Jet2holidays" },
   fields: {
     accommodation: { from: "title", regex: "^([^|]+)", group: 1 },
     board_basis: { from: "text", regex: "Half Board", group: 0, map: { "Half Board": "Half Board" } },
@@ -130,7 +130,7 @@ describe("applyScalarOverrides", () => {
 describe("flight legs", () => {
   const spec = {
     version: 1,
-    constants: { tour_operator: "T", currency: "GBP" },
+    constants: { tour_operator: "T" },
     fields: {},
   } as unknown as ExtractionSpec;
 
@@ -1033,7 +1033,7 @@ describe("travel_date fallbacks", () => {
   // A spec whose travel_date rule doesn't match this page.
   const EJ_SPEC: ExtractionSpec = {
     version: 1,
-    constants: { tour_operator: "easyJet holidays", currency: "GBP" },
+    constants: { tour_operator: "easyJet holidays" },
     fields: {
       travel_date: { from: "text", regex: "Departing (\d{1,2} [A-Za-z]{3} \d{4})", group: 1, transform: "date" },
       no_of_nights: { from: "text", regex: "(\d+) nights", group: 1, transform: "number" },
@@ -1233,10 +1233,10 @@ describe("cruise itinerary table", () => {
     "* A cruising experience with us provides access to a range of destinations.",
   ].join("\n");
 
-  // What a cruise line's own spec carries: operator + currency, no cruise rules.
+  // What a cruise line's own spec carries: just the operator, no cruise rules.
   const spec = {
     version: 1,
-    constants: { tour_operator: "Royal Caribbean", currency: "GBP" },
+    constants: { tour_operator: "Royal Caribbean" },
     fields: {},
   } as unknown as ExtractionSpec;
   const CTX = { title: "", text: CRUISE_TEXT, url: "https://www.royalcaribbean.com/checkout/summary?sailDate=2027-06-21" };
@@ -1288,7 +1288,7 @@ describe("cruise itinerary table", () => {
 describe("cruise itinerary — pipe-separated port list, no day numbers (MSC)", () => {
   const spec = {
     version: 1,
-    constants: { tour_operator: "MSC Cruises", cruise_line: "MSC Cruises", currency: "GBP" },
+    constants: { tour_operator: "MSC Cruises", cruise_line: "MSC Cruises" },
     fields: {},
   } as unknown as ExtractionSpec;
   const URL = "https://www.msccruises.co.uk/booking/summary?sailDate=2027-04-10";
@@ -1379,7 +1379,7 @@ describe("cruise itinerary — pipe-separated port list, no day numbers (MSC)", 
 describe("cruise itinerary — deepText fallback (the RC drawer failure)", () => {
   const spec = {
     version: 1,
-    constants: { tour_operator: "Royal Caribbean", currency: "GBP", cruise_line: "Royal Caribbean" },
+    constants: { tour_operator: "Royal Caribbean", cruise_line: "Royal Caribbean" },
     fields: {},
   } as unknown as ExtractionSpec;
   const URL = "https://www.royalcaribbean.com/checkout/summary?sailDate=2027-06-21";
@@ -1605,7 +1605,7 @@ describe("cruise page with no port table", () => {
   const brokenShipRule = { from: "text", regex: String.raw`([A-Z ]+)\nSouthern Caribbean & Aruban Nights`, group: 1 };
   const specWithBrokenShip = {
     version: 1,
-    constants: { tour_operator: "Virgin Voyages", currency: "GBP" },
+    constants: { tour_operator: "Virgin Voyages" },
     fields: {
       ship_name: brokenShipRule,
       cruise_line: { from: "text", fallback: "Virgin Voyages" },
@@ -1695,7 +1695,7 @@ describe("cruise page with no port table", () => {
     // here should invent a sailing.
     const packageSpec = {
       version: 1,
-      constants: { tour_operator: "Some Portal", currency: "GBP" },
+      constants: { tour_operator: "Some Portal" },
       fields: { accommodation: { from: "text", regex: String.raw`^([^\n]+)`, group: 1 } },
     } as unknown as ExtractionSpec;
     const q = runExtractionSpec(packageSpec, { title: "", text: VIRGIN_TEXT, url: URL }, "x");
@@ -1718,7 +1718,7 @@ describe("cruise page with no port table", () => {
       const spec = {
         version: 1,
         packageType: "cruise",
-        constants: { tour_operator: "Virgin Voyages", currency: "GBP" },
+        constants: { tour_operator: "Virgin Voyages" },
         fields: {
           embarkation: { from: "text", regex: String.raw`Round trip from ([^,\n]+)`, group: 1 },
         },
@@ -1743,7 +1743,7 @@ describe("cruise page with no port table", () => {
       const spec = {
         version: 1,
         packageType: "package-holiday",
-        constants: { tour_operator: "Some Portal", currency: "GBP" },
+        constants: { tour_operator: "Some Portal" },
         fields: { accommodation: { from: "text", regex: String.raw`^([^\n]+)`, group: 1 } },
       } as unknown as ExtractionSpec;
       const q = runExtractionSpec(spec, { title: "", text: PORT_TABLE_TEXT, url: "https://x.test/d" }, "x");

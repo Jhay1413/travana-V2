@@ -3,7 +3,7 @@ import { runExtractionSpec } from "./extraction.interpreter";
 import type { ExtractionSpec } from "./extraction.types";
 
 // A spec routinely carries BOTH a constant and a field rule for the same key:
-// the AI is told to declare tour_operator/currency as constants and, separately,
+// the AI is told to declare tour_operator as a constant and, separately,
 // to try to extract every common field. When such a rule matched nothing it
 // returned '' and overwrote the constant — so a page whose wording didn't fit
 // the rule lost a value the spec stated outright. For tour_operator that left
@@ -20,7 +20,7 @@ const run = (spec: Partial<ExtractionSpec>, text: string) =>
 
 describe("a constant and a field rule for the same key", () => {
   const spec = {
-    constants: { tour_operator: "Easyjet", currency: "GBP" },
+    constants: { tour_operator: "Easyjet", promotion_code: "SUMMER10" },
     fields: {
       // Overfitted to one deal's wording — matches nothing on most pages.
       tour_operator: { from: "text", regex: "Operated by ([A-Za-z2 ]+) Holidays", group: 1 },
@@ -37,7 +37,7 @@ describe("a constant and a field rule for the same key", () => {
   });
 
   it("leaves a constant with no rule alone", () => {
-    expect(run(spec, "x".repeat(300)).currency).toBe("GBP");
+    expect(run(spec, "x".repeat(300)).promotion_code).toBe("SUMMER10");
   });
 });
 

@@ -88,6 +88,76 @@ describe('deriveSpecFromPicks — label-anchored', () => {
   });
 });
 
+describe('deriveSpecFromPicks — whitespace-padded captures', () => {
+  // The picker's contract trims `pick.value` to the element's clean visible
+  // text, but the captured page TEXT the rule is verified against is not
+  // guaranteed to be that clean — a trailing space left in the source before
+  // the line break, a stray \r from a captured line ending, or an &nbsp;
+  // rendered as   all survive into ctx.text untouched. The label-anchored
+  // regex's capture group is `([^\n]+)`, which happily swallows that trailing
+  // padding — `\s*` after the label only strips LEADING whitespace, nothing
+  // strips trailing whitespace off the captured value before verify()
+  // compares it byte-for-byte against the trimmed pick.value. If verify()
+  // doesn't normalise both sides the same way finalize() (extraction.interpreter.ts)
+  // does at real scrape time — which trims unconditionally — a perfectly
+  // correct pick is rejected here and never makes it into the stored spec at
+  // all, even though the exact same regex would have worked fine at scrape time.
+  it('still verifies "Trip total" -> £1,447.00 GBP when the captured line has trailing spaces', () => {
+    const text = ['Trip total', '£1,447.00 GBP   ', 'Taxes and fees included'].join('\n');
+    const ctx: PickerCaptureContext = { url: 'https://royalcaribbean.com/booking/confirm', title: 'Booking Confirmation', text };
+    const p = pick({
+      field: 'sales_price',
+      value: '£1,447.00 GBP', // trimmed ground truth — the bookmarklet never sends trailing spaces
+      textIndex: text.indexOf('£1,447.00 GBP'),
+      lineIndex: 1,
+      linesBefore: ['Trip total'],
+      linesAfter: ['Taxes and fees included'],
+    });
+
+    const result = deriveSpecFromPicks([p], ctx);
+
+    expect(result.problems).toEqual([]);
+    expect(result.derived).toHaveLength(1);
+    expect(result.derived[0].strategy).toBe('label-anchored');
+  });
+
+  it('still verifies when the captured line ends with \\r (a captured Windows-style line ending)', () => {
+    const text = ['Trip total', '£1,447.00 GBP\r', 'Taxes and fees included'].join('\n');
+    const ctx: PickerCaptureContext = { url: 'https://royalcaribbean.com/booking/confirm', title: 'Booking Confirmation', text };
+    const p = pick({
+      field: 'sales_price',
+      value: '£1,447.00 GBP',
+      textIndex: text.indexOf('£1,447.00 GBP'),
+      lineIndex: 1,
+      linesBefore: ['Trip total'],
+      linesAfter: ['Taxes and fees included'],
+    });
+
+    const result = deriveSpecFromPicks([p], ctx);
+
+    expect(result.problems).toEqual([]);
+    expect(result.derived).toHaveLength(1);
+  });
+
+  it('still verifies when the captured line has a trailing \\u00a0 (a rendered &nbsp;)', () => {
+    const text = ['Trip total', '£1,447.00 GBP ', 'Taxes and fees included'].join('\n');
+    const ctx: PickerCaptureContext = { url: 'https://royalcaribbean.com/booking/confirm', title: 'Booking Confirmation', text };
+    const p = pick({
+      field: 'sales_price',
+      value: '£1,447.00 GBP',
+      textIndex: text.indexOf('£1,447.00 GBP'),
+      lineIndex: 1,
+      linesBefore: ['Trip total'],
+      linesAfter: ['Taxes and fees included'],
+    });
+
+    const result = deriveSpecFromPicks([p], ctx);
+
+    expect(result.problems).toEqual([]);
+    expect(result.derived).toHaveLength(1);
+  });
+});
+
 describe('deriveSpecFromPicks — heading-position', () => {
   it("derives Carnival's second heading -> the voyage name, never the banner's \"IMPORTANT NOTICE\"", () => {
     const headings = ['IMPORTANT NOTICE', '3-Day The Bahamas from Miami, FL'];

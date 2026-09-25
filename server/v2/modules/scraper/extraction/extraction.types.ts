@@ -54,7 +54,10 @@ export interface ExtractionSpec {
   // Wait until the page contains something matching this before reading (so the
   // SPA has rendered the priced quote). Matched against innerText.
   wait?: { textMatches?: string; timeoutMs?: number };
-  // Fixed values merged into the result (e.g. tour_operator, currency).
+  // Fixed values merged into the result (e.g. tour_operator). A spec stored
+  // before this business went GBP-only may still carry a "currency" key here
+  // from when the AI generated one — the interpreter no longer reads it (see
+  // extraction.interpreter.ts's hardcoded `currency: 'GBP'`), so it is inert.
   constants?: Record<string, string | number>;
   // ScraperJson field name → how to extract it. Scalar fields only; the
   // interpreter derives the structured arrays (flights/transfers/luggage).
