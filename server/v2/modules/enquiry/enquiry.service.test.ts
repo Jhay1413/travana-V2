@@ -14,6 +14,7 @@ vi.mock("./enquiry.repository", () => ({
     clearRelations: vi.fn(),
     addDestination: vi.fn(),
     addResort: vi.fn(),
+    addAccommodation: vi.fn(),
     addBoardBasis: vi.fn(),
     addDepartureAirport: vi.fn(),
     addPassenger: vi.fn(),

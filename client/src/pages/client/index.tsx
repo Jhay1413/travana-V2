@@ -38,7 +38,7 @@ import { ClientIndexHeader, type ClientCreateKind } from "@/features/client/comp
 import type { HolidaySelection } from "@/features/client/types";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/features/booking/components/booking-create-dialog";
-import { CreateTaskDialog } from "@/features/client/components/modals/CreateTaskDialog";
+import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import {
   useClientEditForm,
@@ -89,7 +89,7 @@ export default function ClientPage() {
 
   const editForm = useClientEditForm(clientId, clientData);
   const fileActions = useClientFiles(clientId);
-  const taskCreate = useClientTaskCreate(clientId, currentUser?.id);
+  const taskCreate = useClientTaskCreate();
   const ticketCreate = useClientTicketCreate(clientId, currentUser?.id);
   const enquiryActions = useClientEnquiryActions(clientId, currentUser?.id, () => {
     setConvertingFromEnquiryTxnId(null);
@@ -461,10 +461,9 @@ export default function ClientPage() {
         presentation="drawer"
         open={taskCreate.showTaskDialog}
         onOpenChange={taskCreate.setShowTaskDialog}
-        taskForm={taskCreate.taskForm}
-        setTaskForm={taskCreate.setTaskForm}
-        isPending={taskCreate.createTaskMutation.isPending}
-        onConfirm={taskCreate.confirmCreateTask}
+        entityType="client"
+        entityId={clientId}
+        defaultAssignedToId={currentUser?.id}
       />
 
       <CreateTicketDialog

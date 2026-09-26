@@ -60,6 +60,7 @@ async function activateDueFutureDealsOnce(): Promise<void> {
 interface CreateEnquiryPayload extends InsertEnquiryTable {
   destinations?: string[];
   resorts?: string[];
+  accommodations?: string[];
   boardBases?: string[];
   departureAirports?: string[];
   passengers?: EnquiryPassenger[];
@@ -267,7 +268,7 @@ export const transactionService = {
   },
 
   async createTransactionWithEnquiry(transactionData: InsertTransaction, enquiryData: CreateEnquiryPayload, scope: Scope, agentId?: string | null) {
-    const { destinations, resorts, boardBases, departureAirports, passengers, notes, agent_id, ...enquiryFields } = enquiryData;
+    const { destinations, resorts, accommodations, boardBases, departureAirports, passengers, notes, agent_id, ...enquiryFields } = enquiryData;
 
     const txn = await transactionRepository.create({
       ...transactionData,
@@ -287,6 +288,11 @@ export const transactionService = {
     if (resorts?.length) {
       for (const resortId of resorts) {
         await enquiryTableRepository.addResort(enquiry.id, resortId);
+      }
+    }
+    if (accommodations?.length) {
+      for (const accommodationId of accommodations) {
+        await enquiryTableRepository.addAccommodation(enquiry.id, accommodationId);
       }
     }
     if (boardBases?.length) {

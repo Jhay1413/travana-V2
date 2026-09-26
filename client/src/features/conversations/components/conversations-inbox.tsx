@@ -114,7 +114,7 @@ import type { Conversation, ConversationMessage, ConversationTag, InboxTab } fro
 // client. Cross-feature import is intentional here (same pattern those pages
 // already use for these specific hooks/dialogs).
 import { useClientTaskCreate, useClientTicketCreate } from "@/features/client/components/hooks";
-import { CreateTaskDialog } from "@/features/client/components/modals/CreateTaskDialog";
+import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 
 // How often the composer re-announces that this agent is still typing. The
@@ -673,14 +673,15 @@ function liveQuoteReturnDate(travelDate: string | null | undefined, nights: numb
   return liveQuoteFormatDate(d.toISOString());
 }
 
-// Picks each transaction's primary quote (the non-copy one, falling back to the
-// first) and keeps only those still "live" (not lost/archived/won, and not
-// expired — expired quotes surface in the Expired section instead), newest first.
+// Every quote across all of a client's transactions — including duplicate/copy
+// quotes, which are live deals in their own right — kept when still "live"
+// (not lost/archived/won, and not expired — expired quotes surface in the
+// Expired section instead), newest first.
 function selectLiveQuotes(transactions: Transaction[] | undefined): LiveQuoteRecord[] {
-  const primaries = (transactions ?? [])
-    .map((t) => (t.quotes?.find((q) => !q.isQuoteCopy) || t.quotes?.[0]) as LiveQuoteRecord | undefined)
-    .filter((q): q is LiveQuoteRecord => !!q && isLiveQuoteStatus(q.quote_status) && !isQuoteExpired(q));
-  return [...primaries]
+  const live = (transactions ?? [])
+    .flatMap((t) => (t.quotes ?? []) as LiveQuoteRecord[])
+    .filter((q) => isLiveQuoteStatus(q.quote_status) && !isQuoteExpired(q));
+  return [...live]
     .sort((a, b) => new Date(b.date_created || 0).getTime() - new Date(a.date_created || 0).getTime())
     .slice(0, 5);
 }
@@ -697,31 +698,35 @@ interface ExpiredDealRow {
   destinationName: string | null;
   dateLine: string | null;
   createdAt: string | null;
+  isCopy: boolean;
 }
 
-// Each transaction's primary quote, when expired (and not won — a won quote is
-// converted, not expired), plus its enquiry when expired — newest first.
+// Every quote (including copies) across all of a client's transactions, when
+// expired (and not won — a won quote is converted, not expired), plus each
+// transaction's enquiry when expired — newest first.
 function selectExpiredDeals(transactions: Transaction[] | undefined): ExpiredDealRow[] {
   const rows: ExpiredDealRow[] = [];
 
   for (const t of transactions ?? []) {
-    const q = (t.quotes?.find((quote) => !quote.isQuoteCopy) || t.quotes?.[0]) as LiveQuoteRecord | undefined;
-    if (q && isQuoteExpired(q) && q.quote_status?.toLowerCase() !== "won") {
-      const departureDate = liveQuoteFormatDate(q.travel_date);
-      const returnDate = liveQuoteReturnDate(q.travel_date, q.num_of_nights);
-      const dateRange = [departureDate, returnDate].filter(Boolean).join(" → ");
-      const code = q.departing_airport_code || q.departing_airport_name || null;
-      rows.push({
-        id: q.id,
-        kind: "quote",
-        title: q.title || "Untitled quote",
-        price: parseFloat(q.sales_price || "0") || 0,
-        operatorName: q.main_tour_operator_name ?? null,
-        operatorLogoUrl: q.main_tour_operator_logo_url ?? null,
-        destinationName: q.destination_name ?? null,
-        dateLine: [code, dateRange || null].filter(Boolean).join(" - ") || null,
-        createdAt: q.date_created,
-      });
+    for (const q of (t.quotes ?? []) as LiveQuoteRecord[]) {
+      if (isQuoteExpired(q) && q.quote_status?.toLowerCase() !== "won") {
+        const departureDate = liveQuoteFormatDate(q.travel_date);
+        const returnDate = liveQuoteReturnDate(q.travel_date, q.num_of_nights);
+        const dateRange = [departureDate, returnDate].filter(Boolean).join(" → ");
+        const code = q.departing_airport_code || q.departing_airport_name || null;
+        rows.push({
+          id: q.id,
+          kind: "quote",
+          title: q.title || "Untitled quote",
+          price: parseFloat(q.sales_price || "0") || 0,
+          operatorName: q.main_tour_operator_name ?? null,
+          operatorLogoUrl: q.main_tour_operator_logo_url ?? null,
+          destinationName: q.destination_name ?? null,
+          dateLine: [code, dateRange || null].filter(Boolean).join(" - ") || null,
+          createdAt: q.date_created,
+          isCopy: Boolean(q.isQuoteCopy),
+        });
+      }
     }
 
     const e = t.enquiry as EnquiryTable | null | undefined;
@@ -739,6 +744,7 @@ function selectExpiredDeals(transactions: Transaction[] | undefined): ExpiredDea
         destinationName: e.destinations?.[0]?.name ?? null,
         dateLine: dateRange || null,
         createdAt: e.date_created,
+        isCopy: false,
       });
     }
   }
@@ -756,6 +762,18 @@ interface ClientDealRowData {
   operatorLogoUrl: string | null;
   destinationName: string | null;
   dateLine: string | null;
+  /** True for a quote duplicated from another — flagged with a small "Copy" pill. */
+  isCopy?: boolean;
+}
+
+// Small "Copy" pill flagging a duplicate quote row — same rounded-pill idiom
+// as the client-details holidays panel's CopyPill, sized for this denser list.
+function DealRowCopyPill() {
+  return (
+    <span className="shrink-0 rounded-full border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300">
+      Copy
+    </span>
+  );
 }
 
 // Shared row markup for both the Live Quotes and Expired lists — only the
@@ -789,7 +807,10 @@ function ClientDealRow({
         <LiveQuoteOperatorMark name={row.operatorName} logoUrl={row.operatorLogoUrl} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <span className={cn("truncate text-sm font-semibold 3xl:text-base", expired && "text-red-500")}>{row.title}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className={cn("truncate text-sm font-semibold 3xl:text-base", expired && "text-red-500")}>{row.title}</span>
+              {row.isCopy && <DealRowCopyPill />}
+            </span>
             {row.price > 0 && (
               <span className="shrink-0 text-sm font-semibold text-black/60 dark:text-white/60">
                 {liveQuoteCurrency.format(row.price)}
@@ -817,7 +838,6 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [notesOpen, setNotesOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(true);
   const [liveQuotesOpen, setLiveQuotesOpen] = useState(true);
   const [expiredOpen, setExpiredOpen] = useState(false);
 
@@ -832,7 +852,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   // client dashboard and quote pages use, just scoped to whatever client this
   // conversation is linked to. Only meaningful once linked (see the header
   // buttons below), but hooks can't be called conditionally.
-  const taskCreate = useClientTaskCreate(client?.id ?? "", currentUser?.id);
+  const taskCreate = useClientTaskCreate();
   const ticketCreate = useClientTicketCreate(client?.id ?? "", currentUser?.id);
   const { data: notes = [] } = useClientNotes(client?.id ?? "");
   const { data: transactions, isLoading: isLoadingLiveQuotes } = useTransactions(
@@ -917,6 +937,22 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
               {client.phoneNumber && <ClientField label="Contact" icon={Phone} value={client.phoneNumber} />}
               {!client.phoneNumber && client.email && <ClientField label="Contact" icon={Mail} value={client.email} />}
               {since && <ClientField label="Member Since" icon={CalendarDays} value={since} />}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: "Enquiries", count: historyCounts.enquiries, className: "text-emerald-500" },
+                  { label: "Quotes", count: historyCounts.quotes, className: "text-sky-500" },
+                  { label: "Bookings", count: historyCounts.bookings, className: "text-amber-500" },
+                ].map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-lg border border-black/10 px-1.5 py-1.5 text-center dark:border-white/10"
+                    data-testid={`client-history-${stat.label.toLowerCase()}`}
+                  >
+                    <div className="text-sm font-semibold">{isLoadingLiveQuotes ? "–" : stat.count}</div>
+                    <div className={cn("mt-0.5 text-[11px]", stat.className)}>{stat.label}</div>
+                  </div>
+                ))}
+              </div>
             </>
           ) : (
             <>
@@ -926,38 +962,6 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
             </>
           )}
         </div>
-
-        {client && (
-          <div className="border-t border-black/10 dark:border-white/10" data-testid="client-history">
-            <button
-              type="button"
-              onClick={() => setHistoryOpen((v) => !v)}
-              className="flex w-full items-center justify-between px-4 py-5 text-left 3xl:px-6"
-              data-testid="client-history-toggle"
-            >
-              <span className="text-sm font-semibold">History</span>
-              <ChevronRight className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", historyOpen && "rotate-90")} />
-            </button>
-            {historyOpen && (
-              <div className="grid grid-cols-3 gap-3 px-4 pb-5 3xl:px-6">
-                {[
-                  { label: "Enquiries", count: historyCounts.enquiries, className: "text-emerald-500" },
-                  { label: "Quotes", count: historyCounts.quotes, className: "text-sky-500" },
-                  { label: "Bookings", count: historyCounts.bookings, className: "text-amber-500" },
-                ].map((stat) => (
-                  <div
-                    key={stat.label}
-                    className="rounded-xl border border-black/10 px-2 py-3 text-center dark:border-white/10"
-                    data-testid={`client-history-${stat.label.toLowerCase()}`}
-                  >
-                    <div className="text-2xl font-semibold">{isLoadingLiveQuotes ? "–" : stat.count}</div>
-                    <div className={cn("mt-0.5 text-[13px]", stat.className)}>{stat.label}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         {client && (
           <div className="border-t border-black/10 dark:border-white/10" data-testid="client-live-quotes">
@@ -997,6 +1001,7 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
                           operatorLogoUrl: q.main_tour_operator_logo_url ?? null,
                           destinationName: q.destination_name ?? null,
                           dateLine: departureLine || null,
+                          isCopy: Boolean(q.isQuoteCopy),
                         }}
                       />
                     );
@@ -1077,14 +1082,15 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
     {client && (
       <>
         <CreateTaskDialog
+          presentation="drawer"
           open={taskCreate.showTaskDialog}
           onOpenChange={taskCreate.setShowTaskDialog}
-          taskForm={taskCreate.taskForm}
-          setTaskForm={taskCreate.setTaskForm}
-          isPending={taskCreate.createTaskMutation.isPending}
-          onConfirm={taskCreate.confirmCreateTask}
+          entityType="client"
+          entityId={client.id}
+          defaultAssignedToId={currentUser?.id}
         />
         <CreateTicketDialog
+          presentation="drawer"
           open={ticketCreate.showTicketDialog}
           onOpenChange={ticketCreate.setShowTicketDialog}
           clientName={clientDisplayName(client)}

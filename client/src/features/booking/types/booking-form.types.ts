@@ -230,7 +230,10 @@ export const defaultBookingFormValues: BookingFormValues = {
   accommodationId: "",
   boardBasisId: "",
   checkInDate: "",
-  checkInTime: "",
+  // Prefilled for new bookings; every path that hydrates an existing booking
+  // (edit) or an imported/scraped value sets this key explicitly on the
+  // object it merges over these defaults, so it always wins over "15:00".
+  checkInTime: "15:00",
   roomType: "",
   outboundDepartAirportId: "",
   outboundArriveAirportId: "",

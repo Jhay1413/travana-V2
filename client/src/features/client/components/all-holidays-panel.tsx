@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarCheck, Check, ChevronDown, Ellipsis, FileText, Filter, ListTodo, MessageSquare, Search, SquarePen, Ticket } from "lucide-react";
+import { CalendarCheck, Check, ChevronDown, Ellipsis, FileText, Filter, ListTodo, MessageSquare, Pin, Search, SquarePen, Ticket } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { isQuoteExpired, isEnquiryExpired, isBookingExpired } from "@/lib/deal-expiry";
+import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import type { EnquiryTable, Quote } from "@/features/quote/types";
 import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
 import { isPrimaryQuote } from "@/features/client/components/client-types";
@@ -264,6 +265,7 @@ function CopyPill() {
 function HolidayListRow({
   row,
   selected,
+  pinned = false,
   isLast = false,
   roomy = false,
   isCopyRow = false,
@@ -271,6 +273,8 @@ function HolidayListRow({
 }: {
   row: HolidayRowData;
   selected: boolean;
+  /** This row's own favourite — matched by `${type}:${id}` against the caller's pinned set. */
+  pinned?: boolean;
   /** Live Deals sizing — a notch larger than the compact holidays list. */
   roomy?: boolean;
   /** Last row in its list — the separator hairline is dropped so the list ends clean. */
@@ -326,6 +330,12 @@ function HolidayListRow({
               >
                 {row.title}
               </span>
+              {pinned && (
+                <Pin
+                  className="h-2.5 w-2.5 shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+                  data-testid={`all-holidays-row-pinned-${row.id}`}
+                />
+              )}
               {isCopyRow && <CopyPill />}
             </span>
             {row.price > 0 && (
@@ -362,12 +372,15 @@ function HolidayListRow({
 function HolidayGroupRow({
   row,
   selection,
+  pinnedKeys,
   isLast,
   roomy,
   onSelect,
 }: {
   row: HolidayRowData;
   selection: HolidaySelection | null;
+  /** Favourited `${type}:${id}` keys — built once per panel, not per row. */
+  pinnedKeys: ReadonlySet<string>;
   isLast: boolean;
   roomy: boolean;
   onSelect: (selection: HolidaySelection) => void;
@@ -380,6 +393,7 @@ function HolidayGroupRow({
         row={row}
         isLast={hasCopies || isLast}
         selected={selection?.type === row.type && selection.id === row.id}
+        pinned={pinnedKeys.has(`${row.type}:${row.id}`)}
         onSelect={() => onSelect({ type: row.type, id: row.id })}
       />
       {hasCopies && (
@@ -392,6 +406,7 @@ function HolidayGroupRow({
               row={copy}
               isLast={index === row.copies.length - 1 && isLast}
               selected={selection?.type === copy.type && selection.id === copy.id}
+              pinned={pinnedKeys.has(`${copy.type}:${copy.id}`)}
               onSelect={() => onSelect({ type: copy.type, id: copy.id })}
             />
           ))}
@@ -455,6 +470,20 @@ export function AllHolidaysPanel({
   const bookedTransactionIds = useMemo(() => new Set(bookings.map((b) => b.transaction_id)), [bookings]);
   const quoteRows = useMemo(() => buildQuoteRows(quotes, bookedTransactionIds), [quotes, bookedTransactionIds]);
   const bookingRows = useMemo(() => buildBookingRows(bookings), [bookings]);
+
+  // Fetched once for the whole panel — no per-row favourite lookups. Keyed by
+  // `${itemType}:${itemId}` since the panel mixes enquiry/quote/booking rows
+  // that can otherwise collide on a shared id space.
+  const { data: favorites } = useFavorites();
+  const pinnedKeys = useMemo(
+    () =>
+      new Set(
+        (favorites ?? [])
+          .filter((f) => f.itemType === "enquiry" || f.itemType === "quote" || f.itemType === "booking")
+          .map((f) => `${f.itemType}:${f.itemId}`),
+      ),
+    [favorites],
+  );
 
   // A deep link or pipeline selection must reveal the selected deal's own
   // category. Otherwise the detail view can show an enquiry while this panel
@@ -676,6 +705,7 @@ export function AllHolidaysPanel({
                   row={row}
                   isLast={index === activeRows.length - 1}
                   selection={selection}
+                  pinnedKeys={pinnedKeys}
                   onSelect={onSelect}
                 />
               ))}
@@ -703,6 +733,7 @@ export function AllHolidaysPanel({
                         row={row}
                         isLast={index === expiredRows.length - 1}
                         selection={selection}
+                        pinnedKeys={pinnedKeys}
                         onSelect={onSelect}
                       />
                     ))}

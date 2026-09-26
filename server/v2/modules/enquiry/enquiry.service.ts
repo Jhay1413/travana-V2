@@ -68,6 +68,11 @@ export const newEnquiryService = {
           await enquiryTableRepository.addResort(id, resortId);
         }
       }
+      if (relations.accommodations?.length) {
+        for (const accommodationId of relations.accommodations) {
+          await enquiryTableRepository.addAccommodation(id, accommodationId);
+        }
+      }
       if (relations.boardBases?.length) {
         for (const bbId of relations.boardBases) {
           await enquiryTableRepository.addBoardBasis(id, bbId);

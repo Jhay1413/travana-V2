@@ -1,5 +1,8 @@
+import { useMemo } from "react";
 import { useLocation } from "wouter";
+import { Pin } from "lucide-react";
 import { useOpportunityBookings } from "@/hooks/queries";
+import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { FilterBar } from "./filter-bar";
 import { Pagination } from "./pagination";
 import { StatusBadge } from "./status-badge";
@@ -13,6 +16,13 @@ export function BookingsPage() {
   const items = query.data?.items ?? [];
   const total = query.data?.total ?? 0;
   const totalPages = query.data?.totalPages ?? 0;
+
+  // Already fetched in one shot for the whole list — no per-row favourite lookups.
+  const { data: favorites } = useFavorites();
+  const pinnedBookingIds = useMemo(
+    () => new Set((favorites ?? []).filter((f) => f.itemType === "booking").map((f) => f.itemId)),
+    [favorites],
+  );
 
   const [, navigate] = useLocation();
 
@@ -43,7 +53,15 @@ export function BookingsPage() {
                   data-testid={`row-opportunity-booking-${item.id}`}
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-xs font-medium">{item.clientName}</div>
+                    <div className="flex items-center gap-1 truncate text-xs font-medium">
+                      <span className="truncate">{item.clientName}</span>
+                      {pinnedBookingIds.has(item.id) && (
+                        <Pin
+                          className="h-2.5 w-2.5 shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+                          data-testid={`row-opportunity-booking-pinned-${item.id}`}
+                        />
+                      )}
+                    </div>
                     {item.agentName && (
                       <div className="truncate text-[10px] text-black/40 dark:text-white/40">
                         {item.agentName}

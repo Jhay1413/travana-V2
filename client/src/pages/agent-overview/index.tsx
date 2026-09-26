@@ -142,6 +142,7 @@ export default function AgentOverviewPage() {
       />
 
       <CreateTaskDialog
+        presentation="drawer"
         open={creatingTask}
         onOpenChange={setCreatingTask}
         defaultAssignedToId={userId}

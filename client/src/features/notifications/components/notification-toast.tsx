@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, CheckCircle, LifeBuoy, MessageSquare, X } from "lucide-react";
+import { Bell, CheckCircle, LifeBuoy, MessageSquare, UserPlus, X } from "lucide-react";
 import { useCurrentUser, useNotifications } from "@/hooks/queries";
 import { useMarkNotificationRead } from "@/hooks/mutations";
+import { isNotificationsPanelOpen } from "@/features/notifications/lib/panel-open-store";
 
 const NOTIF_STYLE: Record<string, { icon: typeof Bell; label: string; border: string; bg: string; iconBg: string; iconColor: string; labelColor: string; titleColor: string; bodyColor: string; btnColor: string; btnHover: string; dismissColor: string; dismissHover: string }> = {
   chat_message: {
@@ -51,6 +52,36 @@ const NOTIF_STYLE: Record<string, { icon: typeof Bell; label: string; border: st
     dismissColor: "text-red-500/60",
     dismissHover: "hover:bg-red-200/50 hover:text-red-700 dark:hover:bg-red-500/20 dark:hover:text-red-300",
   },
+  task_assigned: {
+    icon: UserPlus,
+    label: "Task Assigned",
+    border: "border-purple-200/60 dark:border-purple-500/30",
+    bg: "bg-purple-50/95 dark:bg-purple-950/90",
+    iconBg: "bg-purple-200/60 dark:bg-purple-500/20",
+    iconColor: "text-purple-600 dark:text-purple-400",
+    labelColor: "text-purple-600/80 dark:text-purple-400/80",
+    titleColor: "text-purple-900 dark:text-purple-100",
+    bodyColor: "text-purple-800/75 dark:text-purple-200/70",
+    btnColor: "text-purple-600 dark:text-purple-400",
+    btnHover: "hover:text-purple-800 dark:hover:text-purple-200",
+    dismissColor: "text-purple-500/60",
+    dismissHover: "hover:bg-purple-200/50 hover:text-purple-700 dark:hover:bg-purple-500/20 dark:hover:text-purple-300",
+  },
+  ticket_assigned: {
+    icon: UserPlus,
+    label: "Ticket Assigned",
+    border: "border-teal-200/60 dark:border-teal-500/30",
+    bg: "bg-teal-50/95 dark:bg-teal-950/90",
+    iconBg: "bg-teal-200/60 dark:bg-teal-500/20",
+    iconColor: "text-teal-600 dark:text-teal-400",
+    labelColor: "text-teal-600/80 dark:text-teal-400/80",
+    titleColor: "text-teal-900 dark:text-teal-100",
+    bodyColor: "text-teal-800/75 dark:text-teal-200/70",
+    btnColor: "text-teal-600 dark:text-teal-400",
+    btnHover: "hover:text-teal-800 dark:hover:text-teal-200",
+    dismissColor: "text-teal-500/60",
+    dismissHover: "hover:bg-teal-200/50 hover:text-teal-700 dark:hover:bg-teal-500/20 dark:hover:text-teal-300",
+  },
 };
 
 const DEFAULT_STYLE = NOTIF_STYLE.chat_message;
@@ -77,6 +108,15 @@ export function NotificationToast() {
 
     if (unreadToShow.length > 0) {
       unreadToShow.forEach((n) => shownIdsRef.current.add(n.id));
+
+      // The notifications panel now auto-opens for new unread arrivals (see
+      // notifications-panel.tsx). A toast for a notification that just
+      // opened — or already has open — the panel would be redundant, since
+      // the user is already looking at it in the list, so skip queuing one
+      // while the panel is open. The ids are still marked as shown above so
+      // they don't toast later either.
+      if (isNotificationsPanelOpen()) return;
+
       setToastQueue((prev) => {
         const existingIds = new Set(prev.map((p) => p.id));
         const newItems = unreadToShow

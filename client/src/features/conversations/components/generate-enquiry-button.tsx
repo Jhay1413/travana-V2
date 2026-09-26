@@ -87,6 +87,7 @@ export function GenerateEnquiryButton({ conversation }: { conversation: Conversa
         {generate.isPending ? "Drafting…" : "Generate Enquiry"}
       </button>
       <EnquiryWizard
+        presentation="drawer"
         open={wizardOpen}
         onOpenChange={setWizardOpen}
         enquiry={null}

@@ -47,6 +47,9 @@ export function buildEnquiryTransaction(
         ? (data.destinations as unknown as EnquiryPayload["destinations"])
         : undefined,
       resorts: Array.isArray(data.resorts) ? (data.resorts as unknown as EnquiryPayload["resorts"]) : undefined,
+      accommodations: Array.isArray(data.accommodations)
+        ? (data.accommodations as unknown as EnquiryPayload["accommodations"])
+        : undefined,
       boardBases: Array.isArray(data.boardBases) ? (data.boardBases as unknown as EnquiryPayload["boardBases"]) : undefined,
       departureAirports: Array.isArray(data.departureAirports) ? (data.departureAirports as string[]) : undefined,
       passengers: Array.isArray(data.passengers) ? (data.passengers as EnquiryPassengerInput[]) : undefined,

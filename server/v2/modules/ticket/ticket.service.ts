@@ -1,5 +1,6 @@
 import { ticketRepository, type TicketListMode } from "./ticket.repository";
 import { realtimeService } from "../../realtime/realtime.service";
+import { notificationRepository } from "../notification/notification.repository";
 import { AppError } from "../../utils/error-handler";
 import { sanitizeRichText } from "../../utils/sanitize-rich-text";
 import type { Ticket, InsertTicket } from "@shared/schema";
@@ -36,6 +37,30 @@ function publishChanged(orgId: string, ticketId: string): void {
   }
 }
 
+/**
+ * Fires the "you were assigned a ticket" notification. Best-effort: a
+ * failure here must never fail the create/update the caller is waiting on.
+ * Assigning a ticket to yourself never notifies (no enquiry/quote-style
+ * exception applies to tickets).
+ */
+async function notifyTicketAssignee(ticket: Ticket, actingUserId: string | null | undefined): Promise<void> {
+  if (!ticket.assignedTo) return;
+  if (actingUserId && ticket.assignedTo === actingUserId) return;
+
+  try {
+    await notificationRepository.create({
+      userId: ticket.assignedTo,
+      type: "ticket_assigned",
+      title: "Ticket assigned to you",
+      message: `You were assigned to "${ticket.subject}"`,
+      link: `/tickets/${ticket.id}`,
+      read: false,
+    });
+  } catch (err) {
+    console.warn(`[tickets] assignment notification failed for ticket ${ticket.id}:`, err);
+  }
+}
+
 export const ticketService = {
   async listTickets(scope: Scope, mode: TicketListMode = "mine") {
     if (mode === "all" && !hasAnyRole(scope.orgRoles, ADMIN_TICKET_ROLES)) {
@@ -68,12 +93,19 @@ export const ticketService = {
     const values = data.description ? { ...data, description: sanitizeRichText(data.description) } : data;
     const ticket = await ticketRepository.create(values, scope);
     publishChanged(scope.orgId, ticket.id);
+    await notifyTicketAssignee(ticket, scope.userId);
     return ticket;
   },
 
   async updateTicket(id: string, data: Partial<InsertTicket>, scope: Scope): Promise<Ticket> {
     const editable = stripImmutableFields(data);
     const values = editable.description ? { ...editable, description: sanitizeRichText(editable.description) } : editable;
+
+    // Only needed when this update actually touches assignment — read before
+    // the write so a reassignment can be told apart from a resave that
+    // merely echoes the current assignee back.
+    const previous = editable.assignedTo !== undefined ? await ticketRepository.findById(id, scope, scope.userId ?? null) : undefined;
+
     const ticket = await ticketRepository.update(id, values, scope);
     if (!ticket) {
       throw new AppError("Ticket not found", 404);
@@ -81,6 +113,11 @@ export const ticketService = {
     // Covers the badge's two inputs — status (open → resolved) and assignment —
     // without this layer needing to know which fields `data` touched.
     publishChanged(scope.orgId, ticket.id);
+
+    if (editable.assignedTo !== undefined && ticket.assignedTo !== previous?.assignedTo) {
+      await notifyTicketAssignee(ticket, scope.userId);
+    }
+
     return ticket;
   },
 

@@ -54,6 +54,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { formatFullDateTime } from "@/lib/note-time";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
+import { FormDrawer } from "@/components/shared/form-drawer";
 import { QuoteRHFForm } from "@/features/quote/components/quote-rhf-form";
 import { buildQuotePayload } from "@/features/quote/components/quote-create-dialog";
 import type { QuoteFormValues } from "@/features/quote/types";
@@ -1021,6 +1022,7 @@ export default function EnquiryPage() {
       </div>
 
       <EnquiryWizard
+        presentation="drawer"
         open={showEditWizard}
         onOpenChange={setShowEditWizard}
         enquiry={enquiry as any}
@@ -1028,29 +1030,22 @@ export default function EnquiryPage() {
         isSaving={updateEnquiryMutation.isPending}
       />
 
-      <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
-        <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
-          <DialogHeader className="px-6 pt-6">
-            <DialogTitle className="text-lg font-semibold">Convert Enquiry to Quote</DialogTitle>
-            <DialogDescription className="text-sm text-black/55">
-              Review and adjust the details from the enquiry, then create the quote.
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="max-h-[calc(90vh-100px)]">
-            <div className="px-6 pb-6">
-              <QuoteRHFForm
-                key={enquiryId + showConvertModal}
-                defaultValues={convertDefaultValues}
-                onSubmit={handleConvertSubmit}
-                isLoading={createQuoteMutation.isPending}
-                submitLabel="Convert to Quote"
-                onCancel={() => setShowConvertModal(false)}
-              />
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
+      <FormDrawer
+        open={showConvertModal}
+        onOpenChange={setShowConvertModal}
+        title="Convert Enquiry to Quote"
+        description="Review and adjust the details from the enquiry, then create the quote."
+        data-testid="convert-enquiry-drawer"
+      >
+        <QuoteRHFForm
+          key={enquiryId + showConvertModal}
+          layout="drawer"
+          defaultValues={convertDefaultValues}
+          onSubmit={handleConvertSubmit}
+          isLoading={createQuoteMutation.isPending}
+          submitLabel="Convert to Quote"
+        />
+      </FormDrawer>
     </>
   );
 }

@@ -5,12 +5,9 @@ import routes from "./routes/index";
 import v2Routes from "./v2/routes/index";
 import { setupAuth, registerAuthRoutes } from "./v2/middlewares/auth";
 import { errorHandler } from "./middlewares/error.middleware";
-import { taskRepository } from "./repositories/task.repository";
-import { checkStaleTickets } from "./services/ticket-notification.service";
 import quotePublicRoutes from "./routes/quote-public.routes";
 import websitePublicRoutes from "./routes/website-public.routes";
 import portalRoutes, { portalStaffRouter } from "./routes/portal.routes";
-import cron from "node-cron";
 import { warmPool } from "./v2/config/database";
 
 const app = express();
@@ -129,22 +126,6 @@ app.use((req, res, next) => {
       // Open the first DB connections one at a time now, so the first page load
       // does not have to open a dozen in parallel (see v2/config/database.ts).
       void warmPool();
-
-      // Every 30 minutes: check due tasks and stale tickets. Runs on a cron
-      // schedule (not a 60s setInterval) so the DB can scale to zero when idle.
-      cron.schedule("*/30 * * * *", async () => {
-        try {
-          await taskRepository.checkAndNotifyDueTasks();
-        } catch (err) {
-          console.error("Task notification check failed:", err);
-        }
-        try {
-          await checkStaleTickets();
-        } catch (err) {
-          console.error("Ticket notification check failed:", err);
-        }
-      });
-
     },
   );
 })();

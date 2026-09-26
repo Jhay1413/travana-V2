@@ -100,6 +100,7 @@ export function useClientEnquiryActions(
             notes: typeof data.notes === "string" && data.notes.trim() ? data.notes.trim() : undefined,
             destinations: Array.isArray(data.destinations) ? (data.destinations as any) : undefined,
             resorts: Array.isArray(data.resorts) ? (data.resorts as any) : undefined,
+            accommodations: Array.isArray(data.accommodations) ? (data.accommodations as any) : undefined,
             boardBases: Array.isArray(data.boardBases) ? (data.boardBases as any) : undefined,
             departureAirports: Array.isArray(data.departureAirports) ? data.departureAirports : undefined,
             passengers: Array.isArray(data.passengers)
