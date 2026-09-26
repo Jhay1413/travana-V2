@@ -114,7 +114,13 @@ function TicketListRow({ ticket, active, pinned, onClick }: { ticket: Ticket; ac
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <span className="flex min-w-0 items-center gap-1 truncate text-[13px] font-semibold text-black/85 3xl:text-sm dark:text-white/85">
-              {pinned && <Pin className="h-3 w-3 shrink-0 text-black/35 dark:text-white/40" aria-label="Pinned" />}
+              {pinned && (
+                <Pin
+                  className="h-3 w-3 shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+                  aria-label="Pinned"
+                  data-testid={`ticket-row-pinned-${ticket.id}`}
+                />
+              )}
               <span className="truncate">{clientName || "Internal ticket"}</span>
             </span>
             <span className="whitespace-nowrap text-xs text-black/45 dark:text-white/45">{rowTime(lastActivity)}</span>

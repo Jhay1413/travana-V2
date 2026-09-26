@@ -239,7 +239,10 @@ export const defaultQuoteFormValues: QuoteFormValues = {
   accommodationId: "",
   boardBasisId: "",
   checkInDate: "",
-  checkInTime: "",
+  // Prefilled for new quotes; every path that hydrates an existing quote
+  // (edit, copy) or an imported/scraped value sets this key explicitly on
+  // the object it merges over these defaults, so it always wins over "15:00".
+  checkInTime: "15:00",
   roomType: "",
   outboundDepartAirportId: "",
   outboundArriveAirportId: "",

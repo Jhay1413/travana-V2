@@ -56,8 +56,10 @@ import { useMyEnrollments, useTrainingCourses } from "@/features/hub/api/use-tra
 import type { MyEnrollment, TrainingCourse } from "@/features/hub/types/training.types";
 import { agentProfiles } from "@/data/hub-mock";
 import { userProfileApi } from "@/api";
+import type { UserProfilePayload } from "@/features/user-profile/api/user-profile.api";
 import axiosClient from "@/api/client/axios-client";
-import { useCurrentUser, useMyProfit, useUsers } from "@/hooks/queries";
+import { userApi } from "@/features/user";
+import { authKeys, useCurrentUser, useMyProfit, useUsers } from "@/hooks/queries";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -808,10 +810,29 @@ export default function HubProfiles() {
   });
 
   const saveProfileMutation = useMutation({
-    mutationFn: (payload: { bio?: string; extendedBio?: string; location?: string; specialisation?: string; certifications?: string }) =>
-      userProfileApi.saveMyProfile(payload),
+    mutationFn: (payload: UserProfilePayload) => userProfileApi.saveMyProfile(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-profile", "me"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to save profile", variant: "destructive" });
+    },
+  });
+
+  // The account's display name lives on the `user` table, not `user_profiles`,
+  // so it has to be saved through the users endpoint — otherwise "Full Name"
+  // edits in the dialog below only ever touched local state and were wiped out
+  // the next time currentUser refetched (e.g. after an avatar upload).
+  const saveNameMutation = useMutation({
+    mutationFn: (name: string) => {
+      if (!currentUser?.id) throw new Error("Not signed in");
+      return userApi.update(currentUser.id, { name });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: authKeys.currentUser() });
+    },
+    onError: () => {
+      toast({ title: "Failed to save profile", variant: "destructive" });
     },
   });
 
@@ -998,7 +1019,7 @@ export default function HubProfiles() {
     const savedUrl = await uploadAvatar(file);
     if (savedUrl) {
       setActiveCoverImage(savedUrl);
-      saveProfileMutation.mutate({ coverImage: savedUrl } as any);
+      saveProfileMutation.mutate({ coverImage: savedUrl });
     }
   };
 
@@ -1030,6 +1051,10 @@ export default function HubProfiles() {
     }));
     if (editImagePreview !== profileImage) {
       setProfileImage(editImagePreview);
+    }
+    const trimmedName = editForm.name.trim();
+    if (trimmedName && trimmedName !== currentUser?.name) {
+      saveNameMutation.mutate(trimmedName);
     }
     saveProfileMutation.mutate({
       bio: editForm.bio,

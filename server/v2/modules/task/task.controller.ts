@@ -65,7 +65,7 @@ export const taskController = {
       body.dueDate = new Date(body.dueDate);
     }
     const parsed = insertTasksSchema
-      .pick({ title: true, dueDate: true, userId: true, completed: true })
+      .pick({ title: true, description: true, dueDate: true, userId: true, completed: true })
       .partial()
       .parse(body);
     const task = await taskService.update(id, parsed, getScope(req));

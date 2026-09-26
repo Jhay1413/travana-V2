@@ -15,12 +15,17 @@ import type { Enquiry } from "@/features/enquiry/types";
 import type { EnquiryTable } from "@/features/quote/types";
 import type { FormPresentation } from "@/features/quote/types";
 import type { EnquiryIntent } from "@/features/conversations/api/ai-enquiry.api";
-import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useBoardBasis, useAirportsByCountries, useAccommodationTypes } from "@/hooks/queries";
+import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useAccommodationSearch, useBoardBasis, useAirportsByCountries, useAccommodationTypes } from "@/hooks/queries";
 import type { LookupCountry } from "@/features/lookups/api/lookup.api";
+import { orderBoardBasisRows } from "@/features/lookups";
+import type { Airport } from "@/features/airport/types";
 import { useEnquiry } from "@/features/enquiry/api/use-enquiry-queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { AddAirportModal } from "@/features/lookups/components/lookups/add-airport-modal";
+import { AddDestinationModal } from "@/features/lookups/components/lookups/add-destination-modal";
+import { AddResortModal } from "@/features/lookups/components/lookups/add-resort-modal";
+import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
 import { FormDrawer, FormDrawerSection, FormDrawerFooter, drawerLabelClass, drawerInputClass, drawerControlClass } from "@/components/shared/form-drawer";
 import { cn } from "@/lib/utils";
 
@@ -43,21 +48,6 @@ const CRUISE_FLEXIBILITY_OPTIONS = [
 ];
 
 const STAR_RATINGS = ["2 Star", "3 Star", "4 Star", "5 Star"];
-
-// Board basis options shown in the enquiry wizard, in display order. Matched by
-// name (case-insensitive, trimmed) so it stays portable across environments.
-// The near-duplicate lookup rows in the table (e.g. " All-Inclusive",
-// "Self-Catering", "Bed & Breakfast") differ once normalized and are excluded.
-const ALLOWED_BOARD_BASIS = [
-  "All Inclusive",
-  "Bed and Breakfast",
-  "Self Catering",
-  "Half Board",
-  "Full Board",
-  "Room Only",
-  "Lodge",
-];
-
 
 const BUDGET_TYPES = ["Per Person", "Package"];
 
@@ -116,6 +106,7 @@ interface EnquiryForm {
   countries: string[];
   destinations: string[];
   resorts: string[];
+  accommodations: string[];
   departureAirports: string[];
   travelDate: string;
   flexibility: string;
@@ -159,6 +150,7 @@ const defaultForm: EnquiryForm = {
   countries: [],
   destinations: [],
   resorts: [],
+  accommodations: [],
   departureAirports: [],
   travelDate: "",
   flexibility: "",
@@ -216,6 +208,22 @@ function findUkCountry(countries: LookupCountry[] | undefined): LookupCountry | 
     const code = normLower(c.country_code);
     return name === "united kingdom" || name === "uk" || code === "gb" || code === "uk";
   });
+}
+
+// Airport codes pinned to the top of the departure-airport list, in priority
+// order. Matched by `airport_code` (case-insensitive) rather than a hardcoded
+// id, so it keeps working across environments/seeds. A pinned code that isn't
+// present is simply skipped — never breaks the remaining list.
+const PINNED_AIRPORT_CODES = ["NCL"];
+
+function withPinnedAirportsFirst(airports: Airport[]): Airport[] {
+  const rest = [...airports];
+  const pinned: Airport[] = [];
+  for (const code of PINNED_AIRPORT_CODES) {
+    const idx = rest.findIndex((a) => normLower(a.airport_code) === code.toLowerCase());
+    if (idx !== -1) pinned.push(...rest.splice(idx, 1));
+  }
+  return [...pinned, ...rest];
 }
 
 // Maps an AI-extracted enquiry intent onto the wizard form: resolves country /
@@ -318,6 +326,7 @@ function resolveIntentToForm(intent: EnquiryIntent, lk: LookupSets): EnquiryForm
 function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
   const destRecords = ((enquiry.destinations as any[]) || []);
   const resortRecords = ((enquiry.resorts as any[]) || []);
+  const accomRecords = ((enquiry.accommodations as any[]) || []);
   const bbRecords = ((enquiry.boardBases as any[]) || []);
   const airportRecords = ((enquiry.airports as any[]) || []);
 
@@ -345,6 +354,14 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     if (r?.resort_name || r?.name) labels[id] = r.resort_name || r.name;
   }
 
+  const accommodations: string[] = [];
+  for (const a of accomRecords) {
+    const id = a?.accomodation_id || a?.accommodation_id;
+    if (!id) continue;
+    accommodations.push(id);
+    if (a?.accomodation_name || a?.name) labels[id] = a.accomodation_name || a.name;
+  }
+
   const boardBases: string[] = [];
   for (const b of bbRecords) {
     const id = b?.board_basis_id || b?.board_basis;
@@ -367,6 +384,7 @@ function formFromEnquiry(enquiry: Enquiry): EnquiryForm {
     countries,
     destinations,
     resorts,
+    accommodations,
     departureAirports,
     travelDate: enquiry.travel_date || "",
     flexibility: enquiry.flexibility_date || enquiry.flexible_date || "",
@@ -450,26 +468,41 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
   const [form, setForm] = useState<EnquiryForm>(defaultForm);
   const [direction, setDirection] = useState(1);
   const [resortSearch, setResortSearch] = useState("");
+  const [destSearch, setDestSearch] = useState("");
+  const [accomSearch, setAccomSearch] = useState("");
   const [airportSearch, setAirportSearch] = useState("");
   const [showAddAirport, setShowAddAirport] = useState(false);
+  const [showAddDestination, setShowAddDestination] = useState(false);
+  const [showAddResort, setShowAddResort] = useState(false);
+  const [showAddAccommodation, setShowAddAccommodation] = useState(false);
   const [addedAirportLabels, setAddedAirportLabels] = useState<Record<string, string>>({});
 
   const primaryCountry = form.countries[0];
   const primaryDestination = form.destinations[0];
+  const primaryResort = form.resorts[0];
 
   const { data: countriesData } = useCountries();
-  const { data: singleCountryDestinations } = useDestinations(
+  const { data: singleCountryDestinations, isFetching: isSingleCountryDestFetching } = useDestinations(
     form.countries.length === 1 ? primaryCountry : undefined,
   );
-  const { data: allDestinationsData } = useAllDestinations();
+  const { data: allDestinationsData, isFetching: isAllDestFetching } = useAllDestinations();
   const destinationsData = form.countries.length === 1 ? singleCountryDestinations : allDestinationsData;
+  const isDestFetching = form.countries.length === 1 ? isSingleCountryDestFetching : isAllDestFetching;
   // While the user is typing a search, ignore the selected destination/country pivot
   // so they can find ANY resort. With no search term, scope to the selected
   // destination (or country) to give a sensible default list.
-  const { data: resortsData } = useResortSearch(
+  const { data: resortsData, isFetching: isResortFetching } = useResortSearch(
     resortSearch,
     resortSearch ? undefined : primaryDestination || undefined,
     resortSearch || primaryDestination ? undefined : primaryCountry || undefined,
+  );
+  // Same resort/destination/country scoping as the quote form's accommodation
+  // search — the most specific selection wins.
+  const { data: accommodationsData, isFetching: isAccomFetching } = useAccommodationSearch(
+    accomSearch,
+    primaryResort || undefined,
+    !primaryResort ? primaryDestination || undefined : undefined,
+    !primaryResort && !primaryDestination ? primaryCountry || undefined : undefined,
   );
   const { data: boardBasisData } = useBoardBasis();
   // Departure airports are UK-only (old platform behaviour) — resolve the UK
@@ -627,12 +660,46 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
     });
   };
 
+  const handleAccommodationsChange = (next: string[]) => {
+    setForm((prev) => {
+      const labels = { ...prev.labels };
+      const countryOf = { ...prev.countryOf };
+      const destinationOf = { ...prev.destinationOf };
+      const resorts = [...prev.resorts];
+      const destinations = [...prev.destinations];
+      const countries = [...prev.countries];
+      const added = next.filter((a) => !prev.accommodations.includes(a));
+      for (const id of added) {
+        const a = (accommodationsData || []).find((x: any) => x.id === id);
+        if (!a) continue;
+        labels[id] = a.name;
+        if (a.resorts_id) {
+          if (!resorts.includes(a.resorts_id)) resorts.push(a.resorts_id);
+          if (a.resort_name) labels[a.resorts_id] = a.resort_name;
+        }
+        if (a.destination_id) {
+          destinationOf[id] = a.destination_id;
+          if (!destinations.includes(a.destination_id)) {
+            destinations.push(a.destination_id);
+            if (a.destination_name) labels[a.destination_id] = a.destination_name;
+          }
+          if (a.country_id) countryOf[a.destination_id] = a.country_id;
+        }
+        if (a.country_id) {
+          countryOf[id] = a.country_id;
+          if (!countries.includes(a.country_id)) countries.push(a.country_id);
+        }
+      }
+      return { ...prev, accommodations: next, resorts, destinations, countries, labels, countryOf, destinationOf };
+    });
+  };
+
   // UK airports only (`airportsData` is already scoped to the UK country via
   // `ukCountry` above). `form.labels` is seeded from the enquiry's own airport
   // records in `formFromEnquiry`/`resolveIntentToForm`, so a previously
   // selected non-UK airport (e.g. on an older enquiry) still renders its label
   // as a selected chip even though it's excluded from the selectable options.
-  const airportOptions = (airportsData || []).map((a) => ({
+  const airportOptions = withPinnedAirportsFirst(airportsData || []).map((a) => ({
     value: a.id,
     label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
   }));
@@ -726,6 +793,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
         flexibility_date: form.flexibility || undefined,
         destinations: form.destinations.length ? form.destinations : undefined,
         resorts: form.resorts.length ? form.resorts : undefined,
+        accommodations: form.accommodations.length ? form.accommodations : undefined,
         boardBases: form.boardBases.length ? form.boardBases : undefined,
         departureAirports: form.departureAirports.length ? form.departureAirports : undefined,
         passengers: childPassengers.length ? childPassengers : undefined,
@@ -879,50 +947,175 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
       )}
 
       {!isHotTub && !isCruise && (
-        <div className={cn("grid gap-3 sm:grid-cols-3", span2)}>
-          <div className="space-y-1.5">
-            <Label className={labelCls}>Countries</Label>
-            <MultiSearchableSelect
-              value={form.countries}
-              onValueChange={handleCountriesChange}
-              options={(countriesData || []).map((c: any) => ({ value: c.id, label: c.country_name }))}
-              placeholder="Select ..."
-              searchPlaceholder="Search countries..."
-              emptyMessage="No countries found."
-              className={pickerCls}
-              data-testid="select-enquiry-country"
-            />
+        <>
+          <div className={cn("grid gap-3 sm:grid-cols-3", span2)}>
+            <div className="space-y-1.5">
+              <Label className={labelCls}>Countries</Label>
+              <MultiSearchableSelect
+                value={form.countries}
+                onValueChange={handleCountriesChange}
+                options={(countriesData || []).map((c: any) => ({ value: c.id, label: c.country_name }))}
+                placeholder="Select ..."
+                searchPlaceholder="Search countries..."
+                emptyMessage="No countries found."
+                className={pickerCls}
+                data-testid="select-enquiry-country"
+              />
+              {/* No AddCountryModal exists in @/features/lookups/components/lookups yet — see report. */}
+            </div>
+            <div className="space-y-1.5">
+              <Label className={labelCls}>Destinations</Label>
+              <MultiSearchableSelect
+                value={form.destinations}
+                onValueChange={handleDestinationsChange}
+                selectedLabels={form.labels}
+                options={(destinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
+                onSearchCapture={setDestSearch}
+                placeholder="Select ..."
+                searchPlaceholder="Search destinations..."
+                emptyMessage="No destinations found."
+                className={pickerCls}
+                data-testid="select-enquiry-destination"
+                onAddNew={
+                  !isDestFetching && (destinationsData || []).length === 0
+                    ? () => setShowAddDestination(true)
+                    : undefined
+                }
+                addNewLabel="Add Destination"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className={labelCls}>Resorts</Label>
+              <MultiSearchableSelect
+                value={form.resorts}
+                onValueChange={handleResortsChange}
+                selectedLabels={form.labels}
+                options={(resortsData || []).map((r: any) => ({ value: r.id, label: r.name }))}
+                onSearch={setResortSearch}
+                placeholder="Search ..."
+                searchPlaceholder="Search resorts..."
+                emptyMessage="No resorts found."
+                className={pickerCls}
+                data-testid="select-enquiry-resort"
+                onAddNew={
+                  !isResortFetching && (resortsData || []).length === 0
+                    ? () => setShowAddResort(true)
+                    : undefined
+                }
+                addNewLabel="Add Resort"
+              />
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label className={labelCls}>Destinations</Label>
+          <div className={cn("space-y-1.5", span2)}>
+            <Label className={labelCls}>Accommodations</Label>
             <MultiSearchableSelect
-              value={form.destinations}
-              onValueChange={handleDestinationsChange}
+              value={form.accommodations}
+              onValueChange={handleAccommodationsChange}
               selectedLabels={form.labels}
-              options={(destinationsData || []).map((d: any) => ({ value: d.id, label: d.name }))}
-              placeholder="Select ..."
-              searchPlaceholder="Search destinations..."
-              emptyMessage="No destinations found."
-              className={pickerCls}
-              data-testid="select-enquiry-destination"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className={labelCls}>Resorts</Label>
-            <MultiSearchableSelect
-              value={form.resorts}
-              onValueChange={handleResortsChange}
-              selectedLabels={form.labels}
-              options={(resortsData || []).map((r: any) => ({ value: r.id, label: r.name }))}
-              onSearch={setResortSearch}
+              options={(accommodationsData || []).map((a: any) => ({ value: a.id, label: a.name }))}
+              onSearch={setAccomSearch}
               placeholder="Search ..."
-              searchPlaceholder="Search resorts..."
-              emptyMessage="No resorts found."
+              searchPlaceholder="Search accommodations..."
+              emptyMessage="No accommodations found."
+              isLoading={isAccomFetching}
               className={pickerCls}
-              data-testid="select-enquiry-resort"
+              data-testid="select-enquiry-accommodation"
+              onAddNew={
+                !isAccomFetching && (accommodationsData || []).length === 0
+                  ? () => setShowAddAccommodation(true)
+                  : undefined
+              }
+              addNewLabel="Add Accommodation"
             />
           </div>
-        </div>
+
+          <AddDestinationModal
+            open={showAddDestination}
+            onOpenChange={setShowAddDestination}
+            initialName={destSearch}
+            initialCountryId={primaryCountry || ""}
+            onSuccess={(dest) => {
+              setForm((prev) => {
+                const labels = { ...prev.labels, [dest.id]: dest.name };
+                const countryOf = { ...prev.countryOf };
+                const countries = [...prev.countries];
+                if (dest.country_id) {
+                  countryOf[dest.id] = dest.country_id;
+                  if (!countries.includes(dest.country_id)) countries.push(dest.country_id);
+                }
+                return { ...prev, destinations: [...prev.destinations, dest.id], countries, labels, countryOf };
+              });
+              setDestSearch("");
+            }}
+          />
+
+          <AddResortModal
+            open={showAddResort}
+            onOpenChange={setShowAddResort}
+            initialName={resortSearch}
+            initialCountryId={primaryCountry || ""}
+            initialDestinationId={primaryDestination || ""}
+            initialDestinationName={form.labels[primaryDestination] || ""}
+            onSuccess={(res) => {
+              setForm((prev) => {
+                const labels = { ...prev.labels, [res.id]: res.name };
+                const countryOf = { ...prev.countryOf };
+                const destinationOf = { ...prev.destinationOf };
+                const destinations = [...prev.destinations];
+                const countries = [...prev.countries];
+                if (res.destination_id) {
+                  destinationOf[res.id] = res.destination_id;
+                  if (!destinations.includes(res.destination_id)) destinations.push(res.destination_id);
+                  if (res.destination_name) labels[res.destination_id] = res.destination_name;
+                  if (res.country_id) countryOf[res.destination_id] = res.country_id;
+                }
+                if (res.country_id) {
+                  countryOf[res.id] = res.country_id;
+                  if (!countries.includes(res.country_id)) countries.push(res.country_id);
+                }
+                return { ...prev, resorts: [...prev.resorts, res.id], destinations, countries, labels, countryOf, destinationOf };
+              });
+              setResortSearch("");
+            }}
+          />
+
+          <AddAccommodationModal
+            open={showAddAccommodation}
+            onOpenChange={setShowAddAccommodation}
+            initialName={accomSearch}
+            initialCountryId={primaryCountry || ""}
+            initialDestinationId={primaryDestination || ""}
+            initialDestinationName={form.labels[primaryDestination] || ""}
+            initialResortId={primaryResort || ""}
+            initialResortName={form.labels[primaryResort] || ""}
+            onSuccess={(acc) => {
+              setForm((prev) => {
+                const labels = { ...prev.labels, [acc.id]: acc.name };
+                const countryOf = { ...prev.countryOf };
+                const destinationOf = { ...prev.destinationOf };
+                const resorts = [...prev.resorts];
+                const destinations = [...prev.destinations];
+                const countries = [...prev.countries];
+                if (acc.resorts_id) {
+                  if (!resorts.includes(acc.resorts_id)) resorts.push(acc.resorts_id);
+                  if (acc.resort_name) labels[acc.resorts_id] = acc.resort_name;
+                }
+                if (acc.destination_id) {
+                  destinationOf[acc.id] = acc.destination_id;
+                  if (!destinations.includes(acc.destination_id)) destinations.push(acc.destination_id);
+                  if (acc.destination_name) labels[acc.destination_id] = acc.destination_name;
+                  if (acc.country_id) countryOf[acc.destination_id] = acc.country_id;
+                }
+                if (acc.country_id) {
+                  countryOf[acc.id] = acc.country_id;
+                  if (!countries.includes(acc.country_id)) countries.push(acc.country_id);
+                }
+                return { ...prev, accommodations: [...prev.accommodations, acc.id], resorts, destinations, countries, labels, countryOf, destinationOf };
+              });
+              setAccomSearch("");
+            }}
+          />
+        </>
       )}
 
       {!isDrawer && (
@@ -1459,14 +1652,10 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
         <MultiSearchableSelect
           value={form.boardBases}
           onValueChange={(v) => set("boardBases", v)}
-          options={ALLOWED_BOARD_BASIS
-            .map((name) =>
-              (boardBasisData || []).find(
-                (b: any) => (b.type || "").trim().toLowerCase() === name.toLowerCase(),
-              ),
-            )
-            .filter(Boolean)
-            .map((b: any) => ({ value: b.id, label: (b.type || "").trim() }))}
+          options={orderBoardBasisRows(boardBasisData || []).map((b: any) => ({
+            value: b.id,
+            label: (b.type || "").trim(),
+          }))}
           placeholder="Select board basis..."
           searchPlaceholder="Search board basis..."
           emptyMessage="No board basis found."

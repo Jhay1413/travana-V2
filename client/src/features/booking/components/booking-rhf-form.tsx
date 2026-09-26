@@ -72,6 +72,7 @@ import { summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
 import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
 import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
+import { orderBoardBasisRows } from "@/features/lookups";
 
 const emptyFlightLeg: FlightLegValue = {
   departAirportId: "",
@@ -611,7 +612,7 @@ export function BookingRHFForm({
 
   const boardBasisOptions = useMemo(
     () =>
-      (boardBasisData || []).map((b: { id: string; type: string }) => ({
+      orderBoardBasisRows(boardBasisData || []).map((b: { id: string; type: string }) => ({
         value: b.id,
         label: b.type,
       })),

@@ -501,6 +501,7 @@ export function WhatsOnTab({
       />
 
       <CreateTaskDialog
+        presentation="drawer"
         open={creatingTask}
         onOpenChange={setCreatingTask}
         defaultAssignedToId={allUsers ? undefined : userId}

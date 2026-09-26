@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { tasks, notifications, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
+import { tasks, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
 import { eq, and, desc, gte, lte, inArray, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
@@ -36,7 +36,7 @@ const entityRouteMap: Record<string, string> = {
   booking: "/bookings",
 };
 
-function entityLink(entityType: string, entityId: string): string {
+export function entityLink(entityType: string, entityId: string): string {
   const base = entityRouteMap[entityType] ?? `/${entityType}s`;
   return `${base}/${entityId}`;
 }
@@ -464,6 +464,17 @@ export const taskRepository = {
       .orderBy(desc(tasks.createdAt));
   },
 
+  /**
+   * Plain, unresolved task row — used by the service layer to read the prior
+   * assignee before an update, so it can tell an actual reassignment apart
+   * from a resave that merely echoes back the same `userId`.
+   */
+  async findById(id: string, scope?: Scope): Promise<TaskNew | undefined> {
+    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const [result] = await db.select().from(tasks).where(and(...conds)).limit(1);
+    return result;
+  },
+
   async create(taskData: InsertTaskNew, scope?: Scope): Promise<TaskNew> {
     const values = scope
       ? { ...taskData, id: randomUUID(), orgId: (taskData as any).orgId ?? scope.orgId ?? null, branchId: (taskData as any).branchId ?? scope.branchId ?? null }
@@ -529,49 +540,5 @@ export const taskRepository = {
           eq(tasks.completed, false)
         )
       );
-  },
-
-  /**
-   * `userId`, when provided, scopes the scan to that user's own tasks —
-   * used by the on-demand notification-load trigger so each request only
-   * pays for a cheap, indexed per-user query instead of a full table scan.
-   * Omitting it preserves the old global-scan behaviour (e.g. for the
-   * removed cron / any future admin-triggered sweep).
-   */
-  async checkAndNotifyDueTasks(userId?: string): Promise<void> {
-    const now = new Date();
-    const conds: SQL[] = [
-      eq(tasks.completed, false),
-      eq(tasks.notified, false),
-      lte(tasks.dueDate, now),
-    ];
-    if (userId) {
-      conds.push(eq(tasks.userId, userId));
-    }
-    const dueTasks = await db
-      .select()
-      .from(tasks)
-      .where(and(...conds));
-
-    if (dueTasks.length === 0) return;
-
-    const notificationRows = dueTasks
-      .filter(t => t.userId !== null && t.userId !== undefined)
-      .map(t => ({
-        userId: t.userId as string,
-        type: "task_due" as const,
-        title: "Task Due",
-        message: `Task "${t.title}" is now due.`,
-        link: entityLink(t.entityType ?? "", t.entityId ?? ""),
-      }));
-
-    const dueIds = dueTasks.map(t => t.id);
-
-    await db.transaction(async (tx) => {
-      if (notificationRows.length > 0) {
-        await tx.insert(notifications).values(notificationRows);
-      }
-      await tx.update(tasks).set({ notified: true }).where(inArray(tasks.id, dueIds));
-    });
   },
 };

@@ -1811,6 +1811,7 @@ export const tasks = pgTable("tasks", {
   entityId: varchar("entity_id"),
   userId: varchar("user_id"),
   title: text("title"),
+  description: text("description"),
   dueDate: timestamp("due_date"),
   completed: boolean("completed"),
   completedAt: timestamp("completed_at"),

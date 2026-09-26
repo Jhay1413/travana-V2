@@ -37,6 +37,7 @@ import {
   useAccommodationSearch,
   useRoomTypes,
 } from "@/hooks/queries";
+import { orderBoardBasisRows } from "@/features/lookups";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -659,7 +660,7 @@ export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourO
     label: a.airport_code ? `${a.airport_name || a.id} (${a.airport_code})` : a.airport_name || a.id,
   }));
   const tourOperatorOptions = (tourOperatorsData || []).map((op: any) => ({ value: op.id, label: op.name || op.id }));
-  const boardBasisOptions = (boardBasisData || []).map((b: any) => ({ value: b.id, label: b.type || b.id }));
+  const boardBasisOptions = orderBoardBasisRows(boardBasisData || []).map((b: any) => ({ value: b.id, label: b.type || b.id }));
   const roomTypeOptions = (roomTypesData || []).map((r: any) => ({ value: r.id, label: r.name || r.type || r.id }));
 
   const { fields: transfers, append: addTransfer, remove: removeTransfer } = useFieldArray({ control, name: "transfers" });

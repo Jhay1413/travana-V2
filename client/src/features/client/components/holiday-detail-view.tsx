@@ -49,17 +49,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import {
-  DrawerField,
-  FormDrawer,
-  FormDrawerFooter,
-  FormDrawerSection,
-  drawerControlClass,
-  drawerInputClass,
-} from "@/components/shared/form-drawer";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { UserReassignSelect } from "@/components/ui/user-reassign-select";
+import { FormDrawer } from "@/components/shared/form-drawer";
 import { EMOJI_CATEGORIES } from "@/lib/emoji";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
@@ -88,7 +78,6 @@ import {
   useDeleteNote,
   useToggleTask,
   useDeleteTask,
-  useCreateTask,
   useCreateQuote,
   useUpdateEnquiry,
   useSetDealLost,
@@ -96,6 +85,7 @@ import {
 } from "@/hooks/mutations";
 import { useRole } from "@/hooks/use-role";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
+import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
 import { useToast } from "@/hooks/use-toast";
 import { currency, formatUKDate, formatLeadSource, transformQuoteData, type QuoteDisplay } from "@/features/quote/components/quote-types";
 import {
@@ -641,123 +631,6 @@ function taskInitials(name: string): string {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join("");
-}
-
-// Minimal "Add Task" dialog used from the Actions menu — mirrors the add-task
-// form embedded in QuoteTasksSection/EnquiryTasksSection, but standalone so it
-// can be opened without also mounting a full Tasks card (the tab already
-// covers that).
-function HolidayAddTaskDialog({
-  open,
-  onOpenChange,
-  entityId,
-  entityType,
-  assignedUserId,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  entityId: string;
-  entityType: "enquiry" | "quote" | "booking";
-  assignedUserId?: string;
-}) {
-  const taskEntityType = entityType === "booking" ? "quote" : entityType;
-  const { data: currentUser } = useCurrentUser();
-  const createMutation = useCreateTask(taskEntityType, entityId);
-  const { toast } = useToast();
-  const [title, setTitle] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [dueTime, setDueTime] = useState("09:00");
-  const [assignedToId, setAssignedToId] = useState("");
-
-  const handleAdd = () => {
-    const userIdForTask = assignedToId || assignedUserId || currentUser?.id;
-    if (!title || !dueDate || !userIdForTask) return;
-    createMutation.mutate(
-      {
-        entityType: taskEntityType,
-        entityId,
-        userId: userIdForTask,
-        title,
-        dueDate: new Date(`${dueDate}T${dueTime || "09:00"}`),
-        completed: false,
-        notified: false,
-      } as any,
-      {
-        onSuccess: () => {
-          onOpenChange(false);
-          setTitle("");
-          setDueDate("");
-          setDueTime("09:00");
-          setAssignedToId("");
-          toast({ title: "Task added" });
-        },
-        onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
-      },
-    );
-  };
-
-  const canSubmit = !!title && !!dueDate;
-
-  return (
-    <FormDrawer
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Create Task"
-      description="Set a task with a due date and time."
-      data-testid="holiday-dialog-add-task"
-    >
-      <div className="space-y-5 px-7 pb-6 pt-6">
-        <DrawerField label="Task" className="max-w-[420px]">
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Enter a task…"
-            className={drawerInputClass}
-            data-testid="holiday-input-task-title"
-          />
-        </DrawerField>
-        <DrawerField label="Assign To" className="max-w-[420px]">
-          <UserReassignSelect
-            value={assignedToId || assignedUserId || currentUser?.id || ""}
-            onValueChange={setAssignedToId}
-            className={drawerControlClass}
-            data-testid="holiday-select-task-assign-to"
-          />
-        </DrawerField>
-      </div>
-      <FormDrawerSection title="Schedule" data-testid="drawer-section-task-schedule">
-        <div className="flex flex-wrap gap-x-6 gap-y-4">
-          <DrawerField label="Due Date" className="w-[170px]">
-            <DatePicker
-              value={dueDate}
-              onChange={(v) => setDueDate(v)}
-              placeholder="Pick a date"
-              className={drawerControlClass}
-              modal
-              data-testid="holiday-input-task-due-date"
-            />
-          </DrawerField>
-          <DrawerField label="Due Time" className="w-[140px]">
-            <Input
-              type="time"
-              value={dueTime}
-              onChange={(e) => setDueTime(e.target.value)}
-              className={drawerInputClass}
-              data-testid="holiday-input-task-due-time"
-            />
-          </DrawerField>
-        </div>
-      </FormDrawerSection>
-      <FormDrawerFooter
-        submitLabel="Create Task"
-        isLoading={createMutation.isPending}
-        disabled={!canSubmit}
-        hint={canSubmit ? undefined : "Enter a task and a due date to save."}
-        onSubmit={handleAdd}
-        data-testid="drawer-footer"
-      />
-    </FormDrawer>
-  );
 }
 
 function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityType: "enquiry" | "quote" | "booking" }) {
@@ -1394,12 +1267,13 @@ export function QuoteActionsMenu({
         </AlertDialogContent>
       </AlertDialog>
 
-      <HolidayAddTaskDialog
+      <CreateTaskDialog
+        presentation="drawer"
         open={showAddTaskDialog}
         onOpenChange={setShowAddTaskDialog}
-        entityId={quoteId}
         entityType="quote"
-        assignedUserId={quoteData?.user_id}
+        entityId={quoteId}
+        defaultAssignedToId={quoteData?.user_id}
       />
 
       <CreateTicketDialog
@@ -1947,35 +1821,30 @@ export function EnquiryActionsMenu({
         isSaving={updateEnquiryMutation.isPending}
       />
 
-      <Dialog open={showConvertModal} onOpenChange={setShowConvertModal}>
-        <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
-          <DialogHeader className="px-6 pt-6">
-            <DialogTitle className="text-sm font-semibold">Convert Enquiry to Quote</DialogTitle>
-            <DialogDescription className="text-sm text-black/55">
-              Review and adjust the details from the enquiry, then create the quote.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[calc(90vh-100px)]">
-            <div className="px-6 pb-6">
-              <QuoteRHFForm
-                key={enquiryId + showConvertModal}
-                defaultValues={convertDefaultValues}
-                onSubmit={handleConvertSubmit}
-                isLoading={createQuoteMutation.isPending}
-                submitLabel="Convert to Quote"
-                onCancel={() => setShowConvertModal(false)}
-              />
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
+      <FormDrawer
+        open={showConvertModal}
+        onOpenChange={setShowConvertModal}
+        title="Convert Enquiry to Quote"
+        description="Review and adjust the details from the enquiry, then create the quote."
+        data-testid="convert-enquiry-drawer"
+      >
+        <QuoteRHFForm
+          key={enquiryId + showConvertModal}
+          layout="drawer"
+          defaultValues={convertDefaultValues}
+          onSubmit={handleConvertSubmit}
+          isLoading={createQuoteMutation.isPending}
+          submitLabel="Convert to Quote"
+        />
+      </FormDrawer>
 
-      <HolidayAddTaskDialog
+      <CreateTaskDialog
+        presentation="drawer"
         open={showAddTaskDialog}
         onOpenChange={setShowAddTaskDialog}
-        entityId={enquiryId}
         entityType="enquiry"
-        assignedUserId={enquiry.user_id}
+        entityId={enquiryId}
+        defaultAssignedToId={enquiry.user_id}
       />
 
       <CreateTicketDialog

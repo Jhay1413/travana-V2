@@ -73,7 +73,15 @@ export function NoteCard({
       className="group"
       data-testid={`note-card-${note.id}`}
     >
-      <div className={`rounded-xl border p-2 text-[20px] ${isSystem ? "border-sky-200/60 bg-sky-50/50" : "border-black/10 bg-white/60"}`}>
+      <div
+        className={`rounded-xl border p-2 text-[20px] ${
+          isSystem
+            ? "border-sky-200/60 bg-sky-50/50"
+            : isNotePinned
+              ? "border-amber-200/60 bg-amber-50/40 dark:border-amber-500/20 dark:bg-amber-500/5"
+              : "border-black/10 bg-white/60"
+        }`}
+      >
         <div className="flex items-start justify-between gap-1.5">
           <div className="flex items-center gap-1.5">
             {isSystem ? (
@@ -96,6 +104,12 @@ export function NoteCard({
               <span className="ml-1.5 text-[9px] text-black/40" data-testid={`note-time-${note.id}`} title={formatFullDateTime(note.createdAt)}>
                 {formatRelativeTime(note.createdAt)} · {formatFullDateTime(note.createdAt)}
               </span>
+              {isNotePinned && (
+                <Pin
+                  className="ml-1 inline h-2.5 w-2.5 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+                  data-testid={`note-pinned-indicator-${note.id}`}
+                />
+              )}
             </div>
           </div>
           {!isSystem && (

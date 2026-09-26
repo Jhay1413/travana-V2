@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Bell, Check, CheckCheck, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -21,6 +21,7 @@ import {
   useClearAllNotifications,
 } from "@/hooks/mutations";
 import type { Notification } from "@/features/notifications/types";
+import { setNotificationsPanelOpen } from "@/features/notifications/lib/panel-open-store";
 import { useLocation } from "wouter";
 
 interface NotificationsPanelProps {
@@ -55,6 +56,57 @@ export function NotificationsPanel({ userId }: NotificationsPanelProps) {
   // the same list the panel renders (rather than a second query against
   // /unread) so the badge can never disagree with what's shown inside.
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  // --- Auto-open on new notifications ------------------------------------
+  // Product decision reversed an earlier "never auto-open" rule: every
+  // genuinely NEW unread notification should pop the panel open, but a
+  // later arrival must not re-trigger an open while it's already open (no
+  // flicker/remount), and the very first fetch on mount must never open it
+  // (that would pop the panel for a user who just logged in with 10
+  // pre-existing unread notifications).
+  //
+  // "Genuinely new" is tracked by id, not list length/identity, because a
+  // delete shrinks the list and a plain refetch (e.g. window refocus)
+  // returns the same rows — neither should count as new. We snapshot the
+  // id set on the first successful load as a baseline, then on every
+  // subsequent update diff against it for unread ids we haven't seen yet.
+  const hasBaselinedRef = useRef(false);
+  const seenIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const currentIds = new Set(notifications.map((n) => n.id));
+
+    if (!hasBaselinedRef.current) {
+      // First successful fetch: remember what's already there, but don't open.
+      seenIdsRef.current = currentIds;
+      hasBaselinedRef.current = true;
+      return;
+    }
+
+    const hasNewUnread = notifications.some(
+      (n) => !n.read && !seenIdsRef.current.has(n.id)
+    );
+    seenIdsRef.current = currentIds;
+
+    if (hasNewUnread) {
+      // Update the shared "panel open" flag synchronously (before the
+      // functional setOpen below re-renders) so the toast — whose effect
+      // runs later in this same commit — can see it opened and skip
+      // showing a redundant toast for the same notification.
+      setNotificationsPanelOpen(true);
+      // Functional updater bails out of a re-render when already `true`,
+      // which is what prevents an already-open panel from flickering.
+      setOpen((prev) => (prev ? prev : true));
+    }
+  }, [notifications, isLoading]);
+
+  // Keep the shared store in sync with every other way `open` can change
+  // (bell click, close button, navigating away on click).
+  useEffect(() => {
+    setNotificationsPanelOpen(open);
+  }, [open]);
 
   const markReadMutation = useMarkNotificationRead(userId);
   const markAllReadMutation = useMarkAllNotificationsRead(userId);

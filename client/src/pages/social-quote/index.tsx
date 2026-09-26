@@ -444,6 +444,7 @@ export default function SocialQuotePage() {
 
         return (
           <QuoteCreateDialog
+            presentation="drawer"
             open={showCreateDialog}
             onOpenChange={(open) => { if (!open) { setShowCreateDialog(false); setSelectedClient(null); } }}
             clientId={selectedClient.id}

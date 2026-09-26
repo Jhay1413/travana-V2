@@ -11,8 +11,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
+import { useFixedDropdownPosition } from "@/hooks/use-fixed-dropdown-position";
+import { useCloseOnOutsideOrEscape } from "@/hooks/use-close-on-outside-or-escape";
 import {
   useSavePost,
   useScheduleOnOnlySocials,
@@ -111,10 +112,25 @@ export function SocialPostPreviewDialog({
   const rescheduleOnOnlySocials = useRescheduleOnOnlySocials();
   const postRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const calendarTriggerRef = useRef<HTMLButtonElement>(null);
+  const calendarDropdownRef = useRef<HTMLDivElement>(null);
   const [subtitle, setSubtitle] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // The calendar dropdown is rendered inline (not a Radix `Popover` portaled to
+  // `document.body`) and positioned with `position: fixed` from the trigger's rect —
+  // this dialog's own `FocusScope`/`RemoveScroll` would otherwise fight a portaled
+  // popover for focus/scroll, leaving it dead to clicks. See
+  // docs/form-drawer-pointer-events-fix.md (sections 6 and 8) and
+  // client/src/components/ui/date-picker.tsx, which was fixed the same way.
+  const calendarPosition = useFixedDropdownPosition(calendarTriggerRef, calendarOpen);
+  useCloseOnOutsideOrEscape(
+    calendarOpen,
+    () => setCalendarOpen(false),
+    [calendarTriggerRef, calendarDropdownRef],
+    calendarTriggerRef
+  );
   const [copied, setCopied] = useState(false);
   const [existingImages, setExistingImages] = useState<ExistingImage[]>([]);
   const [pendingFiles, setPendingFiles] = useState<LocalImage[]>([]);
@@ -749,18 +765,28 @@ export function SocialPostPreviewDialog({
                       className="rounded-xl bg-slate-50 dark:bg-slate-900 border-black/6 dark:border-white/6 flex-1"
                       data-testid="input-schedule-date"
                     />
-                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-10 w-10 rounded-xl border-black/6 dark:border-white/6 bg-slate-50 dark:bg-slate-900 shrink-0"
-                          data-testid="button-calendar-picker"
-                        >
-                          <CalendarIcon className="h-4 w-4 text-orange-500" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 z-[9999]" align="end">
+                    <Button
+                      ref={calendarTriggerRef}
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-10 w-10 rounded-xl border-black/6 dark:border-white/6 bg-slate-50 dark:bg-slate-900 shrink-0"
+                      data-testid="button-calendar-picker"
+                      onClick={() => setCalendarOpen((prev) => !prev)}
+                    >
+                      <CalendarIcon className="h-4 w-4 text-orange-500" />
+                    </Button>
+                    {calendarOpen && calendarPosition && (
+                      <div
+                        ref={calendarDropdownRef}
+                        className="fixed z-[9999] w-auto rounded-xl border border-black/10 bg-popover p-0 text-popover-foreground shadow-xl outline-none dark:border-white/10"
+                        style={{
+                          left: calendarPosition.left,
+                          top: calendarPosition.top,
+                          bottom: calendarPosition.bottom,
+                          maxHeight: calendarPosition.maxHeight,
+                        }}
+                      >
                         <Calendar
                           mode="single"
                           selected={scheduleDate ? (() => { const d = new Date(scheduleDate); return isValid(d) ? d : undefined; })() : undefined}
@@ -777,8 +803,8 @@ export function SocialPostPreviewDialog({
                           disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                           initialFocus
                         />
-                      </PopoverContent>
-                    </Popover>
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-3">
                     <Button

@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { tickets, clientTable, user, ticketLikes, type Ticket, type InsertTicket } from "@shared/schema";
-import { and, desc, eq, lt, not, sql, or, type SQL } from "drizzle-orm";
+import { and, desc, eq, sql, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Scope } from "../../utils/scope";
 import type { TicketWithLikes } from "./ticket.types";
@@ -205,34 +205,5 @@ export const ticketRepository = {
 
       return { liked, likeCount: count };
     });
-  },
-
-  /**
-   * Find tickets that are still open (not Closed/Resolved) and haven't been
-   * touched since `cutoff`. Used by the stale-ticket reminder check.
-   *
-   * `userId`, when provided, scopes the scan to tickets owned by that user —
-   * used by the on-demand notification-load trigger so each request only
-   * pays for a cheap, indexed per-user query instead of a full table scan.
-   */
-  async findStale(cutoff: Date, userId?: string) {
-    const conds: SQL[] = [
-      not(eq(tickets.status, "Closed")),
-      not(eq(tickets.status, "Resolved")),
-      lt(tickets.updatedAt, cutoff),
-    ];
-    if (userId) {
-      conds.push(eq(tickets.userId, userId));
-    }
-    return db
-      .select({
-        id: tickets.id,
-        userId: tickets.userId,
-        subject: tickets.subject,
-        status: tickets.status,
-        updatedAt: tickets.updatedAt,
-      })
-      .from(tickets)
-      .where(and(...conds));
   },
 };

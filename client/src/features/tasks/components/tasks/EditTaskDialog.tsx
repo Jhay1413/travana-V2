@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
@@ -18,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 export interface EditableTask {
   id: string;
   title: string | null;
+  description?: string | null;
   dueDate: Date | string | null;
   userId: string | null;
   completed?: boolean | null;
@@ -56,6 +58,7 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId 
   const { toast } = useToast();
   const updateMutation = useUpdateTask(entityType, entityId);
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("09:00");
   const [assignedToId, setAssignedToId] = useState("");
@@ -65,6 +68,7 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId 
   useEffect(() => {
     if (!task) return;
     setTitle(task.title ?? "");
+    setDescription(task.description ?? "");
     setAssignedToId(task.userId ?? "");
     setCompleted(!!task.completed);
     if (task.dueDate) {
@@ -87,6 +91,7 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId 
         id: task.id,
         data: {
           title: title.trim(),
+          description: description.trim() ? description.trim() : null,
           dueDate: combined,
           completed,
           ...(assignedToId ? { userId: assignedToId } : {}),
@@ -121,6 +126,17 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId 
               placeholder="Enter a task…"
               className="h-9 rounded-xl border-black/10 bg-white/70"
               data-testid="input-edit-task-title"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-black/60">Description</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add more detail (optional)…"
+              className="min-h-[72px] rounded-xl border-black/10 bg-white/70"
+              data-testid="input-edit-task-description"
             />
           </div>
 
