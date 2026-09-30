@@ -178,7 +178,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/branch/targets" allow={MANAGER_ROLES} component={BranchTargetsPage} />
 
         <RoleRoute path="/bookings" allow={MANAGER_ROLES} component={BookingsPage} />
-        <RoleRoute path="/tasks" allow={MANAGER_ROLES} component={TasksPage} />
+        <RoleRoute path="/tasks" allow={STAFF_ROLES} component={TasksPage} />
         <RoleRoute path="/reports" allow={MANAGER_ROLES} component={ReportsPage} />
 
         <RoleRoute path="/clients" allow={CLIENT_VIEW_ROLES} component={ClientsListPage} />

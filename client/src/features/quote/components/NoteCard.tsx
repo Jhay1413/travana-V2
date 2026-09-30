@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Pencil, Trash2, Pin, Reply, MessageSquare, Eye } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
-import { useUpdateNote, useDeleteNote, useCreateNote } from "@/hooks/mutations";
+import { useUpdateNote, useDeleteNote } from "@/hooks/mutations";
+import { useCreateNoteWithAttachments, NoteAttachments } from "@/features/note";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
@@ -29,7 +30,7 @@ export function NoteCard({
   const { toast } = useToast();
   const updateMutation = useUpdateNote(quoteId);
   const deleteMutation = useDeleteNote(quoteId);
-  const createMutation = useCreateNote(quoteId);
+  const createMutation = useCreateNoteWithAttachments(quoteId);
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const isNotePinned = useMemo(() => {
@@ -54,14 +55,18 @@ export function NoteCard({
     });
   };
 
-  const handleReply = (html: string) => {
-    createMutation.mutate(
-      { transaction_id: quoteId, content: html },
-      {
-        onSuccess: () => { setIsReplying(false); toast({ title: "Reply added" }); },
-        onError: () => toast({ title: "Failed to add reply", variant: "destructive" }),
-      }
-    );
+  const handleReply = async (html: string, files?: File[]) => {
+    try {
+      const { uploadFailed } = await createMutation.mutateAsync({ data: { transaction_id: quoteId, content: html, parent_id: note.id }, files });
+      setIsReplying(false);
+      toast(uploadFailed
+        ? { title: "Reply added, but its attachments failed to upload", variant: "destructive" }
+        : { title: "Reply added" });
+    } catch (err) {
+      toast({ title: "Failed to add reply", variant: "destructive" });
+      // Re-throw so NoteEditor keeps the typed content and files.
+      throw err;
+    }
   };
 
   return (
@@ -168,6 +173,7 @@ export function NoteCard({
             data-testid={`note-content-${note.id}`}
           />
         )}
+        <NoteAttachments transactionId={quoteId} noteId={note.id} />
 
         {replies.length > 0 && (
           <div className="mt-1.5">
@@ -203,6 +209,7 @@ export function NoteCard({
           <div className="mt-1.5">
             <NoteEditor
               placeholder="Write a reply..."
+              allowAttachments
               onSubmit={handleReply}
               onCancel={() => setIsReplying(false)}
               submitLabel="Reply"

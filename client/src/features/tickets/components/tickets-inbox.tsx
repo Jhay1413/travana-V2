@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { BadgePoundSterling, Check, ChevronDown, Ellipsis, Filter, LifeBuoy, Pin, Search, ShieldCheck, SquarePen, Wrench } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -153,6 +153,7 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
   const [selectedId, setSelectedId] = useState<string | null>(selectedTicketId ?? null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [listScope, setListScope] = useState<TicketListScope>("mine");
+  const prevVisibleRef = useRef<{ tab: TicketTab; ids: Set<string> }>({ tab: "open", ids: new Set() });
 
   const { hasAnyRole } = useRoles();
   const canViewAllTickets = hasAnyRole([...ADMIN_TICKET_ROLES]);
@@ -232,17 +233,32 @@ export function TicketsInbox({ selectedTicketId }: { selectedTicketId?: string }
   useEffect(() => {
     if (isLoading || !tickets) return;
 
+    // Was the selection visible in this tab on the previous run? If so and it
+    // has now left the tab, its status changed under the user (they just
+    // closed/resolved it) — they must stay on this tab, not be yanked to the
+    // other one. Only a selection that was never visible here (a deep link)
+    // switches tabs to find the ticket.
+    const wasVisible =
+      !!selectedId && prevVisibleRef.current.tab === tab && prevVisibleRef.current.ids.has(selectedId);
+    prevVisibleRef.current = { tab, ids: new Set(filtered.map((t) => t.id)) };
+
     if (selectedId) {
       const stillExists = tickets.some((t) => t.id === selectedId);
       if (stillExists) {
-        if (!filtered.some((t) => t.id === selectedId)) {
-          const match = tickets.find((t) => t.id === selectedId)!;
-          const targetTab: TicketTab = isActiveTicket(match) ? "open" : "closed";
-          if (tab !== targetTab) setTab(targetTab);
+        if (filtered.some((t) => t.id === selectedId)) return;
+        const match = tickets.find((t) => t.id === selectedId)!;
+        const targetTab: TicketTab = isActiveTicket(match) ? "open" : "closed";
+        if (tab !== targetTab && !wasVisible) {
+          setTab(targetTab);
+          return;
         }
+        // Same tab (e.g. filtered out by search): keep the selection.
+        if (tab === targetTab) return;
+        // Left this tab after a status change: fall through and re-seed the
+        // selection from the current tab's list.
+      } else if (!byIdError) {
         return;
       }
-      if (!byIdError) return;
     }
 
     if (filtered.length === 0) {

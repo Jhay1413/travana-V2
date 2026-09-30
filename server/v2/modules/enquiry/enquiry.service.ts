@@ -93,8 +93,25 @@ export const newEnquiryService = {
     return enquiryTableRepository.findWithRelations(id);
   },
 
+  /**
+   * Soft delete: stamps deleted_at (every enquiry read filters it out). If the
+   * deal is still at the enquiry stage, its transaction is deactivated so the
+   * pipeline doesn't keep an enquiry-less card — same as marking LOST. A
+   * transaction that has already moved on to a quote/booking is left alone.
+   */
   async deleteEnquiry(id: string, scope: ScopeOrTrusted) {
     await assertEnquiryInScope(id, scope);
-    await enquiryTableRepository.remove(id);
+    const enquiry = await enquiryTableRepository.findById(id);
+    if (!enquiry) throw new AppError("Enquiry not found", 404);
+
+    const deletedBy = "userId" in scope ? scope.userId : null;
+    await enquiryTableRepository.softDelete(id, deletedBy);
+
+    if (enquiry.transaction_id) {
+      const txn = await transactionRepository.findById(enquiry.transaction_id);
+      if (txn?.status === "on_enquiry") {
+        await transactionRepository.update(txn.id, { is_active: false });
+      }
+    }
   },
 };

@@ -112,10 +112,14 @@ export function MultiSearchableSelect({
     inputRef.current?.focus();
   }, [open]);
 
-  // Reset the active-option highlight whenever the filtered list changes.
+  // Reset the active-option highlight when the *contents* of the filtered list change.
+  // Keyed on the option values, not the array identity: parents commonly pass a fresh
+  // `options` array every render, which would otherwise snap the highlight back to row 0
+  // (away from the hovered row) on any parent re-render.
+  const filteredKey = filteredOptions.map((opt) => opt.value).join("|");
   useEffect(() => {
     setHighlightedIndex(0);
-  }, [filteredOptions]);
+  }, [filteredKey]);
 
   // Keep the highlighted option scrolled into view.
   useEffect(() => {
@@ -255,10 +259,13 @@ export function MultiSearchableSelect({
                   role="option"
                   aria-selected={value.includes(opt.value)}
                   onMouseEnter={() => setHighlightedIndex(index)}
+                  // mousemove too: mouseenter never fires when the row was reset/scrolled/
+                  // opened under a stationary pointer, leaving the hovered row unhighlighted.
+                  onMouseMove={() => setHighlightedIndex(index)}
                   onClick={() => toggle(opt.value)}
                   className={cn(
                     "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
-                    index === highlightedIndex && "bg-accent text-accent-foreground"
+                    index === highlightedIndex && "bg-accent text-accent-foreground dark:bg-accent dark:text-accent-foreground"
                   )}
                 >
                   <Check

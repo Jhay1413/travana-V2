@@ -8,7 +8,7 @@ async function enrichTransactions(txns: Transaction[]) {
   const txnIds = txns.map(t => t.id);
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes] = await Promise.all([
-    db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    db.select().from(enquiry_table).where(and(inArray(enquiry_table.transaction_id, txnIds), isNull(enquiry_table.deleted_at))),
     db.select().from(quote).where(and(
       inArray(quote.transaction_id, txnIds),
       isNull(quote.deleted_at)
@@ -171,7 +171,7 @@ async function enrichTransactionsLightweight(txns: Transaction[]) {
       infants: enquiry_table.infants,
       holiday_type_id: enquiry_table.holiday_type_id,
       status: enquiry_table.status,
-    }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    }).from(enquiry_table).where(and(inArray(enquiry_table.transaction_id, txnIds), isNull(enquiry_table.deleted_at))),
     db.select({
       id: quote.id,
       transaction_id: quote.transaction_id,
@@ -354,7 +354,7 @@ export const transactionRepository = {
       conditions.push(
         sql`${transaction.id} IN (
           SELECT ${enquiry_table.transaction_id} FROM ${enquiry_table}
-          WHERE ${enquiry_table.is_active} IS NOT FALSE
+          WHERE ${enquiry_table.is_active} IS NOT FALSE AND ${enquiry_table.deleted_at} IS NULL
         )`
       );
       conditions.push(
@@ -559,7 +559,7 @@ export const transactionRepository = {
     const [txn] = await db.select().from(transaction).where(eq(transaction.id, id)).limit(1);
     if (!txn) return undefined;
 
-    const [enquiryResult] = await db.select().from(enquiry_table).where(eq(enquiry_table.transaction_id, id)).limit(1);
+    const [enquiryResult] = await db.select().from(enquiry_table).where(and(eq(enquiry_table.transaction_id, id), isNull(enquiry_table.deleted_at))).limit(1);
     const rawQuotes = await db.select().from(quote).where(and(eq(quote.transaction_id, id), isNull(quote.deleted_at)));
     const [bookingResult] = await db.select().from(booking).where(eq(booking.transaction_id, id)).limit(1);
     const [client] = txn.client_id ? await db.select().from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];

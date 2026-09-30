@@ -275,7 +275,7 @@ export const internalChatClientsRepository = {
         .select({ count: sql<number>`COUNT(*)` })
         .from(enquiry_table)
         .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
-        .where(and(...txConds, sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`)),
+        .where(and(...txConds, sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`, isNull(enquiry_table.deleted_at))),
 
       db
         .select({ count: sql<number>`COUNT(*)` })
@@ -339,7 +339,7 @@ export const internalChatClientsRepository = {
       .from(enquiry_table)
       .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
       .leftJoin(package_type, eq(enquiry_table.holiday_type_id, package_type.id))
-      .where(and(...txConds, sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`))
+      .where(and(...txConds, sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`, isNull(enquiry_table.deleted_at)))
       .orderBy(desc(enquiry_table.date_created))
       .limit(RECORD_LIMIT + 1);
 

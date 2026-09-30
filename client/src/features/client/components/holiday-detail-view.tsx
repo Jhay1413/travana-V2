@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { groupNotesByParent } from "@/features/note/lib/group-notes";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -30,6 +31,7 @@ import {
   Pin,
   PinOff,
   PlaneTakeoff,
+  Plus,
   RefreshCw,
   Reply,
   RotateCcw,
@@ -80,6 +82,7 @@ import {
   useDeleteTask,
   useCreateQuote,
   useUpdateEnquiry,
+  useDeleteEnquiry,
   useSetDealLost,
   useSetPrimaryQuote,
 } from "@/hooks/mutations";
@@ -99,6 +102,7 @@ import { QuoteExpiryPill } from "@/features/quote/components/QuoteExpiryPill";
 import { getQuoteExpiryInfo } from "@/features/quote/lib/quote-expiry";
 import { useBookingPin, useBookingDelete } from "@/features/booking/components/hooks";
 import { NoteEditor } from "@/components/shared/note-editor";
+import { useCreateNoteWithAttachments, NoteAttachments } from "@/features/note";
 import { useQuoteViews } from "@/features/quote/api/use-quote-share-queries";
 import { sumUpsells } from "@/features/booking/types";
 import { ClientConversationBox } from "@/features/client/components/tabs/ClientChatsTab";
@@ -425,7 +429,7 @@ function HolidayNoteCard({
   const { toast } = useToast();
   const updateMutation = useUpdateNote(transactionId);
   const deleteMutation = useDeleteNote(transactionId);
-  const createMutation = useCreateNote(transactionId);
+  const createMutation = useCreateNoteWithAttachments(transactionId);
 
   const authorName = isSystem ? "System" : note.author_name || "Agent";
   const authorId = note.user_id || note.agent_id;
@@ -444,17 +448,18 @@ function HolidayNoteCard({
     );
   };
 
-  const handleReply = (html: string) => {
-    createMutation.mutate(
-      { transaction_id: transactionId, content: html },
-      {
-        onSuccess: () => {
-          setIsReplying(false);
-          toast({ title: "Reply added" });
-        },
-        onError: () => toast({ title: "Failed to add reply", variant: "destructive" }),
-      },
-    );
+  const handleReply = async (html: string, files?: File[]) => {
+    try {
+      const { uploadFailed } = await createMutation.mutateAsync({ data: { transaction_id: transactionId, content: html, parent_id: note.id }, files });
+      setIsReplying(false);
+      toast(uploadFailed
+        ? { title: "Reply added, but its attachments failed to upload", variant: "destructive" }
+        : { title: "Reply added" });
+    } catch (err) {
+      toast({ title: "Failed to add reply", variant: "destructive" });
+      // Re-throw so NoteEditor keeps the typed content and files.
+      throw err;
+    }
   };
 
   return (
@@ -526,6 +531,7 @@ function HolidayNoteCard({
             data-testid={`holiday-note-content-${note.id}`}
           />
         )}
+        <NoteAttachments transactionId={transactionId} noteId={note.id} />
         {replies.length > 0 && (
           <div className="mt-3 space-y-2 border-l-2 border-[#3b82f6]/20 pl-3">
             {replies.map((reply) => (
@@ -536,6 +542,7 @@ function HolidayNoteCard({
                   className="prose prose-sm mt-0.5 max-w-none leading-relaxed text-black/70"
                   dangerouslySetInnerHTML={{ __html: reply.content || "" }}
                 />
+                <NoteAttachments transactionId={transactionId} noteId={reply.id} />
               </div>
             ))}
           </div>
@@ -544,6 +551,7 @@ function HolidayNoteCard({
           <div className="mt-2">
             <NoteEditor
               placeholder="Write a reply…"
+              allowAttachments
               onSubmit={handleReply}
               onCancel={() => setIsReplying(false)}
               submitLabel="Reply"
@@ -565,23 +573,14 @@ function HolidayNotesTab({ transactionId }: { transactionId: string }) {
     [users],
   );
 
-  const topLevelNotes = useMemo(
-    () =>
-      (notesData || [])
-        .filter((n) => !n.parent_id)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [notesData],
-  );
-  const repliesByParent = useMemo(() => {
-    const map = new Map<string, TransactionNote[]>();
-    (notesData || [])
-      .filter((n) => n.parent_id)
-      .forEach((n) => {
-        const existing = map.get(n.parent_id!) || [];
-        existing.push(n);
-        map.set(n.parent_id!, existing);
-      });
-    return map;
+  const { topLevelNotes, repliesByParent } = useMemo(() => {
+    const grouped = groupNotesByParent(notesData || []);
+    return {
+      topLevelNotes: [...grouped.topLevel].sort(
+        (x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime(),
+      ),
+      repliesByParent: grouped.repliesByParent,
+    };
   }, [notesData]);
 
   if (isLoading) {
@@ -639,9 +638,11 @@ function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityTyp
   const taskEntityType = entityType === "booking" ? "quote" : entityType;
   const { data: tasksData, isLoading } = useTasks(taskEntityType, entityId);
   const { data: users = [] } = useUsers();
+  const { data: currentUser } = useCurrentUser();
   const toggleMutation = useToggleTask(taskEntityType, entityId);
   const deleteMutation = useDeleteTask(taskEntityType, entityId);
   const [editingTask, setEditingTask] = useState<EditableTask | null>(null);
+  const [showAddTask, setShowAddTask] = useState(false);
 
   const userNameById = useMemo(() => new Map(users.map((u) => [u.id, u.name || u.email || ""])), [users]);
   const tasks = useMemo(
@@ -657,7 +658,28 @@ function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityTyp
     );
   }
   if (tasks.length === 0) {
-    return <p className="py-8 text-center text-[13px] text-black/40">No tasks yet.</p>;
+    return (
+      <div className="flex flex-col items-center gap-3 py-8">
+        <p className="text-[13px] text-black/40">No tasks yet.</p>
+        <Button
+          size="sm"
+          className="h-7 rounded-lg bg-[#3b82f6] px-3 text-xs text-white hover:bg-[#3b82f6]/90"
+          data-testid="holiday-tasks-empty-new-task"
+          onClick={() => setShowAddTask(true)}
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          New Task
+        </Button>
+        <CreateTaskDialog
+          presentation="drawer"
+          open={showAddTask}
+          onOpenChange={setShowAddTask}
+          entityType={taskEntityType}
+          entityId={entityId}
+          defaultAssignedToId={currentUser?.id}
+        />
+      </div>
+    );
   }
 
   return (
@@ -748,6 +770,7 @@ function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityTyp
         })}
       </div>
       <EditTaskDialog
+        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}
@@ -774,11 +797,13 @@ function DetailTabsCard({
   entityId,
   entityType,
   clientId,
+  clientName,
 }: {
   transactionId: string;
   entityId: string;
   entityType: "enquiry" | "quote" | "booking";
   clientId: string;
+  clientName: string;
 }) {
   const [tab, setTab] = useState<DetailTab>("notes");
   return (
@@ -807,7 +832,7 @@ function DetailTabsCard({
         </TabsContent>
 
         <TabsContent value="tickets" className="mt-3" data-testid="holiday-detail-tab-panel-tickets">
-          <HolidayTicketsTab clientId={clientId} entityId={entityId} entityType={entityType} transactionId={transactionId} />
+          <HolidayTicketsTab clientId={clientId} clientName={clientName} entityId={entityId} entityType={entityType} transactionId={transactionId} />
         </TabsContent>
       </Tabs>
     </Card>
@@ -1459,7 +1484,7 @@ function QuoteHolidayDetail({
         </div>
       </Card>
       {showDetailTabs && (
-        <DetailTabsCard transactionId={quote.transaction_id} entityId={id} entityType="quote" clientId={clientId} />
+        <DetailTabsCard transactionId={quote.transaction_id} entityId={id} entityType="quote" clientId={clientId} clientName={clientName} />
       )}
       <HolidayComposer transactionId={quote.transaction_id} />
     </>
@@ -1634,7 +1659,7 @@ function BookingHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs
         </div>
       </Card>
       {showDetailTabs && (
-        <DetailTabsCard transactionId={booking.transaction_id} entityId={id} entityType="booking" clientId={clientId} />
+        <DetailTabsCard transactionId={booking.transaction_id} entityId={id} entityType="booking" clientId={clientId} clientName={clientName} />
       )}
       <HolidayComposer transactionId={booking.transaction_id} />
     </>
@@ -1643,7 +1668,8 @@ function BookingHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs
 
 // ─── Enquiry actions menu ───────────────────────────────────────────────────
 // Mirrors the standalone enquiry page's "···" ellipsis menu: Pin, Edit, and
-// (when not already converted) Convert to Quote. No delete item exists there.
+// (when not already converted) Convert to Quote, plus (Admin only) Delete Enquiry
+// — a soft delete behind a confirm dialog.
 // `trigger="icon"` renders the same "···" ellipsis button used by the client
 // page's header actions cluster.
 
@@ -1653,6 +1679,7 @@ export function EnquiryActionsMenu({
   clientName,
   enquiry,
   destinationName,
+  onDeleted,
   trigger = "button",
 }: {
   enquiryId: string;
@@ -1660,9 +1687,13 @@ export function EnquiryActionsMenu({
   clientName: string;
   enquiry: EnquiryTable;
   destinationName: string | null;
+  /** Called after a successful delete so the page can clear its selection. */
+  onDeleted: () => void;
   trigger?: "button" | "icon";
 }) {
   const [, navigate] = useLocation();
+  const { role } = useRole();
+  const isAdmin = role === "Admin";
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: currentUser } = useCurrentUser();
@@ -1670,9 +1701,11 @@ export function EnquiryActionsMenu({
   const { data: userFavorites } = useFavorites();
   const toggleFavoriteMutation = useToggleFavorite();
   const updateEnquiryMutation = useUpdateEnquiry();
+  const deleteEnquiryMutation = useDeleteEnquiry();
   const createQuoteMutation = useCreateQuote();
   const { data: packageTypesData } = usePackageTypes();
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditWizard, setShowEditWizard] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showAddTaskDialog, setShowAddTaskDialog] = useState(false);
@@ -1712,6 +1745,17 @@ export function EnquiryActionsMenu({
         onError: () => toast({ title: "Failed to update enquiry", variant: "destructive" }),
       },
     );
+  };
+
+  const handleConfirmDelete = () => {
+    deleteEnquiryMutation.mutate(enquiryId, {
+      onSuccess: () => {
+        setShowDeleteConfirm(false);
+        toast({ title: "Enquiry deleted" });
+        onDeleted();
+      },
+      onError: () => toast({ title: "Failed to delete enquiry", variant: "destructive" }),
+    });
   };
 
   const handleConvertSubmit = (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
@@ -1809,8 +1853,45 @@ export function EnquiryActionsMenu({
           <DropdownMenuItem onClick={() => setShowAddTaskDialog(true)} className="gap-2 rounded-lg text-sm">
             <CheckSquare className="h-3.5 w-3.5" /> Create Task
           </DropdownMenuItem>
+          {isAdmin && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setShowDeleteConfirm(true)}
+                className="gap-2 rounded-lg text-sm text-rose-600 focus:text-rose-600"
+                data-testid="button-enquiry-delete"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete Enquiry
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this enquiry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The enquiry will be removed from the client&apos;s holidays and the pipeline.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteEnquiryMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmDelete();
+              }}
+              disabled={deleteEnquiryMutation.isPending}
+              className="bg-rose-600 hover:bg-rose-700"
+              data-testid="button-enquiry-delete-confirm"
+            >
+              {deleteEnquiryMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Delete Enquiry"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <EnquiryWizard
         presentation="drawer"
@@ -1942,7 +2023,7 @@ function EnquiryHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs
         </div>
       </Card>
       {showDetailTabs && (
-        <DetailTabsCard transactionId={enquiry.transaction_id} entityId={id} entityType="enquiry" clientId={clientId} />
+        <DetailTabsCard transactionId={enquiry.transaction_id} entityId={id} entityType="enquiry" clientId={clientId} clientName={clientName} />
       )}
       <HolidayComposer transactionId={enquiry.transaction_id} />
     </>

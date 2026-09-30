@@ -386,6 +386,13 @@
       "when": 1790415414717,
       "tag": "0054_charming_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1790698339000,
+      "tag": "0055_flawless_star_brand",
+      "breakpoints": true
     }
   ]
 }

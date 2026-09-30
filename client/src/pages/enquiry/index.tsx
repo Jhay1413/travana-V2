@@ -1,57 +1,51 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import {
   ArrowRight,
-  Bold,
   CheckSquare,
   ChevronLeft,
   Circle,
-  Italic,
-  Link as LinkIcon,
-  List,
-  ListOrdered,
   MessageSquare,
   MoreHorizontal,
   Pencil,
   Pin,
   PinOff,
   Plus,
-  Redo,
   Reply,
-  Send,
-  SmilePlus,
   Trash2,
-  Undo,
   X,
 } from "lucide-react";
 import stockHolidayImage from "@assets/Luxury-Coco-Beach-Resort_1769950332124.jpg";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
+import { NoteEditor } from "@/components/shared/note-editor";
 import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes, enquiryKeys } from "@/hooks/queries";
-import { useCreateNote, useUpdateNote, useDeleteNote } from "@/features/note/api/use-note-mutations";
-import { useCreateQuote, useUpdateEnquiry, useCreateTask, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
+import { useUpdateNote, useDeleteNote } from "@/features/note/api/use-note-mutations";
+import { useCreateNoteWithAttachments, NoteAttachments } from "@/features/note";
+import { useCreateQuote, useUpdateEnquiry, useDeleteEnquiry, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
+import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { useCurrentUser } from "@/hooks/queries";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { DatePicker } from "@/components/ui/date-picker";
 import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import type { CreateQuoteData } from "@/features/quote/types";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import TiptapLink from "@tiptap/extension-link";
 import { AnimatePresence, motion } from "framer-motion";
-import { cn } from "@/lib/utils";
 import { formatFullDateTime } from "@/lib/note-time";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 import { FormDrawer } from "@/components/shared/form-drawer";
@@ -62,7 +56,7 @@ import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Enquiry } from "@/features/enquiry/types";
 import type { TransactionNote } from "@/features/quote/types";
-import type { CreateNoteData } from "@/features/note/api/note.api";
+import { groupNotesByParent } from "@/features/note/lib/group-notes";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -98,78 +92,6 @@ function formatUKDate(input: string | null) {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 
-const EMOJI_CATEGORIES = [
-  { label: "Travel", emojis: ["✈️","🏖️","🌴","🏨","🚢","🗺️","🧳","🌍","🏔️","🎿","🏝️","🌅","🚂","🚗","⛱️","🏕️","🗼","🎡","🚤","🌊"] },
-  { label: "Faces", emojis: ["😀","😊","😍","🥳","😎","🤔","👍","👏","🎉","❤️","⭐","🔥","✅","❌","⚠️","💡","📌","🎯","💪","🙏"] },
-];
-
-function EmojiPicker({ onSelect, onClose }: { onSelect: (emoji: string) => void; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState(0);
-  return (
-    <div className="absolute bottom-full left-0 z-50 mb-2 w-[260px] rounded-2xl border border-black/10 bg-white/95 shadow-xl backdrop-blur-xl" data-testid="emoji-picker">
-      <div className="flex gap-1 border-b border-black/10 px-2 pt-2">
-        {EMOJI_CATEGORIES.map((cat, i) => (
-          <button key={cat.label} type="button" onClick={() => setActiveTab(i)} className={cn("rounded-lg px-2 py-1 text-[10px] font-semibold transition", activeTab === i ? "bg-black/10 text-black" : "text-black/50 hover:text-black/70")} data-testid={`emoji-tab-${cat.label}`}>{cat.label}</button>
-        ))}
-      </div>
-      <div className="grid grid-cols-8 sm:grid-cols-10 gap-0.5 p-2">
-        {EMOJI_CATEGORIES[activeTab].emojis.map((emoji) => (
-          <button key={emoji} type="button" onClick={() => { onSelect(emoji); onClose(); }} className="flex h-7 w-7 items-center justify-center rounded-lg text-base transition hover:bg-black/5" data-testid={`emoji-${emoji}`}>{emoji}</button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function NoteEditor({ initialContent, placeholder, onSubmit, onCancel, submitLabel, isLoading, compact }: {
-  initialContent?: string; placeholder?: string; onSubmit: (html: string) => void; onCancel?: () => void; submitLabel?: string; isLoading?: boolean; compact?: boolean;
-}) {
-  const [showEmoji, setShowEmoji] = useState(false);
-  const editor = useEditor({
-    extensions: [StarterKit, Placeholder.configure({ placeholder: placeholder || "Write a note..." }), TiptapLink.configure({ openOnClick: false })],
-    content: initialContent || "",
-    editorProps: { attributes: { class: cn("prose prose-sm max-w-none outline-none", compact ? "min-h-[36px] p-1.5" : "min-h-[44px] p-2") } },
-  });
-  const handleSubmit = useCallback(() => {
-    if (!editor) return;
-    const html = editor.getHTML();
-    if (!html || html === "<p></p>") return;
-    onSubmit(html);
-    editor.commands.clearContent();
-  }, [editor, onSubmit]);
-  const insertEmoji = useCallback((emoji: string) => { editor?.chain().focus().insertContent(emoji).run(); }, [editor]);
-  if (!editor) return null;
-  return (
-    <div className={cn("rounded-xl border border-black/10 bg-white/80 overflow-hidden", compact && "rounded-lg")}>
-      <div className="flex items-center gap-0.5 border-b border-black/5 bg-black/[0.02] px-1.5 py-1">
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBold().run()} className={cn("h-6 w-6 p-0", editor.isActive("bold") && "bg-black/10")}><Bold className="h-3 w-3" /></Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleItalic().run()} className={cn("h-6 w-6 p-0", editor.isActive("italic") && "bg-black/10")}><Italic className="h-3 w-3" /></Button>
-        <div className="mx-0.5 h-3 w-px bg-black/10" />
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleBulletList().run()} className={cn("h-6 w-6 p-0", editor.isActive("bulletList") && "bg-black/10")}><List className="h-3 w-3" /></Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()} className={cn("h-6 w-6 p-0", editor.isActive("orderedList") && "bg-black/10")}><ListOrdered className="h-3 w-3" /></Button>
-        <div className="mx-0.5 h-3 w-px bg-black/10" />
-        <Button type="button" variant="ghost" size="sm" onClick={() => { const url = window.prompt("Enter URL:"); if (url) editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run(); }} className={cn("h-6 w-6 p-0", editor.isActive("link") && "bg-black/10")}><LinkIcon className="h-3 w-3" /></Button>
-        <div className="mx-0.5 h-3 w-px bg-black/10" />
-        <div className="relative">
-          <Button type="button" variant="ghost" size="sm" onClick={() => setShowEmoji(!showEmoji)} className="h-6 w-6 p-0"><SmilePlus className="h-3 w-3" /></Button>
-          {showEmoji && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />}
-        </div>
-        <div className="flex-1" />
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="h-6 w-6 p-0"><Undo className="h-3 w-3" /></Button>
-        <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} className="h-6 w-6 p-0"><Redo className="h-3 w-3" /></Button>
-      </div>
-      <EditorContent editor={editor} className="[&_.ProseMirror]:outline-none [&_.ProseMirror]:text-xs [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-black/35 [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none" />
-      <div className="flex items-center justify-end gap-1.5 border-t border-black/5 bg-black/[0.01] px-1.5 py-1">
-        {onCancel && <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="h-6 rounded-md px-2 text-[10px]">Cancel</Button>}
-        <Button type="button" size="sm" onClick={handleSubmit} disabled={isLoading} className="h-6 rounded-md bg-[#3b82f6] px-2.5 text-[10px] text-white hover:bg-[#3b82f6]/90">
-          {isLoading ? <Spinner className="h-2.5 w-2.5" /> : <Send className="mr-1 h-2.5 w-2.5" />}
-          {submitLabel || "Post"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 function EnquiryNoteCard({ note, replies, transactionId, currentUserName }: { note: TransactionNote; replies: TransactionNote[]; transactionId: string; currentUserName: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
@@ -177,7 +99,7 @@ function EnquiryNoteCard({ note, replies, transactionId, currentUserName }: { no
   const { toast } = useToast();
   const updateMutation = useUpdateNote(transactionId);
   const deleteMutation = useDeleteNote(transactionId);
-  const createMutation = useCreateNote(transactionId);
+  const createMutation = useCreateNoteWithAttachments(transactionId);
 
   const handleEdit = (html: string) => {
     updateMutation.mutate({ id: note.id, content: html }, {
@@ -191,11 +113,18 @@ function EnquiryNoteCard({ note, replies, transactionId, currentUserName }: { no
       onError: () => toast({ title: "Failed to delete note", variant: "destructive" }),
     });
   };
-  const handleReply = (html: string) => {
-    createMutation.mutate({ transaction_id: transactionId, content: html } as CreateNoteData, {
-      onSuccess: () => { setIsReplying(false); toast({ title: "Reply added" }); },
-      onError: () => toast({ title: "Failed to add reply", variant: "destructive" }),
-    });
+  const handleReply = async (html: string, files?: File[]) => {
+    try {
+      const { uploadFailed } = await createMutation.mutateAsync({ data: { transaction_id: transactionId, content: html, parent_id: note.id }, files });
+      setIsReplying(false);
+      toast(uploadFailed
+        ? { title: "Reply added, but its attachments failed to upload", variant: "destructive" }
+        : { title: "Reply added" });
+    } catch (err) {
+      toast({ title: "Failed to add reply", variant: "destructive" });
+      // Re-throw so NoteEditor keeps the typed content and files.
+      throw err;
+    }
   };
 
   return (
@@ -220,6 +149,7 @@ function EnquiryNoteCard({ note, replies, transactionId, currentUserName }: { no
         ) : (
           <div className="mt-1 prose prose-sm max-w-none text-[11px] leading-relaxed text-black/70 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: note.content || "" }} data-testid={`note-content-${note.id}`} />
         )}
+        <NoteAttachments transactionId={transactionId} noteId={note.id} />
         {replies.length > 0 && (
           <div className="mt-1.5">
             <button type="button" onClick={() => setShowReplies(!showReplies)} className="inline-flex items-center gap-1 text-[9px] font-semibold text-[#3b82f6] transition hover:text-[#3b82f6]/80">
@@ -237,7 +167,7 @@ function EnquiryNoteCard({ note, replies, transactionId, currentUserName }: { no
           </div>
         )}
         {isReplying && (
-          <div className="mt-1.5"><NoteEditor placeholder="Write a reply..." onSubmit={handleReply} onCancel={() => setIsReplying(false)} submitLabel="Reply" isLoading={createMutation.isPending} compact /></div>
+          <div className="mt-1.5"><NoteEditor placeholder="Write a reply..." allowAttachments onSubmit={handleReply} onCancel={() => setIsReplying(false)} submitLabel="Reply" isLoading={createMutation.isPending} compact /></div>
         )}
       </div>
     </motion.div>
@@ -273,6 +203,7 @@ function EnquiryReplyCard({ reply, transactionId }: { reply: TransactionNote; tr
       ) : (
         <div className="mt-1 prose prose-sm max-w-none text-[11px] text-black/60 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: reply.content || "" }} />
       )}
+      <NoteAttachments transactionId={transactionId} noteId={reply.id} />
     </div>
   );
 }
@@ -280,31 +211,27 @@ function EnquiryReplyCard({ reply, transactionId }: { reply: TransactionNote; tr
 function EnquiryNotesSection({ transactionId }: { transactionId: string }) {
   const { data: notesData, isLoading } = useNotes(transactionId);
   const { data: currentUser } = useCurrentUser();
-  const createMutation = useCreateNote(transactionId);
+  const createMutation = useCreateNoteWithAttachments(transactionId);
   const { toast } = useToast();
   const authorName = currentUser?.name || "Agent";
 
-  const topLevelNotes = useMemo(() => {
-    if (!notesData) return [];
-    return notesData.filter((n) => !n.parent_id);
-  }, [notesData]);
+  const { topLevel: topLevelNotes, repliesByParent } = useMemo(
+    () => groupNotesByParent(notesData ?? []),
+    [notesData],
+  );
 
-  const repliesByParent = useMemo(() => {
-    if (!notesData) return new Map<string, TransactionNote[]>();
-    const map = new Map<string, TransactionNote[]>();
-    notesData.filter((n) => n.parent_id).forEach((n) => {
-      const existing = map.get(n.parent_id!) || [];
-      existing.push(n);
-      map.set(n.parent_id!, existing);
-    });
-    return map;
-  }, [notesData]);
-
-  const handleCreate = (html: string) => {
-    createMutation.mutate({ transaction_id: transactionId, content: html }, {
-      onSuccess: () => toast({ title: "Note added" }),
-      onError: () => toast({ title: "Failed to add note", variant: "destructive" }),
-    });
+  const handleCreate = async (html: string, files?: File[]) => {
+    try {
+      const { uploadFailed } = await createMutation.mutateAsync({ data: { transaction_id: transactionId, content: html }, files });
+      
+      toast(uploadFailed
+        ? { title: "Note added, but its attachments failed to upload", variant: "destructive" }
+        : { title: "Note added" });
+    } catch (err) {
+      toast({ title: "Failed to add note", variant: "destructive" });
+      // Re-throw so NoteEditor keeps the typed content and files.
+      throw err;
+    }
   };
 
   return (
@@ -330,7 +257,7 @@ function EnquiryNotesSection({ transactionId }: { transactionId: string }) {
         )}
       </div>
       <div className="mt-3">
-        <NoteEditor placeholder="Add a note about this enquiry..." onSubmit={handleCreate} isLoading={createMutation.isPending} />
+        <NoteEditor placeholder="Add a note about this enquiry..." allowAttachments onSubmit={handleCreate} isLoading={createMutation.isPending} />
       </div>
     </Card>
   );
@@ -369,13 +296,6 @@ function SpecRow({ testId, label, value }: { testId: string; label: string; valu
   );
 }
 
-const TASK_CATEGORIES = [
-  { value: "general", label: "General Task" },
-  { value: "enquiry", label: "Enquiry" },
-  { value: "quote", label: "Quote" },
-  { value: "booking", label: "Booking" },
-];
-
 function formatTaskDue(date: Date | string) {
   const d = new Date(date);
   const now = new Date();
@@ -393,45 +313,10 @@ function formatTaskDue(date: Date | string) {
 function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string; assignedUserId?: string }) {
   const { data: tasksData, isLoading } = useTasks("enquiry", enquiryId);
   const { data: currentUser } = useCurrentUser();
-  const createMutation = useCreateTask("enquiry", enquiryId);
   const toggleMutation = useToggleTask("enquiry", enquiryId);
   const deleteMutation = useDeleteTask("enquiry", enquiryId);
-  const { toast } = useToast();
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [taskCategory, setTaskCategory] = useState<string>("enquiry");
-  const [newTitle, setNewTitle] = useState("");
-  const [newDueDate, setNewDueDate] = useState("");
-  const [newDueTime, setNewDueTime] = useState("09:00");
-  const [assignedToId, setAssignedToId] = useState("");
   const [editingTask, setEditingTask] = useState<EditableTask | null>(null);
-
-  const handleAdd = () => {
-    const userIdForTask = assignedToId || assignedUserId || currentUser?.id;
-    if (!newTitle || !newDueDate || !userIdForTask) return;
-    const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
-    createMutation.mutate(
-      {
-        entityType: "enquiry",
-        entityId: enquiryId,
-        userId: userIdForTask,
-        title: newTitle,
-        dueDate: dueDate,
-        completed: false,
-        notified: false,
-      } as any,
-      {
-        onSuccess: () => {
-          setShowAddDialog(false);
-          setNewTitle("");
-          setNewDueDate("");
-          setNewDueTime("09:00");
-          setAssignedToId("");
-          toast({ title: "Task added" });
-        },
-        onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
-      }
-    );
-  };
 
   const pendingTasks = useMemo(() => (tasksData || []).filter((t) => !t.completed), [tasksData]);
   const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.completed), [tasksData]);
@@ -458,8 +343,17 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
               <Spinner className="h-4 w-4" />
             </div>
           ) : pendingTasks.length === 0 && completedTasks.length === 0 ? (
-            <div className="py-4 text-center text-xs text-black/40" data-testid="text-tasks-empty">
-              No tasks yet.
+            <div className="flex flex-col items-center gap-2.5 py-4 text-center" data-testid="text-tasks-empty">
+              <span className="text-xs text-black/40">No tasks yet.</span>
+              <Button
+                size="sm"
+                className="h-7 rounded-lg bg-[#3b82f6] px-3 text-xs text-white hover:bg-[#3b82f6]/90"
+                data-testid="button-empty-new-task"
+                onClick={() => setShowAddDialog(true)}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                New Task
+              </Button>
             </div>
           ) : (
             <>
@@ -538,85 +432,17 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
         </div>
       </Card>
 
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-add-task">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-semibold">Add Task</DialogTitle>
-            <DialogDescription className="text-xs text-black/55">
-              Set a task with a due date and time.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="mt-3 grid gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Category</Label>
-              <Select value={taskCategory} onValueChange={setTaskCategory}>
-                <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-task-category">
-                  <SelectValue placeholder="Choose a category…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TASK_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Task</Label>
-              <Input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Enter a task…"
-                className="h-9 rounded-xl border-black/10 bg-white/70"
-                data-testid="input-task-title"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Assign To</Label>
-              <UserReassignSelect
-                value={assignedToId || assignedUserId || currentUser?.id || ""}
-                onValueChange={setAssignedToId}
-                data-testid="select-task-assign-to"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Due Date</Label>
-                <DatePicker
-                  value={newDueDate}
-                  onChange={(v) => setNewDueDate(v)}
-                  placeholder="Pick a date"
-                  data-testid="input-task-due-date"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Due Time</Label>
-                <Input
-                  type="time"
-                  value={newDueTime}
-                  onChange={(e) => setNewDueTime(e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="input-task-due-time"
-                />
-              </div>
-            </div>
-
-            <Button
-              className="h-9 w-full rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-              data-testid="button-confirm-add-task"
-              onClick={handleAdd}
-              disabled={!newTitle || !newDueDate || createMutation.isPending}
-            >
-              {createMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Add Task"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CreateTaskDialog
+        presentation="drawer"
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        entityType="enquiry"
+        entityId={enquiryId}
+        defaultAssignedToId={assignedUserId ?? currentUser?.id}
+      />
 
       <EditTaskDialog
+        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}
@@ -642,6 +468,7 @@ export default function EnquiryPage() {
   const { data: currentUser } = useCurrentUser();
   const createQuoteMutation = useCreateQuote();
   const updateEnquiryMutation = useUpdateEnquiry();
+  const deleteEnquiryMutation = useDeleteEnquiry();
   const updateTransactionMutation = useUpdateTransaction();
   const { toast } = useToast();
   const { data: userFavorites } = useFavorites();
@@ -654,6 +481,7 @@ export default function EnquiryPage() {
 
   const [showEditWizard, setShowEditWizard] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false);
   const ellipsisRef = useRef<HTMLDivElement>(null);
 
@@ -922,6 +750,20 @@ export default function EnquiryPage() {
                                       Convert to Quote
                                     </button>
                                   )}
+                                  {role === "Admin" && (
+                                    <button
+                                      type="button"
+                                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-rose-600 transition hover:bg-rose-50"
+                                      data-testid="button-enquiry-delete"
+                                      onClick={() => {
+                                        setShowEllipsisMenu(false);
+                                        setShowDeleteConfirm(true);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      Delete Enquiry
+                                    </button>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1046,6 +888,38 @@ export default function EnquiryPage() {
           submitLabel="Convert to Quote"
         />
       </FormDrawer>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this enquiry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The enquiry will be removed from the client&apos;s holidays and the pipeline.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteEnquiryMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                deleteEnquiryMutation.mutate(enquiryId, {
+                  onSuccess: () => {
+                    setShowDeleteConfirm(false);
+                    toast({ title: "Enquiry deleted" });
+                    navigate(clientId ? `/clients/${clientId}?tab=enquiries` : "/");
+                  },
+                  onError: () => toast({ title: "Failed to delete enquiry", variant: "destructive" }),
+                });
+              }}
+              disabled={deleteEnquiryMutation.isPending}
+              className="bg-rose-600 hover:bg-rose-700"
+              data-testid="button-enquiry-delete-confirm"
+            >
+              {deleteEnquiryMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Delete Enquiry"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

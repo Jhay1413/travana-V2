@@ -1,6 +1,7 @@
 import { useFormContext, useWatch } from "react-hook-form";
 import { Users } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -49,7 +50,7 @@ export function QuoteTravelDetailsSection({ showCruiseStay = false }: { showCrui
           name="transferType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Transfer Type</FormLabel>
+              <FormLabelTooltip className="text-xs font-medium text-black/60" tip="How guests get between the airport and their accommodation: private or shared transfer, seaplane, speedboat, self-drive, or none.">Transfer Type</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
@@ -114,7 +115,7 @@ export function QuoteTravelDetailsSection({ showCruiseStay = false }: { showCrui
           name="flightMeals"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Flight Meals</FormLabel>
+              <FormLabelTooltip className="text-xs font-medium text-black/60" tip="Whether meals are included on the flights (Yes or No).">Flight Meals</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">

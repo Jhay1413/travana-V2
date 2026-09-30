@@ -2,25 +2,12 @@ import { useMemo, useState } from "react";
 import { CheckSquare, Circle, Pencil, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTasks, useCurrentUser } from "@/hooks/queries";
-import { useCreateTask, useToggleTask, useDeleteTask } from "@/hooks/mutations";
-import { useToast } from "@/hooks/use-toast";
-import { UserReassignSelect } from "@/components/ui/user-reassign-select";
+import { useToggleTask, useDeleteTask } from "@/hooks/mutations";
+import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { cn } from "@/lib/utils";
-
-const TASK_CATEGORIES = [
-  { value: "general", label: "General Task" },
-  { value: "enquiry", label: "Enquiry" },
-  { value: "quote", label: "Quote" },
-  { value: "booking", label: "Booking" },
-];
 
 function formatTaskDue(date: Date | string) {
   const d = new Date(date);
@@ -40,10 +27,8 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
   const taskEntityType = entityType === "booking" ? "quote" : entityType;
   const { data: tasksData, isLoading } = useTasks(taskEntityType, quoteId);
   const { data: currentUser } = useCurrentUser();
-  const createMutation = useCreateTask(taskEntityType, quoteId);
   const toggleMutation = useToggleTask(taskEntityType, quoteId);
   const deleteMutation = useDeleteTask(taskEntityType, quoteId);
-  const { toast } = useToast();
   // The add-task dialog can be controlled by a parent (e.g. opened from the
   // quote Actions dropdown) or managed internally via the in-card button.
   const [internalShowAddDialog, setInternalShowAddDialog] = useState(false);
@@ -53,40 +38,7 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
     if (isAddControlled) onAddOpenChange!(open);
     else setInternalShowAddDialog(open);
   };
-  const [taskCategory, setTaskCategory] = useState<string>(entityType);
-  const [newTitle, setNewTitle] = useState("");
-  const [newDueDate, setNewDueDate] = useState("");
-  const [newDueTime, setNewDueTime] = useState("09:00");
-  const [assignedToId, setAssignedToId] = useState("");
   const [editingTask, setEditingTask] = useState<EditableTask | null>(null);
-
-  const handleAdd = () => {
-    const userIdForTask = assignedToId || assignedUserId || currentUser?.id;
-    if (!newTitle || !newDueDate || !userIdForTask) return;
-    const dueDate = new Date(`${newDueDate}T${newDueTime || "09:00"}`);
-    createMutation.mutate(
-      {
-        entityType: taskEntityType,
-        entityId: quoteId,
-        userId: userIdForTask,
-        title: newTitle,
-        dueDate: dueDate,
-        completed: false,
-        notified: false,
-      } as any,
-      {
-        onSuccess: () => {
-          setShowAddDialog(false);
-          setNewTitle("");
-          setNewDueDate("");
-          setNewDueTime("09:00");
-          setAssignedToId("");
-          toast({ title: "Task added" });
-        },
-        onError: () => toast({ title: "Failed to add task", variant: "destructive" }),
-      }
-    );
-  };
 
   const pendingTasks = useMemo(() => (tasksData || []).filter((t) => !t.completed), [tasksData]);
   const completedTasks = useMemo(() => (tasksData || []).filter((t) => t.completed), [tasksData]);
@@ -113,8 +65,17 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
               <Spinner className="h-4 w-4" />
             </div>
           ) : pendingTasks.length === 0 && completedTasks.length === 0 ? (
-            <div className="py-4 text-center text-xs text-black/40" data-testid="text-tasks-empty">
-              No tasks yet.
+            <div className="flex flex-col items-center gap-2.5 py-4 text-center" data-testid="text-tasks-empty">
+              <span className="text-xs text-black/40">No tasks yet.</span>
+              <Button
+                size="sm"
+                className="h-7 rounded-lg bg-[#3b82f6] px-3 text-xs text-white hover:bg-[#3b82f6]/90"
+                data-testid="button-empty-new-task"
+                onClick={() => setShowAddDialog(true)}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                New Task
+              </Button>
             </div>
           ) : (
             <>
@@ -195,85 +156,17 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
         )}
       </Card>
 
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-add-task">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-semibold">Add Task</DialogTitle>
-            <DialogDescription className="text-xs text-black/55">
-              Set a task with a due date and time.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="mt-3 grid gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Category</Label>
-              <Select value={taskCategory} onValueChange={setTaskCategory}>
-                <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70" data-testid="select-task-category">
-                  <SelectValue placeholder="Choose a category…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TASK_CATEGORIES.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Task</Label>
-              <Input
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Enter a task…"
-                className="h-9 rounded-xl border-black/10 bg-white/70"
-                data-testid="input-task-title"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Assign To</Label>
-              <UserReassignSelect
-                value={assignedToId || assignedUserId || currentUser?.id || ""}
-                onValueChange={setAssignedToId}
-                data-testid="select-task-assign-to"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Due Date</Label>
-                <DatePicker
-                  value={newDueDate}
-                  onChange={(v) => setNewDueDate(v)}
-                  placeholder="Pick a date"
-                  data-testid="input-task-due-date"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-black/60">Due Time</Label>
-                <Input
-                  type="time"
-                  value={newDueTime}
-                  onChange={(e) => setNewDueTime(e.target.value)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
-                  data-testid="input-task-due-time"
-                />
-              </div>
-            </div>
-
-            <Button
-              className="h-9 w-full rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-              data-testid="button-confirm-add-task"
-              onClick={handleAdd}
-              disabled={!newTitle || !newDueDate || createMutation.isPending}
-            >
-              {createMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Add Task"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CreateTaskDialog
+        presentation="drawer"
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        entityType={taskEntityType}
+        entityId={quoteId}
+        defaultAssignedToId={assignedUserId ?? currentUser?.id}
+      />
 
       <EditTaskDialog
+        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}

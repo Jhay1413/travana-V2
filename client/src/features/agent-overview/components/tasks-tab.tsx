@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Ellipsis } from "lucide-react";
+import { Check, Ellipsis } from "lucide-react";
 import { useUserTasks } from "@/hooks/queries";
+import { useUpdateTask } from "@/hooks/mutations";
+import { useToast } from "@/hooks/use-toast";
 import { EditTaskDialog } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { DatePicker } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
@@ -47,6 +49,13 @@ function duePill(due: string | Date | null | undefined): { label: string; classN
 export function TasksTab({ userId }: { userId: string }) {
   const [, navigate] = useLocation();
   const [editingTask, setEditingTask] = useState<any | null>(null);
+  const { toast } = useToast();
+  // Tasks are not entity-scoped on this dashboard; useUpdateTask also invalidates
+  // taskKeys.all, which covers every byUser list regardless of these args.
+  const updateTask = useUpdateTask("", "");
+  // Ids ticked off in this panel. Applied optimistically so the row reads as done
+  // straight away; the incomplete-only list then drops it once it refetches.
+  const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set());
   const [filter, setFilter] = useState<TasksFilter>("today");
   const [customDate, setCustomDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
@@ -118,6 +127,23 @@ export function TasksTab({ userId }: { userId: string }) {
       (a, b) => new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime(),
     );
   }, [filter, tasksData, overdueTasks]);
+
+  const completeTask = (id: string) => {
+    setDoneIds((prev) => new Set(prev).add(id));
+    updateTask.mutate(
+      { id, data: { completed: true } },
+      {
+        onError: () => {
+          setDoneIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          toast({ title: "Failed to complete task", variant: "destructive" });
+        },
+      },
+    );
+  };
 
   const taskHref = (task: any): string | null =>
     dealDeepLinkHref(task.entityType, task.entityId, task.clientId);
@@ -195,6 +221,7 @@ export function TasksTab({ userId }: { userId: string }) {
           </div>
         ) : (
           tasks.map((task) => {
+            const isDone = doneIds.has(task.id);
             const pill = duePill(task.dueDate);
             const href = taskHref(task);
             const meta = [
@@ -219,13 +246,33 @@ export function TasksTab({ userId }: { userId: string }) {
                     href ? navigate(href) : setEditingTask(task);
                   }
                 }}
-                className="group flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                className={cn(
+                  "group flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]",
+                  isDone && "opacity-50",
+                )}
                 data-testid={`row-dashboard-task-${task.id}`}
               >
-                <span
-                  className="h-4 w-4 shrink-0 rounded-full border-2 border-black/20 dark:border-white/25"
-                  aria-hidden
-                />
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={isDone}
+                  aria-label={isDone ? "Task completed" : "Mark task complete"}
+                  disabled={isDone}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    completeTask(task.id);
+                  }}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  className={cn(
+                    "grid h-4 w-4 shrink-0 place-items-center rounded-full border-2 transition",
+                    isDone
+                      ? "border-emerald-500 bg-emerald-500 text-white"
+                      : "border-black/20 hover:border-emerald-500 dark:border-white/25 dark:hover:border-emerald-400",
+                  )}
+                  data-testid={`button-complete-dashboard-task-${task.id}`}
+                >
+                  {isDone && <Check className="h-2.5 w-2.5" strokeWidth={3.5} />}
+                </button>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
                     <span className="shrink-0 text-sm font-medium text-[#fe9a00]">
@@ -244,7 +291,7 @@ export function TasksTab({ userId }: { userId: string }) {
                        </>
                      )}
                      <span className="text-black/30 dark:text-white/30">–</span>
-                    <span className="truncate text-sm font-medium" data-testid={`text-dashboard-task-title-${task.id}`}>
+                    <span className={cn("truncate text-sm font-medium", isDone && "line-through")} data-testid={`text-dashboard-task-title-${task.id}`}>
                       {task.title}
                     </span>
                   </div>
@@ -284,6 +331,7 @@ export function TasksTab({ userId }: { userId: string }) {
       </div>
 
       <EditTaskDialog
+        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}

@@ -86,6 +86,7 @@ const AGENT_NAV: NavConfig = [
     items: [
       { path: "/agent-overview", label: "Agent Dashboard", icon: LayoutDashboard },
       { path: "/pipeline", label: "Pipeline", icon: Kanban },
+      { path: "/tasks", label: "Tasks", icon: ListChecks },
       { path: "/social-posts", label: "Social Posts", icon: ThumbsUp },
       { path: "/conversations", label: "Inbox", icon: Mail, badge: "conversations" },
       { path: "/tickets", label: "Tickets", icon: Tag, badge: "tickets" },
@@ -103,6 +104,7 @@ const BRANCH_MANAGER_NAV: NavConfig = [
     items: [
       { path: "/branch-overview", label: "Dashboard", icon: LayoutGrid },
       { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
+      { path: "/tasks", label: "Tasks", icon: ListChecks },
       { path: "/tickets", label: "Tickets", icon: LifeBuoy, badge: "tickets" },
       { path: "/conversations", label: "Inbox", icon: Inbox, badge: "conversations" },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },

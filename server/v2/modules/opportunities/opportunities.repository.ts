@@ -54,7 +54,7 @@ export const opportunitiesRepository = {
   async findEnquiries(filters: OpportunityFilters) {
     const { page, limit, status, search, dateRange, agentId, sortBy = 'newest', scope } = filters;
     const offset = (page - 1) * limit;
-    const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false), ...buildOpportunityScopeConds(scope)];
+    const conditions: any[] = [isNull(enquiry_table.deleted_at), eq(transaction.is_active, true), eq(transaction.is_test, false), ...buildOpportunityScopeConds(scope)];
     if (status && status !== 'all') conditions.push(sql`${enquiry_table.status} = ${status}`);
     if (agentId && agentId !== 'all') conditions.push(eq(transaction.user_id, agentId));
     if (dateRange && dateRange !== 'all-time') conditions.push(...buildDateConditions(enquiry_table.date_created, dateRange));

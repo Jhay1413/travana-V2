@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import type { UseFormSetValue } from "react-hook-form";
@@ -918,7 +919,7 @@ export function BookingRHFForm({
               name="packageType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Package Type *</FormLabel>
+                  <FormLabelTooltip className="text-xs font-medium text-black/60" tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Package Type *</FormLabelTooltip>
                   <Select
                     value={field.value}
                     onValueChange={field.onChange}
@@ -995,7 +996,7 @@ export function BookingRHFForm({
               name="leadSource"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Lead Source</FormLabel>
+                  <FormLabelTooltip className="text-xs font-medium text-black/60" tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead Source</FormLabelTooltip>
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
@@ -1063,7 +1064,7 @@ export function BookingRHFForm({
               name="transferType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Transfer Type</FormLabel>
+                  <FormLabelTooltip className="text-xs font-medium text-black/60" tip="How guests get between the airport and their accommodation: private or shared transfer, seaplane, speedboat, self-drive, or none.">Transfer Type</FormLabelTooltip>
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
@@ -1145,7 +1146,7 @@ export function BookingRHFForm({
               name="flightMeals"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Flight Meals</FormLabel>
+                  <FormLabelTooltip className="text-xs font-medium text-black/60" tip="Whether meals are included on the flights (Yes or No).">Flight Meals</FormLabelTooltip>
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">

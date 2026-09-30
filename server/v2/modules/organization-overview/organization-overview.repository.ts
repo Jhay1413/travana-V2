@@ -154,6 +154,7 @@ export const organizationOverviewRepository = {
           and(
             gte(enquiry_table.date_created, yearStart),
             sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`,
+            isNull(enquiry_table.deleted_at),
             scopeCond(),
           ),
         ),

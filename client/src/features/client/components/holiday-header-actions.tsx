@@ -284,6 +284,7 @@ function EnquiryHeaderActions({ id, clientId, clientName, onDeleted }: HeaderAct
         clientName={clientName}
         enquiry={enquiry}
         destinationName={destinationName}
+        onDeleted={onDeleted}
         trigger="icon"
       />
     </>
