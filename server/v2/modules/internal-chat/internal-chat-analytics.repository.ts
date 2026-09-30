@@ -77,6 +77,7 @@ export const internalChatAnalyticsRepository = {
             gte(enquiry_table.date_created, from),
             lt(enquiry_table.date_created, to),
             sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`,
+            isNull(enquiry_table.deleted_at),
             isNotNull(transaction.client_id),
             ...scopeConds,
           ),

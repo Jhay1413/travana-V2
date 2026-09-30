@@ -8,7 +8,7 @@ import {
   booking,
   notes,
 } from '@shared/schema';
-import { eq, and, asc, inArray } from 'drizzle-orm';
+import { eq, and, asc, inArray, isNull } from 'drizzle-orm';
 
 export type FavoriteWithClient = typeof favorites.$inferSelect & {
   clientId: string | null;
@@ -48,7 +48,7 @@ export const favoriteRepository = {
           .select({ id: enquiry_table.id, client_id: transaction.client_id })
           .from(enquiry_table)
           .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
-          .where(inArray(enquiry_table.id, enquiryIds));
+          .where(and(inArray(enquiry_table.id, enquiryIds), isNull(enquiry_table.deleted_at)));
         for (const e of enqs) {
           if (e.client_id) clientIdByItem.set(`enquiry:${e.id}`, e.client_id);
         }

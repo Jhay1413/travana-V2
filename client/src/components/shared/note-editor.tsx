@@ -1,12 +1,14 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TiptapLink from "@tiptap/extension-link";
-import { Bold, Italic, List, ListOrdered, Link as LinkIcon, SmilePlus, Undo, Redo, Send } from "lucide-react";
+import { Bold, Italic, List, ListOrdered, Link as LinkIcon, SmilePlus, Paperclip, X, FileText, Undo, Redo, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { NOTE_ATTACHMENT_ACCEPT, filterNoteAttachmentFiles, formatFileSize } from "@/lib/note-attachments";
 import { EmojiPicker } from "./emoji-picker";
 
 export function NoteEditor({
@@ -17,16 +19,29 @@ export function NoteEditor({
   submitLabel,
   isLoading,
   compact,
+  allowAttachments = false,
 }: {
   initialContent?: string;
   placeholder?: string;
-  onSubmit: (html: string) => void | Promise<void>;
+  /** `files` is only ever non-empty when `allowAttachments` is on; callers own uploading them once the note exists. */
+  onSubmit: (html: string, files?: File[]) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
   isLoading?: boolean;
   compact?: boolean;
+  /**
+   * Shows a paperclip button and file chips. Off by default: the editor is
+   * shared (deal notes, replies, enquiry notes, ticket posts, client notes)
+   * and only callers that upload the picked files after creating the note
+   * should opt in — otherwise files would be picked and silently dropped.
+   */
+  allowAttachments?: boolean;
 }) {
   const [showEmoji, setShowEmoji] = useState(false);
+  const emojiTriggerRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const { toast } = useToast();
 
   const editor = useEditor({
     extensions: [
@@ -58,13 +73,15 @@ export function NoteEditor({
     if (!editor) return;
     const html = editor.getHTML();
     if (!html || html === "<p></p>") return;
-    const result = onSubmit(html);
+    const files = allowAttachments ? pendingFiles : undefined;
+    const result = onSubmit(html, files);
     if (result && typeof result.then === "function") {
       // Async caller (e.g. mutateAsync): keep the typed content until the
       // submission actually succeeds, so a failed create/edit doesn't lose it.
       result.then(
         () => {
           if (!editor.isDestroyed) editor.commands.clearContent();
+          setPendingFiles([]);
         },
         () => {
           // Swallow — the caller is responsible for surfacing the error (toast).
@@ -73,7 +90,16 @@ export function NoteEditor({
       return;
     }
     editor.commands.clearContent();
-  }, [editor, onSubmit]);
+    setPendingFiles([]);
+  }, [editor, onSubmit, allowAttachments, pendingFiles]);
+
+  const handleFilesPicked = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const { accepted, rejected } = filterNoteAttachmentFiles(Array.from(event.target.files ?? []), pendingFiles.length);
+    // Reset so picking the same file again after removing it still fires onChange.
+    event.target.value = "";
+    rejected.forEach((title) => toast({ title, variant: "destructive" }));
+    if (accepted.length > 0) setPendingFiles((prev) => [...prev, ...accepted]);
+  }, [pendingFiles.length, toast]);
 
   const insertEmoji = useCallback((emoji: string) => {
     editor?.chain().focus().insertContent(emoji).run();
@@ -103,11 +129,19 @@ export function NoteEditor({
         </Button>
         <div className="mx-px h-2.5 w-px bg-black/10" />
         <div className="relative">
-          <Button type="button" variant="ghost" size="sm" onClick={() => setShowEmoji(!showEmoji)} className="h-5 w-5 p-0" data-testid="note-toolbar-emoji">
+          <Button ref={emojiTriggerRef} type="button" variant="ghost" size="sm" onClick={() => setShowEmoji(!showEmoji)} className="h-5 w-5 p-0" data-testid="note-toolbar-emoji">
             <SmilePlus className="h-2.5 w-2.5" />
           </Button>
-          {showEmoji && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />}
+          {showEmoji && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} triggerRef={emojiTriggerRef} />}
         </div>
+        {allowAttachments && (
+          <>
+            <input ref={fileInputRef} type="file" multiple accept={NOTE_ATTACHMENT_ACCEPT} onChange={handleFilesPicked} className="hidden" data-testid="note-attachment-input" />
+            <Button type="button" variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} className="h-5 w-5 p-0" title="Attach files" data-testid="note-toolbar-attach">
+              <Paperclip className="h-2.5 w-2.5" />
+            </Button>
+          </>
+        )}
         <div className="flex-1" />
         <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} className="h-5 w-5 p-0" data-testid="note-toolbar-undo">
           <Undo className="h-2.5 w-2.5" />
@@ -117,6 +151,20 @@ export function NoteEditor({
         </Button>
       </div>
       <EditorContent editor={editor} className="[&_.ProseMirror]:outline-none [&_.ProseMirror]:text-xs [&_.ProseMirror_p.is-editor-empty:first-child::before]:text-black/35 [&_.ProseMirror_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)] [&_.ProseMirror_p.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_p.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_p.is-editor-empty:first-child::before]:pointer-events-none" />
+      {allowAttachments && pendingFiles.length > 0 && (
+        <div className="flex flex-wrap gap-1 border-t border-black/5 px-1.5 py-1" data-testid="note-pending-attachments">
+          {pendingFiles.map((file, index) => (
+            <span key={`${file.name}-${index}`} className="inline-flex items-center gap-1 rounded-md border border-black/10 bg-black/[0.02] px-1.5 py-0.5 text-[10px] text-black/70">
+              <FileText className="h-2.5 w-2.5 shrink-0 text-black/40" />
+              <span className="max-w-[140px] truncate">{file.name}</span>
+              <span className="text-black/40">{formatFileSize(file.size)}</span>
+              <button type="button" onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== index))} aria-label={`Remove ${file.name}`} className="text-black/30 hover:text-rose-600" data-testid={`note-pending-remove-${index}`}>
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex items-center justify-end gap-1.5 border-t border-black/5 bg-black/[0.01] px-1.5 py-1">
         {onCancel && (
           <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="h-6 rounded-md px-2 text-[10px]" data-testid="note-btn-cancel">

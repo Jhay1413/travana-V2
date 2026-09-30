@@ -356,6 +356,7 @@ export const reportsRepository = {
             gte(enquiry_table.date_created, scope.from),
             lte(enquiry_table.date_created, scope.to),
             sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`,
+            isNull(enquiry_table.deleted_at),
             ...buildScopeConditions(scope),
           ),
         )

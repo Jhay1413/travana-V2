@@ -13,6 +13,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
+import {
+  DrawerField,
+  FormDrawer,
+  FormDrawerFooter,
+  FormDrawerSection,
+  drawerControlClass,
+  drawerInputClass,
+} from "@/components/shared/form-drawer";
+import { cn } from "@/lib/utils";
+import type { FormPresentation } from "@/features/quote/types";
 import { useUpdateTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 
@@ -32,6 +42,8 @@ interface EditTaskDialogProps {
   /** Entity the task belongs to — used to invalidate the right cached lists. */
   entityType: string;
   entityId: string;
+  /** "drawer" renders the right-hand drawer used across the app; defaults to a centered dialog. */
+  presentation?: FormPresentation;
 }
 
 /** Two-digit zero padded. */
@@ -54,7 +66,7 @@ function toTimeInput(date: Date): string {
  * time). Self-contained: it owns the update mutation so every place that lists
  * tasks can drop it in with just the task + its entity.
  */
-export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId }: EditTaskDialogProps) {
+export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId, presentation = "dialog" }: EditTaskDialogProps) {
   const { toast } = useToast();
   const updateMutation = useUpdateTask(entityType, entityId);
   const [title, setTitle] = useState("");
@@ -106,6 +118,110 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId 
       },
     );
   };
+
+  const canSubmit = !!title.trim() && !!dueDate;
+
+  if (presentation === "drawer") {
+    return (
+      <FormDrawer
+        open={open}
+        onOpenChange={onOpenChange}
+        title="Edit Task"
+        description="Update the task's details, due date and time."
+        data-testid="edit-task-drawer"
+      >
+        <div className="px-7 pb-6 pt-6 grid gap-4" data-testid="dialog-edit-task">
+          <DrawerField label="Task" className="max-w-[420px]">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter a task…"
+              className={drawerInputClass}
+              data-testid="input-edit-task-title"
+            />
+          </DrawerField>
+          <DrawerField label="Description" className="max-w-[560px]">
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add more detail (optional)…"
+              className="min-h-[88px] rounded-md border border-black/[0.08] bg-[#f4f5f7] px-3 py-2 text-sm text-black/80 shadow-none placeholder:text-black/35 focus-visible:ring-1 focus-visible:ring-[#26cfb3]"
+              data-testid="input-edit-task-description"
+            />
+          </DrawerField>
+          <DrawerField label="Assign To" className="max-w-[420px]">
+            <UserReassignSelect
+              value={assignedToId}
+              onValueChange={setAssignedToId}
+              className={drawerControlClass}
+              data-testid="select-edit-task-assign-to"
+            />
+          </DrawerField>
+          <DrawerField label="Status" className="max-w-[420px]">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setCompleted(false)}
+                className={cn(
+                  "h-11 rounded-md border text-sm font-medium transition",
+                  !completed
+                    ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                    : "border-black/[0.08] bg-[#f4f5f7] text-black/55 hover:bg-[#eef0f3] dark:border-white/10 dark:bg-white/5 dark:text-white/55 dark:hover:bg-white/10",
+                )}
+                data-testid="button-edit-task-status-pending"
+              >
+                Pending
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompleted(true)}
+                className={cn(
+                  "h-11 rounded-md border text-sm font-medium transition",
+                  completed
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "border-black/[0.08] bg-[#f4f5f7] text-black/55 hover:bg-[#eef0f3] dark:border-white/10 dark:bg-white/5 dark:text-white/55 dark:hover:bg-white/10",
+                )}
+                data-testid="button-edit-task-status-done"
+              >
+                Done
+              </button>
+            </div>
+          </DrawerField>
+        </div>
+        <FormDrawerSection title="Schedule" data-testid="drawer-section-edit-task-schedule">
+          <div className="flex flex-wrap gap-x-6 gap-y-4">
+            <DrawerField label="Due Date" className="w-[170px]">
+              <DatePicker
+                value={dueDate}
+                onChange={(v) => setDueDate(v)}
+                placeholder="Pick a date"
+                className={drawerControlClass}
+                modal
+                data-testid="input-edit-task-due-date"
+              />
+            </DrawerField>
+            <DrawerField label="Due Time" className="w-[140px]">
+              <Input
+                type="time"
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
+                className={drawerInputClass}
+                data-testid="input-edit-task-due-time"
+              />
+            </DrawerField>
+          </div>
+        </FormDrawerSection>
+        <FormDrawerFooter
+          submitLabel="Save Changes"
+          isLoading={updateMutation.isPending}
+          disabled={!canSubmit}
+          hint={canSubmit ? undefined : "Enter a task and due date to save."}
+          onSubmit={handleSave}
+          data-testid="button-confirm-edit-task"
+        />
+      </FormDrawer>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -1301,6 +1301,22 @@ export const insertNoteSchema = createInsertSchema(notes).omit({ id: true, creat
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notes.$inferSelect;
 
+// Files attached to a note or a note reply. Replies live in `notes` too
+// (distinguished by parent_id), so a single note_id FK covers both.
+export const noteAttachments = pgTable("note_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  noteId: uuid("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertNoteAttachmentSchema = createInsertSchema(noteAttachments).omit({ id: true, createdAt: true });
+export type InsertNoteAttachment = z.infer<typeof insertNoteAttachmentSchema>;
+export type NoteAttachment = typeof noteAttachments.$inferSelect;
+
 export const task = pgTable('task', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   agent_id: text().references(() => user.id, { onDelete: "set null" }),

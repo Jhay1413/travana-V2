@@ -1,5 +1,6 @@
 import { useFormContext, useWatch } from "react-hook-form";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -59,7 +60,7 @@ export function QuoteDrawerTravelSection({ showCruiseStay = false }: { showCruis
           name="transferType"
           render={({ field }) => (
             <FormItem className="w-[190px] space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Transfer</FormLabel>
+              <FormLabelTooltip className={drawerLabelClass} tip="How guests get between the airport and their accommodation: private or shared transfer, seaplane, speedboat, self-drive, or none.">Transfer</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={drawerControlClass}>
@@ -141,7 +142,7 @@ export function QuoteDrawerTravelSection({ showCruiseStay = false }: { showCruis
           name="flightMeals"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Flight Meals</FormLabel>
+              <FormLabelTooltip className={drawerLabelClass} tip="Whether meals are included on the flights (Yes or No).">Flight Meals</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={drawerControlClass}>

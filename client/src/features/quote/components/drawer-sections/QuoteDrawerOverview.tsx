@@ -1,6 +1,7 @@
 import { useFormContext } from "react-hook-form";
 import { ExternalLink, X } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -68,7 +69,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
           name="packageType"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Holiday Type</FormLabel>
+              <FormLabelTooltip className={drawerLabelClass} tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Holiday Type</FormLabelTooltip>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={drawerControlClass}>
@@ -123,7 +124,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
           name="leadSource"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Lead Source</FormLabel>
+              <FormLabelTooltip className={drawerLabelClass} tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead Source</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={drawerControlClass}>

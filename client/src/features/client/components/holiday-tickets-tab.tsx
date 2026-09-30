@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, Heart, Paperclip, Pencil, Pin, Reply as ReplyIcon, Trash2, X } from "lucide-react";
+import { ChevronDown, Heart, Paperclip, Pencil, Pin, Plus, Reply as ReplyIcon, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
+import { useClientTicketCreate } from "@/features/client/components/hooks";
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { NoteEditor } from "@/components/shared/note-editor";
 import { useToast } from "@/hooks/use-toast";
@@ -634,16 +637,20 @@ function TicketCard({
 
 export function HolidayTicketsTab({
   clientId,
+  clientName,
   entityType,
   transactionId,
 }: {
   clientId: string;
+  clientName: string;
   entityId: string;
   entityType: "enquiry" | "quote" | "booking";
   transactionId: string | null | undefined;
 }) {
   const { data: ticketsData, isLoading } = useTicketsByClient(clientId);
   const { data: users = [] } = useUsers();
+  const { data: currentUser } = useCurrentUser();
+  const ticketCreate = useClientTicketCreate(clientId, currentUser?.id, { transactionId: transactionId ?? null });
   const pinnedTicketIds = usePinnedTicketIds();
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
 
@@ -675,7 +682,38 @@ export function HolidayTicketsTab({
     );
   }
   if (sortedTickets.length === 0) {
-    return <p className="py-8 text-center text-[13px] text-black/40">No tickets yet.</p>;
+    return (
+      <div className="flex flex-col items-center gap-3 py-8">
+        <p className="text-[13px] text-black/40">No tickets yet.</p>
+        <Button
+          size="sm"
+          className="h-7 rounded-lg bg-[#3b82f6] px-3 text-xs text-white hover:bg-[#3b82f6]/90"
+          data-testid="holiday-tickets-empty-new-ticket"
+          onClick={() => ticketCreate.setShowTicketDialog(true)}
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          New Ticket
+        </Button>
+        <CreateTicketDialog
+          presentation="drawer"
+          open={ticketCreate.showTicketDialog}
+          onOpenChange={ticketCreate.setShowTicketDialog}
+          clientName={clientName || "this client"}
+          ticketForm={ticketCreate.ticketForm}
+          setTicketForm={ticketCreate.setTicketForm}
+          ticketPendingFiles={ticketCreate.ticketPendingFiles}
+          ticketFileInputRef={ticketCreate.ticketFileInputRef}
+          isUploading={ticketCreate.isTicketUploading}
+          isPending={ticketCreate.createTicketMutation.isPending}
+          users={users}
+          onFileSelect={ticketCreate.handleTicketFileSelect}
+          removePendingFile={ticketCreate.removeTicketPendingFile}
+          formatFileSize={ticketCreate.formatTicketFileSize}
+          onConfirm={ticketCreate.handleCreateTicket}
+          onReset={ticketCreate.resetTicketForm}
+        />
+      </div>
+    );
   }
 
   return (

@@ -239,7 +239,7 @@ function TasksList({
       >
         View All Tasks
       </button>
-      <EditTaskDialog open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)} task={editingTask} entityType="client" entityId={clientId} />
+      <EditTaskDialog presentation="drawer" open={!!editingTask} onOpenChange={(open) => !open && setEditingTask(null)} task={editingTask} entityType="client" entityId={clientId} />
     </>
   );
 }

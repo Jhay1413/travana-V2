@@ -10,7 +10,7 @@ vi.mock("./enquiry.repository", () => ({
     findAll: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
-    remove: vi.fn(),
+    softDelete: vi.fn(),
     clearRelations: vi.fn(),
     addDestination: vi.fn(),
     addResort: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock("./enquiry.repository", () => ({
   },
 }));
 vi.mock("../transaction/transaction.repository", () => ({
-  transactionRepository: { update: vi.fn() },
+  transactionRepository: { update: vi.fn(), findById: vi.fn() },
 }));
 
 import { newEnquiryService } from "./enquiry.service";
@@ -107,16 +107,58 @@ describe("newEnquiryService.updateEnquiry — status change", () => {
   });
 });
 
-describe("newEnquiryService.deleteEnquiry", () => {
-  it("removes the enquiry after the scope check", async () => {
-    await newEnquiryService.deleteEnquiry("e1", TRUSTED);
-    expect(enquiryTableRepository.remove).toHaveBeenCalledWith("e1");
+describe("newEnquiryService.deleteEnquiry (soft delete)", () => {
+  const SCOPE = { orgId: "o1", branchId: null, orgRole: "org_admin", orgRoles: ["org_admin"], userId: "u1" } as never;
+
+  beforeEach(() => {
+    vi.mocked(enquiryTableRepository.findById).mockResolvedValue({ id: "e1", transaction_id: "t1" } as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_enquiry" } as never);
   });
 
-  it("throws 404 when the enquiry is out of scope", async () => {
+  it("soft-deletes (sets deleted_at via softDelete) instead of removing the row", async () => {
+    await newEnquiryService.deleteEnquiry("e1", SCOPE);
+
+    expect(enquiryTableRepository.softDelete).toHaveBeenCalledWith("e1", "u1");
+  });
+
+  it("records a null deleter for trusted (system) scope", async () => {
+    await newEnquiryService.deleteEnquiry("e1", TRUSTED);
+    expect(enquiryTableRepository.softDelete).toHaveBeenCalledWith("e1", null);
+  });
+
+  it("deactivates the transaction when the deal is still at the enquiry stage", async () => {
+    await newEnquiryService.deleteEnquiry("e1", SCOPE);
+    expect(transactionRepository.update).toHaveBeenCalledWith("t1", { is_active: false });
+  });
+
+  it("leaves a transaction that has moved on to a quote untouched", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_quote" } as never);
+    await newEnquiryService.deleteEnquiry("e1", SCOPE);
+    expect(enquiryTableRepository.softDelete).toHaveBeenCalled();
+    expect(transactionRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("throws 404 when the enquiry is out of scope and deletes nothing", async () => {
     vi.mocked(enquiryTableRepository.enquiryInScope).mockResolvedValue(false as never);
 
-    await expect(newEnquiryService.deleteEnquiry("e1", TRUSTED)).rejects.toMatchObject({ statusCode: 404 });
-    expect(enquiryTableRepository.remove).not.toHaveBeenCalled();
+    await expect(newEnquiryService.deleteEnquiry("e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(enquiryTableRepository.softDelete).not.toHaveBeenCalled();
+    expect(transactionRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("throws 404 for an already soft-deleted enquiry (excluded from the scope check / reads)", async () => {
+    // enquiryInScope filters deleted_at IS NULL, so a deleted row reads as out of scope.
+    vi.mocked(enquiryTableRepository.enquiryInScope).mockResolvedValue(false as never);
+    await expect(newEnquiryService.deleteEnquiry("e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("reads of a soft-deleted enquiry 404 (repository excludes it, service surfaces not-found)", async () => {
+    vi.mocked(enquiryTableRepository.findById).mockResolvedValue(undefined as never);
+    vi.mocked(enquiryTableRepository.findWithRelations).mockResolvedValue(undefined as never);
+    vi.mocked(enquiryTableRepository.findByTransactionId).mockResolvedValue(undefined as never);
+
+    await expect(newEnquiryService.getEnquiryById("e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    await expect(newEnquiryService.getEnquiryWithRelations("e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    await expect(newEnquiryService.getEnquiryByTransactionId("t1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
   });
 });

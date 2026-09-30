@@ -47,6 +47,7 @@ import {
   Tag,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
 import type { EnrichedQuote, PortalStatus } from "@/features/quote/types";
 import { PORTAL_ACTIVE_WINDOW_DAYS } from "@/features/quote/types";
 import type { TravelDeal } from "@/features/social/api/social-post.api";
@@ -57,6 +58,8 @@ type ViewMode = "scheduled" | "all" | "portal" | "unscheduled";
 // it; sized to its content so the row stays compact.
 const FILTER_TRIGGER_CLASS =
   "h-9 w-auto min-w-[150px] gap-2 rounded-xl border-black/10 bg-black/5 text-xs font-medium dark:border-white/10 dark:bg-white/5";
+const DATE_TRIGGER_CLASS =
+  "h-9 w-auto min-w-[150px] border-black/10 bg-black/5 text-xs font-medium hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10";
 type ScheduleFilter = "none" | "today" | "tomorrow" | "this-week" | "next-week" | "next-month" | "specific-date";
 
 /** Whole days a portal post has been live, or null when it was never stamped. */
@@ -524,7 +527,7 @@ export default function SocialPostsBoard() {
 
   return (
     <div className="space-y-4">
-      <div className="glass ringed grain rounded-2xl p-4">
+      <div className="glass ringed grain relative z-30 rounded-2xl p-4">
         <div className="flex flex-wrap items-center gap-2">
           <div ref={searchWrapperRef} className="relative w-full sm:w-64 sm:shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-black/40 dark:text-white/40" />
@@ -576,22 +579,29 @@ export default function SocialPostsBoard() {
           )}
           {viewMode === "scheduled" && scheduleFilter === "specific-date" && (
             <div className="flex items-center gap-2 flex-wrap">
-              <input
-                type="date"
+              <DatePicker
                 value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
+                onChange={(v) => {
+                  setDateFrom(v);
+                  // "To" is only meaningful once "From" is set and can't precede it.
+                  if (!v || (dateTo && dateTo < v)) setDateTo("");
+                }}
+                placeholder="Start date"
+                className={DATE_TRIGGER_CLASS}
                 data-testid="input-date-from-filter"
               />
               <span className="text-xs text-black/50 dark:text-white/50">to</span>
-              <input
-                type="date"
-                value={dateTo}
-                min={dateFrom}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="rounded-xl text-xs font-medium px-3 py-1.5 border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-black/80 dark:text-white/80 focus:outline-none focus:ring-2 focus:ring-green-500"
-                data-testid="input-date-to-filter"
-              />
+              <span title={dateFrom ? undefined : "Pick a start date first"}>
+                <DatePicker
+                  value={dateTo}
+                  onChange={setDateTo}
+                  min={dateFrom || undefined}
+                  disabled={!dateFrom}
+                  placeholder="End date"
+                  className={DATE_TRIGGER_CLASS}
+                  data-testid="input-date-to-filter"
+                />
+              </span>
             </div>
           )}
 

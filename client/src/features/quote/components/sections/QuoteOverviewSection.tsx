@@ -1,6 +1,7 @@
 import { useFormContext } from "react-hook-form";
 import { FileText, ExternalLink } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -23,7 +24,7 @@ export function QuoteOverviewSection() {
           name="packageType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Package Type *</FormLabel>
+              <FormLabelTooltip className="text-xs font-medium text-black/60" tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Package Type *</FormLabelTooltip>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
@@ -93,7 +94,7 @@ export function QuoteOverviewSection() {
           name="leadSource"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Lead Source</FormLabel>
+              <FormLabelTooltip className="text-xs font-medium text-black/60" tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead Source</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">

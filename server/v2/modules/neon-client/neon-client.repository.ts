@@ -289,7 +289,7 @@ export const neonClientRepository = {
         lastActivityAt: sql<Date | null>`max(${transaction.created_at})`,
       })
       .from(transaction)
-      .leftJoin(enquiry_table, eq(enquiry_table.transaction_id, transaction.id))
+      .leftJoin(enquiry_table, and(eq(enquiry_table.transaction_id, transaction.id), isNull(enquiry_table.deleted_at)))
       .leftJoin(
         quote,
         and(

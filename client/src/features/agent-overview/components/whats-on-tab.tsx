@@ -493,6 +493,7 @@ export function WhatsOnTab({
       </div>
 
       <EditTaskDialog
+        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}

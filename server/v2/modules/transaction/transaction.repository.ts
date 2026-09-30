@@ -173,7 +173,7 @@ async function enrichTransactions(txns: Transaction[]) {
   const clientIds = Array.from(new Set(txns.map(t => t.client_id).filter((id): id is string => !!id)));
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes, allClients] = await Promise.all([
-    db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    db.select().from(enquiry_table).where(and(inArray(enquiry_table.transaction_id, txnIds), isNull(enquiry_table.deleted_at))),
     // Full quote rows plus the display joins the client-details panels need
     // (destination / operator / departing airport) — same scalar-subquery
     // pattern as enrichTransactionsLightweight below.
@@ -376,7 +376,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
       JOIN destination_table d ON ed.destination_id = d.id
       WHERE ed.enquiry_id = enquiry_table.id
       LIMIT 1
-    )` }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    )` }).from(enquiry_table).where(and(inArray(enquiry_table.transaction_id, txnIds), isNull(enquiry_table.deleted_at))),
     db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, travel_date: quote.travel_date, num_of_nights: quote.num_of_nights, adult: quote.adult, child: quote.child, infant: quote.infant, sales_price: quote.sales_price, package_commission: quote.package_commission, holiday_type_id: quote.holiday_type_id, quote_status: quote.quote_status, isQuoteCopy: quote.isQuoteCopy, date_created: quote.date_created, date_expiry: quote.date_expiry, is_future_deal: quote.is_future_deal, future_deal_date: quote.future_deal_date, discounts: quote.discounts, service_charge: quote.service_charge, destination_name: sql<string | null>`(
       SELECT d.name FROM quote_accomodation qa
       JOIN accomodation_list_table al ON qa.accomodation_id = al.id
@@ -642,6 +642,7 @@ function buildPipelineConditions(scope: Scope | undefined, column: string, agent
     conditions.push(sql`EXISTS (
       SELECT 1 FROM ${enquiry_table} e
       WHERE e.transaction_id = ${transaction.id}
+        AND e.deleted_at IS NULL
         AND e.is_active IS NOT FALSE
         AND e.status <> 'LOST'
         AND e.is_future_deal IS NOT TRUE
@@ -691,6 +692,7 @@ function buildPipelineConditions(scope: Scope | undefined, column: string, agent
       (${transaction.status} = 'on_enquiry' AND EXISTS (
         SELECT 1 FROM ${enquiry_table} e
         WHERE e.transaction_id = ${transaction.id}
+          AND e.deleted_at IS NULL
           AND e.is_active IS NOT FALSE
           AND e.is_future_deal = TRUE
           AND e.status <> 'LOST'
@@ -713,7 +715,7 @@ function buildPipelineConditions(scope: Scope | undefined, column: string, agent
     conditions.push(sql`(
       (${transaction.status} = 'on_enquiry' AND EXISTS (
         SELECT 1 FROM ${enquiry_table} e
-        WHERE e.transaction_id = ${transaction.id} AND e.status = 'LOST'
+        WHERE e.transaction_id = ${transaction.id} AND e.deleted_at IS NULL AND e.status = 'LOST'
       ))
       OR (${transaction.status} = 'on_quote' AND EXISTS (
         SELECT 1 FROM ${quote}
@@ -752,7 +754,7 @@ function buildPipelineOrderBy(column: string, sort?: "newest" | "oldest"): SQL {
       CASE WHEN ${transaction.status} = 'on_enquiry'
         THEN (
           SELECT e.future_deal_date FROM ${enquiry_table} e
-          WHERE e.transaction_id = ${transaction.id} AND e.is_future_deal = TRUE
+          WHERE e.transaction_id = ${transaction.id} AND e.deleted_at IS NULL AND e.is_future_deal = TRUE
           ORDER BY e.date_created DESC LIMIT 1
         )
         ELSE (
@@ -967,7 +969,7 @@ export const transactionRepository = {
     const [txn] = await db.select().from(transaction).where(and(...conds)).limit(1);
     if (!txn) return undefined;
 
-    const [enquiryResult] = await db.select().from(enquiry_table).where(eq(enquiry_table.transaction_id, id)).limit(1);
+    const [enquiryResult] = await db.select().from(enquiry_table).where(and(eq(enquiry_table.transaction_id, id), isNull(enquiry_table.deleted_at))).limit(1);
     const rawQuotes = await db.select().from(quote).where(and(eq(quote.transaction_id, id), isNull(quote.deleted_at)));
     const [bookingResult] = await db.select().from(booking).where(eq(booking.transaction_id, id)).limit(1);
     const [client] = txn.client_id ? await db.select().from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
