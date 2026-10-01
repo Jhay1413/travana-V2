@@ -23,6 +23,7 @@ import { useEnquiry } from "@/features/enquiry/api/use-enquiry-queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
 import { AddAirportModal } from "@/features/lookups/components/lookups/add-airport-modal";
+import { AddCountryModal } from "@/features/lookups/components/lookups/add-country-modal";
 import { AddDestinationModal } from "@/features/lookups/components/lookups/add-destination-modal";
 import { AddResortModal } from "@/features/lookups/components/lookups/add-resort-modal";
 import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
@@ -469,9 +470,11 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
   const [direction, setDirection] = useState(1);
   const [resortSearch, setResortSearch] = useState("");
   const [destSearch, setDestSearch] = useState("");
+  const [countrySearch, setCountrySearch] = useState("");
   const [accomSearch, setAccomSearch] = useState("");
   const [airportSearch, setAirportSearch] = useState("");
   const [showAddAirport, setShowAddAirport] = useState(false);
+  const [showAddCountry, setShowAddCountry] = useState(false);
   const [showAddDestination, setShowAddDestination] = useState(false);
   const [showAddResort, setShowAddResort] = useState(false);
   const [showAddAccommodation, setShowAddAccommodation] = useState(false);
@@ -957,11 +960,13 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
                 options={(countriesData || []).map((c: any) => ({ value: c.id, label: c.country_name }))}
                 placeholder="Select ..."
                 searchPlaceholder="Search countries..."
+                onSearchCapture={setCountrySearch}
                 emptyMessage="No countries found."
                 className={pickerCls}
                 data-testid="select-enquiry-country"
+                onAddNew={() => setShowAddCountry(true)}
+                addNewLabel="Add Country"
               />
-              {/* No AddCountryModal exists in @/features/lookups/components/lookups yet — see report. */}
             </div>
             <div className="space-y-1.5">
               <Label className={labelCls}>Destinations</Label>
@@ -974,13 +979,10 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
                 placeholder="Select ..."
                 searchPlaceholder="Search destinations..."
                 emptyMessage="No destinations found."
+                isLoading={isDestFetching}
                 className={pickerCls}
                 data-testid="select-enquiry-destination"
-                onAddNew={
-                  !isDestFetching && (destinationsData || []).length === 0
-                    ? () => setShowAddDestination(true)
-                    : undefined
-                }
+                onAddNew={() => setShowAddDestination(true)}
                 addNewLabel="Add Destination"
               />
             </div>
@@ -995,13 +997,10 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
                 placeholder="Search ..."
                 searchPlaceholder="Search resorts..."
                 emptyMessage="No resorts found."
+                isLoading={isResortFetching}
                 className={pickerCls}
                 data-testid="select-enquiry-resort"
-                onAddNew={
-                  !isResortFetching && (resortsData || []).length === 0
-                    ? () => setShowAddResort(true)
-                    : undefined
-                }
+                onAddNew={() => setShowAddResort(true)}
                 addNewLabel="Add Resort"
               />
             </div>
@@ -1020,14 +1019,23 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
               isLoading={isAccomFetching}
               className={pickerCls}
               data-testid="select-enquiry-accommodation"
-              onAddNew={
-                !isAccomFetching && (accommodationsData || []).length === 0
-                  ? () => setShowAddAccommodation(true)
-                  : undefined
-              }
+              onAddNew={() => setShowAddAccommodation(true)}
               addNewLabel="Add Accommodation"
             />
           </div>
+
+          <AddCountryModal
+            open={showAddCountry}
+            onOpenChange={setShowAddCountry}
+            initialName={countrySearch}
+            onSuccess={(c) => {
+              setForm((prev) => ({
+                ...prev,
+                countries: prev.countries.includes(c.id) ? prev.countries : [...prev.countries, c.id],
+              }));
+              setCountrySearch("");
+            }}
+          />
 
           <AddDestinationModal
             open={showAddDestination}

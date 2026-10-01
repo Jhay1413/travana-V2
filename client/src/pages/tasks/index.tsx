@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUserTasks } from "@/features/tasks";
 import type { TaskWithClient } from "@/features/tasks/api/task.api";
 import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
+import { EditTaskDialog } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { cn } from "@/lib/utils";
 import { dealDeepLinkHref } from "@/lib/deal-links";
 
@@ -42,6 +43,8 @@ export default function TasksPage() {
   const updateTask = useUpdateTask("", "");
   const [filter, setFilter] = useState<TasksFilter>("all");
   const [creating, setCreating] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskWithClient | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
   // Ids ticked off on this page, applied optimistically until the refetch lands.
   const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set());
 
@@ -109,6 +112,11 @@ export default function TasksPage() {
         },
       },
     );
+  };
+
+  const openEdit = (task: TaskWithClient) => {
+    setEditingTask(task);
+    setEditOpen(true);
   };
 
   const addButton = (label: string) => (
@@ -195,9 +203,21 @@ export default function TasksPage() {
               <div
                 key={task.id}
                 className={cn(
-                  "flex items-start gap-3 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]",
+                  "flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 dark:hover:bg-white/[0.04]",
                   done && "opacity-50",
                 )}
+                role="button"
+                tabIndex={0}
+                aria-label={`Edit task: ${task.title ?? "Untitled"}`}
+                onClick={() => openEdit(task)}
+                onKeyDown={(e) => {
+                  // Only the row itself; Enter/Space on the checkbox or link keep their own behavior.
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openEdit(task);
+                  }
+                }}
                 data-testid={`row-task-${task.id}`}
               >
                 <button
@@ -231,6 +251,7 @@ export default function TasksPage() {
                     (href ? (
                       <Link
                         href={href}
+                        onClick={(e) => e.stopPropagation()}
                         className="mt-0.5 inline-block text-[13px] font-medium text-blue-600 hover:underline dark:text-blue-400"
                         data-testid={`link-task-deal-${task.id}`}
                       >
@@ -254,6 +275,15 @@ export default function TasksPage() {
           })}
         </div>
       )}
+
+      <EditTaskDialog
+        presentation="drawer"
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        task={editingTask}
+        entityType={editingTask?.entityType ?? ""}
+        entityId={editingTask?.entityId ?? ""}
+      />
 
       <CreateTaskDialog
         presentation="drawer"

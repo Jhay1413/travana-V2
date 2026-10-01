@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Spinner } from "@/components/ui/spinner";
-import { useFixedDropdownPosition } from "@/hooks/use-fixed-dropdown-position";
 import { useCloseOnOutsideOrEscape } from "@/hooks/use-close-on-outside-or-escape";
 import {
   useSavePost,
@@ -119,12 +118,13 @@ export function SocialPostPreviewDialog({
   const [scheduleDate, setScheduleDate] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
   // The calendar dropdown is rendered inline (not a Radix `Popover` portaled to
-  // `document.body`) and positioned with `position: fixed` from the trigger's rect —
-  // this dialog's own `FocusScope`/`RemoveScroll` would otherwise fight a portaled
+  // `document.body`) and positioned `absolute` against its trigger wrapper, opening
+  // upward (the schedule card sits at the bottom of the dialog). NOT `position: fixed`:
+  // DialogContent is transformed AND `overflow-y-auto`, so a fixed child resolves against
+  // the dialog's scrolling padding box and drifts by its scrollTop. This dialog's own `FocusScope`/`RemoveScroll` would otherwise fight a portaled
   // popover for focus/scroll, leaving it dead to clicks. See
   // docs/form-drawer-pointer-events-fix.md (sections 6 and 8) and
   // client/src/components/ui/date-picker.tsx, which was fixed the same way.
-  const calendarPosition = useFixedDropdownPosition(calendarTriggerRef, calendarOpen);
   useCloseOnOutsideOrEscape(
     calendarOpen,
     () => setCalendarOpen(false),
@@ -765,6 +765,7 @@ export function SocialPostPreviewDialog({
                       className="rounded-xl bg-slate-50 dark:bg-slate-900 border-black/6 dark:border-white/6 flex-1"
                       data-testid="input-schedule-date"
                     />
+                    <div className="relative shrink-0">
                     <Button
                       ref={calendarTriggerRef}
                       type="button"
@@ -776,16 +777,10 @@ export function SocialPostPreviewDialog({
                     >
                       <CalendarIcon className="h-4 w-4 text-orange-500" />
                     </Button>
-                    {calendarOpen && calendarPosition && (
+                    {calendarOpen && (
                       <div
                         ref={calendarDropdownRef}
-                        className="fixed z-[9999] w-auto rounded-xl border border-black/10 bg-popover p-0 text-popover-foreground shadow-xl outline-none dark:border-white/10"
-                        style={{
-                          left: calendarPosition.left,
-                          top: calendarPosition.top,
-                          bottom: calendarPosition.bottom,
-                          maxHeight: calendarPosition.maxHeight,
-                        }}
+                        className="absolute bottom-full right-0 z-[9999] mb-1 max-h-[70vh] w-auto overflow-auto rounded-xl border border-black/10 bg-popover p-0 text-popover-foreground shadow-xl outline-none dark:border-white/10"
                       >
                         <Calendar
                           mode="single"
@@ -805,6 +800,7 @@ export function SocialPostPreviewDialog({
                         />
                       </div>
                     )}
+                    </div>
                   </div>
                   <div className="flex gap-3">
                     <Button

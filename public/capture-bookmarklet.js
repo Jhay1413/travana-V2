@@ -519,18 +519,83 @@
     },
   };
 
-  // Every element the picker itself puts on the page carries this attribute on
-  // its ROOT node (the panel, the mode-chooser). isOwnUI() walks up from an
-  // event target looking for it, so a click or hover anywhere inside our own
-  // UI is never mistaken for a pick or a page click to suppress.
+  // Every piece of UI the picker puts on the page lives inside a shadow root
+  // (see createShadowUI below), and this attribute is set on the shadow HOST
+  // element that carries it. isOwnUI() walks up from an event target looking
+  // for it, so a click or hover anywhere inside our own UI is never mistaken
+  // for a pick or a page click to suppress.
+  //
+  // Why the host and not an inner node: a document-level listener (the
+  // picker's capture-phase mousemove/click/keydown) sees events from inside a
+  // shadow root RETARGETED to the host element, so the host is the only node
+  // of ours it can ever observe.
   var UI_ATTR = 'data-travana-picker-ui';
 
+  // Walks up from a node looking for UI_ATTR. parentNode stops at a shadow
+  // root (its parentNode is null), so hop across the boundary via .host.
   function isOwnUI(node) {
     while (node) {
       if (node.nodeType === 1 && node.hasAttribute && node.hasAttribute(UI_ATTR)) return true;
-      node = node.parentNode;
+      node = node.parentNode || node.host;
     }
     return false;
+  }
+
+  // Event-aware version of isOwnUI. Retargeting normally already hands us the
+  // host as e.target, but composedPath() lists every node the event really
+  // passed through (including ones inside the shadow tree), so checking it
+  // too makes the answer correct even if the target were ever an inner node.
+  function isOwnUIEvent(e) {
+    if (e.composedPath) {
+      var path = e.composedPath();
+      for (var i = 0; i < path.length; i++) {
+        if (path[i] && path[i].nodeType === 1 && path[i].hasAttribute && path[i].hasAttribute(UI_ATTR)) return true;
+      }
+    }
+    return isOwnUI(e.target);
+  }
+
+  // Builds an isolated mount point for one piece of picker UI.
+  //
+  // Why a shadow root: the picker used to append plain <div>/<button> nodes
+  // straight into document.body, styled only by inline cssText. Host-page CSS
+  // still wins over that: any rule carrying !important (e.g. a defensive
+  // "body > div { display:none !important }" or a colour/visibility override)
+  // beats an inline style without !important, and INHERITED properties such as
+  // color leak in from the page. On some supplier sites (hoseasons) that left
+  // the panel box visible but its rows hidden or invisible, with no error to
+  // see. A shadow root stops host selectors from matching our nodes at all.
+  //
+  // Inherited properties still cross the shadow boundary, so the first thing
+  // inside is a wrapper with "all:initial", which resets every property to its
+  // initial value, followed by the few things our UI relies on re-applied.
+  //
+  // The host element itself is still a normal child of <body> that host CSS can
+  // target, so it uses a custom tag name (unlikely to match "div" rules) and
+  // important inline declarations, which beat any non-inline !important rule.
+  //
+  // Returns { wrap, remove }: build the UI into wrap, call remove() to tear
+  // down. remove() deletes the HOST, so nothing is left behind in the page.
+  function createShadowUI() {
+    var host = document.createElement('travana-picker-ui');
+    host.setAttribute(UI_ATTR, '1');
+    host.style.setProperty('all', 'initial', 'important');
+    host.style.setProperty('display', 'block', 'important');
+    host.style.setProperty('position', 'static', 'important');
+    var root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
+    var wrap = document.createElement('div');
+    // all:initial MUST come first; everything after it is what the UI needs
+    // back: block layout, the base font and text colour, and left alignment.
+    wrap.style.cssText = 'all:initial;display:block;position:static;color:#111;text-align:left;' +
+      'font:12px/1.4 -apple-system,Segoe UI,Arial,sans-serif;';
+    root.appendChild(wrap);
+    document.body.appendChild(host);
+    return {
+      wrap: wrap,
+      remove: function () {
+        if (host.parentNode) host.parentNode.removeChild(host);
+      },
+    };
   }
 
   function prettyLabel(key) {
@@ -858,7 +923,7 @@
     function onMouseMove(e) {
       if (!armedField) return;
       var el = e.target;
-      if (!el || el.nodeType !== 1 || isOwnUI(el)) {
+      if (!el || el.nodeType !== 1 || isOwnUIEvent(e)) {
         clearHighlight();
         return;
       }
@@ -871,7 +936,7 @@
     // happens because the page has already moved on.
     function onClickCapture(e) {
       if (!armedField) return;
-      if (isOwnUI(e.target)) return; // clicks on our own panel behave normally
+      if (isOwnUIEvent(e)) return; // clicks on our own panel behave normally
       e.preventDefault();
       e.stopPropagation();
       var el = e.target;
@@ -895,8 +960,10 @@
     document.addEventListener('click', onClickCapture, true);
     document.addEventListener('keydown', onKeyDown, true);
 
+    // Mounted inside a shadow root so host-page CSS cannot hide or recolour it
+    // (see createShadowUI). UI_ATTR is on the shadow host, not on the panel.
+    var ui = createShadowUI();
     var panel = document.createElement('div');
-    panel.setAttribute(UI_ATTR, '1');
     panel.style.cssText = PANEL_CSS;
 
     var header = document.createElement('div');
@@ -952,11 +1019,25 @@
     footer.appendChild(cancelBtn);
     panel.appendChild(footer);
 
-    document.body.appendChild(panel);
+    ui.wrap.appendChild(panel);
     var cleanupDrag = makeDraggable(header, panel);
     renderList();
 
+    // A throw while building the rows used to leave an empty list and nothing
+    // in the console. Show a short message inside the panel instead.
     function renderList() {
+      try {
+        renderListRows();
+      } catch (err) {
+        while (list.firstChild) list.removeChild(list.firstChild);
+        var errBox = document.createElement('div');
+        errBox.style.cssText = 'padding:8px 6px;color:#c00;font-weight:600;';
+        errBox.textContent = 'Travana could not render the field list. ' + (err && err.message ? err.message : err);
+        list.appendChild(errBox);
+      }
+    }
+
+    function renderListRows() {
       typeLabel.textContent = 'Type: ' + PACKAGE_TYPE_GROUPS[currentType].groupName;
       var groups = currentGroups();
       while (list.firstChild) list.removeChild(list.firstChild);
@@ -1081,7 +1162,8 @@
       document.removeEventListener('keydown', onKeyDown, true);
       cleanupDrag();
       clearHighlight();
-      if (panel.parentNode) panel.parentNode.removeChild(panel);
+      // Removes the shadow HOST, not just the panel inside it.
+      ui.remove();
     }
   }
 
@@ -1095,8 +1177,9 @@
   // the panel's "Change" button, so there is exactly one place this question
   // is asked.
   function showChoosePackageType(onChosen) {
+    // Shadow-root mount, same isolation as the field-picker panel.
+    var ui = createShadowUI();
     var chooser = document.createElement('div');
-    chooser.setAttribute(UI_ATTR, '1');
     chooser.style.cssText = 'position:fixed;top:16px;right:16px;width:220px;z-index:2147483647;' +
       'background:#ffffff;color:#111;border:1px solid #ccc;border-radius:8px;' +
       'box-shadow:0 6px 24px rgba(0,0,0,.3);padding:10px;' +
@@ -1114,14 +1197,14 @@
         btn.textContent = PACKAGE_TYPE_GROUPS[typeKey].buttonLabel;
         btn.style.cssText = BTN_CSS + 'display:block;width:100%;margin-bottom:6px;';
         btn.addEventListener('click', function () {
-          document.body.removeChild(chooser);
+          ui.remove();
           onChosen(typeKey);
         });
         chooser.appendChild(btn);
       })(order[i]);
     }
 
-    document.body.appendChild(chooser);
+    ui.wrap.appendChild(chooser);
   }
 
   function runPickerMode() {
@@ -1142,8 +1225,9 @@
   // reuses the exact same UI_ATTR exclusion the field picker relies on rather
   // than adding a second, different mechanism for one dialog.
   function showChooser() {
+    // Shadow-root mount, same isolation as the field-picker panel.
+    var ui = createShadowUI();
     var chooser = document.createElement('div');
-    chooser.setAttribute(UI_ATTR, '1');
     chooser.style.cssText = 'position:fixed;top:16px;right:16px;width:220px;z-index:2147483647;' +
       'background:#ffffff;color:#111;border:1px solid #ccc;border-radius:8px;' +
       'box-shadow:0 6px 24px rgba(0,0,0,.3);padding:10px;' +
@@ -1164,14 +1248,14 @@
     pickerBtn.style.cssText = BTN_SECONDARY_CSS + 'display:block;width:100%;';
     chooser.appendChild(pickerBtn);
 
-    document.body.appendChild(chooser);
+    ui.wrap.appendChild(chooser);
 
     instantBtn.addEventListener('click', function () {
-      document.body.removeChild(chooser);
+      ui.remove();
       runInstantCapture();
     });
     pickerBtn.addEventListener('click', function () {
-      document.body.removeChild(chooser);
+      ui.remove();
       runPickerMode();
     });
   }

@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { isQuoteExpired, isEnquiryExpired, isBookingExpired } from "@/lib/deal-expiry";
+import { isQuoteExpired, isEnquiryExpired, isBookingExpired, isQuoteLost, isEnquiryLost } from "@/lib/deal-expiry";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import type { EnquiryTable, Quote } from "@/features/quote/types";
 import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
@@ -87,6 +87,8 @@ interface HolidayRowData {
   dateLine: string | null;
   createdAt: string | null;
   expired: boolean;
+  /** Lost deals get their own section and take precedence over `expired`. */
+  lost: boolean;
   /** True for a quote duplicated from another — rendered nested with a "Copy" pill. */
   isCopy: boolean;
   /** Copies duplicated from this row, nested underneath it. Empty for enquiries/bookings/copies. */
@@ -106,6 +108,7 @@ function buildQuoteRow(qr: QuoteRow): HolidayRowData {
     dateLine: buildDateLine(code, qr.travel_date, qr.num_of_nights),
     createdAt: qr.date_created,
     expired: isQuoteExpired(qr),
+    lost: isQuoteLost(qr),
     isCopy: Boolean(qr.isQuoteCopy),
     copies: [],
   };
@@ -158,6 +161,7 @@ function buildEnquiryRows(enquiries: EnquiryTable[]): HolidayRowData[] {
     dateLine: buildDateLine(null, e.travel_date, e.no_of_nights),
     createdAt: e.date_created,
     expired: isEnquiryExpired(e),
+    lost: isEnquiryLost(e),
     isCopy: false,
     copies: [],
   }));
@@ -178,6 +182,7 @@ function buildBookingRows(bookings: HolidayBooking[]): HolidayRowData[] {
       dateLine: buildDateLine(null, b.travel_date, b.num_of_nights),
       createdAt: b.date_created,
       expired: isBookingExpired(b),
+      lost: false,
       isCopy: false,
       copies: [],
     };
@@ -459,6 +464,8 @@ export function AllHolidaysPanel({
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   // Expired holidays start collapsed so the live ones lead; the toggle reopens them.
   const [expiredOpen, setExpiredOpen] = useState(false);
+  // Lost holidays are likewise collapsed by default.
+  const [lostOpen, setLostOpen] = useState(false);
   const [hasUserSelectedTab, setHasUserSelectedTab] = useState(false);
   const autoSelectedRef = useRef(false);
 
@@ -530,11 +537,15 @@ export function AllHolidaysPanel({
   }, [rows, search]);
 
   const activeRows = useMemo(
-    () => sortRows(filteredRows.filter((r) => !r.expired), sortOrder),
+    () => sortRows(filteredRows.filter((r) => !r.expired && !r.lost), sortOrder),
     [filteredRows, sortOrder],
   );
   const expiredRows = useMemo(
-    () => sortRows(filteredRows.filter((r) => r.expired), sortOrder),
+    () => sortRows(filteredRows.filter((r) => r.expired && !r.lost), sortOrder),
+    [filteredRows, sortOrder],
+  );
+  const lostRows = useMemo(
+    () => sortRows(filteredRows.filter((r) => r.lost), sortOrder),
     [filteredRows, sortOrder],
   );
 
@@ -693,7 +704,7 @@ export function AllHolidaysPanel({
       <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {isLoadingTransactions ? (
           <p className="py-6 text-center text-xs text-black/45 dark:text-white/45">Loading…</p>
-        ) : activeRows.length === 0 && expiredRows.length === 0 ? (
+        ) : activeRows.length === 0 && expiredRows.length === 0 && lostRows.length === 0 ? (
           <p className="py-6 text-center text-xs text-black/45 dark:text-white/45">Nothing to show yet</p>
         ) : (
           <>
@@ -732,6 +743,37 @@ export function AllHolidaysPanel({
                         key={row.id}
                         row={row}
                         isLast={index === expiredRows.length - 1}
+                        selection={selection}
+                        pinnedKeys={pinnedKeys}
+                        onSelect={onSelect}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {lostRows.length > 0 && (
+              <div className="mt-4 border-t border-black/10 pt-3 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setLostOpen((v) => !v)}
+                  className="flex w-full items-center justify-between px-1 py-3 text-left"
+                  data-testid="all-holidays-lost-toggle"
+                >
+                  <span className="text-[13px] font-bold 3xl:text-sm">Lost</span>
+                  <ChevronDown
+                    className={cn("h-4 w-4 text-black/50 transition dark:text-white/50", !lostOpen && "-rotate-90")}
+                  />
+                </button>
+                {lostOpen && (
+                  <div className="mt-1 space-y-1">
+                    {lostRows.map((row, index) => (
+                      <HolidayGroupRow
+                        roomy={isLiveDeals}
+                        key={row.id}
+                        row={row}
+                        isLast={index === lostRows.length - 1}
                         selection={selection}
                         pinnedKeys={pinnedKeys}
                         onSelect={onSelect}
