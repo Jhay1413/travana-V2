@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import {
   AlertTriangle,
+  Anchor,
   ArrowRight,
   BadgePoundSterling,
   Ban,
@@ -12,10 +13,12 @@ import {
   Bus,
   CalendarClock,
   CalendarDays,
+  CalendarRange,
   Check,
   CheckSquare,
   ChevronDown,
   Copy,
+  Dog,
   Ellipsis,
   Eye,
   Globe,
@@ -36,13 +39,16 @@ import {
   Reply,
   RotateCcw,
   Smile,
+  Ship,
   SquareArrowRight,
   Star,
   Tag,
   Ticket as TicketIcon,
   Trash2,
+  UserRound,
   Users,
   Utensils,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -54,6 +60,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { FormDrawer } from "@/components/shared/form-drawer";
 import { EMOJI_CATEGORIES } from "@/lib/emoji";
 import { cn } from "@/lib/utils";
+import { NOTE_ATTACHMENT_ACCEPT, filterNoteAttachmentFiles, formatFileSize } from "@/lib/note-attachments";
 import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -75,7 +82,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useQuote, useBooking, useEnquiry, useNotes, useTasks, useUsers, useCurrentUser, usePackageTypes, quoteKeys, enquiryKeys } from "@/hooks/queries";
 import {
-  useCreateNote,
   useUpdateNote,
   useDeleteNote,
   useToggleTask,
@@ -332,23 +338,65 @@ function buildQuoteLikeFields(item: QuoteDisplay): { left: FieldRowSpec[]; right
   };
 }
 
-function buildEnquiryFields(enquiry: EnquiryTable): { left: FieldRowSpec[]; right: FieldRowSpec[] } {
-  const destinationName = enquiry.destinations?.[0]?.name ?? null;
-  const resortName = enquiry.resorts?.[0]?.name ?? null;
+// The enquiry endpoint returns joined names under per-relation keys
+// (destination_name, resort_name, ...) rather than a shared `name`.
+function joinNames(items: ReadonlyArray<string | null | undefined> | undefined): string | null {
+  const names = (items ?? []).filter((n): n is string => !!n);
+  return names.length ? names.join(", ") : null;
+}
+
+function buildEnquiryFields(enquiry: EnquiryTable, agentName: string | null): { left: FieldRowSpec[]; right: FieldRowSpec[] } {
+  const holidayType = enquiry.holiday_type_name?.toLowerCase() ?? "";
+  const isHotTub = holidayType.includes("hot tub");
+  const isCruise = holidayType.includes("cruise");
+  const isStandard = !isHotTub && !isCruise;
+
+  const destinationNames = joinNames(enquiry.destinations?.map((d) => d.destination_name ?? d.name));
+  const resortNames = joinNames(enquiry.resorts?.map((r) => r.resort_name ?? r.name));
+  const airportNames = joinNames(enquiry.airports?.map((a) => a.airport_name ?? a.name));
+  const boardBasisNames = joinNames(enquiry.boardBases?.map((b) => b.board_basis_name ?? b.name));
+  const portNames = joinNames(enquiry.ports?.map((p) => p.port_name ?? p.name));
+  const cruiseLineNames = joinNames(enquiry.cruiseLines?.map((c) => c.cruise_line_name ?? c.name));
+  const cruiseDestinationNames = joinNames(enquiry.cruiseDestinations?.map((c) => c.cruise_destination_name ?? c.name));
+
   const passengerParts: string[] = [];
   if (enquiry.adults) passengerParts.push(`${enquiry.adults} Adult${enquiry.adults === 1 ? "" : "s"}`);
   if (enquiry.children) passengerParts.push(`${enquiry.children} Child${enquiry.children === 1 ? "" : "ren"}`);
   if (enquiry.infants) passengerParts.push(`${enquiry.infants} Infant${enquiry.infants === 1 ? "" : "s"}`);
+
+  const nights =
+    Array.isArray(enquiry.flexible_nights) && enquiry.flexible_nights.length > 0
+      ? `${enquiry.flexible_nights.join(", ")} nights`
+      : enquiry.no_of_nights
+        ? `${enquiry.no_of_nights} night${enquiry.no_of_nights === 1 ? "" : "s"}`
+        : null;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
   return {
     left: [
-      { key: "travel-date", icon: CalendarDays, label: "Travel Date", value: enquiry.travel_date ? formatUKDate(enquiry.travel_date) : null },
-      { key: "destination", icon: MapPin, label: "Destination", value: destinationName },
-      { key: "resort", icon: Hotel, label: "Resort", value: resortName },
+      { key: "holiday-type", icon: PackagePlus, label: "Holiday Type", value: enquiry.holiday_type_name || null },
+      { key: "travel-date", icon: CalendarDays, label: isCruise ? "Cruise Date" : "Travel Date", value: enquiry.travel_date ? formatUKDate(enquiry.travel_date) : null },
+      { key: "flexibility", icon: CalendarRange, label: "Flexibility", value: enquiry.flexibility_date || enquiry.flexible_date || null },
+      { key: "no-nights", icon: MoonStar, label: "No. Nights", value: nights },
+      { key: "departure-airport", icon: PlaneTakeoff, label: "Departure Airport", value: isStandard ? airportNames : null },
+      { key: "departure-port", icon: Anchor, label: "Departure Port", value: isCruise ? portNames : null },
+      { key: "destination", icon: MapPin, label: "Destination", value: isCruise ? null : destinationNames },
+      { key: "cruise-destinations", icon: Globe, label: "Cruise Destinations", value: isCruise ? (cruiseDestinationNames ?? destinationNames) : null },
+      { key: "resort", icon: Hotel, label: "Resort", value: isCruise ? null : resortNames },
+      { key: "weekend-lodge", icon: Hotel, label: "Weekend Lodge", value: isHotTub ? enquiry.weekend_lodge || null : null },
+      { key: "cruise-line", icon: Ship, label: "Cruise Line", value: isCruise ? cruiseLineNames : null },
     ],
     right: [
-      { key: "no-passengers", icon: Users, label: "No. Passengers", value: passengerParts.length ? passengerParts.join(", ") : null },
-      { key: "no-nights", icon: MoonStar, label: "No. Nights", value: enquiry.no_of_nights ? `${enquiry.no_of_nights} night${enquiry.no_of_nights === 1 ? "" : "s"}` : null },
-      { key: "budget", icon: BadgePoundSterling, label: "Budget", value: enquiry.budget ? currency.format(parseFloat(enquiry.budget)) : null },
+      { key: "no-guests", icon: Users, label: "Guests", value: isHotTub && enquiry.no_of_guests ? plural(enquiry.no_of_guests, "guest") : null },
+      { key: "no-passengers", icon: Users, label: "No. Passengers", value: isHotTub ? null : passengerParts.length ? passengerParts.join(", ") : null },
+      { key: "pets", icon: Dog, label: "Pets", value: isHotTub && enquiry.no_of_pets != null ? plural(enquiry.no_of_pets, "pet") : null },
+      { key: "cabin-type", icon: BedDouble, label: "Cabin Type", value: isCruise ? enquiry.cabin_type || null : null },
+      { key: "pre-cruise", icon: MoonStar, label: "Pre-Cruise Stay", value: isCruise && enquiry.pre_cruise_stay != null ? plural(enquiry.pre_cruise_stay, "night") : null },
+      { key: "post-cruise", icon: MoonStar, label: "Post-Cruise Stay", value: isCruise && enquiry.post_cruise_stay != null ? plural(enquiry.post_cruise_stay, "night") : null },
+      { key: "board-basis", icon: Utensils, label: "Board Basis", value: isStandard ? boardBasisNames : null },
+      { key: "star-rating", icon: Star, label: "Min Star Rating", value: isStandard ? enquiry.accom_min_star_rating || null : null },
+      { key: "budget", icon: BadgePoundSterling, label: "Budget", value: enquiry.budget ? `${currency.format(parseFloat(enquiry.budget))}${formatBudgetType(enquiry.budget_type)}` : null },
+      { key: "assigned-agent", icon: UserRound, label: "Assigned Agent", value: agentName },
       { key: "status", icon: Tag, label: "Status", value: enquiry.status ?? null },
     ],
   };
@@ -854,25 +902,40 @@ function noteHtmlFromText(text: string): string {
 }
 
 function HolidayComposer({ transactionId }: { transactionId: string }) {
-  const createMutation = useCreateNote(transactionId);
+  const createMutation = useCreateNoteWithAttachments(transactionId);
   const { toast } = useToast();
   const [text, setText] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const submit = () => {
     const trimmed = text.trim();
     if (!trimmed || createMutation.isPending) return;
     createMutation.mutate(
-      { transaction_id: transactionId, content: noteHtmlFromText(trimmed) },
+      { data: { transaction_id: transactionId, content: noteHtmlFromText(trimmed) }, files: pendingFiles },
       {
-        onSuccess: () => {
+        // Text and files clear together; on error neither is touched so the
+        // user can retry without re-typing or re-picking.
+        onSuccess: ({ uploadFailed }) => {
           setText("");
-          toast({ title: "Message sent" });
+          setPendingFiles([]);
+          toast(uploadFailed
+            ? { title: "Message sent, but its attachments failed to upload", variant: "destructive" }
+            : { title: "Message sent" });
         },
         onError: () => toast({ title: "Failed to send message", variant: "destructive" }),
       },
     );
+  };
+
+  const handleFilesPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { accepted, rejected } = filterNoteAttachmentFiles(Array.from(event.target.files ?? []), pendingFiles.length);
+    // Reset so picking the same file again after removing it still fires onChange.
+    event.target.value = "";
+    rejected.forEach((title) => toast({ title, variant: "destructive" }));
+    if (accepted.length > 0) setPendingFiles((prev) => [...prev, ...accepted]);
   };
 
   // Insert at the caret rather than appending, and hand focus back so typing
@@ -919,6 +982,30 @@ function HolidayComposer({ transactionId }: { transactionId: string }) {
           data-testid="holiday-composer-input"
         />
 
+        {pendingFiles.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5" data-testid="holiday-composer-pending-attachments">
+            {pendingFiles.map((file, index) => (
+              <span
+                key={`${file.name}-${index}`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-black/10 bg-black/[0.02] px-2 py-1 text-xs text-black/70 dark:border-white/10 dark:bg-white/[0.03] dark:text-white/70"
+              >
+                <Paperclip className="h-3 w-3 shrink-0 text-black/40 dark:text-white/40" />
+                <span className="max-w-[160px] truncate">{file.name}</span>
+                <span className="text-black/40 dark:text-white/40">{formatFileSize(file.size)}</span>
+                <button
+                  type="button"
+                  onClick={() => setPendingFiles((prev) => prev.filter((_, i) => i !== index))}
+                  className="text-black/40 hover:text-black dark:text-white/40 dark:hover:text-white"
+                  title="Remove attachment"
+                  aria-label={`Remove ${file.name}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="mt-2 flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-1 text-black/45 dark:text-white/45">
             <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
@@ -956,11 +1043,20 @@ function HolidayComposer({ transactionId }: { transactionId: string }) {
                 </div>
               </PopoverContent>
             </Popover>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept={NOTE_ATTACHMENT_ACCEPT}
+              onChange={handleFilesPicked}
+              className="hidden"
+              data-testid="holiday-composer-attachment-input"
+            />
             <button
               type="button"
-              disabled
-              title="Attachments aren't supported on notes"
-              className="grid h-8 w-8 place-items-center rounded-sm transition hover:bg-black/5 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach files"
+              className="grid h-8 w-8 place-items-center rounded-sm transition hover:bg-black/5 hover:text-black dark:hover:bg-white/10 dark:hover:text-white"
               data-testid="holiday-composer-attach"
             >
               <Paperclip className="h-4.5 w-4.5" />
@@ -1959,13 +2055,18 @@ function formatBudgetType(budgetType?: string | null): string {
 
 function EnquiryHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs = true }: HolidayDetailContentProps) {
   const { data: enquiry, isLoading, error } = useEnquiry(id);
+  const { data: users = [] } = useUsers();
 
   if (isLoading) return <DetailLoading clientName={clientName} onBack={onBack} />;
   if (error || !enquiry) return <DetailError clientName={clientName} onBack={onBack} />;
 
-  const fields = buildEnquiryFields(enquiry);
+  const agentName = enquiry.user_id ? users.find((u) => u.id === enquiry.user_id)?.name ?? null : null;
+  const fields = buildEnquiryFields(enquiry, agentName);
   const title = enquiry.title || "Untitled enquiry";
-  const destinationName = enquiry.destinations?.[0]?.name ?? null;
+  const isCruise = enquiry.holiday_type_name?.toLowerCase().includes("cruise") ?? false;
+  const destinationName =
+    (isCruise ? joinNames(enquiry.cruiseDestinations?.map((c) => c.cruise_destination_name ?? c.name)) : null) ??
+    joinNames(enquiry.destinations?.map((d) => d.destination_name ?? d.name));
 
   return (
     <>

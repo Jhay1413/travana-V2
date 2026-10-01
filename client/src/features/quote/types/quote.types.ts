@@ -135,6 +135,8 @@ export interface EnquiryDestination {
   enquiry_id: string;
   destination_id: string;
   name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  destination_name?: string | null;
 }
 
 export interface EnquiryResort {
@@ -142,6 +144,8 @@ export interface EnquiryResort {
   enquiry_id: string;
   resort_id: string;
   name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  resort_name?: string | null;
 }
 
 export interface EnquiryAccommodation {
@@ -149,6 +153,8 @@ export interface EnquiryAccommodation {
   enquiry_id: string;
   accomodation_id: string;
   name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  accomodation_name?: string | null;
 }
 
 export interface EnquiryBoardBasis {
@@ -156,12 +162,40 @@ export interface EnquiryBoardBasis {
   enquiry_id: string;
   board_basis_id: string;
   name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  board_basis_name?: string | null;
 }
 
 export interface EnquiryAirport {
   id: string;
   enquiry_id: string;
   airport_id: string;
+  name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  airport_name?: string | null;
+}
+
+export interface EnquiryPort {
+  id?: string;
+  enquiry_id: string;
+  port_id: string;
+  port_name?: string | null;
+  name?: string;
+}
+
+export interface EnquiryCruiseLine {
+  id?: string;
+  enquiry_id: string;
+  cruise_line_id: string;
+  cruise_line_name?: string | null;
+  name?: string;
+}
+
+export interface EnquiryCruiseDestination {
+  id?: string;
+  enquiry_id: string;
+  cruise_destination_id: string;
+  cruise_destination_name?: string | null;
   name?: string;
 }
 
@@ -214,6 +248,9 @@ export interface EnquiryTable {
   accommodations?: EnquiryAccommodation[];
   boardBases?: EnquiryBoardBasis[];
   airports?: EnquiryAirport[];
+  ports?: EnquiryPort[];
+  cruiseLines?: EnquiryCruiseLine[];
+  cruiseDestinations?: EnquiryCruiseDestination[];
   passengers?: (EnquiryPassenger | EnquiryPassengerInput)[];
 }
 

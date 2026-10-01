@@ -36,6 +36,21 @@ export function isEnquiryExpired(e: { status?: string | null; date_expiry?: stri
   return statusInactive || dateExpired;
 }
 
+// "Lost" is split out of "Expired" for the client page's holidays panel only: a
+// lost deal was closed by the agent (a deliberate outcome), whereas an expired
+// one just ran out of time, and the panel shows them in separate sections.
+// isQuoteExpired / isEnquiryExpired deliberately still return true for "lost"
+// (it stays in the *_INACTIVE_STATUSES sets) so other callers, e.g. the
+// conversations inbox, keep their existing behaviour; the panel gives Lost
+// precedence over Expired instead. "archived" stays Expired, not Lost.
+export function isQuoteLost(q: { quote_status?: string | null }): boolean {
+  return q.quote_status?.toLowerCase() === "lost";
+}
+
+export function isEnquiryLost(e: { status?: string | null }): boolean {
+  return e.status?.toLowerCase() === "lost";
+}
+
 export function isBookingExpired(b: { travel_date?: string | null }): boolean {
   if (!b.travel_date) return false;
   const d = new Date(b.travel_date);
