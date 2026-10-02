@@ -10,9 +10,6 @@ import { splitIsoDateTime } from "./formatters";
  * Transform API quote data into display format
  */
 export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): QuoteDisplay {
-  console.log("🔍 Full API Data:", apiData);
-  console.log("🔍 API Data lead_source:", apiData.lead_source);
-
   const flights = apiData.flights || [];
   const cruises = apiData.cruises || [];
   const outboundFlight = flights.find((f) => f.flight_type === "outbound") || flights[0];
@@ -216,7 +213,6 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     })),
   };
 
-  console.log("✅ Transformed quote leadSource:", result.leadSource);
   return result;
 }
 

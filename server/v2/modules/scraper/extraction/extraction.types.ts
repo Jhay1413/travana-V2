@@ -45,7 +45,7 @@ export interface FieldRule {
   // compatibility this needs.
   origin?: 'picked' | 'generated'; // 'picked' = a human clicked the element and it verified; 'generated' = the AI wrote it from one example page
   verifiedValue?: string; // the exact value the agent's click reproduced at pick time (deriveSpecFromPicks only stores a rule that verifies against it)
-  strategy?: string; // which derivation strategy produced this rule (see DerivationStrategy in picker-spec.ts) — 'url-param' | 'label-anchored' | 'heading-position' | 'title-prefix' | 'line-offset'
+  strategy?: string; // which derivation strategy produced this rule (see DerivationStrategy in picker-spec.ts) — 'url-param' | 'label-anchored' | 'heading-position' | 'title-prefix' | 'title-segment' | 'url-path-slug' | 'value-pattern-line' | 'line-offset'
   pickedAt?: string; // ISO timestamp of when the pick was made
 }
 

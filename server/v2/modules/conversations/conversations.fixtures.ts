@@ -9,6 +9,12 @@ import type {
 // not configured (no CONVERSATIONS_API_URL / CONVERSATIONS_API_TOKEN). Kept in
 // SendSeven's snake_case shape so it flows through the proxy untouched — delete
 // this file (and the fallbacks in the repository) once the token is available.
+//
+// STATEFUL: SAMPLE_CONVERSATIONS is the immutable seed (other fixtures, e.g.
+// messages.fixtures.ts, import it). All reads and writes go through `store`, a
+// per-process copy of the seed, so a close/reopen/snooze is visible to the next
+// list/detail/badge-count read. State resets on server restart (or via
+// resetSampleConversations() in tests) — nothing is persisted.
 
 export const SAMPLE_CONVERSATIONS: SsConversation[] = [
   {
@@ -151,6 +157,20 @@ export const SAMPLE_CONVERSATIONS: SsConversation[] = [
   },
 ];
 
+// Mutable working copy of the seed. Deep-cloned so writes never touch
+// SAMPLE_CONVERSATIONS.
+function cloneSeed(): SsConversation[] {
+  return SAMPLE_CONVERSATIONS.map((c) => structuredClone(c));
+}
+
+let store: SsConversation[] = cloneSeed();
+
+// Restores the seed state. Tests call this in beforeEach so the module-level
+// store never leaks between tests.
+export function resetSampleConversations(): void {
+  store = cloneSeed();
+}
+
 // The list `status` filter is a tab concept (open/snoozed/closed); the stored
 // status enum is open/assigned/resolved/closed. Map a tab to matching statuses.
 function matchesStatusTab(conv: SsConversation, tab: string): boolean {
@@ -164,7 +184,7 @@ export function sampleConversationList(params: ListConversationsParams): SsConve
   const pageSize = params.pageSize && params.pageSize > 0 ? params.pageSize : 20;
   const page = params.page && params.page > 0 ? params.page : 1;
 
-  let filtered = SAMPLE_CONVERSATIONS;
+  let filtered = store;
   if (params.status) filtered = filtered.filter((c) => matchesStatusTab(c, params.status as string));
   if (params.contactId) filtered = filtered.filter((c) => c.contact_id === params.contactId);
   if (params.needsReply !== undefined) filtered = filtered.filter((c) => !!c.needs_reply === params.needsReply);
@@ -179,7 +199,8 @@ export function sampleConversationList(params: ListConversationsParams): SsConve
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const start = (page - 1) * pageSize;
-  const items = filtered.slice(start, start + pageSize);
+  // Clones, so callers cannot mutate the store through a returned row.
+  const items = filtered.slice(start, start + pageSize).map((c) => structuredClone(c));
 
   return {
     items,
@@ -197,21 +218,39 @@ export function sampleConversationList(params: ListConversationsParams): SsConve
 }
 
 export function sampleConversationById(id: string): SsConversation | null {
-  return SAMPLE_CONVERSATIONS.find((c) => c.id === id) ?? null;
+  const found = store.find((c) => c.id === id);
+  return found ? structuredClone(found) : null;
 }
 
-// Returns the sample conversation with a shallow patch applied — used so the
-// single-conversation write ops (close/reopen/snooze/assign/update) behave
-// end-to-end in fixture mode.
+// Applies a shallow patch to the STORED conversation and returns the updated
+// record — so the write ops (close/reopen/snooze/assign/update) persist for the
+// life of the process in fixture mode. `id` is never patchable.
 export function sampleConversationPatched(id: string, patch: Partial<SsConversation>): SsConversation | null {
-  const found = sampleConversationById(id);
+  const found = store.find((c) => c.id === id);
   if (!found) return null;
-  return { ...found, ...patch, updated_at: new Date().toISOString() };
+  const { id: _ignoredId, ...rest } = patch;
+  Object.assign(found, rest, { updated_at: new Date().toISOString() });
+  return structuredClone(found);
+}
+
+// Closes every listed conversation in the store. Unknown ids are reported in
+// failed_ids, mirroring the real BulkCloseResponse shape.
+export function sampleBulkClose(body: unknown): { success_count: number; failed_count: number; failed_ids: string[] } {
+  const raw = (body as { conversation_ids?: unknown } | null)?.conversation_ids;
+  const ids = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : [];
+  const failed: string[] = [];
+  let ok = 0;
+  for (const id of ids) {
+    const closed = sampleConversationPatched(id, { status: "closed", closed_at: new Date().toISOString(), snoozed_until: null });
+    if (closed) ok += 1;
+    else failed.push(id);
+  }
+  return { success_count: ok, failed_count: failed.length, failed_ids: failed };
 }
 
 export function sampleBadgeCounts(): SsBadgeCounts {
-  const open = SAMPLE_CONVERSATIONS.filter((c) => matchesStatusTab(c, "open"));
-  const snoozed = SAMPLE_CONVERSATIONS.filter((c) => matchesStatusTab(c, "snoozed"));
+  const open = store.filter((c) => matchesStatusTab(c, "open"));
+  const snoozed = store.filter((c) => matchesStatusTab(c, "snoozed"));
   const unanswered = open.filter((c) => c.needs_reply);
   const unassigned = open.filter((c) => !c.assigned_user_id);
   return {

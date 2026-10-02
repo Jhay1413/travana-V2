@@ -356,6 +356,7 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
     data.lodge_code ||
     data.lodge_id ||
     data.lodge_park_name ||
+    data.lodge_park_code ||
     Array.isArray(data.lodge_images) ||
     data.cottage_id !== undefined ||
     data.hot_tub !== undefined ||
@@ -374,7 +375,8 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   const lodgeParkName = data.lodge_park_name || data.resort || result.fields.resort || "";
   const lodgeCodeVal = data.lodge_code || data.cottage_id || null;
   const lodgeName = data.accommodation || result.fields.accommodation || "";
-  const parkCode = data.lodge_id || null;
+  // lodge_id is a lodges.id UUID on quote JSON, never a park code — don't read it here.
+  const parkCode = data.lodge_park_code || null;
 
   // Line items (extra hotels, transfers, etc.) are resolved in the SAME call.
   const { raw: lineItems, input: lineItemsInput } = collectLineItems(data, {

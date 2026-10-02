@@ -44,17 +44,14 @@ export function useQuoteTagEditor(quoteId: string, quote: QuoteWithTags | null) 
 
   function removeTag(tag: string) {
     if (!quote) return;
-    console.log("🏷️ Removing tag:", tag);
     const updated = quote.tags.filter((t) => t !== tag);
     updateTagsMutation.mutate(
       { id: quoteId, tags: updated },
       {
         onSuccess: () => {
-          console.log("🏷️ Tag removed successfully");
           queryClient.invalidateQueries({ queryKey: ["quotes"] });
         },
-        onError: (error) => {
-          console.error("🏷️ Failed to remove tag:", error);
+        onError: () => {
           toast({ title: "Failed to remove tag", variant: "destructive" });
         },
       },
@@ -66,19 +63,16 @@ export function useQuoteTagEditor(quoteId: string, quote: QuoteWithTags | null) 
     const trimmed = text.trim();
     if (!trimmed) return;
     const updated = [...quote.tags, trimmed];
-    console.log("🏷️ Adding tag:", trimmed, "Updated tags:", updated);
     updateTagsMutation.mutate(
       { id: quoteId, tags: updated },
       {
         onSuccess: () => {
-          console.log("🏷️ Tag added successfully");
           setNewTag("");
           setShowTagSuggestions(false);
           queryClient.invalidateQueries({ queryKey: ["quotes"] });
           queryClient.invalidateQueries({ queryKey: ["tags"] });
         },
-        onError: (error) => {
-          console.error("🏷️ Failed to add tag:", error);
+        onError: () => {
           toast({ title: "Failed to add tag", variant: "destructive" });
         },
       },
@@ -87,20 +81,17 @@ export function useQuoteTagEditor(quoteId: string, quote: QuoteWithTags | null) 
 
   function addTagFromSuggestion(tag: string) {
     if (!quote) return;
-    console.log("🏷️ Adding tag from suggestion:", tag);
     const updated = [...quote.tags, tag];
     updateTagsMutation.mutate(
       { id: quoteId, tags: updated },
       {
         onSuccess: () => {
-          console.log("🏷️ Tag added successfully from suggestion");
           setNewTag("");
           setShowTagSuggestions(false);
           queryClient.invalidateQueries({ queryKey: ["quotes"] });
           queryClient.invalidateQueries({ queryKey: ["tags"] });
         },
-        onError: (error) => {
-          console.error("🏷️ Failed to add tag from suggestion:", error);
+        onError: () => {
           toast({ title: "Failed to add tag", variant: "destructive" });
         },
       },
