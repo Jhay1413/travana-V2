@@ -69,6 +69,7 @@ export interface ScraperJson {
   lodge_code?: string | null;
   lodge_images?: string[];
   lodge_park_name?: string | null;
+  lodge_park_code?: string | null;
   cottage_id?: string | null;
   hot_tub?: boolean | null;
   pets?: number | null;

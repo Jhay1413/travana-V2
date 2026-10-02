@@ -512,7 +512,6 @@ export default function EnquiryPage() {
     if (!enquiry) return;
     
     if (!enquiry.transaction_id) {
-      console.error("❌ Enquiry missing transaction_id:", enquiry);
       toast({
         title: "Conversion Error",
         description: "This enquiry is missing a transaction ID and cannot be converted.",
@@ -521,7 +520,6 @@ export default function EnquiryPage() {
       return;
     }
     
-    console.log("✅ Converting enquiry to quote - Transaction ID:", enquiry.transaction_id);
     const quotePayload = buildQuotePayload(values, packageTypesData);
     const imageUrls = images?.urls || [];
 

@@ -2048,3 +2048,38 @@ describe("party-anchored children/infants (generic — every supplier, not just 
     expect(q.infants).toBe(1);
   });
 });
+
+describe("lodge fields", () => {
+  const LODGE_SPEC = {
+    version: 1,
+    packageType: "lodge",
+    constants: { tour_operator: "Hoseasons" },
+    fields: {
+      accommodation: { from: "title", regex: "^([^|]+)", group: 1 },
+      lodge_code: { from: "text", regex: "Lodge ref: ([A-Za-z0-9]+)", group: 1 },
+      lodge_park_name: { from: "text", regex: "Park: ([A-Za-z ]+)", group: 1 },
+      lodge_park_code: { from: "text", regex: "Park code: ([A-Za-z0-9]+)", group: 1 },
+      sales_price: { from: "text", regex: "£([0-9,]+)", group: 1, transform: "number" },
+    },
+  } as ExtractionSpec;
+  const text = ["Lodge ref: AB123", "Park: Lakeside Park", "Park code: LSP9", "£800"].join("\n");
+  const url = "https://example.com/holiday-parks/lakeside/cosy-lodge-lp33338";
+
+  it("emits a picked lodge_code and lodge_park_code verbatim", () => {
+    const out = runExtractionSpec(LODGE_SPEC, { title: "Cosy Lodge | Hoseasons", text, url }, "2026-08-05T00:00:00Z");
+    expect(out.lodge_code).toBe("AB123"); // picked, not inferred from the URL
+    expect(out.lodge_park_code).toBe("LSP9");
+    expect(out.lodge_park_name).toBe("Lakeside Park");
+    expect(out.accommodation).toBe("Cosy Lodge");
+  });
+
+  it("falls back to the URL code and leaves lodge_park_code empty when not picked", () => {
+    const out = runExtractionSpec(
+      LODGE_SPEC,
+      { title: "Cosy Lodge | Hoseasons", text: "Park: Lakeside Park\n£800", url },
+      "2026-08-05T00:00:00Z",
+    );
+    expect(out.lodge_code).toBe("lp33338");
+    expect(out.lodge_park_code).toBe("");
+  });
+});

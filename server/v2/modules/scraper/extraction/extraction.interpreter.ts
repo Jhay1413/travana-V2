@@ -10,7 +10,11 @@ const MONTHS: Record<string, string> = {
   jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
 };
 
-function titleCaseSlug(s: string): string {
+// Exported because picker-spec.ts's `url-path-slug` strategy must replay this
+// exact transform to verify a generated rule reproduces the picked value. It
+// used to be copied there, which meant a change here silently broke that
+// verification — one definition, no drift.
+export function titleCaseSlug(s: string): string {
   return s
     .split(/[-\s]+/)
     .filter(Boolean)
@@ -2010,6 +2014,7 @@ export function runExtractionSpec(
     result.lodge_type = str(f.lodge_type);
     result.lodge_code = lodgeCode;
     result.lodge_park_name = str(f.lodge_park_name) || str(f.resort);
+    result.lodge_park_code = str(f.lodge_park_code);
     result.cottage_id = str(f.cottage_id) || lodgeCode;
     result.hot_tub = truthy(f.hot_tub);
     result.pets = nbr(f.pets);

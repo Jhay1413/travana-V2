@@ -121,7 +121,9 @@ const CRUISE_FIELDS = [
   'cruise_line', 'ship_name', 'cruise_date', 'cruise_title', 'embarkation',
   'debarkation', 'cabin_type', 'cabin_number', 'cruise_only',
 ];
-const LODGE_FIELDS = ['lodge_type', 'lodge_park_name', 'cottage_id', 'hot_tub', 'pets'];
+// Must match the bookmarklet's `lodge` group in public/capture-bookmarklet.js —
+// picker-spec.test.ts fails if the two drift apart.
+export const LODGE_FIELDS = ['accommodation', 'lodge_code', 'lodge_park_name', 'lodge_park_code', 'lodge_type', 'cottage_id', 'hot_tub', 'pets'];
 
 const SYSTEM_PROMPT = `You write a JSON "extraction spec" that a fixed interpreter uses to read a travel deal from a rendered web page. You NEVER write code — only declarative rules (regex + transforms).
 
@@ -132,7 +134,7 @@ Always try to extract the COMMON fields: ${COMMON_FIELDS.join(', ')}.
 Then add ONLY the fields for the package type this page actually is, and set "packageType" to match:
 - PACKAGE HOLIDAY (hotel + flights): "packageType": "package-holiday", plus ${PACKAGE_HOLIDAY_FIELDS.join(', ')}.
 - CRUISE (ship sailing): "packageType": "cruise", plus ${CRUISE_FIELDS.join(', ')}. You may also add an "itineraryRegex" (matchAll; group1 = day number or "Day 3", group2 = the day's port/description) for the day-by-day plan.
-- HOT TUB BREAK / LODGE (self-catering lodge/cottage with a hot tub, e.g. Hoseasons/Haven/Parkdean): "packageType": "lodge", plus ${LODGE_FIELDS.join(', ')}. For a lodge, "accommodation" is the LODGE/COTTAGE name and "lodge_park_name" is the HOLIDAY PARK it sits in — extract BOTH; without them the park/lodge won't populate. For hot_tub, a rule that matches the words "hot tub" is enough (the interpreter treats any non-empty match as true); pets uses transform "number".
+- HOT TUB BREAK / LODGE (self-catering lodge/cottage with a hot tub, e.g. Hoseasons/Haven/Parkdean): "packageType": "lodge", plus ${LODGE_FIELDS.join(', ')}. For a lodge, "accommodation" is the LODGE/COTTAGE name and "lodge_park_name" is the HOLIDAY PARK it sits in — extract BOTH; without them the park/lodge won't populate. Also extract "lodge_code" (the unit/lodge code, usually the trailing code of the deal URL path, e.g. "…-lp33338" -> "lp33338", or a "Lodge/Cottage ref" label on the page) and "lodge_park_code" (the holiday park's own code/ID if the page shows one; omit it if there is none — do not reuse the lodge code). For hot_tub, a rule that matches the words "hot tub" is enough (the interpreter treats any non-empty match as true); pets uses transform "number".
 
 Always extract "accommodation" (the property/lodge/hotel name — usually in the page title or the main heading) and the "sales_price" / "price_per_person" total, on every page type. A spec that only reads URL params (dates, occupancy) and no page content is WRONG — read the rendered text for the name and price.
 

@@ -569,3 +569,133 @@ describe('mergePickedIntoSpec — merges, never replaces', () => {
     expect(result.preserved).toContain('packageType');
   });
 });
+
+describe('bookmarklet lodge group', () => {
+  it('matches LODGE_FIELDS in extraction-ai.service.ts exactly (no drift)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const { LODGE_FIELDS } = await import('./extraction-ai.service');
+    const src = readFileSync(resolve(process.cwd(), 'public/capture-bookmarklet.js'), 'utf8');
+    const m = src.match(/lodge:\s*\{[^}]*?fields:\s*\[([^\]]*)\]/);
+    expect(m).not.toBeNull();
+    const fields = (m![1].match(/'([^']+)'/g) ?? []).map((s) => s.slice(1, -1));
+    expect(fields).toEqual([...LODGE_FIELDS]);
+    expect(fields).toEqual(expect.arrayContaining(['lodge_code', 'lodge_park_code', 'accommodation']));
+  });
+});
+
+// Real Hoseasons lodge capture (EXTRACTION failure: lodge_code "Ref: LP31765" and
+// lodge_park_name "White Cross Bay" both produced no rule). The text keeps the
+// quoted consecutive lines, "White Cross Bay" many times but never as its own
+// line, and several bare "(LP31763)"-style codes so uniqueness is really tested.
+describe('deriveSpecFromPicks — Hoseasons lodge (rule-derivation strategies)', () => {
+  const text = [
+    'Home > Lodges > Cumbria > White Cross Bay > Gold 3 Caravan with parking',
+    'Gold 3 Caravan with parking',
+    'White Cross Bay in Lake Windermere , Cumbria',
+    '',
+    'Ref: LP31765',
+    '',
+    'Other locations within 30 miles of White Cross Bay',
+    'Silver 2 Caravan',
+    '(LP31763)',
+    'Gold 2 Caravan',
+    '(LP31764)',
+    'Booking steps at White Cross Bay',
+  ].join('\n');
+  const ctx: PickerCaptureContext = {
+    url: 'https://www.hoseasons.co.uk/agents/lodges/white-cross-bay-pwba/gold-3-caravan-with-parking-lp31765?start=03-10-2026&adult=2&nights=7&range=3',
+    title: 'Gold 3 Caravan with parking - White Cross Bay - Lodges - Book Online - Hoseasons',
+    text,
+  };
+  const lodgeCode = pick({
+    field: 'lodge_code',
+    value: 'Ref: LP31765',
+    textIndex: text.indexOf('Ref: LP31765'),
+    lineIndex: 4,
+    linesBefore: ['Home > Lodges > Cumbria > White Cross Bay > Gold 3 Caravan with parking', 'Gold 3 Caravan with parking', 'White Cross Bay in Lake Windermere , Cumbria'],
+  });
+  const parkName = pick({
+    field: 'lodge_park_name',
+    value: 'White Cross Bay',
+    textIndex: text.indexOf('White Cross Bay'),
+    occurrenceCount: 4,
+  });
+
+  function replay(rule: FieldRule, from: 'text' | 'title' | 'url'): string | undefined {
+    const source = from === 'title' ? ctx.title : from === 'url' ? ctx.url : text;
+    return new RegExp(rule.regex!, 'i').exec(source)?.[rule.group ?? 1];
+  }
+
+  it('lodge_code "Ref: LP31765" yields a verified value-pattern-line rule (whole line, generalised digits)', () => {
+    const result = deriveSpecFromPicks([lodgeCode], ctx);
+
+    expect(result.problems).toEqual([]);
+    const d = result.derived[0];
+    expect(d.strategy).toBe('value-pattern-line');
+    expect(d.confidence).toBe('medium');
+    expect(d.rule.regex).toContain('Ref:');
+    expect(d.rule.regex).toContain('\\d+');
+    expect(d.rule.regex).not.toContain('31765'); // generalised, not hardcoded
+    expect(replay(d.rule, 'text')).toBe('Ref: LP31765');
+    expect(d.rule.verifiedValue).toBe('Ref: LP31765');
+  });
+
+  it('the value-pattern-line rule generalises to another lodge page and ignores bare (LP…) codes', () => {
+    const d = deriveSpecFromPicks([lodgeCode], ctx).derived[0];
+    const otherPage = ['Silver 2 Caravan', 'Somewhere else', '', 'Ref: LP99012', '', '(LP31763)'].join('\n');
+    expect(new RegExp(d.rule.regex!, 'i').exec(otherPage)?.[1]).toBe('Ref: LP99012');
+    expect(new RegExp(d.rule.regex!, 'i').exec('(LP31763)\n(LP31764)')).toBeNull();
+  });
+
+  it('lodge_park_name "White Cross Bay" yields a verified url-path-slug rule (trailing -pwba stripped), high confidence', () => {
+    const result = deriveSpecFromPicks([parkName], ctx);
+
+    expect(result.problems).toEqual([]);
+    const d = result.derived[0];
+    expect(d.strategy).toBe('url-path-slug');
+    expect(d.confidence).toBe('high');
+    expect(d.rule.from).toBe('url');
+    expect(d.rule.transform).toBe('titleCase');
+    // raw capture is the slug minus the code; the titleCase transform finishes the job
+    expect(replay(d.rule, 'url')).toBe('white-cross-bay');
+    expect(d.rule.regex).not.toContain('white-cross-bay'); // not hardcoded
+  });
+
+  it('url-path-slug does not over-strip: a shorter value cannot match the slug', () => {
+    for (const value of ['White Cross', 'Gold 3 Caravan']) {
+      const r = deriveSpecFromPicks([pick({ field: 'x', value, textIndex: 0 })], ctx);
+      expect(r.derived).toEqual([]);
+    }
+  });
+
+  it('title-segment derives a non-prefix title segment when the URL cannot supply it', () => {
+    const noSlug: PickerCaptureContext = { ...ctx, url: 'https://www.hoseasons.co.uk/lodge?id=1' };
+    const result = deriveSpecFromPicks([pick({ field: 'lodge_park_name', value: 'White Cross Bay', textIndex: 0 })], noSlug);
+
+    expect(result.problems).toEqual([]);
+    const d = result.derived[0];
+    expect(d.strategy).toBe('title-segment');
+    expect(d.confidence).toBe('medium');
+    expect(replay(d.rule, 'title')).toBe('White Cross Bay');
+  });
+
+  it('title-segment handles a title that mixes separators (each separator is tried on its own split)', () => {
+    const mixed: PickerCaptureContext = { url: 'https://x.test/', title: 'Deal | Lodge - Park Name | Operator', text: 'Park Name\nother' };
+    const result = deriveSpecFromPicks([pick({ field: 'park', value: 'Operator', textIndex: 0 })], mixed);
+    expect(result.derived[0].strategy).toBe('title-segment');
+    expect(new RegExp(result.derived[0].rule.regex!, 'i').exec(mixed.title)?.[1]).toBe('Operator');
+  });
+
+  it('a value with no derivable source still reports the no-candidate reason', () => {
+    const result = deriveSpecFromPicks([pick({ field: 'x', value: 'Lake Windermere Retreat', textIndex: 0 })], ctx);
+    expect(result.derived).toEqual([]);
+    expect(result.problems[0].reason).toContain('no candidate strategy');
+  });
+
+  it('value-pattern-line refuses a pattern that is not unique on the page ("(LP31763)" codes)', () => {
+    const result = deriveSpecFromPicks([pick({ field: 'code', value: '(LP31763)', textIndex: text.indexOf('(LP31763)') })], ctx);
+    expect(result.derived).toEqual([]);
+    expect(result.problems[0].reason).toContain('no candidate strategy');
+  });
+});

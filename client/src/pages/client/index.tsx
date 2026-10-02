@@ -130,7 +130,6 @@ export default function ClientPage() {
 
   async function handleConvertEnquiryToQuote(enq: EnquiryTable) {
     if (!enq.transaction_id) {
-      console.error("❌ Enquiry missing transaction_id:", enq);
       toast({
         title: "Conversion Error",
         description: "This enquiry is missing a transaction ID and cannot be converted.",

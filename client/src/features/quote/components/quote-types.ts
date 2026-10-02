@@ -225,7 +225,6 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     : salesPrice - discounts + serviceCharge;
 
   const childPassengers = (apiData.passengers || []).filter((p: Passenger) => p.type === "child");
-  console.log(apiData)
   const result = {
     id: apiData.id,
     transaction_id: apiData.transaction_id,

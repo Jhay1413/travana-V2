@@ -1,5 +1,6 @@
 import type { ExtractionSpec, FieldRule, FieldSource, FieldTransform } from './extraction.types';
 import { findUnsafeRules } from './extraction-ai.service';
+import { titleCaseSlug } from './extraction.interpreter';
 
 // ─── Visual field-picker → verified extraction spec (EXTRACTION_AUDIT.md §4 Phase 2/5) ──
 //
@@ -50,7 +51,15 @@ export interface PickerCaptureContext {
   packageType?: ExtractionSpec['packageType'];
 }
 
-export type DerivationStrategy = 'url-param' | 'label-anchored' | 'heading-position' | 'title-prefix' | 'line-offset';
+export type DerivationStrategy =
+  | 'url-param'
+  | 'label-anchored'
+  | 'heading-position'
+  | 'title-prefix'
+  | 'title-segment'
+  | 'url-path-slug'
+  | 'value-pattern-line'
+  | 'line-offset';
 
 export interface DerivedRule {
   field: string;
@@ -141,10 +150,28 @@ function normalizeForVerify(s: string): string {
   return s.trim();
 }
 
-function verify(rule: FieldRule, ctx: { title: string; text: string; url: string; headingsText: string }, expected: string): boolean {
+// Mirrors titleCaseSlug in extraction.interpreter.ts (not exported there, and
+// that file must not be touched from here). Needed because url-path-slug
+// captures a hyphenated slug ("white-cross-bay") and relies on the rule's
+// 'titleCase' transform to turn it into the picked value — so verification of
+// THAT strategy has to replay the transform too, or it could never reproduce
+// the value. Imported from the interpreter rather than copied, so the replay
+// can't drift away from the transform it is meant to mirror.
+
+// `replay` is ONLY set by a strategy whose raw capture is deliberately not the
+// final value (url-path-slug). Every other strategy verifies the raw capture
+// exactly as before — the money 'number' transform in particular is still
+// applied downstream and never replayed here (the PRICE_ZERO chain).
+function verify(
+  rule: FieldRule,
+  ctx: { title: string; text: string; url: string; headingsText: string },
+  expected: string,
+  replay?: 'titleCase',
+): boolean {
   const raw = extractRaw(rule, ctx);
   if (raw == null) return false;
-  return normalizeForVerify(raw) === normalizeForVerify(expected);
+  const value = replay === 'titleCase' ? titleCaseSlug(raw) : raw;
+  return normalizeForVerify(value) === normalizeForVerify(expected);
 }
 
 // A picker-derived rule must clear the same bar the AI generator's output does
@@ -257,6 +284,161 @@ function tryTitlePrefix(pick: PickedField, ctx: PickerCaptureContext): { rule: F
   return null;
 }
 
+// ─── Candidate strategy 4b: title-segment ────────────────────────────────────
+//
+// tryTitlePrefix only ever tests segment 0. Hoseasons' title is
+// "Gold 3 Caravan with parking - White Cross Bay - Lodges - Book Online -
+// Hoseasons": the park name (lodge_park_name = "White Cross Bay") is segment 1,
+// so title-prefix can never see it and the pick failed with no rule.
+//
+// Each separator is tried INDEPENDENTLY (in TITLE_SEPARATORS order) and the
+// segment index is counted in THAT separator's own split. A title mixing
+// separators ("A | B - C") therefore yields a rule per separator; the first one
+// that verifies wins, and the rule only ever depends on one separator character,
+// so a different separator elsewhere in the title can't shift the index. A
+// hyphen inside a word ("Check-in") does shift a "-" split — that is caught by
+// verification on THIS page, and is why confidence is 'medium', not 'high'.
+// Segment 0 is skipped: title-prefix owns it and runs first.
+//
+// Regex: skip n separator-delimited groups with a negated class (never a
+// literal title fragment), then capture the nth segment lazily up to the next
+// separator or end of title.
+function tryTitleSegment(pick: PickedField, ctx: PickerCaptureContext): { rule: FieldRule; strategy: DerivationStrategy } | null {
+  for (const sep of TITLE_SEPARATORS) {
+    if (!ctx.title.includes(sep)) continue;
+    const segments = ctx.title.split(sep).map((s) => s.trim());
+    const sepRe = escapeRegExp(sep);
+    for (let n = 1; n < segments.length; n++) {
+      if (segments[n] !== pick.value) continue;
+      return {
+        rule: { from: 'title', regex: `^(?:[^${sepRe}]*${sepRe}){${n}}\\s*([^${sepRe}]*?)\\s*(?:${sepRe}|$)`, group: 1 },
+        strategy: 'title-segment',
+      };
+    }
+  }
+  return null;
+}
+
+// ─── Candidate strategy 4c: url-path-slug ─────────────────────────────────────
+//
+// tryUrlParam reads searchParams only. Hoseasons carries the park in the PATH:
+// /agents/lodges/white-cross-bay-pwba/gold-3-caravan-with-parking-lp31765 —
+// "white-cross-bay-pwba" is the park name plus a trailing park CODE (pwba, the
+// same code the image URLs use). A path slug is as durable as a query param.
+//
+// The raw capture is a hyphenated slug, so the rule carries transform
+// 'titleCase' and verification replays it (see verify). Two shapes per segment:
+//   1. whole slug is the value ("white-cross-bay")
+//   2. whole slug minus ONE trailing code token ("white-cross-bay-pwba")
+// Over-stripping guard: only a single token is ever dropped, the remainder must
+// equal the WHOLE picked value (so "gold-3-caravan-with-parking-lp31765" can
+// never reduce to a shorter value like "Gold 3 Caravan"), the token must look
+// like a code (2-8 alphanumerics), and it must not be a real word of the name:
+// if "<value> <token>" appears in the page text ("White Cross Bay" for value
+// "White Cross" + token "bay"), the token is part of the name and is not stripped.
+function slugWords(segment: string): string {
+  let decoded = segment;
+  try {
+    decoded = decodeURIComponent(segment);
+  } catch {
+    // keep the raw segment
+  }
+  return decoded.replace(/-+/g, ' ').trim();
+}
+
+function tryUrlPathSlug(
+  pick: PickedField,
+  ctx: PickerCaptureContext,
+): { rule: FieldRule; strategy: DerivationStrategy; replay: 'titleCase' } | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(ctx.url);
+  } catch {
+    return null;
+  }
+  const want = pick.value.trim().toLowerCase();
+  if (!want) return null;
+  const segments = parsed.pathname.split('/').filter(Boolean);
+  const textLower = ctx.text.toLowerCase();
+  // Skips scheme+host, then n whole path segments, then the slug itself.
+  const prefix = (n: number): string => `^[a-z][a-z0-9+.-]*://[^/?#]+(?:/[^/?#]+){${n}}/`;
+
+  for (let n = 0; n < segments.length; n++) {
+    const seg = segments[n];
+    if (slugWords(seg).toLowerCase() === want) {
+      return {
+        rule: { from: 'url', regex: `${prefix(n)}([^/?#]+)`, group: 1, transform: 'titleCase' },
+        strategy: 'url-path-slug',
+        replay: 'titleCase',
+      };
+    }
+    const lastHyphen = seg.lastIndexOf('-');
+    if (lastHyphen <= 0) continue;
+    const token = seg.slice(lastHyphen + 1);
+    if (!/^[a-z0-9]{2,8}$/i.test(token)) continue;
+    if (slugWords(seg.slice(0, lastHyphen)).toLowerCase() !== want) continue;
+    if (textLower.includes(`${want} ${token.toLowerCase()}`)) continue; // token is a real word of the name
+    return {
+      rule: { from: 'url', regex: `${prefix(n)}([^/?#]+?)-[a-z0-9]{2,8}(?:[/?#]|$)`, group: 1, transform: 'titleCase' },
+      strategy: 'url-path-slug',
+      replay: 'titleCase',
+    };
+  }
+  return null;
+}
+
+// ─── Candidate strategy 4d: value-pattern-line ────────────────────────────────
+//
+// For a value that EMBEDS ITS OWN LABEL — Hoseasons' lodge_code is picked as the
+// whole line "Ref: LP31765". tryLabelAnchored captures what FOLLOWS a label, so
+// it yields "LP31765" and fails verification; the line before it ("White Cross
+// Bay in Lake Windermere , Cumbria") is rejected as a label (too many words)
+// and, as a line-offset anchor, by findUnsafeRules' 30-char literal-run limit
+// (it is 44 chars). Anchoring on a neighbour is the wrong shape: the value
+// already carries its own stable anchor ("Ref:").
+//
+// So the pattern is built from the value's OWN shape: non-digit text is kept
+// literally (escaped), every digit run becomes \d+, whitespace runs become
+// [ \t]+ (never \s, which would cross a line break). "Ref: LP31765" becomes
+// (?:^|\n)[ \t]*(Ref:[ \t]+LP\d+)[ \t]*(?=\n|$) — the same (?:^|\n) line anchor
+// the other strategies use, since the regex runs without the 'm' flag.
+//
+// Avoiding OVER-generalising: (a) the literal parts stay, so on the Hoseasons
+// page the bare "(LP31763)" codes can't match — "Ref:" is required; (b) the
+// whole generalised pattern must match EXACTLY ONE line of the page text, else
+// null — a pattern that hits several lines can't tell which is meant; (c) a
+// value with no non-digit literal at all ("7", "2026") is refused outright —
+// that would be bare \d+; (d) money/date/integer shaped values are refused so
+// this can never route a price around the label-anchored/PRICE_ZERO path.
+// Avoiding UNDER-generalising: digit runs are never pinned to the picked digits
+// ("LP31765" -> LP\d+), which a regex of the exact string would be. A letter
+// prefix is kept literal on purpose — widening it to [A-Z]+ would start matching
+// unrelated codes. Verification still replays the rule against this page.
+function tryValuePatternLine(pick: PickedField, ctx: PickerCaptureContext): { rule: FieldRule; strategy: DerivationStrategy } | null {
+  const value = pick.value.trim();
+  if (!value || value.includes('\n')) return null;
+  if (inferTransform(value) !== undefined) return null; // money / date / bare integer — not this strategy's job
+  if (!/\d/.test(value)) return null; // nothing to generalise — a plain literal line is just a hardcoded string
+  if (!/[^\d\s]/.test(value)) return null; // needs a literal non-digit part, otherwise the pattern degenerates to \d+
+  const lines = ctx.text.split(/\r?\n/).map((l) => l.trim());
+  if (!lines.includes(value)) return null; // only for a value that is a whole line
+
+  const body = (value.match(/\d+|\s+|[^\d\s]+/g) ?? [])
+    .map((tok) => (/^\d+$/.test(tok) ? '\\d+' : /^\s+$/.test(tok) ? '[ \\t]+' : escapeRegExp(tok)))
+    .join('');
+  const regex = `(?:^|\\n)[ \\t]*(${body})[ \\t]*(?=\\n|$)`;
+
+  let lineRe: RegExp;
+  try {
+    lineRe = new RegExp(`^${body}$`, 'i');
+  } catch {
+    return null;
+  }
+  if (lines.filter((l) => lineRe.test(l)).length !== 1) return null; // not unique on the page
+
+  return { rule: { from: 'text', regex, group: 1 }, strategy: 'value-pattern-line' };
+}
+
 // ─── Candidate strategy 5: line-offset (last resort) ─────────────────────────
 //
 // No label, no heading, no title, no URL param — the only anchor left is
@@ -319,8 +501,11 @@ function deriveConfidence(
   extra: { ambiguousLabel?: boolean },
 ): 'high' | 'medium' | 'low' {
   if (strategy === 'line-offset') return 'low';
-  if (strategy === 'heading-position' || strategy === 'title-prefix') return 'medium';
-  if (strategy === 'url-param') return 'high';
+  // title-segment: titles are stable across redesigns but segment order can
+  // shift. value-pattern-line: generalised from ONE example, anchored on the
+  // value's own literal label, unique-on-page checked.
+  if (strategy === 'heading-position' || strategy === 'title-prefix' || strategy === 'title-segment' || strategy === 'value-pattern-line') return 'medium';
+  if (strategy === 'url-param' || strategy === 'url-path-slug') return 'high';
   // label-anchored: 'high' unless the anchor label itself repeats on the page
   // (occurrenceCount > 1 with a repeating label is exactly the shape that
   // can't tell which occurrence is meant — the "Taxes and fees" bug).
@@ -347,7 +532,7 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
       continue;
     }
 
-    type Candidate = { rule: FieldRule; strategy: DerivationStrategy; ambiguousLabel?: boolean };
+    type Candidate = { rule: FieldRule; strategy: DerivationStrategy; ambiguousLabel?: boolean; replay?: 'titleCase' };
     const candidates: Candidate[] = [];
     const urlParam = tryUrlParam(pick, ctx);
     if (urlParam) candidates.push(urlParam);
@@ -357,12 +542,22 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
     if (headingPosition) candidates.push(headingPosition);
     const titlePrefix = tryTitlePrefix(pick, ctx);
     if (titlePrefix) candidates.push(titlePrefix);
+    // New strategies go AFTER the original ones above so any pick that already
+    // resolved keeps its rule; they only widen what can be derived.
+    // url-path-slug ('high') is tried before title-segment ('medium'), and
+    // value-pattern-line before the 'low' line-offset fallback.
+    const urlPathSlug = tryUrlPathSlug(pick, ctx);
+    if (urlPathSlug) candidates.push(urlPathSlug);
+    const titleSegment = tryTitleSegment(pick, ctx);
+    if (titleSegment) candidates.push(titleSegment);
+    const valuePatternLine = tryValuePatternLine(pick, ctx);
+    if (valuePatternLine) candidates.push(valuePatternLine);
     const lineOffset = tryLineOffset(pick, ctx);
     if (lineOffset) candidates.push(lineOffset);
 
     let winner: Candidate | null = null;
     for (const candidate of candidates) {
-      if (!verify(candidate.rule, runtimeCtx, pick.value)) continue;
+      if (!verify(candidate.rule, runtimeCtx, pick.value, candidate.replay)) continue;
       if (!passesSafetyChecks(pick.field, candidate.rule)) continue;
       winner = candidate;
       break; // candidates are already in priority order — first verified wins
@@ -371,12 +566,12 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
     if (!winner) {
       problems.push({
         field: pick.field,
-        reason: `no candidate strategy (url-param, label-anchored, heading-position, title-prefix, line-offset) produced a rule that reproduces the picked value "${pick.value}" against the captured page`,
+        reason: `no candidate strategy (url-param, label-anchored, heading-position, title-prefix, title-segment, url-path-slug, value-pattern-line, line-offset) produced a rule that reproduces the picked value "${pick.value}" against the captured page`,
       });
       continue;
     }
 
-    const transform = inferTransform(pick.value);
+    const transform = winner.rule.transform ?? inferTransform(pick.value);
     // Provenance (extraction.types.ts, EXTRACTION_AUDIT.md §4 Phase 3): stamp
     // every rule this module emits as human-verified, with the exact value
     // confirmed, which strategy produced it and when. This is what

@@ -515,7 +515,7 @@
     lodge: {
       buttonLabel: 'Hot Tub Break',
       groupName: 'Hot Tub Break (Lodge)',
-      fields: ['lodge_type', 'lodge_park_name', 'cottage_id', 'hot_tub', 'pets'],
+      fields: ['accommodation', 'lodge_code', 'lodge_park_name', 'lodge_park_code', 'lodge_type', 'cottage_id', 'hot_tub', 'pets'],
     },
   };
 
