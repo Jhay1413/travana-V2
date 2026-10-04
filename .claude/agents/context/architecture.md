@@ -15,15 +15,15 @@
 
 <!-- AUTO:START -->
 <!-- Run `npm run docs:arch` to regenerate this block from the live codebase. -->
-**Last refreshed:** 2026-09-26 (auto-generated — do not edit by hand)
+**Last refreshed:** 2026-10-02 (auto-generated — do not edit by hand)
 
 | Fact | Value |
 |------|-------|
 | Backend modules (`server/v2/modules/`) | **69** |
-| Tables defined (`pgTable`) in schema.ts | 160 |
+| Tables defined (`pgTable`) in schema.ts | 161 |
 | Enums (`pgEnum`) in schema.ts | 28 |
 | `orgId`/`org_id` references in schema.ts | 91 |
-| Migrations (`migrations/*.sql`) | 56 (latest: `0054_charming_bug.sql`) |
+| Migrations (`migrations/*.sql`) | 57 (latest: `0055_flawless_star_brand.sql`) |
 | Client pages (`client/src/pages`) | ~48 |
 | Automated test runner | ✅ present |
 | Legacy v1 backend (`server/`) present | ⚠️ yes (alongside v2) |
