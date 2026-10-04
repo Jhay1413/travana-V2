@@ -194,9 +194,29 @@ export function useAddAssets() {
 export function useUploadAssets() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ lessonId, files }: { lessonId: string; courseId: string; files: File[] }) =>
-      trainingApi.uploadAssets(lessonId, files),
+    mutationFn: ({
+      lessonId,
+      files,
+      captions,
+    }: {
+      lessonId: string;
+      courseId: string;
+      files: File[];
+      captions?: (string | null)[];
+    }) => trainingApi.uploadAssets(lessonId, files, captions),
     onSuccess: (_data: TrainingLessonAsset[], { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
+/** Edit a persisted slide's description (stored in the asset's `caption` column). */
+export function useUpdateAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, caption }: { id: string; courseId: string; caption: string | null }) =>
+      trainingApi.updateAsset(id, { caption }),
+    onSuccess: (_data, { courseId }) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
     },
   });

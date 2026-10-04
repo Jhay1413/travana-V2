@@ -236,12 +236,23 @@ export const trainingApi = {
   },
 
   /** Graphics/slide images for a lesson — multipart, field name `files` (≤20, 5MB each). */
-  async uploadAssets(lessonId: string, files: File[]): Promise<TrainingLessonAsset[]> {
+  async uploadAssets(
+    lessonId: string,
+    files: File[],
+    captions?: (string | null)[],
+  ): Promise<TrainingLessonAsset[]> {
     const formData = new FormData();
+    // `captions` is a JSON array aligned by index with `files` (missing entries mean no description).
+    if (captions) formData.append("captions", JSON.stringify(captions));
     files.forEach((file) => formData.append("files", file));
     const { data } = await axios.post<TrainingLessonAsset[]>(`${LESSONS_BASE}/${lessonId}/assets/upload`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    return data;
+  },
+
+  async updateAsset(id: string, body: { caption: string | null }): Promise<TrainingLessonAsset> {
+    const { data } = await axios.patch<TrainingLessonAsset>(`${ASSETS_BASE}/${id}`, body);
     return data;
   },
 

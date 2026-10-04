@@ -119,7 +119,7 @@ export const organizationOverviewRepository = {
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
         .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        .where(and(bookingActiveCond, scopeCond())),
+        .where(and(bookingActiveCond, eq(transaction.is_active, true), scopeCond())),
 
       db
         .select({ count: sql<number>`COUNT(DISTINCT ${transaction.client_id})` })
@@ -183,6 +183,7 @@ export const organizationOverviewRepository = {
           and(
             gte(booking.date_created, yearStart),
             sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
+            eq(transaction.is_active, true),
             scopeCond(),
           ),
         ),
@@ -204,6 +205,7 @@ export const organizationOverviewRepository = {
               gte(booking.date_created, trendStart),
               sql`${booking.date_created} < ${trendEnd.toISOString()}`,
               bookingActiveCond,
+              eq(transaction.is_active, true),
               scopeCond(),
             ),
           )
@@ -236,7 +238,7 @@ export const organizationOverviewRepository = {
               .innerJoin(enquiry_table, eq(enquiry_table.transaction_id, transaction.id))
               .innerJoin(enquiry_destination, eq(enquiry_destination.enquiry_id, enquiry_table.id))
               .innerJoin(destination, eq(destination.id, enquiry_destination.destination_id))
-              .where(and(gte(booking.date_created, yearStart), bookingActiveCond, scopeCond())),
+              .where(and(gte(booking.date_created, yearStart), bookingActiveCond, eq(transaction.is_active, true), scopeCond())),
           );
         return db
           .with(destDeduped)
@@ -274,7 +276,7 @@ export const organizationOverviewRepository = {
               .innerJoin(booking_accomodation, eq(booking_accomodation.booking_id, booking.id))
               .innerJoin(accomodation_list, eq(accomodation_list.id, booking_accomodation.accomodation_id))
               .innerJoin(resorts, eq(resorts.id, accomodation_list.resorts_id))
-              .where(and(gte(booking.date_created, yearStart), bookingActiveCond, scopeCond())),
+              .where(and(gte(booking.date_created, yearStart), bookingActiveCond, eq(transaction.is_active, true), scopeCond())),
           );
         return db
           .with(resortDeduped)
@@ -300,7 +302,7 @@ export const organizationOverviewRepository = {
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
         .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
         .innerJoin(tour_operator, eq(tour_operator.id, booking.main_tour_operator_id))
-        .where(and(gte(booking.date_created, yearStart), bookingActiveCond, scopeCond()))
+        .where(and(gte(booking.date_created, yearStart), bookingActiveCond, eq(transaction.is_active, true), scopeCond()))
         .groupBy(tour_operator.id, tour_operator.name)
         .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
         .limit(5),
@@ -514,6 +516,7 @@ export const organizationOverviewRepository = {
             gte(booking.date_created, monthStart),
             sql`${booking.date_created} < ${monthEnd.toISOString()}`,
             bookingActiveCond,
+            eq(transaction.is_active, true),
             testCond,
             inArray(transaction.branch_id, branchIds),
           ),
@@ -847,8 +850,8 @@ export const organizationOverviewRepository = {
         })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        .where(and(bookingActiveCond, scopeCond))
+        .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(and(bookingActiveCond, eq(transaction.is_active, true), scopeCond))
         .groupBy(transaction.user_id),
 
       db
@@ -1066,7 +1069,7 @@ export const organizationOverviewRepository = {
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
         .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        .where(and(bookingActiveCond, scopeCond, inArray(transaction.branch_id, branchIds)))
+        .where(and(bookingActiveCond, eq(transaction.is_active, true), scopeCond, inArray(transaction.branch_id, branchIds)))
         .groupBy(transaction.branch_id),
       db
         .select({
@@ -1180,6 +1183,7 @@ export const organizationOverviewRepository = {
             gte(booking.date_created, monthStart),
             sql`${booking.date_created} < ${monthEnd.toISOString()}`,
             bookingActiveCond,
+            eq(transaction.is_active, true),
             scopeCond(),
           ),
         )

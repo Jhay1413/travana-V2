@@ -49,7 +49,6 @@ import {
   Unlink,
   Unplug,
   Pin,
-  Link,
   Share2,
   ListTodo,
   Ticket,
@@ -1588,8 +1587,7 @@ export default function ConversationsInbox() {
 
   // Deep-link support: /conversations?conversation=<id> opens straight to that
   // thread — the Dashboard's Latest Inbox links here per row (see
-  // conversations-tab.tsx) and the thread header's "Copy conversation link"
-  // action builds this same URL. Keyed on wouter's `useSearch` (not
+  // conversations-tab.tsx). Keyed on wouter's `useSearch` (not
   // window.location.search) and applied once per id rather than once per
   // mount, mirroring the ?holiday= convention in pages/client/index.tsx: a
   // second link to a different conversation while already on this page is
@@ -2187,17 +2185,6 @@ export default function ConversationsInbox() {
               <div className="flex flex-wrap items-center gap-1.5">
                 <AssignControl conversation={selected} />
                 <HeaderAction icon={Pin} label="Pin conversation (coming soon)" />
-                <HeaderAction
-                  icon={Link}
-                  label="Copy conversation link"
-                  onClick={() => {
-                    const url = `${window.location.origin}/conversations?conversation=${selected.id}`;
-                    navigator.clipboard
-                      .writeText(url)
-                      .then(() => toast({ title: "Link copied", description: url }))
-                      .catch(() => toast({ title: "Couldn't copy link", variant: "destructive" }));
-                  }}
-                />
                 <HeaderAction icon={Share2} label="Share (coming soon)" />
 
                 {/* Everything that used to sit in the header lives in this menu. */}

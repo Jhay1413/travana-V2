@@ -408,8 +408,9 @@ function buildUpdatePayload(
     infant: values.passengersInfants,
     childAges: values.childAges ?? [],
     transfer_type: values.transferType || null,
-    pre_booked_seats: values.preBookedSeats || null,
-    flight_meals: values.flightMeals === "Yes",
+    // Hot Tub Break hides these fields, so clear any stale value.
+    pre_booked_seats: isHotTubBreak ? null : values.preBookedSeats || null,
+    flight_meals: isHotTubBreak ? false : values.flightMeals === "Yes",
     sales_price: String(values.price || 0),
     package_commission: String(commissionValue),
     discounts: String(values.discount || 0),

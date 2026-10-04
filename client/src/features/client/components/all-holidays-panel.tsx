@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarCheck, Check, ChevronDown, Ellipsis, FileText, Filter, ListTodo, MessageSquare, Pin, Search, SquarePen, Ticket } from "lucide-react";
+import { CalendarCheck, Check, ChevronDown, Ellipsis, FileText, Filter, ListTodo, MessageSquare, Search, SquarePen, Ticket } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -11,7 +11,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { isQuoteExpired, isEnquiryExpired, isBookingExpired, isQuoteLost, isEnquiryLost } from "@/lib/deal-expiry";
-import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
+import { useDealPin } from "@/hooks/use-deal-pin";
+import { PinToggleButton } from "@/components/shared/pin-toggle-button";
 import type { EnquiryTable, Quote } from "@/features/quote/types";
 import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
 import { isPrimaryQuote } from "@/features/client/components/client-types";
@@ -189,10 +190,14 @@ function buildBookingRows(bookings: HolidayBooking[]): HolidayRowData[] {
   });
 }
 
-function sortRows(rows: HolidayRowData[], order: "newest" | "oldest"): HolidayRowData[] {
+// Pinned rows lead; within the pinned and unpinned blocks the user's date order holds.
+function sortRows(rows: HolidayRowData[], order: "newest" | "oldest", pinnedKeys: ReadonlySet<string>): HolidayRowData[] {
+  const isPinned = (r: HolidayRowData) => pinnedKeys.has(`${r.type}:${r.id}`);
   return [...rows]
-    .map((row) => (row.copies.length > 0 ? { ...row, copies: sortRows(row.copies, order) } : row))
+    .map((row) => (row.copies.length > 0 ? { ...row, copies: sortRows(row.copies, order, pinnedKeys) } : row))
     .sort((a, b) => {
+      const pinDiff = Number(isPinned(b)) - Number(isPinned(a));
+      if (pinDiff !== 0) return pinDiff;
       const diff = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
       return order === "newest" ? diff : -diff;
     });
@@ -275,6 +280,7 @@ function HolidayListRow({
   roomy = false,
   isCopyRow = false,
   onSelect,
+  onTogglePin,
 }: {
   row: HolidayRowData;
   selected: boolean;
@@ -287,6 +293,7 @@ function HolidayListRow({
   /** Nested "Copy" variant — slightly smaller, carries a "Copy" pill next to the title. */
   isCopyRow?: boolean;
   onSelect: () => void;
+  onTogglePin: () => void;
 }) {
   // Live Deals uses a smaller operator logo than the compact holidays list;
   // copy rows drop a size further still since they're nested and secondary.
@@ -335,12 +342,6 @@ function HolidayListRow({
               >
                 {row.title}
               </span>
-              {pinned && (
-                <Pin
-                  className="h-2.5 w-2.5 shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
-                  data-testid={`all-holidays-row-pinned-${row.id}`}
-                />
-              )}
               {isCopyRow && <CopyPill />}
             </span>
             {row.price > 0 && (
@@ -354,16 +355,21 @@ function HolidayListRow({
           )}
         </div>
       </div>
-      {/* Date line sits on its own row with the "···" dots column under the chip —
-          same visual language as the inbox conversation rows. */}
-      {row.dateLine && (
-        <div className="mt-1.5 flex items-center gap-3">
-          <span className={cn("shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 dark:text-white/30", roomy ? "w-7 2xl:w-8" : "w-9 3xl:w-10")} aria-hidden>
-            ···
-          </span>
-          <span className={cn("truncate text-[#a195a5] dark:text-white/50", roomy ? "text-[13px]" : "text-xs")}>{row.dateLine}</span>
-        </div>
-      )}
+      {/* Footer row: date line under the chip (same visual language as the inbox
+          conversation rows) with the pin toggle at the lower right. */}
+      <div className="mt-1.5 flex items-center gap-3">
+        {row.dateLine ? (
+          <>
+            <span className={cn("shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 dark:text-white/30", roomy ? "w-7 2xl:w-8" : "w-9 3xl:w-10")} aria-hidden>
+              ···
+            </span>
+            <span className={cn("min-w-0 flex-1 truncate text-[#a195a5] dark:text-white/50", roomy ? "text-[13px]" : "text-xs")}>{row.dateLine}</span>
+          </>
+        ) : (
+          <span className="flex-1" />
+        )}
+        <PinToggleButton pinned={pinned} onToggle={onTogglePin} data-testid={`all-holidays-row-pin-${row.id}`} />
+      </div>
       {!selected && !isLast && (
         <span className="pointer-events-none absolute bottom-0 left-3 right-3 h-px bg-black/[0.06] dark:bg-white/[0.06]" aria-hidden />
       )}
@@ -381,6 +387,7 @@ function HolidayGroupRow({
   isLast,
   roomy,
   onSelect,
+  onTogglePin,
 }: {
   row: HolidayRowData;
   selection: HolidaySelection | null;
@@ -389,6 +396,7 @@ function HolidayGroupRow({
   isLast: boolean;
   roomy: boolean;
   onSelect: (selection: HolidaySelection) => void;
+  onTogglePin: (row: HolidayRowData) => void;
 }) {
   const hasCopies = row.copies.length > 0;
   return (
@@ -400,6 +408,7 @@ function HolidayGroupRow({
         selected={selection?.type === row.type && selection.id === row.id}
         pinned={pinnedKeys.has(`${row.type}:${row.id}`)}
         onSelect={() => onSelect({ type: row.type, id: row.id })}
+        onTogglePin={() => onTogglePin(row)}
       />
       {hasCopies && (
         <div className="ml-[22px] space-y-1 border-l border-black/[0.08] pl-3 pt-1 dark:border-white/[0.08]">
@@ -413,6 +422,7 @@ function HolidayGroupRow({
               selected={selection?.type === copy.type && selection.id === copy.id}
               pinned={pinnedKeys.has(`${copy.type}:${copy.id}`)}
               onSelect={() => onSelect({ type: copy.type, id: copy.id })}
+              onTogglePin={() => onTogglePin(copy)}
             />
           ))}
         </div>
@@ -478,19 +488,12 @@ export function AllHolidaysPanel({
   const quoteRows = useMemo(() => buildQuoteRows(quotes, bookedTransactionIds), [quotes, bookedTransactionIds]);
   const bookingRows = useMemo(() => buildBookingRows(bookings), [bookings]);
 
-  // Fetched once for the whole panel — no per-row favourite lookups. Keyed by
+  // Favourites are fetched once for the whole panel — no per-row lookups. Keyed by
   // `${itemType}:${itemId}` since the panel mixes enquiry/quote/booking rows
   // that can otherwise collide on a shared id space.
-  const { data: favorites } = useFavorites();
-  const pinnedKeys = useMemo(
-    () =>
-      new Set(
-        (favorites ?? [])
-          .filter((f) => f.itemType === "enquiry" || f.itemType === "quote" || f.itemType === "booking")
-          .map((f) => `${f.itemType}:${f.itemId}`),
-      ),
-    [favorites],
-  );
+  const { pinnedKeys, togglePin } = useDealPin();
+  const handleTogglePin = (row: HolidayRowData) =>
+    togglePin(row.type, row.id, { label: row.title, subtitle: row.destinationName ?? "" });
 
   // A deep link or pipeline selection must reveal the selected deal's own
   // category. Otherwise the detail view can show an enquiry while this panel
@@ -537,16 +540,16 @@ export function AllHolidaysPanel({
   }, [rows, search]);
 
   const activeRows = useMemo(
-    () => sortRows(filteredRows.filter((r) => !r.expired && !r.lost), sortOrder),
-    [filteredRows, sortOrder],
+    () => sortRows(filteredRows.filter((r) => !r.expired && !r.lost), sortOrder, pinnedKeys),
+    [filteredRows, sortOrder, pinnedKeys],
   );
   const expiredRows = useMemo(
-    () => sortRows(filteredRows.filter((r) => r.expired && !r.lost), sortOrder),
-    [filteredRows, sortOrder],
+    () => sortRows(filteredRows.filter((r) => r.expired && !r.lost), sortOrder, pinnedKeys),
+    [filteredRows, sortOrder, pinnedKeys],
   );
   const lostRows = useMemo(
-    () => sortRows(filteredRows.filter((r) => r.lost), sortOrder),
-    [filteredRows, sortOrder],
+    () => sortRows(filteredRows.filter((r) => r.lost), sortOrder, pinnedKeys),
+    [filteredRows, sortOrder, pinnedKeys],
   );
 
   return (
@@ -718,6 +721,7 @@ export function AllHolidaysPanel({
                   selection={selection}
                   pinnedKeys={pinnedKeys}
                   onSelect={onSelect}
+                  onTogglePin={handleTogglePin}
                 />
               ))}
             </div>
@@ -746,6 +750,7 @@ export function AllHolidaysPanel({
                         selection={selection}
                         pinnedKeys={pinnedKeys}
                         onSelect={onSelect}
+                        onTogglePin={handleTogglePin}
                       />
                     ))}
                   </div>
@@ -777,6 +782,7 @@ export function AllHolidaysPanel({
                         selection={selection}
                         pinnedKeys={pinnedKeys}
                         onSelect={onSelect}
+                        onTogglePin={handleTogglePin}
                       />
                     ))}
                   </div>

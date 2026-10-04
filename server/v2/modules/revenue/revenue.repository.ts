@@ -74,6 +74,7 @@ export const revenueRepository = {
       gte(booking.travel_date, window.start),
       lte(booking.travel_date, window.end),
       eq(booking.is_active, true),
+      eq(transaction.is_active, true),
       isNotNull(booking.package_commission),
     ];
     if (orgId) conditions.push(eq(clientTable.orgId, orgId));
@@ -83,12 +84,11 @@ export const revenueRepository = {
         totalCommission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr()}), 0)`,
         dealCount: sql<number>`COUNT(*)`,
       })
-      .from(booking);
+      .from(booking)
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
 
     const scoped = orgId
-      ? baseQuery
-          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      ? baseQuery.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
       : baseQuery;
 
     const result = await scoped.where(and(...conditions));
@@ -115,18 +115,18 @@ export const revenueRepository = {
       gte(booking.travel_date, window.start),
       lte(booking.travel_date, window.end),
       eq(booking.is_active, true),
+      eq(transaction.is_active, true),
       isNotNull(booking.package_commission),
     ];
     if (orgId) conditions.push(eq(clientTable.orgId, orgId));
 
     const base = db
       .select({ id: booking.id, commission: totalBookingCommissionExpr() })
-      .from(booking);
+      .from(booking)
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
 
     const scoped = orgId
-      ? base
-          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      ? base.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
       : base;
 
     const rows = await scoped.where(and(...conditions));
@@ -203,6 +203,7 @@ export const revenueRepository = {
       gte(booking.travel_date, window.start),
       lte(booking.travel_date, window.end),
       eq(booking.is_active, true),
+      eq(transaction.is_active, true),
       isNotNull(booking.package_commission),
     ];
     if (orgId) conditions.push(eq(clientTable.orgId, orgId));
@@ -301,6 +302,7 @@ export const revenueRepository = {
 
     const conditions: any[] = [
       eq(booking.is_active, true),
+      eq(transaction.is_active, true),
       isNotNull(booking.package_commission),
       gte(booking.travel_date, now.toISOString().split('T')[0]),
       lte(booking.travel_date, oneYearFromNow.toISOString().split('T')[0]),
@@ -353,6 +355,7 @@ export const revenueRepository = {
 
     const conditions: any[] = [
       eq(booking.is_active, true),
+      eq(transaction.is_active, true),
       isNotNull(booking.package_commission),
       gte(booking.travel_date, now.toISOString().split('T')[0]),
       lte(booking.travel_date, oneYearFromNow.toISOString().split('T')[0]),
@@ -364,12 +367,11 @@ export const revenueRepository = {
         totalCommission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr()}), 0)`,
         totalDeals: sql<number>`COUNT(*)`,
       })
-      .from(booking);
+      .from(booking)
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id));
 
     const scoped = orgId
-      ? baseQuery
-          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      ? baseQuery.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
       : baseQuery;
 
     const result = await scoped.where(and(...conditions));

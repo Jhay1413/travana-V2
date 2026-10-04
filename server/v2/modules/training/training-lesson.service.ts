@@ -2,6 +2,7 @@ import { trainingLessonRepository } from './training-lesson.repository';
 import { trainingService } from './training.service';
 import { getSectionOrThrow } from './training-section.service';
 import type { ScopeOrTrusted } from './training.repository';
+import type { UpdateAssetBody } from './training-lesson.validator';
 import { AppError } from '../../utils/error-handler';
 import { uploadImageToS3, deleteImageByStoredUrl } from '../../utils/image-storage';
 import type {
@@ -21,6 +22,12 @@ async function getLessonOrThrow(lessonId: string): Promise<TrainingLesson> {
   const lesson = await trainingLessonRepository.findLessonById(lessonId);
   if (!lesson) throw new AppError('Lesson not found', 404);
   return lesson;
+}
+
+/** Trim; blank / missing becomes null. */
+function normalizeCaption(caption: string | null | undefined): string | null {
+  const trimmed = caption?.trim();
+  return trimmed ? trimmed : null;
 }
 
 export const trainingLessonService = {
@@ -126,8 +133,16 @@ export const trainingLessonService = {
     return trainingLessonRepository.createAssets(rows);
   },
 
-  /** Multer-based upload: stream each image to S3 under `training-assets/`, then persist rows. */
-  async uploadAssets(lessonId: string, files: Express.Multer.File[], scope: ScopeOrTrusted): Promise<TrainingLessonAsset[]> {
+  /**
+   * Multer-based upload: stream each image to S3 under `training-assets/`, then persist rows.
+   * `captions` is the already-validated optional array aligned by index with `files`.
+   */
+  async uploadAssets(
+    lessonId: string,
+    files: Express.Multer.File[],
+    scope: ScopeOrTrusted,
+    captions: (string | null)[] = [],
+  ): Promise<TrainingLessonAsset[]> {
     const lesson = await getLessonOrThrow(lessonId);
     if (lesson.type !== 'graphics') {
       throw new AppError('Assets can only be uploaded to graphics lessons', 400);
@@ -136,17 +151,32 @@ export const trainingLessonService = {
       throw new AppError('No files provided', 400);
     }
     await trainingService.assertCourseEditable(lesson.course_id, scope);
+    if (captions.length > files.length) {
+      throw new AppError('captions has more entries than files', 400);
+    }
 
     const startPosition = await trainingLessonRepository.getNextAssetPosition(lessonId);
     const urls = await Promise.all(files.map((file) => uploadImageToS3(file, 'training-assets')));
     const rows: InsertTrainingLessonAsset[] = urls.map((url, index) => ({
       lesson_id: lessonId,
       asset_url: url,
-      caption: null,
+      caption: normalizeCaption(captions[index]),
       position: startPosition + index,
     }));
 
     return trainingLessonRepository.createAssets(rows);
+  },
+
+  async updateAsset(assetId: string, input: UpdateAssetBody, scope: ScopeOrTrusted): Promise<TrainingLessonAsset> {
+    const asset = await trainingLessonRepository.findAssetById(assetId);
+    if (!asset) throw new AppError('Asset not found', 404);
+
+    const lesson = await getLessonOrThrow(asset.lesson_id);
+    await trainingService.assertCourseEditable(lesson.course_id, scope);
+
+    const updated = await trainingLessonRepository.updateAsset(assetId, { caption: normalizeCaption(input.caption) });
+    if (!updated) throw new AppError('Asset not found', 404);
+    return updated;
   },
 
   async deleteAsset(assetId: string, scope: ScopeOrTrusted): Promise<void> {

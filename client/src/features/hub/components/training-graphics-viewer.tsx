@@ -75,7 +75,16 @@ export function TrainingGraphicsViewer({ assets, onCompleted }: TrainingGraphics
                 />
               </button>
               {asset.caption && (
-                <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400">{asset.caption}</p>
+                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+                  <p
+                    className={`whitespace-pre-line text-base leading-relaxed text-slate-700 dark:text-slate-200 ${
+                      asset.caption.length <= 80 ? "text-center" : "text-left"
+                    }`}
+                    data-testid={`training-graphics-caption-${i}`}
+                  >
+                    {asset.caption}
+                  </p>
+                </div>
               )}
             </CarouselItem>
           ))}

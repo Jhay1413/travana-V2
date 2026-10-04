@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { trainingLessonService } from './training-lesson.service';
+import { parseValidatedCaptions } from './training-lesson.validator';
 import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
 import { getScope } from '../../utils/scope';
@@ -48,8 +49,17 @@ export const trainingLessonController = {
     if (!files || files.length === 0) {
       throw new AppError('No files provided', 400);
     }
-    const assets = await trainingLessonService.uploadAssets(lessonId, files, scope);
+    // Format already validated by uploadAssetsValidator; this only converts to a typed array.
+    const captions = parseValidatedCaptions(req.body?.captions);
+    const assets = await trainingLessonService.uploadAssets(lessonId, files, scope, captions);
     return successResponse(res, assets, `${assets.length} asset(s) uploaded successfully`, 201);
+  }),
+
+  updateAsset: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const id = req.params.id as string;
+    const asset = await trainingLessonService.updateAsset(id, req.body, scope);
+    return successResponse(res, asset, 'Asset updated successfully');
   }),
 
   deleteAsset: asyncHandler(async (req: Request, res: Response) => {

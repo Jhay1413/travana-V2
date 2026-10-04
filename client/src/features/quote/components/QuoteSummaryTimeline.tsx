@@ -492,7 +492,7 @@ export function QuoteSummaryTimeline({ quote, variant = "default" }: { quote: Qu
       });
     }
 
-    if (quote.flightMeals || quote.preBookedSeats) {
+    if (quote.flightMeals === "Yes" || quote.preBookedSeats) {
       timelineItems.push({
         type: "flight-extras",
         sortKey: "9999-12-31#9#23:59",

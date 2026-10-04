@@ -204,6 +204,42 @@ describe("newQuoteService.updateQuote", () => {
     expect(transactionRepository.update).toHaveBeenCalledWith("t1", { is_active: false });
   });
 
+  it("still deactivates the transaction when lost on an on_quote transaction", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", transaction_id: "t1", quote_status: "quoted" } as never);
+    vi.mocked(newQuoteRepository.update).mockResolvedValue({ id: "q1", transaction_id: "t1", quote_status: "lost" } as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ id: "q1" } as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_quote" } as never);
+
+    await newQuoteService.updateQuote("q1", { quote_status: "lost" } as never, TRUSTED);
+
+    expect(newQuoteRepository.update).toHaveBeenCalledWith("q1", { is_active: false });
+    expect(transactionRepository.update).toHaveBeenCalledWith("t1", { is_active: false });
+  });
+
+  it("does NOT deactivate the transaction when lost on an on_booking transaction, but still deactivates the quote", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", transaction_id: "t1", quote_status: "quoted" } as never);
+    vi.mocked(newQuoteRepository.update).mockResolvedValue({ id: "q1", transaction_id: "t1", quote_status: "lost" } as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ id: "q1" } as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_booking" } as never);
+
+    await newQuoteService.updateQuote("q1", { quote_status: "lost" } as never, TRUSTED);
+
+    expect(newQuoteRepository.update).toHaveBeenCalledWith("q1", { is_active: false });
+    expect(transactionRepository.update).not.toHaveBeenCalledWith("t1", { is_active: false });
+  });
+
+  it("reactivates the quote and transaction when moving off lost with no lost siblings", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", transaction_id: "t1", quote_status: "lost" } as never);
+    vi.mocked(newQuoteRepository.update).mockResolvedValue({ id: "q1", transaction_id: "t1", quote_status: "quoted" } as never);
+    vi.mocked(newQuoteRepository.findLostSiblings).mockResolvedValue([] as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ id: "q1" } as never);
+
+    await newQuoteService.updateQuote("q1", { quote_status: "quoted" } as never, TRUSTED);
+
+    expect(newQuoteRepository.update).toHaveBeenCalledWith("q1", { is_active: true });
+    expect(transactionRepository.update).toHaveBeenCalledWith("t1", { is_active: true });
+  });
+
   it("persists childAges when an edit submits them, so ages survive the round trip", async () => {
     vi.mocked(newQuoteRepository.findById).mockResolvedValue({
       id: "q1",

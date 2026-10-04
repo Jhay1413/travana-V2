@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { LessonRow } from "./training-lesson-row";
 import { LessonFormDialog, EMPTY_LESSON_FORM_VALUES, type LessonFormValues } from "./training-lesson-form-dialog";
 import type { LessonWithAssets, SectionWithLessons } from "@/features/hub/types/training.types";
+import type { StagedSlide } from "@/features/hub/types/training-admin.types";
 
 interface TrainingLessonEditorProps {
   courseId: string;
@@ -146,7 +147,7 @@ export function TrainingLessonEditor({ courseId }: TrainingLessonEditorProps) {
       }
     : EMPTY_LESSON_FORM_VALUES;
 
-  const handleLessonDialogSubmit = async (values: LessonFormValues, files: File[]) => {
+  const handleLessonDialogSubmit = async (values: LessonFormValues, slides: StagedSlide[]) => {
     if (!lessonDialogSection) return;
     try {
       if (editingLesson) {
@@ -172,9 +173,14 @@ export function TrainingLessonEditor({ courseId }: TrainingLessonEditorProps) {
           videoUrl: values.type === "video" ? values.videoUrl : null,
         });
 
-        if (values.type === "graphics" && files.length > 0) {
+        if (values.type === "graphics" && slides.length > 0) {
           try {
-            await uploadAssets.mutateAsync({ lessonId: created.id, courseId, files });
+            await uploadAssets.mutateAsync({
+              lessonId: created.id,
+              courseId,
+              files: slides.map((s) => s.file),
+              captions: slides.map((s) => s.caption.trim() || null),
+            });
           } catch {
             toast({ title: "Lesson created, but images failed to upload", variant: "destructive" });
             setLessonDialogSection(null);

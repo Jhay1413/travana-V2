@@ -22,6 +22,24 @@ export function normalizeTransferType(value: unknown): string {
   return TRANSFER_TYPES.find((t) => t.toLowerCase() === trimmed.toLowerCase()) ?? "None";
 }
 
+// Transfer type applied when a scraped/imported quote is loaded into the form.
+// Lodge (Hot Tub Break) imports are always self-drive — Hoseasons scrapes carry
+// transfer "None" — and TUI imports always get a shared transfer. Everything
+// else keeps the scraped value, normalized onto TRANSFER_TYPES.
+export function resolveImportedTransferType({
+  isLodge,
+  tourOperator,
+  scrapedTransferType,
+}: {
+  isLodge: boolean;
+  tourOperator: string;
+  scrapedTransferType: unknown;
+}): string {
+  if (isLodge) return "Self-drive";
+  if (tourOperator.toLowerCase().includes("tui")) return "Shared Transfer";
+  return normalizeTransferType(scrapedTransferType);
+}
+
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
 
 export const flightLegSchema = z.object({

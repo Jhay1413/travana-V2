@@ -87,6 +87,15 @@ export const trainingLessonRepository = {
     return result;
   },
 
+  async updateAsset(id: string, patch: { caption: string | null }): Promise<TrainingLessonAsset | undefined> {
+    const [result] = await db
+      .update(training_lesson_asset)
+      .set({ caption: patch.caption })
+      .where(eq(training_lesson_asset.id, id))
+      .returning();
+    return result;
+  },
+
   async deleteAsset(id: string): Promise<void> {
     await db.delete(training_lesson_asset).where(eq(training_lesson_asset.id, id));
   },

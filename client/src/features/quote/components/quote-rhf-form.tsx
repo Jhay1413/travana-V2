@@ -399,7 +399,7 @@ export function QuoteRHFForm({
               )}
             </div>
             <QuoteDrawerOverview />
-            <QuoteDrawerTravelSection showCruiseStay={isCruise} />
+            <QuoteDrawerTravelSection showCruiseStay={isCruise} showFlightExtras={!isHotTubBreak} />
             {isHotTubBreak && (
               <FormDrawerSection title="Lodge Details" data-testid="drawer-section-lodge">
                 <QuoteLodgeDetailsSection bare />
@@ -516,7 +516,7 @@ export function QuoteRHFForm({
         />
 
         {/* ── TRAVEL DETAILS ────────────────────────────────────────────────── */}
-        <QuoteTravelDetailsSection showCruiseStay={isCruise} />
+        <QuoteTravelDetailsSection showCruiseStay={isCruise} showFlightExtras={!isHotTubBreak} />
 
         {/* ── HOT TUB BREAK: LODGE DETAILS ─────────────────────────────────── */}
         {isHotTubBreak && <QuoteLodgeDetailsSection />}

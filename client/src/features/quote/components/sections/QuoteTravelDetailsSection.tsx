@@ -9,7 +9,13 @@ import { SectionHeader } from "@/features/quote/components/sections/SectionHeade
 import type { QuoteFormValues } from "@/features/quote/types";
 import { TRANSFER_TYPES } from "@/features/quote/types/quote-form.types";
 
-export function QuoteTravelDetailsSection({ showCruiseStay = false }: { showCruiseStay?: boolean }) {
+export function QuoteTravelDetailsSection({
+  showCruiseStay = false,
+  showFlightExtras = true,
+}: {
+  showCruiseStay?: boolean;
+  showFlightExtras?: boolean;
+}) {
   const { control } = useFormContext<QuoteFormValues>();
   const passengersChildren = useWatch({ control, name: "passengersChildren" });
 
@@ -110,41 +116,45 @@ export function QuoteTravelDetailsSection({ showCruiseStay = false }: { showCrui
           )}
         />
 
-        <FormField
-          control={control}
-          name="flightMeals"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabelTooltip className="text-xs font-medium text-black/60" tip="Whether meals are included on the flights (Yes or No).">Flight Meals</FormLabelTooltip>
-              <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="Yes">Yes</SelectItem>
-                  <SelectItem value="No">No</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {showFlightExtras && (
+          <>
+          <FormField
+            control={control}
+            name="flightMeals"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabelTooltip className="text-xs font-medium text-black/60" tip="Whether meals are included on the flights (Yes or No).">Flight Meals</FormLabelTooltip>
+                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Yes">Yes</SelectItem>
+                    <SelectItem value="No">No</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={control}
-          name="preBookedSeats"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Pre-booked Seats</FormLabel>
-              <FormControl>
-                <Input {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" placeholder="e.g. 2A, 2B" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={control}
+            name="preBookedSeats"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs font-medium text-black/60">Pre-booked Seats</FormLabel>
+                <FormControl>
+                  <Input {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" placeholder="e.g. 2A, 2B" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          </>
+        )}
 
         {showCruiseStay && (
           <>

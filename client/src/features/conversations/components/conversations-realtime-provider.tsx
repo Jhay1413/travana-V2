@@ -93,6 +93,7 @@ export function ConversationsRealtimeProvider({ children }: { children: ReactNod
       toast({
         title,
         description,
+        duration: 8000,
         action: (
           <ToastAction altText="Open the conversations inbox" onClick={() => navigate("/conversations")}>
             View

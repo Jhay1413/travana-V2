@@ -121,7 +121,7 @@ export const branchOverviewRepository = {
         const withClient = joinClient
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
-        return withClient.where(and(...baseCond));
+        return withClient.where(and(eq(transaction.is_active, true), ...baseCond));
       })(),
 
       // Active clients in last 90 days (distinct client_id on transactions)
@@ -210,6 +210,7 @@ export const branchOverviewRepository = {
           and(
             gte(booking.date_created, yearStart),
             sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
+            eq(transaction.is_active, true),
             ...baseCond,
           ),
         );
@@ -236,6 +237,7 @@ export const branchOverviewRepository = {
               gte(booking.date_created, trendStart),
               sql`${booking.date_created} < ${trendEnd.toISOString()}`,
               bookingActiveCond,
+              eq(transaction.is_active, true),
               ...baseCond,
             ),
           )
@@ -269,7 +271,7 @@ export const branchOverviewRepository = {
           : innerBase;
         const destDeduped = db
           .$with("br_dest_deduped")
-          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond)));
+          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, eq(transaction.is_active, true), ...baseCond)));
         return db
           .with(destDeduped)
           .select({
@@ -309,7 +311,7 @@ export const branchOverviewRepository = {
           : innerBase;
         const resortDeduped = db
           .$with("br_resort_deduped")
-          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond)));
+          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, eq(transaction.is_active, true), ...baseCond)));
         return db
           .with(resortDeduped)
           .select({
@@ -339,7 +341,7 @@ export const branchOverviewRepository = {
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
         return withClient
-          .where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond))
+          .where(and(gte(booking.date_created, yearStart), bookingActiveCond, eq(transaction.is_active, true), ...baseCond))
           .groupBy(tour_operator.id, tour_operator.name)
           .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
           .limit(5);
@@ -525,6 +527,7 @@ export const branchOverviewRepository = {
           and(
             gte(booking.date_created, monthStart),
             sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+            eq(transaction.is_active, true),
             ...baseCond,
           ),
         )
@@ -889,7 +892,7 @@ export const branchOverviewRepository = {
         ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
         : q;
       return withClient
-        .where(and(bookingActiveCond, ...baseCond))
+        .where(and(bookingActiveCond, eq(transaction.is_active, true), ...baseCond))
         .groupBy(transaction.user_id);
     };
 
@@ -1040,6 +1043,7 @@ export const branchOverviewRepository = {
             gte(booking.date_created, monthStart),
             sql`${booking.date_created} < ${monthEnd.toISOString()}`,
             bookingActiveCond,
+            eq(transaction.is_active, true),
             ...baseCond,
           ),
         )

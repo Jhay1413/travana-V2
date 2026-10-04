@@ -30,7 +30,7 @@ import { LessonRow } from "./training-lesson-row";
 import { LessonFormDialog, EMPTY_LESSON_FORM_VALUES, type LessonFormValues } from "./training-lesson-form-dialog";
 import { TrainingThumbnailUpload } from "./training-thumbnail-upload";
 import { COURSE_CATEGORIES, type CourseVisibility } from "@/features/hub/types/training.types";
-import type { DraftLesson } from "@/features/hub/types/training-admin.types";
+import type { DraftLesson, StagedSlide } from "@/features/hub/types/training-admin.types";
 
 const courseFormSchema = z
   .object({
@@ -167,7 +167,7 @@ export default function TrainingCourseEditor() {
       }
     : EMPTY_LESSON_FORM_VALUES;
 
-  const handleDraftDialogSubmit = (values: LessonFormValues, files: File[]) => {
+  const handleDraftDialogSubmit = (values: LessonFormValues, slides: StagedSlide[]) => {
     const draft: DraftLesson = {
       tempId: editingDraft?.tempId ?? nextDraftLessonId(),
       title: values.title,
@@ -175,7 +175,7 @@ export default function TrainingCourseEditor() {
       type: values.type,
       isRequired: values.isRequired,
       videoUrl: values.type === "video" ? (values.videoUrl ?? null) : null,
-      files: values.type === "graphics" ? files : [],
+      slides: values.type === "graphics" ? slides : [],
     };
     setDraftLessons((prev) => {
       if (editingDraft) {
@@ -258,8 +258,13 @@ export default function TrainingCourseEditor() {
           videoUrl: draft.type === "video" ? draft.videoUrl : null,
         });
 
-        if (draft.type === "graphics" && draft.files.length > 0) {
-          await uploadAssets.mutateAsync({ lessonId: lesson.id, courseId: created.id, files: draft.files });
+        if (draft.type === "graphics" && draft.slides.length > 0) {
+          await uploadAssets.mutateAsync({
+            lessonId: lesson.id,
+            courseId: created.id,
+            files: draft.slides.map((s) => s.file),
+            captions: draft.slides.map((s) => s.caption.trim() || null),
+          });
         }
       } catch {
         lessonFailed = true;
@@ -596,7 +601,7 @@ export default function TrainingCourseEditor() {
                           title={draft.title}
                           type={draft.type}
                           isRequired={draft.isRequired}
-                          mediaBadge={draft.type === "graphics" ? `${draft.files.length} image(s)` : undefined}
+                          mediaBadge={draft.type === "graphics" ? `${draft.slides.length} image(s)` : undefined}
                           index={i}
                           total={draftLessons.length}
                           onMoveUp={() => moveDraftLesson(i, -1)}
@@ -626,7 +631,7 @@ export default function TrainingCourseEditor() {
           onOpenChange={setDraftDialogOpen}
           dialogTitle={editingDraft ? "Edit lesson" : "Add lesson"}
           initialValues={draftInitialValues}
-          initialFiles={editingDraft?.files}
+          initialSlides={editingDraft?.slides}
           disableTypeChange={!!editingDraft}
           onSubmit={handleDraftDialogSubmit}
         />

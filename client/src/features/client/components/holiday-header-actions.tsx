@@ -17,13 +17,12 @@ import { CircleAction } from "@/features/client/components/circle-action";
 import { useQuote, useBooking, useEnquiry, useUsers, quoteKeys, bookingKeys, enquiryKeys } from "@/hooks/queries";
 import { useUpdateTransaction } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
-import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
-import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
 import type { User } from "@/features/user/types";
 import { transformQuoteData } from "@/features/quote/components/quote-types";
 import { useQuoteGuru, useQuoteImages, useQuotePin, useQuoteShare } from "@/features/quote/components/hooks";
 import { useBookingPin } from "@/features/booking/components/hooks";
+import { useEnquiryPin } from "@/features/enquiry/components/hooks";
 import { QuoteShareDialog } from "@/features/quote/components/QuoteShareDialog";
 import { QuoteGuruSheet } from "@/features/quote/components/QuoteGuruSheet";
 import {
@@ -242,31 +241,14 @@ function BookingHeaderActions({ id, clientId, clientName, onDeleted }: HeaderAct
 function EnquiryHeaderActions({ id, clientId, clientName, onDeleted }: HeaderActionsProps) {
   const queryClient = useQueryClient();
   const { data: enquiry, isLoading } = useEnquiry(id);
-  const { data: userFavorites } = useFavorites();
-  const toggleFavoriteMutation = useToggleFavorite();
-  const { toast } = useToast();
 
   const destinationName = enquiry?.destinations?.[0]?.name ?? null;
-  const isEnquiryPinned = useMemo(
-    () => userFavorites?.some((f: Favorite) => f.itemType === "enquiry" && f.itemId === id) ?? false,
-    [userFavorites, id],
-  );
-
-  function togglePin() {
-    if (!enquiry) return;
-    toggleFavoriteMutation.mutate(
-      {
-        itemType: "enquiry",
-        itemId: id,
-        label: enquiry.title || "Enquiry",
-        subtitle: `${clientName || ""}${destinationName ? " · " + destinationName : ""}`,
-      },
-      {
-        onSuccess: (data: { favorited?: boolean }) =>
-          toast({ title: data?.favorited ? "Pinned to dashboard" : "Unpinned from dashboard" }),
-      },
-    );
-  }
+  // Same hook the quote and booking branches above use, rather than a fourth
+  // hand-rolled copy of the favourites toggle.
+  const { isFavorited: isEnquiryPinned, togglePin } = useEnquiryPin(id, {
+    label: enquiry?.title || "Enquiry",
+    subtitle: `${clientName || ""}${destinationName ? " · " + destinationName : ""}`,
+  });
 
   if (isLoading || !enquiry) return <HeaderActionsSkeleton />;
 

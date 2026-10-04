@@ -643,7 +643,12 @@ export const newQuoteService = {
     if (quoteData.quote_status === 'lost' && q.transaction_id) {
       // NOTE(Phase 3): board visibility will derive from status; is_active toggling is kept for now.
       await newQuoteRepository.update(id, { is_active: false });
-      await transactionRepository.update(q.transaction_id, { is_active: false });
+      // A transaction that has already progressed to a booking was WON — only this
+      // quote lost. Leave the transaction active (same guard as enquiry delete).
+      const txn = await transactionRepository.findById(q.transaction_id);
+      if (txn?.status !== 'on_booking') {
+        await transactionRepository.update(q.transaction_id, { is_active: false });
+      }
     } else if (prevStatus === 'lost' && 'quote_status' in quoteData && quoteData.quote_status !== 'lost' && q.transaction_id) {
       // Quote is moving off lost — reactivate it.
       // Note: date_expiry is display-only; no forced bump needed here.

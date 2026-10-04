@@ -370,10 +370,11 @@ export const dashboardRepository = {
       })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
         .where(and(
           eq(transaction.user_id, userId),
           eq(transaction.is_test, false),
+          eq(transaction.is_active, true),
           bookingActiveCond,
         )),
 
@@ -455,11 +456,17 @@ export const dashboardRepository = {
           })
           .from(booking)
           .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          // leftJoin, not inner: a booking whose transaction has no client is
+          // still real revenue, and an inner join silently dropped it.
+          .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
           .where(
             and(
               eq(transaction.user_id, userId),
               eq(transaction.is_test, false),
+              // A deactivated transaction (e.g. one a lost quote wrongly
+              // deactivated) must not contribute commission — same rule as
+              // getAgentStats / getAgentsPerformance.
+              eq(transaction.is_active, true),
               sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
               gte(booking.date_created, startOfMonth),
               lt(booking.date_created, monthEnd)

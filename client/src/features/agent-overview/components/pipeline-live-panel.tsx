@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { SortBy } from "@/features/opportunities";
 import { currency } from "./helpers";
 import { SegmentedTabs } from "./dashboard-ui";
+import { PinToggleButton } from "@/components/shared/pin-toggle-button";
+import { useDealPin, type PinnableDealType } from "@/hooks/use-deal-pin";
 
 type LiveTab = "enquiry" | "quotes" | "bookings";
 
@@ -153,16 +155,35 @@ function dealValue(t: Transaction): number {
 // entityType/entityId task rows — kept separate here since this operates on a
 // full `Transaction` and picks the primary quote; keep the two in sync if this
 // logic changes.
-function dealHref(t: Transaction, tab: LiveTab): string {
-  if (tab === "enquiry" && t.enquiry) {
-    return t.client_id ? `/clients/${t.client_id}?holiday=enquiry:${t.enquiry.id}` : `/enquiries/${t.enquiry.id}`;
-  }
-  if (tab === "bookings" && t.booking) {
-    return t.client_id ? `/clients/${t.client_id}?holiday=booking:${t.booking.id}` : `/bookings/${t.booking.id}`;
-  }
+// The single entity a card represents for the active tab. Both the card's link
+// and its pin resolve through here so the pin always attaches to exactly what
+// the card opens.
+interface DealTarget {
+  type: PinnableDealType;
+  id: string;
+  title: string | null;
+}
+
+function resolveDealTarget(t: Transaction, tab: LiveTab): DealTarget | null {
+  if (tab === "enquiry" && t.enquiry) return { type: "enquiry", id: t.enquiry.id, title: t.enquiry.title ?? null };
+  if (tab === "bookings" && t.booking) return { type: "booking", id: t.booking.id, title: t.booking.title ?? null };
   const q = t.quotes?.find((x) => !x.isQuoteCopy) || t.quotes?.[0];
-  if (q) return t.client_id ? `/clients/${t.client_id}?holiday=quote:${q.id}` : `/quotes/${q.id}`;
-  return "/pipeline";
+  if (q) return { type: "quote", id: q.id, title: q.title ?? null };
+  return null;
+}
+
+const STANDALONE_DEAL_PATH: Record<PinnableDealType, string> = {
+  enquiry: "/enquiries",
+  booking: "/bookings",
+  quote: "/quotes",
+};
+
+function dealHref(t: Transaction, tab: LiveTab): string {
+  const target = resolveDealTarget(t, tab);
+  if (!target) return "/pipeline";
+  return t.client_id
+    ? `/clients/${t.client_id}?holiday=${target.type}:${target.id}`
+    : `${STANDALONE_DEAL_PATH[target.type]}/${target.id}`;
 }
 
 export function PipelineLivePanel({ userId, className }: { userId: string; className?: string }) {
@@ -242,6 +263,15 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
       .slice(0, 8);
   }, [tab, view, byOldestActivity, showInPlayOnly, enquiryQ.data, quoteQ.data, inPlayQ.data, bookingQ.data]);
 
+  // Pinned cards lead; the existing order holds within the pinned and unpinned blocks.
+  // Applied after the top-8 slice, so it only reorders what is already shown.
+  const { pinnedKeys, togglePin } = useDealPin();
+  const isPinnedDeal = (t: Transaction) => {
+    const target = resolveDealTarget(t, tab);
+    return target !== null && pinnedKeys.has(`${target.type}:${target.id}`);
+  };
+  const orderedItems = [...items.filter(isPinnedDeal), ...items.filter((t) => !isPinnedDeal(t))];
+
   const isLoading =
     tab === "enquiry"
       ? showInPlayOnly ? false : enquiryQ.isLoading
@@ -286,7 +316,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
             No {tab === "enquiry" ? "enquiries" : tab} yet
           </div>
         ) : (
-          items.map((t) => {
+          orderedItems.map((t) => {
             const title =
               t.quotes?.[0]?.title || t.booking?.title || t.enquiry?.title || `#${t.id.slice(0, 8)}`;
             const q0: any = t.quotes?.[0];
@@ -304,6 +334,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
             const clientName = (t as any).client_name || t.client?.name || null;
             const clientPhone = (t as any).client_phone || null;
             const clientLine = [clientName, clientPhone].filter(Boolean).join(" - ");
+            const pinTarget = resolveDealTarget(t, tab);
             return (
               <div
                 key={t.id}
@@ -340,10 +371,28 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
                         {travelLine}
                       </div>
                     )}
-                    {clientLine && (
-                      <div className="mt-1.5 flex items-center gap-1 truncate text-xs text-black/60 dark:text-white/60">
-                        <User className="h-3 w-3 shrink-0 text-amber-500" />
-                        <span className="truncate">{clientLine}</span>
+                    {(clientLine || pinTarget) && (
+                      <div className="mt-1.5 flex items-center gap-1 text-xs text-black/60 dark:text-white/60">
+                        {clientLine ? (
+                          <span className="flex min-w-0 flex-1 items-center gap-1">
+                            <User className="h-3 w-3 shrink-0 text-amber-500" />
+                            <span className="truncate">{clientLine}</span>
+                          </span>
+                        ) : (
+                          <span className="flex-1" />
+                        )}
+                        {pinTarget && (
+                          <PinToggleButton
+                            pinned={pinnedKeys.has(`${pinTarget.type}:${pinTarget.id}`)}
+                            onToggle={() =>
+                              togglePin(pinTarget.type, pinTarget.id, {
+                                label: pinTarget.title || title,
+                                subtitle: [clientName, location].filter(Boolean).join(" · "),
+                              })
+                            }
+                            data-testid={`button-pipeline-live-pin-${t.id}`}
+                          />
+                        )}
                       </div>
                     )}
                   </div>

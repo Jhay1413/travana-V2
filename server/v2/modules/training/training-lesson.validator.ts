@@ -53,6 +53,61 @@ export const assetIdValidator = z.object({
   params: z.object({ id: z.string().uuid('Invalid asset id') }),
 });
 
+export const updateAssetValidator = z.object({
+  params: z.object({ id: z.string().uuid('Invalid asset id') }),
+  body: z.object({
+    caption: z.string().max(2000, 'Description must be 2000 characters or fewer').nullable(),
+  }),
+});
+
+/** Multipart `captions` field: array of nullable strings (each ≤2000 after trim), aligned by index with the uploaded files. */
+export const uploadCaptionsSchema = z.array(
+  z
+    .string()
+    .refine((s) => s.trim().length <= 2000, 'Each description must be 2000 characters or fewer')
+    .nullable(),
+);
+
+function parseCaptionsJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Runs after multer so `body.captions` (a JSON string) is available. */
+export const uploadAssetsValidator = z.object({
+  params: z.object({ id: z.string().uuid('Invalid lesson id') }),
+  body: z.object({
+    captions: z
+      .string()
+      .optional()
+      .superRefine((raw, ctx) => {
+        if (raw === undefined) return;
+        const parsed = parseCaptionsJson(raw);
+        if (parsed === undefined) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'captions is not valid JSON' });
+          return;
+        }
+        const result = uploadCaptionsSchema.safeParse(parsed);
+        if (!result.success) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: result.error.errors[0]?.message ?? 'captions must be an array of strings or null',
+          });
+        }
+      }),
+  }),
+});
+
+/** Validated `captions` multipart field → typed array (call only after `uploadAssetsValidator`). */
+export function parseValidatedCaptions(raw: unknown): (string | null)[] | undefined {
+  if (typeof raw !== 'string') return undefined;
+  return uploadCaptionsSchema.parse(JSON.parse(raw));
+}
+
+export type UpdateAssetBody = z.infer<typeof updateAssetValidator>['body'];
 export type CreateLessonBody = z.infer<typeof createLessonValidator>['body'];
 export type UpdateLessonBody = z.infer<typeof updateLessonValidator>['body'];
 export type ReorderLessonsBody = z.infer<typeof reorderLessonsValidator>['body'];

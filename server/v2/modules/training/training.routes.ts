@@ -22,6 +22,8 @@ import {
   reorderLessonsValidator,
   addAssetsValidator,
   assetIdValidator,
+  updateAssetValidator,
+  uploadAssetsValidator,
 } from './training-lesson.validator';
 import { presignUploadValidator } from './training-upload.validator';
 import { enrollValidator, myStatusValidator, progressUpdateValidator } from './training-progress.validator';
@@ -169,6 +171,7 @@ router.post(
   '/lessons/:id/assets/upload',
   requireOrgRole(['platform_admin']),
   uploadAsset.array('files', 20),
+  validate(uploadAssetsValidator),
   trainingLessonController.uploadAssets,
 );
 router.post(
@@ -176,6 +179,12 @@ router.post(
   requireOrgRole(['platform_admin']),
   validate(addAssetsValidator),
   trainingLessonController.addAssets,
+);
+router.patch(
+  '/assets/:id',
+  requireOrgRole(['platform_admin']),
+  validate(updateAssetValidator),
+  trainingLessonController.updateAsset,
 );
 router.delete(
   '/assets/:id',
