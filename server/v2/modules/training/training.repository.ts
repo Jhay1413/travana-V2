@@ -1,7 +1,7 @@
 import { db } from '../../config/database';
 import { training_course } from '@shared/schema';
 import type { TrainingCourse, InsertTrainingCourse } from '@shared/schema';
-import { and, desc, eq, isNull, or, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
 import type { Scope } from '../../utils/scope';
 
 export type ScopeOrTrusted = Scope | { orgId: null };
@@ -59,11 +59,30 @@ export const trainingRepository = {
     await db.delete(training_course).where(eq(training_course.id, id));
   },
 
-  /** platform_admin (the only role that reaches this) sees every course regardless of status. */
+  /** Platform admin / trusted caller: every course regardless of status. */
   async listCoursesForAdmin(scope: ScopeOrTrusted): Promise<TrainingCourse[]> {
     const conds = buildTrainingVisibilityConds(scope);
     const query = db.select().from(training_course).orderBy(desc(training_course.created_at));
     return conds.length > 0 ? query.where(and(...conds)) : query;
+  },
+
+  /** How many courses use this exact stored URL as their thumbnail. */
+  async countCoursesByThumbnailUrl(url: string): Promise<number> {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(training_course)
+      .where(eq(training_course.thumbnail_url, url));
+    return row?.n ?? 0;
+  },
+
+  /** org_admin authoring list: only courses owned by `orgId` (no global courses), any status. */
+  async listCoursesForOrg(orgId: string): Promise<TrainingCourse[]> {
+    if (!orgId) return []; // '' against the uuid column would throw 22P02
+    return db
+      .select()
+      .from(training_course)
+      .where(eq(training_course.org_id, orgId))
+      .orderBy(desc(training_course.created_at));
   },
 
   /** Learner-facing: published courses only, visibility-scoped. */

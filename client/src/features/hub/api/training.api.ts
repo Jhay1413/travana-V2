@@ -79,7 +79,7 @@ export const trainingApi = {
     return data;
   },
 
-  /** Role-aware: `platform_admin` gets `isCorrect` on choices, learners never do. */
+  /** Role-aware: an author of the course gets `isCorrect` on choices, learners never do. */
   async getQuiz(courseId: string): Promise<QuizView> {
     const { data } = await axios.get<QuizView>(`${BASE}/${courseId}/quiz`);
     return data;
@@ -115,7 +115,7 @@ export const trainingApi = {
     return data;
   },
 
-  // === Admin (authoring, platform_admin only) ===
+  // === Admin (authoring; platform_admin or org_admin) ===
 
   /** Full replace-upsert of a course's quiz. */
   async upsertQuiz(courseId: string, input: UpsertQuizInput): Promise<QuizView> {
@@ -161,7 +161,7 @@ export const trainingApi = {
     return data;
   },
 
-  /** Permanently delete a course (platform_admin). Cascades to lessons, quiz, enrollments, certificates. */
+  /** Permanently delete a course (author only). Cascades to lessons, quiz, enrollments, certificates. */
   async deleteCourse(id: string): Promise<void> {
     await axios.delete(`${BASE}/${id}`);
   },

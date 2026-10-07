@@ -50,6 +50,7 @@ const AdminImportPage = lazy(() => import("@/pages/admin-import"));
 const AdminLookupPage = lazy(() => import("@/pages/admin-lookup"));
 const SettingsLookupPage = lazy(() => import("@/pages/settings-lookup"));
 const ToolsPage = lazy(() => import("@/pages/tools"));
+const ImageUpscalePage = lazy(() => import("@/pages/image-upscale"));
 const BookingPage = lazy(() => import("@/pages/booking-standalone"));
 const BookingsPage = lazy(() => import("@/pages/bookings"));
 const TasksPage = lazy(() => import("@/pages/tasks"));
@@ -166,6 +167,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/agency" allow={ADMIN_ROLES} component={AgencyPage} />
         <RoleRoute path="/admin/import" allow={ADMIN_ROLES} component={AdminImportPage} />
         <RoleRoute path="/admin/lookup/:tableSlug" allow={ADMIN_ROLES} component={AdminLookupPage} />
+        <RoleRoute path="/tools/upscale" allow={CLIENT_VIEW_ROLES} component={ImageUpscalePage} />
         <RoleRoute path="/tools" allow={STAFF_ROLES} component={ToolsPage} />
         <RoleRoute path="/settings/bot" allow={ADMIN_ROLES} component={BotSettingsPage} />
         <RoleRoute path="/settings/knowledge-base" allow={ADMIN_ROLES} component={KnowledgeBasePage} />

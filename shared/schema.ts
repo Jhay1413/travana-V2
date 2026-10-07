@@ -2948,3 +2948,50 @@ export const userOrgRoles = pgTable("user_org_roles", {
 
 export type UserOrgRole       = typeof userOrgRoles.$inferSelect;
 export type InsertUserOrgRole = typeof userOrgRoles.$inferInsert;
+
+// ─── Image upscale jobs (server-side, survive the user navigating away) ───────
+
+export const image_upscale_status_enum = pgEnum("image_upscale_status_enum", ["queued", "processing", "done", "failed"]);
+export const image_upscale_source_kind_enum = pgEnum("image_upscale_source_kind_enum", ["quote_image", "upload"]);
+
+export const imageUpscaleJob = pgTable("image_upscale_job", {
+  id:               uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId:            uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  createdBy:        text("created_by").references(() => user.id, { onDelete: "set null" }),
+  quoteId:          uuid("quote_id").references(() => quote.id, { onDelete: "set null" }),
+  sourceKind:       image_upscale_source_kind_enum("source_kind").notNull(),
+  // Quote image url (for quote_image) or the stored source-upload url (for upload).
+  // Kept so Revert works any time, even after the quote's url became the result.
+  originalUrl:      text("original_url").notNull(),
+  resultUrl:        text("result_url"),
+  status:           image_upscale_status_enum("status").notNull().default("queued"),
+  error:            text("error"),
+  scale:            integer("scale"),
+  sourceWidth:      integer("source_width"),
+  sourceHeight:     integer("source_height"),
+  resultWidth:      integer("result_width"),
+  resultHeight:     integer("result_height"),
+  replacedOnQuote:  boolean("replaced_on_quote").notNull().default(false),
+  revertedAt:       timestamp("reverted_at"),
+  createdAt:        timestamp("created_at").notNull().defaultNow(),
+  startedAt:        timestamp("started_at"),
+  finishedAt:       timestamp("finished_at"),
+}, (table) => ({
+  idx_quote:       index("idx_image_upscale_job_quote").on(table.quoteId),
+  idx_org_created: index("idx_image_upscale_job_org_created").on(table.orgId, table.createdAt),
+  // At most one in-flight job per quote image (backs the duplicate check; survives races).
+  uniq_active_quote_image: uniqueIndex("uniq_image_upscale_job_active_quote_image")
+    .on(table.quoteId, table.originalUrl)
+    .where(sql`${table.status} in ('queued', 'processing')`),
+  // Boot recovery, the sweep and the per-org cap only ever look at in-flight rows.
+  idx_active: index("idx_image_upscale_job_active")
+    .on(table.status)
+    .where(sql`${table.status} in ('queued', 'processing')`),
+}));
+
+export const insertImageUpscaleJobSchema = createInsertSchema(imageUpscaleJob).omit({
+  id: true,
+  createdAt: true,
+});
+export type ImageUpscaleJob = typeof imageUpscaleJob.$inferSelect;
+export type InsertImageUpscaleJob = typeof imageUpscaleJob.$inferInsert;

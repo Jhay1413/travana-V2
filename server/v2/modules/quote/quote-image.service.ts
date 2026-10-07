@@ -88,6 +88,11 @@ export const quoteImageService = {
     }
   },
 
+  /** Swap an image URL on the quote; resolves to the number of rows changed. */
+  async replaceImageUrl(quoteId: string, fromUrl: string, toUrl: string): Promise<number> {
+    return quoteImageRepository.replaceImageUrl(quoteId, fromUrl, toUrl);
+  },
+
   async setPrimaryImage(quoteId: string, imageId: string) {
     const image = await quoteImageRepository.setPrimaryImage(quoteId, imageId);
 

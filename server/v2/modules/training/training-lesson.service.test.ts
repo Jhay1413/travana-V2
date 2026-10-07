@@ -16,7 +16,10 @@ vi.mock('./training-section.service', () => ({ getSectionOrThrow: vi.fn() }));
 vi.mock('../../utils/image-storage', () => ({
   uploadImageToS3: vi.fn(),
   deleteImageByStoredUrl: vi.fn(),
+  buildImageProxyUrl: vi.fn(),
+  s3KeyFromStoredUrl: vi.fn(() => null),
 }));
+vi.mock('./training-storage.service', () => ({ deleteTrainingObjectIfUnreferenced: vi.fn() }));
 
 import { trainingLessonRepository } from './training-lesson.repository';
 import { trainingService } from './training.service';

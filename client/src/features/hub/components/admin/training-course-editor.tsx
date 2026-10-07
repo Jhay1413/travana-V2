@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { HubSectionHeader, HubBadge, HubEmptyState } from "@/features/hub/components/hub-components";
 import { useCourseContent } from "@/features/hub/api/use-training-queries";
 import { useAdminOrgSearch, useAdminOrg } from "@/hooks/queries";
+import { useRoles } from "@/hooks/use-role";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   useCreateCourse,
@@ -32,7 +33,10 @@ import { TrainingThumbnailUpload } from "./training-thumbnail-upload";
 import { COURSE_CATEGORIES, type CourseVisibility } from "@/features/hub/types/training.types";
 import type { DraftLesson, StagedSlide } from "@/features/hub/types/training-admin.types";
 
-const courseFormSchema = z
+// `requireOrgPick` is true only for platform admins, who choose the tenant.
+// Org admins' courses are always their own org's — the server fills the org id.
+const buildCourseFormSchema = (requireOrgPick: boolean) =>
+  z
   .object({
     title: z.string().min(1, "Title is required"),
     category: z.string().min(1, "Category is required"),
@@ -46,7 +50,7 @@ const courseFormSchema = z
     requireContentBeforeQuiz: z.boolean(),
   })
   .superRefine((val, ctx) => {
-    if (val.visibility === "org" && !val.orgId) {
+    if (requireOrgPick && val.visibility === "org" && !val.orgId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["orgId"],
@@ -55,7 +59,7 @@ const courseFormSchema = z
     }
   });
 
-type CourseFormValues = z.infer<typeof courseFormSchema>;
+type CourseFormValues = z.infer<ReturnType<typeof buildCourseFormSchema>>;
 
 const EMPTY_COURSE: CourseFormValues = {
   title: "",
@@ -103,9 +107,15 @@ export default function TrainingCourseEditor() {
   const createLesson = useCreateLesson();
   const uploadAssets = useUploadAssets();
 
+  // Platform admins pick global/org + the tenant; org admins (Owners) can only
+  // author for their own organisation, so the pickers are hidden for them.
+  const { hasRole } = useRoles();
+  const isPlatformAdmin = hasRole("platform_admin");
+  const courseFormSchema = useMemo(() => buildCourseFormSchema(isPlatformAdmin), [isPlatformAdmin]);
+
   const form = useForm<CourseFormValues>({
     resolver: zodResolver(courseFormSchema),
-    defaultValues: EMPTY_COURSE,
+    defaultValues: isPlatformAdmin ? EMPTY_COURSE : { ...EMPTY_COURSE, visibility: "org" },
   });
 
   // Draft lessons, create-mode only — persisted to the server on course submit.
@@ -122,11 +132,11 @@ export default function TrainingCourseEditor() {
     const t = setTimeout(() => setDebouncedOrgSearch(orgSearch), 250);
     return () => clearTimeout(t);
   }, [orgSearch]);
-  const { data: orgResults = [], isFetching: orgsSearching } = useAdminOrgSearch(debouncedOrgSearch);
+  const { data: orgResults = [], isFetching: orgsSearching } = useAdminOrgSearch(debouncedOrgSearch, isPlatformAdmin);
   const selectedOrgId = form.watch("orgId");
   // Resolve the chosen org's name directly by id so it displays even when it
   // isn't in the current (filtered) search results — e.g. editing an existing course.
-  const { data: selectedOrg } = useAdminOrg(selectedOrgId || undefined);
+  const { data: selectedOrg } = useAdminOrg(selectedOrgId || undefined, isPlatformAdmin);
 
   useEffect(() => {
     if (course) {
@@ -210,10 +220,12 @@ export default function TrainingCourseEditor() {
       category: values.category,
       description: values.description || undefined,
       thumbnailUrl: values.thumbnailUrl || undefined,
-      visibility: values.visibility as CourseVisibility,
+      // Org admins always create/keep org-scoped courses; the server pins their
+      // own org id, so we omit it.
+      visibility: (isPlatformAdmin ? values.visibility : "org") as CourseVisibility,
       // Only org-scoped courses carry an orgId; global courses clear it so the
       // server stores org_id = NULL.
-      orgId: values.visibility === "org" ? values.orgId : null,
+      orgId: isPlatformAdmin ? (values.visibility === "org" ? values.orgId : null) : undefined,
       passingScore: values.passingScore,
       requireContentBeforeQuiz: values.requireContentBeforeQuiz,
     };
@@ -310,6 +322,17 @@ export default function TrainingCourseEditor() {
         data-testid="training-course-editor-loading"
       >
         <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  // Org admins can read a published global course (as a learner) but cannot
+  // author it — the server 404s every mutation. Show the same forbidden state
+  // as the page guard instead of a broken editor.
+  if (!isNew && !isPlatformAdmin && course?.visibility === "global") {
+    return (
+      <div className="py-16 text-center" data-testid="training-course-editor-forbidden">
+        <p className="text-sm text-slate-500">Global courses can only be managed by platform administrators.</p>
       </div>
     );
   }
@@ -456,34 +479,43 @@ export default function TrainingCourseEditor() {
               />
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="visibility"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Visibility</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={(v) => {
-                          field.onChange(v as CourseVisibility);
-                          // Global courses have no org — clear any stale selection.
-                          if (v === "global") form.setValue("orgId", "");
-                        }}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-course-visibility">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="global">Global (all tenants)</SelectItem>
-                          <SelectItem value="org">Specific organization</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {isPlatformAdmin ? (
+                  <FormField
+                    control={form.control}
+                    name="visibility"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Visibility</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => {
+                            field.onChange(v as CourseVisibility);
+                            // Global courses have no org — clear any stale selection.
+                            if (v === "global") form.setValue("orgId", "");
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-course-visibility">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="global">Global (all tenants)</SelectItem>
+                            <SelectItem value="org">Specific organization</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : (
+                  <div className="space-y-1" data-testid="text-course-visibility-note">
+                    <FormLabel>Visibility</FormLabel>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      This course will be visible to your organisation only.
+                    </p>
+                  </div>
+                )}
 
                 <FormField
                   control={form.control}
@@ -506,7 +538,7 @@ export default function TrainingCourseEditor() {
                 />
               </div>
 
-              {form.watch("visibility") === "org" && (
+              {isPlatformAdmin && form.watch("visibility") === "org" && (
                 <FormField
                   control={form.control}
                   name="orgId"

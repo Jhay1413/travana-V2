@@ -15,22 +15,22 @@
 
 <!-- AUTO:START -->
 <!-- Run `npm run docs:arch` to regenerate this block from the live codebase. -->
-**Last refreshed:** 2026-10-02 (auto-generated — do not edit by hand)
+**Last refreshed:** 2026-10-07 (auto-generated — do not edit by hand)
 
 | Fact | Value |
 |------|-------|
-| Backend modules (`server/v2/modules/`) | **69** |
-| Tables defined (`pgTable`) in schema.ts | 161 |
-| Enums (`pgEnum`) in schema.ts | 28 |
-| `orgId`/`org_id` references in schema.ts | 91 |
-| Migrations (`migrations/*.sql`) | 57 (latest: `0055_flawless_star_brand.sql`) |
-| Client pages (`client/src/pages`) | ~48 |
+| Backend modules (`server/v2/modules/`) | **70** |
+| Tables defined (`pgTable`) in schema.ts | 162 |
+| Enums (`pgEnum`) in schema.ts | 30 |
+| `orgId`/`org_id` references in schema.ts | 94 |
+| Migrations (`migrations/*.sql`) | 58 (latest: `0056_ordinary_gorgon.sql`) |
+| Client pages (`client/src/pages`) | ~49 |
 | Automated test runner | ✅ present |
 | Legacy v1 backend (`server/`) present | ⚠️ yes (alongside v2) |
 
 **Key versions:** React 19.2.0 · TypeScript 5.6.3 · Vite 7.1.9 · Express 5.0.1 · Drizzle ORM 0.39.3 · Zod 3.25.76 · React Query 5.60.5
 
-**Backend modules:** admin-import, ai-ask, ai-conversation, ai-embeddings, ai-enquiry, airport, announcement, audit, booking, bot-config, branch, branch-member, branch-overview, channels, chat, client, comments, contact-link, conversation-integration, conversations, dashboard, destination-guru, easyjet, email, enquiry, facebook, favorite, feedback, files, hr, hub-post, inboxes, internal-chat, invite, json-mapper, knowledge-base, messages, neon-client, note, notification, onboarding, opportunities, organization, organization-overview, plan, platform-admin, portal, quote, quote-share, referral, reports, revenue, scraper, search, sendseven-webhook, sms, social-post, tag, targets, task, ticket, tour-operator, training, transaction, usage, user, user-org-roles, wallet, website-public
+**Backend modules:** admin-import, ai-ask, ai-conversation, ai-embeddings, ai-enquiry, airport, announcement, audit, booking, bot-config, branch, branch-member, branch-overview, channels, chat, client, comments, contact-link, conversation-integration, conversations, dashboard, destination-guru, easyjet, email, enquiry, facebook, favorite, feedback, files, hr, hub-post, image-upscale, inboxes, internal-chat, invite, json-mapper, knowledge-base, messages, neon-client, note, notification, onboarding, opportunities, organization, organization-overview, plan, platform-admin, portal, quote, quote-share, referral, reports, revenue, scraper, search, sendseven-webhook, sms, social-post, tag, targets, task, ticket, tour-operator, training, transaction, usage, user, user-org-roles, wallet, website-public
 <!-- AUTO:END -->
 
 ---

@@ -10,6 +10,7 @@ export type AiUsageFeature =
   | "ai_ask"
   | "destination_guru"
   | "social_post"
+  | "image_upscale"
   | "embedding"
   | "staff_chat_test";
 

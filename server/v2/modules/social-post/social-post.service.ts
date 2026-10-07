@@ -99,7 +99,7 @@ type MediaTask =
  * those for a short-lived presigned S3 URL first. Any other URL (external
  * OnlySocials CDN, legacy absolute URLs, etc.) is passed through unchanged.
  */
-async function resolveUploadableUrl(url: string): Promise<string> {
+export async function resolveUploadableUrl(url: string): Promise<string> {
   const key = s3KeyFromStoredUrl(url);
   if (!key) return boundScene7ImageUrl(url);
   return presignImageKey(key);

@@ -137,8 +137,8 @@ export const trainingProgressService = {
     if (!scope.userId) throw new AppError('User not found in scope', 401);
 
     // Learner-facing visibility check: must be published and in-scope,
-    // 404-as-permission otherwise (mirrors `trainingService.getCourse`).
-    await trainingService.getCourse(courseId, scope);
+    // 404-as-permission otherwise (mirrors `trainingService.getCourseForLearner`).
+    await trainingService.getCourseForLearner(courseId, scope);
 
     return trainingProgressRepository.findOrCreateEnrollment({
       course_id: courseId,
@@ -160,6 +160,9 @@ export const trainingProgressService = {
 
     const lesson = await trainingLessonRepository.findLessonById(lessonId);
     if (!lesson) throw new AppError('Lesson not found', 404);
+
+    // Learner rule (in-scope + published) BEFORE any enrollment is created.
+    await trainingService.getCourseForLearner(lesson.course_id, scope);
 
     const { enrollment } = await trainingProgressRepository.findOrCreateEnrollment({
       course_id: lesson.course_id,
@@ -214,7 +217,7 @@ export const trainingProgressService = {
   async getMyStatus(courseId: string, scope: Scope): Promise<MyCourseStatus> {
     if (!scope.userId) throw new AppError('User not found in scope', 401);
 
-    await trainingService.getCourse(courseId, scope);
+    await trainingService.getCourseForLearner(courseId, scope);
 
     const quizData = await trainingQuizRepository.findQuizWithQuestions(courseId);
     const hasQuiz = quizData !== undefined && quizData.questions.length > 0;
