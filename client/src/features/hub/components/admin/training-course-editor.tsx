@@ -510,7 +510,8 @@ export default function TrainingCourseEditor() {
                   />
                 ) : (
                   <div className="space-y-1" data-testid="text-course-visibility-note">
-                    <FormLabel>Visibility</FormLabel>
+                    {/* Plain label: FormLabel requires a FormField context, and there is no field here. */}
+                    <p className="text-sm font-medium leading-none">Visibility</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       This course will be visible to your organisation only.
                     </p>
