@@ -100,6 +100,24 @@ export const trainingLessonRepository = {
     await db.delete(training_lesson_asset).where(eq(training_lesson_asset.id, id));
   },
 
+  /** How many asset rows reference this exact stored URL. */
+  async countAssetsByUrl(url: string): Promise<number> {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(training_lesson_asset)
+      .where(eq(training_lesson_asset.asset_url, url));
+    return row?.n ?? 0;
+  },
+
+  /** How many lessons use this exact stored URL as their video. */
+  async countLessonsByVideoUrl(url: string): Promise<number> {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(training_lesson)
+      .where(eq(training_lesson.video_url, url));
+    return row?.n ?? 0;
+  },
+
   /** Ordered assets for a single lesson. */
   async listAssetsByLessonId(lessonId: string): Promise<TrainingLessonAsset[]> {
     return db

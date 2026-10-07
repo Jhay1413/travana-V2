@@ -66,7 +66,7 @@ export function useMyCourseStatus(courseId: string) {
 }
 
 /**
- * A course's quiz + questions. Role-aware: `platform_admin` gets `isCorrect`
+ * A course's quiz + questions. Role-aware: an author of the course gets `isCorrect`
  * on every choice (the authoring builder), any other staff (learner) never
  * does — grading/feedback for them comes only from the attempt `results`.
  * `quiz: null` means the course has no quiz yet.

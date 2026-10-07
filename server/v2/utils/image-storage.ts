@@ -113,3 +113,23 @@ export async function deleteImageByStoredUrl(storedUrl: string | null | undefine
   if (!key) return;
   await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
 }
+
+/** Upload an in-memory buffer (e.g. a server-generated image) under `keyPrefix/` and return the stable proxy URL. */
+export async function uploadBufferToS3(
+  buffer: Buffer,
+  contentType: string,
+  keyPrefix: string,
+): Promise<string> {
+  const key = buildImageKey(keyPrefix, "", contentType);
+
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }),
+  );
+
+  return buildImageProxyUrl(key);
+}

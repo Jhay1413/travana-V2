@@ -6,6 +6,7 @@ import { trainingLessonController } from './training-lesson.controller';
 import { trainingUploadController } from './training-upload.controller';
 import { trainingProgressController } from './training-progress.controller';
 import { trainingQuizController } from './training-quiz.controller';
+import type { OrgRole } from '../../utils/scope';
 import { validate } from '../../middlewares/validation.middleware';
 import { requireOrgRole } from '../../middlewares/auth/require-org-role';
 import { createCourseValidator, updateCourseValidator, courseIdValidator } from './training.validator';
@@ -41,6 +42,14 @@ import {
 
 const router = Router();
 
+// Roles admitted to authoring routes. Coarse gate only; ownership is enforced
+// in training.service.ts (canAuthorCourse / getCourseForAuthoring).
+// NOTE: requireOrgRole checks the PRIMARY role (req.orgRole). This is safe for
+// org_admin because ROLE_RANK (user-org-roles.service.ts) ranks org_admin above
+// every other role, so a multi-role user holding org_admin always has it as
+// primary. If that ranking ever changes, revisit this guard.
+const authorRoles: OrgRole[] = ['platform_admin', 'org_admin'];
+
 // Same multer setup as booking.routes.ts (memoryStorage, image allowlist,
 // 5MB cap) — reused verbatim for graphics/slide uploads.
 const ALLOWED_ASSET_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -64,7 +73,7 @@ const uploadAsset = multer({
 
 // Learner (all authenticated staff)
 router.get('/courses', trainingController.listCourses);
-router.get('/courses/admin', requireOrgRole(['platform_admin']), trainingController.listCoursesAdmin);
+router.get('/courses/admin', requireOrgRole(authorRoles), trainingController.listCoursesAdmin);
 router.get('/courses/:id', validate(courseIdValidator), trainingController.getCourseById);
 
 // The current user's enrollments (course id + status) for the "My Courses"
@@ -94,38 +103,39 @@ router.post('/lessons/:id/quiz/attempts', validate(submitLessonQuizAttemptValida
 router.get('/sections/:id/quiz', validate(quizSectionIdValidator), trainingQuizController.getSectionQuiz);
 router.post('/sections/:id/quiz/attempts', validate(submitSectionQuizAttemptValidator), trainingQuizController.submitSectionAttempt);
 
-// Authoring (platform_admin only)
-router.post('/courses', requireOrgRole(['platform_admin']), validate(createCourseValidator), trainingController.createCourse);
-router.patch('/courses/:id', requireOrgRole(['platform_admin']), validate(updateCourseValidator), trainingController.updateCourse);
-router.post('/courses/:id/publish', requireOrgRole(['platform_admin']), validate(courseIdValidator), trainingController.publishCourse);
-router.post('/courses/:id/archive', requireOrgRole(['platform_admin']), validate(courseIdValidator), trainingController.archiveCourse);
-router.delete('/courses/:id', requireOrgRole(['platform_admin']), validate(courseIdValidator), trainingController.deleteCourse);
-router.put('/courses/:id/quiz', requireOrgRole(['platform_admin']), validate(upsertQuizValidator), trainingQuizController.upsertQuiz);
-router.put('/lessons/:id/quiz', requireOrgRole(['platform_admin']), validate(upsertLessonQuizValidator), trainingQuizController.upsertLessonQuiz);
-router.put('/sections/:id/quiz', requireOrgRole(['platform_admin']), validate(upsertSectionQuizValidator), trainingQuizController.upsertSectionQuiz);
+// Authoring (platform_admin: any course; org_admin: own-org courses only -
+// per-course ownership is enforced in the service layer via canAuthorCourse)
+router.post('/courses', requireOrgRole(authorRoles), validate(createCourseValidator), trainingController.createCourse);
+router.patch('/courses/:id', requireOrgRole(authorRoles), validate(updateCourseValidator), trainingController.updateCourse);
+router.post('/courses/:id/publish', requireOrgRole(authorRoles), validate(courseIdValidator), trainingController.publishCourse);
+router.post('/courses/:id/archive', requireOrgRole(authorRoles), validate(courseIdValidator), trainingController.archiveCourse);
+router.delete('/courses/:id', requireOrgRole(authorRoles), validate(courseIdValidator), trainingController.deleteCourse);
+router.put('/courses/:id/quiz', requireOrgRole(authorRoles), validate(upsertQuizValidator), trainingQuizController.upsertQuiz);
+router.put('/lessons/:id/quiz', requireOrgRole(authorRoles), validate(upsertLessonQuizValidator), trainingQuizController.upsertLessonQuiz);
+router.put('/sections/:id/quiz', requireOrgRole(authorRoles), validate(upsertSectionQuizValidator), trainingQuizController.upsertSectionQuiz);
 
 // Sections (course → sections → lessons)
 router.post(
   '/courses/:id/sections',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(createSectionValidator),
   trainingSectionController.createSection,
 );
 router.patch(
   '/courses/:id/sections/reorder',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(reorderSectionsValidator),
   trainingSectionController.reorderSections,
 );
 router.patch(
   '/sections/:id',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(updateSectionValidator),
   trainingSectionController.updateSection,
 );
 router.delete(
   '/sections/:id',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(sectionIdValidator),
   trainingSectionController.deleteSection,
 );
@@ -134,7 +144,7 @@ router.delete(
 // training-upload.service.ts).
 router.post(
   '/uploads/presign',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(presignUploadValidator),
   trainingUploadController.presign,
 );
@@ -142,25 +152,25 @@ router.post(
 // Lessons — created and reordered within their SECTION.
 router.post(
   '/sections/:id/lessons',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(createLessonValidator),
   trainingLessonController.createLesson,
 );
 router.patch(
   '/sections/:id/lessons/reorder',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(reorderLessonsValidator),
   trainingLessonController.reorderLessons,
 );
 router.patch(
   '/lessons/:id',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(updateLessonValidator),
   trainingLessonController.updateLesson,
 );
 router.delete(
   '/lessons/:id',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(lessonIdValidator),
   trainingLessonController.deleteLesson,
 );
@@ -169,26 +179,26 @@ router.delete(
 // and a URL-list variant that complements it.
 router.post(
   '/lessons/:id/assets/upload',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   uploadAsset.array('files', 20),
   validate(uploadAssetsValidator),
   trainingLessonController.uploadAssets,
 );
 router.post(
   '/lessons/:id/assets',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(addAssetsValidator),
   trainingLessonController.addAssets,
 );
 router.patch(
   '/assets/:id',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(updateAssetValidator),
   trainingLessonController.updateAsset,
 );
 router.delete(
   '/assets/:id',
-  requireOrgRole(['platform_admin']),
+  requireOrgRole(authorRoles),
   validate(assetIdValidator),
   trainingLessonController.deleteAsset,
 );

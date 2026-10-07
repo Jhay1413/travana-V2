@@ -393,6 +393,13 @@
       "when": 1790698339000,
       "tag": "0055_flawless_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1791344208878,
+      "tag": "0056_ordinary_gorgon",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,9 @@ import { getSectionOrThrow } from './training-section.service';
 import type { ScopeOrTrusted } from './training.repository';
 import type { UpdateAssetBody } from './training-lesson.validator';
 import { AppError } from '../../utils/error-handler';
-import { uploadImageToS3, deleteImageByStoredUrl } from '../../utils/image-storage';
+import { uploadImageToS3 } from '../../utils/image-storage';
+import { normalizeTrainingUrl, TRAINING_ASSET_PREFIX, TRAINING_VIDEO_PREFIX } from './training-storage.util';
+import { deleteTrainingObjectIfUnreferenced } from './training-storage.service';
 import type {
   TrainingLesson,
   InsertTrainingLesson,
@@ -39,6 +41,11 @@ export const trainingLessonService = {
       throw new AppError('videoUrl is required for video lessons', 400);
     }
 
+    const videoUrl =
+      input.type === 'video' && input.videoUrl
+        ? normalizeTrainingUrl(input.videoUrl, TRAINING_VIDEO_PREFIX, 'videoUrl')
+        : null;
+
     const position = input.position ?? (await trainingLessonRepository.getNextLessonPosition(sectionId));
 
     const data: InsertTrainingLesson = {
@@ -49,7 +56,7 @@ export const trainingLessonService = {
       type: input.type,
       position,
       is_required: input.isRequired ?? true,
-      video_url: input.type === 'video' ? input.videoUrl ?? null : null,
+      video_url: videoUrl,
       video_duration_sec: input.type === 'video' ? input.videoDurationSec ?? null : null,
     };
 
@@ -83,7 +90,9 @@ export const trainingLessonService = {
     if (input.position !== undefined) patch.position = input.position;
     if (input.isRequired !== undefined) patch.is_required = input.isRequired;
     if (input.type !== undefined) patch.type = input.type;
-    if (input.videoUrl !== undefined) patch.video_url = input.videoUrl ?? null;
+    if (input.videoUrl !== undefined) {
+      patch.video_url = input.videoUrl ? normalizeTrainingUrl(input.videoUrl, TRAINING_VIDEO_PREFIX, 'videoUrl') : null;
+    }
     if (input.videoDurationSec !== undefined) patch.video_duration_sec = input.videoDurationSec ?? null;
 
     const updated = await trainingLessonRepository.updateLesson(lessonId, patch);
@@ -117,15 +126,18 @@ export const trainingLessonService = {
   /** Add asset rows from already-known URLs (complements the direct multer upload below). */
   async addAssetUrls(lessonId: string, assets: CreateAssetInput[], scope: ScopeOrTrusted): Promise<TrainingLessonAsset[]> {
     const lesson = await getLessonOrThrow(lessonId);
+    await trainingService.assertCourseEditable(lesson.course_id, scope);
     if (lesson.type !== 'graphics') {
       throw new AppError('Assets can only be added to graphics lessons', 400);
     }
-    await trainingService.assertCourseEditable(lesson.course_id, scope);
+
+    // Reject URLs pointing at someone else's S3 object (and canonicalise ours).
+    const urls = assets.map((asset) => normalizeTrainingUrl(asset.assetUrl, TRAINING_ASSET_PREFIX, 'assetUrl'));
 
     const startPosition = await trainingLessonRepository.getNextAssetPosition(lessonId);
     const rows: InsertTrainingLessonAsset[] = assets.map((asset, index) => ({
       lesson_id: lessonId,
-      asset_url: asset.assetUrl,
+      asset_url: urls[index],
       caption: asset.caption ?? null,
       position: asset.position ?? startPosition + index,
     }));
@@ -144,13 +156,13 @@ export const trainingLessonService = {
     captions: (string | null)[] = [],
   ): Promise<TrainingLessonAsset[]> {
     const lesson = await getLessonOrThrow(lessonId);
+    await trainingService.assertCourseEditable(lesson.course_id, scope);
     if (lesson.type !== 'graphics') {
       throw new AppError('Assets can only be uploaded to graphics lessons', 400);
     }
     if (!files || files.length === 0) {
       throw new AppError('No files provided', 400);
     }
-    await trainingService.assertCourseEditable(lesson.course_id, scope);
     if (captions.length > files.length) {
       throw new AppError('captions has more entries than files', 400);
     }
@@ -187,6 +199,7 @@ export const trainingLessonService = {
     await trainingService.assertCourseEditable(lesson.course_id, scope);
 
     await trainingLessonRepository.deleteAsset(assetId);
-    await deleteImageByStoredUrl(asset.asset_url).catch(() => {});
+    // Only removes the S3 object when it is a training asset no other row still references.
+    await deleteTrainingObjectIfUnreferenced(asset.asset_url, [TRAINING_ASSET_PREFIX]).catch(() => {});
   },
 };

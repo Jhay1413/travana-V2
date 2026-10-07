@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { conversationsKeys } from "./use-conversations-queries";
 import { messagesKeys } from "./use-messages";
 import { commentsKeys } from "./use-comments";
+import { emitRealtime, REALTIME_STREAM_OPEN } from "@/lib/realtime-bus";
 
 // Server: server/v2/realtime/realtime.routes.ts (not touched here — see
 // docs/realtime-inbox-sse-plan.md). Module-local base constant, mirroring the
@@ -163,6 +164,7 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
       source.onopen = () => {
         setConnected(true);
         resync();
+        emitRealtime(REALTIME_STREAM_OPEN);
       };
       // EventSource auto-reconnects natively on error — just reflect the
       // disconnected state so the fallback poll kicks in; no manual retry.
@@ -209,6 +211,15 @@ export function useConversationsRealtime(options: ConversationsRealtimeOptions =
       const invalidateComments = () => {
         qc.invalidateQueries({ queryKey: commentsKeys.all });
       };
+      // Image upscale jobs belong to another feature: forward the parsed payload
+      // over the shared bus (see lib/realtime-bus.ts) rather than knowing its cache.
+      source.addEventListener("upscale.job.updated", (raw: MessageEvent) => {
+        try {
+          emitRealtime("upscale.job.updated", JSON.parse(raw.data));
+        } catch {
+          // Malformed payload — the polling fallback / next resync recovers.
+        }
+      });
       source.addEventListener("comment.received", invalidateComments);
       source.addEventListener("comment.updated", invalidateComments);
     };

@@ -9,6 +9,7 @@ import quotePublicRoutes from "./routes/quote-public.routes";
 import websitePublicRoutes from "./routes/website-public.routes";
 import portalRoutes, { portalStaffRouter } from "./routes/portal.routes";
 import { warmPool } from "./v2/config/database";
+import { startImageUpscaleWorker } from "./v2/modules/image-upscale/image-upscale.worker";
 
 const app = express();
 const httpServer = createServer(app);
@@ -126,6 +127,9 @@ app.use((req, res, next) => {
       // Open the first DB connections one at a time now, so the first page load
       // does not have to open a dozen in parallel (see v2/config/database.ts).
       void warmPool();
+
+      // Fail upscale jobs a dead process left mid-run and re-queue the unstarted ones.
+      startImageUpscaleWorker();
     },
   );
 })();

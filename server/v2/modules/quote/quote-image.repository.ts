@@ -257,4 +257,26 @@ export const quoteImageRepository = {
 
     return updatedImage;
   },
+
+  /**
+   * Swap one image URL for another on a quote, keeping position / isPrimary.
+   * Updates quote_images first; only when no quote_images row matched does it
+   * fall back to the legacy deal_images rows (owner_id = quote id). Returns the
+   * number of rows changed.
+   */
+  async replaceImageUrl(quoteId: string, fromUrl: string, toUrl: string): Promise<number> {
+    const updated = await db
+      .update(quoteImages)
+      .set({ url: toUrl })
+      .where(and(eq(quoteImages.quoteId, quoteId), eq(quoteImages.url, fromUrl)))
+      .returning({ id: quoteImages.id });
+    if (updated.length > 0) return updated.length;
+
+    const legacy = await db
+      .update(deal_images)
+      .set({ image_url: toUrl })
+      .where(and(eq(deal_images.owner_id, quoteId), eq(deal_images.image_url, fromUrl)))
+      .returning({ id: deal_images.id });
+    return legacy.length;
+  },
 };

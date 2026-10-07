@@ -52,19 +52,20 @@ export function useAdminOrgs() {
  * Pass the (debounced) search term; an empty term returns the newest orgs.
  * Distinct cache slot from {@link useAdminOrgs} so the two never collide.
  */
-export function useAdminOrgSearch(search: string) {
+export function useAdminOrgSearch(search: string, enabled = true) {
   return useQuery<OrgSummary[]>({
     queryKey: platformAdminKeys.orgSearch(search),
     queryFn:  () => platformAdminApi.listOrgs(search),
     placeholderData: (prev) => prev,
+    enabled,
   });
 }
 
-export function useAdminOrg(id: string | undefined) {
+export function useAdminOrg(id: string | undefined, enabled = true) {
   return useQuery<OrgSummary>({
     queryKey: platformAdminKeys.org(id ?? ""),
     queryFn:  () => platformAdminApi.getOrg(id as string),
-    enabled:  !!id,
+    enabled:  enabled && !!id,
   });
 }
 
