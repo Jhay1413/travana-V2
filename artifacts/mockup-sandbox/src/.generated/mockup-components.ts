@@ -5,6 +5,6 @@ export const modules: ModuleMap = {
   "./components/mockups/tickets-layouts/DenseTable.tsx": () => import("../components/mockups/tickets-layouts/DenseTable.tsx"),
   "./components/mockups/tickets-layouts/KanbanBoard.tsx": () => import("../components/mockups/tickets-layouts/KanbanBoard.tsx"),
   "./components/mockups/tickets-layouts/SplitPanel.tsx": () => import("../components/mockups/tickets-layouts/SplitPanel.tsx"),
-  "./components/mockups/travana-hr/TravanaHR.tsx": () => import("../components/mockups/travana-hr/TravanaHR.tsx"),
-  "./components/mockups/messenger-integration/MessengerPage.tsx": () => import("../components/mockups/messenger-integration/MessengerPage.tsx")
+  "./components/mockups/messenger-integration/MessengerPage.tsx": () => import("../components/mockups/messenger-integration/MessengerPage.tsx"),
+  "./components/mockups/travana-hr/TravanaHR.tsx": () => import("../components/mockups/travana-hr/TravanaHR.tsx")
 };
