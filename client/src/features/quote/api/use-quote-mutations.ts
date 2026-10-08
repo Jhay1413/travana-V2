@@ -55,8 +55,9 @@ export function useDeleteQuote() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => quoteApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: quoteKeys.lists() });
+    onSuccess: (_data, id) => {
+      queryClient.removeQueries({ queryKey: quoteKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: transactionKeys.all });
       queryClient.invalidateQueries({ queryKey: dashboardKeys.all });
     },

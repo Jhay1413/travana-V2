@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { ArrowUpDown, ChevronDown, ChevronRight, ChevronUp, MapPin } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { sortPinnedFirst } from "@/lib/sort-pinned-first";
+import { useDealPin } from "@/hooks/use-deal-pin";
+import { isDealPinned } from "@/features/transaction";
 import { DashboardCard, InitialsAvatar } from "@/features/agent-overview/components/dashboard-ui";
 import type { Transaction } from "@/features/quote/types";
 import {
@@ -39,6 +42,7 @@ export function PipelineListView({
 }) {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const { pinnedKeys, isLoaded: pinsLoaded } = useDealPin();
 
   const toggleSort = (f: SortField) => {
     if (sortField === f) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -65,8 +69,17 @@ export function PipelineListView({
       if (typeof va === "number" && typeof vb === "number") return sortDir === "asc" ? va - vb : vb - va;
       return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
     });
-    return arr;
-  }, [items, sortField, sortDir, getClientName]);
+    // Pinned deals lead regardless of the chosen sort (most-recently-pinned first);
+    // the user's sort still orders the rest.
+    const pinnedAt = new Map<string, number>();
+    for (const { transaction: tx } of arr) {
+      if (!isDealPinned(tx, pinnedKeys, pinsLoaded)) continue;
+      const at = tx.pinned_at ? new Date(tx.pinned_at).getTime() : NaN;
+      pinnedAt.set(tx.id, Number.isFinite(at) ? at : Date.now());
+    }
+    if (pinnedAt.size === 0) return arr;
+    return sortPinnedFirst(arr.map((item) => ({ id: item.transaction.id, item })), pinnedAt).map((w) => w.item);
+  }, [items, sortField, sortDir, getClientName, pinnedKeys, pinsLoaded]);
 
   const SortHeader = ({ field, label, className = "" }: { field: SortField; label: string; className?: string }) => (
     <th

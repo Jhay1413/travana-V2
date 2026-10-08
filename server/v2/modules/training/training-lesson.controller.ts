@@ -35,6 +35,13 @@ export const trainingLessonController = {
     return successResponse(res, lessons, 'Lessons reordered successfully');
   }),
 
+  reorderAssets: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const lessonId = req.params.id as string;
+    const assets = await trainingLessonService.reorderAssets(lessonId, req.body.order, scope);
+    return successResponse(res, assets, 'Assets reordered successfully');
+  }),
+
   addAssets: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const lessonId = req.params.id as string;

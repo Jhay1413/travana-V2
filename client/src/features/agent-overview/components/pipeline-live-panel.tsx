@@ -10,6 +10,7 @@ import { currency } from "./helpers";
 import { SegmentedTabs } from "./dashboard-ui";
 import { PinToggleButton } from "@/components/shared/pin-toggle-button";
 import { useDealPin, type PinnableDealType } from "@/hooks/use-deal-pin";
+import { resolveDealTarget, type DealTarget, type DealTargetType } from "@/features/transaction";
 
 type LiveTab = "enquiry" | "quotes" | "bookings";
 
@@ -156,20 +157,12 @@ function dealValue(t: Transaction): number {
 // full `Transaction` and picks the primary quote; keep the two in sync if this
 // logic changes.
 // The single entity a card represents for the active tab. Both the card's link
-// and its pin resolve through here so the pin always attaches to exactly what
-// the card opens.
-interface DealTarget {
-  type: PinnableDealType;
-  id: string;
-  title: string | null;
-}
+// and its pin resolve through here (shared with the Pipeline board) so the pin
+// always attaches to exactly what the card opens.
+const TAB_FOCUS: Record<LiveTab, DealTargetType> = { enquiry: "enquiry", quotes: "quote", bookings: "booking" };
 
-function resolveDealTarget(t: Transaction, tab: LiveTab): DealTarget | null {
-  if (tab === "enquiry" && t.enquiry) return { type: "enquiry", id: t.enquiry.id, title: t.enquiry.title ?? null };
-  if (tab === "bookings" && t.booking) return { type: "booking", id: t.booking.id, title: t.booking.title ?? null };
-  const q = t.quotes?.find((x) => !x.isQuoteCopy) || t.quotes?.[0];
-  if (q) return { type: "quote", id: q.id, title: q.title ?? null };
-  return null;
+function resolveTabTarget(t: Transaction, tab: LiveTab): DealTarget | null {
+  return resolveDealTarget(t, TAB_FOCUS[tab]);
 }
 
 const STANDALONE_DEAL_PATH: Record<PinnableDealType, string> = {
@@ -179,7 +172,7 @@ const STANDALONE_DEAL_PATH: Record<PinnableDealType, string> = {
 };
 
 function dealHref(t: Transaction, tab: LiveTab): string {
-  const target = resolveDealTarget(t, tab);
+  const target = resolveTabTarget(t, tab);
   if (!target) return "/pipeline";
   return t.client_id
     ? `/clients/${t.client_id}?holiday=${target.type}:${target.id}`
@@ -267,7 +260,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
   // Applied after the top-8 slice, so it only reorders what is already shown.
   const { pinnedKeys, togglePin } = useDealPin();
   const isPinnedDeal = (t: Transaction) => {
-    const target = resolveDealTarget(t, tab);
+    const target = resolveTabTarget(t, tab);
     return target !== null && pinnedKeys.has(`${target.type}:${target.id}`);
   };
   const orderedItems = [...items.filter(isPinnedDeal), ...items.filter((t) => !isPinnedDeal(t))];
@@ -334,7 +327,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
             const clientName = (t as any).client_name || t.client?.name || null;
             const clientPhone = (t as any).client_phone || null;
             const clientLine = [clientName, clientPhone].filter(Boolean).join(" - ");
-            const pinTarget = resolveDealTarget(t, tab);
+            const pinTarget = resolveTabTarget(t, tab);
             return (
               <div
                 key={t.id}

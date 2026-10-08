@@ -3,7 +3,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { normalizeRichText } from "@/features/hub/lib/rich-text";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,8 @@ import { GraphicsDropzone } from "./training-image-picker";
 import { LessonAssetManager } from "./training-lesson-asset-manager";
 import type { LessonWithAssets } from "@/features/hub/types/training.types";
 import type { StagedSlide } from "@/features/hub/types/training-admin.types";
+import { getRichTextLengthStatus } from "@/features/hub/lib/rich-text";
+import { useToast } from "@/hooks/use-toast";
 
 export const lessonFormSchema = z
   .object({
@@ -88,6 +91,10 @@ export function LessonFormDialog({
   onSubmit,
 }: LessonFormDialogProps) {
   const [slides, setSlides] = useState<StagedSlide[]>(initialSlides);
+  const { toast } = useToast();
+
+  // The rich-text editor only reads `content` on mount, so remount it whenever the form is reset.
+  const [descriptionEditorKey, setDescriptionEditorKey] = useState(0);
 
   const form = useForm<LessonFormValues>({
     resolver: zodResolver(lessonFormSchema),
@@ -97,6 +104,7 @@ export function LessonFormDialog({
   useEffect(() => {
     if (open) {
       form.reset(initialValues);
+      setDescriptionEditorKey((k) => k + 1);
       setSlides(initialSlides);
     }
     // Only re-sync when the dialog (re)opens with a fresh set of initial values.
@@ -106,6 +114,19 @@ export function LessonFormDialog({
   const watchedType = form.watch("type");
 
   const handleSubmit = async (values: LessonFormValues) => {
+    // The staged captions go up via the multipart `captions` field, which the
+    // server caps at SLIDE_CAPTION_MAX_LENGTH per item (uploadCaptionsSchema).
+    // Formatting counts toward that, so block here rather than letting the
+    // create fail with a generic error after the files have been chosen.
+    const overLimitIndex = slides.findIndex((s) => getRichTextLengthStatus(s.caption ?? "").overLimit);
+    if (overLimitIndex !== -1) {
+      toast({
+        title: `Slide ${overLimitIndex + 1} description is too long`,
+        description: "Shorten it to save — formatting counts toward the limit.",
+        variant: "destructive",
+      });
+      return;
+    }
     await onSubmit(values, slides);
   };
 
@@ -144,12 +165,14 @@ export function LessonFormDialog({
                       <FormItem>
                         <FormLabel>Description</FormLabel>
                         <FormControl>
-                          <Textarea
-                            {...field}
-                            rows={3}
-                            placeholder="Optional notes for this lesson"
-                            data-testid="input-lesson-description"
-                          />
+                          <div data-testid="input-lesson-description">
+                            <RichTextEditor
+                              key={descriptionEditorKey}
+                              content={field.value ?? ""}
+                              onChange={(html) => field.onChange(normalizeRichText(html))}
+                              placeholder="Optional notes for this lesson"
+                            />
+                          </div>
                         </FormControl>
                         <FormMessage />
                       </FormItem>

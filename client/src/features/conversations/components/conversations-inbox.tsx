@@ -860,6 +860,8 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
   );
   const liveQuotes = useMemo(() => (client ? selectLiveQuotes(transactions) : []), [client, transactions]);
   const expiredDeals = useMemo(() => (client ? selectExpiredDeals(transactions) : []), [client, transactions]);
+  // Same predicate/source as the Expired list, so the Quotes tile matches it.
+  const expiredQuoteCount = useMemo(() => expiredDeals.filter((d) => d.kind === "quote").length, [expiredDeals]);
   // Lifetime counts for the History tiles — same shapes the client profile page
   // derives from this endpoint (enquiries/quotes/bookings across transactions).
   const historyCounts = useMemo(() => {
@@ -939,15 +941,26 @@ function ContactPanel({ conversation }: { conversation: Conversation }) {
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { label: "Enquiries", count: historyCounts.enquiries, className: "text-emerald-500" },
-                  { label: "Quotes", count: historyCounts.quotes, className: "text-sky-500" },
+                  { label: "Quotes", count: historyCounts.quotes, className: "text-sky-500", expiredCount: expiredQuoteCount },
                   { label: "Bookings", count: historyCounts.bookings, className: "text-amber-500" },
-                ].map((stat) => (
+                ].map((stat: { label: string; count: number; className: string; expiredCount?: number }) => (
                   <div
                     key={stat.label}
                     className="rounded-lg border border-black/10 px-1.5 py-1.5 text-center dark:border-white/10"
                     data-testid={`client-history-${stat.label.toLowerCase()}`}
                   >
-                    <div className="text-sm font-semibold">{isLoadingLiveQuotes ? "–" : stat.count}</div>
+                    <div className="text-sm font-semibold">
+                      {isLoadingLiveQuotes ? "–" : stat.count}
+                      {!isLoadingLiveQuotes && !!stat.expiredCount && stat.expiredCount > 0 && (
+                        <span
+                          className="ml-1 text-[10px] font-medium text-red-500"
+                          title={`${stat.expiredCount} expired`}
+                          data-testid="client-history-quotes-expired"
+                        >
+                          ({stat.expiredCount})
+                        </span>
+                      )}
+                    </div>
                     <div className={cn("mt-0.5 text-[11px]", stat.className)}>{stat.label}</div>
                   </div>
                 ))}

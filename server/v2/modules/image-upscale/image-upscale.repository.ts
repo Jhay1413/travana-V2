@@ -1,7 +1,7 @@
 import { db } from "../../config/database";
 import { imageUpscaleJob } from "@shared/schema";
 import type { ImageUpscaleJob, InsertImageUpscaleJob } from "@shared/schema";
-import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 const ACTIVE_STATUSES = ["queued", "processing"] as const;
 const PG_UNIQUE_VIOLATION = "23505";
@@ -99,6 +99,44 @@ export const imageUpscaleRepository = {
         ),
       )
       .orderBy(desc(imageUpscaleJob.createdAt))
+      .limit(1);
+    return row ?? null;
+  },
+
+  /** Newest finished, not-reverted upscale of this quote image (its result_url is the sharper copy). */
+  async findLatestDoneByOriginal(quoteId: string, originalUrl: string, orgId: string): Promise<ImageUpscaleJob | null> {
+    const [row] = await db
+      .select()
+      .from(imageUpscaleJob)
+      .where(
+        and(
+          eq(imageUpscaleJob.orgId, orgId),
+          eq(imageUpscaleJob.quoteId, quoteId),
+          eq(imageUpscaleJob.originalUrl, originalUrl),
+          eq(imageUpscaleJob.status, "done"),
+          isNotNull(imageUpscaleJob.resultUrl),
+          isNull(imageUpscaleJob.revertedAt),
+        ),
+      )
+      .orderBy(desc(imageUpscaleJob.createdAt))
+      .limit(1);
+    return row ?? null;
+  },
+
+  /** A finished, not-reverted job whose output is this url (the url is already upscaled). */
+  async findDoneByResultUrl(quoteId: string, resultUrl: string, orgId: string): Promise<ImageUpscaleJob | null> {
+    const [row] = await db
+      .select()
+      .from(imageUpscaleJob)
+      .where(
+        and(
+          eq(imageUpscaleJob.orgId, orgId),
+          eq(imageUpscaleJob.quoteId, quoteId),
+          eq(imageUpscaleJob.resultUrl, resultUrl),
+          eq(imageUpscaleJob.status, "done"),
+          isNull(imageUpscaleJob.revertedAt),
+        ),
+      )
       .limit(1);
     return row ?? null;
   },

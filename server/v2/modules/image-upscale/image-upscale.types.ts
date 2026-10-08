@@ -1,4 +1,6 @@
 export type UpscaleScale = 2 | 3 | 4;
+/** Stored job scale: 1 means crop-only (no provider call). */
+export type FormatScale = 1 | UpscaleScale;
 
 export interface UpscaleProviderInput {
   imageUrl: string;
@@ -62,7 +64,65 @@ export interface PerformUpscaleResult {
   url: string;
   width: number | null;
   height: number | null;
-  scale: UpscaleScale;
+  scale: FormatScale;
   sourceWidth: number | null;
   sourceHeight: number | null;
+}
+
+export interface ImageDims {
+  width: number;
+  height: number;
+  type?: string;
+}
+
+/** A downloaded source image, measured and ready to be handed to the pipeline. */
+export interface FetchedSource {
+  buffer: Buffer;
+  contentType: string | null;
+  dims: ImageDims | null;
+  /** True when the image already lives in our S3 (no copy needed for the provider). */
+  ownStorage: boolean;
+  /** A url fal can fetch: presigned when `ownStorage`, the original url otherwise. */
+  fetchableUrl: string;
+}
+
+/** Side of the square post image (Instagram feed format) every image is formatted to. */
+export const POST_IMAGE_SIZE = 1080;
+
+export type AutoUpscaleSkipReason = "already_formatted" | "reused_previous" | "failed" | "cap_reached" | "timeout";
+
+export interface AutoUpscaleSize {
+  w: number;
+  h: number;
+}
+
+export interface AutoUpscaleItem {
+  /** The quote image url, or the uploaded file's name. */
+  originalUrl: string;
+  resultUrl: string;
+  from: AutoUpscaleSize | null;
+  to: AutoUpscaleSize | null;
+  /** False when the image was only cropped (large enough already, no provider call). */
+  upscaled: boolean;
+}
+
+export interface AutoUpscaleSkip {
+  originalUrl: string;
+  reason: AutoUpscaleSkipReason;
+  message?: string;
+}
+
+export interface PrepareImagesInput {
+  quoteId: string;
+  imageUrls: string[];
+  files: Express.Multer.File[];
+  /** `orgId` is null for trusted/internal callers and platform admins: nothing is formatted then. */
+  scope: { orgId: string | null; userId?: string | null };
+}
+
+export interface PrepareImagesResult {
+  imageUrls: string[];
+  files: Express.Multer.File[];
+  upscaled: AutoUpscaleItem[];
+  skipped: AutoUpscaleSkip[];
 }

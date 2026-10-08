@@ -141,7 +141,8 @@ export const transactionController = {
     // validate() checks req.query but doesn't reassign it, so this reads the
     // raw query typed against the validator's own inferred shape.
     const { sort } = req.query as unknown as ListPipelineByStatusQuery;
-    const result = await transactionService.listPipelineByStatus(getScope(req), column, page, limit, agentId || undefined, quoteStatusFilter || undefined, sort);
+    const scope = getScope(req);
+    const result = await transactionService.listPipelineByStatus(scope, column, page, limit, agentId || undefined, quoteStatusFilter || undefined, sort, scope.userId ?? undefined);
     return successResponse(res, result, "Pipeline data retrieved");
   }),
 

@@ -9,7 +9,11 @@ const mocks = vi.hoisted(() => ({
   falSubscribe: vi.fn(),
   assertPublicHttpUrl: vi.fn(),
   isAxiosError: vi.fn(),
+  fetchViaHeadlessBrowser: vi.fn(),
+  toSquare: vi.fn(),
 }));
+vi.mock("./image-format.util", () => ({ toSquare: mocks.toSquare }));
+vi.mock("../../utils/browser-fetch", () => ({ fetchViaHeadlessBrowser: mocks.fetchViaHeadlessBrowser }));
 
 vi.mock("../social-post/social-post.service", () => ({
   resolveUploadableUrl: mocks.resolveUploadableUrl,
@@ -46,9 +50,9 @@ const quoteInput: PerformUpscaleInput = {
   userId: "user-1",
 };
 
-function setSourceWidth(width: number) {
-  mocks.imageSize.mockReturnValueOnce({ width, height: Math.round(width * 0.75) }); // source
-  mocks.imageSize.mockReturnValueOnce({ width: 3840, height: 2880 }); // result
+/** 4:3 source of the given width unless a height is given. */
+function setSourceWidth(width: number, height = Math.round(width * 0.75), type = "jpg") {
+  mocks.imageSize.mockReturnValueOnce({ width, height, type });
 }
 
 describe("upscale pipeline performUpscale", () => {
@@ -61,75 +65,107 @@ describe("upscale pipeline performUpscale", () => {
     mocks.isAxiosError.mockReturnValue(false);
     mocks.axiosGet.mockResolvedValue({ data: new ArrayBuffer(8) });
     mocks.uploadBufferToS3.mockResolvedValue(RESULT);
+    mocks.toSquare.mockResolvedValue({ buffer: Buffer.from("sq"), contentType: "image/jpeg", width: 1080, height: 1080 });
     provider.upscale.mockResolvedValue({
       url: "https://fal.test/out.jpg",
-      width: 3840,
-      height: 2880,
+      width: 2160,
+      height: 1440,
       contentType: "image/jpeg",
     });
   });
 
-  it("chooses scale 4 for a 1000px image", async () => {
-    setSourceWidth(1000);
+  it("chooses scale 3 for a 600x450 image", async () => {
+    setSourceWidth(600);
     const result = await pipeline.performUpscale(quoteInput);
-    expect(provider.upscale).toHaveBeenCalledWith({ imageUrl: "https://s3.test/signed-a.jpg", scale: 4 });
-    expect(result.scale).toBe(4);
-    expect(result.sourceWidth).toBe(1000);
+    expect(provider.upscale).toHaveBeenCalledWith({ imageUrl: "https://s3.test/signed-a.jpg", scale: 3 });
+    expect(result.scale).toBe(3);
+    expect(result.sourceWidth).toBe(600);
   });
 
-  it("chooses scale 2 for a 1920px image", async () => {
-    setSourceWidth(1920);
+  it("1080x608: upscales 2x (short side 608) then squares to 1080x1080", async () => {
+    setSourceWidth(1080, 608);
     const result = await pipeline.performUpscale(quoteInput);
     expect(provider.upscale).toHaveBeenCalledWith(expect.objectContaining({ scale: 2 }));
+    expect(mocks.toSquare).toHaveBeenCalledWith(expect.any(Buffer), 1080, false);
+    expect(result).toMatchObject({ scale: 2, width: 1080, height: 1080, sourceWidth: 1080, sourceHeight: 608 });
+  });
+
+  it("800x600: scale 2 (ceil(1080/600))", async () => {
+    setSourceWidth(800, 600);
+    const result = await pipeline.performUpscale(quoteInput);
     expect(result.scale).toBe(2);
   });
 
-  it("rejects images already 3840px wide or larger", async () => {
-    mocks.imageSize.mockReturnValueOnce({ width: 3840, height: 2160 });
+  it("caps the scale at 4 for a 200px short side (best effort)", async () => {
+    setSourceWidth(400, 200);
+    const result = await pipeline.performUpscale(quoteInput);
+    expect(result.scale).toBe(4);
+  });
+
+  it("4000x2667: no provider call, crop only with scale 1", async () => {
+    setSourceWidth(4000, 2667);
+    const result = await pipeline.performUpscale(quoteInput);
+    expect(provider.upscale).not.toHaveBeenCalled();
+    expect(mocks.toSquare).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAiUsage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ scale: 1, width: 1080, height: 1080 });
+  });
+
+  it("1080x1080 is rejected with 400 and nothing runs", async () => {
+    setSourceWidth(1080, 1080);
     await expect(pipeline.performUpscale(quoteInput)).rejects.toMatchObject({
       statusCode: 400,
-      message: "Image is already 4K or larger",
+      message: "Image is already 1080×1080",
     });
     expect(provider.upscale).not.toHaveBeenCalled();
+    expect(mocks.toSquare).not.toHaveBeenCalled();
+  });
+
+  it("PNG sources stay PNG", async () => {
+    mocks.axiosGet.mockResolvedValueOnce({ data: new ArrayBuffer(8), headers: { "content-type": "image/png" } });
+    mocks.resolveUploadableUrl.mockResolvedValue("https://cdn.example.com/a.png");
+    mocks.uploadBufferToS3.mockResolvedValueOnce(RESULT);
+    mocks.toSquare.mockResolvedValue({ buffer: Buffer.from("sq"), contentType: "image/png", width: 1080, height: 1080 });
+    setSourceWidth(3000, 2000, "png");
+    await pipeline.performUpscale({ ...quoteInput, originalUrl: "https://cdn.example.com/a.png" });
+    expect(mocks.toSquare).toHaveBeenCalledWith(expect.any(Buffer), 1080, true);
+    expect(mocks.uploadBufferToS3).toHaveBeenCalledWith(expect.any(Buffer), "image/png", "social-upscale");
+  });
+
+  it("turns a formatter failure into a 422", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    setSourceWidth(3000, 2000);
+    mocks.toSquare.mockRejectedValue(new Error("bad image"));
+    await expect(pipeline.performUpscale(quoteInput)).rejects.toMatchObject({ statusCode: 422 });
+    expect(mocks.uploadBufferToS3).not.toHaveBeenCalled();
   });
 
   it("stores the result under social-upscale/ and records usage", async () => {
-    setSourceWidth(1000);
+    setSourceWidth(600);
     const result = await pipeline.performUpscale(quoteInput);
     expect(mocks.uploadBufferToS3).toHaveBeenCalledWith(expect.any(Buffer), "image/jpeg", "social-upscale");
     expect(result.url).toBe(RESULT);
-    expect(result.width).toBe(3840);
+    expect(result.width).toBe(1080);
     expect(mocks.recordAiUsage).toHaveBeenCalledWith(
       expect.objectContaining({ orgId: "org-1", feature: "image_upscale", userId: "user-1" }),
     );
   });
 
   it("never touches the quote itself (the worker does that after persisting the result)", async () => {
-    setSourceWidth(1000);
+    setSourceWidth(600);
     const result = await pipeline.performUpscale(quoteInput);
     expect(result).not.toHaveProperty("replacedOnQuote");
   });
 
-  it("returns null dimensions (not 0) when neither image-size nor the provider knows them", async () => {
-    mocks.imageSize.mockReturnValueOnce({ width: 1000, height: 750 }); // source
-    mocks.imageSize.mockImplementationOnce(() => {
-      throw new Error("unreadable");
-    }); // result
-    provider.upscale.mockResolvedValue({ url: "https://fal.test/out.jpg", width: 0, height: 0, contentType: "image/jpeg" });
-    const result = await pipeline.performUpscale(quoteInput);
-    expect(result.width).toBeNull();
-    expect(result.height).toBeNull();
-  });
-
   it("does not run the public-host guard for our own storage (presigned S3)", async () => {
-    setSourceWidth(1000);
+    setSourceWidth(600);
     await pipeline.performUpscale(quoteInput);
     expect(mocks.assertPublicHttpUrl).not.toHaveBeenCalled();
   });
 
   it("guards an external quote image url and refuses redirects", async () => {
     mocks.resolveUploadableUrl.mockResolvedValue("https://cdn.example.com/a.jpg");
-    setSourceWidth(1000);
+    setSourceWidth(600);
     await pipeline.performUpscale({ ...quoteInput, originalUrl: "https://cdn.example.com/a.jpg" });
     expect(mocks.assertPublicHttpUrl).toHaveBeenCalledWith("https://cdn.example.com/a.jpg");
     expect(mocks.axiosGet).toHaveBeenNthCalledWith(1, "https://cdn.example.com/a.jpg", expect.objectContaining({ maxRedirects: 0 }));
@@ -154,21 +190,74 @@ describe("upscale pipeline performUpscale", () => {
     ).rejects.toMatchObject({ statusCode: 400, message: "Image URL redirects are not allowed" });
   });
 
+  it("falls back to the headless browser on a 403, stores our copy and gives the provider the presigned copy", async () => {
+    const tui = "https://content.tui.co.uk/a.jpg";
+    mocks.resolveUploadableUrl.mockResolvedValue(tui);
+    mocks.isAxiosError.mockReturnValue(true);
+    mocks.axiosGet.mockRejectedValueOnce({ response: { status: 403 } });
+    mocks.fetchViaHeadlessBrowser.mockResolvedValue({ buffer: Buffer.from("webp"), contentType: "image/webp", status: 200 });
+    mocks.uploadBufferToS3.mockResolvedValueOnce("/api/v2/files/img?key=social-upscale%2Fsource%2Fcopy.webp");
+    setSourceWidth(600);
+    await pipeline.performUpscale({ ...quoteInput, originalUrl: tui });
+    expect(mocks.fetchViaHeadlessBrowser).toHaveBeenCalledWith(tui, expect.objectContaining({ maxBytes: expect.any(Number) }));
+    expect(mocks.uploadBufferToS3).toHaveBeenNthCalledWith(1, expect.any(Buffer), "image/webp", "social-upscale/source");
+    expect(provider.upscale).toHaveBeenCalledWith({ imageUrl: "https://s3.test/social-upscale/source/copy.webp", scale: 3 });
+  });
+
+  it("uploads a source copy for a directly downloaded external image too", async () => {
+    mocks.resolveUploadableUrl.mockResolvedValue("https://cdn.example.com/a.jpg");
+    mocks.axiosGet.mockResolvedValueOnce({ data: new ArrayBuffer(8), headers: { "content-type": "image/png; charset=x" } });
+    mocks.uploadBufferToS3.mockResolvedValueOnce("/api/v2/files/img?key=social-upscale%2Fsource%2Fcopy.png");
+    setSourceWidth(600);
+    await pipeline.performUpscale({ ...quoteInput, originalUrl: "https://cdn.example.com/a.jpg" });
+    expect(mocks.fetchViaHeadlessBrowser).not.toHaveBeenCalled();
+    expect(mocks.uploadBufferToS3).toHaveBeenNthCalledWith(1, expect.any(Buffer), "image/png", "social-upscale/source");
+    expect(provider.upscale).toHaveBeenCalledWith({ imageUrl: "https://s3.test/social-upscale/source/copy.png", scale: 3 });
+  });
+
+  it("does not upload a source copy for own-storage urls", async () => {
+    setSourceWidth(600);
+    await pipeline.performUpscale(quoteInput);
+    expect(mocks.uploadBufferToS3).toHaveBeenCalledTimes(1); // result only
+    expect(mocks.fetchViaHeadlessBrowser).not.toHaveBeenCalled();
+  });
+
+  it("fails with the generic message when the headless browser also fails", async () => {
+    mocks.resolveUploadableUrl.mockResolvedValue("https://content.tui.co.uk/a.jpg");
+    mocks.isAxiosError.mockReturnValue(true);
+    mocks.axiosGet.mockRejectedValue({ response: { status: 403 } });
+    mocks.fetchViaHeadlessBrowser.mockRejectedValue(new Error("status 403"));
+    await expect(
+      pipeline.performUpscale({ ...quoteInput, originalUrl: "https://content.tui.co.uk/a.jpg" }),
+    ).rejects.toMatchObject({ statusCode: 502, message: "Could not download the source image" });
+    expect(provider.upscale).not.toHaveBeenCalled();
+  });
+
+  it("runs the SSRF guard before any download or browser navigation", async () => {
+    mocks.resolveUploadableUrl.mockResolvedValue("http://10.0.0.1/a.jpg");
+    mocks.assertPublicHttpUrl.mockRejectedValue(new AppError("Image URL points to a private address", 400));
+    await expect(pipeline.performUpscale({ ...quoteInput, originalUrl: "http://10.0.0.1/a.jpg" })).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(mocks.fetchViaHeadlessBrowser).not.toHaveBeenCalled();
+    expect(mocks.axiosGet).not.toHaveBeenCalled();
+  });
+
   it("presigns an uploaded source and never touches the quote", async () => {
-    setSourceWidth(1000);
+    setSourceWidth(600);
     const result = await pipeline.performUpscale({ ...quoteInput, originalUrl: UPLOAD, sourceKind: "upload" });
     expect(mocks.resolveUploadableUrl).not.toHaveBeenCalled();
-    expect(provider.upscale).toHaveBeenCalledWith({ imageUrl: "https://s3.test/social-upscale/source/x.jpg", scale: 4 });
+    expect(provider.upscale).toHaveBeenCalledWith({ imageUrl: "https://s3.test/social-upscale/source/x.jpg", scale: 3 });
   });
 
   it("stores a standalone upload (no quote) under image-upscale/", async () => {
-    setSourceWidth(1000);
+    setSourceWidth(600);
     await pipeline.performUpscale({ ...quoteInput, originalUrl: UPLOAD, sourceKind: "upload", quoteId: null });
     expect(mocks.uploadBufferToS3).toHaveBeenCalledWith(expect.any(Buffer), "image/jpeg", "image-upscale");
   });
 
   it("propagates a provider failure as 502", async () => {
-    setSourceWidth(1000);
+    setSourceWidth(600);
     provider.upscale.mockRejectedValue(new AppError("Image upscaling failed. Please try again.", 502));
     await expect(pipeline.performUpscale(quoteInput)).rejects.toMatchObject({ statusCode: 502 });
   });

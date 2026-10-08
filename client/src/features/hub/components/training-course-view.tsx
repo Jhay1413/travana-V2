@@ -9,6 +9,8 @@ import { TrainingQuiz, TrainingLessonQuiz, TrainingSectionQuiz, TrainingQuizRunn
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { RichTextDisplay } from "@/components/shared/rich-text-editor";
+import { TRAINING_RICH_TEXT_CLASS } from "@/features/hub/lib/rich-text";
 import type { LessonProgress, LessonWithAssets, SectionProgress } from "../types/training.types";
 
 interface TrainingCourseViewProps {
@@ -144,6 +146,8 @@ export function TrainingCourseView({ courseId }: TrainingCourseViewProps) {
       <div className="space-y-6 lg:col-span-2">
         {selectedLesson ? (
           <>
+            {/* Order is deliberate: the slide/video leads, then the lesson
+                title, then its description — slide → title → description. */}
             {selectedLesson.type === "video" && selectedLesson.video_url ? (
               <TrainingVideoPlayer
                 key={selectedLesson.id}
@@ -162,14 +166,17 @@ export function TrainingCourseView({ courseId }: TrainingCourseViewProps) {
               <div className="aspect-video rounded-xl bg-slate-900" data-testid="training-lesson-no-content" />
             )}
 
-            <div className="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+            <div className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6 dark:border-slate-800 dark:bg-slate-900">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="text-xl font-bold text-slate-900 dark:text-white">{selectedLesson.title}</h1>
                 {progressByLessonId.get(selectedLesson.id)?.completed && <HubBadge variant="green">Completed</HubBadge>}
                 {!selectedLesson.is_required && <HubBadge>Optional</HubBadge>}
               </div>
               {selectedLesson.description && (
-                <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">{selectedLesson.description}</p>
+                <RichTextDisplay
+                  content={selectedLesson.description}
+                  className={cn("mt-3 text-sm text-slate-600 dark:text-slate-400", TRAINING_RICH_TEXT_CLASS)}
+                />
               )}
             </div>
 

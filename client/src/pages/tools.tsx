@@ -82,17 +82,17 @@ export default function ToolsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-black/50" />
-            <h2 className="text-sm font-semibold text-black/80">Image Upscaler</h2>
+            <h2 className="text-sm font-semibold text-black/80">Post Image Formatter</h2>
           </div>
           <Link
             href="/tools/upscale"
             className="rounded-xl bg-black/80 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-black"
           >
-            Open upscaler
+            Open formatter
           </Link>
         </div>
         <p className="mt-3 text-sm text-black/60">
-          Upscale a photo to 4K and compare it side by side with the original.
+          Create a 1080×1080 post image: centre-crops to a square and upscales small photos first.
         </p>
       </section>
 

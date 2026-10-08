@@ -6,3 +6,4 @@ export { transactionApi } from "./api/transaction.api";
 export * from "./api/use-transaction-queries";
 export * from "./api/use-transaction-mutations";
 export * from "./lib/main-quote";
+export * from "./lib/resolve-deal-target";

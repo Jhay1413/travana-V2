@@ -128,6 +128,10 @@ export interface Transaction {
   last_activity_at?: string;
   /** The deal's next open task, if any — drives the card's task line. */
   next_task?: { id: string; title: string | null; due_date: string | null; user_id: string | null } | null;
+  /** Pipeline endpoints only: whether the viewing user pinned this deal (server-side, drives column order). */
+  pinned?: boolean;
+  /** ISO time the viewing user pinned this deal; null when not pinned. */
+  pinned_at?: string | null;
 }
 
 export interface EnquiryDestination {

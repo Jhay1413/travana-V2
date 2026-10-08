@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { Link } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useFreeQuotesInfinite, quoteKeys } from "@/features/quote/api/use-quote-queries";
 import { useQueryClient } from "@tanstack/react-query";
@@ -8,6 +8,8 @@ import axiosClient from "@/api/client/axios-client";
 import { useToast } from "@/hooks/use-toast";
 import { SocialPostPreviewDialog } from "@/features/social/components/social-post-preview-dialog";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
+import { quoteApi } from "@/api";
+import { socialPostApi } from "@/features/social/api/social-post.api";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -61,6 +63,17 @@ const FILTER_TRIGGER_CLASS =
 const DATE_TRIGGER_CLASS =
   "h-9 w-auto min-w-[150px] border-black/10 bg-black/5 text-xs font-medium hover:bg-black/10 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10";
 type ScheduleFilter = "none" | "today" | "tomorrow" | "this-week" | "next-week" | "next-month" | "specific-date";
+
+// Board filters live in the URL (?view=all&schedule=today&portal=active&q=...)
+// so they survive opening a quote and coming back. Defaults are omitted to keep
+// the URL clean.
+const VIEW_MODES: readonly ViewMode[] = ["scheduled", "all", "portal", "unscheduled"];
+const SCHEDULE_FILTERS: readonly ScheduleFilter[] = ["none", "today", "tomorrow", "this-week", "next-week", "next-month", "specific-date"];
+const PORTAL_STATUSES: readonly PortalStatus[] = ["all", "active", "expired"];
+
+function pickParam<T extends string>(value: string | null, allowed: readonly T[], fallback: T): T {
+  return allowed.find((option) => option === value) ?? fallback;
+}
 
 /** Whole days a portal post has been live, or null when it was never stamped. */
 function portalAgeDays(portalAddedAt: string | null | undefined): number | null {
@@ -174,6 +187,9 @@ function DetailRow({ icon: Icon, label, value, testId }: { icon: typeof Hotel; l
 
 function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPortalToggle, onPushNotify, onFeaturedToggle, showPortalStatus = false }: { post: SocialPost; onGeneratePost: (quote: EnrichedQuote) => void; onViewPost: (quote: EnrichedQuote) => void; isGenerating: boolean; onPortalToggle: (quoteId: string, checked: boolean) => void; onPushNotify: (quoteId: string) => void; onFeaturedToggle: (quoteId: string, checked: boolean) => void; showPortalStatus?: boolean; }) {
   const { quote } = post;
+  // Carry the board's filters through the quote page so "back" restores them.
+  const boardSearch = useSearch();
+  const viewQuoteHref = `/social-posts/quotes/${quote.id}${boardSearch ? `?from=${encodeURIComponent(boardSearch)}` : ""}`;
   const imageUrl = getFirstImage(quote);
   const cruise = getCruise(quote);
   const tourOp = quote.main_tour_operator_name;
@@ -288,7 +304,7 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
           {/* Push Notification to Portal temporarily removed */}
         </div>
         <div className="mt-auto pt-3 pb-1 border-t border-black/8 dark:border-white/8">
-          <Link href={`/social-posts/quotes/${quote.id}`}>
+          <Link href={viewQuoteHref}>
             <Button variant="outline" className="w-full rounded-xl text-sm font-medium gap-2" data-testid={`button-view-quote-${quote.id}`}><Eye className="w-4 h-4" />View Quote</Button>
           </Link>
           <div className="mt-4" />
@@ -311,10 +327,13 @@ function SocialPostCard({ post, onGeneratePost, onViewPost, isGenerating, onPort
 export default function SocialPostsBoard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("scheduled");
-  const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("none");
-  const [portalStatus, setPortalStatus] = useState<PortalStatus>("all");
+  const [, setLocation] = useLocation();
+  // Read once on mount: the URL is the persisted copy, the state below the live one.
+  const [initialParams] = useState(() => new URLSearchParams(window.location.search));
+  const [searchQuery, setSearchQuery] = useState(() => initialParams.get("q") ?? "");
+  const [viewMode, setViewMode] = useState<ViewMode>(() => pickParam(initialParams.get("view"), VIEW_MODES, "scheduled"));
+  const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>(() => pickParam(initialParams.get("schedule"), SCHEDULE_FILTERS, "none"));
+  const [portalStatus, setPortalStatus] = useState<PortalStatus>(() => pickParam(initialParams.get("portal"), PORTAL_STATUSES, "all"));
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [previewQuoteId, setPreviewQuoteId] = useState<string | null>(null);
@@ -322,7 +341,7 @@ export default function SocialPostsBoard() {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const generatePost = useGeneratePost();
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => (initialParams.get("q") ?? "").trim());
   const { data: availableTags } = useTags();
   const [selectedTagNames, setSelectedTagNames] = useState<string[]>([]);
   const [tagMenuOpen, setTagMenuOpen] = useState(false);
@@ -346,6 +365,18 @@ export default function SocialPostsBoard() {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 400);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  // Mirror the filters into the URL (replace, so Back doesn't step through every tweak).
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (viewMode !== "scheduled") params.set("view", viewMode);
+    if (scheduleFilter !== "none") params.set("schedule", scheduleFilter);
+    if (portalStatus !== "all") params.set("portal", portalStatus);
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    const next = params.toString();
+    if (next === window.location.search.replace(/^[?]/, "")) return;
+    setLocation(`${window.location.pathname}${next ? `?${next}` : ""}`, { replace: true });
+  }, [viewMode, scheduleFilter, portalStatus, debouncedSearch, setLocation]);
 
   const activeFilter = viewMode === "scheduled" ? scheduleFilter : "none";
   // The expired/active split only applies to portal posts — every other view sends "all".
@@ -453,6 +484,29 @@ export default function SocialPostsBoard() {
     import("@/features/social/api/social-post.api").then(({ socialPostApi }) => {
       socialPostApi.getByQuoteId(quote.id).then((deal) => { if (deal) setPreviewDeal(deal); });
     });
+  };
+
+  // Opens the schedule dialog for a quote that may not be in the loaded board
+  // list (e.g. just created): loads its saved deal, or generates one if none exists.
+  const openPostForQuote = async (quoteId: string) => {
+    setPreviewQuoteId(quoteId);
+    setPreviewImageUrl(null);
+    setPreviewDeal(null);
+    try {
+      const [quote, existingDeal] = await Promise.all([
+        quoteApi.getById(quoteId),
+        socialPostApi.getByQuoteId(quoteId),
+      ]);
+      if (existingDeal) {
+        setPreviewImageUrl(getFirstImage(quote));
+        setPreviewDeal(existingDeal);
+      } else {
+        await handleGeneratePost(quote);
+      }
+    } catch {
+      toast({ title: "Failed to open the new post", variant: "destructive" });
+      setPreviewQuoteId(null);
+    }
   };
 
   const handlePortalToggle = useCallback(async (quoteId: string, checked: boolean) => {
@@ -757,7 +811,12 @@ export default function SocialPostsBoard() {
         onOpenChange={setCreateDialogOpen}
         socialPost
         presentation="drawer"
-        onSuccess={() => setCreateDialogOpen(false)}
+        onSuccess={(id) => {
+          setCreateDialogOpen(false);
+          // Open the schedule dialog for the new post right away, on top of the
+          // current view (the new card may not match the active filters).
+          if (id) void openPostForQuote(id);
+        }}
       />
     </div>
   );

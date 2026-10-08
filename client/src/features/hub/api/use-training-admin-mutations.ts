@@ -174,6 +174,17 @@ export function useReorderLessons() {
   });
 }
 
+export function useReorderAssets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ lessonId, order }: { lessonId: string; courseId: string; order: { id: string; position: number }[] }) =>
+      trainingApi.reorderAssets(lessonId, order),
+    onSuccess: (_data, { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
 export function useAddAssets() {
   const queryClient = useQueryClient();
   return useMutation({

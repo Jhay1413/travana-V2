@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, HelpCircle, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextDisplay, RichTextEditor } from "@/components/shared/rich-text-editor";
+import { TRAINING_RICH_TEXT_CLASS, normalizeRichText } from "@/features/hub/lib/rich-text";
+import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { HubBadge, HubEmptyState } from "@/features/hub/components/hub-components";
@@ -61,11 +63,32 @@ export function TrainingLessonEditor({ courseId }: TrainingLessonEditorProps) {
 
   // Lesson create/edit dialog — creates always target `lessonDialogSection`.
   const [lessonDialogSection, setLessonDialogSection] = useState<SectionWithLessons | null>(null);
-  const [editingLesson, setEditingLesson] = useState<LessonWithAssets | null>(null);
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
 
   const [quizTarget, setQuizTarget] = useState<QuizTarget | null>(null);
 
-  const sections = [...(course?.sections ?? [])].sort((a, b) => a.position - b.position);
+  const sections = useMemo(
+    () => [...(course?.sections ?? [])].sort((a, b) => a.position - b.position),
+    [course?.sections],
+  );
+
+  // Derived from live course data so asset deletes/uploads/caption edits show up in the open dialog.
+  const editingLesson = useMemo<LessonWithAssets | null>(() => {
+    if (!editingLessonId) return null;
+    for (const section of sections) {
+      const found = section.lessons.find((l) => l.id === editingLessonId);
+      if (found) return found;
+    }
+    return null;
+  }, [sections, editingLessonId]);
+
+  // The lesson being edited vanished from live data (deleted elsewhere) — close the dialog.
+  useEffect(() => {
+    if (editingLessonId && !isLoading && !editingLesson) {
+      setEditingLessonId(null);
+      setLessonDialogSection(null);
+    }
+  }, [editingLessonId, editingLesson, isLoading]);
 
   const openCreateSectionDialog = () => {
     setEditingSection(null);
@@ -128,24 +151,31 @@ export function TrainingLessonEditor({ courseId }: TrainingLessonEditorProps) {
   };
 
   const openCreateLessonDialog = (section: SectionWithLessons) => {
-    setEditingLesson(null);
+    setEditingLessonId(null);
     setLessonDialogSection(section);
   };
 
   const openEditLessonDialog = (section: SectionWithLessons, lesson: LessonWithAssets) => {
-    setEditingLesson(lesson);
+    setEditingLessonId(lesson.id);
     setLessonDialogSection(section);
   };
 
-  const lessonInitialValues: LessonFormValues = editingLesson
-    ? {
-        title: editingLesson.title,
-        description: editingLesson.description ?? "",
-        type: editingLesson.type,
-        isRequired: editingLesson.is_required,
-        videoUrl: editingLesson.video_url,
-      }
-    : EMPTY_LESSON_FORM_VALUES;
+  // Memoised on the lesson id only: a background refetch must not hand the form
+  // new initial values and wipe the user's in-progress edits.
+  const lessonInitialValues: LessonFormValues = useMemo(
+    () =>
+      editingLesson
+        ? {
+            title: editingLesson.title,
+            description: editingLesson.description ?? "",
+            type: editingLesson.type,
+            isRequired: editingLesson.is_required,
+            videoUrl: editingLesson.video_url,
+          }
+        : EMPTY_LESSON_FORM_VALUES,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editingLessonId],
+  );
 
   const handleLessonDialogSubmit = async (values: LessonFormValues, slides: StagedSlide[]) => {
     if (!lessonDialogSection) return;
@@ -322,7 +352,10 @@ export function TrainingLessonEditor({ courseId }: TrainingLessonEditorProps) {
 
                 <div className="space-y-2 p-3">
                   {section.description && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{section.description}</p>
+                    <RichTextDisplay
+                      content={section.description}
+                      className={cn("text-xs text-slate-500 dark:text-slate-400", TRAINING_RICH_TEXT_CLASS)}
+                    />
                   )}
 
                   {lessons.length === 0 ? (
@@ -387,15 +420,13 @@ export function TrainingLessonEditor({ courseId }: TrainingLessonEditorProps) {
             </div>
             <div>
               <Label htmlFor="section-description">Description (optional)</Label>
-              <Textarea
-                id="section-description"
-                value={sectionDescription}
-                onChange={(e) => setSectionDescription(e.target.value)}
-                rows={2}
-                placeholder="What does this section cover?"
-                className="mt-1"
-                data-testid="input-section-description"
-              />
+              <div className="mt-1" data-testid="input-section-description">
+                <RichTextEditor
+                  content={sectionDescription}
+                  onChange={(html) => setSectionDescription(normalizeRichText(html))}
+                  placeholder="What does this section cover?"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

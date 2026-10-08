@@ -9,6 +9,7 @@ import { COURSE_CATEGORIES, type TrainingCourse, type MyEnrollment } from "@/fea
 import { Button } from "@/components/ui/button";
 import { useRoles } from "@/hooks/use-role";
 import { cn } from "@/lib/utils";
+import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 
 /** Special filter tab: courses the current user is enrolled in. */
 const MY_COURSES_TAB = "My Courses";
@@ -114,7 +115,10 @@ function TrainingCourseCard({
           {course.title}
         </h3>
         {course.description ? (
-          <p className="mt-1.5 line-clamp-3 text-xs text-slate-500 dark:text-slate-400">{course.description}</p>
+          <RichTextDisplay
+            content={course.description}
+            className="mt-1.5 line-clamp-3 text-xs text-slate-500 dark:text-slate-400"
+          />
         ) : (
           <p className="mt-1.5 text-xs italic text-slate-400 dark:text-slate-600">No description available.</p>
         )}

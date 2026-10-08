@@ -15,6 +15,18 @@ import type { CreateUpscaleJobInput, ImageUpscaleJobDto, ImageUpscaleSourceKind 
 export const MAX_ACTIVE_JOBS_PER_ORG = 30;
 const DEFAULT_RECENT_LIMIT = 10;
 
+export interface InsertJobInput {
+  orgId: string;
+  userId: string | null;
+  quoteId: string | null;
+  sourceKind: ImageUpscaleSourceKind;
+  originalUrl: string;
+}
+
+export type InsertJobOutcome =
+  | { kind: "created" | "duplicate"; job: ImageUpscaleJob }
+  | { kind: "cap_reached" };
+
 interface JobWorker {
   enqueue(jobId: string): void;
 }
@@ -48,6 +60,33 @@ export function createImageUpscaleService(worker: JobWorker) {
     return { originalUrl: input.imageUrl, sourceKind: "quote_image" };
   }
 
+  async function insertJob(input: InsertJobInput): Promise<InsertJobOutcome> {
+    const { orgId, userId, quoteId, sourceKind, originalUrl } = input;
+    const quoteImage = sourceKind === "quote_image" && quoteId ? quoteId : null;
+
+    if (quoteImage) {
+      const duplicate = await imageUpscaleRepository.findActiveDuplicate(quoteImage, originalUrl, orgId);
+      if (duplicate) return { kind: "duplicate", job: duplicate };
+    }
+
+    let job: ImageUpscaleJob | null;
+    try {
+      job = await imageUpscaleRepository.insertIfUnderCap(
+        { orgId, createdBy: userId, quoteId, sourceKind, originalUrl, status: "queued" },
+        MAX_ACTIVE_JOBS_PER_ORG,
+      );
+    } catch (err) {
+      // Lost a race with another request for the same image (partial unique index).
+      if (quoteImage && isUniqueViolation(err)) {
+        const winner = await imageUpscaleRepository.findActiveDuplicate(quoteImage, originalUrl, orgId);
+        if (winner) return { kind: "duplicate", job: winner };
+      }
+      throw err;
+    }
+    if (!job) return { kind: "cap_reached" };
+    return { kind: "created", job };
+  }
+
   async function loadScopedJob(jobId: string, scope: Scope) {
     const job = await imageUpscaleRepository.findById(jobId, assertOrg(scope));
     if (!job) throw new AppError("Upscale job not found", 404);
@@ -59,39 +98,25 @@ export function createImageUpscaleService(worker: JobWorker) {
       // Before any S3 write: without an org there is nothing to scope the job to.
       const orgId = assertOrg(scope);
       const { originalUrl, sourceKind } = await resolveSource(input, scope);
-      const quoteImage = sourceKind === "quote_image" && input.quoteId ? input.quoteId : null;
-
-      if (quoteImage) {
-        const duplicate = await imageUpscaleRepository.findActiveDuplicate(quoteImage, originalUrl, orgId);
-        if (duplicate) return toImageUpscaleJobDto(duplicate);
-      }
-
-      let job: ImageUpscaleJob | null;
-      try {
-        job = await imageUpscaleRepository.insertIfUnderCap(
-          {
-            orgId,
-            createdBy: scope.userId,
-            quoteId: input.quoteId ?? null,
-            sourceKind,
-            originalUrl,
-            status: "queued",
-          },
-          MAX_ACTIVE_JOBS_PER_ORG,
-        );
-      } catch (err) {
-        // Lost a race with another request for the same image (partial unique index).
-        if (quoteImage && isUniqueViolation(err)) {
-          const winner = await imageUpscaleRepository.findActiveDuplicate(quoteImage, originalUrl, orgId);
-          if (winner) return toImageUpscaleJobDto(winner);
-        }
-        throw err;
-      }
-      if (!job) throw new AppError("Too many upscales in progress, try again shortly", 429);
-
-      worker.enqueue(job.id);
-      return toImageUpscaleJobDto(job);
+      const outcome = await insertJob({
+        orgId,
+        userId: scope.userId,
+        quoteId: input.quoteId ?? null,
+        sourceKind,
+        originalUrl,
+      });
+      if (outcome.kind === "cap_reached") throw new AppError("Too many upscales in progress, try again shortly", 429);
+      if (outcome.kind === "created") worker.enqueue(outcome.job.id);
+      return toImageUpscaleJobDto(outcome.job);
     },
+
+    /**
+     * Creates the job row for the caller to run itself (auto-upscale at schedule
+     * time) — same cap and duplicate rules as `createJob`, but nothing is enqueued
+     * and no request scope / quote-membership check is applied (the caller has
+     * already validated the quote).
+     */
+    createInlineJob: insertJob,
 
     async getJob(jobId: string, scope: Scope): Promise<ImageUpscaleJobDto> {
       return toImageUpscaleJobDto(await loadScopedJob(jobId, scope));
@@ -136,4 +161,7 @@ export function createImageUpscaleService(worker: JobWorker) {
   };
 }
 
-export const imageUpscaleService = createImageUpscaleService(imageUpscaleWorker);
+// Resolved per call: the worker module sits in an import cycle with this one (via social-post).
+export const imageUpscaleService = createImageUpscaleService({
+  enqueue: (jobId) => imageUpscaleWorker.enqueue(jobId),
+});

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useUploadAssets, useDeleteAsset, useUpdateAsset } from "@/features/hub/api/use-training-admin-mutations";
+import { useUploadAssets, useDeleteAsset, useUpdateAsset, useReorderAssets } from "@/features/hub/api/use-training-admin-mutations";
 import { useToast } from "@/hooks/use-toast";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { cn } from "@/lib/utils";
+import { describeRichTextLength, getRichTextLengthStatus, normalizeRichText } from "@/features/hub/lib/rich-text";
 import { ImageDropzone, LessonImageGrid } from "./training-image-picker";
 import type { LessonWithAssets, TrainingLessonAsset } from "@/features/hub/types/training.types";
 
@@ -19,7 +21,7 @@ interface AssetCaptionFieldProps {
 }
 
 /**
- * Description textarea for one persisted slide. Saves on blur when the text
+ * Rich-text description for one persisted slide. Saves on blur when the text
  * changed, and also on unmount (e.g. the dialog closes via Escape/overlay
  * before the field ever blurred). A refetched server value is adopted only
  * while the field has no unsaved edits, and a save never overwrites newer typing.
@@ -30,21 +32,28 @@ function AssetCaptionField({ asset, courseId, index }: AssetCaptionFieldProps) {
   const serverCaption = asset.caption ?? "";
   const [value, setValue] = useState(serverCaption);
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  // The rich-text editor only reads `content` on mount, so remount it when a server value is adopted.
+  const [editorKey, setEditorKey] = useState(0);
   const valueRef = useRef(value);
   const lastSavedRef = useRef(serverCaption);
 
   useEffect(() => {
     const dirty = valueRef.current.trim() !== lastSavedRef.current;
     if (!dirty) {
+      if (serverCaption !== valueRef.current) setEditorKey((k) => k + 1);
       lastSavedRef.current = serverCaption;
       valueRef.current = serverCaption;
       setValue(serverCaption);
     }
   }, [serverCaption]);
 
+  const lengthStatus = getRichTextLengthStatus(value);
+
   const save = () => {
     const next = valueRef.current.trim();
     if (next === lastSavedRef.current) return;
+    // The server rejects over-limit captions; keep the edit in the editor and explain via the status line instead.
+    if (getRichTextLengthStatus(next).overLimit) return;
     setSaveState("saving");
     updateAsset.mutate(
       { id: asset.id, courseId, caption: next || null },
@@ -68,27 +77,42 @@ function AssetCaptionField({ asset, courseId, index }: AssetCaptionFieldProps) {
 
   return (
     <div className="space-y-1">
-      <Textarea
-        value={value}
-        onChange={(e) => {
-          valueRef.current = e.target.value;
-          setValue(e.target.value);
-          if (saveState === "saved") setSaveState("idle");
-        }}
+      {/* Focus events bubble in React, so this blur fires when focus leaves the editor. */}
+      <div
         onBlur={save}
-        placeholder="Slide description (optional)"
         aria-label={`Slide ${index + 1} description`}
-        rows={3}
-        maxLength={2000}
-        className="w-full text-sm"
         data-testid={`input-asset-caption-${asset.id}`}
-      />
+      >
+        <RichTextEditor
+          key={editorKey}
+          content={value}
+          onChange={(html) => {
+            const next = normalizeRichText(html);
+            valueRef.current = next;
+            setValue(next);
+            if (saveState === "saved") setSaveState("idle");
+          }}
+          placeholder="Slide description (optional)"
+          className="w-full text-sm"
+        />
+      </div>
       <p
-        className="h-4 text-[11px] text-slate-400 dark:text-slate-500"
+        className={cn(
+          "min-h-4 text-[11px] text-slate-400 dark:text-slate-500",
+          lengthStatus.overLimit
+            ? "text-red-600 dark:text-red-400"
+            : lengthStatus.nearLimit && "text-amber-600 dark:text-amber-400",
+        )}
         aria-live="polite"
         data-testid={`text-asset-caption-status-${asset.id}`}
       >
-        {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
+        {lengthStatus.nearLimit
+          ? describeRichTextLength(lengthStatus)
+          : saveState === "saving"
+            ? "Saving…"
+            : saveState === "saved"
+              ? "Saved"
+              : ""}
       </p>
     </div>
   );
@@ -102,6 +126,7 @@ function AssetCaptionField({ asset, courseId, index }: AssetCaptionFieldProps) {
 export function LessonAssetManager({ lesson, courseId }: LessonAssetManagerProps) {
   const uploadAssets = useUploadAssets();
   const deleteAsset = useDeleteAsset();
+  const reorderAssets = useReorderAssets();
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -127,6 +152,18 @@ export function LessonAssetManager({ lesson, courseId }: LessonAssetManagerProps
 
   const sortedAssets = [...lesson.assets].sort((a, b) => a.position - b.position);
 
+  const moveAsset = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= sortedAssets.length) return;
+    const reordered = [...sortedAssets];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(target, 0, moved);
+    reorderAssets.mutate(
+      { lessonId: lesson.id, courseId, order: reordered.map((asset, i) => ({ id: asset.id, position: i })) },
+      { onError: () => toast({ title: "Failed to reorder slides", variant: "destructive" }) },
+    );
+  };
+
   return (
     <div className="space-y-2" data-testid="lesson-asset-manager">
       <div className="flex items-center justify-between">
@@ -144,6 +181,9 @@ export function LessonAssetManager({ lesson, courseId }: LessonAssetManagerProps
             url: asset.asset_url,
             onRemove: () => handleDeleteAsset(asset.id),
             removing: deletingId === asset.id,
+            onMoveUp: index > 0 ? () => moveAsset(index, -1) : undefined,
+            onMoveDown: index < sortedAssets.length - 1 ? () => moveAsset(index, 1) : undefined,
+            reordering: reorderAssets.isPending,
             testId: `button-delete-asset-${asset.id}`,
             footer: <AssetCaptionField asset={asset} courseId={courseId} index={index} />,
           }))}
