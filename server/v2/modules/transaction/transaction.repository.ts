@@ -778,21 +778,28 @@ function buildPipelineOrderBy(column: string, sort?: "newest" | "oldest"): SQL {
 //   on_quote   -> the deal's primary quote  (non-copy, not deleted; 'quote')
 // Pins are stored in `favorites` (one row per user + item), so a correlated
 // subquery keeps ordering correct across pagination without a join fan-out.
+//
+// The `::text` casts are required, not cosmetic: `favorites.item_id` is varchar
+// while enquiry/booking/quote ids are uuid, and Postgres has no implicit cast
+// between them — without these the whole pipeline query dies with
+// `operator does not exist: character varying = uuid` (SQLSTATE 42883).
+// Cast the uuid side, never `item_id::uuid`: `favorites` holds ids for several
+// entity types, so one non-uuid value there would error the entire query.
 function buildPinnedAtExpr(userId: string): SQL {
   return sql`(
     SELECT MAX(${favorites.createdAt}) FROM ${favorites}
     WHERE ${favorites.userId} = ${userId}
       AND (
         (${transaction.status} = 'on_enquiry' AND ${favorites.itemType} = 'enquiry' AND ${favorites.itemId} IN (
-          SELECT e.id FROM ${enquiry_table} e
+          SELECT e.id::text FROM ${enquiry_table} e
           WHERE e.transaction_id = ${transaction.id} AND e.deleted_at IS NULL
         ))
         OR (${transaction.status} = 'on_booking' AND ${favorites.itemType} = 'booking' AND ${favorites.itemId} IN (
-          SELECT ${booking.id} FROM ${booking}
+          SELECT ${booking.id}::text FROM ${booking}
           WHERE ${booking.transaction_id} = ${transaction.id}
         ))
         OR (${transaction.status} = 'on_quote' AND ${favorites.itemType} = 'quote' AND ${favorites.itemId} IN (
-          SELECT ${quote.id} FROM ${quote}
+          SELECT ${quote.id}::text FROM ${quote}
           WHERE ${quote.transaction_id} = ${transaction.id}
             AND ${quote.isQuoteCopy} = FALSE
             AND ${quote.deleted_at} IS NULL
