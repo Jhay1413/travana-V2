@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Loader2, UploadCloud, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, UploadCloud, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { describeRichTextLength, getRichTextLengthStatus, normalizeRichText } from "@/features/hub/lib/rich-text";
 import type { StagedSlide } from "@/features/hub/types/training-admin.types";
 
 const ACCEPTED_IMAGE_TYPES = "image/jpeg,image/png,image/webp,image/gif";
@@ -104,6 +105,10 @@ export interface ImageGridItem {
   label?: string;
   /** Optional content rendered beside the thumbnail (e.g. a description field). Switches the grid to a vertical list of rows. */
   footer?: ReactNode;
+  /** Optional reorder handlers (row layout only). Omit to hide the arrows; pass undefined for a disabled end. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  reordering?: boolean;
 }
 
 /**
@@ -132,6 +137,35 @@ export function LessonImageGrid({ items }: { items: ImageGridItem[] }) {
                   <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
                     {item.label ?? `Slide ${n}`}
                   </span>
+                  <div className="flex items-center">
+                  {(item.onMoveUp || item.onMoveDown) && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={item.onMoveUp}
+                        disabled={!item.onMoveUp || item.reordering}
+                        aria-label={`Move slide ${n} up`}
+                        className="h-7 w-7 text-slate-500"
+                        data-testid={`button-move-slide-up-${item.key}`}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={item.onMoveDown}
+                        disabled={!item.onMoveDown || item.reordering}
+                        aria-label={`Move slide ${n} down`}
+                        className="h-7 w-7 text-slate-500"
+                        data-testid={`button-move-slide-down-${item.key}`}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </Button>
+                    </>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
@@ -144,6 +178,7 @@ export function LessonImageGrid({ items }: { items: ImageGridItem[] }) {
                   >
                     {item.removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                   </Button>
+                  </div>
                 </div>
                 {item.footer}
               </div>
@@ -174,6 +209,24 @@ export function LessonImageGrid({ items }: { items: ImageGridItem[] }) {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Live length note under a staged slide description; renders nothing until the value nears the server limit. */
+function CaptionLengthNote({ caption, testId }: { caption: string; testId: string }) {
+  const status = getRichTextLengthStatus(caption);
+  if (!status.nearLimit) return null;
+  return (
+    <p
+      className={cn(
+        "mt-1 text-[11px]",
+        status.overLimit ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400",
+      )}
+      role={status.overLimit ? "alert" : undefined}
+      data-testid={testId}
+    >
+      {describeRichTextLength(status)}
+    </p>
   );
 }
 
@@ -231,6 +284,15 @@ export function GraphicsDropzone({ slides, onChange, disabled }: GraphicsDropzon
     onChange(slides.filter((_, i) => i !== index));
   };
 
+  const handleMove = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= slides.length) return;
+    const reordered = [...slides];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(target, 0, moved);
+    onChange(reordered);
+  };
+
   const handleCaptionChange = (index: number, caption: string) => {
     onChange(slides.map((slide, i) => (i === index ? { ...slide, caption } : slide)));
   };
@@ -256,18 +318,19 @@ export function GraphicsDropzone({ slides, onChange, disabled }: GraphicsDropzon
               url: getPreview(slide.file),
               onRemove: () => handleRemove(i),
               label: `Slide ${i + 1}`,
+              onMoveUp: !disabled && i > 0 ? () => handleMove(i, -1) : undefined,
+              onMoveDown: !disabled && i < slides.length - 1 ? () => handleMove(i, 1) : undefined,
               footer: (
-                <Textarea
-                  value={slide.caption}
-                  onChange={(e) => handleCaptionChange(i, e.target.value)}
-                  placeholder="Slide description (optional)"
-                  aria-label={`Slide ${i + 1} description`}
-                  rows={3}
-                  maxLength={2000}
-                  disabled={disabled}
-                  className="w-full text-sm"
-                  data-testid={`input-slide-caption-${i}`}
-                />
+                <div aria-label={`Slide ${i + 1} description`} data-testid={`input-slide-caption-${i}`}>
+                  <RichTextEditor
+                    content={slide.caption}
+                    onChange={(html) => handleCaptionChange(i, normalizeRichText(html))}
+                    placeholder="Slide description (optional)"
+                    editable={!disabled}
+                    className="w-full text-sm"
+                  />
+                  <CaptionLengthNote caption={slide.caption} testId={`text-slide-caption-length-${i}`} />
+                </div>
               ),
             }))}
           />

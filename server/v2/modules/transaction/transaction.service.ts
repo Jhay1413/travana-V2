@@ -243,12 +243,12 @@ export const transactionService = {
     return await transactionRepository.findAllLightweight(scope);
   },
 
-  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest" | "oldest-activity") {
+  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest" | "oldest-activity", pinnedForUserId?: string) {
     await activateDueFutureDealsOnce();
     if (sort === "oldest-activity") {
       return await listPipelineByOldestActivity(scope, column, page, limit, agentId, quoteStatusFilter);
     }
-    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter, sort);
+    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter, sort, pinnedForUserId);
   },
 
   async getTransactionById(id: string, scope: Scope) {

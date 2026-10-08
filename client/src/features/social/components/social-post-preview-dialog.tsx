@@ -47,21 +47,28 @@ import {
 import type { TravelDeal, QuoteImageSource } from "@/features/social/api/social-post.api";
 import { socialPostApi } from "@/features/social/api/social-post.api";
 import { useQuote } from "@/hooks/queries";
+import { POST_IMAGE_SIZE } from "@/features/image-upscale";
 import { SocialImageTile } from "./social-image-tile";
-import { useUpscaleTiles, isUpscalableFile, type UpscaledInfo } from "./use-upscale-tiles";
+import { EmojiInsertButton } from "@/components/shared/emoji-insert-button";
+import { insertTextAtCaret } from "@/lib/contenteditable";
 
-interface LocalImage {
+/** Mirrors the server: animated gifs are never formatted. */
+const isFormattableFile = (file: File) => file.type.startsWith("image/") && file.type !== "image/gif";
+
+/** Natural size of a tile image, captured when it loads. */
+interface TileSize {
+  sourceWidth?: number;
+  sourceHeight?: number;
+}
+
+/** Anything not already exactly 1080×1080 is formatted by the server. */
+const needsFormatting = (tile: TileSize) =>
+  tile.sourceWidth !== undefined && !(tile.sourceWidth === POST_IMAGE_SIZE && tile.sourceHeight === POST_IMAGE_SIZE);
+
+interface LocalImage extends TileSize {
   localId: string;
   file: File;
   previewUrl: string;
-  /** Server job created for this pending file. */
-  jobId?: string;
-  // Derived from the upscale jobs by useUpscaleTiles — never set directly.
-  upscaled?: UpscaledInfo;
-  upscaling?: boolean;
-  upscaleError?: string;
-  sourceWidth?: number;
-  sourceHeight?: number;
 }
 
 interface ExistingImage {
@@ -71,17 +78,11 @@ interface ExistingImage {
   name: string;
 }
 
-interface UrlImage {
+interface UrlImage extends TileSize {
   url: string;
   name: string;
   source: string;
   selected: boolean;
-  // Derived from the upscale jobs by useUpscaleTiles — never set directly.
-  upscaled?: UpscaledInfo;
-  upscaling?: boolean;
-  upscaleError?: string;
-  sourceWidth?: number;
-  sourceHeight?: number;
 }
 
 type ImageItem =
@@ -126,6 +127,9 @@ export function SocialPostPreviewDialog({
   const scheduleOnOnlySocials = useScheduleOnOnlySocials();
   const rescheduleOnOnlySocials = useRescheduleOnOnlySocials();
   const postRef = useRef<HTMLDivElement>(null);
+  const savedPostRange = useRef<Range | null>(null);
+  const subtitleInputRef = useRef<HTMLInputElement>(null);
+  const hashtagsInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const calendarTriggerRef = useRef<HTMLButtonElement>(null);
   const calendarDropdownRef = useRef<HTMLDivElement>(null);
@@ -155,14 +159,13 @@ export function SocialPostPreviewDialog({
   const [imageOrder, setImageOrder] = useState<ImageItem[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [onlySocialsPostContent, setOnlySocialsPostContent] = useState("");
-  const { urlTiles, localTiles, upscaleOne, upscaleAll, revertUrl, revertLocal, setSourceSize, batchProgress, upscalableCount } = useUpscaleTiles({
-    quoteId,
-    open,
-    urlImages,
-    setUrlImages,
-    pendingFiles,
-    setPendingFiles,
-  });
+  // Size-preserving: only touch the list when the measured size actually changed.
+  const withSize = <T extends TileSize>(tile: T, w: number, h: number): T =>
+    tile.sourceWidth === w && tile.sourceHeight === h ? tile : { ...tile, sourceWidth: w, sourceHeight: h };
+  const setUrlSourceSize = (url: string, w: number, h: number) =>
+    setUrlImages((prev) => prev.map((img) => (img.url === url ? withSize(img, w, h) : img)));
+  const setLocalSourceSize = (localId: string, w: number, h: number) =>
+    setPendingFiles((prev) => prev.map((img) => (img.localId === localId ? withSize(img, w, h) : img)));
 
   const isScheduled = !!travelDeal?.onlySocialsId;
   const isBusy =
@@ -261,19 +264,19 @@ export function SocialPostPreviewDialog({
         data: img,
         sortKey: `ex-${img.id}`,
       })),
-      ...urlTiles.filter(img => img.selected).map((img, i): ImageItem => ({
+      ...urlImages.filter(img => img.selected).map((img, i): ImageItem => ({
         type: "url",
         data: img,
         sortKey: `url-${i}-${img.url.slice(-20)}`,
       })),
-      ...localTiles.map((img): ImageItem => ({
+      ...pendingFiles.map((img): ImageItem => ({
         type: "local",
         data: img,
         sortKey: `loc-${img.localId}`,
       })),
     ];
     setImageOrder(items);
-  }, [existingImages, localTiles, urlTiles]);
+  }, [existingImages, pendingFiles, urlImages]);
 
   const toggleUrlImage = (url: string) => {
     setUrlImages(prev => prev.map(img =>
@@ -329,13 +332,19 @@ export function SocialPostPreviewDialog({
     if (imageOrder.length > 0) {
       const first = imageOrder[0];
       if (first.type === "existing") return first.data.thumb_url || first.data.url;
-      if (first.type === "url") return first.data.upscaled?.url ?? first.data.url;
-      return first.data.upscaled?.url ?? first.data.previewUrl;
+      if (first.type === "url") return first.data.url;
+      return first.data.previewUrl;
     }
     return quoteImageUrl;
   }, [imageOrder, quoteImageUrl]);
 
   const selectedUrlCount = urlImages.filter(img => img.selected).length;
+  // What the server will format on schedule: selected quote images and attached
+  // image files that are not already 1080×1080.
+  const formatCount =
+    urlImages.filter((img) => img.selected && needsFormatting(img)).length +
+    pendingFiles.filter((img) => isFormattableFile(img.file) && needsFormatting(img)).length;
+  const imagesLabel = (n: number) => `${n} image${n === 1 ? "" : "s"}`;
 
   // Tokenize once per hashtags change instead of re-splitting the string
   // several times on every render (the live preview read it 3-4×).
@@ -354,22 +363,42 @@ export function SocialPostPreviewDialog({
     e.preventDefault();
     const text = e.clipboardData.getData("text/plain");
     if (!text) return;
-    // execCommand keeps the native caret position + undo stack and converts
-    // newlines into the editor's block/<br> markup. Fall back to a manual
-    // range insert where it isn't available.
-    const inserted = document.execCommand("insertText", false, text);
-    if (!inserted) {
-      const selection = window.getSelection();
-      if (!selection || selection.rangeCount === 0) return;
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      const node = document.createTextNode(text);
-      range.insertNode(node);
-      range.setStartAfter(node);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
+    insertTextAtCaret(e.currentTarget, text);
+  };
+
+  // Remember the caret while it is inside the editor so the emoji menu (which
+  // takes focus away) can put it back before inserting.
+  const rememberPostRange = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !postRef.current) return;
+    const range = selection.getRangeAt(0);
+    if (postRef.current.contains(range.commonAncestorContainer)) {
+      savedPostRange.current = range.cloneRange();
     }
+  };
+
+  const handlePickPostEmoji = (emoji: string) => {
+    if (!postRef.current) return;
+    insertTextAtCaret(postRef.current, emoji, savedPostRange.current);
+    rememberPostRange();
+  };
+
+  // Splice an emoji into a controlled <Input> at its caret/selection, then put
+  // the caret just after it once React has re-rendered the new value.
+  const insertEmojiInInput = (
+    input: HTMLInputElement | null,
+    current: string,
+    setValue: (value: string) => void,
+    emoji: string,
+  ) => {
+    const start = input?.selectionStart ?? current.length;
+    const end = input?.selectionEnd ?? current.length;
+    setValue(current.slice(0, start) + emoji + current.slice(end));
+    const caret = start + emoji.length;
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(caret, caret);
+    });
   };
 
   const handleSaveAndSchedule = async () => {
@@ -390,16 +419,9 @@ export function SocialPostPreviewDialog({
     const existingIds = imageOrder
       .filter((i) => i.type === "existing")
       .map((i) => (i.data as ExistingImage).id);
-    const localImages = imageOrder.filter((i) => i.type === "local").map((i) => i.data as LocalImage);
-    // An upscaled local image is already stored in S3, so send its URL (the server
-    // presigns our proxy URLs) instead of the raw file.
-    const newFiles = localImages.filter((img) => !img.upscaled).map((img) => img.file);
-    const selectedUrls = [
-      ...imageOrder
-        .filter((i) => i.type === "url")
-        .map((i) => (i.data as UrlImage).upscaled?.url ?? (i.data as UrlImage).url),
-      ...localImages.flatMap((img) => (img.upscaled ? [img.upscaled.url] : [])),
-    ];
+    const newFiles = imageOrder.filter((i) => i.type === "local").map((i) => (i.data as LocalImage).file);
+    // The server formats every selected image to 1080×1080 while scheduling.
+    const selectedUrls = imageOrder.filter((i) => i.type === "url").map((i) => (i.data as UrlImage).url);
 
     try {
       await savePost.mutateAsync({
@@ -432,17 +454,30 @@ export function SocialPostPreviewDialog({
         result = await scheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
       }
       const failedImages = result.failedImageUrls ?? [];
+      const formattedCount = result.autoUpscale?.upscaled.length ?? 0;
+      const upscaledCount = result.autoUpscale?.upscaled.filter((i) => i.upscaled).length ?? 0;
+      const atOriginalSize =
+        result.autoUpscale?.skipped.filter((s) => s.reason === "failed" || s.reason === "timeout").length ?? 0;
+      const originalSizeNote =
+        atOriginalSize > 0
+          ? `${atOriginalSize} image${atOriginalSize === 1 ? " was" : "s were"} posted at original size`
+          : null;
       if (failedImages.length > 0) {
         toast({
           title: `Post ${isScheduled ? "rescheduled" : "scheduled"}, but ${failedImages.length} image${failedImages.length > 1 ? "s" : ""} failed to upload`,
-          description: "Reopen the post and reschedule to retry the missing images.",
+          description: ["Reopen the post and reschedule to retry the missing images.", originalSizeNote]
+            .filter(Boolean)
+            .join("\n"),
           variant: "destructive",
         });
       } else {
+        const done = isScheduled ? "Post updated and rescheduled on OnlySocials" : "Post saved and scheduled on OnlySocials";
         toast({
-          title: isScheduled
-            ? "Post updated and rescheduled on OnlySocials"
-            : "Post saved and scheduled on OnlySocials",
+          title:
+            formattedCount > 0
+              ? `${isScheduled ? "Rescheduled" : "Scheduled"} · ${imagesLabel(formattedCount)} formatted (${upscaledCount} upscaled)`
+              : done,
+          description: [formattedCount > 0 ? done : null, originalSizeNote].filter(Boolean).join("\n") || undefined,
         });
       }
       onOpenChange(false);
@@ -579,11 +614,17 @@ export function SocialPostPreviewDialog({
 
               <div className="lg:col-span-3 space-y-4">
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
                     <Type className="w-3.5 h-3.5" />
                     Subtitle
-                  </label>
+                    <EmojiInsertButton
+                      className="ml-auto"
+                      onPick={(emoji) => insertEmojiInInput(subtitleInputRef.current, subtitle, setSubtitle, emoji)}
+                      data-testid="button-emoji-subtitle"
+                    />
+                  </div>
                   <Input
+                    ref={subtitleInputRef}
                     value={subtitle}
                     onChange={(e) => setSubtitle(e.target.value)}
                     placeholder="Catchy tagline for your post..."
@@ -593,26 +634,41 @@ export function SocialPostPreviewDialog({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
                     <PenLine className="w-3.5 h-3.5" />
                     Post Content
-                  </label>
+                    <EmojiInsertButton
+                      className="ml-auto"
+                      onPick={handlePickPostEmoji}
+                      data-testid="button-emoji-post"
+                    />
+                  </div>
                   <div
                     ref={postRef}
                     contentEditable
                     suppressContentEditableWarning
                     onPaste={handlePostPaste}
+                    onKeyUp={rememberPostRange}
+                    onMouseUp={rememberPostRange}
+                    onBlur={rememberPostRange}
                     className="min-h-[240px] max-h-[380px] overflow-y-auto rounded-xl px-4 py-3 text-[13px] leading-[1.7] bg-white dark:bg-slate-800 border border-black/8 dark:border-white/8 shadow-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-shadow"
                     data-testid="editor-post-content"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
                     <Hash className="w-3.5 h-3.5" />
                     Hashtags
-                  </label>
+                    <EmojiInsertButton
+                      className="ml-auto"
+                      side="top"
+                      onPick={(emoji) => insertEmojiInInput(hashtagsInputRef.current, hashtags, setHashtags, emoji)}
+                      data-testid="button-emoji-hashtags"
+                    />
+                  </div>
                   <Input
+                    ref={hashtagsInputRef}
                     value={hashtags}
                     onChange={(e) => setHashtags(e.target.value)}
                     placeholder="#TravelDeals #Holiday ..."
@@ -639,11 +695,11 @@ export function SocialPostPreviewDialog({
                       </p>
                       <p className="flex items-center gap-1 text-[10px] text-black/40 dark:text-white/40">
                         <Info className="w-3 h-3 shrink-0" />
-                        Upscaling a quote image replaces the original on the quote — use Revert on the tile to undo. You can close this dialog — upscaling continues in the background.
+                        Images are formatted to {POST_IMAGE_SIZE}×{POST_IMAGE_SIZE} (centre-cropped) when you schedule. Small images are upscaled first. Your quote&apos;s original photos are not changed.
                       </p>
                     </div>
                     <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-                      {urlTiles.map((img, i) => (
+                      {urlImages.map((img, i) => (
                         <SocialImageTile
                           key={`url-img-${i}`}
                           src={img.url}
@@ -655,13 +711,7 @@ export function SocialPostPreviewDialog({
                           toggleTestId={`button-toggle-url-image-${i}`}
                           sourceWidth={img.sourceWidth}
                           sourceHeight={img.sourceHeight}
-                          upscaling={img.upscaling}
-                          upscaled={img.upscaled}
-                          upscaleError={img.upscaleError}
-                          upscaleEnabled={!!quoteId}
-                          onSourceSize={(w, h) => setSourceSize({ kind: "url", url: img.url }, w, h)}
-                          onUpscale={() => upscaleOne({ kind: "url", url: img.url })}
-                          onRevert={() => revertUrl(img.url)}
+                          onSourceSize={(w, h) => setUrlSourceSize(img.url, w, h)}
                           testId={`url-image-${i}`}
                         />
                       ))}
@@ -682,27 +732,6 @@ export function SocialPostPreviewDialog({
                       >
                         Deselect All
                       </button>
-                      {quoteId && (upscalableCount > 0 || batchProgress) && (
-                        <>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="ml-auto h-7 px-2.5 text-[11px]"
-                            onClick={upscaleAll}
-                            disabled={!!batchProgress}
-                            data-testid="button-upscale-all"
-                          >
-                            {batchProgress ? <Spinner className="w-3 h-3 mr-1" /> : <Sparkles className="w-3 h-3 mr-1" />}
-                            Upscale all selected{batchProgress ? "" : ` (${upscalableCount})`}
-                          </Button>
-                          {batchProgress && (
-                            <span className="text-[10px] text-black/50 dark:text-white/50" role="status">
-                              Upscaling {Math.min(batchProgress.done + 1, batchProgress.total)} of {batchProgress.total}…
-                            </span>
-                          )}
-                        </>
-                      )}
                     </div>
                   </div>
                 )}
@@ -769,7 +798,7 @@ export function SocialPostPreviewDialog({
                     >
                       {imageOrder.filter(i => i.type !== "url").map((item) => (
                         <Reorder.Item key={item.sortKey} value={item} className="relative group cursor-grab active:cursor-grabbing">
-                          {item.type === "local" && quoteId && isUpscalableFile(item.data.file) ? (
+                          {item.type === "local" && item.data.file.type.startsWith("image/") ? (
                             <SocialImageTile
                               className="w-48"
                               src={item.data.previewUrl}
@@ -779,13 +808,8 @@ export function SocialPostPreviewDialog({
                               selected
                               sourceWidth={item.data.sourceWidth}
                               sourceHeight={item.data.sourceHeight}
-                              upscaling={item.data.upscaling}
-                              upscaled={item.data.upscaled}
-                              upscaleError={item.data.upscaleError}
-                              upscaleEnabled
-                              onSourceSize={(w, h) => setSourceSize({ kind: "local", localId: item.data.localId }, w, h)}
-                              onUpscale={() => upscaleOne({ kind: "local", localId: item.data.localId })}
-                              onRevert={() => revertLocal(item.data.localId)}
+                              onSourceSize={(w, h) => setLocalSourceSize(item.data.localId, w, h)}
+                              upscaleSkipped={!isFormattableFile(item.data.file)}
                               testId={`local-${item.data.localId}`}
                             />
                           ) : (
@@ -886,7 +910,11 @@ export function SocialPostPreviewDialog({
                       ) : (
                         <Clock className="w-4 h-4" />
                       )}
-                      {isScheduled ? "Save & Reschedule" : "Save & Schedule"}
+                      {isBusy && formatCount > 0
+                        ? `Formatting ${imagesLabel(formatCount)} and scheduling… this can take a minute`
+                        : `${isScheduled ? "Save & Reschedule" : "Save & Schedule"}${
+                            formatCount > 0 ? ` · formatting ${imagesLabel(formatCount)}` : ""
+                          }`}
                     </Button>
                     <Button
                       onClick={handleCopy}

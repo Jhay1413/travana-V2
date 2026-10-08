@@ -13,9 +13,11 @@ import {
   fetchOnlySocialsPost,
 } from "../../utils/only-socials";
 import { s3KeyFromStoredUrl, presignImageKey } from "../../utils/image-storage";
+import { autoUpscaleService } from "../image-upscale/auto-upscale.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { buildDealEmbeddingText, buildDealEmbeddingMetadata } from "./deal-embedding";
 import type { TravelDeal } from "@shared/schema";
+import type { AutoUpscaleItem, AutoUpscaleSkip } from "../image-upscale/image-upscale.types";
 import type {
   OnlySocialsMediaUploadResponse,
   OnlySocialsMediaContent,
@@ -25,6 +27,18 @@ import type {
 import type { Scope } from "../../utils/scope";
 
 type ScopeOrTrusted = Scope | { orgId: null };
+
+/** What auto-upscaling did at schedule time, surfaced so the UI can tell the user. */
+export interface AutoUpscaleSummary {
+  upscaled: AutoUpscaleItem[];
+  skipped: AutoUpscaleSkip[];
+}
+
+export interface SchedulePostResult {
+  deal: TravelDeal;
+  failedImageUrls: string[];
+  autoUpscale: AutoUpscaleSummary;
+}
 
 // Best-effort vector-store sync for a POSTED deal (fire-and-forget, mirrors
 // quote.service#syncFreeQuoteEmbedding): a schedule/reschedule/edit must never
@@ -539,14 +553,24 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     newFiles: Express.Multer.File[],
     imageUrls: string[] = [],
     scope: ScopeOrTrusted = { orgId: null }
-  ): Promise<{ deal: TravelDeal; failedImageUrls: string[] }> {
+  ): Promise<SchedulePostResult> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] schedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
 
+    // Never blocks or fails the schedule: unusable images fall back to the original.
+    const tUpscale = Date.now();
+    const prepared = await autoUpscaleService.prepareImagesForPost({
+      quoteId: deal.quote_id,
+      imageUrls,
+      files: newFiles,
+      scope,
+    });
+    console.log(`[SocialPost][timing] auto-upscale phase: ${Date.now() - tUpscale}ms`);
+
     const tMedia = Date.now();
-    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
+    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, prepared.files, prepared.imageUrls);
     console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids, ${failedUrls.length} failed)`);
 
     // OnlySocials stores the date/time verbatim (no timezone), so give it the
@@ -563,7 +587,11 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
     console.log(`[SocialPost][timing] schedulePost DONE id=${id} total=${Date.now() - t0}ms`);
     syncDealEmbedding(updated);
-    return { deal: updated, failedImageUrls: failedUrls };
+    return {
+      deal: updated,
+      failedImageUrls: failedUrls,
+      autoUpscale: { upscaled: prepared.upscaled, skipped: prepared.skipped },
+    };
   },
 
   async reschedulePost(
@@ -575,15 +603,25 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     postContent: string,
     imageUrls: string[] = [],
     scope: ScopeOrTrusted = { orgId: null }
-  ): Promise<{ deal: TravelDeal; failedImageUrls: string[] }> {
+  ): Promise<SchedulePostResult> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] reschedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
 
+    // Never blocks or fails the schedule: unusable images fall back to the original.
+    const tUpscale = Date.now();
+    const prepared = await autoUpscaleService.prepareImagesForPost({
+      quoteId: deal.quote_id,
+      imageUrls,
+      files: newFiles,
+      scope,
+    });
+    console.log(`[SocialPost][timing] auto-upscale phase: ${Date.now() - tUpscale}ms`);
+
     const tMedia = Date.now();
-    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
+    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, prepared.files, prepared.imageUrls);
     console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids, ${failedUrls.length} failed)`);
 
     // OnlySocials gets the local wall-clock value; the DB keeps the UTC instant.
@@ -604,7 +642,11 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
     console.log(`[SocialPost][timing] reschedulePost DONE id=${id} total=${Date.now() - t0}ms`);
     syncDealEmbedding(updated);
-    return { deal: updated, failedImageUrls: failedUrls };
+    return {
+      deal: updated,
+      failedImageUrls: failedUrls,
+      autoUpscale: { upscaled: prepared.upscaled, skipped: prepared.skipped },
+    };
   },
 
   async deleteScheduledPost(id: string, scope: ScopeOrTrusted): Promise<TravelDeal> {

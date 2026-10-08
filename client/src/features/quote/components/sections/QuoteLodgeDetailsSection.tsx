@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { Hotel, PawPrint } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -5,14 +6,27 @@ import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useParks, useLodges } from "@/hooks/queries";
+import { AddLodgeModal } from "@/features/lookups/components/lookups/add-lodge-modal";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import type { QuoteFormValues } from "@/features/quote/types";
 
 export function QuoteLodgeDetailsSection({ bare = false }: { /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean } = {}) {
-  const { control } = useFormContext<QuoteFormValues>();
+  const { control, setValue } = useFormContext<QuoteFormValues>();
   const parkId = useWatch({ control, name: "parkId" });
   const { data: parksData } = useParks();
-  const { data: lodgesData } = useLodges(parkId || undefined);
+  const { data: lodgesData, isFetching: isLodgesFetching } = useLodges(parkId || undefined);
+  const [lodgeSearch, setLodgeSearch] = useState("");
+  const [showAddLodgeModal, setShowAddLodgeModal] = useState(false);
+  // Label for a just-created lodge until the refetched list contains it.
+  const [createdLodge, setCreatedLodge] = useState<{ id: string; label: string } | null>(null);
+
+  const parkName = (parksData ?? []).find((p: { id: string; name: string | null }) => p.id === parkId)?.name ?? undefined;
+  const lodgeTerm = lodgeSearch.trim().toLowerCase();
+  const lodgeList: { lodge_name: string | null; lodge_code: string | null }[] = lodgesData ?? [];
+  const noLodgeMatch = lodgeTerm
+    ? !lodgeList.some((l) => (l.lodge_name || l.lodge_code || "").toLowerCase().includes(lodgeTerm))
+    : lodgeList.length === 0;
+  const canAddLodge = !!parkId && !isLodgesFetching && noLodgeMatch;
 
   return (
     <div className={bare ? "" : "rounded-2xl border border-black/10 bg-white/70 p-4"}>
@@ -53,10 +67,20 @@ export function QuoteLodgeDetailsSection({ bare = false }: { /** Render without 
                     label: l.lodge_name || l.lodge_code || l.id,
                   }))}
                   value={field.value ?? ""}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    setLodgeSearch("");
+                  }}
+                  onSearchCapture={setLodgeSearch}
+                  selectedLabel={createdLodge && createdLodge.id === field.value ? createdLodge.label : undefined}
+                  onAddNew={canAddLodge ? () => setShowAddLodgeModal(true) : undefined}
+                  addNewLabel="Add Lodge"
                   placeholder={parkId ? "Select lodge..." : "Select a park first"}
                 />
               </FormControl>
+              {!parkId && lodgeSearch.trim() && (
+                <p className="text-xs text-black/50">Select a park first to add a lodge</p>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -115,6 +139,21 @@ export function QuoteLodgeDetailsSection({ bare = false }: { /** Render without 
           )}
         />
       </div>
+
+      {parkId && (
+        <AddLodgeModal
+          open={showAddLodgeModal}
+          onOpenChange={setShowAddLodgeModal}
+          parkId={parkId}
+          parkName={parkName}
+          initialName={lodgeSearch.trim()}
+          onSuccess={(lodge) => {
+            setCreatedLodge({ id: lodge.id, label: lodge.lodge_name || lodge.lodge_code || lodge.id });
+            setValue("lodgeId", lodge.id, { shouldDirty: true });
+            setLodgeSearch("");
+          }}
+        />
+      )}
     </div>
   );
 }

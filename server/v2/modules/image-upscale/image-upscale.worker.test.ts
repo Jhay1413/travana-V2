@@ -57,11 +57,11 @@ function makeJob(overrides: Partial<ImageUpscaleJob> = {}): ImageUpscaleJob {
 
 const PIPELINE_RESULT = {
   url: RESULT,
-  width: 3840,
-  height: 2880,
+  width: 1080,
+  height: 1080,
   scale: 4,
-  sourceWidth: 1000,
-  sourceHeight: 750,
+  sourceWidth: 480,
+  sourceHeight: 360,
 };
 
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -82,33 +82,43 @@ describe("image upscale worker", () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it("claims, persists the result BEFORE swapping the quote, then marks done and emits processing + done", async () => {
+  it("claims, persists the result, then marks done (never swapping the quote) and emits processing + done", async () => {
     const order: string[] = [];
     mocks.repo.update.mockImplementation(async (id: string, data: Partial<ImageUpscaleJob>) => {
       order.push(`update:${Object.keys(data).sort().join(",")}`);
       return makeJob({ id, ...data });
     });
-    mocks.replaceImageUrl.mockImplementation(async () => {
-      order.push("replace");
-      return 1;
-    });
-
     await createImageUpscaleWorker(provider).runJob("job-1");
 
     expect(mocks.repo.claimQueued).toHaveBeenCalledWith("job-1");
     expect(order).toEqual([
       "update:resultHeight,resultUrl,resultWidth,scale,sourceHeight,sourceWidth",
-      "replace",
-      "update:replacedOnQuote",
       "update:error,finishedAt,status",
     ]);
-    expect(mocks.replaceImageUrl).toHaveBeenCalledWith(QUOTE_ID, ORIGINAL, RESULT);
+    expect(mocks.replaceImageUrl).not.toHaveBeenCalled();
     expect(mocks.repo.update).toHaveBeenLastCalledWith("job-1", {
       status: "done",
       error: null,
       finishedAt: expect.any(Date),
     });
     expect(mocks.publish.mock.calls.map(([, event]) => event.job.status)).toEqual(["processing", "done"]);
+  });
+
+  it("runJobInline executes like a queued job, passes the pre-fetched source and resolves to the final row", async () => {
+    const prefetched = { buffer: Buffer.alloc(1), contentType: null, dims: null, ownStorage: true, fetchableUrl: "u" };
+
+    const finished = await createImageUpscaleWorker(provider).runJobInline("job-1", prefetched);
+
+    expect(mocks.performUpscale).toHaveBeenCalledWith(expect.objectContaining({ originalUrl: ORIGINAL }), prefetched);
+    expect(mocks.replaceImageUrl).not.toHaveBeenCalled();
+    expect(finished?.status).toBe("done");
+    expect(mocks.publish.mock.calls.map(([, event]) => event.job.status)).toEqual(["processing", "done"]);
+  });
+
+  it("runJobInline resolves to null when the job was already claimed", async () => {
+    mocks.repo.claimQueued.mockResolvedValue(null);
+    expect(await createImageUpscaleWorker(provider).runJobInline("job-1")).toBeNull();
+    expect(mocks.performUpscale).not.toHaveBeenCalled();
   });
 
   it("does not run when claimQueued returns null (already taken)", async () => {
@@ -127,11 +137,11 @@ describe("image upscale worker", () => {
   });
 
   it("marks the job failed with the message of an operational error", async () => {
-    mocks.performUpscale.mockRejectedValue(new AppError("Image is already 4K or larger", 400));
+    mocks.performUpscale.mockRejectedValue(new AppError("Image is already 1080×1080", 400));
     await createImageUpscaleWorker(provider).runJob("job-1");
     expect(mocks.repo.update).toHaveBeenLastCalledWith(
       "job-1",
-      expect.objectContaining({ status: "failed", error: "Image is already 4K or larger" }),
+      expect.objectContaining({ status: "failed", error: "Image is already 1080×1080" }),
     );
     expect(mocks.replaceImageUrl).not.toHaveBeenCalled();
   });
@@ -145,29 +155,14 @@ describe("image upscale worker", () => {
     );
   });
 
-  it("fails with 'Upscaled but could not update the quote' when the swap throws, keeping the stored result", async () => {
-    mocks.replaceImageUrl.mockRejectedValue(new Error("db down"));
-    await createImageUpscaleWorker(provider).runJob("job-1");
-    const failedCall = mocks.repo.update.mock.calls.at(-1);
-    expect(failedCall?.[1]).toEqual({
-      status: "failed",
-      error: "Upscaled but could not update the quote",
-      finishedAt: expect.any(Date),
-    });
-    // result_url was written first and is never cleared.
-    expect(mocks.repo.update.mock.calls[0][1]).toMatchObject({ resultUrl: RESULT });
-    expect(failedCall?.[1]).not.toHaveProperty("resultUrl");
-  });
-
-  it("keeps result_url and replaced_on_quote (revertable) when the final done update fails", async () => {
+  it("keeps result_url when the final done update fails", async () => {
     mocks.repo.update.mockImplementation(async (id: string, data: Partial<ImageUpscaleJob>) => {
       if (data.status === "done") throw new Error("db blip");
-      return makeJob({ id, ...data, resultUrl: RESULT, replacedOnQuote: true });
+      return makeJob({ id, ...data, resultUrl: RESULT });
     });
     await createImageUpscaleWorker(provider).runJob("job-1");
 
     const calls = mocks.repo.update.mock.calls.map(([, data]) => data);
-    expect(calls).toContainEqual({ replacedOnQuote: true });
     const failed = calls.at(-1);
     expect(failed).toEqual({
       status: "failed",
@@ -176,9 +171,8 @@ describe("image upscale worker", () => {
     });
     // The failure write must not null out the result or the replaced flag.
     expect(failed).not.toHaveProperty("resultUrl");
-    expect(failed).not.toHaveProperty("replacedOnQuote");
     const published = mocks.publish.mock.calls.at(-1)?.[1].job;
-    expect(published).toMatchObject({ status: "failed", resultUrl: RESULT, replacedOnQuote: true });
+    expect(published).toMatchObject({ status: "failed", resultUrl: RESULT, replacedOnQuote: false });
   });
 
   it("an emit error cannot flip a finished job to failed", async () => {

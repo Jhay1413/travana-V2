@@ -114,8 +114,8 @@ export const dashboardRepository = {
     const upsellProfitScoped = orgId
       ? upsellProfitBase
           .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-          .where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false), ...orgFilter))
-      : upsellProfitBase.where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false)));
+          .where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false), eq(transaction.is_active, true), ...orgFilter))
+      : upsellProfitBase.where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false), eq(transaction.is_active, true)));
 
     const bookingMonthBase = db
       .select({
@@ -221,6 +221,7 @@ export const dashboardRepository = {
             gte(booking_upsell.added_at, monthStart),
             sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
             eq(transaction.is_test, false),
+            eq(transaction.is_active, true),
             ...orgFilter,
           ))
           .groupBy(transaction.user_id)
@@ -229,6 +230,7 @@ export const dashboardRepository = {
           gte(booking_upsell.added_at, monthStart),
           sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
           eq(transaction.is_test, false),
+          eq(transaction.is_active, true),
         )).groupBy(transaction.user_id);
 
     const agentQuoteBase = db
@@ -339,6 +341,11 @@ export const dashboardRepository = {
     todayUpsellsCount: number;
     weekUpsellsCount: number;
     monthUpsellsCount: number;
+    // Upsell commission already included in today/week/monthProfit (exposed so the
+    // UI can annotate it; never add it on top of the profit figures).
+    todayUpsellAmount: number;
+    weekUpsellAmount: number;
+    monthUpsellAmount: number;
     totalOpenQuotesValue: number;
     quotesCount: number;
   }> {
@@ -407,6 +414,7 @@ export const dashboardRepository = {
         .where(and(
           eq(transaction.user_id, userId),
           eq(transaction.is_test, false),
+          eq(transaction.is_active, true),
           bookingActiveCond,
           sql`${booking_upsell.is_active} = true`,
         )),
@@ -433,6 +441,9 @@ export const dashboardRepository = {
       todayUpsellsCount: Number(ua.todayUpsellsCount),
       weekUpsellsCount: Number(ua.weekUpsellsCount),
       monthUpsellsCount: Number(ua.monthUpsellsCount),
+      todayUpsellAmount: Number(ua.todayUpsell),
+      weekUpsellAmount: Number(ua.weekUpsell),
+      monthUpsellAmount: Number(ua.monthUpsell),
       totalOpenQuotesValue: Number(oq.totalOpenQuotesValue),
       quotesCount: Number(oq.quotesCount),
     };
@@ -488,6 +499,10 @@ export const dashboardRepository = {
             and(
               eq(transaction.user_id, userId),
               eq(transaction.is_test, false),
+              // Mirrors the booking aggregate above: an inactive transaction
+              // must not contribute upsell commission either, or the two halves
+              // of this figure disagree.
+              eq(transaction.is_active, true),
               sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
               sql`${booking_upsell.is_active} = true`,
               gte(booking_upsell.added_at, startOfMonth),

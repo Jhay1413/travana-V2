@@ -48,7 +48,7 @@ export function ImageUpscaleTool() {
   useEffect(() => {
     if (job?.status === "failed" && toastedFailure.current !== job.id) {
       toastedFailure.current = job.id;
-      toast({ title: "Upscale failed", description: job.error ?? "Upscaling failed", variant: "destructive" });
+      toast({ title: "Formatting failed", description: job.error ?? "Formatting failed", variant: "destructive" });
     }
   }, [job, toast]);
 
@@ -79,9 +79,9 @@ export function ImageUpscaleTool() {
       const created = await createJob.mutateAsync({ file });
       setJobId(created.id);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Upscaling failed";
+      const message = err instanceof Error ? err.message : "Formatting failed";
       setError(message);
-      toast({ title: "Upscale failed", description: message, variant: "destructive" });
+      toast({ title: "Formatting failed", description: message, variant: "destructive" });
     }
   };
 

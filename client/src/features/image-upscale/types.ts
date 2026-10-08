@@ -3,7 +3,8 @@ export interface UpscaleResult {
   /** Null when the server could not read the result's size. */
   width: number | null;
   height: number | null;
-  scale: 2 | 3 | 4;
+  /** 1 = crop only (the photo was already large enough). */
+  scale: 1 | 2 | 3 | 4;
   sourceWidth: number | null;
   sourceHeight: number | null;
 }
@@ -41,3 +42,6 @@ export const isJobActive = (job: Pick<UpscaleJob, "status">): boolean =>
 /** Mirrors the server allowlist and multer limit for POST /api/v2/image-upscale/jobs. */
 export const UPSCALE_ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
 export const UPSCALE_MAX_BYTES = 20 * 1024 * 1024;
+
+/** Side of the square post image (Instagram feed) every image is formatted to; mirrors the server. */
+export const POST_IMAGE_SIZE = 1080;

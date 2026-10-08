@@ -21,6 +21,7 @@ import {
   updateLessonValidator,
   lessonIdValidator,
   reorderLessonsValidator,
+  reorderAssetsValidator,
   addAssetsValidator,
   assetIdValidator,
   updateAssetValidator,
@@ -189,6 +190,12 @@ router.post(
   requireOrgRole(authorRoles),
   validate(addAssetsValidator),
   trainingLessonController.addAssets,
+);
+router.patch(
+  '/lessons/:id/assets/reorder',
+  requireOrgRole(authorRoles),
+  validate(reorderAssetsValidator),
+  trainingLessonController.reorderAssets,
 );
 router.patch(
   '/assets/:id',

@@ -6,7 +6,8 @@ import { useLocation, useRoute } from "wouter";
 import { ArrowLeft, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { normalizeRichText } from "@/features/hub/lib/rich-text";
 import { Switch } from "@/components/ui/switch";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -138,8 +139,12 @@ export default function TrainingCourseEditor() {
   // isn't in the current (filtered) search results — e.g. editing an existing course.
   const { data: selectedOrg } = useAdminOrg(selectedOrgId || undefined, isPlatformAdmin);
 
+  // The rich-text editor only reads `content` on mount, so remount it whenever the form is reset.
+  const [descriptionEditorKey, setDescriptionEditorKey] = useState(0);
+
   useEffect(() => {
     if (course) {
+      setDescriptionEditorKey((k) => k + 1);
       form.reset({
         title: course.title,
         category: course.category,
@@ -218,8 +223,9 @@ export default function TrainingCourseEditor() {
     const payload = {
       title: values.title,
       category: values.category,
-      description: values.description || undefined,
-      thumbnailUrl: values.thumbnailUrl || undefined,
+      // null (not undefined) so clearing the field actually clears it on update — the server only patches fields it is sent.
+      description: values.description || null,
+      thumbnailUrl: values.thumbnailUrl || null,
       // Org admins always create/keep org-scoped courses; the server pins their
       // own org id, so we omit it.
       visibility: (isPlatformAdmin ? values.visibility : "org") as CourseVisibility,
@@ -425,12 +431,14 @@ export default function TrainingCourseEditor() {
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Textarea
-                        {...field}
-                        rows={3}
-                        placeholder="What will staff learn in this course?"
-                        data-testid="input-course-description"
-                      />
+                      <div data-testid="input-course-description">
+                        <RichTextEditor
+                          key={descriptionEditorKey}
+                          content={field.value ?? ""}
+                          onChange={(html) => field.onChange(normalizeRichText(html))}
+                          placeholder="What will staff learn in this course?"
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -510,7 +518,8 @@ export default function TrainingCourseEditor() {
                   />
                 ) : (
                   <div className="space-y-1" data-testid="text-course-visibility-note">
-                    <FormLabel>Visibility</FormLabel>
+                    {/* Plain label: FormLabel requires a FormField context, and there is no field here. */}
+                    <p className="text-sm font-medium leading-none">Visibility</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       This course will be visible to your organisation only.
                     </p>

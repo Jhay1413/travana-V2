@@ -77,6 +77,18 @@ export const trainingLessonRepository = {
     });
   },
 
+  /** Persist a new ordering for a set of assets (each row updated by id). */
+  async reorderAssets(order: { id: string; position: number }[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const entry of order) {
+        await tx
+          .update(training_lesson_asset)
+          .set({ position: entry.position })
+          .where(eq(training_lesson_asset.id, entry.id));
+      }
+    });
+  },
+
   async createAssets(data: InsertTrainingLessonAsset[]): Promise<TrainingLessonAsset[]> {
     if (data.length === 0) return [];
     return db.insert(training_lesson_asset).values(data).returning();

@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks } from "@shared/schema";
+import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks, favorites } from "@shared/schema";
 import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, getTableColumns, type SQL, type Column } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -769,6 +769,38 @@ function buildPipelineOrderBy(column: string, sort?: "newest" | "oldest"): SQL {
   return sort === "oldest" ? sql`${transaction.created_at} ASC` : sql`${transaction.created_at} DESC`;
 }
 
+// Per-user pin lookup for the board. Returns the time the viewing user pinned
+// this deal (NULL when not pinned). The pin target is resolved from the deal's
+// own status, which is 1:1 with the pipeline column family and mirrors the
+// client's resolveDealTarget (features/transaction/lib/resolve-deal-target.ts):
+//   on_enquiry -> the deal's live enquiry   (favorites.item_type = 'enquiry')
+//   on_booking -> the deal's booking        (favorites.item_type = 'booking')
+//   on_quote   -> the deal's primary quote  (non-copy, not deleted; 'quote')
+// Pins are stored in `favorites` (one row per user + item), so a correlated
+// subquery keeps ordering correct across pagination without a join fan-out.
+function buildPinnedAtExpr(userId: string): SQL {
+  return sql`(
+    SELECT MAX(${favorites.createdAt}) FROM ${favorites}
+    WHERE ${favorites.userId} = ${userId}
+      AND (
+        (${transaction.status} = 'on_enquiry' AND ${favorites.itemType} = 'enquiry' AND ${favorites.itemId} IN (
+          SELECT e.id FROM ${enquiry_table} e
+          WHERE e.transaction_id = ${transaction.id} AND e.deleted_at IS NULL
+        ))
+        OR (${transaction.status} = 'on_booking' AND ${favorites.itemType} = 'booking' AND ${favorites.itemId} IN (
+          SELECT ${booking.id} FROM ${booking}
+          WHERE ${booking.transaction_id} = ${transaction.id}
+        ))
+        OR (${transaction.status} = 'on_quote' AND ${favorites.itemType} = 'quote' AND ${favorites.itemId} IN (
+          SELECT ${quote.id} FROM ${quote}
+          WHERE ${quote.transaction_id} = ${transaction.id}
+            AND ${quote.isQuoteCopy} = FALSE
+            AND ${quote.deleted_at} IS NULL
+        ))
+      )
+  )`;
+}
+
 export const transactionRepository = {
   async findById(id: string, scope?: Scope): Promise<Transaction | undefined> {
     // Record-level access: staff may open any deal in their org (no branch
@@ -894,7 +926,7 @@ export const transactionRepository = {
     return enrichTransactionsLightweight(txns);
   },
 
-  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest"): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
+  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest", pinnedForUserId?: string): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
     const emptyPage = { items: [] as any[], total: 0, page, hasMore: false, totalProfit: 0, totalValue: 0 };
 
     if (!(PIPELINE_COLUMNS as readonly string[]).includes(column)) {
@@ -902,17 +934,42 @@ export const transactionRepository = {
     }
 
     const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter);
-    const orderByClause = buildPipelineOrderBy(column, sort);
+    const baseOrderBy = buildPipelineOrderBy(column, sort);
 
     const [countResult] = await db.select({ total: count() }).from(transaction).where(where);
     const total = countResult?.total || 0;
 
     const totalProfit = 0;
     const totalValue = 0;
+    const offset = (page - 1) * limit;
 
-    const txns = await db.select().from(transaction).where(where).orderBy(orderByClause).limit(limit).offset((page - 1) * limit);
+    if (!pinnedForUserId) {
+      const txns = await db.select().from(transaction).where(where).orderBy(baseOrderBy).limit(limit).offset(offset);
+      const enriched = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
+      return { items: enriched, total, page, hasMore: page * limit < total, totalProfit, totalValue };
+    }
+
+    // Pinned deals lead each column (most-recently-pinned first), then the
+    // column's normal order — applied in SQL so it holds across pagination.
+    const pinnedAt = buildPinnedAtExpr(pinnedForUserId);
+    const orderByClause = sql`(${pinnedAt}) IS NOT NULL DESC, (${pinnedAt}) DESC NULLS LAST, ${baseOrderBy}`;
+    const rows = await db
+      .select({ ...getTableColumns(transaction), pinned_at: sql<Date | string | null>`(${pinnedAt})` })
+      .from(transaction)
+      .where(where)
+      .orderBy(orderByClause)
+      .limit(limit)
+      .offset(offset);
+    const pinnedAtById = new Map<string, Date | string | null>(rows.map((r) => [r.id, r.pinned_at]));
+    const txns: Transaction[] = rows.map(({ pinned_at: _pinnedAt, ...txn }) => txn);
     const enriched = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
-    return { items: enriched, total, page, hasMore: page * limit < total, totalProfit, totalValue };
+    const items = enriched.map((item) => {
+      const raw = pinnedAtById.get(item.id) ?? null;
+      const parsed = raw ? new Date(raw) : null;
+      const valid = parsed !== null && Number.isFinite(parsed.getTime());
+      return { ...item, pinned: valid, pinned_at: valid ? parsed.toISOString() : null };
+    });
+    return { items, total, page, hasMore: page * limit < total, totalProfit, totalValue };
   },
 
   // Enriched candidate set for a pipeline column with no SQL-level order or

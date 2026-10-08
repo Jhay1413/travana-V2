@@ -7,6 +7,8 @@ vi.mock('./training-lesson.repository', () => ({
     updateAsset: vi.fn(),
     getNextAssetPosition: vi.fn(),
     createAssets: vi.fn(),
+    listAssetsByLessonId: vi.fn(),
+    reorderAssets: vi.fn(),
   },
 }));
 vi.mock('./training.service', () => ({
@@ -25,7 +27,7 @@ import { trainingLessonRepository } from './training-lesson.repository';
 import { trainingService } from './training.service';
 import { uploadImageToS3 } from '../../utils/image-storage';
 import { trainingLessonService } from './training-lesson.service';
-import { uploadAssetsValidator, parseValidatedCaptions } from './training-lesson.validator';
+import { uploadAssetsValidator, parseValidatedCaptions, reorderAssetsValidator } from './training-lesson.validator';
 
 const repo = vi.mocked(trainingLessonRepository);
 const courseService = vi.mocked(trainingService);
@@ -152,5 +154,114 @@ describe('trainingLessonService.updateAsset', () => {
       statusCode: 403,
     });
     expect(repo.updateAsset).not.toHaveBeenCalled();
+  });
+});
+
+const A1 = '22222222-2222-4222-8222-222222222221';
+const A2 = '22222222-2222-4222-8222-222222222222';
+const A3 = '22222222-2222-4222-8222-222222222223';
+const FOREIGN = '33333333-3333-4333-8333-333333333333';
+
+describe('reorderAssetsValidator', () => {
+  const parse = (order: unknown) => reorderAssetsValidator.safeParse({ params: { id: LESSON_ID }, body: { order } });
+
+  it('accepts a valid order', () => {
+    expect(parse([{ id: A1, position: 0 }]).success).toBe(true);
+  });
+
+  it('rejects an empty order array', () => {
+    expect(parse([]).success).toBe(false);
+  });
+
+  it('rejects non-uuid ids and negative or fractional positions', () => {
+    expect(parse([{ id: 'nope', position: 0 }]).success).toBe(false);
+    expect(parse([{ id: A1, position: -1 }]).success).toBe(false);
+    expect(parse([{ id: A1, position: 1.5 }]).success).toBe(false);
+  });
+
+  it('rejects a non-uuid lesson id param', () => {
+    expect(
+      reorderAssetsValidator.safeParse({ params: { id: 'x' }, body: { order: [{ id: A1, position: 0 }] } }).success,
+    ).toBe(false);
+  });
+});
+
+describe('trainingLessonService.reorderAssets', () => {
+  const lessonAssets = [A1, A2, A3].map((id, position) => ({
+    id,
+    lesson_id: LESSON_ID,
+    asset_url: 'u',
+    caption: null,
+    position,
+  }));
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    repo.findLessonById.mockResolvedValue({ id: LESSON_ID, course_id: 'c1', type: 'graphics' } as never);
+    repo.listAssetsByLessonId.mockResolvedValue(lessonAssets as never);
+    repo.reorderAssets.mockResolvedValue(undefined);
+  });
+
+  it('persists the given ids/positions and returns the re-read assets', async () => {
+    const order = [
+      { id: A3, position: 0 },
+      { id: A1, position: 1 },
+      { id: A2, position: 2 },
+    ];
+    const result = await trainingLessonService.reorderAssets(LESSON_ID, order, 'trusted' as never);
+
+    expect(courseService.assertCourseEditable).toHaveBeenCalledWith('c1', 'trusted');
+    expect(repo.reorderAssets).toHaveBeenCalledTimes(1);
+    expect(repo.reorderAssets).toHaveBeenCalledWith(order);
+    expect(result).toBe(lessonAssets);
+  });
+
+  it('rejects an asset id from another lesson with 400 and never writes', async () => {
+    await expect(
+      trainingLessonService.reorderAssets(
+        LESSON_ID,
+        [
+          { id: A1, position: 0 },
+          { id: FOREIGN, position: 1 },
+        ],
+        'trusted' as never,
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(repo.reorderAssets).not.toHaveBeenCalled();
+  });
+
+  it('does not look up foreign ids globally, so the error cannot reveal whether they exist elsewhere', async () => {
+    await expect(
+      trainingLessonService.reorderAssets(LESSON_ID, [{ id: FOREIGN, position: 0 }], 'trusted' as never),
+    ).rejects.toMatchObject({ statusCode: 400, message: `Asset ${FOREIGN} does not belong to this lesson` });
+    expect(repo.findAssetById).not.toHaveBeenCalled();
+  });
+
+  it('404s when the lesson does not exist and never writes', async () => {
+    repo.findLessonById.mockResolvedValue(undefined);
+    await expect(
+      trainingLessonService.reorderAssets(LESSON_ID, [{ id: A1, position: 0 }], 'trusted' as never),
+    ).rejects.toMatchObject({ statusCode: 404 });
+    expect(repo.reorderAssets).not.toHaveBeenCalled();
+  });
+
+  it('propagates assertCourseEditable rejection and neither lists assets nor writes', async () => {
+    courseService.assertCourseEditable.mockRejectedValue(Object.assign(new Error('locked'), { statusCode: 403 }));
+    await expect(
+      trainingLessonService.reorderAssets(LESSON_ID, [{ id: A1, position: 0 }], 'trusted' as never),
+    ).rejects.toMatchObject({ statusCode: 403 });
+    expect(repo.listAssetsByLessonId).not.toHaveBeenCalled();
+    expect(repo.reorderAssets).not.toHaveBeenCalled();
+  });
+
+  it('accepts a partial id set and writes only the supplied entries (current behaviour, see report)', async () => {
+    const order = [{ id: A2, position: 0 }];
+    await trainingLessonService.reorderAssets(LESSON_ID, order, 'trusted' as never);
+    expect(repo.reorderAssets).toHaveBeenCalledWith(order);
+  });
+
+  it('with an empty order (only reachable bypassing the validator) does not throw', async () => {
+    await expect(trainingLessonService.reorderAssets(LESSON_ID, [], 'trusted' as never)).resolves.toBe(lessonAssets);
+    expect(repo.reorderAssets).toHaveBeenCalledWith([]);
   });
 });

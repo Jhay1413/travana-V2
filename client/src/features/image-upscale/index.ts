@@ -1,7 +1,7 @@
 export { ImageUpscaleTool } from "./components/image-upscale-tool";
 export { UpscaleCompare } from "./components/upscale-compare";
 export type { UpscaleCompareProps, UpscaleCompareResult } from "./components/upscale-compare";
-export { isJobActive } from "./types";
+export { isJobActive, POST_IMAGE_SIZE } from "./types";
 export type { UpscaleJob, UpscaleJobStatus, CreateUpscaleJobParams } from "./types";
 export {
   upscaleJobKeys,

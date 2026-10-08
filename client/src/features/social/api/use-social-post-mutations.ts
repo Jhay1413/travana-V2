@@ -1,7 +1,14 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { socialPostApi, type GeneratePostParams, type TravelDeal } from "./social-post.api";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { socialPostApi, type GeneratePostParams, type SchedulePostResult, type TravelDeal } from "./social-post.api";
 import { socialPostKeys } from "./use-social-post-queries";
 import { quoteKeys } from "@/features/quote/api/use-quote-queries";
+
+/** Auto-upscaling swaps quote images for sharper copies, so cached quotes are stale. */
+function invalidateQuotesIfUpscaled(queryClient: QueryClient, deal: SchedulePostResult): void {
+  if (deal.autoUpscale && deal.autoUpscale.upscaled.length > 0) {
+    queryClient.invalidateQueries({ queryKey: quoteKeys.all });
+  }
+}
 
 export function useGeneratePost() {
   const queryClient = useQueryClient();
@@ -31,7 +38,7 @@ export function useScheduleOnOnlySocials() {
       socialPostApi.scheduleOnOnlySocials(id, formData),
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
-      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     },
   });
 }
@@ -44,7 +51,7 @@ export function useRescheduleOnOnlySocials() {
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
       queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
-      queryClient.invalidateQueries({ queryKey: socialPostKeys.media(deal.id) });
+      queryClient.invalidateQueries({ queryKey: socialPostKeys.media(deal.id) });
     },
   });
 }

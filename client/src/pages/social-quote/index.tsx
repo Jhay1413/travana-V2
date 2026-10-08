@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useRoute, useSearch } from "wouter";
 import {
   ChevronLeft,
   Copy,
@@ -40,7 +40,7 @@ import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import { useDeleteQuote } from "@/hooks/mutations";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
-import { useQuote, useCurrentUser } from "@/hooks/queries";
+import { useQuote, useCurrentUser, quoteKeys } from "@/hooks/queries";
 import { StatusPill } from "@/features/social/components/social-quote";
 import { transformQuoteData, currency, formatUKDate } from "@/features/quote/components/quote-types";
 import { QuoteGuruSheet } from "@/features/quote/components/QuoteGuruSheet";
@@ -57,6 +57,9 @@ import { CircleAction } from "@/features/client/components/circle-action";
 
 export default function SocialQuotePage() {
   const [, setLocation] = useLocation();
+  // The board passes its filter query string as ?from= so going back restores the view.
+  const from = new URLSearchParams(useSearch()).get("from");
+  const boardPath = from ? `/social-posts?${from}` : "/social-posts";
   const [, params] = useRoute("/social-posts/quotes/:quoteId");
 
   const { role } = useRole();
@@ -128,7 +131,7 @@ export default function SocialQuotePage() {
             size="sm"
             variant="outline"
             className="mt-4"
-            onClick={() => setLocation("/social-posts")}
+            onClick={() => setLocation(boardPath)}
           >
             Back to Social Posts
           </Button>
@@ -160,7 +163,7 @@ export default function SocialQuotePage() {
     try {
       await deleteQuoteMutation.mutateAsync(quoteId);
       toast({ title: "Quote deleted" });
-      setLocation("/social-posts");
+      setLocation(boardPath);
     } catch {
       toast({ title: "Failed to delete quote", variant: "destructive" });
       setShowDeleteConfirm(false);
@@ -185,7 +188,7 @@ export default function SocialQuotePage() {
                 variant="outline"
                 className="h-9 rounded-2xl border-black/10 bg-white/70"
                 data-testid="button-back-social-posts"
-                onClick={() => setLocation("/social-posts")}
+                onClick={() => setLocation(boardPath)}
               >
                 <ChevronLeft className="mr-2 h-4 w-4" />
                 Social Posts
@@ -286,7 +289,7 @@ export default function SocialQuotePage() {
               clientId={clientId}
               clientName={clientName}
               selection={{ type: "quote", id: quoteId }}
-              onBack={() => setLocation("/social-posts")}
+              onBack={() => setLocation(boardPath)}
               onOpenExpiryDialog={quoteExpiry.openExpiryDialog}
               showDetailTabs={false}
             />
@@ -309,7 +312,7 @@ export default function SocialQuotePage() {
         presentation="drawer"
         onSuccess={() => {
           setShowEditDialog(false);
-          queryClient.invalidateQueries({ queryKey: ["quotes", quoteId] });
+          queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
         }}
       />
 

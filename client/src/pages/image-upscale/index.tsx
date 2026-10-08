@@ -4,10 +4,9 @@ export default function ImageUpscalePage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
       <header>
-        <h1 className="text-xl font-semibold text-black/80">Image Upscaler</h1>
+        <h1 className="text-xl font-semibold text-black/80">Post Image Formatter</h1>
         <p className="mt-1 text-sm text-black/50">
-          Upscale a photo to 4K and compare it with the original. Nothing is saved to a quote — use the ✨ button in a
-          social post for that.
+          Centre-crops to a 1080×1080 square and upscales small photos first. Nothing is saved to a quote.
         </p>
       </header>
       <ImageUpscaleTool />

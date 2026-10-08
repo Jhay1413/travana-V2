@@ -5,6 +5,9 @@ import { cn } from "@/lib/utils";
 import { InitialsAvatar } from "@/features/agent-overview/components/dashboard-ui";
 import { useSetPrimaryQuote } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
+import { useDealPin } from "@/hooks/use-deal-pin";
+import { PinToggleButton } from "@/components/shared/pin-toggle-button";
+import { isDealPinned, resolveDealTarget } from "@/features/transaction";
 import type { Transaction } from "@/features/quote/types";
 import {
   formatCurrency,
@@ -81,6 +84,9 @@ export function DealCard({
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const setPrimaryQuoteMutation = useSetPrimaryQuote();
+  const { pinnedKeys, togglePin, isLoaded: pinsLoaded } = useDealPin();
+  const pinTarget = resolveDealTarget(t);
+  const pinned = isDealPinned(t, pinnedKeys, pinsLoaded, pinTarget);
   const [isDragging, setIsDragging] = useState(false);
   const [showQuotes, setShowQuotes] = useState(false);
   const quotesRef = useRef<HTMLDivElement>(null);
@@ -107,6 +113,7 @@ export function DealCard({
     <div
       className={cn(
         "group relative cursor-grab rounded-md border border-black/10 bg-white p-3 shadow-sm active:cursor-grabbing 3xl:p-3.5",
+        pinned && "border-amber-300/70 bg-amber-50/30",
         isDragging && "opacity-40",
       )}
       draggable
@@ -189,6 +196,19 @@ export function DealCard({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {pinTarget && (
+            <PinToggleButton
+              pinned={pinned}
+              onToggle={() =>
+                togglePin(pinTarget.type, pinTarget.id, {
+                  label: pinTarget.title || getTransactionTitle(t),
+                  subtitle: clientName,
+                })
+              }
+              className={cn(!pinned && "opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100")}
+              data-testid={`button-pin-deal-${t.id}`}
+            />
+          )}
           <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
             <button
               type="button"

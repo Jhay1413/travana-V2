@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, ExternalLink, Loader2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { UpscaleResult } from "../types";
+import { POST_IMAGE_SIZE, type UpscaleResult } from "../types";
 
 export type UpscaleCompareResult = Pick<UpscaleResult, "url" | "width" | "height"> &
   Partial<Pick<UpscaleResult, "scale" | "sourceWidth" | "sourceHeight">>;
@@ -23,7 +23,7 @@ const EXT_BY_TYPE: Record<string, string> = {
 
 function downloadName(originalName: string, blobType: string): string {
   const base = originalName.replace(/\.[^.]+$/, "") || "image";
-  return `${base}-4k.${EXT_BY_TYPE[blobType] ?? "jpg"}`;
+  return `${base}-1080.${EXT_BY_TYPE[blobType] ?? "jpg"}`;
 }
 
 export function UpscaleCompare({ result, originalUrl, originalName, onReset }: UpscaleCompareProps) {
@@ -86,6 +86,7 @@ export function UpscaleCompare({ result, originalUrl, originalName, onReset }: U
   return (
     <section className="space-y-4 rounded-2xl border border-black/10 bg-white/60 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold text-black/80">Original vs {POST_IMAGE_SIZE}×{POST_IMAGE_SIZE}</h2>
         <button
           type="button"
           onClick={() => setZoomed((z) => !z)}
@@ -109,7 +110,7 @@ export function UpscaleCompare({ result, originalUrl, originalName, onReset }: U
         {/* LEFT: upscaled */}
         <div className="min-w-0 space-y-2">
           <h3 className="text-sm font-semibold text-black/80">
-            Upscaled{hasSize ? ` · ${result.width} × ${result.height}` : ""}{result.scale ? ` · ${result.scale}×` : ""}
+            {POST_IMAGE_SIZE}×{POST_IMAGE_SIZE}{hasSize ? ` · ${result.width} × ${result.height}` : ""}{result.scale && result.scale > 1 ? ` · upscaled ${result.scale}×` : " · cropped"}
           </h3>
           <div
             ref={upscaledPane}
@@ -117,7 +118,7 @@ export function UpscaleCompare({ result, originalUrl, originalName, onReset }: U
             className={paneClass}
             style={paneStyle}
           >
-            <img src={result.url} alt="Upscaled" className={imgClass} style={imgStyle} draggable={false} />
+            <img src={result.url} alt="Formatted" className={imgClass} style={imgStyle} draggable={false} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button

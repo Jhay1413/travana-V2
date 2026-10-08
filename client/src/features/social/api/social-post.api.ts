@@ -44,11 +44,44 @@ export interface TravelDeal {
   created_at: string;
 }
 
+export interface AutoUpscaleSize {
+  w: number;
+  h: number;
+}
+
+export interface AutoUpscaledImage {
+  /** Quote image url, or the uploaded file's name. */
+  originalUrl: string;
+  resultUrl: string;
+  from: AutoUpscaleSize | null;
+  to: AutoUpscaleSize | null;
+  /** False when the image was only cropped (already large enough). */
+  upscaled: boolean;
+}
+
+export type AutoUpscaleSkipReason = "already_formatted" | "reused_previous" | "failed" | "cap_reached" | "timeout";
+
+export interface AutoUpscaleSkipped {
+  originalUrl: string;
+  reason: AutoUpscaleSkipReason;
+  message?: string;
+}
+
+/** What the server's automatic 1080×1080 formatting did while scheduling. */
+export interface AutoUpscaleSummary {
+  upscaled: AutoUpscaledImage[];
+  skipped: AutoUpscaleSkipped[];
+}
+
 /** Schedule/reschedule responses: the deal plus any quote-image URLs that
  * failed to upload to OnlySocials (the post is still scheduled without them). */
 export interface SchedulePostResult extends TravelDeal {
   failedImageUrls?: string[];
+  autoUpscale?: AutoUpscaleSummary;
 }
+
+/** Upscaling runs inside the request, so scheduling can take minutes. */
+const SCHEDULE_TIMEOUT_MS = 240_000;
 
 export interface QuoteImageSource {
   url: string;
@@ -79,7 +112,7 @@ export const socialPostApi = {
     const { data: res } = await axiosClient.post<SchedulePostResult>(
       `/api/v2/social-posts/${id}/schedule`,
       formData,
-      { headers: { "Content-Type": "multipart/form-data" } }
+      { headers: { "Content-Type": "multipart/form-data" }, timeout: SCHEDULE_TIMEOUT_MS }
     );
     return res;
   },
@@ -88,7 +121,7 @@ export const socialPostApi = {
     const { data: res } = await axiosClient.put<SchedulePostResult>(
       `/api/v2/social-posts/${id}/reschedule`,
       formData,
-      { headers: { "Content-Type": "multipart/form-data" } }
+      { headers: { "Content-Type": "multipart/form-data" }, timeout: SCHEDULE_TIMEOUT_MS }
     );
     return res;
   },

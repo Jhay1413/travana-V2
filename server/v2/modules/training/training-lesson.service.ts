@@ -123,6 +123,23 @@ export const trainingLessonService = {
     return trainingLessonRepository.listLessonsBySectionId(sectionId);
   },
 
+  /** Persist a new position for every slide in `order`; all ids must belong to `lessonId`. */
+  async reorderAssets(lessonId: string, order: LessonReorderEntry[], scope: ScopeOrTrusted): Promise<TrainingLessonAsset[]> {
+    const lesson = await getLessonOrThrow(lessonId);
+    await trainingService.assertCourseEditable(lesson.course_id, scope);
+
+    const assets = await trainingLessonRepository.listAssetsByLessonId(lessonId);
+    const validIds = new Set(assets.map((a) => a.id));
+    for (const entry of order) {
+      if (!validIds.has(entry.id)) {
+        throw new AppError(`Asset ${entry.id} does not belong to this lesson`, 400);
+      }
+    }
+
+    await trainingLessonRepository.reorderAssets(order);
+    return trainingLessonRepository.listAssetsByLessonId(lessonId);
+  },
+
   /** Add asset rows from already-known URLs (complements the direct multer upload below). */
   async addAssetUrls(lessonId: string, assets: CreateAssetInput[], scope: ScopeOrTrusted): Promise<TrainingLessonAsset[]> {
     const lesson = await getLessonOrThrow(lessonId);

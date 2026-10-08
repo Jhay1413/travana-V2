@@ -11,6 +11,7 @@ vi.mock("./transaction.repository", () => ({
     update: vi.fn(),
     remove: vi.fn(),
     findExpiringQuotes: vi.fn(),
+    findPipelineByStatus: vi.fn(),
     applyFutureDeal: vi.fn(),
     applyLost: vi.fn(),
   },
@@ -441,5 +442,16 @@ describe("transactionService.createTransactionWithBooking — add booking", () =
     await transactionService.createTransactionWithBooking({} as never, {} as never, SCOPE);
 
     expect(neonClientRepository.update).toHaveBeenCalledWith("c1", { badge: "VIP Client" });
+  });
+});
+
+describe("transactionService.listPipelineByStatus — pinning", () => {
+  it("forwards the viewing user id so the repository can sort pinned deals first", async () => {
+    const page = { items: [], total: 0, page: 1, hasMore: false, totalProfit: 0, totalValue: 0 };
+    vi.mocked(transactionRepository.findPipelineByStatus).mockResolvedValue(page);
+
+    await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1");
+
+    expect(transactionRepository.findPipelineByStatus).toHaveBeenCalledWith(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1");
   });
 });

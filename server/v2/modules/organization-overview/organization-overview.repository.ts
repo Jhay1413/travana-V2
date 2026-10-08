@@ -881,7 +881,7 @@ export const organizationOverviewRepository = {
         .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
         .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        .where(and(bookingActiveCond, scopeCond, sql`${booking_upsell.is_active} = true`))
+        .where(and(bookingActiveCond, eq(transaction.is_active, true), scopeCond, sql`${booking_upsell.is_active} = true`))
         .groupBy(transaction.user_id),
     ]);
 

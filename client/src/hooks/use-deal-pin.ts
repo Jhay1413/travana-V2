@@ -41,5 +41,5 @@ export function useDealPin() {
     );
   }
 
-  return { pinnedKeys, togglePin };
+  return { pinnedKeys, togglePin, isLoaded: favorites !== undefined };
 }

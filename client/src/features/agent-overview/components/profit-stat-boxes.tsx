@@ -56,6 +56,9 @@ export interface ProfitStats {
   todayUpsellsCount?: number;
   weekUpsellsCount?: number;
   monthUpsellsCount?: number;
+  todayUpsellAmount?: number;
+  weekUpsellAmount?: number;
+  monthUpsellAmount?: number;
 }
 
 function bookingWord(count: number): string {
@@ -66,14 +69,21 @@ function upsellWord(count: number): string {
   return count === 1 ? "Upsell" : "Upsells";
 }
 
+// The profit headline ALREADY includes upsell commission, so the amount is worded
+// "incl. £X" (a part of the total), never "+£X". A "+" would read as extra on top and
+// lead agents to double-count it when checking progress against target.
 function BookingCountSubtext({
   count,
   upsellCount,
+  upsellAmount,
   period,
+  testId,
 }: {
   count: number;
   upsellCount?: number;
+  upsellAmount?: number;
   period: string;
+  testId: string;
 }) {
   return (
     <>
@@ -82,6 +92,11 @@ function BookingCountSubtext({
         <>
           {" · "}
           <span className="font-semibold text-[#fe9a00]">{upsellCount}</span> {upsellWord(upsellCount)}
+          {!!upsellAmount && (
+            <span className="whitespace-nowrap" data-testid={testId}>
+              {" "}(incl. {currency.format(upsellAmount)})
+            </span>
+          )}
         </>
       )}{" "}
       {period}
@@ -128,7 +143,9 @@ export function ProfitStatBoxes({
             <BookingCountSubtext
               count={profitStats.todayBookingsCount}
               upsellCount={profitStats.todayUpsellsCount}
+              upsellAmount={profitStats.todayUpsellAmount}
               period="today"
+              testId="stat-upsell-amount-todays-profit"
             />
           ) : (
             "Total from today's bookings"
@@ -145,7 +162,9 @@ export function ProfitStatBoxes({
             <BookingCountSubtext
               count={profitStats.weekBookingsCount}
               upsellCount={profitStats.weekUpsellsCount}
+              upsellAmount={profitStats.weekUpsellAmount}
               period="this week"
+              testId="stat-upsell-amount-weeks-profit"
             />
           ) : (
             "Total from this week's bookings"
@@ -161,7 +180,9 @@ export function ProfitStatBoxes({
           <BookingCountSubtext
             count={monthBookingsCount}
             upsellCount={profitStats.monthUpsellsCount}
+            upsellAmount={profitStats.monthUpsellAmount}
             period="this Month"
+            testId="stat-upsell-amount-this-month"
           />
         </p>
       </StatCard>

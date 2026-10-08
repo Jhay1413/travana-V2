@@ -80,6 +80,19 @@ export function resolveMaxConcurrent(configured?: number): number | undefined {
   return configured;
 }
 
+// Browser section only, for non-scraper callers (e.g. fetching bot-protected
+// images). Needs no supplier credentials. Local Chrome gets a throwaway profile
+// (no userDataDir) so it never contends for the easyJet session profile lock.
+export function buildBrowserContext(): EasyJetScrapeContext {
+  const base = buildDefaultContext();
+  return {
+    ...base,
+    credentials: {},
+    queueKey: 'headless-fetch',
+    browser: { ...base.browser, userDataDir: undefined },
+  };
+}
+
 // Reconstructs the env-based configuration used before per-org DB configs. Lets
 // the legacy /easyjet/scrape route (and local dev) keep working unchanged.
 export function buildDefaultContext(): EasyJetScrapeContext {

@@ -34,6 +34,15 @@ export const reorderLessonsValidator = z.object({
   }),
 });
 
+export const reorderAssetsValidator = z.object({
+  params: z.object({ id: z.string().uuid('Invalid lesson id') }),
+  body: z.object({
+    order: z
+      .array(z.object({ id: z.string().uuid(), position: z.number().int().min(0) }))
+      .min(1, 'order must contain at least one entry'),
+  }),
+});
+
 export const addAssetsValidator = z.object({
   params: z.object({ id: z.string().uuid('Invalid lesson id') }),
   body: z.object({

@@ -8,18 +8,18 @@ interface RecentUpscalesProps {
 
 function statusLabel(job: UpscaleJob): string {
   if (job.status === "queued") return "Queued…";
-  if (job.status === "processing") return "Upscaling…";
+  if (job.status === "processing") return "Formatting…";
   if (job.status === "failed") return job.error ?? "Failed";
   if (job.resultWidth && job.resultHeight) return `${job.resultWidth} × ${job.resultHeight}`;
   return "Done";
 }
 
-/** The user's latest upscales, so a result is not lost when they navigate away mid-job. */
+/** The user's latest formatted images, so a result is not lost when they navigate away mid-job. */
 export function RecentUpscales({ jobs, onCompare }: RecentUpscalesProps) {
   if (jobs.length === 0) return null;
   return (
     <section className="space-y-3 rounded-2xl border border-black/10 bg-white/60 p-5" data-testid="section-recent-upscales">
-      <h2 className="text-sm font-semibold text-black/80">Recent upscales</h2>
+      <h2 className="text-sm font-semibold text-black/80">Recent images</h2>
       <ul className="divide-y divide-black/5">
         {jobs.map((job) => {
           const done = job.status === "done" && !!job.resultUrl;

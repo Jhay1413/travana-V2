@@ -1,17 +1,15 @@
 import { AppError } from "../../utils/error-handler";
-import { quoteImageService } from "../quote/quote-image.service";
 import { imageUpscaleRepository } from "./image-upscale.repository";
 import { publishJobUpdated } from "./image-upscale.events";
 import { createUpscalePipeline } from "./image-upscale.pipeline";
 import { falEsrganProvider } from "./providers/fal-esrgan.provider";
 import type { ImageUpscaleJob } from "@shared/schema";
-import type { UpscaleProvider } from "./image-upscale.types";
+import type { FetchedSource, UpscaleProvider } from "./image-upscale.types";
 
 export const IMAGE_UPSCALE_CONCURRENCY = 3;
 const SWEEP_INTERVAL_MS = 60_000;
 const START_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000, 30_000];
 const GENERIC_FAILURE = "Image upscaling failed. Please try again.";
-const QUOTE_UPDATE_FAILURE = "Upscaled but could not update the quote";
 
 interface WorkerOptions {
   concurrency?: number;
@@ -44,18 +42,19 @@ export function createImageUpscaleWorker(provider: UpscaleProvider, options: Wor
   let sweepTimer: ReturnType<typeof setInterval> | null = null;
 
   /** Runs the pipeline and the follow-up writes. Resolves to the final row to publish; never throws. */
-  async function execute(job: ImageUpscaleJob): Promise<ImageUpscaleJob | null> {
+  async function execute(job: ImageUpscaleJob, prefetched?: FetchedSource): Promise<ImageUpscaleJob | null> {
     try {
-      const result = await pipeline.performUpscale({
-        originalUrl: job.originalUrl,
-        sourceKind: job.sourceKind,
-        quoteId: job.quoteId,
-        orgId: job.orgId,
-        userId: job.createdBy,
-      });
+      const result = await pipeline.performUpscale(
+        {
+          originalUrl: job.originalUrl,
+          sourceKind: job.sourceKind,
+          quoteId: job.quoteId,
+          orgId: job.orgId,
+          userId: job.createdBy,
+        },
+        prefetched,
+      );
 
-      // Persist the result BEFORE touching the quote: from here on a late
-      // failure can never lose the upscaled image or strand a swapped quote.
       await imageUpscaleRepository.update(job.id, {
         resultUrl: result.url,
         scale: result.scale,
@@ -65,29 +64,13 @@ export function createImageUpscaleWorker(provider: UpscaleProvider, options: Wor
         resultHeight: result.height,
       });
 
-      if (job.quoteId && job.sourceKind === "quote_image") {
-        // The original S3 object is kept (it may be shared with duplicated quotes).
-        let changed: number;
-        try {
-          changed = await quoteImageService.replaceImageUrl(job.quoteId, job.originalUrl, result.url);
-        } catch (err) {
-          console.error(`[ImageUpscale] job ${job.id} could not update the quote:`, err);
-          return await imageUpscaleRepository.update(job.id, {
-            status: "failed",
-            error: QUOTE_UPDATE_FAILURE,
-            finishedAt: new Date(),
-          });
-        }
-        // Recorded right away so revert works even if the final update below fails.
-        if (changed > 0) await imageUpscaleRepository.update(job.id, { replacedOnQuote: true });
-      }
-
+      // The square post image is NOT swapped onto the quote: it would wreck the
+      // quote gallery. `replaced_on_quote` stays false.
       return await imageUpscaleRepository.update(job.id, { status: "done", error: null, finishedAt: new Date() });
     } catch (err) {
       console.error(`[ImageUpscale] job ${job.id} failed:`, err instanceof Error ? err.message : err);
       try {
-        // Only status/error/finishedAt: result_url and replaced_on_quote already
-        // persisted (if any) are kept so the image can still be reverted.
+        // Only status/error/finishedAt: a result_url already persisted is kept.
         return await imageUpscaleRepository.update(job.id, {
           status: "failed",
           error: failureMessage(err),
@@ -100,19 +83,25 @@ export function createImageUpscaleWorker(provider: UpscaleProvider, options: Wor
     }
   }
 
-  async function runJob(jobId: string): Promise<void> {
+  /** Claims, executes and publishes one job. Resolves to the final row, or null when not run / not persisted. */
+  async function claimAndRun(jobId: string, prefetched?: FetchedSource): Promise<ImageUpscaleJob | null> {
     let claimed: ImageUpscaleJob | null;
     try {
       claimed = await imageUpscaleRepository.claimQueued(jobId);
     } catch (err) {
       console.error(`[ImageUpscale] job ${jobId} could not be claimed:`, err);
-      return;
+      return null;
     }
-    if (!claimed) return; // already taken, finished, or gone
+    if (!claimed) return null; // already taken, finished, or gone
     publishJobUpdated(claimed);
 
-    const finished = await execute(claimed);
+    const finished = await execute(claimed, prefetched);
     if (finished) publishJobUpdated(finished);
+    return finished;
+  }
+
+  async function runJob(jobId: string): Promise<void> {
+    await claimAndRun(jobId);
   }
 
   function pump(): void {
@@ -149,6 +138,14 @@ export function createImageUpscaleWorker(provider: UpscaleProvider, options: Wor
   return {
     runJob,
     enqueue,
+
+    /**
+     * Runs a freshly created job right now, outside the queue and concurrency
+     * limit (the caller bounds its own parallelism), with the same claim and events
+     * as a queued job. Never throws; null when the job was
+     * not run (already claimed elsewhere).
+     */
+    runJobInline: claimAndRun,
 
     /**
      * Boot recovery (fail what the dead process was running, re-queue what it

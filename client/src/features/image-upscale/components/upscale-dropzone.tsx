@@ -90,7 +90,7 @@ export function UpscaleDropzone({ file, previewUrl, pending, error, onPick, onUp
               className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-black/80 px-4 py-2 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
             >
               {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Upscale to 4K
+              Format to 1080×1080
             </button>
             <button
               type="button"
@@ -102,7 +102,7 @@ export function UpscaleDropzone({ file, previewUrl, pending, error, onPick, onUp
             </button>
             {pending && (
               <span className="flex items-center gap-1.5 text-xs text-black/50">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Upscaling… usually 5–20 seconds. You can leave this page; it keeps running.
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Formatting… usually 5–20 seconds. You can leave this page; it keeps running.
               </span>
             )}
           </div>

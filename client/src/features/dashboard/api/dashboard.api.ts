@@ -18,6 +18,9 @@ export interface AgentStats {
   todayUpsellsCount: number;
   weekUpsellsCount: number;
   monthUpsellsCount: number;
+  todayUpsellAmount: number;
+  weekUpsellAmount: number;
+  monthUpsellAmount: number;
   totalOpenQuotesValue: number;
   quotesCount: number;
 }

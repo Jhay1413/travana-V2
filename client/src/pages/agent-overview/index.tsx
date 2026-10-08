@@ -74,6 +74,9 @@ export default function AgentOverviewPage() {
       todayUpsellsCount: agentStats?.todayUpsellsCount,
       weekUpsellsCount: agentStats?.weekUpsellsCount,
       monthUpsellsCount: agentStats?.monthUpsellsCount,
+      todayUpsellAmount: agentStats?.todayUpsellAmount,
+      weekUpsellAmount: agentStats?.weekUpsellAmount,
+      monthUpsellAmount: agentStats?.monthUpsellAmount,
     };
   }, [agentStats, shopTargetsData, agentTargetsData]);
 
