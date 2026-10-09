@@ -9,6 +9,7 @@ import {
   booking,
   booking_upsell,
   quote,
+  quoteViewsTable,
   enquiry_table,
   enquiry_destination,
   destination,
@@ -22,7 +23,7 @@ import {
   agentTargetTable,
   tour_operator,
 } from "@shared/schema";
-import { sql, eq, and, gte, lte, isNull, ne, desc, inArray } from "drizzle-orm";
+import { sql, eq, and, gte, lt, lte, isNull, ne, desc, inArray } from "drizzle-orm";
 import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 import type {
   OrganizationOverviewCore,
@@ -39,55 +40,52 @@ import type {
 } from "./organization-overview.types";
 import { totalBookingCommissionExpr, totalQuoteCommissionExpr, totalUpsellCommissionExpr, totalUpsellSalesExpr } from "../../utils/commission-sql";
 import { quoteStatsConds } from "../../utils/quote-conditions";
+import {
+  ukStartOfDay,
+  ukStartOfWeek,
+  ukStartOfMonth,
+  ukMonthEnd,
+  ukStartOfYear,
+  ukStartOfNextYear,
+  ukAddDays,
+  ukDateString,
+  ukYearMonth,
+  ukMonthName,
+} from "./organization-overview.dates";
 
 const bookingActiveCond = sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`;
 const testCond = eq(transaction.is_test, false);
 
-function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function startOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function startOfWeek(d: Date) {
-  const today = startOfDay(d);
-  const dayOfWeek = today.getDay() || 7;
-  const monday = new Date(today);
-  monday.setDate(monday.getDate() - (dayOfWeek - 1));
-  return monday;
-}
-
-function startOfYear(d: Date) {
-  return new Date(d.getFullYear(), 0, 1);
-}
-
-function addDays(d: Date, days: number) {
-  const out = new Date(d);
-  out.setDate(out.getDate() + days);
-  return out;
-}
+// All calendar boundaries are Europe/London midnights (see organization-overview.dates.ts).
+const startOfDay = ukStartOfDay;
+const startOfWeek = ukStartOfWeek;
+const startOfMonth = ukStartOfMonth;
+const addDays = ukAddDays;
 
 export const organizationOverviewRepository = {
-  async getStats(orgId: string | null): Promise<OrganizationOverviewCore> {
+  async getStats(orgId: string | null, branchId?: string): Promise<OrganizationOverviewCore> {
     const now = new Date();
     const todayStart = startOfDay(now);
     const weekStart = startOfWeek(now);
     const monthStart = startOfMonth(now);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const yearStart = startOfYear(now);
+    const monthEnd = ukMonthEnd(now);
+    const yearStart = ukStartOfYear(now);
+    const nextYearStart = ukStartOfNextYear(now);
     const ninetyDaysAgo = addDays(todayStart, -90);
+    const prevWeekStart = addDays(weekStart, -7);
+    const quoteWindowStart = prevWeekStart < monthStart ? prevWeekStart : monthStart;
     const fourteenDaysAgo = addDays(todayStart, -14);
     const in7Days = addDays(todayStart, 7);
     const in30Days = addDays(todayStart, 30);
 
     // Org scope joins the client table for filtering. Platform admin (orgId null)
     // sees every org's data and skips the org filter entirely.
+    // When a branch is selected every deal-derived figure narrows to that branch's deals.
+    const branchCond = branchId ? eq(transaction.branch_id, branchId) : undefined;
     const scopeCond = (extra: ReturnType<typeof eq>[] = []) =>
       orgId
-        ? and(testCond, eq(clientTable.orgId, orgId), ...extra)
-        : and(testCond, ...extra);
+        ? and(testCond, eq(clientTable.orgId, orgId), branchCond, ...extra)
+        : and(testCond, branchCond, ...extra);
 
     const [
       orgProfile,
@@ -97,7 +95,11 @@ export const organizationOverviewRepository = {
       funnelEnquiriesRow,
       funnelQuotesRow,
       funnelBookingsRow,
+      closeBookingsRow,
+      windowQuotesRow,
+      quoteViewsRow,
       trendRows,
+      trendUpsellRows,
       topDestinationsRows,
       topResortsRows,
       topTourOperatorsRows,
@@ -114,7 +116,14 @@ export const organizationOverviewRepository = {
           weekCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${weekStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: weekStart.toISOString() })}), 0)`,
           monthCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
           ytdCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${yearStart.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: yearStart.toISOString() })}), 0)`,
+          todayUpsellCommission: sql<number>`COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: todayStart.toISOString() })}), 0)`,
+          weekUpsellCommission: sql<number>`COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: weekStart.toISOString() })}), 0)`,
+          monthUpsellCommission: sql<number>`COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
+          monthBookingCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
           monthBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()})`,
+          todayBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${todayStart.toISOString()})`,
+          weekBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${weekStart.toISOString()})`,
+          monthSales: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN COALESCE(${booking.sales_price}, 0) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellSalesExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
         })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
@@ -127,23 +136,36 @@ export const organizationOverviewRepository = {
         .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
         .where(and(gte(transaction.created_at, ninetyDaysAgo), scopeCond())),
 
-      db
-        .select({
-          value: sql<number>`COALESCE(SUM(${totalQuoteCommissionExpr(quote.id)}), 0)`,
-          count: sql<number>`COUNT(*)`,
-        })
-        .from(quote)
-        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-        .where(
-          and(
-            isNull(quote.deleted_at),
-            sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
-            sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED', 'LOST'))`,
-            ...quoteStatsConds(),
-            scopeCond(),
-          ),
-        ),
+      // One row per active deal that has at least one open quote, valued at that
+      // deal's most recent open quote.
+      (() => {
+        const openDeals = db
+          .selectDistinctOn([quote.transaction_id], {
+            transactionId: sql<string>`${quote.transaction_id}`.as("open_transaction_id"),
+            commission: sql<number>`${totalQuoteCommissionExpr(quote.id)}`.as("open_commission"),
+          })
+          .from(quote)
+          .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          .where(
+            and(
+              isNull(quote.deleted_at),
+              sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+              sql`(${quote.quote_status} IS NULL OR UPPER(${quote.quote_status}::text) NOT IN ('BOOKED', 'BOOKING_CONFIRMED', 'LOST'))`,
+              ...quoteStatsConds(),
+              eq(transaction.is_active, true),
+              scopeCond(),
+            ),
+          )
+          .orderBy(quote.transaction_id, sql`${quote.date_created} DESC NULLS LAST`, desc(quote.id))
+          .as("open_deals");
+        return db
+          .select({
+            value: sql<number>`COALESCE(SUM(${openDeals.commission}), 0)`,
+            count: sql<number>`COUNT(*)`,
+          })
+          .from(openDeals);
+      })(),
 
       db
         .select({ count: sql<number>`COUNT(*)` })
@@ -188,13 +210,65 @@ export const organizationOverviewRepository = {
           ),
         ),
 
+      // Bookings for close-rate windows: this week [weekStart, now] and previous week [weekStart-7d, weekStart).
+      db
+        .select({
+          week: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${weekStart.toISOString()} AND ${booking.date_created} <= ${now.toISOString()})`,
+          prevWeek: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${prevWeekStart.toISOString()} AND ${booking.date_created} < ${weekStart.toISOString()})`,
+        })
+        .from(booking)
+        .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(and(gte(booking.date_created, prevWeekStart), bookingActiveCond, eq(transaction.is_active, true), scopeCond())),
+
+      // Quotes for close-rate windows, plus month created / month sent counts.
+      db
+        .select({
+          month: sql<number>`COUNT(DISTINCT ${transaction.id}) FILTER (WHERE ${quote.date_created} >= ${monthStart.toISOString()} AND ${quote.date_created} < ${monthEnd.toISOString()})`,
+          week: sql<number>`COUNT(DISTINCT ${transaction.id}) FILTER (WHERE ${quote.date_created} >= ${weekStart.toISOString()} AND ${quote.date_created} <= ${now.toISOString()})`,
+          prevWeek: sql<number>`COUNT(DISTINCT ${transaction.id}) FILTER (WHERE ${quote.date_created} >= ${prevWeekStart.toISOString()} AND ${quote.date_created} < ${weekStart.toISOString()})`,
+          sent: sql<number>`COUNT(*) FILTER (WHERE ${quote.quote_sent_at} IS NOT NULL AND ${quote.quote_sent_at} >= ${monthStart.toISOString()} AND ${quote.quote_sent_at} < ${monthEnd.toISOString()})`,
+        })
+        .from(quote)
+        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(
+          and(
+            isNull(quote.deleted_at),
+            sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+            ...quoteStatsConds(),
+            eq(transaction.is_active, true),
+            sql`(${quote.date_created} >= ${quoteWindowStart.toISOString()} OR ${quote.quote_sent_at} >= ${monthStart.toISOString()})`,
+            scopeCond(),
+          ),
+        ),
+
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(quoteViewsTable)
+        .innerJoin(quote, eq(quoteViewsTable.quoteId, quote.id))
+        .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .where(
+          and(
+            lte(quoteViewsTable.viewedAt, now),
+            gte(quote.quote_sent_at, monthStart),
+            lt(quote.quote_sent_at, monthEnd),
+            isNull(quote.deleted_at),
+            sql`(${quote.is_active} IS NULL OR ${quote.is_active} = true)`,
+            ...quoteStatsConds(),
+            eq(transaction.is_active, true),
+            scopeCond(),
+          ),
+        ),
+
+      // Booking-only commission/bookings grouped by the London month the booking was created.
       (() => {
-        const trendStart = new Date(now.getFullYear(), 0, 1);
-        const trendEnd = new Date(now.getFullYear() + 1, 0, 1);
+        const monthExpr = sql`DATE_TRUNC('month', ${booking.date_created} AT TIME ZONE 'Europe/London')`;
         return db
           .select({
-            month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${booking.date_created}), 'YYYY-MM')`,
-            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: trendStart.toISOString(), end: trendEnd.toISOString() })}), 0)`,
+            month: sql<string>`TO_CHAR(${monthExpr}, 'YYYY-MM')`,
+            commission: sql<number>`COALESCE(SUM(${totalBookingCommissionExpr(booking.id)}), 0)`,
             bookings: sql<number>`COUNT(*)`,
           })
           .from(booking)
@@ -202,15 +276,41 @@ export const organizationOverviewRepository = {
           .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           .where(
             and(
-              gte(booking.date_created, trendStart),
-              sql`${booking.date_created} < ${trendEnd.toISOString()}`,
+              gte(booking.date_created, yearStart),
+              lt(booking.date_created, nextYearStart),
               bookingActiveCond,
               eq(transaction.is_active, true),
               scopeCond(),
             ),
           )
-          .groupBy(sql`DATE_TRUNC('month', ${booking.date_created})`)
-          .orderBy(sql`DATE_TRUNC('month', ${booking.date_created}) ASC`);
+          .groupBy(monthExpr)
+          .orderBy(sql`${monthExpr} ASC`);
+      })(),
+
+      // Upsell commission grouped by the London month the upsell was added.
+      (() => {
+        const monthExpr = sql`DATE_TRUNC('month', ${booking_upsell.added_at} AT TIME ZONE 'Europe/London')`;
+        return db
+          .select({
+            month: sql<string>`TO_CHAR(${monthExpr}, 'YYYY-MM')`,
+            commission: sql<number>`COALESCE(SUM(CAST(${booking_upsell.commission} AS DECIMAL)), 0)`,
+          })
+          .from(booking_upsell)
+          .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
+          .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          .where(
+            and(
+              sql`${booking_upsell.is_active} = true`,
+              gte(booking_upsell.added_at, yearStart),
+              lt(booking_upsell.added_at, nextYearStart),
+              bookingActiveCond,
+              eq(transaction.is_active, true),
+              scopeCond(),
+            ),
+          )
+          .groupBy(monthExpr)
+          .orderBy(sql`${monthExpr} ASC`);
       })(),
 
       (() => {
@@ -328,17 +428,17 @@ export const organizationOverviewRepository = {
         )
         .groupBy(booking_upsell.tour_operator_id),
 
-      this.getBranchLeaderboard(orgId, monthStart, monthEnd, now),
+      this.getBranchLeaderboard(orgId, monthStart, monthEnd, now, branchId),
 
-      this.getAttention(orgId, todayStart, in7Days, in30Days, fourteenDaysAgo),
+      this.getAttention(orgId, todayStart, in7Days, in30Days, fourteenDaysAgo, branchId),
 
-      this.getTourOperatorBreakdown(orgId, monthStart, now),
+      this.getTourOperatorBreakdown(orgId, monthStart, now, branchId),
     ]);
 
     // Org-wide monthly target = sum of every branch's shop target for the current month.
-    const monthTarget = await this.getOrgMonthlyTarget(orgId, now);
+    const monthTarget = await this.getOrgMonthlyTarget(orgId, now, branchId);
     // Per-month org-wide targets (sum of branches) for the calendar year.
-    const yearTargets = await this.getOrgYearlyTargets(orgId, now.getFullYear());
+    const yearTargets = await this.getOrgYearlyTargets(orgId, ukYearMonth(now).year, branchId);
 
     const kpi = kpiRow[0];
     const monthBookingsCount = Number(kpi?.monthBookingsCount ?? 0);
@@ -348,19 +448,31 @@ export const organizationOverviewRepository = {
     const quotes = Number(funnelQuotesRow[0]?.count ?? 0);
     const bookings = Number(funnelBookingsRow[0]?.count ?? 0);
 
+    // Bookings created in a window are compared with quotes created in the same
+    // window (not a cohort), so a busy Monday can exceed 100% — clamp it.
+    const closeRate = (b: number, q: number) => (q > 0 ? Math.min(100, (b / q) * 100) : 0);
+    const weekCloseRate = closeRate(Number(closeBookingsRow[0]?.week ?? 0), Number(windowQuotesRow[0]?.week ?? 0));
+    const prevWeekCloseRate = closeRate(Number(closeBookingsRow[0]?.prevWeek ?? 0), Number(windowQuotesRow[0]?.prevWeek ?? 0));
+
+    const trendByMonth = new Map<string, { month: string; commission: number; bookings: number }>();
+    for (const r of trendRows) {
+      trendByMonth.set(String(r.month), { month: String(r.month), commission: Number(r.commission), bookings: Number(r.bookings) });
+    }
+    for (const u of trendUpsellRows) {
+      const key = String(u.month);
+      const existing = trendByMonth.get(key) ?? { month: key, commission: 0, bookings: 0 };
+      existing.commission += Number(u.commission);
+      trendByMonth.set(key, existing);
+    }
     const trend = this.buildYearTrend(
-      trendRows.map((r) => ({
-        month: String(r.month),
-        commission: Number(r.commission),
-        bookings: Number(r.bookings),
-      })),
+      Array.from(trendByMonth.values()),
       yearTargets,
       now,
     );
 
     const leftToTarget = monthTarget - monthCommission;
     const percentToTarget = monthTarget > 0 ? (monthCommission / monthTarget) * 100 : 0;
-    const currentMonthName = now.toLocaleDateString("en-GB", { month: "long" });
+    const currentMonthName = ukMonthName(now);
 
     return {
       organization: orgProfile,
@@ -368,9 +480,20 @@ export const organizationOverviewRepository = {
         todayCommission: Number(kpi?.todayCommission ?? 0),
         weekCommission: Number(kpi?.weekCommission ?? 0),
         monthCommission,
+        todayUpsellCommission: Number(kpi?.todayUpsellCommission ?? 0),
+        weekUpsellCommission: Number(kpi?.weekUpsellCommission ?? 0),
+        monthUpsellCommission: Number(kpi?.monthUpsellCommission ?? 0),
         ytdCommission: Number(kpi?.ytdCommission ?? 0),
         monthBookingsCount,
-        avgCommission: monthBookingsCount > 0 ? monthCommission / monthBookingsCount : 0,
+        todayBookingsCount: Number(kpi?.todayBookingsCount ?? 0),
+        weekBookingsCount: Number(kpi?.weekBookingsCount ?? 0),
+        monthSales: Number(kpi?.monthSales ?? 0),
+        monthQuotesCount: Number(windowQuotesRow[0]?.month ?? 0),
+        weekCloseRate,
+        prevWeekCloseRate,
+        quoteViewsCount: Number(quoteViewsRow[0]?.count ?? 0),
+        quotesSentCount: Number(windowQuotesRow[0]?.sent ?? 0),
+        avgCommission: monthBookingsCount > 0 ? Number(kpi?.monthBookingCommission ?? 0) / monthBookingsCount : 0,
         openQuotesValue: Number(openQuotesRow[0]?.value ?? 0),
         openQuotesCount: Number(openQuotesRow[0]?.count ?? 0),
         activeClientsCount: Number(activeClientsRow[0]?.count ?? 0),
@@ -477,9 +600,10 @@ export const organizationOverviewRepository = {
     monthStart: Date,
     monthEnd: Date,
     now: Date,
+    branchId?: string,
   ): Promise<OrganizationOverviewBranchRow[]> {
     // Pull every branch in the org first so rows with no activity still appear.
-    const branchRows = orgId
+    const allBranchRows = orgId
       ? await db
           .select({
             id: branches.id,
@@ -498,6 +622,7 @@ export const organizationOverviewRepository = {
           })
           .from(branches);
 
+    const branchRows = branchId ? allBranchRows.filter((b) => b.id === branchId) : allBranchRows;
     if (branchRows.length === 0) return [];
 
     const branchIds = branchRows.map((b) => b.id);
@@ -557,8 +682,8 @@ export const organizationOverviewRepository = {
         .from(shopTargetTable)
         .where(
           and(
-            eq(shopTargetTable.year, now.getFullYear()),
-            eq(shopTargetTable.month, now.getMonth() + 1),
+            eq(shopTargetTable.year, ukYearMonth(now).year),
+            eq(shopTargetTable.month, ukYearMonth(now).month),
             inArray(shopTargetTable.branchId, branchIds),
           ),
         ),
@@ -597,10 +722,13 @@ export const organizationOverviewRepository = {
     in7Days: Date,
     in30Days: Date,
     fourteenDaysAgo: Date,
+    branchId?: string,
   ) {
     const scopeCond = orgId
-      ? and(testCond, eq(clientTable.orgId, orgId))
-      : testCond;
+      ? and(testCond, eq(clientTable.orgId, orgId), branchId ? eq(transaction.branch_id, branchId) : undefined)
+      : and(testCond, branchId ? eq(transaction.branch_id, branchId) : undefined);
+    const ticketBranchCond = branchId ? eq(tickets.branchId, branchId) : undefined;
+    const taskBranchCond = branchId ? eq(task.branch_id, branchId) : undefined;
 
     const upcoming7 = db
       .select({ count: sql<number>`COUNT(*)` })
@@ -609,8 +737,8 @@ export const organizationOverviewRepository = {
       .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
       .where(
         and(
-          gte(booking.travel_date, todayStart.toISOString().slice(0, 10)),
-          lte(booking.travel_date, in7Days.toISOString().slice(0, 10)),
+          gte(booking.travel_date, ukDateString(todayStart)),
+          lte(booking.travel_date, ukDateString(in7Days)),
           bookingActiveCond,
           scopeCond,
         ),
@@ -623,8 +751,8 @@ export const organizationOverviewRepository = {
       .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
       .where(
         and(
-          gte(booking.travel_date, todayStart.toISOString().slice(0, 10)),
-          lte(booking.travel_date, in30Days.toISOString().slice(0, 10)),
+          gte(booking.travel_date, ukDateString(todayStart)),
+          lte(booking.travel_date, ukDateString(in30Days)),
           bookingActiveCond,
           scopeCond,
         ),
@@ -650,11 +778,11 @@ export const organizationOverviewRepository = {
       ? db
           .select({ count: sql<number>`COUNT(*)` })
           .from(tickets)
-          .where(and(ne(tickets.status, "Closed"), eq(tickets.orgId, orgId)))
+          .where(and(ne(tickets.status, "Closed"), eq(tickets.orgId, orgId), ticketBranchCond))
       : db
           .select({ count: sql<number>`COUNT(*)` })
           .from(tickets)
-          .where(ne(tickets.status, "Closed"));
+          .where(and(ne(tickets.status, "Closed"), ticketBranchCond));
 
     const overdueTasks = orgId
       ? db
@@ -665,6 +793,7 @@ export const organizationOverviewRepository = {
               sql`${task.due_date} < NOW()`,
               sql`(${task.status} IS NULL OR LOWER(${task.status}) NOT IN ('completed', 'done', 'closed'))`,
               eq(task.org_id, orgId),
+              taskBranchCond,
             ),
           )
       : db
@@ -674,6 +803,7 @@ export const organizationOverviewRepository = {
             and(
               sql`${task.due_date} < NOW()`,
               sql`(${task.status} IS NULL OR LOWER(${task.status}) NOT IN ('completed', 'done', 'closed'))`,
+              taskBranchCond,
             ),
           );
 
@@ -687,7 +817,7 @@ export const organizationOverviewRepository = {
             dueDate: tickets.dueDate,
           })
           .from(tickets)
-          .where(and(ne(tickets.status, "Closed"), eq(tickets.orgId, orgId)))
+          .where(and(ne(tickets.status, "Closed"), eq(tickets.orgId, orgId), ticketBranchCond))
           .orderBy(desc(tickets.createdAt))
           .limit(5)
       : db
@@ -699,7 +829,7 @@ export const organizationOverviewRepository = {
             dueDate: tickets.dueDate,
           })
           .from(tickets)
-          .where(ne(tickets.status, "Closed"))
+          .where(and(ne(tickets.status, "Closed"), ticketBranchCond))
           .orderBy(desc(tickets.createdAt))
           .limit(5);
 
@@ -718,6 +848,7 @@ export const organizationOverviewRepository = {
             and(
               sql`(${task.status} IS NULL OR LOWER(${task.status}) NOT IN ('completed', 'done', 'closed'))`,
               eq(task.org_id, orgId),
+              taskBranchCond,
             ),
           )
           .orderBy(sql`${task.due_date} ASC NULLS LAST`)
@@ -733,7 +864,10 @@ export const organizationOverviewRepository = {
           })
           .from(task)
           .where(
-            sql`(${task.status} IS NULL OR LOWER(${task.status}) NOT IN ('completed', 'done', 'closed'))`,
+            and(
+              sql`(${task.status} IS NULL OR LOWER(${task.status}) NOT IN ('completed', 'done', 'closed'))`,
+              taskBranchCond,
+            ),
           )
           .orderBy(sql`${task.due_date} ASC NULLS LAST`)
           .limit(5);
@@ -771,7 +905,7 @@ export const organizationOverviewRepository = {
     };
   },
 
-  async getOrgMonthlyTarget(orgId: string | null, when: Date): Promise<number> {
+  async getOrgMonthlyTarget(orgId: string | null, when: Date, branchId?: string): Promise<number> {
     if (!orgId) return 0;
     const [row] = await db
       .select({
@@ -782,14 +916,15 @@ export const organizationOverviewRepository = {
       .where(
         and(
           eq(branches.organizationId, orgId),
-          eq(shopTargetTable.year, when.getFullYear()),
-          eq(shopTargetTable.month, when.getMonth() + 1),
+          eq(shopTargetTable.year, ukYearMonth(when).year),
+          eq(shopTargetTable.month, ukYearMonth(when).month),
+          branchId ? eq(shopTargetTable.branchId, branchId) : undefined,
         ),
       );
     return row ? Number(row.total) : 0;
   },
 
-  async getOrgYearlyTargets(orgId: string | null, year: number): Promise<Map<number, number>> {
+  async getOrgYearlyTargets(orgId: string | null, year: number, branchId?: string): Promise<Map<number, number>> {
     const map = new Map<number, number>();
     if (!orgId) return map;
     const rows = await db
@@ -799,7 +934,13 @@ export const organizationOverviewRepository = {
       })
       .from(shopTargetTable)
       .innerJoin(branches, eq(branches.id, shopTargetTable.branchId))
-      .where(and(eq(branches.organizationId, orgId), eq(shopTargetTable.year, year)))
+      .where(
+        and(
+          eq(branches.organizationId, orgId),
+          eq(shopTargetTable.year, year),
+          branchId ? eq(shopTargetTable.branchId, branchId) : undefined,
+        ),
+      )
       .groupBy(shopTargetTable.month);
     for (const r of rows) map.set(Number(r.month), Number(r.total));
     return map;
@@ -810,12 +951,13 @@ export const organizationOverviewRepository = {
     range: AgentPerformanceRange,
     customFrom?: Date,
     customTo?: Date,
+    branchId?: string,
   ): Promise<AgentsPerformanceResponse> {
     const now = new Date();
     const todayStart = startOfDay(now);
     const weekStart = startOfWeek(now);
     const monthStart = startOfMonth(now);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const monthEnd = ukMonthEnd(now);
 
     let from: Date;
     let to: Date;
@@ -833,9 +975,10 @@ export const organizationOverviewRepository = {
       to = customTo ? addDays(startOfDay(customTo), 1) : monthEnd;
     }
 
+    const branchCond = branchId ? eq(transaction.branch_id, branchId) : undefined;
     const scopeCond = orgId
-      ? and(testCond, eq(clientTable.orgId, orgId))
-      : testCond;
+      ? and(testCond, eq(clientTable.orgId, orgId), branchCond)
+      : and(testCond, branchCond);
 
     const [aggRows, quoteAggRows, upsellAggRows] = await Promise.all([
       db
@@ -850,7 +993,7 @@ export const organizationOverviewRepository = {
         })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-        .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
         .where(and(bookingActiveCond, eq(transaction.is_active, true), scopeCond))
         .groupBy(transaction.user_id),
 
@@ -937,8 +1080,9 @@ export const organizationOverviewRepository = {
           .where(
             and(
               eq(branches.organizationId, orgId),
-              eq(agentTargetTable.year, now.getFullYear()),
-              eq(agentTargetTable.month, now.getMonth() + 1),
+              eq(agentTargetTable.year, ukYearMonth(now).year),
+              eq(agentTargetTable.month, ukYearMonth(now).month),
+              branchId ? eq(agentTargetTable.branchId, branchId) : undefined,
             ),
           )
       : [];
@@ -949,16 +1093,51 @@ export const organizationOverviewRepository = {
 
     const aggByUser = new Map(aggRows.map((r) => [r.agentId, r] as const));
 
-    // Only rank sales agents. Branch managers who also sell hold the `agent`
-    // role and stay; non-selling roles (pure managers/admins) are excluded.
-    const [agentIds, suspendedIds] = await Promise.all([
+    // Only rank people who sell: sales agents and homeworkers. Branch managers
+    // who also sell hold the `agent` role and stay; non-selling roles (pure
+    // managers/admins) are excluded. Homeworkers are flagged via isHomeworker.
+    type BranchRef = { id: string; name: string; code: string | null };
+    const teamUserIds = teamUsers.map((u) => u.id);
+    const [agentIds, homeworkerIds, suspendedIds, membershipRows] = await Promise.all([
       userOrgRolesRepository.findSalesAgentUserIds({ orgId }),
+      userOrgRolesRepository.findHomeworkerUserIds({ orgId }),
       userOrgRolesRepository.findSuspendedUserIds({ orgId }),
+      teamUserIds.length === 0
+        ? Promise.resolve([] as Array<BranchRef & { userId: string }>)
+        : db
+            .select({ userId: branchMembers.userId, id: branches.id, name: branches.name, code: branches.code })
+            .from(branchMembers)
+            .innerJoin(branches, eq(branches.id, branchMembers.branchId))
+            .where(
+              and(
+                eq(branchMembers.isActive, true),
+                inArray(branchMembers.userId, teamUserIds),
+                orgId ? eq(branches.organizationId, orgId) : undefined,
+              ),
+            ),
     ]);
+    const branchesByUser = new Map<string, Map<string, BranchRef>>();
+    for (const m of membershipRows) {
+      const byId = branchesByUser.get(m.userId) ?? new Map<string, BranchRef>();
+      byId.set(m.id, { id: m.id, name: m.name, code: m.code });
+      branchesByUser.set(m.userId, byId);
+    }
+    // With a branch selected, only active members of that branch are listed.
+    const branchMemberIds = branchId
+      ? new Set(
+          (
+            await db
+              .select({ userId: branchMembers.userId })
+              .from(branchMembers)
+              .where(and(eq(branchMembers.branchId, branchId), eq(branchMembers.isActive, true)))
+          ).map((m) => m.userId),
+        )
+      : null;
     const agentSet = new Set(agentIds);
+    const homeworkerSet = new Set(homeworkerIds);
 
     // Suspended users are excluded from every report/leaderboard.
-    const rows: AgentPerformanceRow[] = teamUsers.filter((u) => agentSet.has(u.id) && !suspendedIds.has(u.id)).map((u) => {
+    const rows: AgentPerformanceRow[] = teamUsers.filter((u) => (agentSet.has(u.id) || homeworkerSet.has(u.id)) && !suspendedIds.has(u.id) && (!branchMemberIds || branchMemberIds.has(u.id))).map((u) => {
       const a = aggByUser.get(u.id);
       const us = upsellsByUser.get(u.id);
       const today = Number(a?.today ?? 0) + Number(us?.todayUpsell ?? 0);
@@ -977,6 +1156,8 @@ export const organizationOverviewRepository = {
         name: fullName || u.name || u.email || "Agent",
         firstName,
         avatarUrl: u.image ?? null,
+        isHomeworker: homeworkerSet.has(u.id),
+        branches: Array.from(branchesByUser.get(u.id)?.values() ?? []).sort((x, y) => x.name.localeCompare(y.name)),
         today,
         week,
         month,
@@ -984,7 +1165,7 @@ export const organizationOverviewRepository = {
         rangeCommission,
         rangeSales,
         rangeQuotes,
-        avgPerBooking: rangeBookings > 0 ? rangeCommission / rangeBookings : 0,
+        avgPerBooking: rangeBookings > 0 ? Number(a?.rangeCommission ?? 0) / rangeBookings : 0,
         target,
         achievedPercent,
       };
@@ -992,11 +1173,29 @@ export const organizationOverviewRepository = {
 
     rows.sort((a, b) => b.rangeCommission - a.rangeCommission || a.name.localeCompare(b.name));
 
+    // Totals for sellers without a row (suspended, left, non-agent, or no seller).
+    const listedIds = new Set(rows.map((r) => r.id));
+    const unlisted = { today: 0, week: 0, month: 0, rangeBookings: 0 };
+    for (const a of aggRows) {
+      if (a.agentId && listedIds.has(a.agentId)) continue;
+      unlisted.today += Number(a.today ?? 0);
+      unlisted.week += Number(a.week ?? 0);
+      unlisted.month += Number(a.month ?? 0);
+      unlisted.rangeBookings += Number(a.rangeBookings ?? 0);
+    }
+    for (const u of upsellAggRows) {
+      if (u.agentId && listedIds.has(u.agentId)) continue;
+      unlisted.today += Number(u.todayUpsell ?? 0);
+      unlisted.week += Number(u.weekUpsell ?? 0);
+      unlisted.month += Number(u.monthUpsell ?? 0);
+    }
+
     return {
       range,
       from: from.toISOString(),
       to: to.toISOString(),
       rows,
+      unlisted,
     };
   },
 
@@ -1005,12 +1204,13 @@ export const organizationOverviewRepository = {
     range: AgentPerformanceRange,
     customFrom?: Date,
     customTo?: Date,
+    branchId?: string,
   ): Promise<BranchesPerformanceResponse> {
     const now = new Date();
     const todayStart = startOfDay(now);
     const weekStart = startOfWeek(now);
     const monthStart = startOfMonth(now);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const monthEnd = ukMonthEnd(now);
 
     let from: Date;
     let to: Date;
@@ -1028,7 +1228,7 @@ export const organizationOverviewRepository = {
       to = customTo ? addDays(startOfDay(customTo), 1) : monthEnd;
     }
 
-    const branchRows = orgId
+    const allBranchRows = orgId
       ? await db
           .select({
             id: branches.id,
@@ -1045,15 +1245,14 @@ export const organizationOverviewRepository = {
           })
           .from(branches);
 
+    const branchRows = branchId ? allBranchRows.filter((b) => b.id === branchId) : allBranchRows;
     if (branchRows.length === 0) {
       return { range, from: from.toISOString(), to: to.toISOString(), rows: [] };
     }
 
     const branchIds = branchRows.map((b) => b.id);
 
-    const scopeCond = orgId
-      ? and(testCond, eq(clientTable.orgId, orgId))
-      : testCond;
+    const scopeCond = orgId ? and(testCond, eq(clientTable.orgId, orgId)) : testCond;
 
     const [bookingAgg, quoteAgg, targetRows] = await Promise.all([
       db
@@ -1064,6 +1263,7 @@ export const organizationOverviewRepository = {
           month: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: monthStart.toISOString(), end: monthEnd.toISOString() })}), 0)`,
           rangeBookings: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()})`,
           rangeCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellCommissionExpr(booking.id, { start: from.toISOString(), end: to.toISOString() })}), 0)`,
+          rangeBookingCommission: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN ${totalBookingCommissionExpr(booking.id)} ELSE 0 END), 0)`,
           rangeSales: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${from.toISOString()} AND ${booking.date_created} < ${to.toISOString()} THEN COALESCE(${booking.sales_price}, 0) ELSE 0 END), 0) + COALESCE(SUM(${totalUpsellSalesExpr(booking.id, { start: from.toISOString(), end: to.toISOString() })}), 0)`,
         })
         .from(booking)
@@ -1095,8 +1295,8 @@ export const organizationOverviewRepository = {
         .from(shopTargetTable)
         .where(
           and(
-            eq(shopTargetTable.year, now.getFullYear()),
-            eq(shopTargetTable.month, now.getMonth() + 1),
+            eq(shopTargetTable.year, ukYearMonth(now).year),
+            eq(shopTargetTable.month, ukYearMonth(now).month),
             inArray(shopTargetTable.branchId, branchIds),
           ),
         ),
@@ -1134,7 +1334,7 @@ export const organizationOverviewRepository = {
         rangeCommission,
         rangeSales,
         rangeQuotes,
-        avgPerBooking: rangeBookings > 0 ? rangeCommission / rangeBookings : 0,
+        avgPerBooking: rangeBookings > 0 ? Number(bk?.rangeBookingCommission ?? 0) / rangeBookings : 0,
         target,
         achievedPercent,
       };
@@ -1156,13 +1356,15 @@ export const organizationOverviewRepository = {
     orgId: string | null,
     monthStart: Date,
     now: Date,
+    branchId?: string,
   ): Promise<TourOperatorBreakdownRow[]> {
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const monthEnd = ukMonthEnd(now);
 
+    const branchCond = branchId ? eq(transaction.branch_id, branchId) : undefined;
     const scopeCond = (extra: ReturnType<typeof eq>[] = []) =>
       orgId
-        ? and(testCond, eq(clientTable.orgId, orgId), ...extra)
-        : and(testCond, ...extra);
+        ? and(testCond, eq(clientTable.orgId, orgId), branchCond, ...extra)
+        : and(testCond, branchCond, ...extra);
 
     // Booking-level aggregation: bookings, booking commission, revenue per operator.
     const [bookingAgg, upsellAgg] = await Promise.all([
@@ -1208,6 +1410,7 @@ export const organizationOverviewRepository = {
             gte(booking_upsell.added_at, monthStart),
             sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
             bookingActiveCond,
+            eq(transaction.is_active, true),
             scopeCond(),
           ),
         )
@@ -1252,7 +1455,7 @@ export const organizationOverviewRepository = {
     now: Date,
   ): OrganizationOverviewTrendPoint[] {
     const byMonth = new Map(rows.map((r) => [r.month, r] as const));
-    const year = now.getFullYear();
+    const year = ukYearMonth(now).year;
     const result: OrganizationOverviewTrendPoint[] = [];
     for (let m = 1; m <= 12; m += 1) {
       const key = `${year}-${String(m).padStart(2, "0")}`;

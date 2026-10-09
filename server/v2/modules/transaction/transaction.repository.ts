@@ -610,7 +610,7 @@ const PIPELINE_COLUMNS = ["enquiry", "quoted", "in_play", "booking", "future", "
 // before calling. Phase 3: status-derivation model — each column maps purely
 // to transaction.status + (for quoted/in_play) the primary quote's quote_status.
 // No time-window filters; expiry is display-only.
-function buildPipelineConditions(scope: Scope | undefined, column: string, agentId?: string, quoteStatusFilter?: string): SQL {
+function buildPipelineConditions(scope: Scope | undefined, column: string, agentId?: string, quoteStatusFilter?: string, branchId?: string): SQL {
   // Base conditions shared by every column.
   const conditions: SQL[] = [
     sql`${transaction.client_id} IS NOT NULL`,
@@ -618,6 +618,7 @@ function buildPipelineConditions(scope: Scope | undefined, column: string, agent
     ...buildTxnScopeConds(scope),
   ];
   if (agentId) conditions.push(eq(transaction.user_id, agentId));
+  if (branchId) conditions.push(eq(transaction.branch_id, branchId));
 
   // Display filter for the Enquiry / Quoted / In Play columns, derived from dates the
   // same way as server/v2/utils/expiry.ts (effectiveExpiry = date_expiry, else date_created + 7d).
@@ -933,14 +934,14 @@ export const transactionRepository = {
     return enrichTransactionsLightweight(txns);
   },
 
-  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest", pinnedForUserId?: string): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
+  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest", pinnedForUserId?: string, branchId?: string): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
     const emptyPage = { items: [] as any[], total: 0, page, hasMore: false, totalProfit: 0, totalValue: 0 };
 
     if (!(PIPELINE_COLUMNS as readonly string[]).includes(column)) {
       return emptyPage;
     }
 
-    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter);
+    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter, branchId);
     const baseOrderBy = buildPipelineOrderBy(column, sort);
 
     const [countResult] = await db.select({ total: count() }).from(transaction).where(where);
@@ -994,12 +995,12 @@ export const transactionRepository = {
   // general-purpose paginated listing. `total` is the true, uncapped count of
   // matching rows (see listPipelineByOldestActivity for how it's reconciled
   // with the capped page actually served).
-  async findPipelineCandidates(scope: Scope | undefined, column: string, agentId: string | undefined, quoteStatusFilter: string | undefined, cap: number): Promise<{ items: PipelineCandidateItem[]; total: number }> {
+  async findPipelineCandidates(scope: Scope | undefined, column: string, agentId: string | undefined, quoteStatusFilter: string | undefined, cap: number, branchId?: string): Promise<{ items: PipelineCandidateItem[]; total: number }> {
     if (!(PIPELINE_COLUMNS as readonly string[]).includes(column)) {
       return { items: [], total: 0 };
     }
 
-    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter);
+    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter, branchId);
     const [countResult] = await db.select({ total: count() }).from(transaction).where(where);
     const total = countResult?.total || 0;
 

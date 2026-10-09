@@ -571,3 +571,17 @@ describe("validateQuote — price disagreements blame the UNVERIFIED field", () 
       .find((i) => i.code === "PRICE_PARTY_MISMATCH")?.field).toBe("sales_price");
   });
 });
+
+describe('validateQuote — PICKED_FIELD_MISSED', () => {
+  it('warns (never errors) for a picked field that resolved empty, naming the field and pick date', () => {
+    const spec: ExtractionSpec = {
+      version: 1,
+      fields: { ship_name: { from: 'text', regex: 'x([^\n]+)', origin: 'picked', pickedAt: '2026-10-01T10:00:00.000Z' } },
+    };
+    const res = validateQuote({ ship_name: '' } as unknown as ScrapedQuoteJson, { url: 'https://a.com', text: '', spec });
+    const issue = res.issues.find((i) => i.code === 'PICKED_FIELD_MISSED');
+    expect(issue?.level).toBe('warn');
+    expect(issue?.field).toBe('ship_name');
+    expect(issue?.message).toContain('2026-10-01');
+  });
+});

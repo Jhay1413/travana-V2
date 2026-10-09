@@ -410,9 +410,7 @@ export const scraperService = {
       throw new AppError('This supplier has no extraction spec yet — capture a deal page first.', 400);
     }
 
-    const row = await scraperRepository.update(id, {
-      config: { ...config, specNeedsReview: !approve },
-    });
+    const row = await scraperRepository.mergeConfig(id, { specNeedsReview: !approve });
     if (!row) throw new AppError('Supplier scraper not found', 404);
 
     // Approving is the moment the spec becomes worth protecting: archive it so
@@ -468,9 +466,11 @@ export const scraperService = {
       credentials: decryptCredentials(row).credentials,
       sessionCookies,
       persistConfig: async (patch) => {
-        latest = { ...latest, ...patch };
+        // Atomic DB-side merge: the in-memory snapshot may be stale (picks saved
+        // mid-scrape), so never write it back wholesale.
+        const saved = await scraperRepository.mergeConfig(row.id, patch as Record<string, unknown>);
+        latest = saved ? (((saved.config as ScraperConfig) ?? {}) as ScraperConfig) : { ...latest, ...patch };
         resolved.config = latest;
-        await scraperRepository.update(row.id, { config: latest });
       },
       persistSession: async (cookies) => {
         const hasCookies = Array.isArray(cookies) && cookies.length > 0;
@@ -557,11 +557,9 @@ export const scraperService = {
     // near-duplicate that splits the same portal across two suppliers.
     const existing = await scraperRepository.findBySupplierKey(identity.key);
     if (existing && !(existing.config as ScraperConfig)?.deepLink?.hostIncludes) {
-      const adopted = {
-        ...((existing.config as ScraperConfig) ?? {}),
+      const row = await scraperRepository.mergeConfig(existing.id, {
         deepLink: { hostIncludes: identity.hostIncludes, pathIncludes: '' },
-      } as ScraperConfig;
-      const row = await scraperRepository.update(existing.id, { config: adopted });
+      });
       if (row) return { resolved: this.toResolved(row), created: false };
     }
 

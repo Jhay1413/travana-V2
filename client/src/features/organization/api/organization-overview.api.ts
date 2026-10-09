@@ -30,6 +30,17 @@ export interface OrganizationOverviewKpis {
   leftToTarget: number;
   percentToTarget: number;
   currentMonthName: string;
+  todayBookingsCount: number;
+  weekBookingsCount: number;
+  monthSales: number;
+  monthQuotesCount: number;
+  weekCloseRate: number;
+  prevWeekCloseRate: number;
+  quoteViewsCount: number;
+  quotesSentCount: number;
+  todayUpsellCommission: number;
+  weekUpsellCommission: number;
+  monthUpsellCommission: number;
 }
 
 export type AgentPerformanceRange = "day" | "week" | "month" | "custom";
@@ -49,6 +60,15 @@ export interface AgentPerformanceRow {
   avgPerBooking: number;
   target: number;
   achievedPercent: number;
+  isHomeworker: boolean;
+  branches: Array<{ id: string; name: string; code: string | null }>;
+}
+
+export interface AgentsPerformanceUnlisted {
+  today: number;
+  week: number;
+  month: number;
+  rangeBookings: number;
 }
 
 export interface AgentsPerformanceResponse {
@@ -56,12 +76,19 @@ export interface AgentsPerformanceResponse {
   from: string;
   to: string;
   rows: AgentPerformanceRow[];
+  unlisted?: AgentsPerformanceUnlisted;
 }
 
 export interface AgentsPerformanceParams {
   range: AgentPerformanceRange;
   from?: string;
   to?: string;
+  /** Narrow every figure to one branch. Omit for the whole organisation. */
+  branchId?: string;
+}
+
+export interface OverviewStatsParams {
+  branchId?: string;
 }
 
 export interface BranchPerformanceRow {
@@ -171,9 +198,10 @@ export interface MultiBranchOverview extends OrganizationOverviewBase {
 export type OrganizationOverviewStats = SingleBranchOverview | MultiBranchOverview;
 
 export const organizationOverviewApi = {
-  getStats: async (): Promise<OrganizationOverviewStats> => {
+  getStats: async (params?: OverviewStatsParams): Promise<OrganizationOverviewStats> => {
     const { data } = await axiosClient.get<{ data: OrganizationOverviewStats }>(
       "/api/v2/organization-overview/stats",
+      { params: params?.branchId ? { branchId: params.branchId } : undefined },
     );
     return data?.data ?? (data as unknown as OrganizationOverviewStats);
   },

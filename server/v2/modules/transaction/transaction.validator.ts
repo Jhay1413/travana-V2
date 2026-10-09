@@ -60,6 +60,7 @@ export const listPipelineByStatusValidator = z.object({
   params: z.object({ status: z.string() }),
   query: z.object({
     sort: z.enum(["newest", "oldest", "oldest-activity"]).optional(),
+    branchId: z.string().uuid("Invalid branchId").optional(),
   }),
 });
 

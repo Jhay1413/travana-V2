@@ -179,11 +179,27 @@ function dealHref(t: Transaction, tab: LiveTab): string {
     : `${STANDALONE_DEAL_PATH[target.type]}/${target.id}`;
 }
 
-export function PipelineLivePanel({ userId, className }: { userId: string; className?: string }) {
+export function PipelineLivePanel({
+  userId = "",
+  className,
+  title = "Pipeline Live!",
+  scope = "mine",
+  branchId,
+}: {
+  /** Whose deals to show when scope is "mine"; ignored for scope "all". */
+  userId?: string;
+  className?: string;
+  title?: string;
+  /** "mine" limits the feed to userId's deals; "all" shows the whole organisation's pipeline. */
+  scope?: "mine" | "all";
+  /** Narrow the feed to one branch's deals. Omit for no branch filter. */
+  branchId?: string;
+}) {
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<LiveTab>("quotes");
   const [view, setView] = useState<LiveView>(loadView);
-  const enabled = !!userId;
+  const enabled = scope === "all" || !!userId;
+  const agentId = scope === "all" ? undefined : userId;
 
   // "In Play" is a filter (only meaningful within the Quotes tab, whose data
   // already blends the "quote" and "in_play" pipeline stages); "oldest"/
@@ -212,10 +228,10 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
   const inPlayEnabled = enabled && tab === "quotes";
   const bookingEnabled = enabled && tab === "bookings" && !showInPlayOnly;
 
-  const enquiryQ = usePipelineColumn("enquiry", 10, userId, undefined, { enabled: enquiryEnabled }, sort);
-  const quoteQ = usePipelineColumn("quote", 10, userId, undefined, { enabled: quoteEnabled }, sort);
-  const inPlayQ = usePipelineColumn("in_play", 10, userId, undefined, { enabled: inPlayEnabled }, sort);
-  const bookingQ = usePipelineColumn("booking", 10, userId, undefined, { enabled: bookingEnabled }, sort);
+  const enquiryQ = usePipelineColumn("enquiry", 10, agentId, undefined, { enabled: enquiryEnabled }, sort, branchId);
+  const quoteQ = usePipelineColumn("quote", 10, agentId, undefined, { enabled: quoteEnabled }, sort, branchId);
+  const inPlayQ = usePipelineColumn("in_play", 10, agentId, undefined, { enabled: inPlayEnabled }, sort, branchId);
+  const bookingQ = usePipelineColumn("booking", 10, agentId, undefined, { enabled: bookingEnabled }, sort, branchId);
 
   const handleViewChange = (next: LiveView) => {
     setView(next);
@@ -277,7 +293,7 @@ export function PipelineLivePanel({ userId, className }: { userId: string; class
       {/* Horizontal padding lives on the sections, not the panel, so the
           separator under the title spans the full panel width. */}
       <div className="flex items-center justify-between gap-2 px-5">
-        <div className="text-sm font-semibold">Pipeline Live!</div>
+        <div className="text-sm font-semibold">{title}</div>
         <Select value={view} onValueChange={(v) => handleViewChange(v as LiveView)}>
           <SelectTrigger
             className="h-7 w-[84px] rounded-[6px] border-black/10 bg-white px-2 text-xs text-[#7c98b0] shadow-none dark:border-white/10 dark:bg-white/5 dark:text-white/55"

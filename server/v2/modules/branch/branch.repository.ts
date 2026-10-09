@@ -22,6 +22,16 @@ export const branchRepository = {
     return row ?? null;
   },
 
+  /** Owning org of a branch, or null when the branch does not exist. */
+  async findOrgIdById(id: string): Promise<string | null> {
+    const [row] = await db
+      .select({ organizationId: branches.organizationId })
+      .from(branches)
+      .where(eq(branches.id, id))
+      .limit(1);
+    return row?.organizationId ?? null;
+  },
+
   async findDefaultByOrg(orgId: string): Promise<Branch | null> {
     const [row] = await db
       .select()

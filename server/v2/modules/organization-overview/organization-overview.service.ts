@@ -7,15 +7,17 @@ import type {
   BranchesPerformanceResponse,
 } from "./organization-overview.types";
 import type { Scope } from "../../utils/scope";
+import { branchService } from "../branch/branch.service";
 
 function effectiveOrgId(scope: Scope): string | null {
   return scope.orgRole === "platform_admin" ? scope.orgId || null : scope.orgId || null;
 }
 
 export const organizationOverviewService = {
-  async getStats(scope: Scope): Promise<OrganizationOverviewStats> {
+  async getStats(scope: Scope, branchId?: string): Promise<OrganizationOverviewStats> {
     const orgId = effectiveOrgId(scope);
-    const core = await organizationOverviewRepository.getStats(orgId);
+    if (branchId) await branchService.assertBranchInOrg(branchId, orgId);
+    const core = await organizationOverviewRepository.getStats(orgId, branchId);
     const plan = orgId ? await planService.getOrgPlan(orgId) : null;
 
     if (plan?.code === "starter") {
@@ -30,13 +32,11 @@ export const organizationOverviewService = {
     range: AgentPerformanceRange,
     from?: Date,
     to?: Date,
+    branchId?: string,
   ): Promise<AgentsPerformanceResponse> {
-    return organizationOverviewRepository.getAgentsPerformance(
-      effectiveOrgId(scope),
-      range,
-      from,
-      to,
-    );
+    const orgId = effectiveOrgId(scope);
+    if (branchId) await branchService.assertBranchInOrg(branchId, orgId);
+    return organizationOverviewRepository.getAgentsPerformance(orgId, range, from, to, branchId);
   },
 
   async getBranchesPerformance(
@@ -44,12 +44,10 @@ export const organizationOverviewService = {
     range: AgentPerformanceRange,
     from?: Date,
     to?: Date,
+    branchId?: string,
   ): Promise<BranchesPerformanceResponse> {
-    return organizationOverviewRepository.getBranchesPerformance(
-      effectiveOrgId(scope),
-      range,
-      from,
-      to,
-    );
+    const orgId = effectiveOrgId(scope);
+    if (branchId) await branchService.assertBranchInOrg(branchId, orgId);
+    return organizationOverviewRepository.getBranchesPerformance(orgId, range, from, to, branchId);
   },
 };

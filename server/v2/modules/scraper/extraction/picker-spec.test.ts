@@ -699,3 +699,70 @@ describe('deriveSpecFromPicks — Hoseasons lodge (rule-derivation strategies)',
     expect(result.problems[0].reason).toContain('no candidate strategy');
   });
 });
+
+describe('deriveSpecFromPicks — unstable anchors and promo-line tolerance', () => {
+  const ctxFor = (text: string): PickerCaptureContext => ({ url: 'https://example-travel.com/deal/1', title: 'Deal', text });
+
+  it('(a) a rule picked on a page without a "Was" line still extracts from a later page with one inserted', () => {
+    const text = ['Hotel Sol', '7 nights', 'Price per person', '£899', 'Book now'].join('\n');
+    const result = deriveSpecFromPicks(
+      [pick({ field: 'sales_price', value: '£899', textIndex: text.indexOf('£899'), linesBefore: ['Hotel Sol', '7 nights', 'Price per person'] })],
+      ctxFor(text),
+    );
+    expect(result.problems).toEqual([]);
+    const rule = result.derived[0].rule;
+    expect(rule.regex).toContain('Price per person');
+    const re = new RegExp(rule.regex!, 'i');
+    const later = ['Hotel Sol', '7 nights', 'Price per person', 'Was £2,499', 'Save £300', '£2,199', 'Book now'].join('\n');
+    expect(re.exec(later)?.[1]).toBe('£2,199');
+    expect(re.exec(text)?.[1]).toBe('£899');
+  });
+
+  it('(b) a "Was £2,199" line directly above the value is not used as the label', () => {
+    const text = ['Hotel Sol', 'Price per person', 'Was £2,199', '£1,899', 'Book now'].join('\n');
+    const result = deriveSpecFromPicks(
+      [pick({ field: 'sales_price', value: '£1,899', textIndex: text.indexOf('£1,899'), linesBefore: ['Hotel Sol', 'Price per person', 'Was £2,199'] })],
+      ctxFor(text),
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.derived[0].rule.regex).toContain('Price per person');
+    expect(result.derived[0].rule.regex).not.toContain('2,199');
+  });
+
+  it('(c) a date line above a value is not used as the label', () => {
+    const text = ['Hotel Sol', 'Departure', 'Sat 12 Oct 2026', 'Manchester', 'Done'].join('\n');
+    const result = deriveSpecFromPicks(
+      [pick({ field: 'departure_airport', value: 'Manchester', textIndex: text.indexOf('Manchester'), linesBefore: ['Hotel Sol', 'Departure', 'Sat 12 Oct 2026'] })],
+      ctxFor(text),
+    );
+    // The earlier "Departure" label can't reach the value across the date line, so no rule is the safe outcome.
+    for (const d of result.derived) expect(d.rule.regex).not.toContain('Oct');
+  });
+
+  it('rejects other unstable lines but keeps short labels with small numbers', () => {
+    for (const bad of ['12:30', '25% off', 'Offer ends in 2 days']) {
+      const text = ['Adults (18+)', bad, 'Value X', 'end'].join('\n');
+      const r = deriveSpecFromPicks(
+        [pick({ field: 'f', value: 'Value X', textIndex: text.indexOf('Value X'), linesBefore: ['Adults (18+)', bad] })],
+        ctxFor(text),
+      );
+      for (const d of r.derived) expect(d.rule.regex).not.toContain(bad.startsWith('12') ? '12:30' : bad.startsWith('25') ? '25%' : 'ends in');
+    }
+    const text = ['Adults (18+)', 'Value X', 'end'].join('\n');
+    const r = deriveSpecFromPicks(
+      [pick({ field: 'f', value: 'Value X', textIndex: text.indexOf('Value X'), linesBefore: ['Adults (18+)'] })],
+      ctxFor(text),
+    );
+    expect(r.derived[0].rule.regex).toContain('Adults');
+  });
+
+  it('does not skip a value that itself starts with a promo word', () => {
+    const text = ['Leaving', 'Leaving from', 'From Manchester', 'end'].join('\n');
+    const result = deriveSpecFromPicks(
+      [pick({ field: 'departure_airport', value: 'From Manchester', textIndex: text.indexOf('From Manchester'), linesBefore: ['Leaving', 'Leaving from'] })],
+      ctxFor(text),
+    );
+    expect(result.derived).toHaveLength(1);
+    expect(new RegExp(result.derived[0].rule.regex!, 'i').exec(text)?.[1]).toBe('From Manchester');
+  });
+});

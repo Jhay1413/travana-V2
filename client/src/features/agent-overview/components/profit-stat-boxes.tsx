@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { currency } from "./helpers";
 
 // Icons follow Icons.txt at the repo root (Home section).
-function StatCard({
+export function StatCard({
   label,
   icon: Icon,
   iconClass,

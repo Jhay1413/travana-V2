@@ -499,6 +499,27 @@ function checkSpecCoverage(quote: ScrapedQuoteJson, ctx: ValidationContext, issu
   }
 }
 
+// ─── Picked fields that stopped matching ────────────────────────────────────
+// A field an agent picked on the page was verified once, against that one page.
+// If the supplier later rewords the layout the rule silently yields nothing, so
+// say which field and when it was picked rather than leaving a blank. Warning
+// only — never blocks an import.
+function checkPickedFieldsMissed(quote: ScrapedQuoteJson, ctx: ValidationContext, issues: Issue[]): void {
+  const fields = ctx.spec?.fields;
+  if (!fields) return;
+  const record = quote as unknown as Record<string, unknown>;
+  for (const [key, rule] of Object.entries(fields)) {
+    if (rule.origin !== 'picked' || !isResolvedEmpty(record[key])) continue;
+    const when = rule.pickedAt && !Number.isNaN(Date.parse(rule.pickedAt)) ? ` on ${rule.pickedAt.slice(0, 10)}` : '';
+    issues.push({
+      code: 'PICKED_FIELD_MISSED',
+      level: 'warn',
+      field: key,
+      message: `The field "${key}" you picked${when} no longer matches this page, so it was left blank. Re-pick it with the field picker.`,
+    });
+  }
+}
+
 function overallLevel(issues: Issue[]): 'ok' | 'warn' | 'error' {
   if (issues.some((i) => i.level === 'error')) return 'error';
   if (issues.length > 0) return 'warn';
@@ -517,6 +538,7 @@ export function validateQuote(quote: ScrapedQuoteJson, ctx: ValidationContext): 
   checkProseFields(quote, ctx, issues);
   checkCaptureComplete(ctx, issues);
   checkSpecCoverage(quote, ctx, issues);
+  checkPickedFieldsMissed(quote, ctx, issues);
 
   return { level: overallLevel(issues), issues };
 }

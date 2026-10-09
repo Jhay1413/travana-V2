@@ -221,8 +221,56 @@ function looksLikeLabel(candidate: string, value: string): boolean {
   const trimmed = candidate.trim();
   if (!trimmed || trimmed === value) return false; // can't anchor a value on itself
   if (/^\d+$/.test(trimmed)) return false; // digits-only line ("2026") isn't a label
+  if (isUnstableAnchorLine(trimmed)) return false; // price/date/time/count lines change per deal
   const words = trimmed.split(/\s+/).filter(Boolean);
   return words.length > 0 && words.length <= 5;
+}
+
+// Lines that carry a VALUE which changes per deal or per day ("Was £2,199",
+// "Sat 12 Oct 2026", "Only 3 left", "12:30", "25% off"). Anchoring a rule on
+// one breaks the moment the value moves, days after it was verified. Small
+// numbers in a stable label ("Adults (18+)") stay acceptable: >2 digits trips it.
+const MONTH_NAMES =
+  '(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)';
+const WEEKDAY_NAMES = '(?:mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)';
+const DATE_ISO_SEARCH_RE = /\b\d{4}-\d{2}-\d{2}\b/;
+const DATE_NUMERIC_SEARCH_RE = /\b\d{1,2}[-/]\d{1,2}[-/]\d{2,4}\b/;
+const DATE_DAY_MONTH_SEARCH_RE = new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+${MONTH_NAMES}\\b`, 'i');
+const DATE_MONTH_DAY_SEARCH_RE = new RegExp(`\\b${MONTH_NAMES}\\.?\\s+\\d{1,2}\\b`, 'i');
+const WEEKDAY_DAY_SEARCH_RE = new RegExp(`\\b${WEEKDAY_NAMES}\\b[,.]?\\s+\\d{1,2}\\b`, 'i');
+const CLOCK_TIME_RE = /\b\d{1,2}:\d{2}\b/;
+const PERCENT_RE = /\d\s?%/;
+// Urgency / scarcity copy: "Only 3 left", "Offer ends in 2 days", "5 rooms remaining".
+const URGENCY_RE = /\b(?:only|ends?|expires?|hurry)\b[^\n]*\d|\d+\s*(?:left|remaining|days?|hours?|hrs?|mins?|minutes?|seconds?|rooms?|seats?|spaces?)\b/i;
+
+function isUnstableAnchorLine(line: string): boolean {
+  if (MONEY_SYMBOL_RE.test(line) || MONEY_THOUSANDS_RE.test(line)) return true;
+  if (
+    DATE_ISO_SEARCH_RE.test(line) ||
+    DATE_NUMERIC_SEARCH_RE.test(line) ||
+    DATE_DAY_MONTH_SEARCH_RE.test(line) ||
+    DATE_MONTH_DAY_SEARCH_RE.test(line) ||
+    WEEKDAY_DAY_SEARCH_RE.test(line)
+  ) {
+    return true;
+  }
+  if (CLOCK_TIME_RE.test(line) || PERCENT_RE.test(line) || URGENCY_RE.test(line)) return true;
+  return (line.match(/\d/g) ?? []).length > 2;
+}
+
+// Between the label and the value a supplier may later insert promo lines
+// ("Was £2,499", "Save £300", "From", "RRP"). Up to two such lines are skipped.
+// No inline (?i): the interpreter compiles every rule with the 'i' flag
+// (safeRegex / new RegExp(.., 'i')), so plain words are already case-insensitive.
+const PROMO_WORDS = 'was|save|saving|rrp|from|now|previously|discount';
+const PROMO_START_RE = new RegExp(`^(?:${PROMO_WORDS})\\b`, 'i');
+const PROMO_SKIP = `(?:(?:${PROMO_WORDS})\\b[^\\n]*\\n+\\s*){0,2}`;
+
+// Label-then-next-line regex. If the picked value itself starts with a promo
+// word (e.g. "From Manchester") the skip group would swallow it, so omit it.
+function anchoredRegex(label: string, value: string): string {
+  const skip = PROMO_START_RE.test(value.trim()) ? '' : PROMO_SKIP;
+  return `(?:^|\\n)\\s*${escapeRegExp(label)}\\s*\\n+\\s*${skip}([^\\n]+)`;
 }
 
 // How many times a candidate label appears as its OWN line in the page text.
@@ -244,7 +292,7 @@ function tryLabelAnchored(
     const label = pick.linesBefore[i];
     if (!looksLikeLabel(label, pick.value)) continue;
     return {
-      rule: { from: 'text', regex: `(?:^|\\n)\\s*${escapeRegExp(label)}\\s*\\n+\\s*([^\\n]+)`, group: 1 },
+      rule: { from: 'text', regex: anchoredRegex(label, pick.value), group: 1 },
       strategy: 'label-anchored',
       ambiguousLabel: labelOccurrences(ctx.text, label) > 1,
     };
@@ -451,11 +499,11 @@ function tryValuePatternLine(pick: PickedField, ctx: PickerCaptureContext): { ru
 function tryLineOffset(pick: PickedField, ctx: PickerCaptureContext): { rule: FieldRule; strategy: DerivationStrategy } | null {
   for (let i = pick.linesBefore.length - 1; i >= 0; i--) {
     const anchor = pick.linesBefore[i];
-    if (!anchor.trim()) continue;
+    if (!anchor.trim() || isUnstableAnchorLine(anchor.trim())) continue;
     const occurrences = (ctx.text.match(new RegExp(`(?:^|\\n)\\s*${escapeRegExp(anchor)}\\s*\\n`, 'g')) ?? []).length;
     if (occurrences !== 1) continue; // not unique — can't trust it as a positional anchor
     return {
-      rule: { from: 'text', regex: `(?:^|\\n)\\s*${escapeRegExp(anchor)}\\s*\\n+\\s*([^\\n]+)`, group: 1 },
+      rule: { from: 'text', regex: anchoredRegex(anchor, pick.value), group: 1 },
       strategy: 'line-offset',
     };
   }

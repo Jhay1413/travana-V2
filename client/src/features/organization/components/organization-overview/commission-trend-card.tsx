@@ -31,7 +31,7 @@ export function CommissionTrendCard({ trend }: { trend: OrganizationOverviewTren
 
   return (
     <Card
-      className="glass ringed grain rounded-2xl p-4 md:p-5"
+      className="rounded-lg border border-black/10 bg-white p-4 shadow-none dark:border-white/10 dark:bg-white/[0.04] md:p-5"
       data-testid="commission-trend-card"
     >
       <div className="mb-3 flex items-center justify-between">

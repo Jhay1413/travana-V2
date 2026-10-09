@@ -10,6 +10,7 @@ import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { walletService } from "../wallet/wallet.service";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { AppError } from "../../utils/error-handler";
+import { branchService } from "../branch/branch.service";
 import type { Scope } from "../../utils/scope";
 import { effectiveExpiry } from "../../utils/expiry";
 import type { PipelineCandidateItem } from "./transaction.types";
@@ -191,6 +192,7 @@ async function listPipelineByOldestActivity(
   limit: number,
   agentId?: string,
   quoteStatusFilter?: string,
+  branchId?: string,
 ) {
   const { items, total } = await transactionRepository.findPipelineCandidates(
     scope,
@@ -198,6 +200,7 @@ async function listPipelineByOldestActivity(
     agentId,
     quoteStatusFilter,
     OLDEST_ACTIVITY_CANDIDATE_CAP,
+    branchId,
   );
 
   // No activity at all (null/undefined last_activity_at) sorts first, then
@@ -243,12 +246,13 @@ export const transactionService = {
     return await transactionRepository.findAllLightweight(scope);
   },
 
-  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest" | "oldest-activity", pinnedForUserId?: string) {
+  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest" | "oldest-activity", pinnedForUserId?: string, branchId?: string) {
+    if (branchId) await branchService.assertBranchInOrg(branchId, scope.orgId || null);
     await activateDueFutureDealsOnce();
     if (sort === "oldest-activity") {
-      return await listPipelineByOldestActivity(scope, column, page, limit, agentId, quoteStatusFilter);
+      return await listPipelineByOldestActivity(scope, column, page, limit, agentId, quoteStatusFilter, branchId);
     }
-    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter, sort, pinnedForUserId);
+    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter, sort, pinnedForUserId, branchId);
   },
 
   async getTransactionById(id: string, scope: Scope) {

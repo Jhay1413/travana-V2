@@ -18,8 +18,19 @@ export interface OrganizationOverviewKpis {
   todayCommission: number;
   weekCommission: number;
   monthCommission: number;
+  todayUpsellCommission: number;
+  weekUpsellCommission: number;
+  monthUpsellCommission: number;
   ytdCommission: number;
   monthBookingsCount: number;
+  todayBookingsCount: number;
+  weekBookingsCount: number;
+  monthSales: number;
+  monthQuotesCount: number;
+  weekCloseRate: number;
+  prevWeekCloseRate: number;
+  quoteViewsCount: number;
+  quotesSentCount: number;
   avgCommission: number;
   openQuotesValue: number;
   openQuotesCount: number;
@@ -37,6 +48,8 @@ export interface AgentPerformanceRow {
   name: string;
   firstName: string;
   avatarUrl: string | null;
+  isHomeworker: boolean;
+  branches: Array<{ id: string; name: string; code: string | null }>;
   today: number;
   week: number;
   month: number;
@@ -54,6 +67,7 @@ export interface AgentsPerformanceResponse {
   from: string;
   to: string;
   rows: AgentPerformanceRow[];
+  unlisted: { today: number; week: number; month: number; rangeBookings: number };
 }
 
 export interface BranchPerformanceRow {

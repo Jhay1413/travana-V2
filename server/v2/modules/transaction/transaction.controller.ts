@@ -140,9 +140,9 @@ export const transactionController = {
     // Already validated against the enum by listPipelineByStatusValidator —
     // validate() checks req.query but doesn't reassign it, so this reads the
     // raw query typed against the validator's own inferred shape.
-    const { sort } = req.query as unknown as ListPipelineByStatusQuery;
+    const { sort, branchId } = req.query as unknown as ListPipelineByStatusQuery;
     const scope = getScope(req);
-    const result = await transactionService.listPipelineByStatus(scope, column, page, limit, agentId || undefined, quoteStatusFilter || undefined, sort, scope.userId ?? undefined);
+    const result = await transactionService.listPipelineByStatus(scope, column, page, limit, agentId || undefined, quoteStatusFilter || undefined, sort, scope.userId ?? undefined, branchId);
     return successResponse(res, result, "Pipeline data retrieved");
   }),
 

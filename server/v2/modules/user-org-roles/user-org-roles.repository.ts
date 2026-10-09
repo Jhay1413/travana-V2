@@ -7,11 +7,45 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** The org-role string that marks a user as a sales agent. */
 const SALES_AGENT_ROLE = 'agent';
 
+/** The org-role string that marks a user as a homeworker. */
+const HOMEWORKER_ROLE = 'homeworker';
+
 /** Support role that should not appear in agent pickers, leaderboards or stats. */
 const SOCIAL_MEDIA_ROLE = 'social_media_manager';
 
 /** Operational roles — a user holding any of these is a real team member. */
 const OPERATIONAL_ROLES = ['org_admin', 'branch_manager', 'agent', 'homeworker'];
+
+/**
+ * User IDs holding `role`, either granted in the `user_org_roles` junction or
+ * as their active branch membership role. `branchId` restricts the membership
+ * side to one branch, `orgId` restricts both sides to one org; with neither
+ * (platform-admin context) it spans all orgs.
+ */
+async function findUserIdsByRole(
+  role: string,
+  opts?: { orgId?: string | null; branchId?: string | null },
+): Promise<string[]> {
+  const orgId = opts?.orgId ?? null;
+  const branchId = opts?.branchId ?? null;
+
+  const junctionConds = [eq(userOrgRoles.role, role)];
+  if (orgId) junctionConds.push(eq(userOrgRoles.orgId, orgId));
+
+  const memberConds = [eq(branchMembers.orgRole, role), eq(branchMembers.isActive, true)];
+  if (branchId) memberConds.push(eq(branchMembers.branchId, branchId));
+  else if (orgId) memberConds.push(eq(branchMembers.orgId, orgId));
+
+  const [junctionRows, memberRows] = await Promise.all([
+    db.select({ userId: userOrgRoles.userId }).from(userOrgRoles).where(and(...junctionConds)),
+    db.select({ userId: branchMembers.userId }).from(branchMembers).where(and(...memberConds)),
+  ]);
+
+  const ids = new Set<string>();
+  for (const r of junctionRows) ids.add(r.userId);
+  for (const r of memberRows) ids.add(r.userId);
+  return Array.from(ids);
+}
 
 export const userOrgRolesRepository = {
   /**
@@ -26,25 +60,12 @@ export const userOrgRolesRepository = {
    * (platform-admin context) it returns sales agents across all orgs.
    */
   async findSalesAgentUserIds(opts?: { orgId?: string | null; branchId?: string | null }): Promise<string[]> {
-    const orgId = opts?.orgId ?? null;
-    const branchId = opts?.branchId ?? null;
+    return findUserIdsByRole(SALES_AGENT_ROLE, opts);
+  },
 
-    const junctionConds = [eq(userOrgRoles.role, SALES_AGENT_ROLE)];
-    if (orgId) junctionConds.push(eq(userOrgRoles.orgId, orgId));
-
-    const memberConds = [eq(branchMembers.orgRole, SALES_AGENT_ROLE), eq(branchMembers.isActive, true)];
-    if (branchId) memberConds.push(eq(branchMembers.branchId, branchId));
-    else if (orgId) memberConds.push(eq(branchMembers.orgId, orgId));
-
-    const [junctionRows, memberRows] = await Promise.all([
-      db.select({ userId: userOrgRoles.userId }).from(userOrgRoles).where(and(...junctionConds)),
-      db.select({ userId: branchMembers.userId }).from(branchMembers).where(and(...memberConds)),
-    ]);
-
-    const ids = new Set<string>();
-    for (const r of junctionRows) ids.add(r.userId);
-    for (const r of memberRows) ids.add(r.userId);
-    return Array.from(ids);
+  /** User IDs of everyone holding the `homeworker` role (junction or active branch membership). */
+  async findHomeworkerUserIds(opts?: { orgId?: string | null; branchId?: string | null }): Promise<string[]> {
+    return findUserIdsByRole(HOMEWORKER_ROLE, opts);
   },
 
   /**

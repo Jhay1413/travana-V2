@@ -452,6 +452,6 @@ describe("transactionService.listPipelineByStatus — pinning", () => {
 
     await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1");
 
-    expect(transactionRepository.findPipelineByStatus).toHaveBeenCalledWith(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1");
+    expect(transactionRepository.findPipelineByStatus).toHaveBeenCalledWith(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1", undefined);
   });
 });

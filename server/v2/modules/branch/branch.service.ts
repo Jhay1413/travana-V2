@@ -10,6 +10,17 @@ export const branchService = {
     return branchRepository.findAllByOrg(orgId);
   },
 
+  /**
+   * Throws 404 unless the branch exists and belongs to `orgId`. A null/empty
+   * orgId (platform admin) may use any existing branch.
+   */
+  async assertBranchInOrg(branchId: string, orgId: string | null): Promise<void> {
+    const branchOrgId = await branchRepository.findOrgIdById(branchId);
+    if (!branchOrgId || (orgId && branchOrgId !== orgId)) {
+      throw new AppError('Branch not found', 404);
+    }
+  },
+
   async getById(id: string, orgId: string) {
     const branch = await branchRepository.findById(id, orgId);
     if (!branch) throw new AppError('Branch not found', 404);
