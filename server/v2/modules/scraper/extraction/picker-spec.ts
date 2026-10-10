@@ -54,6 +54,8 @@ export interface PickerCaptureContext {
 export type DerivationStrategy =
   | 'url-param'
   | 'label-anchored'
+  | 'inline-label'
+  | 'label-after'
   | 'heading-position'
   | 'title-prefix'
   | 'title-segment'
@@ -284,20 +286,118 @@ function labelOccurrences(text: string, label: string): number {
   return (text.match(re) ?? []).length;
 }
 
+// Returns EVERY acceptable preceding line (nearest first), not just the first:
+// the nearest line is often a per-item badge ("Plus") that fails verification
+// (or drifts), and the verify loop needs the farther labels to fall back on.
 function tryLabelAnchored(
   pick: PickedField,
   ctx: PickerCaptureContext,
-): { rule: FieldRule; strategy: DerivationStrategy; ambiguousLabel: boolean } | null {
+): { rule: FieldRule; strategy: DerivationStrategy; ambiguousLabel: boolean }[] {
+  const out: { rule: FieldRule; strategy: DerivationStrategy; ambiguousLabel: boolean }[] = [];
   for (let i = pick.linesBefore.length - 1; i >= 0; i--) {
     const label = pick.linesBefore[i];
     if (!looksLikeLabel(label, pick.value)) continue;
-    return {
+    out.push({
       rule: { from: 'text', regex: anchoredRegex(label, pick.value), group: 1 },
       strategy: 'label-anchored',
       ambiguousLabel: labelOccurrences(ctx.text, label) > 1,
-    };
+    });
   }
-  return null;
+  return out;
+}
+
+// ─── Candidate strategy 2b: inline-label ─────────────────────────────────────
+//
+// The value carries its own label on the SAME line: TUI's "Total Price £3952.48".
+// Label = leading text up to the first currency symbol or digit; the rest must
+// be money / number / date. Returns null if the line isn't that shape, or the
+// label isn't label-like / is itself an unstable line.
+function splitInlineLabel(line: string): { label: string; rest: string } | null {
+  const t = line.trim();
+  const idx = t.search(/[£$€\d]/);
+  if (idx <= 0) return null;
+  // A digit glued to letters ("LP31765") is part of a code, not an amount after a label.
+  if (/\d/.test(t[idx]) && !/[\s:]/.test(t[idx - 1])) return null;
+  const label = t.slice(0, idx).trim().replace(/\s*:$/, '').trim();
+  const rest = t.slice(idx).trim();
+  if (!label || !/[A-Za-z]/.test(label)) return null;
+  if (inferTransform(rest) === undefined) return null;
+  if (!looksLikeLabel(label, t)) return null; // also rejects unstable (money/date/...) labels
+  return { label, rest };
+}
+
+// Literal label as a regex: whitespace runs become [ \t]+ (never \s, which
+// would cross a line break).
+function labelPattern(label: string): string {
+  return label
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeRegExp)
+    .join('[ \\t]+');
+}
+
+// How many lines of the page START with the label (followed by `tail`).
+function lineStartOccurrences(text: string, labelPat: string, tail: string): number {
+  return (text.match(new RegExp(`(?:^|\\n)[ \\t]*${labelPat}${tail}`, 'gi')) ?? []).length;
+}
+
+function tryInlineLabel(
+  pick: PickedField,
+  ctx: PickerCaptureContext,
+): { rule: FieldRule; strategy: DerivationStrategy; ambiguousLabel: boolean } | null {
+  const value = pick.value.trim();
+  if (!value || value.includes('\n')) return null;
+  const split = splitInlineLabel(value);
+  if (!split) return null;
+  const pat = labelPattern(split.label);
+  // Amount start built from the value's own shape (symbol kept if present).
+  const symbol = /^[£$€]/.exec(split.rest)?.[0];
+  const amountStart = symbol ? `${escapeRegExp(symbol)}[ \\t]*\\d` : '\\d';
+  // Group 1 spans the WHOLE line from the label, so the raw capture equals the
+  // picked value; the label is what anchors it, wherever the line sits.
+  const regex = `(?:^|\\n)[ \\t]*(${pat}[ \\t]*:?[ \\t]*${amountStart}[^\\n]*)`;
+  return {
+    rule: { from: 'text', regex, group: 1 },
+    strategy: 'inline-label',
+    ambiguousLabel: lineStartOccurrences(ctx.text, pat, '\\b') > 1,
+  };
+}
+
+// ─── Candidate strategy 2c: label-after ──────────────────────────────────────
+//
+// Anchors on the NEXT line when the preceding lines are per-item badges that
+// change between pages. TUI's per-person "£1976.24pp" sits between hotel badges
+// ("Green & Fair Hotel", "Plus") and the stable "Total Price £3952.48" line.
+// Anchor = that line's stable label part (whole line if it is a label, else its
+// leading label prefix). It must start exactly one line on the page, otherwise
+// it can't say which occurrence is meant.
+function tryLabelAfter(
+  pick: PickedField,
+  ctx: PickerCaptureContext,
+): { rule: FieldRule; strategy: DerivationStrategy; viaInline: boolean } | null {
+  const next = pick.linesAfter.map((l) => l.trim()).find(Boolean);
+  if (!next || next === pick.value.trim()) return null;
+
+  let pat: string;
+  let tail: string;
+  let viaInline = false;
+  if (looksLikeLabel(next, pick.value)) {
+    pat = labelPattern(next);
+    tail = '[ \\t]*(?=\\n|$)';
+  } else {
+    const split = splitInlineLabel(next);
+    if (!split) return null;
+    pat = labelPattern(split.label);
+    tail = '\\b';
+    viaInline = true;
+  }
+  if (lineStartOccurrences(ctx.text, pat, tail) !== 1) return null;
+
+  return {
+    rule: { from: 'text', regex: `(?:^|\\n)[ \\t]*([^\\n]+?)[ \\t]*(?:\\n[ \\t]*)+${pat}${tail}`, group: 1 },
+    strategy: 'label-after',
+    viaInline,
+  };
 }
 
 // ─── Candidate strategy 3: heading-position ──────────────────────────────────
@@ -554,6 +654,10 @@ function deriveConfidence(
   // value's own literal label, unique-on-page checked.
   if (strategy === 'heading-position' || strategy === 'title-prefix' || strategy === 'title-segment' || strategy === 'value-pattern-line') return 'medium';
   if (strategy === 'url-param' || strategy === 'url-path-slug') return 'high';
+  if (strategy === 'label-after') return pick.occurrenceCount > 1 ? 'low' : 'medium';
+  // inline-label: the label is the value's own prefix; 'low' only if that label
+  // starts more than one line on the page.
+  if (strategy === 'inline-label') return extra.ambiguousLabel ? 'low' : 'high';
   // label-anchored: 'high' unless the anchor label itself repeats on the page
   // (occurrenceCount > 1 with a repeating label is exactly the shape that
   // can't tell which occurrence is meant — the "Taxes and fees" bug).
@@ -584,8 +688,14 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
     const candidates: Candidate[] = [];
     const urlParam = tryUrlParam(pick, ctx);
     if (urlParam) candidates.push(urlParam);
-    const labelAnchored = tryLabelAnchored(pick, ctx);
-    if (labelAnchored) candidates.push(labelAnchored);
+    // A label-after whose anchor is a "Label £amount" line outranks preceding-line
+    // labels: those are often per-item badges that merely happen to verify on this
+    // one page ("Plus"). A plain label-line anchor ranks after title/url instead.
+    const labelAfter = tryLabelAfter(pick, ctx);
+    if (labelAfter?.viaInline) candidates.push(labelAfter);
+    candidates.push(...tryLabelAnchored(pick, ctx));
+    const inlineLabel = tryInlineLabel(pick, ctx);
+    if (inlineLabel) candidates.push(inlineLabel);
     const headingPosition = tryHeadingPosition(pick, ctx);
     if (headingPosition) candidates.push(headingPosition);
     const titlePrefix = tryTitlePrefix(pick, ctx);
@@ -598,6 +708,7 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
     if (urlPathSlug) candidates.push(urlPathSlug);
     const titleSegment = tryTitleSegment(pick, ctx);
     if (titleSegment) candidates.push(titleSegment);
+    if (labelAfter && !labelAfter.viaInline) candidates.push(labelAfter);
     const valuePatternLine = tryValuePatternLine(pick, ctx);
     if (valuePatternLine) candidates.push(valuePatternLine);
     const lineOffset = tryLineOffset(pick, ctx);
@@ -614,7 +725,7 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
     if (!winner) {
       problems.push({
         field: pick.field,
-        reason: `no candidate strategy (url-param, label-anchored, heading-position, title-prefix, title-segment, url-path-slug, value-pattern-line, line-offset) produced a rule that reproduces the picked value "${pick.value}" against the captured page`,
+        reason: `no candidate strategy (url-param, label-anchored, inline-label, label-after, heading-position, title-prefix, title-segment, url-path-slug, value-pattern-line, line-offset) produced a rule that reproduces the picked value "${pick.value}" against the captured page`,
       });
       continue;
     }
