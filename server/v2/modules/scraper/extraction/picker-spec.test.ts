@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { deriveSpecFromPicks, mergePickedIntoSpec, type DerivedRule, type PickedField, type PickerCaptureContext } from './picker-spec';
 import type { ExtractionSpec, FieldRule } from './extraction.types';
+import { runExtractionSpec } from './extraction.interpreter';
 
 // Real pages from EXTRACTION_AUDIT.md — a picker that only worked on synthetic
 // fixtures would tell us nothing about the accuracy problem in §3.
@@ -764,5 +765,93 @@ describe('deriveSpecFromPicks — unstable anchors and promo-line tolerance', ()
     );
     expect(result.derived).toHaveLength(1);
     expect(new RegExp(result.derived[0].rule.regex!, 'i').exec(text)?.[1]).toBe('From Manchester');
+  });
+});
+
+// ─── TUI retail agents portal: inline-label + label-after ────────────────────
+describe('deriveSpecFromPicks — TUI inline price label', () => {
+  const TUI_TEXT = [
+    'Riu Montego Bay',
+    '',
+    'IN MONTEGO BAY, JAMAICA',
+    '',
+    'Green & Fair Hotel',
+    'Plus',
+    '£1976.24pp',
+    'Total Price £3952.48',
+    'Continue',
+    'Incl. mandatory fees & taxes',
+    '1/26',
+  ].join('\n');
+  const TUI_URL = 'https://agents.tui.co.uk/holiday/summary';
+  const TUI_TITLE = 'TUI Holidays | Live Happy | tui.co.uk';
+  const TUI_HEADINGS = ['Riu Montego Bay', 'About the hotel', 'Your room', 'Your board', 'Location', 'Hotel details', 'Green & Fair', 'We value your privacy'];
+  const ctx: PickerCaptureContext = { url: TUI_URL, title: TUI_TITLE, text: TUI_TEXT, headings: TUI_HEADINGS };
+
+  const salesPick = pick({
+    field: 'sales_price',
+    value: 'Total Price £3952.48',
+    textIndex: TUI_TEXT.indexOf('Total Price £3952.48'),
+    lineIndex: 7,
+    linesBefore: ['Green & Fair Hotel', 'Plus', '£1976.24pp'],
+    linesAfter: ['Continue', 'Incl. mandatory fees & taxes'],
+  });
+  const perPersonPick = pick({
+    field: 'price_per_person',
+    value: '£1976.24pp',
+    textIndex: TUI_TEXT.indexOf('£1976.24pp'),
+    lineIndex: 6,
+    linesBefore: ['IN MONTEGO BAY, JAMAICA', 'Green & Fair Hotel', 'Plus'],
+    linesAfter: ['Total Price £3952.48', 'Continue'],
+  });
+
+  const run = (spec: ExtractionSpec, text: string) =>
+    runExtractionSpec(spec, { title: TUI_TITLE, text, url: TUI_URL }, '2026-01-01T00:00:00Z');
+
+  const result = deriveSpecFromPicks([salesPick, perPersonPick], ctx);
+  const byField = (f: string): DerivedRule | undefined => result.derived.find((d) => d.field === f);
+
+  it('derives sales_price as inline-label and the interpreter reads 3952.48', () => {
+    expect(result.problems).toEqual([]);
+    const d = byField('sales_price');
+    expect(d?.strategy).toBe('inline-label');
+    expect(d?.confidence).toBe('high');
+    expect(d?.rule.transform).toBe('number');
+    expect(run(result.spec, TUI_TEXT).sales_price).toBe(3952.48);
+  });
+
+  it('derives price_per_person as label-after anchored on "Total Price" and reads 1976.24', () => {
+    const d = byField('price_per_person');
+    expect(d?.strategy).toBe('label-after');
+    expect(d?.rule.regex).toContain('Total[ \\t]+Price');
+    expect(d?.rule.regex).not.toContain('Plus');
+    expect(run(result.spec, TUI_TEXT).price_per_person).toBe(1976.24);
+  });
+
+  it('replays both rules on a different hotel with no badge lines', () => {
+    const page2 = ['Hotel Example', '', 'IN PAPHOS, CYPRUS', '', '£899.50pp', 'Total Price £1799.00', 'Continue'].join('\n');
+    const q = run(result.spec, page2);
+    expect(q.sales_price).toBe(1799);
+    expect(q.price_per_person).toBe(899.5);
+  });
+
+  it('inline-label is unaffected by a promo line inserted before the total', () => {
+    const page3 = ['Hotel Example', '£899.50pp', 'Was £2,100', 'Total Price £1799.00', 'Continue'].join('\n');
+    expect(run(result.spec, page3).sales_price).toBe(1799);
+  });
+
+  it('never uses the per-person price line as a label for sales_price', () => {
+    const d = byField('sales_price');
+    expect(d?.rule.regex).not.toContain('1976');
+    expect(d?.rule.regex).not.toContain('pp');
+  });
+
+  it('tries every acceptable preceding line, not just the nearest', () => {
+    const text = ['Trip total', 'Badge', '£500.00'].join('\n');
+    // nearest "Badge" verifies here, but a farther label must also be offered
+    const p = pick({ field: 'sales_price', value: '£500.00', textIndex: 12, linesBefore: ['Trip total', 'Badge'] });
+    const r = deriveSpecFromPicks([p], { url: 'https://x.test/', title: '', text });
+    expect(r.problems).toEqual([]);
+    expect(r.derived[0].strategy).toBe('label-anchored');
   });
 });
