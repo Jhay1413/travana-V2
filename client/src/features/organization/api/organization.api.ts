@@ -11,7 +11,23 @@ export interface OrganizationBillingContact {
   vatNumber?: string;
 }
 
+export interface OrganizationProfile {
+  phone?: string;
+  email?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  town?: string;
+  county?: string;
+  postcode?: string;
+}
+
+export interface OrganizationBrandingSettings {
+  iconUrl?: string | null;
+}
+
 export interface OrganizationSettings {
+  profile?: OrganizationProfile;
+  branding?: OrganizationBrandingSettings;
   timezone?: string;
   currency?: string;
   dateFormat?: string;

@@ -28,7 +28,7 @@ export default function AcceptInvitePage() {
   const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
-    document.title = invite?.orgName ? `Join ${invite.orgName} · TravelHub` : "Accept invitation · TravelHub";
+    document.title = invite?.orgName ? `Join ${invite.orgName} · Travana` : "Accept invitation · Travana";
   }, [invite]);
 
   const passwordOk = password.length >= 8;
@@ -61,7 +61,7 @@ export default function AcceptInvitePage() {
           <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600">
             <Plane className="h-5 w-5 text-white" />
           </div>
-          <span className="text-lg font-semibold">TravelHub</span>
+          <span className="text-lg font-semibold">Travana</span>
         </div>
 
         {!token ? (
@@ -156,7 +156,7 @@ export default function AcceptInvitePage() {
             </Button>
 
             <p className="text-xs text-white/40 text-center">
-              By accepting, you agree to TravelHub's terms.
+              By accepting, you agree to Travana's terms.
             </p>
           </form>
         )}

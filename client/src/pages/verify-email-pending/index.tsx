@@ -23,29 +23,50 @@ function VerifyEmailConfirm({ token }: { token: string }) {
   const [, setLocation] = useLocation();
   const [status, setStatus] = useState<ConfirmStatus>("loading");
   const [message, setMessage] = useState("");
+  const { toast } = useToast();
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await axiosClient.get("/api/v2/onboarding/verify-email", {
+        const { data } = await axiosClient.get<{ message?: string }>("/api/v2/onboarding/verify-email", {
           params: { token },
         });
         if (cancelled) return;
         setStatus("success");
         setMessage(data?.message ?? "Your email has been verified. You can now sign in.");
-      } catch (err: any) {
+      } catch {
+        // Any failure (including code VERIFICATION_LINK_INVALID) shows the same guidance.
         if (cancelled) return;
         setStatus("error");
-        setMessage(
-          err?.response?.data?.message ?? err?.message ?? "Verification link is invalid or expired.",
-        );
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [token]);
+
+  const retryEmail = new URLSearchParams(window.location.search).get("email") ?? "";
+  const handleRequestNewLink = async () => {
+    if (!retryEmail) {
+      setLocation("/verify-email");
+      return;
+    }
+    setResending(true);
+    try {
+      await axiosClient.post("/api/v2/onboarding/resend-verification", { email: retryEmail });
+      toast({ title: "Verification email sent", description: `Check ${retryEmail} for the new link.` });
+    } catch (err: unknown) {
+      toast({
+        title: "Couldn't resend",
+        description: err instanceof Error && err.message ? err.message : "Something went wrong — try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
+      setResending(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
@@ -54,7 +75,7 @@ function VerifyEmailConfirm({ token }: { token: string }) {
           <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600">
             <Plane className="h-5 w-5 text-white" />
           </div>
-          <span className="text-lg font-semibold">TravelHub</span>
+          <span className="text-lg font-semibold">Travana</span>
         </div>
 
         {status === "loading" && (
@@ -96,14 +117,27 @@ function VerifyEmailConfirm({ token }: { token: string }) {
             <h1 className="mb-2 text-2xl font-semibold tracking-tight" data-testid="text-verify-confirm-title">
               Verification failed
             </h1>
-            <p className="mb-6 text-sm text-white/60">{message}</p>
-            <Button
-              onClick={() => setLocation("/")}
-              className="w-full rounded-xl bg-white text-black hover:bg-white/90 h-11"
-              data-testid="button-back-to-login"
-            >
-              Back to sign in
-            </Button>
+            <p className="mb-6 text-sm text-white/60" data-testid="text-verify-error">
+              This link has already been used or has expired. If you've already verified, just sign in — otherwise request a new link.
+            </p>
+            <div className="space-y-3">
+              <Button
+                onClick={() => setLocation("/")}
+                className="w-full rounded-xl bg-white text-black hover:bg-white/90 h-11"
+                data-testid="button-back-to-login"
+              >
+                Sign in
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={handleRequestNewLink}
+                disabled={resending}
+                className="w-full rounded-xl text-white/70 hover:bg-white/5 hover:text-white h-11"
+                data-testid="button-request-new-link"
+              >
+                {resending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Sending...</> : "Request a new link"}
+              </Button>
+            </div>
           </>
         )}
       </div>
@@ -156,10 +190,10 @@ export default function VerifyEmailPendingPage() {
         title: "Verification email sent",
         description: `Check ${email} for the verification link.`,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: "Couldn't resend",
-        description: err?.message ?? "Something went wrong — try again in a moment.",
+        description: err instanceof Error && err.message ? err.message : "Something went wrong — try again in a moment.",
         variant: "destructive",
       });
     } finally {
@@ -182,7 +216,7 @@ export default function VerifyEmailPendingPage() {
           <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600">
             <Plane className="h-5 w-5 text-white" />
           </div>
-          <span className="text-lg font-semibold">TravelHub</span>
+          <span className="text-lg font-semibold">Travana</span>
         </div>
 
         <div className="mb-6 grid h-14 w-14 place-items-center rounded-2xl bg-blue-500/15 text-blue-400">

@@ -77,6 +77,17 @@ export const socialPostRepository = {
     return row?.orgId ?? null;
   },
 
+  async findPassengerCountsForQuote(
+    quoteId: string,
+  ): Promise<{ adults: number | null; children: number | null } | null> {
+    const [row] = await db
+      .select({ adults: quote.adult, children: quote.child })
+      .from(quote)
+      .where(eq(quote.id, quoteId))
+      .limit(1);
+    return row ?? null;
+  },
+
   /** Batch, org-agnostic projection of SCHEDULED deals for the embeddings
    *  backfill script. "Scheduled" = onlySocialsId set (same definition the
    *  social-posts board uses). Requires a non-null transaction.org_id since

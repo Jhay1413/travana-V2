@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
     update: vi.fn(),
     findOrgIdForQuote: vi.fn(),
     findPrimaryAccommodationNameForQuote: vi.fn(),
+    findPassengerCountsForQuote: vi.fn(),
+    isTestTransactionForQuote: vi.fn(),
+    findOrganizationBrandingById: vi.fn(),
+    create: vi.fn(),
   },
 }));
 
@@ -36,7 +40,14 @@ vi.mock("../ai-embeddings/ai-embeddings.service", () => ({
   aiEmbeddingsService: { syncSource: vi.fn(), removeSourceById: vi.fn() },
 }));
 
-import { formatPostHTML, socialPostService, type PostDeal } from "./social-post.service";
+import {
+  buildOrgSocialContact,
+  familySize,
+  formatPostHTML,
+  shortTourOperatorName,
+  socialPostService,
+  type PostDeal,
+} from "./social-post.service";
 import type { OrgSocialContact } from "./social-post.types";
 
 const baseDeal: PostDeal = {
@@ -66,36 +77,167 @@ describe("formatPostHTML contact block", () => {
       instagramUrl: "https://www.instagram.com/acmetravel/",
     };
 
-    const html = formatPostHTML(baseDeal, "Book now", "Great resort", ["#Travel"], contact);
+    const html = formatPostHTML(baseDeal, "Book now", "Great resort", contact);
 
-    expect(html).toContain("To Book:");
+    expect(html).toContain("To Book");
     expect(html).toContain("01234 567890");
     expect(html).toContain("acmetravel.example");
     expect(html).toContain("https://www.instagram.com/acmetravel/");
   });
 
   it("omits the contact block entirely when the org has no contact details configured", () => {
-    const html = formatPostHTML(baseDeal, "Book now", "Great resort", ["#Travel"], noContact);
+    const html = formatPostHTML(baseDeal, "Book now", "Great resort", noContact);
 
-    expect(html).not.toContain("To Book:");
+    expect(html).not.toContain("To Book");
     expect(html).not.toContain("Private message");
     expect(html).not.toContain("Pop in and see us");
   });
 
   it("never falls back to another tenant's hardcoded contact details", () => {
-    const withContact = formatPostHTML(baseDeal, "Book now", "Great resort", ["#Travel"], {
+    const withContact = formatPostHTML(baseDeal, "Book now", "Great resort", {
       businessName: "Acme Travel",
       phone: "01234 567890",
       website: "acmetravel.example",
       instagramUrl: null,
     });
-    const withoutContact = formatPostHTML(baseDeal, "Book now", "Great resort", ["#Travel"], noContact);
+    const withoutContact = formatPostHTML(baseDeal, "Book now", "Great resort", noContact);
 
     for (const html of [withContact, withoutContact]) {
       expect(html).not.toContain("0191 594 7999");
       expect(html).not.toContain("tinastraveldeals.co.uk");
       expect(html).not.toContain("instagram.com/tinastravel");
     }
+  });
+});
+
+describe("formatPostHTML layout", () => {
+  const contact: OrgSocialContact = {
+    businessName: "Test Travel",
+    phone: "0191 594 7999",
+    website: "tinastraveldeals.co.uk",
+    instagramUrl: null,
+  };
+
+  it("has no hashtag line and no tour operator emoji", () => {
+    const html = formatPostHTML(baseDeal, "Book now", "Great resort", contact);
+    expect(html).not.toContain("#");
+    expect(html).not.toContain("🏢");
+  });
+
+  it("puts the shortened tour operator before the To Book section", () => {
+    const html = formatPostHTML(baseDeal, "Book now", "Great resort", contact);
+    expect(html).toContain("Jet2<br>");
+    expect(html).not.toContain("Jet2holidays");
+    expect(html.indexOf("Jet2<br>")).toBeLessThan(html.indexOf("To Book"));
+    expect(html.trimEnd().endsWith("<br>")).toBe(true);
+  });
+
+  it("renders the To Book block in the expected format", () => {
+    const html = formatPostHTML(baseDeal, "Book now", "Great resort", contact);
+    const block = html.slice(html.indexOf("To Book"));
+    expect(block.split("\n").map((l) => l.trim()).filter(Boolean)).toEqual([
+      "To Book<br>",
+      "☎️ Call us on 0191 594 7999<br>",
+      "💬 Private message<br>",
+      "📍 Pop in and see us<br>",
+      "🌐 Visit our website: tinastraveldeals.co.uk<br>",
+    ]);
+    expect(html).toContain("<br>To Book<br>");
+  });
+
+  it("omits the To Book block when no contact details are configured", () => {
+    const html = formatPostHTML(baseDeal, "Book now", "Great resort", noContact);
+    expect(html).not.toContain("To Book");
+  });
+});
+
+describe("familySize", () => {
+  it.each([
+    [2, 1, 3],
+    [2, 2, 4],
+    [2, 0, null],
+    [2, 3, null],
+    [1, 1, null],
+    [3, 1, null],
+    [null, 1, null],
+    [2, null, null],
+    [undefined, undefined, null],
+  ])("familySize(%s adults, %s children) = %s", (adults, children, expected) => {
+    expect(familySize(adults, children)).toBe(expected);
+  });
+});
+
+describe("formatPostHTML family pricing", () => {
+  it.each([3, 4] as const)("renders the total with a Family of %i line and no pp", (size) => {
+    const html = formatPostHTML({ ...baseDeal, price: "3952.48", familySize: size }, "Book now", "Great resort", noContact);
+    expect(html).toContain(`💸 Total cost from £3952.48 for a Family of ${size}<br>`);
+    expect(html).not.toContain("pp<br>");
+  });
+
+  it("keeps the per-person line when there is no family size", () => {
+    const html = formatPostHTML({ ...baseDeal, price: "988.12", familySize: null }, "Book now", "Great resort", noContact);
+    expect(html).toContain("💸 Total cost from £988.12pp<br>");
+    expect(html).not.toContain("Family of");
+  });
+});
+
+describe("socialPostService.generatePost family pricing", () => {
+  const params = {
+    quoteId: "quote-1",
+    title: "Sunny Escape",
+    destination: "Spain",
+    nights: 7,
+    salesPrice: "3952.48",
+    pricePerPerson: "988.12",
+    travelDate: "2026-08-01",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("OPENAI_API_KEY", "");
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.repo.isTestTransactionForQuote.mockResolvedValue(false);
+    mocks.repo.findOrgIdForQuote.mockResolvedValue(null);
+    mocks.repo.findOrganizationBrandingById.mockResolvedValue(null);
+    mocks.repo.create.mockImplementation(async (data: Record<string, unknown>) => data);
+  });
+
+  it("uses the total price and Family of 4 for 2 adults + 2 children", async () => {
+    mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 2 });
+    await socialPostService.generatePost(params, { orgId: null });
+    const saved = mocks.repo.create.mock.calls[0][0] as { post: string; price: string };
+    expect(saved.post).toContain("💸 Total cost from £3952.48 for a Family of 4<br>");
+    expect(saved.price).toBe("3952.48");
+  });
+
+  it("keeps per-person pricing for non-family quotes", async () => {
+    mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 0 });
+    await socialPostService.generatePost(params, { orgId: null });
+    const saved = mocks.repo.create.mock.calls[0][0] as { post: string; price: string };
+    expect(saved.post).toContain("💸 Total cost from £988.12pp<br>");
+    expect(saved.price).toBe("988.12");
+  });
+
+  it("falls back to per-person when a family quote has no salesPrice", async () => {
+    mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 1 });
+    await socialPostService.generatePost({ ...params, salesPrice: undefined }, { orgId: null });
+    const saved = mocks.repo.create.mock.calls[0][0] as { post: string; price: string };
+    expect(saved.post).toContain("£988.12pp<br>");
+    expect(saved.post).not.toContain("Family of");
+  });
+});
+
+describe("shortTourOperatorName", () => {
+  it.each(["easyJet", "Easyjet", "easyJet holidays", "EasyJet Holidays"])("shortens %s to Ejet", (name) => {
+    expect(shortTourOperatorName(name)).toBe("Ejet");
+  });
+
+  it.each(["Jet2Holidays", "Jet2 Holidays", "jet2holidays", "Jet2holidays.com", "Jet2"])("shortens %s to Jet2", (name) => {
+    expect(shortTourOperatorName(name)).toBe("Jet2");
+  });
+
+  it("returns other names trimmed and unchanged", () => {
+    expect(shortTourOperatorName("  TUI  ")).toBe("TUI");
   });
 });
 
@@ -151,5 +293,25 @@ describe("socialPostService auto-upscale at schedule time", () => {
     expect(mocks.uploadMediaFromUrl).toHaveBeenNthCalledWith(1, "https://a/1-up.jpg");
     expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith("os-1", "2026-01-01T10:00:00", "new text", [10, 11, 12]);
     expect(result.autoUpscale).toEqual(summary);
+  });
+});
+
+describe("buildOrgSocialContact phone fallback", () => {
+  it("prefers settings.social.phone", () => {
+    const c = buildOrgSocialContact({
+      name: "Acme",
+      settings: { social: { phone: "111" }, profile: { phone: "222" } },
+    });
+    expect(c.phone).toBe("111");
+  });
+
+  it("falls back to the trimmed settings.profile.phone", () => {
+    const c = buildOrgSocialContact({ name: "Acme", settings: { profile: { phone: "  222  " } } });
+    expect(c.phone).toBe("222");
+  });
+
+  it("is null when neither phone is set", () => {
+    const c = buildOrgSocialContact({ name: "Acme", settings: { profile: { phone: "  " } } });
+    expect(c.phone).toBeNull();
   });
 });

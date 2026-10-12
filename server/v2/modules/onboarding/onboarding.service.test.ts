@@ -10,12 +10,22 @@ vi.mock("../user/user.repository", () => ({
   },
 }));
 vi.mock("../../utils/public-url", () => ({ getPublicBaseUrl: () => "http://localhost:5000" }));
-vi.mock("../../../services/email-provider", () => ({ getEmailProvider: () => ({ send: vi.fn() }) }));
+const providerSend = vi.hoisted(() => vi.fn());
+const providerName = vi.hoisted(() => ({ value: "resend" }));
+vi.mock("../../../services/email-provider", () => ({
+  getEmailProvider: () => ({ name: providerName.value, send: providerSend }),
+  isRealEmailProvider: (p: { name: string }) => p.name !== "console",
+}));
+vi.mock("../invite/invite.service", () => ({
+  INVITE_TTL_MS: 7 * 24 * 60 * 60 * 1000,
+  inviteService: { sendInviteEmail: vi.fn() },
+}));
 
 import { onboardingService } from "./onboarding.service";
 import { onboardingRepository } from "./onboarding.repository";
 import { organizationRepository } from "../organization/organization.repository";
 import { userRepository } from "../user/user.repository";
+import { inviteService } from "../invite/invite.service";
 
 function branch(name = "Main") {
   return {
@@ -46,6 +56,9 @@ function payload(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  providerName.value = "resend";
+  providerSend.mockResolvedValue(undefined);
+  vi.mocked(inviteService.sendInviteEmail).mockResolvedValue(undefined);
   // default: no conflicts
   vi.mocked(userRepository.findByEmail).mockResolvedValue(undefined as never);
   vi.mocked(organizationRepository.findBySlug).mockResolvedValue(undefined as never);
@@ -80,6 +93,110 @@ describe("onboardingService.signup — conflict guards", () => {
     await expect(
       onboardingService.signup(payload({ agents: [{ name: "Bob", email: "bob@x.com", role: "Agent", active: true, branchIndex: 0 }] })),
     ).rejects.toMatchObject({ statusCode: 409 });
+  });
+});
+
+describe("onboardingService.signup — agents are created as pending invites", () => {
+  const bob = { name: "Bob Boss", email: "Bob@X.com", role: "Manager", active: true, branchIndex: 0 };
+
+  it("creates agents with an invite token, no password, unverified and an inactive membership", async () => {
+    await onboardingService.signup(payload({ agents: [bob] }));
+
+    const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
+    const agent = arg.agents[0];
+    expect(agent.user).toMatchObject({
+      email: "bob@x.com",
+      emailVerified: false,
+      invitedBy: arg.ownerUser.id,
+      inviteAgencyName: "Acme Travel",
+    });
+    expect(agent.user.password).toBeUndefined();
+    expect(typeof agent.user.inviteToken).toBe("string");
+    expect(agent.user.inviteTokenExpiry).toBeInstanceOf(Date);
+    expect(agent.branchMemberRoleAndActive.isActive).toBe(false);
+  });
+
+  it("sends each agent an invite email via the invite service after the transaction", async () => {
+    await onboardingService.signup(payload({ agents: [bob] }));
+
+    const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
+    expect(inviteService.sendInviteEmail).toHaveBeenCalledWith("bob@x.com", "Acme Travel", arg.agents[0].user.inviteToken);
+  });
+
+  it("does not fail signup when an agent invite email throws", async () => {
+    vi.mocked(inviteService.sendInviteEmail).mockRejectedValue(new Error("boom"));
+
+    await expect(onboardingService.signup(payload({ agents: [bob] }))).resolves.toMatchObject({ orgId: "org1" });
+  });
+
+  it("rejects duplicate agent emails case-insensitively (409) before touching the DB", async () => {
+    const dupes = [bob, { ...bob, name: "Bobby", email: "bob@x.COM" }];
+
+    await expect(onboardingService.signup(payload({ agents: dupes }))).rejects.toMatchObject({ statusCode: 409 });
+    expect(onboardingRepository.signupAgency).not.toHaveBeenCalled();
+  });
+
+  it("rejects an agent whose email equals the owner email (409)", async () => {
+    await expect(
+      onboardingService.signup(payload({ agents: [{ ...bob, email: "ADA@acme.com" }] })),
+    ).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("drops an empty contact person and keeps a partially filled one", async () => {
+    await onboardingService.signup(
+      payload({
+        agents: [
+          { ...bob, contactPerson: { name: " ", phone: "", relationship: "Spouse" } },
+          { ...bob, email: "c@x.com", contactPerson: { name: "Cat", phone: "", relationship: "" } },
+        ],
+      }),
+    );
+
+    const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
+    expect(arg.agents[0].profile).toMatchObject({ emergencyContactName: null, emergencyContactRelationship: null });
+    expect(arg.agents[1].profile).toMatchObject({ emergencyContactName: "Cat", emergencyContactRelationship: null });
+  });
+});
+
+describe("onboardingService.signup — robustness", () => {
+  it("works when agents and hasHomeworkers are omitted (no schema defaults applied)", async () => {
+    const p = payload() as unknown as Record<string, unknown>;
+    delete p.agents;
+    delete p.hasHomeworkers;
+
+    await expect(onboardingService.signup(p as never)).resolves.toMatchObject({ orgId: "org1" });
+  });
+
+  it("maps a Postgres unique violation (23505) to a 409", async () => {
+    vi.mocked(onboardingRepository.signupAgency).mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
+
+    await expect(onboardingService.signup(payload())).rejects.toMatchObject({ statusCode: 409 });
+  });
+
+  it("rethrows other repository errors untouched", async () => {
+    vi.mocked(onboardingRepository.signupAgency).mockRejectedValue(new Error("db down"));
+
+    await expect(onboardingService.signup(payload())).rejects.toThrow("db down");
+  });
+
+  it("reports emailSent=true only for a real provider that did not throw", async () => {
+    expect((await onboardingService.signup(payload())).emailSent).toBe(true);
+
+    providerName.value = "console";
+    expect((await onboardingService.signup(payload())).emailSent).toBe(false);
+
+    providerName.value = "resend";
+    providerSend.mockRejectedValue(new Error("smtp"));
+    expect((await onboardingService.signup(payload())).emailSent).toBe(false);
+  });
+
+  it("escapes the owner name in the verification email HTML", async () => {
+    await onboardingService.signup(payload({ ownerName: '<script>alert(1)</script>' }));
+
+    const sent = providerSend.mock.calls[0][0] as { html: string; subject: string };
+    expect(sent.html).not.toContain("<script>");
+    expect(sent.html).toContain("&lt;script&gt;");
+    expect(sent.subject).toContain("Travana");
   });
 });
 
@@ -154,10 +271,13 @@ describe("onboardingService.resendVerification", () => {
 });
 
 describe("onboardingService.verifyEmail", () => {
-  it("rejects an unknown token (400)", async () => {
+  it("rejects an unknown token (400) with VERIFICATION_LINK_INVALID", async () => {
     vi.mocked(userRepository.findByVerificationToken).mockResolvedValue(undefined as never);
 
-    await expect(onboardingService.verifyEmail("nope")).rejects.toMatchObject({ statusCode: 400 });
+    await expect(onboardingService.verifyEmail("nope")).rejects.toMatchObject({
+      statusCode: 400,
+      code: "VERIFICATION_LINK_INVALID",
+    });
   });
 
   it("rejects an expired token (400)", async () => {

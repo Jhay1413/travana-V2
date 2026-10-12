@@ -17,7 +17,7 @@ export interface AgentProfileInput {
 
 export interface OnboardingSignupInput {
   organization: InsertOrganization;
-  branchInputs: InsertBranch[];
+  branchInputs: Array<Omit<InsertBranch, "organizationId">>;
   ownerUser: InsertUser;
   ownerBranchMemberRoleAndActive: { orgRole: string; isActive: boolean };
   agents: Array<{

@@ -1322,7 +1322,7 @@ export function PublicQuoteContent({ quote, token, isPortal = false }: { quote: 
       <footer className="border-t border-white/5 py-6 mt-8">
         <div className="max-w-5xl mx-auto px-4 md:px-8 text-center">
           <p className="text-white/20 text-xs">
-            Powered by TravelHub · Quote prepared exclusively for you
+            Powered by Travana · Quote prepared exclusively for you
           </p>
         </div>
       </footer>

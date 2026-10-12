@@ -62,6 +62,24 @@ describe("signupSchema", () => {
     expect(signupSchema.safeParse({ body: validSignupBody({ slug: "Acme Travel!" }) }).success).toBe(false);
   });
 
+  it("returns a clear message for an invalid slug", () => {
+    const result = signupSchema.safeParse({ body: validSignupBody({ slug: "Acme Travel!" }) });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0].message).toMatch(/Agency URL must be 3.40 characters/);
+  });
+
+  it("accepts a contact person with only a name or only a phone", () => {
+    const agent = (contactPerson: Record<string, unknown>) => ({
+      name: "Bob",
+      email: "bob@x.com",
+      role: "Agent",
+      active: true,
+      contactPerson,
+    });
+    expect(signupSchema.safeParse({ body: validSignupBody({ agents: [agent({ name: "Cat" })] }) }).success).toBe(true);
+    expect(signupSchema.safeParse({ body: validSignupBody({ agents: [agent({ phone: "07", relationship: "" })] }) }).success).toBe(true);
+  });
+
   it("rejects a password shorter than 8 characters", () => {
     expect(signupSchema.safeParse({ body: validSignupBody({ password: "short" }) }).success).toBe(false);
   });

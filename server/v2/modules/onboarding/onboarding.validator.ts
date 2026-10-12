@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const SLUG_MESSAGE = "Agency URL must be 3–40 characters: lowercase letters, numbers and hyphens";
+
 const dayHoursSchema = z.object({
   day: z.string().min(1),
   open: z.boolean(),
@@ -18,9 +20,9 @@ const branchSchema = z.object({
 });
 
 const contactPersonSchema = z.object({
-  name: z.string().min(1, "Contact name is required"),
-  relationship: z.enum(["Spouse", "Parent", "Sibling", "Child", "Friend", "Other"]),
-  phone: z.string().min(1, "Contact phone is required"),
+  name: z.string().optional(),
+  relationship: z.enum(["Spouse", "Parent", "Sibling", "Child", "Friend", "Other", ""]).optional(),
+  phone: z.string().optional(),
 });
 
 const agentSchema = z.object({
@@ -40,9 +42,9 @@ export const signupSchema = z.object({
       agencyName: z.string().min(1, "Agency name is required"),
       slug: z
         .string()
-        .min(3)
-        .max(40)
-        .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
+        .min(3, SLUG_MESSAGE)
+        .max(40, SLUG_MESSAGE)
+        .regex(/^[a-z0-9-]+$/, SLUG_MESSAGE),
       brandColor: z.string().optional(),
       logoUrl: z.string().url().optional(),
       ownerName: z.string().min(1, "Owner name is required"),

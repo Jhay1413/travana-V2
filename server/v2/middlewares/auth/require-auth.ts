@@ -86,10 +86,11 @@ export function registerAuthRoutes(app: Express): void {
 
   app.post("/api/auth/login", async (req: any, res) => {
     try {
-      const { email, password } = req.body;
-      if (!email || !password) {
+      const { email: rawEmail, password } = req.body;
+      if (!rawEmail || !password || typeof rawEmail !== "string") {
         return res.status(400).json({ message: "Email and password are required" });
       }
+      const email = rawEmail.toLowerCase().trim();
 
       const foundUser = await authStorage.getUserByEmail(email);
       if (!foundUser || !foundUser.password) {
@@ -244,10 +245,11 @@ export function registerAuthRoutes(app: Express): void {
 
   app.post("/api/auth/forgot-password", async (req: any, res) => {
     try {
-      const { email } = req.body;
-      if (!email) {
+      const { email: rawEmail } = req.body;
+      if (!rawEmail || typeof rawEmail !== "string") {
         return res.status(400).json({ message: "Email is required" });
       }
+      const email = rawEmail.toLowerCase().trim();
 
       const foundUser = await authStorage.getUserByEmail(email);
       if (!foundUser) {

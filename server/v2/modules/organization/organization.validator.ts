@@ -11,7 +11,23 @@ const billingContactSchema = z.object({
   vatNumber:    z.string().max(40).optional().or(z.literal('')),
 }).partial();
 
+const profileSchema = z.object({
+  phone:        z.string().max(40).optional().or(z.literal('')),
+  email:        z.string().email().max(200).optional().or(z.literal('')),
+  addressLine1: z.string().max(200).optional().or(z.literal('')),
+  addressLine2: z.string().max(200).optional().or(z.literal('')),
+  town:         z.string().max(100).optional().or(z.literal('')),
+  county:       z.string().max(100).optional().or(z.literal('')),
+  postcode:     z.string().max(20).optional().or(z.literal('')),
+}).partial();
+
+const brandingSchema = z.object({
+  iconUrl: z.string().url().nullable().optional(),
+}).partial();
+
 const orgSettingsSchema = z.object({
+  profile:    profileSchema.optional(),
+  branding:   brandingSchema.optional(),
   timezone:   z.string().optional(),
   currency:   z.string().length(3).optional(),
   dateFormat: z.string().optional(),
