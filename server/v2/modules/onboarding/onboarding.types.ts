@@ -28,9 +28,9 @@ export type ContactRelationship =
   | "Other";
 
 export interface AgentContactPerson {
-  name: string;
-  relationship: ContactRelationship;
-  phone: string;
+  name?: string;
+  relationship?: ContactRelationship | "";
+  phone?: string;
 }
 
 export interface AgentPayload {
@@ -54,8 +54,9 @@ export interface SignupPayload {
   ownerPhone: string;
   password: string;
   branches: BranchPayload[];
-  agents: AgentPayload[];
-  hasHomeworkers: boolean;
+  /** Optional: schema defaults are not applied by validate(), so treat as possibly undefined. */
+  agents?: AgentPayload[];
+  hasHomeworkers?: boolean;
   homeworkerCommission?: number;
 }
 
@@ -64,4 +65,6 @@ export interface SignupResult {
   userId: string;
   branchIds: string[];
   message: string;
+  /** True only when the owner verification email was handed to a real (non-console) provider without error. */
+  emailSent: boolean;
 }

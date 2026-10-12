@@ -1,12 +1,13 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { escapeHtml } from '../../utils/escape-html';
 import { AppError } from '../../utils/error-handler';
 import { getPublicBaseUrl } from '../../utils/public-url';
 import { getEmailProvider } from '../../../services/email-provider';
 import { inviteRepository, type PendingInviteRow } from './invite.repository';
 import { branchRepository } from '../branch/branch.repository';
 
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ALLOWED_ROLES = ['branch_manager', 'agent', 'homeworker', 'referral_agent', 'social_media_manager'] as const;
 type AllowedRole = (typeof ALLOWED_ROLES)[number];
 
@@ -19,15 +20,15 @@ function buildInviteUrl(token: string): string {
 }
 
 function buildInviteEmail(orgName: string, inviterName: string | null, url: string) {
-  const subject = `You've been invited to join ${orgName} on TravelHub`;
-  const text = `${inviterName ? `${inviterName} has` : 'You have been'} invited you to join ${orgName} on TravelHub.
+  const subject = `You've been invited to join ${orgName} on Travana`;
+  const text = `${inviterName ? `${inviterName} has` : 'You have been'} invited you to join ${orgName} on Travana.
 
 Click the link below to set up your account:
 ${url}
 
 This invitation expires in 7 days.`;
   const html = `
-    <p>${inviterName ? `<strong>${inviterName}</strong> has` : 'You have been'} invited you to join <strong>${orgName}</strong> on TravelHub.</p>
+    <p>${inviterName ? `<strong>${escapeHtml(inviterName)}</strong> has` : 'You have been'} invited you to join <strong>${escapeHtml(orgName)}</strong> on Travana.</p>
     <p>Click the button below to set up your account:</p>
     <p><a href="${url}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">Accept invitation</a></p>
     <p style="color:#888;font-size:12px">This invitation expires in 7 days.</p>

@@ -37,7 +37,7 @@ export default function LandingPage() {
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
               <Plane className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold tracking-tight">TravelHub</span>
+            <span className="text-xl font-semibold tracking-tight">Travana</span>
           </div>
           <button
             onClick={() => setLocation("/signup")}
@@ -226,7 +226,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-white/10 py-8">
         <div className="max-w-7xl mx-auto px-6 text-center text-white/40 text-sm">
-          <p>&copy; 2026 TravelHub. Premium travel agency software.</p>
+          <p>&copy; 2026 Travana. Premium travel agency software.</p>
         </div>
       </footer>
     </div>

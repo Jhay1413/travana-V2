@@ -243,6 +243,18 @@ export interface PostDeal {
   luggageTransfers?: string | null;
   tourOperator?: string | null;
   price?: string | null;
+  familySize?: 3 | 4 | null;
+}
+
+/** Family deal = exactly 2 adults and 1 or 2 children (infants never count). */
+export function familySize(
+  adults: number | null | undefined,
+  children: number | null | undefined,
+): 3 | 4 | null {
+  if (adults !== 2) return null;
+  if (children === 1) return 3;
+  if (children === 2) return 4;
+  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -259,20 +271,29 @@ function readOptionalString(value: unknown): string | null {
  * org admins can configure) — if unset, the fields come back null and the
  * caller must omit them rather than fall back to any hardcoded agency.
  */
-function buildOrgSocialContact(org: OrganizationBranding | null): OrgSocialContact {
+export function buildOrgSocialContact(org: OrganizationBranding | null): OrgSocialContact {
   const social = org && isRecord(org.settings.social) ? org.settings.social : null;
+  const profile = org && isRecord(org.settings.profile) ? org.settings.profile : null;
   return {
     businessName: org?.name?.trim() || null,
-    phone: social ? readOptionalString(social.phone) : null,
+    phone: (social ? readOptionalString(social.phone) : null) ?? (profile ? readOptionalString(profile.phone) : null),
     website: social ? readOptionalString(social.website) : null,
     instagramUrl: social ? readOptionalString(social.instagramUrl) : null,
   };
 }
 
-/** Turn an org's business name into a hashtag-safe token, e.g. "Tina's Travel" -> "#TinasTravel". */
-function toHashtag(name: string): string | null {
-  const cleaned = name.replace(/[^a-zA-Z0-9]/g, "");
-  return cleaned ? `#${cleaned}` : null;
+const TOUR_OPERATOR_SHORT_NAMES: Record<string, string> = {
+  easyjet: "Ejet",
+  easyjetholidays: "Ejet",
+  jet2: "Jet2",
+  jet2holidays: "Jet2",
+  jet2holidayscom: "Jet2",
+};
+
+/** Shortens well-known tour operator names for posts; unknown names are returned trimmed. */
+export function shortTourOperatorName(name: string): string {
+  const key = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return TOUR_OPERATOR_SHORT_NAMES[key] ?? name.trim();
 }
 
 /**
@@ -284,8 +305,8 @@ function formatContactBlock(contact: OrgSocialContact): string {
   const hasContactDetails = !!(contact.phone || contact.website || contact.instagramUrl);
   if (!hasContactDetails) return "";
 
-  const lines = ["<br>To Book:<br>"];
-  if (contact.phone) lines.push(`☎ Call us on ${contact.phone}<br>`);
+  const lines = ["<br>To Book<br>"];
+  if (contact.phone) lines.push(`☎️ Call us on ${contact.phone}<br>`);
   lines.push("💬 Private message<br>");
   lines.push("📍 Pop in and see us<br>");
   if (contact.website) lines.push(`🌐 Visit our website: ${contact.website}<br>`);
@@ -297,15 +318,19 @@ export function formatPostHTML(
   deal: PostDeal,
   subtitle: string,
   resortSummary: string,
-  hashtags: string[],
   contact: OrgSocialContact
 ): string {
   const tropicalEmoji = pickRandomEmoji(EMOJI_POOLS.tropical);
   const subtitleEmoji = pickRandomEmoji(EMOJI_POOLS.subtitle);
 
-  const priceSection = deal.price ? `💸 Total cost from £${deal.price}pp<br>` : "";
-  const hashtagLine = hashtags.join(" ");
+  const priceSection = !deal.price
+    ? ""
+    : deal.familySize
+      ? `💸 Total cost from £${deal.price} for a Family of ${deal.familySize}<br>`
+      : `💸 Total cost from £${deal.price}pp<br>`;
   const contactBlock = formatContactBlock(contact);
+  const tourOperatorLine =
+    deal.tourOperator && deal.tourOperator !== "N/A" ? `${shortTourOperatorName(deal.tourOperator)}<br>\n` : "";
 
   return `${tropicalEmoji} ${deal.title} ${tropicalEmoji}<br>
 ${subtitleEmoji} ${subtitle} ${subtitleEmoji}<br>
@@ -318,9 +343,7 @@ ${deal.luggageTransfers && deal.luggageTransfers !== "N/A" ? `🧳 ${deal.luggag
 <br>
 ${priceSection}<br>
 ${resortSummary}<br>
-${contactBlock}${deal.tourOperator && deal.tourOperator !== "N/A" ? `🏢 ${deal.tourOperator}<br>` : ""}
-<br>
-${hashtagLine}`;
+${tourOperatorLine}${contactBlock}`;
 }
 
 async function callOpenAI(prompt: string, systemPrompt: string, maxTokens: number, orgId?: string | null): Promise<string> {
@@ -405,7 +428,10 @@ export const socialPostService = {
     // Branding always follows the quote's own org, even when the caller is a
     // platform admin acting outside their normal org scope — never falls back
     // to any hardcoded agency's contact details.
-    const dealOrgId = await socialPostRepository.findOrgIdForQuote(params.quoteId);
+    const [dealOrgId, passengerCounts] = await Promise.all([
+      socialPostRepository.findOrgIdForQuote(params.quoteId),
+      socialPostRepository.findPassengerCountsForQuote(params.quoteId),
+    ]);
     const orgBranding = dealOrgId ? await socialPostRepository.findOrganizationBrandingById(dealOrgId) : null;
     const contact = buildOrgSocialContact(orgBranding);
 
@@ -441,14 +467,9 @@ export const socialPostService = {
       : safeTitle;
 
     const defaultResortSummary = isHotTub
-      ? "🛁 Why You'll Love It:<br>🌿 Surrounded by peaceful countryside<br>🔥 Private hot tub included<br>🛏️ Comfortable lodge accommodation"
-      : "🌞 Why You'll Love It:<br>🏖️ Great destination & atmosphere<br>🏨 Quality accommodation<br>🌴 Memorable holiday experience";
-    const businessHashtag = contact.businessName ? toHashtag(contact.businessName) : null;
-    const defaultHashtags = isHotTub
-      ? ["#HotTubBreak", "#LodgeBreak", "#UKBreak", "#HolidayPark", "#WeekendGetaway", "#CoupleRetreat", "#HotTub", "#LodgeLife", "#TravelDeals", ...(businessHashtag ? [businessHashtag] : [])]
-      : ["#TravelDeals", "#HolidayDeals", "#TravelAgency", "#BookNow", "#HolidayTime", "#TravelLife", "#Vacation", "#HolidayGoals", ...(businessHashtag ? [businessHashtag] : []), "#Travel"];
-
-    const [subtitleResult, resortSummaryResult, hashtagsRawResult] = await Promise.allSettled([
+      ? "🛁 Why You'll Love It:<br>🔥 Private hot tub included<br>🛏️ Comfortable lodge accommodation<br>😊 Memorable getaway"
+      : "✨ Why You'll Love It:<br>📍 Great destination & atmosphere<br>🏨 Quality accommodation<br>😊 Memorable holiday experience";
+    const [subtitleResult, resortSummaryResult] = await Promise.allSettled([
       callOpenAI(
         isHotTub
           ? `Write a short, catchy subtitle (max 10 words) for a hot tub lodge break at "${propertyLabel}" in ${locationLabel}. Make it cosy and romantic. Return ONLY the subtitle text, no quotes.`
@@ -459,18 +480,21 @@ export const socialPostService = {
       ),
       callOpenAI(
         isHotTub
-          ? `Write a brief, engaging lodge summary in bullet form using relevant icons for "${propertyLabel}" in ${locationLabel}. Focus on the cosy atmosphere, hot tub experience, and countryside setting.
+          ? `Write a brief, engaging lodge summary in bullet form for "${propertyLabel}" in ${locationLabel}. Focus on the cosy atmosphere, the hot tub experience, and the setting.
 
-It should start with:
-🛁 Why You'll Love It:
-🌿 Surrounded by peaceful countryside
+Format:
+- First line: "<emoji> Why You'll Love It:" where <emoji> is ONE emoji that best fits this break (for example 🛁 for a hot tub lodge).
+- Then 3-4 short bullet lines, each starting with an emoji relevant to THAT line and the location.
+- Do not use any fixed or repeated lines; only mention things that are plausible for this specific lodge and location.
 
 NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`
-          : `Write a brief, engaging resort summary in bullet form using travel icons for "${safeTitle}" in ${safeDestination}. Focus on what makes this destination special, the atmosphere, and key amenities.
+          : `Write a brief, engaging resort summary in bullet form for "${safeTitle}" in ${safeDestination}. Focus on what makes this destination special, the atmosphere, and key amenities.
 
-It should start with:
-🌞 Why You'll Love It:
-🏖️ Close to golden sands & turquoise waters
+Format:
+- First line: "<emoji> Why You'll Love It:" where <emoji> is ONE emoji that best fits this destination and deal (for example 🗼 for Paris, 🎢 for Orlando, ⛷️ for a ski trip, 🌴 for a beach resort).
+- Then 3-4 short bullet lines, each starting with an emoji relevant to THAT line and the destination.
+- Do not use any fixed or forced lines.
+- Do NOT mention beaches, sand, sea or golden sands unless the destination is genuinely coastal.
 
 NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
         isHotTub
@@ -479,28 +503,18 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
         200,
         usageOrgId
       ),
-      callOpenAI(
-        isHotTub
-          ? `Generate 10 relevant Facebook hashtags for a hot tub lodge break in ${locationLabel} (${safeNights} nights). Return ONLY the hashtags separated by spaces, e.g. #HotTubBreak #LodgeBreak`
-          : `Generate 10 relevant Facebook hashtags for a travel deal to ${safeDestination} (${safeNights} nights). Return ONLY the hashtags separated by spaces, e.g. #TravelDeals #Tenerife`,
-        "You are a social media expert for a travel agency.",
-        80,
-        usageOrgId
-      ),
     ]);
 
     if (subtitleResult.status === "rejected") console.error("[SocialPost] Subtitle generation failed:", subtitleResult.reason?.message);
     if (resortSummaryResult.status === "rejected") console.error("[SocialPost] Resort summary generation failed:", resortSummaryResult.reason?.message);
-    if (hashtagsRawResult.status === "rejected") console.error("[SocialPost] Hashtag generation failed:", hashtagsRawResult.reason?.message);
 
     const subtitle = subtitleResult.status === "fulfilled" && subtitleResult.value ? subtitleResult.value : `${safeTitle} — Book Now`;
     const resortSummary = resortSummaryResult.status === "fulfilled" && resortSummaryResult.value ? resortSummaryResult.value : defaultResortSummary;
-    const hashtagsRaw = hashtagsRawResult.status === "fulfilled" && hashtagsRawResult.value ? hashtagsRawResult.value : "";
 
-    const parsedHashtags = hashtagsRaw.split(/\s+/).filter((h) => h.startsWith("#")).slice(0, 12);
-    const hashtags = parsedHashtags.length > 0 ? parsedHashtags : defaultHashtags;
-
-    const displayPrice = pricePerPerson || salesPrice || null;
+    // Family deals (2 adults + 1-2 children) show the total price; if the total
+    // is unknown, fall back to the per-person line.
+    const familyDealSize = salesPrice ? familySize(passengerCounts?.adults, passengerCounts?.children) : null;
+    const displayPrice = familyDealSize && salesPrice ? salesPrice : pricePerPerson || salesPrice || null;
 
     const deal: PostDeal = {
       title: safeTitle,
@@ -511,9 +525,10 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       luggageTransfers: transferType && transferType !== "none" ? transferType : null,
       tourOperator: tourOperator?.trim() || null,
       price: displayPrice,
+      familySize: familyDealSize,
     };
 
-    const postHTML = formatPostHTML(deal, subtitle, resortSummary, hashtags, contact);
+    const postHTML = formatPostHTML(deal, subtitle, resortSummary, contact);
 
     return await socialPostRepository.create({
       quote_id: quoteId,
@@ -521,7 +536,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       subtitle,
       post: postHTML,
       resortSummary,
-      hashtags,
+      hashtags: [],
       travelDate: safeTravelDate,
       nights: safeNights,
       boardBasis: boardBasis || null,

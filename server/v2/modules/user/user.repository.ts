@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { user, branchMembers, type User, type InsertUser, type UpsertUser } from "@shared/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Scope } from "../../utils/scope";
 import { notSuspendedOrBanned } from "../../utils/user-conditions";
 import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
@@ -47,7 +47,7 @@ export const userRepository = {
   },
 
   async findByEmail(email: string): Promise<User | undefined> {
-    const [result] = await db.select().from(user).where(eq(user.email, email)).limit(1);
+    const [result] = await db.select().from(user).where(sql`lower(${user.email}) = lower(${email})`).limit(1);
     return result;
   },
 

@@ -2,11 +2,14 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { AppError } from "../../utils/error-handler";
 import { getPublicBaseUrl } from "../../utils/public-url";
-import { getEmailProvider } from "../../../services/email-provider";
+import { escapeHtml } from "../../utils/escape-html";
+import { getEmailProvider, isRealEmailProvider } from "../../../services/email-provider";
+import { inviteService, INVITE_TTL_MS } from "../invite/invite.service";
 import { onboardingRepository } from "./onboarding.repository";
 import { organizationRepository } from "../organization/organization.repository";
 import { userRepository } from "../user/user.repository";
 import { sendsevenProvisioningService } from "../conversation-integration/sendseven-provisioning.service";
+import type { InsertBranch } from "@shared/schema";
 import type { SignupPayload, SignupResult } from "./onboarding.types";
 
 const ORG_ROLE_ADMIN = "org_admin";
@@ -26,17 +29,41 @@ function mapAgentRoleToOrgRole(agentRole: string): string {
   }
 }
 
+const UNIQUE_VIOLATION = "23505";
+
+function isUniqueViolation(err: unknown): boolean {
+  let current: unknown = err;
+  for (let depth = 0; depth < 4 && typeof current === "object" && current !== null; depth++) {
+    const e = current as { code?: unknown; cause?: unknown };
+    if (e.code === UNIQUE_VIOLATION) return true;
+    current = e.cause;
+  }
+  return false;
+}
+
 function buildVerificationUrl(token: string): string {
-  const base = getPublicBaseUrl() || "http://localhost:5000";
+  let base = getPublicBaseUrl();
+  if (!base) {
+    const isProduction =
+      process.env.NODE_ENV === "production" ||
+      Boolean(process.env.REPLIT_DEPLOYMENT || process.env.REPLIT_DEPLOYMENT_ID);
+    if (isProduction) {
+      console.error(
+        "[onboarding] No public base URL configured (set BASE_URL / PUBLIC_BASE_URL) — verification links will be broken",
+      );
+    }
+    base = "http://localhost:5000";
+  }
   return `${base}/verify-email?token=${encodeURIComponent(token)}`;
 }
 
 function buildVerificationEmail(name: string, url: string) {
-  const subject = "Verify your TravelHub account";
-  const text = `Hi ${name},\n\nWelcome to TravelHub. Please verify your email by clicking the link below:\n${url}\n\nThis link expires in 24 hours.`;
+  const subject = "Verify your Travana account";
+  const safeName = escapeHtml(name);
+  const text = `Hi ${name},\n\nWelcome to Travana. Please verify your email by clicking the link below:\n${url}\n\nThis link expires in 24 hours.`;
   const html = `
-    <p>Hi ${name},</p>
-    <p>Welcome to TravelHub. Please verify your email by clicking the button below:</p>
+    <p>Hi ${safeName},</p>
+    <p>Welcome to Travana. Please verify your email by clicking the button below:</p>
     <p><a href="${url}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">Verify Email</a></p>
     <p>This link expires in 24 hours.</p>
   `;
@@ -47,6 +74,23 @@ export const onboardingService = {
   async signup(payload: SignupPayload): Promise<SignupResult> {
     const ownerEmail = payload.ownerEmail.toLowerCase().trim();
     const slug = payload.slug.toLowerCase().trim();
+    // validate() does not write parsed data back, so schema defaults never apply.
+    const agents = payload.agents ?? [];
+    const hasHomeworkers = payload.hasHomeworkers ?? false;
+
+    const seenAgentEmails = new Set<string>();
+    const duplicateAgentEmails = new Set<string>();
+    for (const agent of agents) {
+      const email = agent.email.toLowerCase().trim();
+      if (seenAgentEmails.has(email)) duplicateAgentEmails.add(email);
+      seenAgentEmails.add(email);
+    }
+    if (duplicateAgentEmails.size > 0) {
+      throw new AppError(
+        `Each agent needs a unique email. Duplicated: ${Array.from(duplicateAgentEmails).join(", ")}`,
+        409,
+      );
+    }
 
     const existingUser = await userRepository.findByEmail(ownerEmail);
     if (existingUser) {
@@ -59,7 +103,7 @@ export const onboardingService = {
     }
 
     const conflictingAgentEmails: string[] = [];
-    for (const agent of payload.agents) {
+    for (const agent of agents) {
       const email = agent.email.toLowerCase().trim();
       if (email === ownerEmail) {
         conflictingAgentEmails.push(email);
@@ -82,7 +126,7 @@ export const onboardingService = {
     const ownerFirstName = ownerNameParts[0];
     const ownerLastName = ownerNameParts.slice(1).join(" ") || "—";
 
-    const branchInputs: any[] = payload.branches.map((b) => ({
+    const branchInputs: Array<Omit<InsertBranch, "organizationId">> = payload.branches.map((b) => ({
       name: b.name.trim(),
       address: b.address.trim(),
       phone: b.phone.trim(),
@@ -94,7 +138,7 @@ export const onboardingService = {
       branchType: "shop",
     }));
 
-    if (payload.hasHomeworkers) {
+    if (hasHomeworkers) {
       branchInputs.push({
         name: "Homeworkers",
         address: "",
@@ -108,71 +152,115 @@ export const onboardingService = {
       });
     }
 
-    const result = await onboardingRepository.signupAgency({
-      organization: {
-        name: payload.agencyName.trim(),
-        slug,
-        plan: "starter",
-        isActive: true,
-        seatLimit: 15,
-        brandColor: payload.brandColor ?? "#2563eb",
-        logoUrl: payload.logoUrl ?? null,
-        homeworkerCommission: payload.hasHomeworkers ? payload.homeworkerCommission ?? null : null,
-        trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
-      },
-      branchInputs,
-      ownerUser: {
-        id: crypto.randomUUID(),
-        name: payload.ownerName.trim(),
-        email: ownerEmail,
-        firstName: ownerFirstName,
-        lastName: ownerLastName,
-        phoneNumber: payload.ownerPhone.trim(),
-        role: "Agent",
-        orgRole: ORG_ROLE_ADMIN,
-        password: hashedPassword,
-        emailVerified: false,
-        verificationToken,
-        verificationTokenExpiry,
-      },
-      ownerBranchMemberRoleAndActive: { orgRole: ORG_ROLE_ADMIN, isActive: true },
-      agents: payload.agents.map((agent) => {
-        const agentNameParts = agent.name.trim().split(/\s+/);
-        const orgRole = mapAgentRoleToOrgRole(agent.role);
-        const address = agent.address?.trim() || null;
-        const contact = agent.contactPerson;
-        const contactName = contact?.name.trim() || null;
-        const contactRel = contact?.relationship ?? null;
-        const contactPhone = contact?.phone.trim() || null;
-        return {
+    const ownerId = crypto.randomUUID();
+    const orgName = payload.agencyName.trim();
+    const inviteExpiry = new Date(Date.now() + INVITE_TTL_MS);
+    const invitedAt = new Date();
+
+    // Agents are created exactly like invited-but-not-accepted users (see
+    // inviteService.send): no password, unverified, an invite token, and an
+    // inactive branch membership that acceptInvite activates.
+    const agentInputs = agents.map((agent) => {
+      const agentNameParts = agent.name.trim().split(/\s+/);
+      const orgRole = mapAgentRoleToOrgRole(agent.role);
+      const address = agent.address?.trim() || null;
+      const contact = agent.contactPerson;
+      const contactName = contact?.name?.trim() || null;
+      const contactPhone = contact?.phone?.trim() || null;
+      const keepContact = Boolean(contactName || contactPhone);
+      const contactRel = keepContact ? contact?.relationship || null : null;
+      const inviteToken = crypto.randomBytes(32).toString("hex");
+      const email = agent.email.toLowerCase().trim();
+      return {
+        inviteToken,
+        email,
+        input: {
           user: {
             id: crypto.randomUUID(),
             name: agent.name.trim(),
-            email: agent.email.toLowerCase().trim(),
+            email,
             firstName: agentNameParts[0],
             lastName: agentNameParts.slice(1).join(" ") || "—",
             phoneNumber: (agent.phone ?? "").trim(),
             role: "Agent",
             orgRole,
             emailVerified: false,
+            inviteToken,
+            inviteTokenExpiry: inviteExpiry,
+            invitedBy: ownerId,
+            invitedAt,
+            inviteAgencyName: orgName,
           },
           branchIndex: agent.branchIndex,
-          branchMemberRoleAndActive: { orgRole, isActive: agent.active },
+          branchMemberRoleAndActive: { orgRole, isActive: false },
           profile: {
             address,
-            emergencyContactName: contactName,
+            emergencyContactName: keepContact ? contactName : null,
             emergencyContactRelationship: contactRel,
-            emergencyContactPhone: contactPhone,
+            emergencyContactPhone: keepContact ? contactPhone : null,
           },
-        };
-      }),
+        },
+      };
     });
 
+    let result;
+    try {
+      result = await onboardingRepository.signupAgency({
+        organization: {
+          name: orgName,
+          slug,
+          plan: "starter",
+          isActive: true,
+          seatLimit: 15,
+          brandColor: payload.brandColor ?? "#2563eb",
+          logoUrl: payload.logoUrl ?? null,
+          homeworkerCommission: hasHomeworkers ? payload.homeworkerCommission ?? null : null,
+          trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
+        },
+        branchInputs,
+        ownerUser: {
+          id: ownerId,
+          name: payload.ownerName.trim(),
+          email: ownerEmail,
+          firstName: ownerFirstName,
+          lastName: ownerLastName,
+          phoneNumber: payload.ownerPhone.trim(),
+          role: "Agent",
+          orgRole: ORG_ROLE_ADMIN,
+          password: hashedPassword,
+          emailVerified: false,
+          verificationToken,
+          verificationTokenExpiry,
+        },
+        ownerBranchMemberRoleAndActive: { orgRole: ORG_ROLE_ADMIN, isActive: true },
+        agents: agentInputs.map((a) => a.input),
+      });
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new AppError(
+          "That agency URL or one of the email addresses is already taken — please check and try again",
+          409,
+        );
+      }
+      throw err;
+    }
+
+    // Invite agents through the existing invite email path (never throws).
+    for (const agent of agentInputs) {
+      try {
+        await inviteService.sendInviteEmail(agent.email, orgName, agent.inviteToken);
+      } catch (err) {
+        console.error(`[onboarding] agent invite email failed for ${agent.email} (signup still succeeded):`, err);
+      }
+    }
+
+    let emailSent = false;
     try {
       const provider = getEmailProvider();
       const url = buildVerificationUrl(verificationToken);
       const { subject, html, text } = buildVerificationEmail(payload.ownerName.trim(), url);
       await provider.send({ to: ownerEmail, subject, html, text });
+      emailSent = isRealEmailProvider(provider);
     } catch (err) {
       console.error("[onboarding] verification email failed (signup still succeeded):", err);
     }
@@ -182,6 +270,7 @@ export const onboardingService = {
       userId: result.ownerId,
       branchIds: result.branchIds,
       message: "Agency created — check your email to verify your account",
+      emailSent,
     };
   },
 
@@ -219,7 +308,13 @@ export const onboardingService = {
   async verifyEmail(token: string): Promise<void> {
     const found = await userRepository.findByVerificationToken(token);
     if (!found) {
-      throw new AppError("Invalid or expired verification link", 400);
+      // The token is cleared on use, so we can't tell "already verified" from "never valid".
+      throw new AppError(
+        "This link has already been used or has expired — try signing in",
+        400,
+        true,
+        "VERIFICATION_LINK_INVALID",
+      );
     }
     if (!found.verificationTokenExpiry || new Date(found.verificationTokenExpiry) < new Date()) {
       throw new AppError("Verification link has expired", 400);

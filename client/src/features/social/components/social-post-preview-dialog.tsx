@@ -25,7 +25,6 @@ import {
   CalendarClock,
   Calendar as CalendarIcon,
   Sparkles,
-  Hash,
   Type,
   PenLine,
   Check,
@@ -129,12 +128,10 @@ export function SocialPostPreviewDialog({
   const postRef = useRef<HTMLDivElement>(null);
   const savedPostRange = useRef<Range | null>(null);
   const subtitleInputRef = useRef<HTMLInputElement>(null);
-  const hashtagsInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const calendarTriggerRef = useRef<HTMLButtonElement>(null);
   const calendarDropdownRef = useRef<HTMLDivElement>(null);
   const [subtitle, setSubtitle] = useState("");
-  const [hashtags, setHashtags] = useState("");
   const [scheduleDate, setScheduleDate] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
   // The calendar dropdown is rendered inline (not a Radix `Popover` portaled to
@@ -179,7 +176,6 @@ export function SocialPostPreviewDialog({
   useEffect(() => {
     if (travelDeal) {
       setSubtitle(travelDeal.subtitle || "");
-      setHashtags((travelDeal.hashtags || []).join(" "));
       if (postRef.current) {
         postRef.current.innerHTML = travelDeal.post || "";
       }
@@ -346,10 +342,6 @@ export function SocialPostPreviewDialog({
     pendingFiles.filter((img) => isFormattableFile(img.file) && needsFormatting(img)).length;
   const imagesLabel = (n: number) => `${n} image${n === 1 ? "" : "s"}`;
 
-  // Tokenize once per hashtags change instead of re-splitting the string
-  // several times on every render (the live preview read it 3-4×).
-  const hashtagTokens = useMemo(() => hashtags.split(/\s+/).filter(Boolean), [hashtags]);
-
   /**
    * Force plain-text paste into the Post Content editor.
    *
@@ -429,7 +421,6 @@ export function SocialPostPreviewDialog({
         data: {
           post: currentHtml,
           subtitle,
-          hashtags: hashtagTokens.filter((h) => h.startsWith("#")),
         },
       });
     } catch (err) {
@@ -544,7 +535,7 @@ export function SocialPostPreviewDialog({
                 Generating your post...
               </p>
               <p className="text-xs text-black/40 dark:text-white/40 mt-1">
-                AI is writing subtitle, resort summary & hashtags
+                AI is writing subtitle & resort summary
               </p>
             </div>
           </div>
@@ -580,7 +571,12 @@ export function SocialPostPreviewDialog({
                     )}
                     {travelDeal.price && (
                       <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-full">
-                        From &pound;{travelDeal.price}pp
+                        {(() => {
+                          const familyMatch = /for a Family of (3|4)/.exec(travelDeal.post || "");
+                          return familyMatch
+                            ? <>From &pound;{travelDeal.price} for a Family of {familyMatch[1]}</>
+                            : <>From &pound;{travelDeal.price}pp</>;
+                        })()}
                       </div>
                     )}
                   </div>
@@ -592,18 +588,6 @@ export function SocialPostPreviewDialog({
                     {subtitle && (
                       <p className="text-[11px] text-black/55 dark:text-white/55 italic">{subtitle}</p>
                     )}
-                    <div className="flex flex-wrap gap-1 pt-1">
-                      {hashtagTokens.slice(0, 6).map((tag, i) => (
-                        <span key={i} className="text-[10px] text-blue-500 dark:text-blue-400 font-medium">
-                          {tag}
-                        </span>
-                      ))}
-                      {hashtagTokens.length > 6 && (
-                        <span className="text-[10px] text-black/30 dark:text-white/30">
-                          +{hashtagTokens.length - 6} more
-                        </span>
-                      )}
-                    </div>
                   </div>
                 </div>
 
@@ -653,27 +637,6 @@ export function SocialPostPreviewDialog({
                     onBlur={rememberPostRange}
                     className="min-h-[240px] max-h-[380px] overflow-y-auto rounded-xl px-4 py-3 text-[13px] leading-[1.7] bg-white dark:bg-slate-800 border border-black/8 dark:border-white/8 shadow-sm focus:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-shadow"
                     data-testid="editor-post-content"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-black/55 dark:text-white/55">
-                    <Hash className="w-3.5 h-3.5" />
-                    Hashtags
-                    <EmojiInsertButton
-                      className="ml-auto"
-                      side="top"
-                      onPick={(emoji) => insertEmojiInInput(hashtagsInputRef.current, hashtags, setHashtags, emoji)}
-                      data-testid="button-emoji-hashtags"
-                    />
-                  </div>
-                  <Input
-                    ref={hashtagsInputRef}
-                    value={hashtags}
-                    onChange={(e) => setHashtags(e.target.value)}
-                    placeholder="#TravelDeals #Holiday ..."
-                    className="rounded-xl bg-white dark:bg-slate-800 border-black/8 dark:border-white/8 shadow-sm focus:shadow-md transition-shadow"
-                    data-testid="input-hashtags"
                   />
                 </div>
 

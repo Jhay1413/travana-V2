@@ -64,6 +64,21 @@ type Branch = {
 const AGENT_ROLE_OPTIONS: AgentRole[] = ["Agent", "Senior Agent", "Manager", "Admin"];
 const CONTACT_RELATIONSHIP_OPTIONS: ContactRelationship[] = ["Spouse", "Parent", "Sibling", "Child", "Friend", "Other"];
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+const normaliseEmail = (e: string) => e.trim().toLowerCase();
+const SLUG_REGEX = /^[a-z0-9-]+$/;
+const SLUG_MIN = 3;
+const SLUG_MAX = 40;
+const sanitiseSlug = (v: string) => v.toLowerCase().replace(/[^a-z0-9-]/g, "");
+const slugFromName = (v: string) =>
+  v.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, SLUG_MAX).replace(/-+$/g, "");
+const isValidSlug = (v: string) => v.length >= SLUG_MIN && v.length <= SLUG_MAX && SLUG_REGEX.test(v);
+
+function readEmailSent(body: unknown): boolean {
+  if (!body || typeof body !== "object") return true;
+  const b = body as { emailSent?: unknown; data?: { emailSent?: unknown } | null };
+  const v = b.emailSent ?? b.data?.emailSent;
+  return typeof v === "boolean" ? v : true;
+}
 
 function buildDefaultSchedule(pattern: OpeningPattern): DaySchedule[] {
   return DAYS.map((day, i) => {
@@ -106,6 +121,7 @@ export default function SignupAgencyPage() {
   // Step 1: Company Details (these populate the DEFAULT branch — index 0)
   const [companyName, setCompanyName] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
   const [address, setAddress] = useState("");
   const [companyPhone, setCompanyPhone] = useState("");
   const [companyEmail, setCompanyEmail] = useState("");
@@ -150,8 +166,22 @@ export default function SignupAgencyPage() {
 
   const handleCompanyNameChange = (v: string) => {
     setCompanyName(v);
-    setSlug(v.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+    if (!slugEdited) setSlug(slugFromName(v));
   };
+
+  const handleSlugChange = (v: string) => {
+    setSlugEdited(true);
+    setSlug(sanitiseSlug(v).slice(0, SLUG_MAX));
+  };
+
+  const agentEmailNorm = normaliseEmail(agentForm.email);
+  const agentEmailDuplicate =
+    !!agentEmailNorm &&
+    (agentEmailNorm === normaliseEmail(ownerEmail) ||
+      agents.some((a) => a.id !== editingAgentId && normaliseEmail(a.email) === agentEmailNorm));
+  const agentContactIncomplete = !!agentForm.contactName.trim() !== !!agentForm.contactPhone.trim();
+  const agentFormValid =
+    !!agentForm.name.trim() && isValidEmail(agentForm.email) && !agentEmailDuplicate && !agentContactIncomplete;
 
   const handleDefaultPatternChange = (pattern: OpeningPattern) => {
     setDefaultPattern(pattern);
@@ -200,7 +230,7 @@ export default function SignupAgencyPage() {
 
   // Agents
   const addOrUpdateAgent = () => {
-    if (!agentForm.name.trim() || !agentForm.email.trim() || !isValidEmail(agentForm.email)) return;
+    if (!agentFormValid) return;
     if (editingAgentId) {
       setAgents((prev) => prev.map((a) => a.id === editingAgentId ? { ...agentForm, id: editingAgentId } : a));
       setEditingAgentId(null);
@@ -227,7 +257,7 @@ export default function SignupAgencyPage() {
 
   const canProceed = () => {
     if (step === 1)
-      return !!companyName.trim() && !!slug && !!address.trim() && !!companyPhone.trim()
+      return !!companyName.trim() && isValidSlug(slug) && !!address.trim() && !!companyPhone.trim()
         && !!companyEmail.trim() && isValidEmail(companyEmail);
     if (step === 2)
       return !!ownerName.trim() && !!ownerEmail.trim() && isValidEmail(ownerEmail)
@@ -252,7 +282,7 @@ export default function SignupAgencyPage() {
       agencyName: companyName.trim(),
       slug,
       ownerName: ownerName.trim(),
-      ownerEmail: ownerEmail.trim(),
+      ownerEmail: normaliseEmail(ownerEmail),
       ownerPhone: ownerPhone.trim(),
       password,
       branches: allBranches.map((b) => ({
@@ -272,7 +302,7 @@ export default function SignupAgencyPage() {
           : undefined;
         return {
           name: a.name.trim(),
-          email: a.email.trim(),
+          email: normaliseEmail(a.email),
           phone: a.phone.trim(),
           address: a.address.trim(),
           role: a.role,
@@ -286,14 +316,24 @@ export default function SignupAgencyPage() {
     };
 
     try {
-      await axiosClient.post("/api/v2/onboarding/signup", payload);
-      toast({
-        title: "Agency created",
-        description: "We've sent a verification link to your owner email. Sign in once you've verified.",
-      });
-      setLocation("/");
-    } catch (err: any) {
-      const msg = err?.response?.data?.message ?? "Signup failed — please try again";
+      const res = await axiosClient.post("/api/v2/onboarding/signup", payload);
+      const emailSent = readEmailSent(res?.data);
+      const agentNote = payload.agents.length > 0 ? " Your agents will receive an invite to set their password." : "";
+      if (emailSent) {
+        toast({
+          title: "Agency created",
+          description: `Agency created — we've sent a verification link to ${payload.ownerEmail}.${agentNote}`,
+        });
+      } else {
+        toast({
+          title: "Agency created",
+          description: `Agency created, but we couldn't send the verification email. Use 'Resend' on the next screen.${agentNote}`,
+          variant: "destructive",
+        });
+      }
+      setLocation(`/verify-email?email=${encodeURIComponent(payload.ownerEmail)}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error && err.message ? err.message : "Signup failed — please try again";
       toast({ title: "Signup failed", description: msg, variant: "destructive" });
       setSubmitting(false);
     }
@@ -307,7 +347,7 @@ export default function SignupAgencyPage() {
             <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600">
               <Plane className="h-5 w-5 text-white" />
             </div>
-            <span className="text-lg font-semibold">TravelHub</span>
+            <span className="text-lg font-semibold">Travana</span>
           </div>
           <button onClick={() => setLocation("/")} className="text-sm text-black/60 hover:text-black dark:text-white/60 dark:hover:text-white" data-testid="link-back-to-login">
             Already have an account? Sign in
@@ -359,9 +399,24 @@ export default function SignupAgencyPage() {
                         <Building2 className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/40" />
                         <Input id="company-name" data-testid="input-company-name" value={companyName} onChange={(e) => handleCompanyNameChange(e.target.value)} placeholder="e.g. Sunset Voyages" className="pl-9" />
                       </div>
-                      {slug && (
-                        <p className="text-xs text-black/50 dark:text-white/50">Your URL slug: <span className="font-mono">{slug}</span></p>
-                      )}
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label htmlFor="company-slug">Agency URL</Label>
+                      <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring">
+                        <span className="flex items-center border-r border-input bg-black/5 px-3 text-sm text-black/60 dark:bg-white/10 dark:text-white/60">travana.app/</span>
+                        <input
+                          id="company-slug"
+                          data-testid="input-company-slug"
+                          value={slug}
+                          onChange={(e) => handleSlugChange(e.target.value)}
+                          placeholder="your-agency"
+                          maxLength={SLUG_MAX}
+                          className="h-10 min-w-0 flex-1 bg-transparent px-3 font-mono text-sm outline-none"
+                        />
+                      </div>
+                      <p className={cn("text-xs", slug && !isValidSlug(slug) ? "text-red-600" : "text-black/50 dark:text-white/50")}>
+                        3–40 characters: lowercase letters, numbers and hyphens
+                      </p>
                     </div>
                     <div className="space-y-2 sm:col-span-2">
                       <Label htmlFor="company-address">Address</Label>
@@ -723,11 +778,22 @@ export default function SignupAgencyPage() {
                       </div>
                     </div>
 
+                    {agentEmailDuplicate && (
+                      <p className="text-xs text-red-600" data-testid="text-agent-email-duplicate">
+                        This email is already used by the owner or another agent.
+                      </p>
+                    )}
+                    {agentContactIncomplete && (
+                      <p className="text-xs text-red-600" data-testid="text-agent-contact-incomplete">
+                        Emergency contact needs both a name and a phone number (or leave both empty).
+                      </p>
+                    )}
+
                     <div className="flex gap-2">
                       <Button
                         type="button"
                         onClick={addOrUpdateAgent}
-                        disabled={!agentForm.name.trim() || !agentForm.email.trim() || !isValidEmail(agentForm.email)}
+                        disabled={!agentFormValid}
                         data-testid="button-add-agent"
                         className="bg-blue-500 text-white hover:bg-blue-600"
                       >
