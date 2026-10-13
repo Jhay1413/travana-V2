@@ -48,6 +48,18 @@ export interface ValidationContext {
   // collapsed content that document.body.innerText excludes, so relying on
   // `text` alone would miss the exact capture this check exists to catch.
   headings?: string[];
+  // Whether the spec's picked flights section (spec.flightsSection) was located
+  // on this page. Undefined means "not checked" (no evidence), so only an
+  // explicit false raises the missed-section warning.
+  flightsSectionFound?: boolean;
+  // Same, for the direction-specific sections.
+  flightsOutboundSectionFound?: boolean;
+  flightsReturnSectionFound?: boolean;
+  // Whether the spec's picked itinerary section (spec.itinerarySection) was located
+  // on this page (undefined = not checked), and its text when it was. The partial
+  // port-list comparison reads the section instead of the whole page when given.
+  itinerarySectionFound?: boolean;
+  itinerarySectionText?: string;
 }
 
 // ─── Money ────────────────────────────────────────────────────────────────
@@ -57,16 +69,23 @@ export interface ValidationContext {
 // missed". The result today is a £0 quote imported with a success toast
 // (EXTRACTION_AUDIT.md §1.2). Zero is never a real deal price, so it is always
 // an error, never merely "empty".
-// Which of the two price fields to blame when they disagree. The arithmetic
-// only proves they CAN'T BOTH be right, never which one is wrong — provenance
-// is what settles it. A rule an agent picked was confirmed against a value
-// they read off the real page; a generated rule has only passed shape checks.
-// Since the attributed field is the one the client withholds, blaming the
-// verified one throws away the trustworthy number and keeps the guess.
+// A PICKED TOTAL IS NEVER WITHHELD. A price an agent picked was read off the real page
+// by a human, so no arithmetic against another (possibly generated) field may
+// discard it. But the arithmetic still proves the two fields CAN'T BOTH be right,
+// and a wrong generated per-person price must not slip through unnoticed — so the
+// UNVERIFIED field takes the blame (the client withholds the attributed field):
+//   - both picked: nothing is checked (both were confirmed by hand).
+//   - sales_price picked, price_per_person not: both checks run, blamed on
+//     price_per_person. Virgin Voyages: picked "Grand total" £2,013.10 against a
+//     generated per-person rule that read the party total £2,065.10.
+//   - only price_per_person picked: both checks run, blamed on sales_price.
+//   - neither picked: both checks run, blamed on sales_price.
+function isPicked(ctx: ValidationContext, key: 'sales_price' | 'price_per_person'): boolean {
+  return ctx.spec?.fields?.[key]?.origin === 'picked';
+}
+
 function blameUnverifiedPrice(ctx: ValidationContext): 'sales_price' | 'price_per_person' {
-  const salesPicked = ctx.spec?.fields?.sales_price?.origin === 'picked';
-  const perPersonPicked = ctx.spec?.fields?.price_per_person?.origin === 'picked';
-  return salesPicked && !perPersonPicked ? 'price_per_person' : 'sales_price';
+  return isPicked(ctx, 'sales_price') && !isPicked(ctx, 'price_per_person') ? 'price_per_person' : 'sales_price';
 }
 
 function checkMoney(quote: ScrapedQuoteJson, ctx: ValidationContext, issues: Issue[]): void {
@@ -80,54 +99,41 @@ function checkMoney(quote: ScrapedQuoteJson, ctx: ValidationContext, issues: Iss
   }
 
   const hasBoth = quote.sales_price > 0 && quote.price_per_person > 0;
-  if (hasBoth) {
+  const bothPicked = isPicked(ctx, 'sales_price') && isPicked(ctx, 'price_per_person');
+  if (hasBoth && !bothPicked) {
+    const blame = blameUnverifiedPrice(ctx);
+    const verifiedNote = blame === 'price_per_person' ? ' sales_price was verified by hand on the page, so price_per_person is the rule to correct.' : '';
+
     // The Cunard bug: a per-person figure was written into the TOTAL price
     // field, so a family of 4 booking a £1,200pp cruise imported at £1,200
-    // total instead of £4,800. Reconciling price_per_person × adults against
-    // sales_price catches exactly that shape. 5% tolerance absorbs
-    // single-supplement / rounding differences that are NOT this bug.
+    // total instead of £4,800. price_per_person must reconcile with sales_price
+    // for EITHER the paying adults OR the whole party (adults + children): a
+    // supplier that gives children a free place prices the total on adults only,
+    // and one that averages across everyone prices it on the party. Infants
+    // travel free and are excluded. 5% tolerance absorbs single-supplement /
+    // rounding differences that are NOT this bug.
     if (quote.adults > 0) {
-      const expectedTotal = quote.price_per_person * quote.adults;
-      const diffRatio = Math.abs(quote.sales_price - expectedTotal) / quote.sales_price;
-      if (diffRatio > 0.05) {
-        // BLAME THE UNVERIFIED FIELD. The check only knows the two disagree,
-        // not which is wrong — but provenance does: a rule an agent PICKED was
-        // confirmed against a value they read off the real page, while a
-        // generated rule has only ever passed shape checks. Attributing the
-        // issue decides which field the client withholds, so getting this
-        // backwards throws away the trustworthy number and keeps the guess.
-        //
-        // That is exactly what happened on Virgin Voyages: an agent picked
-        // sales_price ("Grand total" → £2,013.10, verified), while the
-        // generated price_per_person rule was reading "£2,065.10 (Includes
-        // taxes & fees)" — the party TOTAL, not a per-person fare. The pair
-        // could not reconcile, the verified total was withheld, and the form
-        // fell back to 0 with the agent's own correct pick discarded.
-        const blame = blameUnverifiedPrice(ctx);
-        const verifiedNote =
-          blame === 'price_per_person'
-            ? ' sales_price was verified by hand on the page, so price_per_person is the rule to correct.'
-            : '';
+      const party = quote.adults + (quote.children > 0 ? quote.children : 0);
+      const withinTolerance = (travellers: number): boolean =>
+        Math.abs(quote.sales_price - quote.price_per_person * travellers) / quote.sales_price <= 0.05;
+      if (!withinTolerance(quote.adults) && !withinTolerance(party)) {
         issues.push({
           code: 'PRICE_PARTY_MISMATCH',
           level: 'error',
           field: blame,
-          message: `sales_price (${quote.sales_price}) does not reconcile with price_per_person × adults (${quote.price_per_person} × ${quote.adults} = ${expectedTotal}) — looks like a per-person figure was recorded as the total (the Cunard bug).${verifiedNote}`,
+          message: `sales_price (${quote.sales_price}) does not reconcile with price_per_person × adults (${quote.price_per_person} × ${quote.adults} = ${quote.price_per_person * quote.adults}) or × all travellers (adults + children) (${quote.price_per_person} × ${party} = ${quote.price_per_person * party}) — looks like a per-person figure was recorded as the total (the Cunard bug).${verifiedNote}`,
         });
       }
     }
 
-    // A total that is cheaper than what ONE person pays is never legitimate —
-    // whichever of the two fields is wrong, the pair can't both stand. Blamed
-    // the same way as the mismatch above, and for the same reason: pointing at
-    // sales_price unconditionally would withhold a hand-verified total because
-    // an unverified per-person rule disagreed with it.
+    // A total cheaper than what ONE person pays is never legitimate — whichever
+    // field is wrong, the pair can't both stand. Blamed the same way.
     if (quote.sales_price < quote.price_per_person) {
       issues.push({
         code: 'PRICE_BELOW_PER_PERSON',
         level: 'error',
-        field: blameUnverifiedPrice(ctx),
-        message: `sales_price (${quote.sales_price}) is less than price_per_person (${quote.price_per_person}) — a total can never be cheaper than one person's share of it.`,
+        field: blame,
+        message: `sales_price (${quote.sales_price}) is less than price_per_person (${quote.price_per_person}) — a total can never be cheaper than one person's share of it.${verifiedNote}`,
       });
     }
   }
@@ -230,7 +236,9 @@ function checkCruiseItineraryMissing(quote: ScrapedQuoteJson, ctx: ValidationCon
   if (!quote.cruise_line) return; // not a cruise
   if (quote.itinerary && quote.itinerary.length > 0) return;
 
-  const declaresItinerary = !!ctx.spec?.itineraryRegex;
+  // A picked itinerary section that was found on the page is itself evidence of a day-by-day plan.
+  const sectionFound = ctx.itinerarySectionFound === true;
+  const declaresItinerary = !!ctx.spec?.itineraryRegex || sectionFound;
   const mentionsItinerary =
     ITINERARY_MENTION_RE.test(ctx.text) ||
     ITINERARY_MENTION_RE.test(ctx.title ?? '') ||
@@ -241,8 +249,9 @@ function checkCruiseItineraryMissing(quote: ScrapedQuoteJson, ctx: ValidationCon
     code: 'CRUISE_ITINERARY_MISSING',
     level: 'warn',
     field: 'itinerary',
-    message:
-      'This is a cruise and the page appears to describe a day-by-day itinerary, but none was extracted. ' +
+    message: sectionFound
+      ? "The itinerary section you picked was found on this page, but no days could be read from it. Check that the itinerary is fully expanded in it, or re-pick the section."
+      : 'This is a cruise and the page appears to describe a day-by-day itinerary, but none was extracted. ' +
       'The likely cause: the itinerary panel/drawer was collapsed when the page was captured — it is absent ' +
       'from the captured text even though it exists in the DOM. Re-open it (e.g. "View Ports") and re-capture.',
   });
@@ -283,10 +292,18 @@ function checkCruiseItineraryMissing(quote: ScrapedQuoteJson, ctx: ValidationCon
 // stay silent in that case: the rows are sequence positions, not days, and the
 // list is knowably short, so a nights-vs-days comparison is meaningless rather
 // than merely wrong.
+// With a picked itinerary section the port list is looked for in THAT text: the
+// rest of the page (a "Similar cruises" strip) would otherwise be compared against
+// this sailing's itinerary.
+function itineraryScopeText(ctx: ValidationContext): string {
+  return ctx.itinerarySectionFound === true && ctx.itinerarySectionText ? ctx.itinerarySectionText : ctx.text;
+}
+
 function isPartialPortList(quote: ScrapedQuoteJson, ctx: ValidationContext): boolean {
   const extracted = quote.itinerary?.length ?? 0;
-  if (!extracted || !ctx.text) return false;
-  const portList = parsePortListItinerary(ctx.text);
+  const scope = itineraryScopeText(ctx);
+  if (!extracted || !scope) return false;
+  const portList = parsePortListItinerary(scope);
   if (!portList.ports.length) return false;
   return portList.ports.length + portList.hiddenCount > extracted;
 }
@@ -296,8 +313,9 @@ function checkCruiseItineraryPartial(quote: ScrapedQuoteJson, ctx: ValidationCon
   const extractedCount = quote.itinerary?.length ?? 0;
   if (extractedCount === 0) return; // CRUISE_ITINERARY_MISSING's territory, not this check's
 
-  if (!ctx.text) return;
-  const portList = parsePortListItinerary(ctx.text);
+  const scope = itineraryScopeText(ctx);
+  if (!scope) return;
+  const portList = parsePortListItinerary(scope);
   if (!portList.ports.length) return; // no port-list shape on this page — nothing to compare against
 
   const declaredCount = portList.ports.length + portList.hiddenCount;
@@ -510,12 +528,40 @@ function checkPickedFieldsMissed(quote: ScrapedQuoteJson, ctx: ValidationContext
   const record = quote as unknown as Record<string, unknown>;
   for (const [key, rule] of Object.entries(fields)) {
     if (rule.origin !== 'picked' || !isResolvedEmpty(record[key])) continue;
+    // 0 is a normal answer for these party counts ("0 Children"), so a picked
+    // count that resolved to 0 is not treated as a missed pick. A rule that
+    // truly stopped matching also yields 0 here — accepted: a silent 0 for a
+    // child/infant count is far less harmful than nagging on every adults-only deal.
+    if ((key === 'children' || key === 'infants') && record[key] === 0) continue;
     const when = rule.pickedAt && !Number.isNaN(Date.parse(rule.pickedAt)) ? ` on ${rule.pickedAt.slice(0, 10)}` : '';
     issues.push({
       code: 'PICKED_FIELD_MISSED',
       level: 'warn',
       field: key,
       message: `The field "${key}" you picked${when} no longer matches this page, so it was left blank. Re-pick it with the field picker.`,
+    });
+  }
+}
+
+// ─── Picked flights section that was not found ─────────────────────────────
+// The section was located by its heading line when the agent picked it. If the
+// supplier renamed or removed that heading the parsers silently fall back to the
+// whole page, so say so. Warning only — never blocks an import.
+function checkFlightsSectionMissed(ctx: ValidationContext, issues: Issue[]): void {
+  const checks = [
+    { section: ctx.spec?.itinerarySection, found: ctx.itinerarySectionFound, field: 'itinerary_section', noun: 'itinerary section' },
+    { section: ctx.spec?.flightsSection, found: ctx.flightsSectionFound, field: 'flights_section', noun: 'flights section' },
+    { section: ctx.spec?.flightsOutboundSection, found: ctx.flightsOutboundSectionFound, field: 'flights_outbound_section', noun: 'outbound flights section' },
+    { section: ctx.spec?.flightsReturnSection, found: ctx.flightsReturnSectionFound, field: 'flights_return_section', noun: 'return flights section' },
+  ];
+  for (const { section, found, field, noun } of checks) {
+    if (!section || section.origin !== 'picked' || found !== false) continue;
+    const when = section.pickedAt && !Number.isNaN(Date.parse(section.pickedAt)) ? ` on ${section.pickedAt.slice(0, 10)}` : '';
+    issues.push({
+      code: 'PICKED_FIELD_MISSED',
+      level: 'warn',
+      field,
+      message: `The ${noun} you picked${when} wasn't found on this page — re-pick it with the field picker.`,
     });
   }
 }
@@ -539,6 +585,7 @@ export function validateQuote(quote: ScrapedQuoteJson, ctx: ValidationContext): 
   checkCaptureComplete(ctx, issues);
   checkSpecCoverage(quote, ctx, issues);
   checkPickedFieldsMissed(quote, ctx, issues);
+  checkFlightsSectionMissed(ctx, issues);
 
   return { level: overallLevel(issues), issues };
 }

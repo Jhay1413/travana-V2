@@ -1,3 +1,5 @@
+import { deriveCheckIn } from "@/lib/check-in-time";
+
 export interface ScraperFlight {
   flight_number?: string | null;
   flight_ref?: string | null;
@@ -156,7 +158,12 @@ function mapToConnectingLeg(flight: ScraperFlight): ParsedConnectingLeg {
   };
 }
 
-export function mapScraperJsonToFormFields(data: ScraperJson) {
+export interface MapScraperOptions {
+  /** Social post quotes derive hotel check-in from the outbound arrival (see deriveCheckIn). */
+  socialCheckIn?: boolean;
+}
+
+export function mapScraperJsonToFormFields(data: ScraperJson, options: MapScraperOptions = {}) {
   const flights = Array.isArray(data.flights) ? data.flights : [];
   const outboundFlights = flights.filter((f) => isOutboundFlightType(f.flight_type));
   const inboundFlights = flights.filter((f) => isInboundFlightType(f.flight_type));
@@ -175,8 +182,8 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
   const inDep = parseDateTimePart(inbound?.departure_date_time);
   const inArr = parseDateTimePart(inbound?.arrival_date_time);
 
-  const checkInDate = hotelCheckIn.date || outDep.date;
-  const checkInTime = hotelCheckIn.time || outDep.time;
+  let checkInDate = hotelCheckIn.date || outDep.date;
+  let checkInTime = hotelCheckIn.time || outDep.time;
 
   if (!outDep.date && data.check_in_date_time) {
     const fallback = parseDateTimePart(data.check_in_date_time);
@@ -187,6 +194,14 @@ export function mapScraperJsonToFormFields(data: ScraperJson) {
     const fallback = parseDateTimePart(data.arrival_date_time);
     outArr.date = outArr.date || fallback.date;
     outArr.time = outArr.time || fallback.time;
+  }
+
+  if (options.socialCheckIn) {
+    const lastLeg = outboundConnectingLegs[outboundConnectingLegs.length - 1];
+    const arrival = lastLeg ? { date: lastLeg.arriveDate, time: lastLeg.arriveTime } : outArr;
+    const derived = deriveCheckIn(arrival, convertToIsoDate(data.travel_date || "") || outDep.date);
+    checkInDate = derived.date;
+    checkInTime = derived.time;
   }
 
   const allImages: string[] = [];

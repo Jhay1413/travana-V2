@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { deriveSpecFromPicks, mergePickedIntoSpec, type DerivedRule, type PickedField, type PickerCaptureContext } from './picker-spec';
 import type { ExtractionSpec, FieldRule } from './extraction.types';
 import { runExtractionSpec } from './extraction.interpreter';
+import { findUnsafeRules } from './extraction-ai.service';
 
 // Real pages from EXTRACTION_AUDIT.md — a picker that only worked on synthetic
 // fixtures would tell us nothing about the accuracy problem in §3.
@@ -853,5 +854,219 @@ describe('deriveSpecFromPicks — TUI inline price label', () => {
     const r = deriveSpecFromPicks([p], { url: 'https://x.test/', title: '', text });
     expect(r.problems).toEqual([]);
     expect(r.derived[0].strategy).toBe('label-anchored');
+  });
+});
+
+describe('deriveSpecFromPicks — children / infants counts (like adults)', () => {
+  const ctxFor = (text: string): PickerCaptureContext => ({ url: 'https://example.com/booking', title: 'Booking', text });
+
+  it('derives a bare "1" under a "Children" label and replays to 1', () => {
+    const text = ['Your party', 'Adults', '2', 'Children', '1', 'Infants (0-1)', '0'].join('\n');
+    const p = pick({ field: 'children', value: '1', textIndex: text.indexOf('Children\n1') + 9, lineIndex: 4, linesBefore: ['Adults', '2', 'Children'], linesAfter: ['Infants (0-1)', '0'] });
+    const result = deriveSpecFromPicks([p], ctxFor(text));
+    expect(result.problems).toEqual([]);
+    expect(result.derived[0].strategy).toBe('label-anchored');
+    expect(result.derived[0].rule.regex).toContain('Children');
+    expect(result.derived[0].rule.transform).toBe('number');
+    expect(runExtractionSpec(result.spec, { title: 'Booking', text, url: 'https://example.com/booking' }, 'x').children).toBe(1);
+  });
+
+  it('derives a bare "1" under an "Infants (0-1)" label', () => {
+    const text = ['Your party', 'Adults', '2', 'Children', '0', 'Infants (0-1)', '1'].join('\n');
+    const p = pick({ field: 'infants', value: '1', textIndex: text.lastIndexOf('1'), lineIndex: 6, linesBefore: ['Children', '0', 'Infants (0-1)'], linesAfter: [] });
+    const result = deriveSpecFromPicks([p], ctxFor(text));
+    expect(result.problems).toEqual([]);
+    expect(result.derived[0].rule.regex).toContain('Infants');
+    expect(runExtractionSpec(result.spec, { title: 'Booking', text, url: 'https://example.com/booking' }, 'x').infants).toBe(1);
+  });
+
+  it.each([
+    ['children', '1 Child', '2 Adults', 1],
+    ['children', '2 Children', '2 Adults', 2],
+    ['infants', '1 Infant', '2 Adults', 1],
+  ])('derives inline "%s" pick %j and yields the number', (field, value, adultsLine, expected) => {
+    const text = ['Trip details', adultsLine, value, 'More info'].join('\n');
+    const p = pick({ field, value, textIndex: text.indexOf(value), lineIndex: 2, linesBefore: ['Trip details', adultsLine], linesAfter: ['More info'] });
+    const result = deriveSpecFromPicks([p], ctxFor(text));
+    expect(result.problems).toEqual([]);
+    expect(result.derived[0].rule.transform).toBe('number');
+    const q = runExtractionSpec(result.spec, { title: 'Booking', text, url: 'https://example.com/booking' }, 'x') as unknown as Record<string, number>;
+    expect(q[field]).toBe(expected);
+  });
+});
+
+describe('deriveSpecFromPicks — party-count (adults/children/infants on ONE element)', () => {
+  const URL_ = 'https://example.com/booking';
+  const ctxFor = (text: string): PickerCaptureContext => ({ url: URL_, title: 'Booking', text });
+  const party = (field: string, value: string, text: string) =>
+    pick({ field, value, textIndex: text.indexOf(value), lineIndex: 1, linesBefore: ['Trip details'], linesAfter: ['More info'] });
+  const page = (line: string) => ['Trip details', line, 'More info'].join('\n');
+  const replay = (spec: ExtractionSpec, text: string): Record<string, number> =>
+    runExtractionSpec(spec, { title: 'Booking', text, url: URL_ }, 'x') as unknown as Record<string, number>;
+  const LINE = 'Travelers: 2 adults and 1 child';
+
+  it('captures only the picked field\'s number', () => {
+    const text = page(LINE);
+    const c = deriveSpecFromPicks([party('children', LINE, text)], ctxFor(text));
+    expect(c.problems).toEqual([]);
+    const rule = c.derived.find((d) => d.field === 'children')!;
+    expect(rule.strategy).toBe('party-count');
+    expect(rule.rule.transform).toBe('number');
+    expect(rule.rule.regex).toContain('Travelers');
+    expect(replay(c.spec, text).children).toBe(1);
+
+    const a = deriveSpecFromPicks([party('adults', LINE, text)], ctxFor(text));
+    expect(replay(a.spec, text).adults).toBe(2);
+  });
+
+  it('one pick (adults) also yields children and infants rules', () => {
+    const text = page(LINE);
+    const r = deriveSpecFromPicks([party('adults', LINE, text)], ctxFor(text));
+    expect(r.derived.map((d) => d.field).sort()).toEqual(['adults', 'children', 'infants']);
+    expect(r.derived.every((d) => d.strategy === 'party-count' && d.rule.origin === 'picked')).toBe(true);
+    expect(r.derived.find((d) => d.field === 'children')!.rule.verifiedValue).toBe('1');
+    expect(r.derived.find((d) => d.field === 'infants')!.rule.verifiedValue).toBe('0');
+    expect(findUnsafeRules(r.spec)).toEqual([]);
+    expect(replay(r.spec, text)).toMatchObject({ adults: 2, children: 1, infants: 0 });
+    const merged = mergePickedIntoSpec(undefined, r.spec, r.derived);
+    expect(merged.applied.map((x) => x.field).sort()).toEqual(['adults', 'children', 'infants']);
+  });
+
+  it('does not create a sibling for a field picked separately in the batch', () => {
+    const text = ['Trip details', LINE, 'Infants', '1', 'More info'].join('\n');
+    const infants = pick({ field: 'infants', value: '1', textIndex: text.lastIndexOf('1'), lineIndex: 3, linesBefore: [LINE, 'Infants'], linesAfter: ['More info'] });
+    const r = deriveSpecFromPicks([party('adults', LINE, text), infants], ctxFor(text));
+    expect(r.derived.filter((d) => d.field === 'infants')).toHaveLength(1);
+    expect(r.derived.find((d) => d.field === 'infants')!.strategy).not.toBe('party-count');
+  });
+
+  it('replays on later pages', () => {
+    const text = page(LINE);
+    const { spec } = deriveSpecFromPicks([party('adults', LINE, text)], ctxFor(text));
+    expect(replay(spec, page('Travelers: 2 adults'))).toMatchObject({ adults: 2, children: 0, infants: 0 });
+    expect(replay(spec, page('Travelers: 2 adults, 2 children and 1 infant'))).toMatchObject({ adults: 2, children: 2, infants: 1 });
+    expect(replay(spec, page('Travelers: 1 adult and 1 child'))).toMatchObject({ adults: 1, children: 1, infants: 0 });
+  });
+
+  it('handles the word-before format', () => {
+    const line = 'Adults: 2 Children: 1';
+    const text = page(line);
+    const r = deriveSpecFromPicks([party('children', line, text)], ctxFor(text));
+    expect(r.problems).toEqual([]);
+    expect(r.derived.find((d) => d.field === 'children')!.strategy).toBe('party-count');
+    expect(replay(r.spec, text)).toMatchObject({ adults: 2, children: 1, infants: 0 });
+    expect(findUnsafeRules(r.spec)).toEqual([]);
+  });
+
+  it.each([
+    ['2 Adults, 1 Child', 2, 1],
+    ['Guests 2 adults · 1 kid', 2, 1],
+  ])('handles %j', (line, adults, children) => {
+    const text = page(line);
+    const r = deriveSpecFromPicks([party('adults', line, text)], ctxFor(text));
+    expect(r.problems).toEqual([]);
+    expect(replay(r.spec, text)).toMatchObject({ adults, children, infants: 0 });
+    expect(findUnsafeRules(r.spec)).toEqual([]);
+  });
+
+  it('keeps the existing strategy for a single-token value', () => {
+    const text = ['Trip details', '2 Adults', '1 Child', 'More info'].join('\n');
+    const r = deriveSpecFromPicks([pick({ field: 'children', value: '1 Child', textIndex: text.indexOf('1 Child'), lineIndex: 2, linesBefore: ['Trip details', '2 Adults'], linesAfter: ['More info'] })], ctxFor(text));
+    expect(r.derived).toHaveLength(1);
+    expect(r.derived[0].strategy).not.toBe('party-count');
+    expect(replay(r.spec, text).children).toBe(1);
+  });
+
+  it('a picked children/infants rule that does not match resolves to 0 (not another field\'s number)', () => {
+    const text = page(LINE);
+    const { spec } = deriveSpecFromPicks([party('adults', LINE, text)], ctxFor(text));
+    const q = replay(spec, page('Travelers: 3 adults'));
+    expect(q.adults).toBe(3);
+    expect(q.children).toBe(0);
+    expect(q.infants).toBe(0);
+  });
+});
+
+describe('flights_section pick', () => {
+  const BLOCK = [
+    'Your flights', '1', 'flight available', 'OUT', 'Wed', '12', 'May', '2027', '11:10', 'Manchester', 'MAN', 'Direct', '9', 'h', '40', 'm',
+    '14:50', 'Montego Bay', 'MBJ', 'TUI Airways', 'RTN', 'Wed', '26', 'May', '2027', '16:50', 'Montego Bay', 'MBJ', 'Direct', '8', 'h', '50', 'm',
+    '07:40', 'Manchester', 'MAN', 'TUI Airways',
+  ].join('\n');
+  const url = 'https://tui.example/deal';
+  const page = (block: string) => ['Holiday summary', 'Hotel Riu', 'Your room', block, 'Your hotel', 'Riu Palace'].join('\n');
+  const flightsPick = (value: string, over: Partial<PickedField> = {}) =>
+    pick({ field: 'flights_section', value, linesBefore: ['Holiday summary', 'Hotel Riu', 'Your room'], linesAfter: ['Your hotel', 'Riu Palace'], ...over });
+
+  it('stores startLabel "Your flights" and an end label on spec.flightsSection, not in fields', () => {
+    const text = page(BLOCK);
+    const res = deriveSpecFromPicks([flightsPick(BLOCK)], { url, title: 't', text });
+    expect(res.problems).toEqual([]);
+    expect(res.spec.fields).toEqual({});
+    expect(res.derived).toEqual([]);
+    expect(res.spec.flightsSection).toMatchObject({ startLabel: 'Your flights', endLabel: 'Your hotel', origin: 'picked' });
+    expect(res.spec.flightsSection?.sampleText).toBe(BLOCK);
+  });
+
+  it('truncates the sample to 2000 chars', () => {
+    const long = ['Your flights', ...Array.from({ length: 400 }, (_, i) => 'line ' + i)].join('\n');
+    const res = deriveSpecFromPicks([flightsPick(long)], { url, title: 't', text: page(long) });
+    expect(res.spec.flightsSection?.sampleText?.length).toBe(2000);
+  });
+
+  it('falls back to the nearest stable line before a heading-less block', () => {
+    const block = BLOCK.split('\n').slice(3).join('\n');
+    const text = ['Holiday summary', 'Your flights', block, 'Your hotel'].join('\n');
+    const res = deriveSpecFromPicks([flightsPick(block, { linesBefore: ['Holiday summary', 'Your flights'], linesAfter: ['Your hotel'] })], { url, title: 't', text });
+    expect(res.problems).toEqual([]);
+    expect(res.spec.flightsSection?.startLabel).toBe('Your flights');
+  });
+
+  it('rejects an unstable first line and reports a problem when nothing stable precedes it', () => {
+    const block = ['Wed 12 May 2027', 'OUT', '11:10', 'MAN', 'MBJ'].join('\n');
+    const res = deriveSpecFromPicks([flightsPick(block, { linesBefore: ['£1,200', '14:50'], linesAfter: [] })], { url, title: 't', text: block });
+    expect(res.spec.flightsSection).toBeUndefined();
+    expect(res.problems).toHaveLength(1);
+    expect(res.problems[0].field).toBe('flights_section');
+    expect(res.problems[0].reason).toContain("couldn't find a stable heading");
+  });
+
+  it('reports a problem when the labels do not locate the picked block in the capture', () => {
+    const res = deriveSpecFromPicks([flightsPick(BLOCK)], { url, title: 't', text: 'Holiday summary\nSomething else entirely' });
+    expect(res.spec.flightsSection).toBeUndefined();
+    expect(res.problems[0].reason).toContain('was not found');
+  });
+
+  it('derives the end label from the page lines, never from a line inside the block', () => {
+    const text = page(BLOCK);
+    const res = deriveSpecFromPicks([flightsPick(BLOCK, { linesAfter: ['Direct'] })], { url, title: 't', text });
+    expect(res.problems).toEqual([]);
+    expect(res.spec.flightsSection?.endLabel).toBe('Your hotel');
+  });
+
+  it('merge overwrites an existing flightsSection and reports it as applied', () => {
+    const existing: ExtractionSpec = {
+      version: 1,
+      fields: {},
+      flightsSection: { startLabel: 'Old heading', origin: 'picked', pickedAt: '2026-01-01T00:00:00.000Z' },
+    };
+    const res = deriveSpecFromPicks([flightsPick(BLOCK)], { url, title: 't', text: page(BLOCK) });
+    const merged = mergePickedIntoSpec(existing, res.spec, res.derived);
+    expect(merged.spec.flightsSection?.startLabel).toBe('Your flights');
+    expect(merged.applied).toEqual([
+      { field: 'flights_section', strategy: 'section-anchor', confidence: 'high', verifiedValue: 'Your flights', replaced: 'picked' },
+    ]);
+    expect(merged.preserved).not.toContain('flightsSection');
+  });
+
+  it('merge keeps an existing flightsSection when the picks did not include one', () => {
+    const existing: ExtractionSpec = {
+      version: 1,
+      fields: {},
+      flightsSection: { startLabel: 'Old heading', origin: 'picked', pickedAt: '2026-01-01T00:00:00.000Z' },
+    };
+    const merged = mergePickedIntoSpec(existing, { version: 1, fields: {} }, []);
+    expect(merged.spec.flightsSection?.startLabel).toBe('Old heading');
+    expect(merged.preserved).toContain('flightsSection');
   });
 });

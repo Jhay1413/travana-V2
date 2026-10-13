@@ -75,6 +75,9 @@ const OPTIONAL_SPEC_SAMPLES: Record<OptionalSpecKey, unknown> = {
   flightModalTrigger: "compare airport",
   itineraryRegex: "Day\\s*(\\d+)[:\\s]+([^\\n]+)",
   packageType: "cruise",
+  flightsSection: { startLabel: "Your flights", endLabel: "Your hotel", origin: "picked", pickedAt: "2026-05-01T00:00:00.000Z", sampleText: "Your flights OUT" },
+  flightsOutboundSection: { startLabel: "Departure", origin: "picked", pickedAt: "2026-05-01T00:00:00.000Z", source: "deepText", blockLines: 9 },
+  flightsReturnSection: { startLabel: "Return", endLabel: "Price per person From", origin: "picked", pickedAt: "2026-05-01T00:00:00.000Z", blockLines: 9 },
 };
 
 describe("specSchema round-trip: every ExtractionSpec key survives parsing", () => {

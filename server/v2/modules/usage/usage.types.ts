@@ -9,6 +9,8 @@ export type AiUsageFeature =
   | "enquiry_ai"
   | "ai_ask"
   | "destination_guru"
+  | "scraper_flights"
+  | "scraper_itinerary"
   | "social_post"
   | "image_upscale"
   | "embedding"

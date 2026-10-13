@@ -17,6 +17,7 @@ import { autoUpscaleService } from "../image-upscale/auto-upscale.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { buildDealEmbeddingText, buildDealEmbeddingMetadata } from "./deal-embedding";
 import type { TravelDeal } from "@shared/schema";
+import { toOnlySocialsBody } from "@shared/social-post-body";
 import type { AutoUpscaleItem, AutoUpscaleSkip } from "../image-upscale/image-upscale.types";
 import type {
   OnlySocialsMediaUploadResponse,
@@ -332,14 +333,20 @@ export function formatPostHTML(
   const tourOperatorLine =
     deal.tourOperator && deal.tourOperator !== "N/A" ? `${shortTourOperatorName(deal.tourOperator)}<br>\n` : "";
 
+  // Optional detail lines are only emitted when present, so a missing one never
+  // leaves a stray blank line once newlines are treated as line breaks.
+  const detailLines = [
+    `📅 ${safeDateFormat(deal.travelDate)}<br>`,
+    `🌙 ${deal.nights} Nights<br>`,
+    deal.boardBasis && deal.boardBasis !== "N/A" ? `🍽️ ${deal.boardBasis}<br>` : "",
+    deal.departureAirport && deal.departureAirport !== "N/A" ? `✈️ ${deal.departureAirport}<br>` : "",
+    deal.luggageTransfers && deal.luggageTransfers !== "N/A" ? `🧳 ${deal.luggageTransfers} 🚌<br>` : "",
+  ].filter(Boolean);
+
   return `${tropicalEmoji} ${deal.title} ${tropicalEmoji}<br>
 ${subtitleEmoji} ${subtitle} ${subtitleEmoji}<br>
 <br>
-📅 ${safeDateFormat(deal.travelDate)}<br>
-🌙 ${deal.nights} Nights<br>
-${deal.boardBasis && deal.boardBasis !== "N/A" ? `🍽️ ${deal.boardBasis}<br>` : ""}
-${deal.departureAirport && deal.departureAirport !== "N/A" ? `✈️ ${deal.departureAirport}<br>` : ""}
-${deal.luggageTransfers && deal.luggageTransfers !== "N/A" ? `🧳 ${deal.luggageTransfers} 🚌<br>` : ""}
+${detailLines.join("\n")}
 <br>
 ${priceSection}<br>
 ${resortSummary}<br>
@@ -509,7 +516,10 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     if (resortSummaryResult.status === "rejected") console.error("[SocialPost] Resort summary generation failed:", resortSummaryResult.reason?.message);
 
     const subtitle = subtitleResult.status === "fulfilled" && subtitleResult.value ? subtitleResult.value : `${safeTitle} — Book Now`;
-    const resortSummary = resortSummaryResult.status === "fulfilled" && resortSummaryResult.value ? resortSummaryResult.value : defaultResortSummary;
+    // The model is told to use <br> but sometimes returns plain newlines.
+    const resortSummary = toOnlySocialsBody(
+      resortSummaryResult.status === "fulfilled" && resortSummaryResult.value ? resortSummaryResult.value : defaultResortSummary
+    );
 
     // Family deals (2 adults + 1-2 children) show the total price; if the total
     // is unknown, fall back to the per-person line.
@@ -528,7 +538,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       familySize: familyDealSize,
     };
 
-    const postHTML = formatPostHTML(deal, subtitle, resortSummary, contact);
+    const postHTML = toOnlySocialsBody(formatPostHTML(deal, subtitle, resortSummary, contact));
 
     return await socialPostRepository.create({
       quote_id: quoteId,
@@ -554,7 +564,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
   async updateTravelDeal(id: string, data: Partial<TravelDeal>, scope: ScopeOrTrusted): Promise<TravelDeal> {
     await assertDealInScope(id, scope);
-    const updated = await socialPostRepository.update(id, data);
+    const payload = typeof data.post === "string" ? { ...data, post: toOnlySocialsBody(data.post) } : data;
+    const updated = await socialPostRepository.update(id, payload);
     // Only posted deals live in the vector store; keep the row fresh on edits.
     if (updated.onlySocialsId) syncDealEmbedding(updated);
     return updated;
@@ -591,7 +602,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     // OnlySocials stores the date/time verbatim (no timezone), so give it the
     // user's local wall-clock value; the DB keeps the absolute UTC instant.
     const tSchedule = Date.now();
-    const result = await scheduleOnlySocialsPost(postScheduleLocal, deal.post, allImageIds);
+    const result = await scheduleOnlySocialsPost(postScheduleLocal, toOnlySocialsBody(deal.post), allImageIds);
     console.log(`[SocialPost][timing] scheduleOnlySocialsPost: ${Date.now() - tSchedule}ms`);
 
     const tDb = Date.now();
@@ -644,7 +655,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
       newPostScheduleLocal,
-      postContent,
+      toOnlySocialsBody(postContent),
       allImageIds
     );
     console.log(`[SocialPost][timing] rescheduleOnlySocialsPost: ${Date.now() - tSchedule}ms`);

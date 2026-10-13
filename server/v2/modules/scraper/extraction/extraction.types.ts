@@ -49,6 +49,25 @@ export interface FieldRule {
   pickedAt?: string; // ISO timestamp of when the pick was made
 }
 
+// A picked region of the captured text (see ExtractionSpec.flightsSection and
+// ExtractionSpec.itinerarySection).
+export interface PickedSectionSpec {
+  startLabel: string;
+  endLabel?: string;
+  origin: 'picked';
+  pickedAt: string;
+  sampleText?: string;
+  // Which captured text the section was verified on. extractFlightsSection
+  // searches this source FIRST (a heading can also appear, without the cards,
+  // in another source).
+  source?: 'text' | 'flightsText' | 'deepText';
+  // Non-empty line count of the picked block. Direction sections use it to size
+  // a window when no unique end label exists (never a blind 4000-char window).
+  blockLines?: number;
+}
+// Kept for compatibility: the flights sections were the first users of this shape.
+export type FlightsSectionSpec = PickedSectionSpec;
+
 export interface ExtractionSpec {
   version: number;
   // Wait until the page contains something matching this before reading (so the
@@ -104,4 +123,22 @@ export interface ExtractionSpec {
   // (the case for every spec stored before this field existed) falls back to
   // the pre-existing field-based inference, unchanged.
   packageType?: 'cruise' | 'package-holiday' | 'lodge';
+  // Optional: where the flight legs sit on the page, as picked by an agent with
+  // the picker's "Flights Section" field. The interpreter reads flights from the
+  // text between startLabel and endLabel ONLY (extractFlightsSection) before
+  // falling back to the whole page. Labels are stable heading lines, never
+  // values. `sampleText` is a debugging aid and is never used for extraction.
+  flightsSection?: FlightsSectionSpec;
+  // Direction-specific variants for pages that lay out outbound flight ->
+  // accommodation -> return flight, where ONE box cannot hold both. Each is read
+  // on its own and every leg in it is forced to that direction. A direction
+  // without a section (or whose section doesn't parse) falls back to
+  // flightsSection / the whole page for that direction only.
+  flightsOutboundSection?: FlightsSectionSpec;
+  flightsReturnSection?: FlightsSectionSpec;
+  // Optional (cruise only): where the day-by-day itinerary sits, as picked with the
+  // picker's "Itinerary" field. When the section is found, the itinerary readers run
+  // on its text ONLY (extractItinerarySection) before the whole-page chain, so ports
+  // in a "Similar cruises" list elsewhere on the page can't leak in.
+  itinerarySection?: PickedSectionSpec;
 }

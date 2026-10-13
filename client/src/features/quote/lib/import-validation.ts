@@ -68,7 +68,7 @@ export function fieldLabel(field: string | undefined): string | undefined {
 // useful instead of nothing.
 const ISSUE_COPY: Record<string, string> = {
   PRICE_ZERO: "The price didn't extract — the capture may have been taken before the page finished loading. Re-capture, or enter the price manually.",
-  PRICE_PARTY_MISMATCH: "The total price doesn't match price-per-person × travellers — one of the two extracted wrong (this is the bug where a per-person fare gets recorded as the total). Check both and enter the total manually.",
+  PRICE_PARTY_MISMATCH: "The total price doesn't match price-per-person × travellers (adults + children) — one of the two extracted wrong (this is the bug where a per-person fare gets recorded as the total). Check both and enter the total manually.",
   PRICE_BELOW_PER_PERSON: "The total price is lower than the per-person price, which can't be right. Check both and enter the total manually.",
   DATE_NOT_ISO: "The date didn't come through in a format we could read. Enter it manually.",
   DATE_OUT_OF_RANGE: "This date falls outside a plausible booking window — the extraction likely grabbed the wrong text. Check and correct it.",

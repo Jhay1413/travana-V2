@@ -4,7 +4,9 @@ import { type Scope } from '../../utils/scope';
 import { scraperRepository } from './scraper.repository';
 import { getAdapter } from './adapters';
 import { extractionAiService, loginConfigAiService } from './extraction/extraction-ai.service';
-import { runExtractionSpec } from './extraction/extraction.interpreter';
+import { runExtractionSpecDetailed } from './extraction/extraction.interpreter';
+import { flightExtractionAiService } from './extraction/flight-extraction-ai.service';
+import { itineraryExtractionAiService } from './extraction/itinerary-extraction-ai.service';
 import { validateQuote, type ValidationResult } from './extraction/extraction.validate';
 import {
   deriveSpecFromPicks,
@@ -120,6 +122,7 @@ export interface SavePicksInput {
   headings?: string[];
   apiJson?: unknown;
   deepText?: string;
+  flightsText?: string;
   pickerVersion?: number;
   packageType?: ExtractionSpec['packageType'];
   picked: PickedField[];
@@ -733,6 +736,8 @@ export const scraperService = {
         title,
         text: input.text,
         headings: input.headings,
+        deepText: input.deepText,
+        flightsText: input.flightsText,
         packageType: input.packageType,
       });
       spec = applied.spec;
@@ -748,7 +753,7 @@ export const scraperService = {
       picks = applied.result;
     }
 
-    const quote = runExtractionSpec(
+    const { quote, flightsSection, directionSections, itinerarySection } = runExtractionSpecDetailed(
       spec,
       {
         title,
@@ -767,6 +772,14 @@ export const scraperService = {
     if (input.children != null) quote.children = input.children;
     if (input.infants != null) quote.infants = input.infants;
 
+    // A picked flights section the text parsers couldn't read (or that holds a
+    // connection) gets a verified AI pass; it never fails the import.
+    const aiContext = { supplierName: resolved.supplierName, orgId: scope.orgId };
+    await flightExtractionAiService.refineQuoteFlights(quote, spec, flightsSection, aiContext);
+    await flightExtractionAiService.refineDirectionFlights(quote, spec, directionSections, aiContext);
+    // Likewise a picked itinerary section that was found but yielded no days.
+    await itineraryExtractionAiService.refineQuoteItinerary(quote, spec, itinerarySection, aiContext);
+
     // Post-extraction validation (EXTRACTION_AUDIT.md §4 Phase 1). Real page
     // text IS available on this path (the agent's own browser captured it), so
     // this also doubles as the wait.textMatches post-hoc capture gate: the
@@ -774,7 +787,18 @@ export const scraperService = {
     // rendered fully but was captured before the price replaced its loading
     // state — checkCaptureComplete inside validateQuote catches that shape by
     // re-checking the spec's own wait.textMatches against the captured text.
-    const validation = validateQuote(quote, { url: input.url, text: input.text, title, spec, headings: input.headings });
+    const validation = validateQuote(quote, {
+      url: input.url,
+      text: input.text,
+      title,
+      spec,
+      headings: input.headings,
+      flightsSectionFound: flightsSection ? flightsSection.found : undefined,
+      flightsOutboundSectionFound: directionSections.outbound ? directionSections.outbound.found : undefined,
+      flightsReturnSectionFound: directionSections.return ? directionSections.return.found : undefined,
+      itinerarySectionFound: itinerarySection ? itinerarySection.found : undefined,
+      itinerarySectionText: itinerarySection?.text ?? undefined,
+    });
 
     return {
       quote,
@@ -906,6 +930,8 @@ export const scraperService = {
       title,
       text: input.text,
       headings: input.headings,
+      deepText: input.deepText,
+      flightsText: input.flightsText,
       packageType: input.packageType,
     });
 

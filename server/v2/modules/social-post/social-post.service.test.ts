@@ -40,6 +40,7 @@ vi.mock("../ai-embeddings/ai-embeddings.service", () => ({
   aiEmbeddingsService: { syncSource: vi.fn(), removeSourceById: vi.fn() },
 }));
 
+import { toOnlySocialsBody } from "@shared/social-post-body";
 import {
   buildOrgSocialContact,
   familySize,
@@ -313,5 +314,16 @@ describe("buildOrgSocialContact phone fallback", () => {
   it("is null when neither phone is set", () => {
     const c = buildOrgSocialContact({ name: "Acme", settings: { profile: { phone: "  " } } });
     expect(c.phone).toBeNull();
+  });
+});
+
+describe("formatPostHTML line breaks", () => {
+  it("is unchanged in meaning when normalised for OnlySocials, with no stray blanks for missing details", () => {
+    const html = formatPostHTML({ ...baseDeal, boardBasis: null }, "Book now", "Why:<br>Great", noContact);
+    const body = toOnlySocialsBody(html);
+    expect(toOnlySocialsBody(body)).toBe(body);
+    expect(body).toContain("🌙 7 Nights<br>\n✈️ Manchester");
+    expect(body).toContain("<br>\n<br>\n");
+    expect(body).not.toMatch(/\n\n/);
   });
 });

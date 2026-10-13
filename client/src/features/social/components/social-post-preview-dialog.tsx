@@ -50,6 +50,7 @@ import { POST_IMAGE_SIZE } from "@/features/image-upscale";
 import { SocialImageTile } from "./social-image-tile";
 import { EmojiInsertButton } from "@/components/shared/emoji-insert-button";
 import { insertTextAtCaret } from "@/lib/contenteditable";
+import { editorHtmlToPost, postToEditorHtml } from "@/lib/post-editor-html";
 
 /** Mirrors the server: animated gifs are never formatted. */
 const isFormattableFile = (file: File) => file.type.startsWith("image/") && file.type !== "image/gif";
@@ -177,7 +178,7 @@ export function SocialPostPreviewDialog({
     if (travelDeal) {
       setSubtitle(travelDeal.subtitle || "");
       if (postRef.current) {
-        postRef.current.innerHTML = travelDeal.post || "";
+        postRef.current.innerHTML = postToEditorHtml(travelDeal.post || "");
       }
       if (travelDeal.postSchedule) {
         const d = new Date(travelDeal.postSchedule);
@@ -400,7 +401,7 @@ export function SocialPostPreviewDialog({
       return;
     }
 
-    const currentHtml = postRef.current?.innerHTML ?? "";
+    const currentHtml = editorHtmlToPost(postRef.current?.innerHTML ?? "");
     // Two representations of the same moment:
     //  - postScheduleLocal: the raw wall-clock the user picked. OnlySocials stores
     //    date/time verbatim (no timezone), so it must get this unconverted.
@@ -439,7 +440,7 @@ export function SocialPostPreviewDialog({
 
       let result;
       if (isScheduled) {
-        formData.append("postContent", onlySocialsPostContent || currentHtml);
+        formData.append("postContent", currentHtml);
         result = await rescheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
       } else {
         result = await scheduleOnOnlySocials.mutateAsync({ id: travelDeal.id, formData });
@@ -479,10 +480,10 @@ export function SocialPostPreviewDialog({
   };
 
   const handleCopy = () => {
-    const currentHtml = postRef.current?.innerHTML ?? "";
+    const currentHtml = editorHtmlToPost(postRef.current?.innerHTML ?? "");
     const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = currentHtml;
-    const plainText = tempDiv.textContent || tempDiv.innerText || "";
+    tempDiv.innerHTML = currentHtml.replace(/<br>\n?/g, "\n");
+    const plainText = tempDiv.textContent || "";
     navigator.clipboard.writeText(plainText).then(() => {
       setCopied(true);
       toast({ title: "Copied to clipboard" });

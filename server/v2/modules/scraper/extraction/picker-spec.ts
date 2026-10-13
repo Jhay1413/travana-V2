@@ -1,6 +1,6 @@
-import type { ExtractionSpec, FieldRule, FieldSource, FieldTransform } from './extraction.types';
+import type { ExtractionSpec, FieldRule, FieldSource, FieldTransform, FlightsSectionSpec } from './extraction.types';
 import { findUnsafeRules } from './extraction-ai.service';
-import { titleCaseSlug } from './extraction.interpreter';
+import { extractFlightsSection, extractItinerarySection, titleCaseSlug } from './extraction.interpreter';
 
 // ─── Visual field-picker → verified extraction spec (EXTRACTION_AUDIT.md §4 Phase 2/5) ──
 //
@@ -40,6 +40,10 @@ export interface PickerCaptureContext {
   title: string;
   text: string;
   headings?: string[];
+  // Alternative captured texts, used ONLY to locate a flights_section pick
+  // (some pages render the flight cards solely in deepText).
+  deepText?: string;
+  flightsText?: string;
   // The package type the AGENT declared when arming the picker (see
   // capture-bookmarklet.js — picker mode now asks Cruise / Package Holiday /
   // Hot Tub Break before showing fields). Passed straight onto the derived
@@ -61,6 +65,7 @@ export type DerivationStrategy =
   | 'title-segment'
   | 'url-path-slug'
   | 'value-pattern-line'
+  | 'party-count'
   | 'line-offset';
 
 export interface DerivedRule {
@@ -634,20 +639,154 @@ const DATE_DAY_MONTH_YEAR_RE = /^\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\s+\d{4}
 const DATE_MONTH_DAY_YEAR_RE = /^[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}$/;
 const INTEGER_RE = /^\d+$/;
 
-function inferTransform(value: string): FieldTransform | undefined {
+// Party-size counts. Besides a bare "1", a supplier often prints the count with
+// its unit ("1 Child", "2 Children", "1 infant"); a rule capturing that must
+// still yield the number, so a single small integer wrapped in non-digits gets
+// the 'number' transform for these fields only (everywhere else such a value —
+// "Room 2", "7 nights" — deliberately stays an untouched string).
+const PARTY_COUNT_FIELDS = new Set(['adults', 'children', 'infants']);
+const PARTY_COUNT_RE = /^\D*\d{1,2}\D*$/;
+
+function inferTransform(value: string, field?: string): FieldTransform | undefined {
   const v = value.trim();
+  if (field && PARTY_COUNT_FIELDS.has(field) && PARTY_COUNT_RE.test(v)) return 'number';
   if (MONEY_SYMBOL_RE.test(v) || MONEY_THOUSANDS_RE.test(v)) return 'number';
   if (DATE_ISO_RE.test(v) || DATE_NUMERIC_RE.test(v) || DATE_DAY_MONTH_YEAR_RE.test(v) || DATE_MONTH_DAY_YEAR_RE.test(v)) return 'date';
   if (INTEGER_RE.test(v)) return 'number'; // a bare integer count, e.g. "7" nights or "2" adults
   return undefined;
 }
 
+// ─── Candidate strategy: party-count ─────────────────────────────────────────
+//
+// Adults, children and infants often share ONE element ("Travelers: 2 adults
+// and 1 child"). A whole-line capture with the 'number' transform reads the
+// FIRST number only, so only adults could ever be right. This strategy instead
+// captures just the number next to THIS field's party word, and a single pick
+// also yields rules for the sibling party fields (see derivePartySiblings).
+type PartyField = 'adults' | 'children' | 'infants';
+const PARTY_ORDER: PartyField[] = ['adults', 'children', 'infants'];
+const PARTY_WORDS: Record<PartyField, string> = {
+  adults: 'adults?|adt',
+  children: 'children|child|kids?|chd',
+  infants: 'infants?|babies|baby|inf',
+};
+const ALL_PARTY_WORDS = PARTY_ORDER.map((f) => PARTY_WORDS[f]).join('|');
+
+type PartyStyle = 'number-before' | 'word-before';
+
+function isPartyField(field: string): field is PartyField {
+  return field === 'adults' || field === 'children' || field === 'infants';
+}
+
+function partyCapture(field: PartyField, style: PartyStyle): string {
+  const w = PARTY_WORDS[field];
+  return style === 'number-before' ? `\\b(\\d{1,2})[ \\t]*(?:${w})\\b` : `\\b(?:${w})\\b[ \\t]*:?[ \\t]*(\\d{1,2})\\b`;
+}
+
+interface PartyPlan {
+  style: PartyStyle;
+  counts: Partial<Record<PartyField, number>>;
+  multi: boolean; // 2+ distinct party tokens on the line
+  labelPat: string | null; // stable leading label as a regex, if any
+}
+
+// Reads the party tokens off a single-line picked value. The style is decided
+// once per line (the first party word is preceded by its number -> "2 adults",
+// otherwise "Adults: 2"), so "Adults: 2 Children: 1" can't be misread as
+// "2 Children".
+function planParty(value: string): PartyPlan | null {
+  const v = value.trim();
+  if (!v || v.includes('\n')) return null;
+  const firstWord = new RegExp(`\\b(?:${ALL_PARTY_WORDS})\\b`, 'i').exec(v);
+  if (!firstWord) return null;
+  const style: PartyStyle = /\d[ \t]*$/.test(v.slice(0, firstWord.index)) ? 'number-before' : 'word-before';
+  const counts: Partial<Record<PartyField, number>> = {};
+  for (const f of PARTY_ORDER) {
+    const m = new RegExp(partyCapture(f, style), 'i').exec(v);
+    if (m) counts[f] = Number(m[1]);
+  }
+  const tokenCount = Object.keys(counts).length;
+  if (tokenCount === 0) return null;
+
+  const cut = Math.min(firstWord.index, v.search(/\d/) === -1 ? v.length : v.search(/\d/));
+  const label = v.slice(0, cut).trim().replace(/\s*:$/, '').trim();
+  const labelPat = label && /[A-Za-z]/.test(label) && looksLikeLabel(label, v) ? labelPattern(label) : null;
+  return { style, counts, multi: tokenCount >= 2, labelPat };
+}
+
+function partyRule(field: PartyField, plan: PartyPlan): FieldRule | null {
+  let lead: string;
+  if (plan.labelPat) {
+    lead = `${plan.labelPat}[^\\n]*?`;
+  } else {
+    // No stable label: the line must visibly be a party line, i.e. also carry
+    // another party word, or the rule would match any "1 child" on the page.
+    if (!plan.multi) return null;
+    const others = PARTY_ORDER.filter((f) => f !== field)
+      .map((f) => PARTY_WORDS[f])
+      .join('|');
+    lead = `(?=[^\\n]*\\b(?:${others})\\b)[^\\n]*?`;
+  }
+  return { from: 'text', regex: `(?:^|\\n)[ \\t]*${lead}${partyCapture(field, plan.style)}`, group: 1, transform: 'number' };
+}
+
+// The captured number must equal the count parsed from the picked value; a
+// party word that is absent from the value must NOT match anywhere (that is
+// the "0" the rule reports on this page).
+function verifyParty(rule: FieldRule, ctx: { title: string; text: string; url: string; headingsText: string }, expected: number | undefined): boolean {
+  const raw = extractRaw(rule, ctx);
+  if (expected === undefined) return raw === null;
+  return raw !== null && Number(raw.trim()) === expected;
+}
+
+function tryPartyCount(
+  pick: PickedField,
+): { rule: FieldRule; strategy: DerivationStrategy; partyExpected: number; plan: PartyPlan } | null {
+  if (!isPartyField(pick.field)) return null;
+  const plan = planParty(pick.value);
+  if (!plan) return null;
+  const expected = plan.counts[pick.field];
+  if (expected === undefined) return null;
+  const rule = partyRule(pick.field, plan);
+  if (!rule) return null;
+  return { rule, strategy: 'party-count', partyExpected: expected, plan };
+}
+
+// One pick fills all three: rules for the OTHER party fields from the same
+// multi-party line, unless the agent picked that field separately.
+function derivePartySiblings(
+  plan: PartyPlan,
+  pickedField: PartyField,
+  skip: Set<string>,
+  runtimeCtx: { title: string; text: string; url: string; headingsText: string },
+  pickedAt: string,
+): DerivedRule[] {
+  if (!plan.multi) return [];
+  const out: DerivedRule[] = [];
+  for (const f of PARTY_ORDER) {
+    if (f === pickedField || skip.has(f)) continue;
+    const base = partyRule(f, plan);
+    if (!base) continue;
+    const expected = plan.counts[f];
+    if (!verifyParty(base, runtimeCtx, expected)) continue;
+    if (!passesSafetyChecks(f, base)) continue;
+    out.push({
+      field: f,
+      rule: { ...base, origin: 'picked', verifiedValue: String(expected ?? 0), strategy: 'party-count', pickedAt },
+      strategy: 'party-count',
+      confidence: plan.labelPat ? 'high' : 'medium',
+    });
+  }
+  return out;
+}
+
 // ─── Confidence ───────────────────────────────────────────────────────────────
 function deriveConfidence(
   strategy: DerivationStrategy,
   pick: PickedField,
-  extra: { ambiguousLabel?: boolean },
+  extra: { ambiguousLabel?: boolean; unlabeledParty?: boolean },
 ): 'high' | 'medium' | 'low' {
+  if (strategy === 'party-count') return extra.unlabeledParty ? 'medium' : 'high';
   if (strategy === 'line-offset') return 'low';
   // title-segment: titles are stable across redesigns but segment order can
   // shift. value-pattern-line: generalised from ONE example, anchored on the
@@ -665,6 +804,188 @@ function deriveConfidence(
   return 'high';
 }
 
+// ─── Flights section (the "flights_section" pick) ────────────────────────────
+//
+// The agent clicks the box wrapping ALL flight legs. Unlike every other pick this
+// is not a value to extract but a REGION to read: the result is stored on
+// spec.flightsSection (NOT in `fields`) as a start heading (and optionally an end
+// heading) that extractFlightsSection uses to cut the same region out of any
+// later capture. Labels must be stable copy, never values — a "Wed 12 May" line
+// would break the next day.
+export const FLIGHTS_SECTION_FIELD = 'flights_section';
+// Direction-specific variants for pages laid out outbound flight -> hotel -> return flight.
+export const FLIGHTS_OUTBOUND_SECTION_FIELD = 'flights_outbound_section';
+export const FLIGHTS_RETURN_SECTION_FIELD = 'flights_return_section';
+// A cruise's day-by-day itinerary box: located the same way (heading labels), stored
+// on spec.itinerarySection.
+export const ITINERARY_SECTION_FIELD = 'itinerary_section';
+type SectionKind = 'combined' | 'outbound' | 'return' | 'itinerary';
+const SECTION_FIELDS: Record<string, SectionKind> = {
+  [FLIGHTS_SECTION_FIELD]: 'combined',
+  [FLIGHTS_OUTBOUND_SECTION_FIELD]: 'outbound',
+  [FLIGHTS_RETURN_SECTION_FIELD]: 'return',
+  [ITINERARY_SECTION_FIELD]: 'itinerary',
+};
+const FLIGHTS_SECTION_SAMPLE_CHARS = 2000;
+
+// A bare leg marker ("OUT", "RTN") repeats once per leg, so it can't locate the section.
+const LEG_MARKER_RE = /^(?:out|rtn|ret|outbound|outward|return|inbound|inward)$/i;
+
+// `allowLegMarker`: a DIRECTION section's heading is often exactly "Return"/"Outbound",
+// which is the right label there (it is unique to its own section).
+function isStableSectionLine(line: string, allowLegMarker = false): boolean {
+  const t = line.trim();
+  return t.length >= 4 && t.length <= 80 && /[A-Za-z]{3,}/.test(t) && !/^\d+$/.test(t) && (allowLegMarker || !LEG_MARKER_RE.test(t)) && !isUnstableAnchorLine(t);
+}
+
+function nonEmptyLines(s: string): string[] {
+  return s
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+type FlightsSectionSource = 'text' | 'flightsText' | 'deepText';
+
+// Finds the picked block inside one source's lines by its first and last
+// non-empty lines. The last line often repeats (a carrier on every card), so of
+// the candidates after the first line the one whose span is closest to the
+// block's own line count wins. Returns indexes into `lines`, or null.
+function locateBlock(lines: string[], blockLines: string[]): { start: number; end: number } | null {
+  const first = blockLines[0];
+  const last = blockLines[blockLines.length - 1];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] !== first) continue;
+    let best = -1;
+    let bestDiff = Number.POSITIVE_INFINITY;
+    let seen = 0;
+    for (let j = i; j < lines.length && seen < blockLines.length * 3 + 20; j++) {
+      if (lines[j]) seen++;
+      if (j === i && blockLines.length > 1) continue;
+      if (lines[j] !== last) continue;
+      const span = lines.slice(i, j + 1).filter(Boolean).length;
+      const diff = Math.abs(span - blockLines.length);
+      if (diff < bestDiff) {
+        best = j;
+        bestDiff = diff;
+      }
+    }
+    if (best >= 0) return { start: i, end: best };
+  }
+  return null;
+}
+
+// Derives labels from ONE source's own lines (the bookmarklet's linesBefore /
+// linesAfter were computed against `text` only, and on some pages the cards
+// exist solely in deepText).
+function deriveFromSource(
+  source: FlightsSectionSource,
+  sourceText: string,
+  pick: PickedField,
+  blockLines: string[],
+  kind: SectionKind,
+): { section: FlightsSectionSpec } | { reason: string } {
+  const direction = kind === 'outbound' || kind === 'return';
+  const noun = kind === 'itinerary' ? 'itinerary' : 'flights';
+  // No label of ANY kind may carry a digit: "Transport:  VS25" or "... - VS 25" is one deal's flight number.
+  const labelOk = (l: string): boolean => isStableSectionLine(l, direction) && !/\d/.test(l);
+  const lines = sourceText.split(/\r?\n/).map((l) => l.trim());
+  const where = locateBlock(lines, blockLines);
+  if (!where) return { reason: `the picked block was not found in the ${source}` };
+
+  const count = (label: string): number => {
+    const want = label.toLowerCase();
+    return lines.filter((l) => l.toLowerCase() === want).length;
+  };
+
+  // Start headings, best first: the block's own first line, then the nearest
+  // stable lines above it (looking back a bounded distance).
+  const raw: string[] = [];
+  if (looksLikeLabel(blockLines[0], pick.value) && labelOk(blockLines[0])) raw.push(blockLines[0]);
+  for (let i = where.start - 1; i >= 0 && i >= where.start - 25; i--) {
+    if (labelOk(lines[i])) raw.push(lines[i]);
+  }
+  if (raw.length === 0) {
+    return { reason: `couldn't find a stable heading for the ${noun} section — pick the box including its heading` };
+  }
+  const startCandidates = raw.filter((l) => count(l) === 1);
+  if (startCandidates.length === 0) {
+    return { reason: `the heading "${raw[0]}" appears more than once on the page, so it can't locate the ${noun} section — pick the box including a unique heading` };
+  }
+
+  // End heading: nearest stable, unique line after the block.
+  let endLabel: string | undefined;
+  for (let i = where.end + 1; i < lines.length && i <= where.end + 25; i++) {
+    if (labelOk(lines[i]) && count(lines[i]) === 1) {
+      endLabel = lines[i];
+      break;
+    }
+  }
+
+  const first = blockLines[0];
+  const last = blockLines[blockLines.length - 1];
+  const covers = (startLabel: string, end: string | undefined): boolean => {
+    const probe: FlightsSectionSpec = { startLabel, endLabel: end, origin: 'picked', pickedAt: '', source, blockLines: blockLines.length };
+    const cut =
+      kind === 'itinerary'
+        ? extractItinerarySection({ itinerarySection: probe }, { [source]: sourceText })
+        : extractFlightsSection(
+            kind === 'outbound' ? { flightsOutboundSection: probe } : kind === 'return' ? { flightsReturnSection: probe } : { flightsSection: probe },
+            { [source]: sourceText },
+            kind,
+          );
+    if (!cut) return false;
+    const got = new Set(nonEmptyLines(cut));
+    return got.has(first) && got.has(last);
+  };
+
+  for (const startLabel of startCandidates) {
+    const useEnd = endLabel && endLabel.toLowerCase() !== startLabel.toLowerCase() && covers(startLabel, endLabel);
+    if (useEnd || covers(startLabel, undefined)) {
+      return {
+        section: {
+          startLabel,
+          ...(useEnd ? { endLabel } : {}),
+          origin: 'picked',
+          pickedAt: new Date().toISOString(),
+          sampleText: pick.value.slice(0, FLIGHTS_SECTION_SAMPLE_CHARS),
+          source,
+          ...(direction ? { blockLines: blockLines.length } : {}),
+        },
+      };
+    }
+  }
+  return { reason: `locating the section by its heading "${startCandidates[0]}" did not reproduce the picked ${noun} block in the ${source}` };
+}
+
+function deriveFlightsSection(
+  pick: PickedField,
+  ctx: PickerCaptureContext,
+  kind: SectionKind,
+): { section: FlightsSectionSpec } | { problem: string } {
+  const blockLines = nonEmptyLines(pick.value);
+  const noun = kind === 'itinerary' ? 'itinerary' : 'flights';
+  if (blockLines.length === 0) return { problem: `the picked ${noun} section was empty` };
+
+  // Same order the runtime lookup uses. The first source that both contains the
+  // block and yields a verified heading wins, and is remembered on the section.
+  const sources: [FlightsSectionSource, string | undefined][] = [
+    ['text', ctx.text],
+    ['flightsText', ctx.flightsText],
+    ['deepText', ctx.deepText],
+  ];
+  const reasons: string[] = [];
+  for (const [name, content] of sources) {
+    if (!content) continue;
+    const outcome = deriveFromSource(name, content, pick, blockLines, kind);
+    if ('section' in outcome) return outcome;
+    reasons.push(outcome.reason);
+  }
+  // Prefer a reason that says WHY a located block failed over a plain "not found".
+  const informative = reasons.find((r) => !r.includes('was not found in'));
+  return { problem: informative ?? reasons[0] ?? `the picked ${noun} block was not found in the captured page` };
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureContext): PickerSpecResult {
   const headingsText = (ctx.headings ?? []).join('\n');
@@ -672,8 +993,28 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
 
   const derived: DerivedRule[] = [];
   const problems: DerivationProblem[] = [];
+  const pickedFieldNames = new Set(picks.map((p) => p.field));
+
+  let flightsSection: ExtractionSpec['flightsSection'];
+  let flightsOutboundSection: ExtractionSpec['flightsOutboundSection'];
+  let flightsReturnSection: ExtractionSpec['flightsReturnSection'];
+  let itinerarySection: ExtractionSpec['itinerarySection'];
 
   for (const pick of picks) {
+    // A region, not a value: derived on its own and stored under
+    // spec.flightsSection (never in `fields`), so none of the value strategies
+    // below apply and it needs no textIndex of its own.
+    const sectionKind = SECTION_FIELDS[pick.field];
+    if (sectionKind) {
+      const outcome = deriveFlightsSection(pick, ctx, sectionKind);
+      if ('problem' in outcome) problems.push({ field: pick.field, reason: outcome.problem });
+      else if (sectionKind === 'outbound') flightsOutboundSection = outcome.section;
+      else if (sectionKind === 'return') flightsReturnSection = outcome.section;
+      else if (sectionKind === 'itinerary') itinerarySection = outcome.section;
+      else flightsSection = outcome.section;
+      continue;
+    }
+
     // An unlocatable pick has no position in the page to anchor against at
     // all — trying to guess a rule from a label/heading/url alone, without
     // ever having confirmed the value actually sits where claimed, is exactly
@@ -684,8 +1025,19 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
       continue;
     }
 
-    type Candidate = { rule: FieldRule; strategy: DerivationStrategy; ambiguousLabel?: boolean; replay?: 'titleCase' };
+    type Candidate = {
+      rule: FieldRule;
+      strategy: DerivationStrategy;
+      ambiguousLabel?: boolean;
+      replay?: 'titleCase';
+      partyExpected?: number;
+      partyPlan?: PartyPlan;
+    };
     const candidates: Candidate[] = [];
+    // A multi-party line ("2 adults and 1 child") goes through party-count
+    // FIRST; a single token keeps the older order and only falls back to it.
+    const partyCount = tryPartyCount(pick);
+    if (partyCount && partyCount.plan.multi) candidates.push({ ...partyCount, partyPlan: partyCount.plan });
     const urlParam = tryUrlParam(pick, ctx);
     if (urlParam) candidates.push(urlParam);
     // A label-after whose anchor is a "Label £amount" line outranks preceding-line
@@ -711,12 +1063,17 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
     if (labelAfter && !labelAfter.viaInline) candidates.push(labelAfter);
     const valuePatternLine = tryValuePatternLine(pick, ctx);
     if (valuePatternLine) candidates.push(valuePatternLine);
+    if (partyCount && !partyCount.plan.multi) candidates.push({ ...partyCount, partyPlan: partyCount.plan });
     const lineOffset = tryLineOffset(pick, ctx);
     if (lineOffset) candidates.push(lineOffset);
 
     let winner: Candidate | null = null;
     for (const candidate of candidates) {
-      if (!verify(candidate.rule, runtimeCtx, pick.value, candidate.replay)) continue;
+      const ok =
+        candidate.strategy === 'party-count'
+          ? verifyParty(candidate.rule, runtimeCtx, candidate.partyExpected)
+          : verify(candidate.rule, runtimeCtx, pick.value, candidate.replay);
+      if (!ok) continue;
       if (!passesSafetyChecks(pick.field, candidate.rule)) continue;
       winner = candidate;
       break; // candidates are already in priority order — first verified wins
@@ -725,12 +1082,12 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
     if (!winner) {
       problems.push({
         field: pick.field,
-        reason: `no candidate strategy (url-param, label-anchored, inline-label, label-after, heading-position, title-prefix, title-segment, url-path-slug, value-pattern-line, line-offset) produced a rule that reproduces the picked value "${pick.value}" against the captured page`,
+        reason: `no candidate strategy (url-param, label-anchored, inline-label, label-after, heading-position, title-prefix, title-segment, url-path-slug, value-pattern-line, party-count, line-offset) produced a rule that reproduces the picked value "${pick.value}" against the captured page`,
       });
       continue;
     }
 
-    const transform = winner.rule.transform ?? inferTransform(pick.value);
+    const transform = winner.rule.transform ?? inferTransform(pick.value, pick.field);
     // Provenance (extraction.types.ts, EXTRACTION_AUDIT.md §4 Phase 3): stamp
     // every rule this module emits as human-verified, with the exact value
     // confirmed, which strategy produced it and when. This is what
@@ -749,14 +1106,29 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
       field: pick.field,
       rule,
       strategy: winner.strategy,
-      confidence: deriveConfidence(winner.strategy, pick, { ambiguousLabel: winner.ambiguousLabel }),
+      confidence: deriveConfidence(winner.strategy, pick, {
+        ambiguousLabel: winner.ambiguousLabel,
+        unlabeledParty: winner.partyPlan ? winner.partyPlan.labelPat === null : false,
+      }),
     });
+
+    // One pick fills all three: sibling party rules from the same line, for
+    // fields the agent did not pick separately in this batch.
+    if (winner.strategy === 'party-count' && winner.partyPlan && isPartyField(pick.field)) {
+      for (const sibling of derivePartySiblings(winner.partyPlan, pick.field, pickedFieldNames, runtimeCtx, rule.pickedAt ?? new Date().toISOString())) {
+        if (!derived.some((d) => d.field === sibling.field)) derived.push(sibling);
+      }
+    }
   }
 
   const spec: ExtractionSpec = {
     version: 1,
     fields: Object.fromEntries(derived.map((d) => [d.field, d.rule])),
     ...(ctx.packageType ? { packageType: ctx.packageType } : {}),
+    ...(flightsSection ? { flightsSection } : {}),
+    ...(flightsOutboundSection ? { flightsOutboundSection } : {}),
+    ...(flightsReturnSection ? { flightsReturnSection } : {}),
+    ...(itinerarySection ? { itinerarySection } : {}),
   };
 
   return { spec, derived, problems };
@@ -805,9 +1177,32 @@ export function mergePickedIntoSpec(existing: ExtractionSpec | undefined, picked
     });
   }
 
+  // A derived flights section (combined or per direction) replaces whatever the
+  // stored spec had under the same key.
+  const sectionKeys = [
+    ['flightsSection', FLIGHTS_SECTION_FIELD],
+    ['flightsOutboundSection', FLIGHTS_OUTBOUND_SECTION_FIELD],
+    ['flightsReturnSection', FLIGHTS_RETURN_SECTION_FIELD],
+    ['itinerarySection', ITINERARY_SECTION_FIELD],
+  ] as const;
+  const mergedSections: Partial<Pick<ExtractionSpec, 'flightsSection' | 'flightsOutboundSection' | 'flightsReturnSection' | 'itinerarySection'>> = {};
+  for (const [key, field] of sectionKeys) {
+    const derivedSection = picked[key];
+    if (!derivedSection) continue;
+    mergedSections[key] = derivedSection;
+    applied.push({
+      field,
+      strategy: 'section-anchor',
+      confidence: 'high',
+      verifiedValue: derivedSection.startLabel,
+      replaced: base[key] ? 'picked' : null,
+    });
+  }
+
   const spec: ExtractionSpec = {
     ...base,
     fields: mergedFields,
+    ...mergedSections,
     // The agent declares the package type up front when arming the picker
     // (PickerCaptureContext.packageType above), which is more current than
     // whatever the stored spec previously inferred or was told — so it wins
@@ -822,7 +1217,7 @@ export function mergePickedIntoSpec(existing: ExtractionSpec | undefined, picked
   // simply "kept"), nor is `version` (structural, not content); `packageType`
   // is excluded only when the pick actually overwrote it.
   const preserved = existing
-    ? Object.keys(existing).filter((key) => key !== 'version' && key !== 'fields' && (key !== 'packageType' || !picked.packageType))
+    ? Object.keys(existing).filter((key) => key !== 'version' && key !== 'fields' && (key !== 'packageType' || !picked.packageType) && !(key in mergedSections))
     : [];
 
   return { spec, applied, preserved };

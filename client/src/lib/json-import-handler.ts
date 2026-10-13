@@ -15,6 +15,8 @@ export interface JsonImportDeps {
   toast: (opts: { title: string; description?: string; variant?: "default" | "destructive" }) => void;
   setImageUrls?: (updater: (prev: string[]) => string[]) => void;
   skipLodgeResetRef?: React.MutableRefObject<boolean>;
+  /** True when importing into a social post quote (derives hotel check-in from the outbound arrival). */
+  socialPost?: boolean;
   fallbackFieldMapper?: (data: Record<string, any>, setIfPresent: (key: string, val: unknown) => void, toIsoDate: (d: string | undefined) => string) => void;
 }
 
@@ -349,7 +351,7 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
   const { jsonMapperApi } = await import("@/features/json-mapper/api/json-mapper.api");
 
-  const result = mapScraperJsonToFormFields(data);
+  const result = mapScraperJsonToFormFields(data, { socialCheckIn: deps.socialPost });
 
   const hasLodgeFieldsInJson = !!(
     data.lodge_type ||

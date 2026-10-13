@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyScalarOverrides, runExtractionSpec } from "./extraction.interpreter";
+import { applyScalarOverrides, extractFlightsSection, looksMultiLeg, runExtractionSpec, runExtractionSpecDetailed } from "./extraction.interpreter";
 import type { ScrapedQuoteJson } from "../../easyjet/easyjet.types";
 import type { ExtractionSpec } from "./extraction.types";
 import { supplierScraperSeed } from "../../../../../scripts/seed-data/supplier-scrapers";
@@ -2081,5 +2081,135 @@ describe("lodge fields", () => {
     );
     expect(out.lodge_code).toBe("lp33338");
     expect(out.lodge_park_code).toBe("");
+  });
+});
+
+// A children/infants rule an agent PICKED was verified on the page, so it must
+// be applied directly — never re-anchored near the adults text and never
+// discarded for sitting far from it. Generated rules keep the anchoring.
+describe("picked children/infants bypass party anchoring", () => {
+  const url = "https://example.com/deal";
+  const FAR_PAGE = [
+    "2 Adults for 7 nights",
+    ...Array.from({ length: 30 }, (_, i) => `Unrelated marketing copy line number ${i} padding the page well out.`),
+    "Children",
+    "1",
+    "Infants (0-1)",
+    "1",
+  ].join("\n");
+
+  const rule = (regex: string, extra: Record<string, unknown> = {}) => ({ from: "text", regex, group: 1, transform: "number", ...extra });
+  const buildSpec = (extra: Record<string, unknown>) =>
+    ({
+      version: 1,
+      fields: {
+        adults: rule("(\\d+) Adults?"),
+        children: rule("(?:^|\\n)\\s*Children\\s*\\n+\\s*(\\d+)", extra),
+        infants: rule("(?:^|\\n)\\s*Infants \\(0-1\\)\\s*\\n+\\s*(\\d+)", extra),
+      },
+    }) as unknown as ExtractionSpec;
+
+  it("returns a picked children/infants value that sits far from the adults text", () => {
+    const q = runExtractionSpec(buildSpec({ origin: "picked" }), { title: "", text: FAR_PAGE, url }, "x");
+    expect(q.adults).toBe(2);
+    expect(q.children).toBe(1);
+    expect(q.infants).toBe(1);
+  });
+
+  it("still anchors a generated rule: the far-away match is ignored", () => {
+    const q = runExtractionSpec(buildSpec({ origin: "generated" }), { title: "", text: FAR_PAGE, url }, "x");
+    expect(q.children).toBe(0);
+    expect(q.infants).toBe(0);
+  });
+
+  it("applies the same bypass through applyScalarOverrides", () => {
+    const base = runExtractionSpec({ version: 1, fields: {} } as unknown as ExtractionSpec, { title: "", text: FAR_PAGE, url }, "x");
+    const out = applyScalarOverrides(base, buildSpec({ origin: "picked" }), { url, text: FAR_PAGE });
+    expect(out.children).toBe(1);
+  });
+});
+
+// ─── Picked flights section ───────────────────────────────────────────────────
+describe("extractFlightsSection", () => {
+  const section = (startLabel: string, endLabel?: string) => ({
+    flightsSection: { startLabel, endLabel, origin: "picked" as const, pickedAt: "2026-10-01T00:00:00.000Z" },
+  });
+  const PAGE = ["Hotel Regente", "£2,000", "Your flights", "OUT", "11:10", "Your hotel", "Room details"].join("\n");
+
+  it("returns text from the start label to the end of the default window", () => {
+    expect(extractFlightsSection(section("Your flights"), { text: PAGE })).toBe(
+      "Your flights\nOUT\n11:10\nYour hotel\nRoom details",
+    );
+  });
+
+  it("stops at the end label and matches case-insensitively on a line start", () => {
+    const out = extractFlightsSection(section("YOUR FLIGHTS", "your hotel"), { text: PAGE });
+    expect(out).toBe("Your flights\nOUT\n11:10\n");
+  });
+
+  it("returns null when the label is nowhere, or the spec has no section", () => {
+    expect(extractFlightsSection(section("Flight details"), { text: PAGE })).toBeNull();
+    expect(extractFlightsSection({}, { text: PAGE })).toBeNull();
+  });
+
+  it("searches text, then flightsText, then deepText", () => {
+    const all = { flightsText: "Your flights\nFROM MODAL", deepText: "Your flights\nFROM DEEP", text: PAGE };
+    expect(extractFlightsSection(section("Your flights"), all)).toBe("Your flights\nOUT\n11:10\nYour hotel\nRoom details");
+    expect(extractFlightsSection(section("Your flights"), { ...all, text: "nope" })).toBe("Your flights\nFROM MODAL");
+    expect(extractFlightsSection(section("Your flights"), { deepText: "Your flights\nFROM DEEP", text: "nope" })).toBe("Your flights\nFROM DEEP");
+  });
+
+  it("caps an unterminated section at 4000 chars", () => {
+    const long = "Your flights\n" + "x".repeat(10_000);
+    expect(extractFlightsSection(section("Your flights"), { text: long })?.length).toBe(4000);
+  });
+});
+
+describe("looksMultiLeg", () => {
+  it("is false for a plain out and back", () => {
+    expect(looksMultiLeg("OUT\n11:10\n14:50\nRTN\n16:50\n07:40\nBA2490 BA2491")).toBe(false);
+  });
+  it("is true for more than 4 distinct times", () => {
+    expect(looksMultiLeg("06:00 08:00 09:30 12:00 14:15")).toBe(true);
+  });
+  it("is true for more than 2 distinct flight numbers", () => {
+    expect(looksMultiLeg("BA2490 then LH123 then U2123")).toBe(true);
+  });
+});
+
+describe("runExtractionSpecDetailed with a flights section", () => {
+  const DECOY = ["OUT", "Sat 01 Jan 2028", "08:00", "Direct", "2h 0m", "10:00", "London Gatwick", "LGW", "Paris", "CDG", "Other Air"].join("\n");
+  const REAL = [
+    "Your flights",
+    "OUT", "Sun 30 Aug 2026", "06:00", "Direct", "1h 50m", "08:50", "London Stansted", "STN", "Prague", "PRG", "Ryanair",
+    "RTN", "Sat 05 Sep 2026", "06:10", "Direct", "1h 55m", "07:05", "Prague", "PRG", "London Stansted", "STN", "Ryanair",
+    "Your room",
+  ].join("\n");
+  const PAGE = ["Deal", DECOY, "Hotel", REAL].join("\n");
+  const base = { version: 1, fields: {} } as unknown as ExtractionSpec;
+  const picked = { ...base, flightsSection: { startLabel: "Your flights", endLabel: "Your room", origin: "picked", pickedAt: "2026-10-01T00:00:00.000Z" } } as ExtractionSpec;
+
+  it("reads the section only, ignoring an earlier look-alike block", () => {
+    const withoutSection = runExtractionSpec(base, { title: "", text: PAGE, url: "https://x.test/d" }, "x");
+    expect(withoutSection.flights[0].departing_airport).toBe("LGW");
+    const { quote, flightsSection } = runExtractionSpecDetailed(picked, { title: "", text: PAGE, url: "https://x.test/d" }, "x");
+    expect(quote.flights[0].departing_airport).toBe("STN");
+    expect(quote.flights[0].departure_date_time).toBe("2026-08-30T06:00");
+    expect(quote.flights[1].departure_date_time).toBe("2026-09-05T06:10");
+    expect(flightsSection).toMatchObject({ found: true, parsedFromSection: true, multiLeg: false });
+    expect(flightsSection?.text).toContain("Your flights");
+  });
+
+  it("falls back to the whole page when the section yields nothing, and reports it", () => {
+    const text = ["Deal", DECOY, "Your flights", "nothing parseable here", "Your room"].join("\n");
+    const { quote, flightsSection } = runExtractionSpecDetailed(picked, { title: "", text, url: "https://x.test/d" }, "x");
+    expect(flightsSection).toMatchObject({ found: true, parsedFromSection: false });
+    expect(quote.flights[0].departing_airport).toBe("LGW");
+  });
+
+  it("reports not-found, and null when the spec has no section", () => {
+    const missing = runExtractionSpecDetailed(picked, { title: "", text: DECOY, url: "https://x.test/d" }, "x");
+    expect(missing.flightsSection).toMatchObject({ found: false, text: null, multiLeg: false, parsedFromSection: false });
+    expect(runExtractionSpecDetailed(base, { title: "", text: PAGE, url: "https://x.test/d" }, "x").flightsSection).toBeNull();
   });
 });

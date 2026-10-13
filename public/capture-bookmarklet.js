@@ -30,7 +30,7 @@
   // Bump on every change. Shown in the capture alert so it's obvious which
   // version is actually installed in the bookmarks bar — an old bookmarklet
   // silently producing old-shaped captures is otherwise impossible to spot.
-  var VERSION = 'v15';
+  var VERSION = 'v16';
   var MAX_TEXT = 400000;
   // deepText() walks hidden nodes and pierces shadow roots, so on a large page
   // it can be far bigger than `text` once every collapsed panel, inactive tab
@@ -492,7 +492,7 @@
   // up filled in.
   var COMMON_FIELD_GROUP = {
     name: 'Always',
-    fields: ['sales_price', 'price_per_person', 'travel_date', 'no_of_nights', 'adults', 'quote_title', 'tour_operator'],
+    fields: ['sales_price', 'price_per_person', 'travel_date', 'no_of_nights', 'adults', 'children', 'infants', 'quote_title', 'tour_operator'],
   };
   // Keyed by the exact `packageType` value the server's ExtractionSpec expects
   // (extraction.types.ts) — 'cruise' | 'package-holiday' | 'lodge' — so the
@@ -505,12 +505,12 @@
       // the quote's headline — pick it and the server fills quote_title from it
       // too (see extraction.interpreter.ts), so an agent never has to point at
       // the same words twice.
-      fields: ['cruise_title', 'cruise_line', 'ship_name', 'cruise_date', 'cabin_type', 'cabin_number', 'embarkation', 'debarkation'],
+      fields: ['cruise_title', 'cruise_line', 'ship_name', 'cruise_date', 'cabin_type', 'cabin_number', 'embarkation', 'debarkation', 'itinerary_section', 'flights_section', 'flights_outbound_section', 'flights_return_section'],
     },
     'package-holiday': {
       buttonLabel: 'Package Holiday',
       groupName: 'Package Holiday',
-      fields: ['accommodation', 'board_basis', 'room_type', 'departure_airport_name', 'arrival_airport_name'],
+      fields: ['accommodation', 'board_basis', 'room_type', 'departure_airport_name', 'arrival_airport_name', 'flights_section', 'flights_outbound_section', 'flights_return_section'],
     },
     lodge: {
       buttonLabel: 'Hot Tub Break',
@@ -598,7 +598,17 @@
     };
   }
 
+  // Field keys whose generated label would read badly. Outbound/Return sections are
+  // for pages laid out outbound flight -> hotel -> return flight, where one
+  // Flights Section box cannot hold both.
+  var LABEL_OVERRIDES = {
+    flights_outbound_section: 'Outbound Flights',
+    flights_return_section: 'Return Flights',
+    itinerary_section: 'Itinerary',
+  };
+
   function prettyLabel(key) {
+    if (LABEL_OVERRIDES[key]) return LABEL_OVERRIDES[key];
     return key.replace(/_/g, ' ').replace(/\b\w/g, function (c) {
       return c.toUpperCase();
     });
@@ -607,10 +617,14 @@
   // Visible text of a picked element, trimmed — this is the ground truth the
   // server matches back against `text`. innerText (not textContent) so it
   // reflects what the agent actually saw and clicked, not hidden siblings.
+  // Newlines are KEPT: the Flights Section pick is a whole multi-line block (every
+  // leg), and the server reads its first/last lines. Capped so a pick on a huge
+  // wrapper can't blow the payload (the server schema allows the same maximum).
+  var MAX_PICK_VALUE = 8000;
   function textOf(el) {
     var t = el.innerText;
     if (!t) t = el.textContent || '';
-    return t.trim();
+    return t.trim().slice(0, MAX_PICK_VALUE);
   }
 
   function ancestorTags(el) {
@@ -640,13 +654,57 @@
     var empty = { textIndex: -1, occurrenceIndex: -1, occurrenceCount: 0, lineIndex: -1, linesBefore: [], linesAfter: [] };
     if (!value) return empty;
 
+    var needle = value;
     var positions = [];
     var from = 0;
     while (true) {
-      var at = text.indexOf(value, from);
+      var at = text.indexOf(needle, from);
       if (at < 0) break;
       positions.push(at);
-      from = at + Math.max(value.length, 1);
+      from = at + Math.max(needle.length, 1);
+    }
+    // A multi-line block (Flights Section) can differ from the body's text in
+    // blank lines / spacing, so fall back to locating its first line — as a
+    // WHOLE line only (never a substring of a longer one). When that line occurs
+    // several times, take the occurrence whose next non-empty line equals the
+    // block's second non-empty line; with no such occurrence and more than one
+    // candidate the pick is left unlocated rather than guessed.
+    if (!positions.length && value.indexOf('\n') >= 0) {
+      var vNonEmpty = [];
+      var vParts = value.split('\n');
+      for (var vp = 0; vp < vParts.length; vp++) {
+        if (vParts[vp].trim()) vNonEmpty.push(vParts[vp].trim());
+      }
+      var firstLine = vNonEmpty[0] || '';
+      var secondLine = vNonEmpty[1] || '';
+      var tLines = text.split('\n');
+      var cands = [];
+      var run = 0;
+      for (var tl = 0; tl < tLines.length; tl++) {
+        if (firstLine && tLines[tl].trim() === firstLine) {
+          var nextLine = '';
+          for (var nl = tl + 1; nl < tLines.length; nl++) {
+            if (tLines[nl].trim()) {
+              nextLine = tLines[nl].trim();
+              break;
+            }
+          }
+          cands.push({ pos: run + tLines[tl].indexOf(firstLine), matchesSecond: nextLine === secondLine });
+        }
+        run += tLines[tl].length + 1;
+      }
+      var chosen = null;
+      for (var ci = 0; ci < cands.length; ci++) {
+        if (cands[ci].matchesSecond) {
+          chosen = cands[ci];
+          break;
+        }
+      }
+      if (!chosen && cands.length === 1) chosen = cands[0];
+      if (chosen) {
+        needle = firstLine;
+        positions.push(chosen.pos);
+      }
     }
     if (!positions.length) return empty;
 
@@ -685,8 +743,21 @@
     for (var b = lineIndex - 1; b >= 0 && linesBefore.length < 3; b--) {
       if (lines[b].trim()) linesBefore.unshift(lines[b].trim());
     }
+    // linesAfter must start AFTER the picked block, which for a multi-line value
+    // spans several lines: walk past as many non-empty lines as the value has.
+    var valueLineCount = 0;
+    var valueLines = value.split('\n');
+    for (var vl = 0; vl < valueLines.length; vl++) {
+      if (valueLines[vl].trim()) valueLineCount++;
+    }
+    var lastLine = lineIndex;
+    var seen = lines[lineIndex] && lines[lineIndex].trim() ? 1 : 0;
+    while (seen < valueLineCount && lastLine + 1 < lines.length) {
+      lastLine++;
+      if (lines[lastLine].trim()) seen++;
+    }
     var linesAfter = [];
-    for (var af = lineIndex + 1; af < lines.length && linesAfter.length < 2; af++) {
+    for (var af = lastLine + 1; af < lines.length && linesAfter.length < 2; af++) {
       if (lines[af].trim()) linesAfter.push(lines[af].trim());
     }
 

@@ -12,6 +12,7 @@ import {
 } from "@/features/quote/api/use-page-capture-import";
 import { withMoneyFieldsQuarantined } from "@/features/quote/lib/import-validation";
 import { pricePerPersonFor } from "@/features/quote/lib/pricing";
+import { deriveCheckIn } from "@/lib/check-in-time";
 import { ImportValidationPanel } from "@/features/quote/components/sections/ImportValidationPanel";
 import { SupplierScraperPicksResultView, type SupplierScraperPicksResult } from "@/features/supplier-scraper";
 import {
@@ -222,12 +223,44 @@ export function QuoteRHFForm({
     if (!checkInDate) return;
     const date = parseISO(checkInDate);
     if (!isValid(date)) return;
-    setValue("outboundDepartDate", checkInDate, { shouldDirty: true });
+    // Social posts derive check-in FROM the flights (it can be the day after an
+    // overnight arrival), so it must not overwrite an already-set departure date.
+    if (!socialPost || !form.getValues("outboundDepartDate")) {
+      setValue("outboundDepartDate", checkInDate, { shouldDirty: true });
+    }
     const nightCount = Number(nights) || 0;
     if (nightCount > 0) {
       setValue("inboundDepartDate", format(addDays(date, nightCount), "yyyy-MM-dd"), { shouldDirty: true });
     }
   }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Social post: auto-fill check-in from the outbound arrival ─────────────
+  // Applies only while the user hasn't hand-edited the value (it is empty, the
+  // form default, or still what we last filled in).
+  const outboundArriveDate = useWatch({ control, name: "outboundArriveDate" });
+  const outboundArriveTime = useWatch({ control, name: "outboundArriveTime" });
+  const outboundConnectingLegs = useWatch({ control, name: "outboundConnectingLegs" });
+  const travelDate = useWatch({ control, name: "travelDate" });
+  const lastAutoCheckIn = useRef<{ date: string; time: string } | null>(null);
+  useEffect(() => {
+    if (!socialPost) return;
+    const lastLeg = outboundConnectingLegs?.[outboundConnectingLegs.length - 1];
+    const arrival = lastLeg?.arriveDate || lastLeg?.arriveTime
+      ? { date: lastLeg.arriveDate, time: lastLeg.arriveTime }
+      : { date: outboundArriveDate, time: outboundArriveTime };
+    if (!arrival.date && !arrival.time) return;
+    const derived = deriveCheckIn(arrival, travelDate);
+    const last = lastAutoCheckIn.current;
+    const currentDate = form.getValues("checkInDate") ?? "";
+    const currentTime = form.getValues("checkInTime") ?? "";
+    if (derived.date && (!currentDate || currentDate === last?.date || currentDate === derived.date)) {
+      if (currentDate !== derived.date) setValue("checkInDate", derived.date, { shouldDirty: true });
+    }
+    if (!currentTime || currentTime === "15:00" || currentTime === last?.time || currentTime === derived.time) {
+      if (currentTime !== derived.time) setValue("checkInTime", derived.time, { shouldDirty: true });
+    }
+    lastAutoCheckIn.current = derived;
+  }, [socialPost, outboundArriveDate, outboundArriveTime, outboundConnectingLegs, travelDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── JSON upload ───────────────────────────────────────────────────────────
   // Shared by the file-based JSON import and the easyJet URL import: stage the
@@ -250,6 +283,7 @@ export function QuoteRHFForm({
       toast,
       setImageUrls: setImageUrlsFromJson,
       skipLodgeResetRef,
+      socialPost,
       fallbackFieldMapper: (data, setIfPresent) => {
         setIfPresent("quoteLink", data.quoteLink || data.quote_link || data.link || data.source_url);
       },

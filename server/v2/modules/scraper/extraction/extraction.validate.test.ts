@@ -524,51 +524,78 @@ describe("validateQuote — a partial port list raises ONE warning, not two", ()
   });
 });
 
-// When the two price fields disagree, the arithmetic proves only that they
-// can't both be right — never which one is wrong. Provenance settles it: the
-// attributed field is the one the client WITHHOLDS, so blaming a hand-verified
-// pick throws away the trustworthy number and keeps the guess.
-//
-// Real case: an agent picked Virgin Voyages' sales_price ("Grand total" ->
-// £2,013.10, verified on the page), while the generated price_per_person rule
-// was reading "£2,065.10 (Includes taxes & fees)" — the party TOTAL, not a
-// per-person fare. The pair couldn't reconcile, the verified total was
-// withheld, and the form fell back to 0 with the agent's own pick discarded.
-describe("validateQuote — price disagreements blame the UNVERIFIED field", () => {
-  const specWithPickedTotal = {
-    version: 1,
-    fields: {
-      sales_price: { from: "text", regex: "Grand total", origin: "picked", verifiedValue: "£2,013.10" },
-      price_per_person: { from: "text", regex: "\(Includes taxes & fees\)" },
-    },
-  } as unknown as ExtractionSpec;
-
-  const mismatched = () => baseQuote({ sales_price: 2013.1, price_per_person: 2065.1, adults: 2 });
-
-  it("blames price_per_person when sales_price was picked and it was not", () => {
-    const issues = validateQuote(mismatched(), ctx({ spec: specWithPickedTotal })).issues;
-    const mismatch = issues.find((i) => i.code === "PRICE_PARTY_MISMATCH");
-    const below = issues.find((i) => i.code === "PRICE_BELOW_PER_PERSON");
-    expect(mismatch?.field).toBe("price_per_person");
-    expect(below?.field).toBe("price_per_person");
-  });
-
-  it("still blames sales_price when NEITHER field was verified", () => {
-    const issues = validateQuote(mismatched(), ctx()).issues;
-    expect(issues.find((i) => i.code === "PRICE_PARTY_MISMATCH")?.field).toBe("sales_price");
-  });
-
-  it("blames sales_price when the per-person figure is the verified one", () => {
-    const bothPicked = {
+// Once an agent picks a price it is always correct: a picked sales_price is
+// never second-guessed by reconciliation against price_per_person (which may be
+// a generated rule reading the wrong number — Virgin Voyages' "Grand total"
+// £2,013.10 vs a per-person rule that read the party total).
+describe("validateQuote — a picked price is trusted, the unverified field takes the blame", () => {
+  const spec = (picked: Array<"sales_price" | "price_per_person">) =>
+    ({
       version: 1,
       fields: {
-        sales_price: { from: "text", regex: "Grand total", origin: "picked" },
-        price_per_person: { from: "text", regex: "pp", origin: "picked" },
+        sales_price: { from: "text", regex: "Grand total", ...(picked.includes("sales_price") ? { origin: "picked" } : {}) },
+        price_per_person: { from: "text", regex: "pp", ...(picked.includes("price_per_person") ? { origin: "picked" } : {}) },
       },
-    } as unknown as ExtractionSpec;
-    // With both verified there is no asymmetry to exploit, so the default holds.
-    expect(validateQuote(mismatched(), ctx({ spec: bothPicked })).issues
-      .find((i) => i.code === "PRICE_PARTY_MISMATCH")?.field).toBe("sales_price");
+    }) as unknown as ExtractionSpec;
+  const priceIssues = (q: ScrapedQuoteJson, c: ValidationContext) =>
+    validateQuote(q, c).issues.filter((i) => i.code === "PRICE_PARTY_MISMATCH" || i.code === "PRICE_BELOW_PER_PERSON");
+  // Virgin Voyages: picked "Grand total" £2,013.10; the generated per-person rule read the party total £2,065.10.
+  const virginVoyages = () => baseQuote({ sales_price: 2013.1, price_per_person: 2065.1, adults: 2 });
+
+  it("Virgin Voyages: a picked total against a wrong generated per-person is kept; the blame lands on price_per_person", () => {
+    const issues = priceIssues(virginVoyages(), ctx({ spec: spec(["sales_price"]) }));
+    expect(issues.map((i) => i.code).sort()).toEqual(["PRICE_BELOW_PER_PERSON", "PRICE_PARTY_MISMATCH"]);
+    expect(issues.every((i) => i.field === "price_per_person")).toBe(true);
+    expect(issues.some((i) => i.field === "sales_price")).toBe(false);
+  });
+
+  it("a per-person figure recorded as the total, with the total picked, still raises (on price_per_person)", () => {
+    const issues = priceIssues(baseQuote({ sales_price: 1200, price_per_person: 1200, adults: 2 }), ctx({ spec: spec(["sales_price"]) }));
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: "PRICE_PARTY_MISMATCH", field: "price_per_person" });
+  });
+
+  it("raises nothing when both are picked", () => {
+    expect(priceIssues(virginVoyages(), ctx({ spec: spec(["sales_price", "price_per_person"]) }))).toEqual([]);
+  });
+
+  it("blames sales_price when only price_per_person is picked", () => {
+    const issues = priceIssues(virginVoyages(), ctx({ spec: spec(["price_per_person"]) }));
+    expect(issues.map((i) => i.code).sort()).toEqual(["PRICE_BELOW_PER_PERSON", "PRICE_PARTY_MISMATCH"]);
+    expect(issues.every((i) => i.field === "sales_price")).toBe(true);
+  });
+
+  it("blames sales_price when neither is picked (Cunard bug on a Carnival / Jet2 style spec)", () => {
+    const issues = priceIssues(baseQuote({ sales_price: 1200, price_per_person: 1200, adults: 2 }), ctx());
+    expect(issues.map((i) => i.code)).toEqual(["PRICE_PARTY_MISMATCH"]);
+    expect(issues[0].field).toBe("sales_price");
+  });
+
+  it("counts adults + children as travellers (2 adults + 2 children at 500pp = 2000)", () => {
+    expect(priceIssues(baseQuote({ sales_price: 2000, price_per_person: 500, adults: 2, children: 2 }), ctx())).toEqual([]);
+  });
+
+  it("accepts a free-child-place deal: total = adults x pp (2A + 1C, 1000 = 2 x 500)", () => {
+    expect(priceIssues(baseQuote({ sales_price: 1000, price_per_person: 500, adults: 2, children: 1 }), ctx())).toEqual([]);
+  });
+
+  it("accepts an averaged per-person price: total = party x pp (2A + 1C, 1500 = 3 x 500)", () => {
+    expect(priceIssues(baseQuote({ sales_price: 1500, price_per_person: 500, adults: 2, children: 1 }), ctx())).toEqual([]);
+  });
+
+  it("excludes infants from travellers", () => {
+    expect(priceIssues(baseQuote({ sales_price: 1500, price_per_person: 500, adults: 2, children: 1, infants: 1 }), ctx())).toEqual([]);
+  });
+
+  it("still flags a per-person total for a family, and the message names both reconciliations", () => {
+    const issue = priceIssues(baseQuote({ sales_price: 500, price_per_person: 500, adults: 2, children: 2 }), ctx()).find((i) => i.code === "PRICE_PARTY_MISMATCH");
+    expect(issue?.message).toContain("price_per_person × adults");
+    expect(issue?.message).toContain("all travellers (adults + children)");
+  });
+
+  it("keeps PRICE_ZERO even when sales_price is picked", () => {
+    const issues = validateQuote(baseQuote({ sales_price: 0 }), ctx({ spec: spec(["sales_price"]) })).issues;
+    expect(issues.some((i) => i.code === "PRICE_ZERO")).toBe(true);
   });
 });
 
@@ -583,5 +610,29 @@ describe('validateQuote — PICKED_FIELD_MISSED', () => {
     expect(issue?.level).toBe('warn');
     expect(issue?.field).toBe('ship_name');
     expect(issue?.message).toContain('2026-10-01');
+  });
+});
+
+describe('validateQuote — missing flights section', () => {
+  const spec: ExtractionSpec = {
+    version: 1,
+    fields: {},
+    flightsSection: { startLabel: 'Your flights', origin: 'picked', pickedAt: '2026-10-01T10:00:00.000Z' },
+  };
+  const quote = { flights: [] } as unknown as ScrapedQuoteJson;
+
+  it('warns when the picked section was not found on this page', () => {
+    const res = validateQuote(quote, { url: 'https://a.com', text: '', spec, flightsSectionFound: false });
+    const issue = res.issues.find((i) => i.field === 'flights_section');
+    expect(issue?.code).toBe('PICKED_FIELD_MISSED');
+    expect(issue?.level).toBe('warn');
+    expect(issue?.message).toBe("The flights section you picked on 2026-10-01 wasn't found on this page — re-pick it with the field picker.");
+  });
+
+  it('stays quiet when the section was found or the check did not run', () => {
+    const found = validateQuote(quote, { url: 'https://a.com', text: '', spec, flightsSectionFound: true });
+    const unchecked = validateQuote(quote, { url: 'https://a.com', text: '', spec });
+    expect(found.issues.some((i) => i.field === 'flights_section')).toBe(false);
+    expect(unchecked.issues.some((i) => i.field === 'flights_section')).toBe(false);
   });
 });

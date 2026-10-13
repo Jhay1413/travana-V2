@@ -73,6 +73,22 @@ export const fieldRuleSchema = z.object({
   pickedAt: z.preprocess(nullToUndef, z.string().optional()),
 });
 
+// A picked flights region (ExtractionSpec.flightsSection and its direction variants).
+const flightsSectionSchema = z.preprocess(
+  nullToUndef,
+  z
+    .object({
+      startLabel: z.string().min(1).max(200),
+      endLabel: z.preprocess(nullToUndef, z.string().min(1).max(200).optional()),
+      origin: z.literal('picked'),
+      pickedAt: z.string(),
+      sampleText: z.preprocess(nullToUndef, z.string().max(2000).optional()),
+      source: z.preprocess(nullToUndef, z.enum(['text', 'flightsText', 'deepText']).optional()),
+      blockLines: z.preprocess(nullToUndef, z.number().int().min(1).max(500).optional()),
+    })
+    .optional(),
+);
+
 // Exported for tests: the validator and the interpreter must agree on the set
 // of field sources, and they silently drifted apart once already.
 export const specSchema = z.object({
@@ -99,6 +115,12 @@ export const specSchema = z.object({
   // test in spec-sources.test.ts exists to catch the next one of these.
   imageContainerIncludes: z.preprocess(nullToUndef, z.string().optional()),
   flightModalTrigger: z.preprocess(nullToUndef, z.string().optional()),
+  // Set only by the field picker (picker-spec.ts) — kept here so a spec that
+  // carries them is never stripped by a round-trip through this schema.
+  flightsSection: flightsSectionSchema,
+  flightsOutboundSection: flightsSectionSchema,
+  flightsReturnSection: flightsSectionSchema,
+  itinerarySection: flightsSectionSchema,
   // Declared, not inferred. See extraction.types.ts for why: an inferred type
   // dropped Virgin Voyages' entire cruise block when its ship_name regex
   // matched nothing. The AI is told (SYSTEM_PROMPT) to emit the ONE package

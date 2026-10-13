@@ -8,8 +8,6 @@ import axiosClient from "@/api/client/axios-client";
 import { useToast } from "@/hooks/use-toast";
 import { SocialPostPreviewDialog } from "@/features/social/components/social-post-preview-dialog";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
-import { quoteApi } from "@/api";
-import { socialPostApi } from "@/features/social/api/social-post.api";
 import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -486,29 +484,6 @@ export default function SocialPostsBoard() {
     });
   };
 
-  // Opens the schedule dialog for a quote that may not be in the loaded board
-  // list (e.g. just created): loads its saved deal, or generates one if none exists.
-  const openPostForQuote = async (quoteId: string) => {
-    setPreviewQuoteId(quoteId);
-    setPreviewImageUrl(null);
-    setPreviewDeal(null);
-    try {
-      const [quote, existingDeal] = await Promise.all([
-        quoteApi.getById(quoteId),
-        socialPostApi.getByQuoteId(quoteId),
-      ]);
-      if (existingDeal) {
-        setPreviewImageUrl(getFirstImage(quote));
-        setPreviewDeal(existingDeal);
-      } else {
-        await handleGeneratePost(quote);
-      }
-    } catch {
-      toast({ title: "Failed to open the new post", variant: "destructive" });
-      setPreviewQuoteId(null);
-    }
-  };
-
   const handlePortalToggle = useCallback(async (quoteId: string, checked: boolean) => {
     try {
       await axiosClient.patch(`/api/v2/quotes/${quoteId}/portal-visibility`, { show_on_portal: checked });
@@ -811,11 +786,12 @@ export default function SocialPostsBoard() {
         onOpenChange={setCreateDialogOpen}
         socialPost
         presentation="drawer"
-        onSuccess={(id) => {
+        onSuccess={() => {
           setCreateDialogOpen(false);
-          // Open the schedule dialog for the new post right away, on top of the
-          // current view (the new card may not match the active filters).
-          if (id) void openPostForQuote(id);
+          // Don't open the generator: the agent generates from the new card
+          // when ready. Refresh the board so the card appears.
+          queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
+          toast({ title: "Social post added", description: "Click Generate Post on its card when you're ready." });
         }}
       />
     </div>

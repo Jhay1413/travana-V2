@@ -1,5 +1,7 @@
 import type { ScrapedQuoteJson, ScrapedFlightJson, ScrapedTransferJson } from '../../easyjet/easyjet.types';
-import type { ExtractionSpec, FieldRule, FieldTransform } from './extraction.types';
+import type { ExtractionSpec, FieldRule, FieldTransform, FlightsSectionSpec } from './extraction.types';
+import { normaliseClockTime } from './flight-legs.validate';
+import { isDateLine, isTimeLine, parseItineraryDayRows } from './itinerary-day-rows';
 
 // Fixed, trusted interpreter: applies a declarative ExtractionSpec to a captured
 // DOM ({title, text, url}) and produces the ScraperJson the quote-form import
@@ -315,6 +317,12 @@ function resolvePartyField(
   },
   adultsRule: FieldRule | undefined,
 ): string | number {
+  // A rule an agent PICKED was verified against the real page: the value they
+  // clicked is the answer, wherever it sits. It is never re-anchored to the
+  // adults text nor discarded for being far from it — plain resolveField
+  // applies its own match directly. Anchoring stays for generated rules only.
+  if (rule.origin === 'picked') return resolveField(rule, ctx);
+
   // 1. API first — identical to resolveField; untouched.
   if (rule.jsonPath && ctx.apiJson != null) {
     const v = getByPath(ctx.apiJson, rule.jsonPath);
@@ -910,7 +918,9 @@ function parseFlightList(text: string | undefined): ParsedFlightModal | null {
 const LEG_LABELS = /\b(OUT|RTN|OUTBOUND|INBOUND|RETURN|DEPARTING|RETURNING)\b/g;
 // Words that look like airport codes but aren't — leg labels and common card
 // furniture. Anything else in caps of exactly three letters is treated as IATA.
-const NOT_A_CODE = /^(OUT|RTN|VAT|ATO|TBC|N\/A)$/;
+// Carrier names/codes ("TUI Airways" sits on the line right after the destination
+// code on a card) are listed too, or the last "code" of a leg becomes TUI.
+const NOT_A_CODE = /^(OUT|RTN|VAT|ATO|TBC|N\/A|TUI|EZY|RYR|BAW|EXS|TCX|AFR|JET)$/;
 
 function scanFlightBlock(block: string): {
   depart: string;
@@ -921,7 +931,8 @@ function scanFlightBlock(block: string): {
   toCode: string;
 } | null {
   const date = /(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\s+\d{4})/.exec(block)?.[1] ?? '';
-  const times = [...block.matchAll(/\b(\d{1,2}:\d{2})\b/g)].map((m) => m[1]);
+  const timeHits = [...block.matchAll(/\b(\d{1,2}:\d{2})\b/g)];
+  const times = timeHits.map((m) => m[1]);
   if (!date || times.length < 2) return null;
 
   // Airport codes with the line they sit on, so the name can be read from the
@@ -940,9 +951,22 @@ function scanFlightBlock(block: string): {
 
   const from = codes[0];
   const to = codes[codes.length - 1];
+  // "+1 day" / "arrives the next day" / "+2 days": the card prints ONE date, so
+  // an overnight arrival is that date shifted by the stated number of days.
+  // The marker is honoured only INSIDE this card: from its label to ~150 chars past the arrival
+  // time, cut at "Selected", a blank line, the next leg label or a non-flight heading. Text
+  // further down the page ("late checkout the next day", "+2 days for 99") is not this flight.
+  const arrivalEnd = (timeHits[1].index ?? 0) + timeHits[1][0].length;
+  const tail = block.slice(arrivalEnd, arrivalEnd + 150).split(/\n\s*\n|\n\s*(?:Selected|Your room|Accommodation|Hotel|OUT|RTN|OUTBOUND|INBOUND|RETURN|DEPARTING|RETURNING)\b/)[0];
+  const card = block.slice(0, arrivalEnd) + tail;
+  const shift = /(?:^|\n)[ \t]*\+\s*(\d)\s*days?[ \t]*(?:\n|$)/i.exec(card)?.[1];
+  const overnight = shift ? Number(shift) : /\bnext\s+day\b/i.test(card) ? 1 : 0;
+  const departStamp = combineDateTime(date, times[0]);
+  const arriveStamp = combineDateTime(date, times[1]);
+  const arriveShifted = overnight && dateOnly(arriveStamp) ? `${addNights(dateOnly(arriveStamp), overnight)}${arriveStamp.slice(10)}` : arriveStamp;
   return {
-    depart: combineDateTime(date, times[0]),
-    arrive: combineDateTime(date, times[1]),
+    depart: departStamp,
+    arrive: arriveShifted,
     fromName: from.name,
     fromCode: from.code,
     toName: to.name,
@@ -1600,6 +1624,23 @@ export function parsePortListItinerary(pageText: string): PortListItinerary {
   return { ports: [], hiddenCount: 0 };
 }
 
+// Reads the itinerary out of a PICKED section's own text (spec.itinerarySection).
+// Order: the spec's itineraryRegex, the day/port table, the pipe port list, then the
+// day-row reader for layouts those miss. A table read whose "ports" are mostly dates
+// or times (a "Day 1 / Sat 12 Jun / Southampton" layout, where the table reader takes
+// the date line as the port) is rejected so the day-row reader can take it.
+function readItineraryFromSection(section: string, itineraryRegex: string | undefined): { day: number; description: string; sub_description?: string }[] {
+  if (itineraryRegex) {
+    const rows = buildItineraryFromRegex(section, itineraryRegex);
+    if (rows.length) return rows;
+  }
+  const table = parseItineraryTable(section);
+  if (table.length && table.filter((r) => isDateLine(r.description) || isTimeLine(r.description)).length * 2 < table.length) return table;
+  const portList = parsePortListItinerary(section);
+  if (portList.ports.length) return portList.ports.map((description, idx) => ({ day: idx + 1, description }));
+  return parseItineraryDayRows(section);
+}
+
 // The value a labelled pair states, e.g. "Onboard" / "Freedom of the Seas".
 // Cruise pages print their headline facts this way — label line, value line —
 // and the label vocabulary is industry-standard, not supplier wording.
@@ -1613,21 +1654,537 @@ function labelledValue(pageText: string, label: RegExp): string {
   return '';
 }
 
+// ─── Flights section (picker's "Flights Section" pick) ────────────────────────
+//
+// The agent clicks the box wrapping ALL flight legs; deriveSpecFromPicks stores
+// a stable heading line near it (and optionally the one after it) as
+// spec.flightsSection. At runtime the section is cut out of the captured text
+// by those two labels, so the flight parsers read the flights box ONLY and can
+// no longer be fooled by the hotel/price text around it. PURE: no I/O.
+export interface FlightsSectionSources {
+  text?: string;
+  deepText?: string;
+  flightsText?: string;
+}
+
+const FLIGHTS_SECTION_DEFAULT_CHARS = 4_000;
+export const FLIGHTS_SECTION_END_WINDOW = 6_000;
+
+function normLabel(s: string): string {
+  return s.trim().toLowerCase();
+}
+
+// Exact (trimmed, case-insensitive) line equality is preferred; a line that only
+// STARTS with the label is the fallback when no line equals it.
+function findLabelLine(lines: { line: string; offset: number }[], label: string, from: number, until: number): number {
+  const want = normLabel(label);
+  if (!want) return -1;
+  let prefix = -1;
+  for (let i = from; i < lines.length; i++) {
+    if (lines[i].offset > until) break;
+    const got = normLabel(lines[i].line);
+    if (got === want) return i;
+    if (prefix < 0 && got.startsWith(want)) prefix = i;
+  }
+  return prefix;
+}
+
+export type FlightsSectionKind = 'combined' | 'outbound' | 'return';
+
+const DIRECTION_WINDOW_CHARS = 1_500;
+
+function sectionSpecOf(spec: Pick<ExtractionSpec, 'flightsSection' | 'flightsOutboundSection' | 'flightsReturnSection'>, kind: FlightsSectionKind): FlightsSectionSpec | undefined {
+  return kind === 'outbound' ? spec.flightsOutboundSection : kind === 'return' ? spec.flightsReturnSection : spec.flightsSection;
+}
+
+export interface CutSection {
+  text: string;
+  // The few non-empty lines right above the section (date headers like "26 / Aug").
+  before: string[];
+}
+
+// Cuts one source. A COMBINED section ends at its end label (within 6000 chars)
+// or after a default 4000. A DIRECTION section never uses a blind window: it
+// ends at the FIRST of its unique end label, the other direction's start label
+// further down, or a window sized from the picked block (lines x 1.5 + 5,
+// capped at 1500 chars).
+interface SectionLimits {
+  defaultChars: number;
+  endWindow: number;
+}
+const FLIGHTS_SECTION_LIMITS: SectionLimits = { defaultChars: FLIGHTS_SECTION_DEFAULT_CHARS, endWindow: FLIGHTS_SECTION_END_WINDOW };
+// A long cruise lists dozens of days, so its window is wider than the flights one.
+const ITINERARY_SECTION_DEFAULT_CHARS = 8_000;
+export const ITINERARY_SECTION_END_WINDOW = 12_000;
+const ITINERARY_SECTION_LIMITS: SectionLimits = { defaultChars: ITINERARY_SECTION_DEFAULT_CHARS, endWindow: ITINERARY_SECTION_END_WINDOW };
+
+function cutSection(
+  source: string,
+  section: FlightsSectionSpec,
+  direction: boolean,
+  otherStartLabel?: string,
+  limits: SectionLimits = FLIGHTS_SECTION_LIMITS,
+): CutSection | null {
+  const lines: { line: string; offset: number }[] = [];
+  let offset = 0;
+  for (const line of source.split('\n')) {
+    lines.push({ line, offset });
+    offset += line.length + 1;
+  }
+  const startIdx = findLabelLine(lines, section.startLabel, 0, Number.POSITIVE_INFINITY);
+  if (startIdx < 0) return null;
+  const start = lines[startIdx].offset;
+
+  const before: string[] = [];
+  for (let i = startIdx - 1; i >= 0 && before.length < 6; i--) {
+    if (lines[i].line.trim()) before.unshift(lines[i].line.trim());
+  }
+
+  const ends: number[] = [];
+  // An end label carrying a digit (an older pick that chose "Transport:  VS25") is one
+  // deal's flight number: treated as absent rather than cutting at a stale line.
+  if (section.endLabel && !/\d/.test(section.endLabel)) {
+    const endIdx = findLabelLine(lines, section.endLabel, startIdx + 1, start + limits.endWindow);
+    if (endIdx > startIdx) ends.push(lines[endIdx].offset);
+  }
+  if (!direction) {
+    const end = ends.length ? ends[0] : start + limits.defaultChars;
+    return { text: source.slice(start, end), before };
+  }
+  if (otherStartLabel) {
+    const otherIdx = findLabelLine(lines, otherStartLabel, startIdx + 1, Number.POSITIVE_INFINITY);
+    if (otherIdx > startIdx) ends.push(lines[otherIdx].offset);
+  }
+  // A real boundary (unique end label / the other direction's start) always wins;
+  // the block-sized window is only the fallback when neither exists on the page.
+  if (ends.length > 0) return { text: source.slice(start, Math.min(...ends)), before };
+  const maxLines = Math.ceil((section.blockLines ?? 12) * 1.5) + 5;
+  let seen = 0;
+  let windowEnd = start + DIRECTION_WINDOW_CHARS;
+  for (let i = startIdx; i < lines.length; i++) {
+    if (!lines[i].line.trim()) continue;
+    if (seen === maxLines) {
+      windowEnd = Math.min(windowEnd, lines[i].offset);
+      break;
+    }
+    seen++;
+  }
+  return { text: source.slice(start, Math.min(windowEnd, start + DIRECTION_WINDOW_CHARS)), before };
+}
+
+/**
+ * Every place the picked section can be cut from, in runtime order: the source
+ * the pick was verified on FIRST, then the visible page text, a flight-details
+ * modal and the hidden deepText. Duplicates (same text) are removed.
+ */
+export function cutSectionCandidates(
+  spec: Pick<ExtractionSpec, 'flightsSection' | 'flightsOutboundSection' | 'flightsReturnSection'>,
+  sources: FlightsSectionSources,
+  kind: FlightsSectionKind = 'combined',
+): CutSection[] {
+  const section = sectionSpecOf(spec, kind);
+  if (!section?.startLabel?.trim()) return [];
+  const other = kind === 'outbound' ? spec.flightsReturnSection : kind === 'return' ? spec.flightsOutboundSection : undefined;
+  const ordered: (keyof FlightsSectionSources)[] = ['text', 'flightsText', 'deepText'];
+  if (section.source) ordered.sort((a, b) => Number(b === section.source) - Number(a === section.source));
+  const out: CutSection[] = [];
+  for (const name of ordered) {
+    const source = sources[name];
+    if (!source) continue;
+    const cut = cutSection(source, section, kind !== 'combined', other?.startLabel);
+    if (cut && !out.some((o) => o.text === cut.text)) out.push(cut);
+  }
+  return out;
+}
+
+// ─── Heading pass: direction cards found WITHOUT any pick ─────────────────────
+//
+// Pages laid out outbound flight -> hotel -> return flight print each direction
+// under its own heading line. Whole-line, case-insensitive: an inline
+// "Departure: Saturday, August 21" inside a sentence is not a heading. A section
+// runs from the heading to the next heading of the OTHER direction, a
+// non-flight heading (Accommodation / Hotel / Price ...), or a window.
+const OUTBOUND_HEADING_RE = /^(?:departure(?: transport)?|outbound(?: flights?)?|going out)$/i;
+// A card marker (TUI's OUT / RTN ...) always belongs to the card parsers: it ends a heading
+// section instead of being swallowed by it.
+const LEG_LABEL_LINE_RE = /^(?:OUT|RTN|OUTBOUND|INBOUND|RETURN|DEPARTING|RETURNING)$/;
+const RETURN_HEADING_RE = /^(?:return(?: transport)?|return flights?|inbound(?: flights?)?|coming back)$/i;
+const NON_FLIGHT_HEADING_RE = /^(?:accommodation|hotels?|your room|rooms?|price\b.*|total price|trip summary|extras|transfers?|baggage)$/i;
+const HEADING_WINDOW_LINES = 45;
+const HEADING_WINDOW_CHARS = 2_500;
+
+export function directionHeadingSections(source: string, kind: 'outbound' | 'return'): CutSection[] {
+  const own = kind === 'outbound' ? OUTBOUND_HEADING_RE : RETURN_HEADING_RE;
+  const other = kind === 'outbound' ? RETURN_HEADING_RE : OUTBOUND_HEADING_RE;
+  const lines: { line: string; offset: number }[] = [];
+  let offset = 0;
+  for (const line of source.split('\n')) {
+    lines.push({ line: line.trim(), offset });
+    offset += line.length + 1;
+  }
+  const out: CutSection[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!own.test(lines[i].line)) continue;
+    let end = lines.length;
+    let seen = 0;
+    for (let j = i + 1; j < lines.length; j++) {
+      if (other.test(lines[j].line) || (LEG_LABEL_LINE_RE.test(lines[j].line) && !own.test(lines[j].line)) || NON_FLIGHT_HEADING_RE.test(lines[j].line) || lines[j].offset - lines[i].offset > HEADING_WINDOW_CHARS) {
+        end = j;
+        break;
+      }
+      if (lines[j].line && ++seen >= HEADING_WINDOW_LINES) {
+        end = j + 1;
+        break;
+      }
+    }
+    const endOffset = end < lines.length ? lines[end].offset : source.length;
+    const before: string[] = [];
+    for (let k = i - 1; k >= 0 && before.length < 6; k--) if (lines[k].line) before.unshift(lines[k].line);
+    out.push({ text: source.slice(lines[i].offset, endOffset), before });
+  }
+  return out;
+}
+
+/**
+ * Every place the picked itinerary section (spec.itinerarySection) can be cut
+ * from, in runtime order (verified source first, then text, flightsText,
+ * deepText). Duplicates removed. PURE.
+ */
+export function itinerarySectionCandidates(spec: Pick<ExtractionSpec, 'itinerarySection'>, sources: FlightsSectionSources): string[] {
+  const section = spec.itinerarySection;
+  if (!section?.startLabel?.trim()) return [];
+  const ordered: (keyof FlightsSectionSources)[] = ['text', 'flightsText', 'deepText'];
+  if (section.source) ordered.sort((a, b) => Number(b === section.source) - Number(a === section.source));
+  const out: string[] = [];
+  for (const name of ordered) {
+    const source = sources[name];
+    if (!source) continue;
+    const cut = cutSection(source, section, false, undefined, ITINERARY_SECTION_LIMITS);
+    if (cut && !out.includes(cut.text)) out.push(cut.text);
+  }
+  return out;
+}
+
+/** The text of the picked itinerary section, or null when the spec has none or its start label isn't on this page. */
+export function extractItinerarySection(spec: Pick<ExtractionSpec, 'itinerarySection'>, sources: FlightsSectionSources): string | null {
+  return itinerarySectionCandidates(spec, sources)[0] ?? null;
+}
+
+export function flightsSectionCandidates(spec: Pick<ExtractionSpec, 'flightsSection'>, sources: FlightsSectionSources): string[] {
+  return cutSectionCandidates(spec, sources, 'combined').map((c) => c.text);
+}
+
+/**
+ * The text of the picked flights section, or null when the spec has none or its
+ * start label isn't on this page. Searches the verified source, then text,
+ * flightsText, deepText. `kind` selects the combined or a direction section.
+ */
+export function extractFlightsSection(
+  spec: Pick<ExtractionSpec, 'flightsSection' | 'flightsOutboundSection' | 'flightsReturnSection'>,
+  sources: FlightsSectionSources,
+  kind: FlightsSectionKind = 'combined',
+): string | null {
+  return cutSectionCandidates(spec, sources, kind)[0]?.text ?? null;
+}
+
+// ─── Direction sections: one direction's legs, possibly several (connections) ──
+//
+// Layout (USAirtours-shaped; deepText splits "(LHR)" onto its own line):
+//   Virgin Atlantic Airways - VS 25
+//   Direct
+//   20:05
+//   Heathrow London (LHR)
+//   7h 45m
+//   22:50
+//   John F Kennedy Intl (JFK)
+//   +1 day
+// A leg is a whole-line clock time, an airport, [duration], a whole-line clock
+// time, an airport, [+N day]. A duration such as "7h 45m" is never a time. The
+// date is printed ABOVE the section ("21 / Aug"), so it is read from `before`.
+export interface DirectionLeg {
+  flightNo: string;
+  fromCode: string;
+  fromName: string;
+  toCode: string;
+  toName: string;
+  depart: string; // YYYY-MM-DDTHH:mm
+  arrive: string;
+}
+
+const WHOLE_TIME_RE = /^(\d{1,2}):(\d{2})$/;
+const DURATION_LINE_RE = /^(?:\d+\s*h(?:\s*\d+\s*m)?|\d+\s*m|direct|non-?stop|\d+\s*stops?)$/i;
+const OVERNIGHT_LINE_RE = /^\+\s*(\d)\s*days?$/i;
+
+function airportOf(line: string): { name: string; code: string } | null {
+  const m = /^(.*?)\s*\(([A-Z]{3})\)$/.exec(line);
+  if (m) return { name: m[1].trim(), code: m[2] };
+  if (/^[A-Z]{3}$/.test(line) && !NOT_A_CODE.test(line)) return { name: '', code: line };
+  return null;
+}
+
+const MONTH_WORD_RE = /^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?$/i;
+
+function monthIndex(word: string): string {
+  return MONTH_WORD_RE.test(word) ? (MONTHS[word.slice(0, 3).toLowerCase()] ?? '') : '';
+}
+
+// "21" + "Aug", or "21 Aug", or "21 Aug 2027" inside a few lines; nearest to the end wins.
+function dayMonthIn(lines: string[]): { day: string; month: string; year: string } | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const full = /^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?(?:,?\s+(\d{4}))?$/.exec(lines[i]);
+    if (full && monthIndex(full[2])) return { day: full[1].padStart(2, '0'), month: monthIndex(full[2]), year: full[3] ?? '' };
+    if (i > 0 && /^\d{1,2}$/.test(lines[i - 1]) && monthIndex(lines[i])) {
+      return { day: lines[i - 1].padStart(2, '0'), month: monthIndex(lines[i]), year: '' };
+    }
+  }
+  return null;
+}
+
+// Year printed next to this exact day/month anywhere on the page ("21 Aug 2027",
+// "August 21, 2027"); '' when the page never states it.
+function yearForDayMonth(pageText: string, day: string, month: string): string {
+  const name = Object.keys(MONTHS).find((k) => MONTHS[k] === month) ?? '';
+  if (!name) return '';
+  const d = String(Number(day));
+  const dayFirst = new RegExp(`\\b0?${d}(?:st|nd|rd|th)?\\s+${name}[a-z]*\\.?,?\\s+(20\\d{2})\\b`, 'i').exec(pageText);
+  if (dayFirst) return dayFirst[1];
+  const monthFirst = new RegExp(`\\b${name}[a-z]*\\.?\\s+0?${d}(?:st|nd|rd|th)?,?\\s+(20\\d{2})\\b`, 'i').exec(pageText);
+  return monthFirst ? monthFirst[1] : '';
+}
+
+const KNOWN_CARRIERS = /^(TUI|EZY|RYR|BAW|EXS|TCX|AFR|JET)$/;
+
+function plausibleDirectionLeg(leg: DirectionLeg): boolean {
+  const codeOk = (c: string): boolean => /^[A-Z]{3}$/.test(c) && !KNOWN_CARRIERS.test(c);
+  return codeOk(leg.fromCode) && codeOk(leg.toCode) && leg.fromCode !== leg.toCode && leg.arrive > leg.depart;
+}
+
+export function parseDirectionLegs(
+  sectionText: string,
+  before: string[],
+  hints: { pageText: string; fallbackDate: string; yearHint: string; notBefore: string },
+): DirectionLeg[] | null {
+  // Join a "(XXX)" that deepText put on its own line back onto the name above it.
+  const raw = sectionText.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines: string[] = [];
+  for (const l of raw) {
+    if (/^\([A-Z]{3}\)$/.test(l) && lines.length) lines[lines.length - 1] = `${lines[lines.length - 1]} ${l}`;
+    else lines.push(l);
+  }
+
+  const legs: DirectionLeg[] = [];
+  let cursor = 0; // start of the lines belonging to the next leg
+  let prevArrivalDate = '';
+  let anchorDate = hints.notBefore;
+  let i = 0;
+  while (i < lines.length) {
+    if (!WHOLE_TIME_RE.test(lines[i])) {
+      i++;
+      continue;
+    }
+    const depTime = normaliseClockTime(lines[i]);
+    const from = airportOf(lines[i + 1] ?? '');
+    let j = i + 2;
+    while (j < lines.length && DURATION_LINE_RE.test(lines[j])) j++;
+    const arrTime = WHOLE_TIME_RE.test(lines[j] ?? '') ? normaliseClockTime(lines[j]) : '';
+    const to = arrTime ? airportOf(lines[j + 1] ?? '') : null;
+    if (!depTime || !from || !arrTime || !to) {
+      i++;
+      continue;
+    }
+    // "+1 day" sits right after the arrival airport; the next leg's lines (airline,
+    // "Direct") begin immediately after it, so k stops there and no further.
+    let k = j + 2;
+    let overnight = 0;
+    for (let probe = j + 2; probe < lines.length && probe <= j + 3 && !WHOLE_TIME_RE.test(lines[probe]); probe++) {
+      const m = OVERNIGHT_LINE_RE.exec(lines[probe]);
+      if (m) {
+        overnight = Number(m[1]);
+        k = probe + 1;
+        break;
+      }
+    }
+
+    const preamble = lines.slice(cursor, i);
+    // Flight number: "… Airways - VS 25" / "(VS25)" above the times, else "Transport: VS25" below.
+    let flightNo = '';
+    for (let p = preamble.length - 1; p >= 0 && !flightNo; p--) {
+      const m = /\s[-–]\s*([A-Z][A-Z0-9]\s?\d{1,4}[A-Z]?)$/.exec(preamble[p]) ?? /\(([A-Z][A-Z0-9]\s?\d{1,4})\)/.exec(preamble[p]);
+      if (m) flightNo = m[1].replace(/\s+/g, '');
+    }
+    const nextTime = lines.findIndex((l, idx) => idx >= j + 2 && WHOLE_TIME_RE.test(l));
+    const after = lines.slice(j + 2, nextTime < 0 ? lines.length : nextTime);
+    if (!flightNo) {
+      for (const l of after) {
+        const m = /^Transport:\s*([A-Z][A-Z0-9]\s?\d{1,4})\b/i.exec(l);
+        if (m) {
+          flightNo = m[1].replace(/\s+/g, '').toUpperCase();
+          break;
+        }
+      }
+    }
+
+    // Date: printed in the leg's own lines, else just above the section (first
+    // leg), else the previous leg's arrival day (a connection), else the deal date.
+    const own = dayMonthIn(preamble);
+    const above = legs.length === 0 ? dayMonthIn(before) : null;
+    const stated = own ?? above;
+    let departDate = '';
+    if (stated) {
+      const year = stated.year || yearForDayMonth(hints.pageText, stated.day, stated.month) || (anchorDate ? anchorDate.slice(0, 4) : hints.yearHint);
+      if (year) {
+        departDate = `${year}-${stated.month}-${stated.day}`;
+        // A year taken from an anchor can land before it (a Jan return after a Dec outbound).
+        if (!stated.year && anchorDate && departDate < anchorDate) departDate = `${Number(year) + 1}-${stated.month}-${stated.day}`;
+      }
+    } else if (prevArrivalDate) {
+      departDate = prevArrivalDate;
+    } else {
+      departDate = hints.fallbackDate;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate)) return null;
+
+    let arriveDate = overnight ? addNights(departDate, overnight) : departDate;
+    if (!overnight && arrTime < depTime) arriveDate = addNights(departDate, 1);
+
+    const leg: DirectionLeg = {
+      flightNo,
+      fromCode: from.code,
+      fromName: from.name,
+      toCode: to.code,
+      toName: to.name,
+      depart: `${departDate}T${depTime}`,
+      arrive: `${arriveDate}T${arrTime}`,
+    };
+    if (!plausibleDirectionLeg(leg)) return null;
+    legs.push(leg);
+    prevArrivalDate = arriveDate;
+    anchorDate = departDate;
+    cursor = k;
+    i = k;
+  }
+  if (legs.length === 0) return null;
+  // The legs of one direction form a journey: each starts where the previous ended, and the
+  // journey never ends back at its own origin (that is an out-and-back read as one direction).
+  for (let n = 1; n < legs.length; n++) if (legs[n].fromCode !== legs[n - 1].toCode) return null;
+  if (legs.length > 1 && legs[legs.length - 1].toCode === legs[0].fromCode) return null;
+  return legs;
+}
+
+// Airport codes: three capitals that are not a carrier/furniture word.
+function airportCodesIn(text: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/\b[A-Z]{3}\b/g)) if (!NOT_A_CODE.test(m[0])) out.add(m[0]);
+  return out;
+}
+
+/**
+ * A connection or multi-leg itinerary. Judged on structure, not raw counts:
+ * more than 2 distinct airports (an out-and-back has exactly 2) or more than 2
+ * distinct flight numbers. Raw clock-time counting is only a last resort when no
+ * airport code can be read at all. Prices ("£1.50"), durations, aircraft types
+ * (A320) and postcodes are ignored so they can't look like legs.
+ */
+export function looksMultiLeg(sectionText: string): boolean {
+  const cleaned = sectionText
+    .replace(/[A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2}\b/g, ' ') // postcodes
+    .replace(/\b[AB]\d{3}\b/g, ' ') // aircraft types
+    .replace(/duration\W{0,3}\d{1,2}[:.]\d{2}/gi, ' ');
+  if (airportCodesIn(cleaned).size > 2) return true;
+  const numbers = new Set(cleaned.match(/\b(?:[A-Z]{2}\d{2,4}|[A-Z]\d{3,4})\b/g) ?? []);
+  if (numbers.size > 2) return true;
+  if (airportCodesIn(cleaned).size > 0) return false;
+  const times = new Set<string>();
+  for (const m of cleaned.matchAll(/(?<![\d:.]|[£$€]\s?)(\d{1,2}[:.]\d{2})(?!\d)/g)) {
+    const t = normaliseClockTime(m[1]);
+    if (t) times.add(t);
+  }
+  return times.size > 4;
+}
+
+// What happened with a direction section on this page (null = the spec has none).
+export interface DirectionSectionInfo {
+  found: boolean;
+  text: string | null;
+  // True when the direction parser read at least one plausible leg from it.
+  parsed: boolean;
+}
+
+// What happened with spec.itinerarySection on this page (null = the spec has none).
+export interface ItinerarySectionInfo {
+  found: boolean;
+  text: string | null;
+  // True when the section's own text produced the itinerary (a whole-page
+  // fallback does not count).
+  parsedFromSection: boolean;
+}
+
+export interface FlightsSectionInfo {
+  found: boolean;
+  text: string | null;
+  multiLeg: boolean;
+  // True when the text parsers produced a PLAUSIBLE read of the section alone.
+  parsedFromSection: boolean;
+  // True when the operator's booking JSON supplied the flights (nothing to rescue).
+  fromApiJson: boolean;
+}
+
+// Words that are carriers, not airports. A parser that "found" one of these as a
+// leg's airport read the airline line of a card, not a route.
+const AIRLINE_TOKENS = new Set(['TUI', 'BA', 'EZY', 'U2', 'LS', 'FR', 'W6', 'VS', 'RYR', 'BAW', 'EXS', 'TCX', 'AFR', 'JET']);
+
+/**
+ * Safety net on the section parsers: a read is rejected when any airport code is
+ * not a 3-letter code printed as its own token in the section, is a carrier
+ * token, departure == arrival airport, or any leg lands at/before it departs.
+ */
+export function isPlausibleSectionParse(parsed: ParsedFlightModal, sectionText: string): boolean {
+  const codes = [parsed.homeCode ?? '', parsed.destCode].filter(Boolean);
+  for (const code of codes) {
+    if (!/^[A-Z]{3}$/.test(code) || AIRLINE_TOKENS.has(code) || !new RegExp(`(?<![A-Za-z0-9])${code}(?![A-Za-z0-9])`).test(sectionText)) return false;
+  }
+  if (parsed.homeCode && parsed.destCode && parsed.homeCode === parsed.destCode) return false;
+  const after = (depart: string, arrive: string): boolean => !depart || !arrive || arrive > depart;
+  return after(parsed.outDepart, parsed.outArrive) && after(parsed.retDepart, parsed.retArrive);
+}
+
+function parseFlightsFromSectionText(section: string, homeNameHint: string): ParsedFlightModal | null {
+  const attempts: (ParsedFlightModal | null)[] = [
+    parseFlightModal(section, homeNameHint),
+    parseFlightList(section),
+    parseFlightInlineLegs(section),
+    parseFlightLegCards(section),
+  ];
+  return attempts.find((p): p is ParsedFlightModal => p !== null && isPlausibleSectionParse(p, section)) ?? null;
+}
+
+export interface ExtractionRunContext {
+  title: string;
+  text: string;
+  url: string;
+  apiJson?: unknown;
+  images?: { src: string; w?: number; h?: number; context?: string }[];
+  headings?: string[]; // the page's h1/h2 text, document order
+  flightsText?: string; // text of a flight-details modal, if one was opened
+  deepText?: string; // see runExtractionSpecDetailed
+}
+
 /**
  * Runs a declarative extraction spec against a captured DOM and returns a
  * fully-formed ScraperJson (scalar fields from the spec; structured arrays —
  * flights, transfers, luggage — derived by fixed convention).
  */
-export function runExtractionSpec(
+export function runExtractionSpec(spec: ExtractionSpec, ctx: ExtractionRunContext, scrapedAt: string): ScrapedQuoteJson {
+  return runExtractionSpecDetailed(spec, ctx, scrapedAt).quote;
+}
+
+/**
+ * Same as runExtractionSpec, plus what happened with spec.flightsSection (null
+ * when the spec has none) so the service layer can decide on an AI fallback.
+ */
+export function runExtractionSpecDetailed(
   spec: ExtractionSpec,
-  ctx: {
-    title: string;
-    text: string;
-    url: string;
-    apiJson?: unknown;
-    images?: { src: string; w?: number; h?: number; context?: string }[];
-    headings?: string[]; // the page's h1/h2 text, document order
-    flightsText?: string; // text of a flight-details modal, if one was opened
+  ctx: Omit<ExtractionRunContext, 'deepText'> & {
     // The full DOM text INCLUDING collapsed/hidden nodes and open shadow
     // roots — unlike `text` (document.body.innerText), which excludes
     // anything not rendered. Exists because a Royal Caribbean checkout
@@ -1640,7 +2197,12 @@ export function runExtractionSpec(
     deepText?: string;
   },
   scrapedAt: string,
-): ScrapedQuoteJson {
+): {
+  quote: ScrapedQuoteJson;
+  flightsSection: FlightsSectionInfo | null;
+  directionSections: { outbound: DirectionSectionInfo | null; return: DirectionSectionInfo | null };
+  itinerarySection: ItinerarySectionInfo | null;
+} {
   const text = (ctx.text || '').slice(0, 40_000);
   // Booking-JSON images first: they're the complete list, whereas the rendered
   // <img> set is whatever lazy-loading happened to have reached.
@@ -1753,8 +2315,37 @@ export function runExtractionSpec(
   // The operator's own booking JSON wins outright when the page carries one:
   // it is already structured, so nothing is inferred. The text layouts below
   // remain for pages that embed no such record.
+  //
+  // A picked flights section (spec.flightsSection) is read FIRST, on its own
+  // text only; the whole-page chain below is the fallback when it yields nothing.
+  //
+  // The section may be cut from several sources (visible text, modal, deepText);
+  // the first one that parses plausibly wins, else the first one found is kept
+  // (so the AI fallback has something to read).
+  const apiModal = parseFlightsFromJson(ctx.apiJson);
+  const sectionCandidates = spec.flightsSection ? flightsSectionCandidates(spec, { flightsText: ctx.flightsText, deepText, text }) : [];
+  let sectionText: string | null = sectionCandidates[0] ?? null;
+  let sectionModal: ParsedFlightModal | null = null;
+  for (const candidate of sectionCandidates) {
+    const parsed = parseFlightsFromSectionText(candidate, departureName);
+    if (parsed) {
+      sectionText = candidate;
+      sectionModal = parsed;
+      break;
+    }
+  }
+  const flightsSection: FlightsSectionInfo | null = spec.flightsSection
+    ? {
+        found: sectionText !== null,
+        text: sectionText,
+        multiLeg: sectionText ? looksMultiLeg(sectionText) : false,
+        parsedFromSection: sectionModal !== null,
+        fromApiJson: apiModal !== null,
+      }
+    : null;
   const modal =
-    parseFlightsFromJson(ctx.apiJson) ??
+    apiModal ??
+    sectionModal ??
     parseFlightModal(ctx.flightsText, departureName) ??
     parseFlightList(ctx.flightsText) ??
     parseFlightList(text) ??
@@ -1762,6 +2353,67 @@ export function runExtractionSpec(
     parseFlightInlineLegs(text) ??
     parseFlightLegCards(ctx.flightsText) ??
     parseFlightLegCards(text);
+
+  // Direction-specific sections (outbound flight -> hotel -> return flight pages):
+  // each is parsed on its own and every leg is forced to its direction.
+  const travelHint = isoDate(str(f.cruise_date)) || isoDate(str(f.travel_date)) || dateFromUrl(ctx.url);
+  const sectionSources = { flightsText: ctx.flightsText, deepText, text };
+  const pageForYears = deepText ? `${text}\n${deepText}` : text;
+  // Precedence per direction:
+  //   1. the operator's booking JSON (apiModal) wins outright;
+  //   2. a PICKED direction section for that direction;
+  //   3. the generic chain above (modal / list / inline / leg cards / combined section);
+  //   4. only for a direction still EMPTY after that: the direction-heading pass.
+  const apiWins = apiModal !== null;
+  const genericHas = (kind: 'outbound' | 'return'): boolean =>
+    modal !== null && !!(kind === 'outbound' ? modal.outDepart : modal.retDepart);
+  const directionOf = (kind: 'outbound' | 'return', notBefore: string): { info: DirectionSectionInfo | null; legs: DirectionLeg[] | null } => {
+    const hints = {
+      pageText: pageForYears,
+      fallbackDate: kind === 'outbound' ? travelHint : nights > 0 ? addNights(travelHint, nights) : '',
+      yearHint: travelHint.slice(0, 4),
+      notBefore,
+    };
+    const tryParse = (cuts: CutSection[]): { cut: CutSection; legs: DirectionLeg[] } | null => {
+      for (const cut of cuts) {
+        const parsed = parseDirectionLegs(cut.text, cut.before, hints);
+        if (parsed) return { cut, legs: parsed };
+      }
+      return null;
+    };
+    const picked = kind === 'outbound' ? spec.flightsOutboundSection : spec.flightsReturnSection;
+    const candidates = picked ? cutSectionCandidates(spec, sectionSources, kind) : [];
+    let chosen: CutSection | null = candidates[0] ?? null;
+    const pickedFound = tryParse(candidates);
+    if (pickedFound) chosen = pickedFound.cut;
+
+    let legs: DirectionLeg[] | null = null;
+    if (!apiWins) {
+      if (pickedFound) legs = pickedFound.legs;
+      else if (!genericHas(kind)) {
+        const combined = spec.flightsSection ? flightsSectionCandidates(spec, sectionSources) : [];
+        const headingFound =
+          tryParse(combined.flatMap((c) => directionHeadingSections(c, kind))) ??
+          tryParse([ctx.flightsText, text, deepText].flatMap((src) => (src ? directionHeadingSections(src, kind) : [])));
+        legs = headingFound ? headingFound.legs : null;
+      }
+    }
+    return {
+      info: picked ? { found: chosen !== null, text: chosen?.text ?? null, parsed: legs !== null || apiWins || genericHas(kind) } : null,
+      legs,
+    };
+  };
+  const outDirection = directionOf('outbound', '');
+  const retDirection = directionOf('return', outDirection.legs?.[0]?.depart.slice(0, 10) ?? travelHint);
+  const directionSections = { outbound: outDirection.info, return: retDirection.info };
+
+  // A picked itinerary section: cut from the verified source first, else text /
+  // modal / deepText. `itinerarySectionText` ends up as the candidate that parsed,
+  // else the first one found (so the AI fallback has something to read).
+  const itineraryCandidates = spec.itinerarySection ? itinerarySectionCandidates(spec, { flightsText: ctx.flightsText, deepText, text }) : [];
+  let itinerarySectionText: string | null = itineraryCandidates[0] ?? null;
+  let itineraryParsedFromSection = false;
+
   // Prefer the extracted date; fall back to the deal URL (reliable) when the
   // page text didn't yield one; last, take the date off the outbound flight.
   //
@@ -1792,6 +2444,7 @@ export function runExtractionSpec(
     isoDate(str(f.travel_date)) ||
     dateFromUrl(ctx.url) ||
     dateOnly(modal?.outDepart) ||
+    dateOnly(outDirection.legs?.[0]?.depart) ||
     str(f.travel_date);
   const returnDate = addNights(travelDate, nights);
   const destName = modal?.destName || arrivalName;
@@ -1811,7 +2464,7 @@ export function runExtractionSpec(
     return date && t ? `${date}T${t}` : date;
   };
 
-  const flights: ScrapedFlightJson[] =
+  const baseFlights: ScrapedFlightJson[] =
     homeName || destCode || destName
       ? [
           {
@@ -1830,6 +2483,23 @@ export function runExtractionSpec(
           },
         ]
       : [];
+
+  // A direction whose section parsed REPLACES that direction's legs (any number
+  // of them); the other direction keeps whatever the combined section / whole-page
+  // parsers produced. Outbound legs first, then return legs.
+  const directionJson = (legs: DirectionLeg[], type: 'outbound' | 'return'): ScrapedFlightJson[] =>
+    legs.map((l) => ({
+      flight_number: l.flightNo, flight_type: type,
+      departing_airport: l.fromCode, departing_airport_name: l.fromName, departure_date_time: l.depart,
+      arrival_airport: l.toCode, arrival_airport_name: l.toName, arrival_date_time: l.arrive,
+    }));
+  const flights: ScrapedFlightJson[] =
+    outDirection.legs || retDirection.legs
+      ? [
+          ...(outDirection.legs ? directionJson(outDirection.legs, 'outbound') : baseFlights.filter((l) => l.flight_type === 'outbound')),
+          ...(retDirection.legs ? directionJson(retDirection.legs, 'return') : baseFlights.filter((l) => l.flight_type === 'return')),
+        ]
+      : baseFlights;
 
   const result: ScrapedQuoteJson = {
     source_url: ctx.url,
@@ -1953,9 +2623,21 @@ export function runExtractionSpec(
 
     // The spec's own regex wins; the table scan is what saves a supplier whose
     // rule was never generated or no longer matches.
-    let itinerary: { day: number; description: string; sub_description?: string }[] = spec.itineraryRegex
-      ? buildItineraryFromRegex(text, spec.itineraryRegex)
-      : [];
+    //
+    // A PICKED itinerary section (spec.itinerarySection) is read first, on its own
+    // text only, so ports elsewhere on the page ("Similar cruises") can't leak in.
+    // When it yields nothing the whole-page chain below runs exactly as before.
+    let itinerary: { day: number; description: string; sub_description?: string }[] = [];
+    for (const candidate of itineraryCandidates) {
+      const rows = readItineraryFromSection(candidate, spec.itineraryRegex);
+      if (rows.length) {
+        itinerary = rows;
+        itinerarySectionText = candidate;
+        itineraryParsedFromSection = true;
+        break;
+      }
+    }
+    if (!itinerary.length && spec.itineraryRegex) itinerary = buildItineraryFromRegex(text, spec.itineraryRegex);
     if (!itinerary.length) itinerary = portTable;
     // STRICT fallback, tried only when the visible page produced NOTHING at
     // all: this is the Royal Caribbean drawer failure (see the `deepText`
@@ -2020,5 +2702,8 @@ export function runExtractionSpec(
     result.pets = nbr(f.pets);
   }
 
-  return result;
+  const itinerarySection: ItinerarySectionInfo | null = spec.itinerarySection
+    ? { found: itinerarySectionText !== null, text: itinerarySectionText, parsedFromSection: itineraryParsedFromSection }
+    : null;
+  return { quote: result, flightsSection, directionSections, itinerarySection };
 }

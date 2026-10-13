@@ -7,10 +7,24 @@ import {
   resolveSessionTimeoutMs,
   type EasyJetScrapeContext,
 } from '../../easyjet/easyjet.context';
-import { runExtractionSpec } from '../extraction/extraction.interpreter';
+import { runExtractionSpecDetailed } from '../extraction/extraction.interpreter';
 import { extractionAiService, loginConfigAiService } from '../extraction/extraction-ai.service';
 import { runPriceApi } from './price-api';
 import type { ResolvedScraper, ScraperAdapter } from '../scraper-engine.types';
+
+let aiItinerarySkipLogged = false;
+function logAiItinerarySkippedOnce(): void {
+  if (aiItinerarySkipLogged) return;
+  aiItinerarySkipLogged = true;
+  console.warn('[scraper] itinerary AI fallback skipped on the automated scrape path (no organisation to meter tokens against)');
+}
+
+let aiFlightsSkipLogged = false;
+function logAiFlightsSkippedOnce(): void {
+  if (aiFlightsSkipLogged) return;
+  aiFlightsSkipLogged = true;
+  console.warn('[scraper] flights AI fallback skipped on the automated scrape path (no organisation to meter tokens against)');
+}
 
 // First-run login learning: turn a login form's HTML into selectors (AI), derive
 // the login-page marker + URL, persist for later runs, and return the selectors
@@ -192,7 +206,7 @@ export const domAdapter: ScraperAdapter = {
       // API-first, DOM fills the gaps (per-field, inside the interpreter). The
       // captured <img> list feeds the hotel gallery + destination airport, and
       // the modal text feeds real flight times — neither is in innerText.
-      const quote = runExtractionSpec(
+      const { quote, flightsSection, directionSections, itinerarySection } = runExtractionSpecDetailed(
         spec,
         { title: snap.title, text: snap.text, url: deepLinkUrl, apiJson, images: snap.images, headings: snap.headings, flightsText },
         new Date().toISOString(),
@@ -201,6 +215,15 @@ export const domAdapter: ScraperAdapter = {
       if (occupancy?.adults != null) quote.adults = occupancy.adults;
       if (occupancy?.children != null) quote.children = occupancy.children;
       if (occupancy?.infants != null) quote.infants = occupancy.infants;
+      // A picked flights section the parsers can't read would normally get the
+      // verified AI fallback, but this automated path has no organisation to meter
+      // the tokens against, so it is skipped (logged once) rather than spent unmetered.
+      const directionUnparsed = [directionSections.outbound, directionSections.return].some((d) => d?.found && !d.parsed);
+      if (directionUnparsed || (flightsSection?.found && (!flightsSection.parsedFromSection || flightsSection.multiLeg) && !flightsSection.fromApiJson)) {
+        logAiFlightsSkippedOnce();
+      }
+      // Same for a picked itinerary section none of the readers could parse.
+      if (itinerarySection?.found && !itinerarySection.parsedFromSection) logAiItinerarySkippedOnce();
       return quote;
     }, { learnLogin: makeLearnLogin(resolved) });
   },
