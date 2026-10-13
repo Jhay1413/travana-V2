@@ -1,5 +1,6 @@
 import { jsonMapperRepository } from './json-mapper.repository';
 import { cruiseSettingsRepository } from '../../settings/cruise/cruise.repository';
+import { geoInferenceAiService, type InferredGeo } from './geo-inference.ai.service';
 
 interface CruiseItineraryDayInput {
   day?: number | string;
@@ -16,6 +17,9 @@ interface AccommodationLineInput {
   boardBasis?: string;
   roomType?: string;
   tourOperator?: string;
+  // Context for AI geo inference only (primary stay); never persisted.
+  arrivalAirportName?: string;
+  quoteTitle?: string;
 }
 
 // Line items that only need a tour operator resolved (transfers, car hire, attractions).
@@ -36,6 +40,7 @@ interface JsonMappingInput {
   accommodation?: string;
   boardBasis?: string;
   tourOperator?: string;
+  quoteTitle?: string;
   outboundDepartAirport?: string;
   outboundArriveAirport?: string;
   inboundDepartAirport?: string;
@@ -198,23 +203,65 @@ export const jsonMapperService = {
             };
           }
           let cId = '', dId = '', rId = '', aId = '';
-          if (a.country) {
-            let c = await jsonMapperRepository.findCountryByName(a.country);
-            if (!c) { c = await jsonMapperRepository.createCountry(a.country); warnings.push(`Created new country: "${a.country}"`); }
+
+          // AI gap-fill. Runs only when the scrape left a level of the chain
+          // empty, and only AFTER the global accommodation lookup missed (an
+          // existing hotel already carries its own hierarchy). It lives inside
+          // this cached promise, so a deal repeating the same hotel across line
+          // items still costs at most one call. A level the scrape provided is
+          // never replaced (`a.x || inferred.x`). inferHierarchy never throws;
+          // the extra catch keeps that true even if it is ever changed or mocked
+          // badly — a failure must leave the import exactly as it was before.
+          let inferred: InferredGeo | null = null;
+          if (!a.country || !a.destination || !a.resort) {
+            try {
+              inferred = await geoInferenceAiService.inferHierarchy(
+                {
+                  accommodation: accName,
+                  country: a.country,
+                  destination: a.destination,
+                  resort: a.resort,
+                  arrivalAirportName: a.arrivalAirportName,
+                  quoteTitle: a.quoteTitle,
+                },
+                orgId,
+              );
+            } catch { inferred = null; }
+          }
+          const country = a.country || inferred?.country || '';
+          const destination = a.destination || inferred?.destination || '';
+          const resort = a.resort || inferred?.resort || '';
+          // Inferred values are guesses that reach a catalog shared by the whole
+          // org, so every warning about them says so for the reviewing agent.
+          const tag = (isInferred: boolean) => (isInferred ? ' (inferred from accommodation)' : '');
+          const countryInferred = !a.country && !!country;
+          const destinationInferred = !a.destination && !!destination;
+          const resortInferred = !a.resort && !!resort;
+
+          // Match before create: an AI-named level is looked up exactly like a
+          // scraped one (find*ByName) and an existing row always wins. A guess
+          // such as "USA" vs "United States" must not spawn a duplicate row
+          // when the catalog already has the place.
+          if (country) {
+            let c = await jsonMapperRepository.findCountryByName(country);
+            if (c) { if (countryInferred) warnings.push(`Matched existing country: "${country}"${tag(true)}`); }
+            else { c = await jsonMapperRepository.createCountry(country); warnings.push(`Created new country: "${country}"${tag(countryInferred)}`); }
             cId = c.id;
           } else { warnings.push('Cannot create accommodation without country'); }
 
-          if (a.destination && cId) {
-            let d = await jsonMapperRepository.findDestinationByName(a.destination, cId);
-            if (!d) { d = await jsonMapperRepository.createDestination(a.destination, cId); warnings.push(`Created new destination: "${a.destination}"`); }
+          if (destination && cId) {
+            let d = await jsonMapperRepository.findDestinationByName(destination, cId);
+            if (d) { if (destinationInferred) warnings.push(`Matched existing destination: "${destination}"${tag(true)}`); }
+            else { d = await jsonMapperRepository.createDestination(destination, cId); warnings.push(`Created new destination: "${destination}"${tag(destinationInferred)}`); }
             dId = d.id;
-          } else if (a.destination) { warnings.push('Cannot create destination without country'); }
+          } else if (destination) { warnings.push('Cannot create destination without country'); }
 
-          if (a.resort && dId) {
-            let r = await jsonMapperRepository.findResortByName(a.resort, dId);
-            if (!r) { r = await jsonMapperRepository.createResort(a.resort, dId); warnings.push(`Created new resort: "${a.resort}"`); }
+          if (resort && dId) {
+            let r = await jsonMapperRepository.findResortByName(resort, dId);
+            if (r) { if (resortInferred) warnings.push(`Matched existing resort: "${resort}"${tag(true)}`); }
+            else { r = await jsonMapperRepository.createResort(resort, dId); warnings.push(`Created new resort: "${resort}"${tag(resortInferred)}`); }
             rId = r.id;
-          } else if (a.resort) { warnings.push('Cannot create resort without destination'); }
+          } else if (resort) { warnings.push('Cannot create resort without destination'); }
 
           if (rId) {
             // The global lookup above only accepts an EXACT name match. Now
@@ -228,7 +275,7 @@ export const jsonMapperService = {
             } else {
               const na = await jsonMapperRepository.createAccommodation(accName, rId);
               aId = na.id;
-              warnings.push(`Created new accommodation: "${accName}"`);
+              warnings.push(`Created new accommodation: "${accName}"${resortInferred ? ' (in an inferred resort)' : ''}`);
             }
           } else { warnings.push('Cannot create accommodation without resort'); }
 
@@ -256,6 +303,8 @@ export const jsonMapperService = {
         destination: input.destination,
         resort: input.resort,
         accommodation: input.accommodation,
+        arrivalAirportName: input.outboundArriveAirportName,
+        quoteTitle: input.quoteTitle,
       });
       accommodationId = h.accommodationId;
       resortId = h.resortId;

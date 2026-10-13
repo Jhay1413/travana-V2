@@ -572,16 +572,57 @@ describe('mergePickedIntoSpec — merges, never replaces', () => {
   });
 });
 
-describe('bookmarklet lodge group', () => {
-  it('matches LODGE_FIELDS in extraction-ai.service.ts exactly (no drift)', async () => {
+describe('bookmarklet field groups match the server field lists', () => {
+  // The ONLY entries allowed in a bookmarklet group but absent from the server
+  // lists: page-region pickers (deriveFlightsSection / itinerary handling), not
+  // value fields. Any other extra, or any missing server field, is drift.
+  const BOOKMARKLET_ONLY = ['flights_section', 'flights_outbound_section', 'flights_return_section', 'itinerary_section'];
+
+  const quoted = (body: string): string[] => (body.match(/'([^']+)'/g) ?? []).map((s) => s.slice(1, -1));
+
+  async function load() {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
-    const { LODGE_FIELDS } = await import('./extraction-ai.service');
+    const server = await import('./extraction-ai.service');
     const src = readFileSync(resolve(process.cwd(), 'public/capture-bookmarklet.js'), 'utf8');
-    const m = src.match(/lodge:\s*\{[^}]*?fields:\s*\[([^\]]*)\]/);
-    expect(m).not.toBeNull();
-    const fields = (m![1].match(/'([^']+)'/g) ?? []).map((s) => s.slice(1, -1));
-    expect(fields).toEqual([...LODGE_FIELDS]);
+    return { src, server };
+  }
+
+  function groupFields(src: string, re: RegExp): string[] {
+    const m = src.match(re);
+    expect(m, 'group not found in bookmarklet').not.toBeNull();
+    return quoted(m![1]);
+  }
+
+  function expectNoDrift(bookmarklet: string[], server: readonly string[]) {
+    expect(new Set(bookmarklet).size).toBe(bookmarklet.length);
+    const unexpectedExtras = bookmarklet.filter((f) => !server.includes(f) && !BOOKMARKLET_ONLY.includes(f));
+    expect(unexpectedExtras, 'bookmarklet fields unknown to the server').toEqual([]);
+    const valueFields = bookmarklet.filter((f) => !BOOKMARKLET_ONLY.includes(f));
+    expect([...valueFields].sort()).toEqual([...server].sort());
+  }
+
+  it('common group matches COMMON_FIELDS', async () => {
+    const { src, server } = await load();
+    const fields = groupFields(src, /COMMON_FIELD_GROUP\s*=\s*\{[^}]*?fields:\s*\[([^\]]*)\]/);
+    expect(fields).toEqual(expect.arrayContaining(['country', 'destination', 'resort']));
+    expectNoDrift(fields, server.COMMON_FIELDS);
+  });
+
+  it('package-holiday group matches PACKAGE_HOLIDAY_FIELDS', async () => {
+    const { src, server } = await load();
+    expectNoDrift(groupFields(src, /'package-holiday':\s*\{[^}]*?fields:\s*\[([^\]]*)\]/), server.PACKAGE_HOLIDAY_FIELDS);
+  });
+
+  it('cruise group matches CRUISE_FIELDS', async () => {
+    const { src, server } = await load();
+    expectNoDrift(groupFields(src, /cruise:\s*\{[^}]*?fields:\s*\[([^\]]*)\]/), server.CRUISE_FIELDS);
+  });
+
+  it('lodge group matches LODGE_FIELDS exactly (no drift)', async () => {
+    const { src, server } = await load();
+    const fields = groupFields(src, /lodge:\s*\{[^}]*?fields:\s*\[([^\]]*)\]/);
+    expect(fields).toEqual([...server.LODGE_FIELDS]);
     expect(fields).toEqual(expect.arrayContaining(['lodge_code', 'lodge_park_code', 'accommodation']));
   });
 });
