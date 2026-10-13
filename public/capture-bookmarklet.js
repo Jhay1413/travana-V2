@@ -492,7 +492,7 @@
   // up filled in.
   var COMMON_FIELD_GROUP = {
     name: 'Always',
-    fields: ['sales_price', 'price_per_person', 'travel_date', 'no_of_nights', 'adults', 'children', 'infants', 'quote_title', 'tour_operator'],
+    fields: ['sales_price', 'price_per_person', 'travel_date', 'no_of_nights', 'adults', 'children', 'infants', 'quote_title', 'tour_operator', 'tourist_tax_total', 'country', 'destination', 'resort'],
   };
   // Keyed by the exact `packageType` value the server's ExtractionSpec expects
   // (extraction.types.ts) — 'cruise' | 'package-holiday' | 'lodge' — so the
@@ -505,12 +505,12 @@
       // the quote's headline — pick it and the server fills quote_title from it
       // too (see extraction.interpreter.ts), so an agent never has to point at
       // the same words twice.
-      fields: ['cruise_title', 'cruise_line', 'ship_name', 'cruise_date', 'cabin_type', 'cabin_number', 'embarkation', 'debarkation', 'itinerary_section', 'flights_section', 'flights_outbound_section', 'flights_return_section'],
+      fields: ['cruise_title', 'cruise_line', 'ship_name', 'cruise_date', 'cabin_type', 'cabin_number', 'embarkation', 'debarkation', 'cruise_only', 'itinerary_section', 'flights_section', 'flights_outbound_section', 'flights_return_section'],
     },
     'package-holiday': {
       buttonLabel: 'Package Holiday',
       groupName: 'Package Holiday',
-      fields: ['accommodation', 'board_basis', 'room_type', 'departure_airport_name', 'arrival_airport_name', 'flights_section', 'flights_outbound_section', 'flights_return_section'],
+      fields: ['accommodation', 'board_basis', 'room_type', 'departure_airport_name', 'arrival_airport_name', 'transfer_type', 'star_rating', 'review_score', 'flights_section', 'flights_outbound_section', 'flights_return_section'],
     },
     lodge: {
       buttonLabel: 'Hot Tub Break',

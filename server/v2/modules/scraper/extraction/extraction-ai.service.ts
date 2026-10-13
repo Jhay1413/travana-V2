@@ -130,21 +130,21 @@ export const specSchema = z.object({
 
 // Fields common to any deal, then package-type-specific ones. The page is ONE
 // type — the AI only includes the fields it actually finds.
-const COMMON_FIELDS = [
+export const COMMON_FIELDS = [
   'adults', 'children', 'infants', 'no_of_nights', 'travel_date',
   'price_per_person', 'sales_price', 'tourist_tax_total',
   'tour_operator', 'country', 'destination', 'resort', 'quote_title',
 ];
-const PACKAGE_HOLIDAY_FIELDS = [
+export const PACKAGE_HOLIDAY_FIELDS = [
   'accommodation', 'board_basis', 'room_type', 'departure_airport_name',
   'arrival_airport_name', 'transfer_type', 'star_rating', 'review_score',
 ];
-const CRUISE_FIELDS = [
+export const CRUISE_FIELDS = [
   'cruise_line', 'ship_name', 'cruise_date', 'cruise_title', 'embarkation',
   'debarkation', 'cabin_type', 'cabin_number', 'cruise_only',
 ];
-// Must match the bookmarklet's `lodge` group in public/capture-bookmarklet.js —
-// picker-spec.test.ts fails if the two drift apart.
+// COMMON/PACKAGE_HOLIDAY/CRUISE/LODGE_FIELDS must each match the corresponding
+// group in public/capture-bookmarklet.js — picker-spec.test.ts fails if they drift.
 export const LODGE_FIELDS = ['accommodation', 'lodge_code', 'lodge_park_name', 'lodge_park_code', 'lodge_type', 'cottage_id', 'hot_tub', 'pets'];
 
 const SYSTEM_PROMPT = `You write a JSON "extraction spec" that a fixed interpreter uses to read a travel deal from a rendered web page. You NEVER write code — only declarative rules (regex + transforms).

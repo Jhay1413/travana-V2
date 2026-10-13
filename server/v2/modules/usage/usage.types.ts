@@ -11,6 +11,7 @@ export type AiUsageFeature =
   | "destination_guru"
   | "scraper_flights"
   | "scraper_itinerary"
+  | "scraper_geo"
   | "social_post"
   | "image_upscale"
   | "embedding"
