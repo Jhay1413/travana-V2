@@ -211,6 +211,26 @@ describe("socialPostService.generatePost family pricing", () => {
     expect(saved.price).toBe("3952.48");
   });
 
+  it("includes the To Book block when the resolved org (creator fallback) has a phone", async () => {
+    mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 0 });
+    mocks.repo.findOrgIdForQuote.mockResolvedValue("org-creator");
+    mocks.repo.findOrganizationBrandingById.mockResolvedValue({ name: "Acme", settings: { profile: { phone: "0123" } } });
+    await socialPostService.generatePost(params, { orgId: null });
+    expect(mocks.repo.findOrganizationBrandingById).toHaveBeenCalledWith("org-creator");
+    const saved = mocks.repo.create.mock.calls[0][0] as { post: string };
+    expect(saved.post).toContain("To Book");
+    expect(saved.post).toContain("0123");
+  });
+
+  it("omits the To Book block when the org has no contact details", async () => {
+    mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 0 });
+    mocks.repo.findOrgIdForQuote.mockResolvedValue("org-creator");
+    mocks.repo.findOrganizationBrandingById.mockResolvedValue({ name: "Acme", settings: {} });
+    await socialPostService.generatePost(params, { orgId: null });
+    const saved = mocks.repo.create.mock.calls[0][0] as { post: string };
+    expect(saved.post).not.toContain("To Book");
+  });
+
   it("keeps per-person pricing for non-family quotes", async () => {
     mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 0 });
     await socialPostService.generatePost(params, { orgId: null });

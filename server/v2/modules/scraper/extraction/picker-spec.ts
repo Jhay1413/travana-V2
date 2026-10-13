@@ -291,6 +291,99 @@ function labelOccurrences(text: string, label: string): number {
   return (text.match(re) ?? []).length;
 }
 
+// ─── Long-anchor fragments ───────────────────────────────────────────────────
+//
+// The only distinctive neighbour of a pick is sometimes a LONG line:
+// "New York City NY - Show on map > 2.5 km from selected location". Anchoring on
+// the whole line is refused (not a label; far past findUnsafeRules' 30-char
+// literal-run limit, which stops brittle sentence anchors and is NOT raised).
+// Instead anchor on a short STABLE PHRASE inside it. Selection rule:
+//   1. 2-3 consecutive tokens, each purely letters (no digits, prices, symbols or
+//      punctuation: those change per deal), joined length <= FRAGMENT_MAX_CHARS.
+//   2. Reads as UI copy, not content: every word after the first is lowercase
+//      (a capitalised mid-phrase word is a proper noun - "New York City"), the
+//      first may be capitalised only at line start or right after a separator
+//      token ("-", ">", "|"), and an ALL-CAPS token ("NY") is never used.
+//   3. Neither end is a stopword ("on map" loses to "Show on map").
+//   4. UNIQUE on the captured page: exactly one line contains it (as whole
+//      words), the same bar tryLabelAfter sets for its anchor.
+// Ranked: more words first, then phrase-initial ("Show on map") before a
+// mid-clause slice ("selected location"). Fragment candidates are only ever
+// appended AFTER every pre-existing candidate, so picks that already resolved
+// keep their rule, and their confidence is capped below 'high'.
+const FRAGMENT_MAX_CHARS = 24;
+const FRAGMENT_MAX_PER_LINE = 3;
+const FRAGMENT_STOPWORDS = new Set([
+  'a', 'an', 'the', 'of', 'on', 'in', 'at', 'to', 'from', 'for', 'and', 'or', 'by', 'with', 'is', 'are', 'per', 'as', 'it', 'be',
+]);
+const FRAGMENT_WORD_RE = /^[A-Za-z][A-Za-z'’-]*$/;
+
+// Regex source for a fragment: whitespace runs become [ \t]+ (never \s), whole words only.
+function fragmentPattern(words: string[]): string {
+  return `\\b${words.map(escapeRegExp).join('[ \\t]+')}\\b`;
+}
+
+function fragmentLineCount(text: string, pat: string): number {
+  const re = new RegExp(pat, 'i');
+  return text.split(/\r?\n/).filter((l) => re.test(l)).length;
+}
+
+// Unique, stable-looking fragments of `line`, best first. Empty when none qualify.
+function anchorFragments(line: string, text: string): string[] {
+  const tokens = line.trim().split(/\s+/).filter(Boolean);
+  const found: { pat: string; words: number; initial: boolean }[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    for (let n = 3; n >= 2 && i + n <= tokens.length; n--) {
+      const words = tokens.slice(i, i + n);
+      if (!words.every((w) => FRAGMENT_WORD_RE.test(w))) continue;
+      if (words.join(' ').length > FRAGMENT_MAX_CHARS) continue;
+      if (FRAGMENT_STOPWORDS.has(words[0].toLowerCase()) || FRAGMENT_STOPWORDS.has(words[n - 1].toLowerCase())) continue;
+      if (words.slice(1).some((w) => !/^[a-z]/.test(w))) continue; // proper noun / acronym mid-phrase
+      const first = words[0];
+      if (first.length > 1 && first === first.toUpperCase()) continue; // acronym ("NY")
+      if (i > 0 && /\d/.test(tokens[i - 1])) continue; // starts with a unit ("km from ...") glued to a per-deal number
+      const initial = i === 0 || !FRAGMENT_WORD_RE.test(tokens[i - 1]);
+      if (/^[A-Z]/.test(first) && !initial) continue; // capitalised mid-sentence: a name
+      const pat = fragmentPattern(words);
+      if (fragmentLineCount(text, pat) !== 1) continue;
+      found.push({ pat, words: n, initial });
+    }
+  }
+  found.sort((a, b) => b.words - a.words || Number(b.initial) - Number(a.initial));
+  return [...new Set(found.map((f) => f.pat))].slice(0, FRAGMENT_MAX_PER_LINE);
+}
+
+// Preceding-line anchor on a fragment of a line that is not usable whole.
+function fragmentAnchoredRegex(pat: string, value: string): string {
+  const skip = PROMO_START_RE.test(value.trim()) ? '' : PROMO_SKIP;
+  return `(?:^|\\n)[^\\n]*?${pat}[^\\n]*\\n+\\s*${skip}([^\\n]+)`;
+}
+
+// Fragment candidates for every preceding line that is not label-like (too long,
+// too many words) to anchor whole. Nearest first.
+function tryLabelAnchoredFragments(pick: PickedField, ctx: PickerCaptureContext): { rule: FieldRule; strategy: DerivationStrategy }[] {
+  const out: { rule: FieldRule; strategy: DerivationStrategy }[] = [];
+  for (let i = pick.linesBefore.length - 1; i >= 0; i--) {
+    const line = pick.linesBefore[i];
+    if (!line.trim() || looksLikeLabel(line, pick.value)) continue;
+    for (const pat of anchorFragments(line, ctx.text)) {
+      out.push({ rule: { from: 'text', regex: fragmentAnchoredRegex(pat, pick.value), group: 1 }, strategy: 'label-anchored' });
+    }
+  }
+  return out;
+}
+
+// Following-line anchor on a fragment of a long line (label-after's fallback
+// when tryLabelAfter finds neither a label nor an inline "Label amount").
+function tryLabelAfterFragments(pick: PickedField, ctx: PickerCaptureContext): { rule: FieldRule; strategy: DerivationStrategy }[] {
+  const next = pick.linesAfter.map((l) => l.trim()).find(Boolean);
+  if (!next || next === pick.value.trim() || looksLikeLabel(next, pick.value)) return [];
+  return anchorFragments(next, ctx.text).map((pat) => ({
+    rule: { from: 'text' as const, regex: `(?:^|\\n)[ \\t]*([^\\n]+?)[ \\t]*(?:\\n[ \\t]*)+[^\\n]*?${pat}`, group: 1 },
+    strategy: 'label-after' as DerivationStrategy,
+  }));
+}
+
 // Returns EVERY acceptable preceding line (nearest first), not just the first:
 // the nearest line is often a per-item badge ("Plus") that fails verification
 // (or drifts), and the verify loop needs the farther labels to fall back on.
@@ -601,18 +694,21 @@ function tryValuePatternLine(pick: PickedField, ctx: PickerCaptureContext): { ru
 // occurrence the moment page order shifts. Always 'low' confidence (see
 // deriveConfidence) — this is the fallback the audit's §3 warns is
 // provisional, not the fallback that should be trusted across pages.
-function tryLineOffset(pick: PickedField, ctx: PickerCaptureContext): { rule: FieldRule; strategy: DerivationStrategy } | null {
+function tryLineOffset(pick: PickedField, ctx: PickerCaptureContext): { rule: FieldRule; strategy: DerivationStrategy }[] {
+  const out: { rule: FieldRule; strategy: DerivationStrategy }[] = [];
   for (let i = pick.linesBefore.length - 1; i >= 0; i--) {
     const anchor = pick.linesBefore[i];
     if (!anchor.trim() || isUnstableAnchorLine(anchor.trim())) continue;
     const occurrences = (ctx.text.match(new RegExp(`(?:^|\\n)\\s*${escapeRegExp(anchor)}\\s*\\n`, 'g')) ?? []).length;
     if (occurrences !== 1) continue; // not unique — can't trust it as a positional anchor
-    return {
+    // Every unique anchor is a candidate (nearest first): if the nearest one
+    // fails verification the farther ones still get their turn.
+    out.push({
       rule: { from: 'text', regex: anchoredRegex(anchor, pick.value), group: 1 },
       strategy: 'line-offset',
-    };
+    });
   }
-  return null;
+  return out;
 }
 
 // ─── Transform inference ─────────────────────────────────────────────────────
@@ -784,8 +880,10 @@ function derivePartySiblings(
 function deriveConfidence(
   strategy: DerivationStrategy,
   pick: PickedField,
-  extra: { ambiguousLabel?: boolean; unlabeledParty?: boolean },
+  extra: { ambiguousLabel?: boolean; unlabeledParty?: boolean; fragment?: boolean },
 ): 'high' | 'medium' | 'low' {
+  // An anchor that is only a SLICE of a longer line is never 'high'.
+  if (extra.fragment) return deriveConfidence(strategy, pick, { ...extra, fragment: false }) === 'low' ? 'low' : 'medium';
   if (strategy === 'party-count') return extra.unlabeledParty ? 'medium' : 'high';
   if (strategy === 'line-offset') return 'low';
   // title-segment: titles are stable across redesigns but segment order can
@@ -986,6 +1084,26 @@ function deriveFlightsSection(
   return { problem: informative ?? reasons[0] ?? `the picked ${noun} block was not found in the captured page` };
 }
 
+// ─── Label-led multi-line picks ──────────────────────────────────────────────
+//
+// An agent often grabs the block holding a label AND its value ("Nights\n5").
+// Rules capture a single line, so the whole picked string can never be
+// reproduced; what the field wants is the remainder. Applies only when the pick
+// is exactly two non-empty lines and the first looks like a label (the same
+// looksLikeLabel every anchor uses). The result is a pick for the REMAINDER with
+// the label as its nearest preceding line. Never reached for the *_section
+// fields: those are dispatched through SECTION_FIELDS (whole-block region
+// derivation) before this runs. Anything else multi-line is left untouched and
+// fails with the normal no-candidate reason.
+function splitLabelLedPick(pick: PickedField): PickedField | null {
+  if (!pick.value.includes('\n')) return null;
+  const lines = nonEmptyLines(pick.value);
+  if (lines.length !== 2) return null;
+  const [label, remainder] = lines;
+  if (!looksLikeLabel(label, remainder)) return null;
+  return { ...pick, value: remainder, linesBefore: [...pick.linesBefore, label] };
+}
+
 // ─── Main entry point ────────────────────────────────────────────────────────
 export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureContext): PickerSpecResult {
   const headingsText = (ctx.headings ?? []).join('\n');
@@ -1000,14 +1118,15 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
   let flightsReturnSection: ExtractionSpec['flightsReturnSection'];
   let itinerarySection: ExtractionSpec['itinerarySection'];
 
-  for (const pick of picks) {
+  for (const original of picks) {
     // A region, not a value: derived on its own and stored under
     // spec.flightsSection (never in `fields`), so none of the value strategies
-    // below apply and it needs no textIndex of its own.
-    const sectionKind = SECTION_FIELDS[pick.field];
+    // below apply and it needs no textIndex of its own. This dispatch happens
+    // BEFORE the label-led multi-line handling, so *_section picks never see it.
+    const sectionKind = SECTION_FIELDS[original.field];
     if (sectionKind) {
-      const outcome = deriveFlightsSection(pick, ctx, sectionKind);
-      if ('problem' in outcome) problems.push({ field: pick.field, reason: outcome.problem });
+      const outcome = deriveFlightsSection(original, ctx, sectionKind);
+      if ('problem' in outcome) problems.push({ field: original.field, reason: outcome.problem });
       else if (sectionKind === 'outbound') flightsOutboundSection = outcome.section;
       else if (sectionKind === 'return') flightsReturnSection = outcome.section;
       else if (sectionKind === 'itinerary') itinerarySection = outcome.section;
@@ -1020,10 +1139,15 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
     // ever having confirmed the value actually sits where claimed, is exactly
     // the unverified-guess failure mode this module exists to prevent. Report
     // it and move on rather than emit a rule with nothing behind it.
-    if (pick.textIndex === -1) {
-      problems.push({ field: pick.field, reason: `pick could not be located in the captured page text (textIndex: -1) — no rule can be verified without a position to anchor against` });
+    if (original.textIndex === -1) {
+      problems.push({ field: original.field, reason: `pick could not be located in the captured page text (textIndex: -1) — no rule can be verified without a position to anchor against` });
       continue;
     }
+
+    // "Nights\n5" -> pick for "5" anchored on "Nights" (see splitLabelLedPick).
+    // `original` is kept for messages; `pick` is what the strategies work on.
+    const labelLed = splitLabelLedPick(original);
+    const pick = labelLed ?? original;
 
     type Candidate = {
       rule: FieldRule;
@@ -1032,40 +1156,53 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
       replay?: 'titleCase';
       partyExpected?: number;
       partyPlan?: PartyPlan;
+      fragment?: boolean;
     };
     const candidates: Candidate[] = [];
-    // A multi-party line ("2 adults and 1 child") goes through party-count
-    // FIRST; a single token keeps the older order and only falls back to it.
-    const partyCount = tryPartyCount(pick);
-    if (partyCount && partyCount.plan.multi) candidates.push({ ...partyCount, partyPlan: partyCount.plan });
-    const urlParam = tryUrlParam(pick, ctx);
-    if (urlParam) candidates.push(urlParam);
-    // A label-after whose anchor is a "Label £amount" line outranks preceding-line
-    // labels: those are often per-item badges that merely happen to verify on this
-    // one page ("Plus"). A plain label-line anchor ranks after title/url instead.
-    const labelAfter = tryLabelAfter(pick, ctx);
-    if (labelAfter?.viaInline) candidates.push(labelAfter);
-    candidates.push(...tryLabelAnchored(pick, ctx));
-    const inlineLabel = tryInlineLabel(pick, ctx);
-    if (inlineLabel) candidates.push(inlineLabel);
-    const headingPosition = tryHeadingPosition(pick, ctx);
-    if (headingPosition) candidates.push(headingPosition);
-    const titlePrefix = tryTitlePrefix(pick, ctx);
-    if (titlePrefix) candidates.push(titlePrefix);
-    // New strategies go AFTER the original ones above so any pick that already
-    // resolved keeps its rule; they only widen what can be derived.
-    // url-path-slug ('high') is tried before title-segment ('medium'), and
-    // value-pattern-line before the 'low' line-offset fallback.
-    const urlPathSlug = tryUrlPathSlug(pick, ctx);
-    if (urlPathSlug) candidates.push(urlPathSlug);
-    const titleSegment = tryTitleSegment(pick, ctx);
-    if (titleSegment) candidates.push(titleSegment);
-    if (labelAfter && !labelAfter.viaInline) candidates.push(labelAfter);
-    const valuePatternLine = tryValuePatternLine(pick, ctx);
-    if (valuePatternLine) candidates.push(valuePatternLine);
-    if (partyCount && !partyCount.plan.multi) candidates.push({ ...partyCount, partyPlan: partyCount.plan });
-    const lineOffset = tryLineOffset(pick, ctx);
-    if (lineOffset) candidates.push(lineOffset);
+    if (labelLed) {
+      // Only the rule anchored on the block's own label (the nearest preceding
+      // line) is a candidate: url/title/heading matches on a bare "5" would be
+      // accidents, not derivations.
+      candidates.push(...tryLabelAnchored(pick, ctx).slice(0, 1));
+    } else {
+      // A multi-party line ("2 adults and 1 child") goes through party-count
+      // FIRST; a single token keeps the older order and only falls back to it.
+      const partyCount = tryPartyCount(pick);
+      if (partyCount && partyCount.plan.multi) candidates.push({ ...partyCount, partyPlan: partyCount.plan });
+      const urlParam = tryUrlParam(pick, ctx);
+      if (urlParam) candidates.push(urlParam);
+      // A label-after whose anchor is a "Label £amount" line outranks preceding-line
+      // labels: those are often per-item badges that merely happen to verify on this
+      // one page ("Plus"). A plain label-line anchor ranks after title/url instead.
+      const labelAfter = tryLabelAfter(pick, ctx);
+      if (labelAfter?.viaInline) candidates.push(labelAfter);
+      candidates.push(...tryLabelAnchored(pick, ctx));
+      const inlineLabel = tryInlineLabel(pick, ctx);
+      if (inlineLabel) candidates.push(inlineLabel);
+      const headingPosition = tryHeadingPosition(pick, ctx);
+      if (headingPosition) candidates.push(headingPosition);
+      const titlePrefix = tryTitlePrefix(pick, ctx);
+      if (titlePrefix) candidates.push(titlePrefix);
+      // New strategies go AFTER the original ones above so any pick that already
+      // resolved keeps its rule; they only widen what can be derived.
+      // url-path-slug ('high') is tried before title-segment ('medium'), and
+      // value-pattern-line before the 'low' line-offset fallback.
+      const urlPathSlug = tryUrlPathSlug(pick, ctx);
+      if (urlPathSlug) candidates.push(urlPathSlug);
+      const titleSegment = tryTitleSegment(pick, ctx);
+      if (titleSegment) candidates.push(titleSegment);
+      if (labelAfter && !labelAfter.viaInline) candidates.push(labelAfter);
+      const valuePatternLine = tryValuePatternLine(pick, ctx);
+      if (valuePatternLine) candidates.push(valuePatternLine);
+      if (partyCount && !partyCount.plan.multi) candidates.push({ ...partyCount, partyPlan: partyCount.plan });
+      candidates.push(...tryLineOffset(pick, ctx));
+      // Last of all: short-fragment anchors for long neighbour lines (see
+      // anchorFragments), appended after every older candidate so picks that
+      // already resolved keep their rule.
+      for (const f of [...tryLabelAnchoredFragments(pick, ctx), ...tryLabelAfterFragments(pick, ctx)]) {
+        candidates.push({ ...f, fragment: true });
+      }
+    }
 
     let winner: Candidate | null = null;
     for (const candidate of candidates) {
@@ -1082,7 +1219,7 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
     if (!winner) {
       problems.push({
         field: pick.field,
-        reason: `no candidate strategy (url-param, label-anchored, inline-label, label-after, heading-position, title-prefix, title-segment, url-path-slug, value-pattern-line, party-count, line-offset) produced a rule that reproduces the picked value "${pick.value}" against the captured page`,
+        reason: `no candidate strategy (url-param, label-anchored, inline-label, label-after, heading-position, title-prefix, title-segment, url-path-slug, value-pattern-line, party-count, line-offset) produced a rule that reproduces the picked value "${original.value}" against the captured page`,
       });
       continue;
     }
@@ -1108,6 +1245,7 @@ export function deriveSpecFromPicks(picks: PickedField[], ctx: PickerCaptureCont
       strategy: winner.strategy,
       confidence: deriveConfidence(winner.strategy, pick, {
         ambiguousLabel: winner.ambiguousLabel,
+        fragment: winner.fragment,
         unlabeledParty: winner.partyPlan ? winner.partyPlan.labelPat === null : false,
       }),
     });

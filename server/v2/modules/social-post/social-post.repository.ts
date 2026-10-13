@@ -8,6 +8,8 @@ import {
   quoteImages,
   deal_images,
   organization,
+  user,
+  branchMembers,
 } from "@shared/schema";
 import type { TravelDeal, InsertTravelDeal } from "@shared/schema";
 import type { OrganizationBranding } from "./social-post.types";
@@ -68,10 +70,23 @@ export const socialPostRepository = {
   },
 
   async findOrgIdForQuote(quoteId: string): Promise<string | null> {
+    // Auto-created free social copies are stored with transaction.org_id = null,
+    // so fall back to the creating user's org (user.org_id, else their first
+    // active branch membership) — otherwise branding (the "To Book" block) is lost.
     const [row] = await db
-      .select({ orgId: transaction.org_id })
+      .select({
+        orgId: sql<string | null>`COALESCE(
+          ${transaction.org_id},
+          ${user.orgId},
+          (SELECT bm.org_id FROM ${branchMembers} bm
+           WHERE bm.user_id = ${transaction.user_id} AND bm.is_active = true
+           ORDER BY bm.joined_at ASC
+           LIMIT 1)
+        )`,
+      })
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .leftJoin(user, eq(transaction.user_id, user.id))
       .where(eq(quote.id, quoteId))
       .limit(1);
     return row?.orgId ?? null;

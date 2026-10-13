@@ -1070,3 +1070,124 @@ describe('flights_section pick', () => {
     expect(merged.preserved).toContain('flightsSection');
   });
 });
+
+// ─── USAirtours trip summary (real capture facts) ────────────────────────────
+describe('deriveSpecFromPicks — USAirtours multi-line picks and long anchors', () => {
+  const url = 'https://online.usairtours.co.uk/summary.xhtml?tripId=10';
+  const title = 'Trip summary - USAirtours';
+  const text = [
+    'Your trip',
+    '2 Adults + 1 Children (16 years old)',
+    '21 Aug 2027 - 27 Aug 2027',
+    'Edit search',
+    'Nights',
+    '5',
+    'Transports',
+    '2',
+    'Accommodations',
+    '1',
+    'Rent a car',
+    '5',
+    'Add',
+    'Rent a car',
+    '5',
+    'Moxy NYC Times Square',
+    'New York City NY - Show on map > 2.5 km from selected location',
+    '8.5',
+    'Booking details',
+    'Moxy NYC Times Square',
+    'Free cancellation',
+  ].join('\n');
+  const ctx: PickerCaptureContext = { url, title, text };
+
+  const nightsPick = pick({
+    field: 'no_of_nights',
+    value: 'Nights\n5',
+    textIndex: text.indexOf('Nights\n5'),
+    lineIndex: 30,
+    linesBefore: ['2 Adults + 1 Children (16 years old)', '21 Aug 2027 - 27 Aug 2027', 'Edit search'],
+    linesAfter: ['Transports', '2'],
+  });
+  const accommodationPick = pick({
+    field: 'accommodation',
+    value: 'Moxy NYC Times Square',
+    textIndex: text.indexOf('Moxy NYC Times Square'),
+    tag: 'B',
+    occurrenceIndex: 0,
+    occurrenceCount: 2,
+    linesBefore: ['Add', 'Rent a car', '5'],
+    linesAfter: ['New York City NY - Show on map > 2.5 km from selected location', '8.5'],
+  });
+
+  it('"Nights\n5" yields a label-anchored rule that captures 5 (number transform), safe', () => {
+    const res = deriveSpecFromPicks([nightsPick], ctx);
+    expect(res.problems).toEqual([]);
+    const d = res.derived[0];
+    expect(d.strategy).toBe('label-anchored');
+    expect(d.rule.transform).toBe('number');
+    expect(d.rule.verifiedValue).toBe('5');
+    expect(d.rule.regex).toContain('Nights');
+    expect(new RegExp(d.rule.regex!, 'i').exec(text)?.[1]).toBe('5');
+    expect(findUnsafeRules(res.spec)).toEqual([]);
+    expect(runExtractionSpec(res.spec, { url, title, text }, 'x').no_of_nights).toBe(5);
+  });
+
+  it('"Moxy NYC Times Square" is anchored on a short fragment of the following long line', () => {
+    const res = deriveSpecFromPicks([accommodationPick], ctx);
+    expect(res.problems).toEqual([]);
+    const d = res.derived[0];
+    expect(d.strategy).toBe('label-after');
+    expect(d.rule.regex).toContain('Show[ \\t]+on[ \\t]+map');
+    expect(d.rule.regex).not.toMatch(/\d\.\d|km|New York/);
+    expect(d.confidence).not.toBe('high');
+    expect(new RegExp(d.rule.regex!, 'i').exec(text)?.[1]).toBe('Moxy NYC Times Square');
+    expect(findUnsafeRules(res.spec)).toEqual([]);
+  });
+
+  it('never anchors on a fragment that is not unique on the page', () => {
+    const dup = `${text}\nOther hotel\nPlaza\nLondon - Show on map > 1 km`;
+    const res = deriveSpecFromPicks([accommodationPick], { url, title, text: dup });
+    // "Show on map" now starts two lines, so it must not be used; any rule that
+    // still verifies is built on a different, unique phrase.
+    for (const d of res.derived) expect(d.rule.regex).not.toContain('Show');
+  });
+
+  it('a long preceding line is anchored by a fragment too', () => {
+    const t = ['Intro', 'Tower Hotel - Show on map > 3.1 km from centre', 'Moxy NYC Times Square', 'Next'].join('\n');
+    const res = deriveSpecFromPicks(
+      [pick({ field: 'accommodation', value: 'Moxy NYC Times Square', textIndex: t.indexOf('Moxy'), linesBefore: ['Intro', 'Tower Hotel - Show on map > 3.1 km from centre'] })],
+      { url, title, text: t },
+    );
+    expect(res.problems).toEqual([]);
+    expect(res.derived[0].rule.regex).toContain('Show[ \\t]+on[ \\t]+map');
+    expect(findUnsafeRules(res.spec)).toEqual([]);
+  });
+
+  it('a multi-line value whose first line is not a label still fails with the no-candidate reason', () => {
+    const value = 'This first line is far too long to be a label\n5';
+    const t = `${value}\nMore`;
+    const res = deriveSpecFromPicks([pick({ field: 'no_of_nights', value, textIndex: 0 })], { url, title, text: t });
+    expect(res.derived).toEqual([]);
+    expect(res.problems[0].reason).toContain('no candidate strategy');
+    expect(res.problems[0].reason).toContain(value);
+  });
+
+  it('a multi-line pick with a label but a multi-line remainder is not turned into a rule', () => {
+    const value = 'Nights\n5\nTransports';
+    const res = deriveSpecFromPicks([pick({ field: 'no_of_nights', value, textIndex: text.indexOf('Nights') })], ctx);
+    expect(res.derived).toEqual([]);
+    expect(res.problems[0].reason).toContain('no candidate strategy');
+  });
+
+  it('a *_section multi-line pick is untouched by label-led handling (still a section, no field rule)', () => {
+    const block = ['Your flights', 'OUT', 'Manchester', 'MAN', 'RTN', 'Manchester', 'MAN'].join('\n');
+    const t = ['Holiday summary', 'Your room', block, 'Your hotel', 'Riu Palace'].join('\n');
+    const res = deriveSpecFromPicks(
+      [pick({ field: 'flights_section', value: block, textIndex: t.indexOf('Your flights'), linesBefore: ['Holiday summary', 'Your room'], linesAfter: ['Your hotel', 'Riu Palace'] })],
+      { url, title: 't', text: t },
+    );
+    expect(res.derived).toEqual([]);
+    expect(res.spec.fields).toEqual({});
+    expect(res.spec.flightsSection?.startLabel).toBe('Your flights');
+  });
+});
