@@ -3,6 +3,7 @@ import { tasks, quote, booking, enquiry_table, transaction, clientTable } from "
 import { eq, and, desc, gte, lte, inArray, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
+import { buildPartitionCond, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 type TaskNew = typeof tasks.$inferSelect;
 // id is generated here (randomUUID), so callers never supply it.
@@ -26,6 +27,15 @@ function buildTaskScopeConds(scope?: Scope, opts?: { entityScoped?: boolean }): 
     scope.userId
   ) {
     conds.push(eq(tasks.userId, scope.userId));
+  }
+  // TRANSITIONAL NULL-branch arm: tasks.branch_id is nullable and legacy rows stay
+  // NULL until the Phase 8 migration rewrites it.
+  // Entity-scoped reads apply NO task-level partition: the service has already
+  // verified access to the entity itself (entityInScope), and everyone who can
+  // open the entity sees all of its tasks.
+  if (!opts?.entityScoped) {
+    const partition = buildPartitionCond(scope, tasks.branchId, tasks.userId, { allowNullBranchForOwner: true });
+    if (partition) conds.push(partition);
   }
   return conds;
 }
@@ -446,6 +456,37 @@ export const taskRepository = {
     });
   },
 
+  /**
+   * Can the caller open this entity (quote / enquiry / booking / transaction /
+   * client)? Uses the same partitioned record-level conditions as the entity's
+   * own detail page. Unknown entity types are not in scope.
+   */
+  async entityInScope(entityType: string, entityId: string, scope: ScopeOrTrusted): Promise<boolean> {
+    if (entityType === "client") {
+      const s = scope as Scope;
+      const conds: SQL[] = [eq(clientTable.id, entityId)];
+      if (scope.orgId !== null && s.orgRole !== "platform_admin") conds.push(eq(clientTable.orgId, s.orgId));
+      const partition = buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy);
+      if (partition) conds.push(partition);
+      const [row] = await db.select({ id: clientTable.id }).from(clientTable).where(and(...conds)).limit(1);
+      return !!row;
+    }
+    const txnConds = buildTransactionRecordScopeConds(scope);
+    if (entityType === "transaction") {
+      const [row] = await db.select({ id: transaction.id }).from(transaction).where(and(eq(transaction.id, entityId), ...txnConds)).limit(1);
+      return !!row;
+    }
+    const source = entityType === "quote" ? quote : entityType === "enquiry" ? enquiry_table : entityType === "booking" ? booking : null;
+    if (!source) return false;
+    const [row] = await db
+      .select({ id: source.id })
+      .from(source)
+      .innerJoin(transaction, eq(source.transaction_id, transaction.id))
+      .where(and(eq(source.id, entityId), ...txnConds))
+      .limit(1);
+    return !!row;
+  },
+
   async findByEntity(entityType: string, entityId: string, scope?: Scope): Promise<TaskNew[]> {
     const conds: SQL[] = [eq(tasks.entityType, entityType), eq(tasks.entityId, entityId), ...buildTaskScopeConds(scope, { entityScoped: true })];
     return await db
@@ -476,8 +517,9 @@ export const taskRepository = {
   },
 
   async create(taskData: InsertTaskNew, scope?: Scope): Promise<TaskNew> {
+    // orgId always comes from the caller's scope; the service decides branchId.
     const values = scope
-      ? { ...taskData, id: randomUUID(), orgId: (taskData as any).orgId ?? scope.orgId ?? null, branchId: (taskData as any).branchId ?? scope.branchId ?? null }
+      ? { ...taskData, id: randomUUID(), orgId: scope.orgId || null, branchId: taskData.branchId ?? scope.branchId ?? null }
       : { ...taskData, id: randomUUID() };
     const [result] = await db.insert(tasks).values(values).returning();
     return result;
@@ -529,10 +571,34 @@ export const taskRepository = {
       );
   },
 
-  async reassignByEntity(entityType: string, entityId: string, newUserId: string): Promise<void> {
+  /**
+   * branch_id of the deal (transaction) an entity belongs to — or the client's
+   * branch for a client task. null when the entity has no branch or is unknown.
+   */
+  async findEntityBranchId(entityType: string, entityId: string): Promise<string | null> {
+    if (entityType === "client") {
+      const [row] = await db.select({ branchId: clientTable.branchId }).from(clientTable).where(eq(clientTable.id, entityId)).limit(1);
+      return row?.branchId ?? null;
+    }
+    if (entityType === "transaction") {
+      const [row] = await db.select({ branchId: transaction.branch_id }).from(transaction).where(eq(transaction.id, entityId)).limit(1);
+      return row?.branchId ?? null;
+    }
+    const source = entityType === "quote" ? quote : entityType === "enquiry" ? enquiry_table : entityType === "booking" ? booking : null;
+    if (!source) return null;
+    const [row] = await db
+      .select({ branchId: transaction.branch_id })
+      .from(source)
+      .innerJoin(transaction, eq(source.transaction_id, transaction.id))
+      .where(eq(source.id, entityId))
+      .limit(1);
+    return row?.branchId ?? null;
+  },
+
+  async reassignByEntity(entityType: string, entityId: string, newUserId: string, branchId?: string | null): Promise<void> {
     await db
       .update(tasks)
-      .set({ userId: newUserId })
+      .set(branchId ? { userId: newUserId, branchId } : { userId: newUserId })
       .where(
         and(
           eq(tasks.entityType, entityType),

@@ -1,10 +1,10 @@
 import { db } from "../../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks, favorites } from "@shared/schema";
+import { transaction, tickets, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks, favorites } from "@shared/schema";
 import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, getTableColumns, type SQL, type Column } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
-import { buildTransactionRecordScopeConds } from "../../utils/scope-conditions";
+import { buildPartitionCond, buildTransactionRecordScopeConds } from "../../utils/scope-conditions";
 import type { NextTask, PipelineCandidateItem } from "./transaction.types";
 
 interface ConnectingLeg extends Partial<InsertQuoteFlight> {}
@@ -156,13 +156,15 @@ function buildTxnScopeConds(scope?: Scope, branchOverride?: string): SQL[] {
   if (scope.orgRole === "branch_manager" || scope.orgRole === "agent") {
     // Branch users are pinned to their own branch — any override is ignored.
     if (scope.branchId) conds.push(eq(transaction.branch_id, scope.branchId));
-  } else if (scope.orgRole === "homeworker" && scope.userId) {
-    conds.push(eq(transaction.user_id, scope.userId));
   } else if (scope.orgRole === "org_admin" && branchOverride) {
     // org_admin: optional branch narrowing. org_id condition above already
     // prevents cross-org access if a foreign branch id is supplied.
     conds.push(eq(transaction.branch_id, branchOverride));
   }
+
+  // Shop <-> homeworker isolation (homeworkers: own branch + own rows).
+  const partition = buildPartitionCond(scope, transaction.branch_id, transaction.user_id);
+  if (partition) conds.push(partition);
 
   return conds;
 }
@@ -1021,6 +1023,33 @@ export const transactionRepository = {
     const conds: SQL[] = [eq(transaction.id, id), ...buildTxnScopeConds(scope)];
     const [result] = await db.update(transaction).set(data).where(and(...conds)).returning();
     return result;
+  },
+
+  /**
+   * Updates a deal AND moves everything attached to it into `branchId` in one DB
+   * transaction: its tasks (via its quotes/enquiries/bookings, or the deal itself)
+   * and its tickets. Used when an admin hands a deal across the shop/homeworker
+   * partition, so the new owner's side can open all of it.
+   */
+  async updateAndRehome(id: string, data: Partial<InsertTransaction>, scope: Scope, branchId: string): Promise<Transaction | undefined> {
+    const conds: SQL[] = [eq(transaction.id, id), ...buildTxnScopeConds(scope)];
+    return db.transaction(async (tx) => {
+      const [result] = await tx.update(transaction).set({ ...data, branch_id: branchId }).where(and(...conds)).returning();
+      if (!result) return undefined;
+      await tx
+        .update(tasks)
+        .set({ branchId })
+        .where(
+          or(
+            and(eq(tasks.entityType, "transaction"), eq(tasks.entityId, id)),
+            and(eq(tasks.entityType, "quote"), sql`${tasks.entityId} IN (SELECT ${quote.id}::text FROM ${quote} WHERE ${quote.transaction_id} = ${id})`),
+            and(eq(tasks.entityType, "enquiry"), sql`${tasks.entityId} IN (SELECT ${enquiry_table.id}::text FROM ${enquiry_table} WHERE ${enquiry_table.transaction_id} = ${id})`),
+            and(eq(tasks.entityType, "booking"), sql`${tasks.entityId} IN (SELECT ${booking.id}::text FROM ${booking} WHERE ${booking.transaction_id} = ${id})`),
+          ),
+        );
+      await tx.update(tickets).set({ branchId }).where(eq(tickets.transactionId, id));
+      return result;
+    });
   },
 
   async remove(id: string, scope?: Scope): Promise<boolean> {

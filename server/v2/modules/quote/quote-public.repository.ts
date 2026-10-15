@@ -1,3 +1,4 @@
+// Intentionally outside the shop/homeworker partition: public quote links are token-gated, not staff reads.
 import { db } from "../../config/database";
 import {
   quote, quote_flights, quote_accomodation, quote_transfers, quote_car_hire,

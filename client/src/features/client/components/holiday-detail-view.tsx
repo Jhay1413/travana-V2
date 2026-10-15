@@ -92,7 +92,8 @@ import {
   useSetDealLost,
   useSetPrimaryQuote,
 } from "@/hooks/mutations";
-import { useRole } from "@/hooks/use-role";
+import { useRole, useRoles } from "@/hooks/use-role";
+import { omitHomeworkerDeniedTabs } from "@/config/homeworker-access";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -854,11 +855,13 @@ function DetailTabsCard({
   clientName: string;
 }) {
   const [tab, setTab] = useState<DetailTab>("notes");
+  const { hasRole } = useRoles();
+  const isHomeworker = hasRole("homeworker");
   return (
     <Card className="mt-6 rounded-2xl border border-black/10 bg-white p-3 shadow-sm" data-testid="holiday-detail-tabs-card">
       <Tabs value={tab} onValueChange={(v) => setTab(v as DetailTab)}>
         <TabsList className="h-8 rounded-[6px] border border-black/10 bg-black/[0.02] p-0.5">
-          {DETAIL_TABS.map((t) => (
+          {omitHomeworkerDeniedTabs(DETAIL_TABS, isHomeworker, ["inbox"]).map((t) => (
             <TabsTrigger key={t.value} value={t.value} className="rounded-[4px] px-4 py-0.5 text-[13px] font-semibold data-[state=active]:font-bold 3xl:text-sm" data-testid={`holiday-detail-tab-${t.value}`}>
               {t.label}
             </TabsTrigger>

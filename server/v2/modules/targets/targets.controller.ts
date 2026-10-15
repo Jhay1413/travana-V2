@@ -7,7 +7,8 @@ import type { ShopTargetInput, AgentTargetInput } from "./targets.types";
 function branchOverrideFrom(req: Request): string | undefined {
   const fromQuery = (req.query.branchId as string);
   if (typeof fromQuery === "string" && fromQuery.length > 0) return fromQuery;
-  const fromBody = (req.body && typeof req.body === "object") ? (req.body as any).branchId : undefined;
+  const body = req.body as { branchId?: unknown } | undefined;
+  const fromBody = body && typeof body === "object" ? body.branchId : undefined;
   if (typeof fromBody === "string" && fromBody.length > 0) return fromBody;
   return undefined;
 }

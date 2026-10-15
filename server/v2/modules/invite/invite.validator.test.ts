@@ -16,6 +16,19 @@ describe("sendInviteSchema", () => {
     expect(sendInviteSchema.safeParse({ body: { ...valid, branchId: "abc" } }).success).toBe(false);
   });
 
+  it("accepts a homeworker without a branchId", () => {
+    expect(sendInviteSchema.safeParse({ body: { email: "x@y.com", orgRole: "homeworker" } }).success).toBe(true);
+  });
+
+  it("rejects an agent without a branchId", () => {
+    expect(sendInviteSchema.safeParse({ body: { email: "x@y.com", orgRole: "agent" } }).success).toBe(false);
+  });
+
+  it("rejects an empty or over-precise profitSharePercent for a homeworker", () => {
+    expect(sendInviteSchema.safeParse({ body: { email: "x@y.com", orgRole: "homeworker", profitSharePercent: "" } }).success).toBe(false);
+    expect(sendInviteSchema.safeParse({ body: { email: "x@y.com", orgRole: "homeworker", profitSharePercent: "40.123" } }).success).toBe(false);
+  });
+
   it("rejects a role outside the allowed set (e.g. org_admin)", () => {
     expect(sendInviteSchema.safeParse({ body: { ...valid, orgRole: "org_admin" } }).success).toBe(false);
   });

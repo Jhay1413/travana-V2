@@ -143,13 +143,6 @@ export const platformAdminRepository = {
       .orderBy(asc(user.email));
   },
 
-  async setUserOrgRole(userId: string, orgId: string, orgRole: string): Promise<void> {
-    await db
-      .update(user)
-      .set({ orgRole, updatedAt: new Date() })
-      .where(and(eq(user.id, userId), eq(user.orgId, orgId)));
-  },
-
   async setUserBanned(userId: string, orgId: string, banned: boolean, reason?: string): Promise<void> {
     await db
       .update(user)

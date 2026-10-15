@@ -2,11 +2,16 @@ import axiosClient from "@/api/client/axios-client";
 
 export type InviteOrgRole = "branch_manager" | "agent" | "homeworker" | "referral_agent" | "social_media_manager";
 
-export interface SendInvitePayload {
-  email:    string;
-  branchId: string;
-  orgRole:  InviteOrgRole;
-}
+/**
+ * Invite body for the given role(s). Homeworkers get their own branch on invite,
+ * so they carry no branchId; every other role needs one. Single source of truth
+ * for HR dialogs, InvitePanel and the homeworkers feature.
+ */
+export type InviteBodyFor<R extends InviteOrgRole> = R extends "homeworker"
+  ? { email: string; orgRole: "homeworker"; profitSharePercent?: string; displayName?: string }
+  : { email: string; orgRole: R; branchId: string };
+
+export type SendInvitePayload = InviteBodyFor<InviteOrgRole>;
 
 export interface AcceptInvitePayload {
   token:       string;

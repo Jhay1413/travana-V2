@@ -28,6 +28,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe("userService.createUser - homeworker", () => {
+  it("rejects orgRole homeworker with 400 (use POST /homeworkers) before touching the repository", async () => {
+    await expect(
+      userService.createUser({ email: "a@b.com", orgRole: "homeworker" } as never, ORG_SCOPE),
+    ).rejects.toMatchObject({ statusCode: 400, message: "Use POST /homeworkers" });
+    expect(userRepository.create).not.toHaveBeenCalled();
+  });
+});
+
 describe("userService.getUserById — tenant isolation", () => {
   it("returns 404 when the user belongs to another org", async () => {
     vi.mocked(userRepository.findById).mockResolvedValue({ id: "u2", orgId: "other" } as never);

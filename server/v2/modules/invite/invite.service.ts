@@ -1,46 +1,32 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { escapeHtml } from '../../utils/escape-html';
 import { AppError } from '../../utils/error-handler';
-import { getPublicBaseUrl } from '../../utils/public-url';
-import { getEmailProvider } from '../../../services/email-provider';
 import { inviteRepository, type PendingInviteRow } from './invite.repository';
 import { branchRepository } from '../branch/branch.repository';
+import { homeworkerService } from '../homeworker/homeworker.service';
+import type { InviteHomeworkerInput } from '../homeworker/homeworker.types';
+import { INVITE_TTL_MS, newInviteCredentials, sendInviteEmail } from './invite-email.service';
 
-export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export { INVITE_TTL_MS };
 const ALLOWED_ROLES = ['branch_manager', 'agent', 'homeworker', 'referral_agent', 'social_media_manager'] as const;
 type AllowedRole = (typeof ALLOWED_ROLES)[number];
+type BranchInviteRole = Exclude<AllowedRole, 'homeworker'>;
 
-// Branch managers can only invite "downstream" — agents and homeworkers.
-const BRANCH_MANAGER_INVITABLE: ReadonlySet<AllowedRole> = new Set<AllowedRole>(['agent', 'homeworker']);
+// Branch managers can only invite "downstream" — agents. Homeworkers are
+// org-level units and only org admins may invite them.
+const BRANCH_MANAGER_INVITABLE: ReadonlySet<AllowedRole> = new Set<AllowedRole>(['agent']);
 
-function buildInviteUrl(token: string): string {
-  const base = getPublicBaseUrl() || 'http://localhost:5000';
-  return `${base}/accept-invite?token=${encodeURIComponent(token)}`;
-}
-
-function buildInviteEmail(orgName: string, inviterName: string | null, url: string) {
-  const subject = `You've been invited to join ${orgName} on Travana`;
-  const text = `${inviterName ? `${inviterName} has` : 'You have been'} invited you to join ${orgName} on Travana.
-
-Click the link below to set up your account:
-${url}
-
-This invitation expires in 7 days.`;
-  const html = `
-    <p>${inviterName ? `<strong>${escapeHtml(inviterName)}</strong> has` : 'You have been'} invited you to join <strong>${escapeHtml(orgName)}</strong> on Travana.</p>
-    <p>Click the button below to set up your account:</p>
-    <p><a href="${url}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">Accept invitation</a></p>
-    <p style="color:#888;font-size:12px">This invitation expires in 7 days.</p>
-  `;
-  return { subject, text, html };
-}
-
-export interface SendInvitePayload {
+export interface BranchInvitePayload {
   email:    string;
   branchId: string;
-  orgRole:  AllowedRole;
+  orgRole:  BranchInviteRole;
 }
+
+export interface HomeworkerInvitePayload extends InviteHomeworkerInput {
+  orgRole: 'homeworker';
+}
+
+export type SendInvitePayload = BranchInvitePayload | HomeworkerInvitePayload;
 
 export interface AcceptInvitePayload {
   token:       string;
@@ -61,7 +47,7 @@ function isBranchManager(actor: ActorContext): boolean {
   return actor.orgRole === 'branch_manager';
 }
 
-function assertManagerCanInvite(actor: ActorContext, payload: SendInvitePayload) {
+function assertManagerCanInvite(actor: ActorContext, payload: BranchInvitePayload) {
   if (!isBranchManager(actor)) return;
   if (!actor.branchId) {
     throw new AppError('You must belong to a branch to invite teammates', 403);
@@ -70,7 +56,7 @@ function assertManagerCanInvite(actor: ActorContext, payload: SendInvitePayload)
     throw new AppError('You can only invite to your own branch', 403);
   }
   if (!BRANCH_MANAGER_INVITABLE.has(payload.orgRole)) {
-    throw new AppError('Branch managers can only invite agents or homeworkers', 403);
+    throw new AppError('Branch managers can only invite agents', 403);
   }
 }
 
@@ -92,6 +78,15 @@ export const inviteService = {
       throw new AppError('Invalid role', 400);
     }
 
+    // Homeworkers get their own branch: one creation path, org admins only.
+    if (payload.orgRole === 'homeworker') {
+      if (isBranchManager(actor)) {
+        throw new AppError('Only organisation admins can invite homeworkers', 403);
+      }
+      const { orgRole: _role, ...input } = payload;
+      return homeworkerService.invite(input, actor);
+    }
+
     assertManagerCanInvite(actor, payload);
 
     const branch = await branchRepository.findById(payload.branchId, actor.orgId);
@@ -105,6 +100,9 @@ export const inviteService = {
       if (existing.orgId !== actor.orgId) {
         throw new AppError('This email is already invited to another organisation', 409);
       }
+      if (existing.orgRole !== payload.orgRole) {
+        throw new AppError('This email already has a pending invite for a different role; revoke it first', 409);
+      }
       // Re-issue token for an existing pending invite (acts like resend)
       return this.resend(existing.id, actor);
     }
@@ -112,8 +110,7 @@ export const inviteService = {
     const orgName = await inviteRepository.getOrgName(actor.orgId);
     if (!orgName) throw new AppError('Organisation not found', 404);
 
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiry = new Date(Date.now() + INVITE_TTL_MS);
+    const { token, expiry } = newInviteCredentials();
     const userId = crypto.randomUUID();
 
     const created = await inviteRepository.createPendingUserWithBranchMembership(
@@ -162,8 +159,7 @@ export const inviteService = {
     const orgName = await inviteRepository.getOrgName(actor.orgId);
     if (!orgName) throw new AppError('Organisation not found', 404);
 
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiry = new Date(Date.now() + INVITE_TTL_MS);
+    const { token, expiry } = newInviteCredentials();
 
     await inviteRepository.updateUser(userId, {
       inviteToken: token,
@@ -242,17 +238,17 @@ export const inviteService = {
       assertManagerCanActOnInvite(actor, { branchId: member?.branchId ?? null });
     }
 
+    // An unaccepted homeworker owns an empty branch: delete it with the user so no orphan is left.
+    const ownedBranch = await inviteRepository.findOwnedHomeworkerBranch(userId, actor.orgId);
+    if (ownedBranch) {
+      await inviteRepository.deletePendingUserWithBranch(userId, actor.orgId, ownedBranch.id);
+      return;
+    }
+
     await inviteRepository.deletePendingUser(userId, actor.orgId);
   },
 
   async sendInviteEmail(email: string, orgName: string, token: string) {
-    try {
-      const url = buildInviteUrl(token);
-      const { subject, html, text } = buildInviteEmail(orgName, null, url);
-      const provider = getEmailProvider();
-      await provider.send({ to: email, subject, html, text });
-    } catch (err) {
-      console.error('[invite] email failed (invite still recorded):', err);
-    }
+    await sendInviteEmail(email, orgName, token);
   },
 };

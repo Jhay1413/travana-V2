@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
     isTestTransactionForQuote: vi.fn(),
     findOrganizationBrandingById: vi.fn(),
     create: vi.fn(),
+    findByIdWithOrg: vi.fn(),
+    quoteBelongsToOrg: vi.fn(),
+    findByQuoteId: vi.fn(),
   },
 }));
 
@@ -345,5 +348,41 @@ describe("formatPostHTML line breaks", () => {
     expect(body).toContain("🌙 7 Nights<br>\n✈️ Manchester");
     expect(body).toContain("<br>\n<br>\n");
     expect(body).not.toMatch(/\n\n/);
+  });
+});
+
+describe("socialPostService shop/homeworker partition", () => {
+  const SMM = {
+    orgId: "org1", branchId: "b1", orgRole: "social_media_manager", orgRoles: ["social_media_manager"],
+    userId: "u1", branchType: "shop", ownsHomeworkerBranch: false,
+  } as never;
+
+  beforeEach(() => {
+    mocks.repo.findById.mockReset();
+    mocks.repo.findByIdWithOrg.mockReset();
+    mocks.repo.quoteBelongsToOrg.mockReset();
+    mocks.repo.findByQuoteId.mockReset();
+    mocks.repo.update.mockClear();
+  });
+
+  it("passes the caller scope to the quote check", async () => {
+    mocks.repo.quoteBelongsToOrg.mockResolvedValue(true);
+    mocks.repo.findByQuoteId.mockResolvedValue(null);
+    await socialPostService.getTravelDealByQuoteId("q1", SMM);
+    expect(mocks.repo.quoteBelongsToOrg).toHaveBeenCalledWith("q1", "org1", SMM);
+  });
+
+  it("hides a homeworker's quote from shop staff (404)", async () => {
+    mocks.repo.quoteBelongsToOrg.mockResolvedValue(false);
+    await expect(socialPostService.getTravelDealByQuoteId("q1", SMM)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("hides a deal whose quote is in a homeworker branch (404)", async () => {
+    mocks.repo.findById.mockResolvedValue({ id: "d1", quote_id: "q1" });
+    mocks.repo.findByIdWithOrg.mockResolvedValue({ id: "d1", orgId: "org1" });
+    mocks.repo.quoteBelongsToOrg.mockResolvedValue(false);
+    await expect(socialPostService.updateTravelDeal("d1", {}, SMM)).rejects.toMatchObject({ statusCode: 404 });
+    expect(mocks.repo.quoteBelongsToOrg).toHaveBeenCalledWith("q1", "org1", SMM);
+    expect(mocks.repo.update).not.toHaveBeenCalled();
   });
 });

@@ -3,6 +3,7 @@ import { tickets, clientTable, user, ticketLikes, type Ticket, type InsertTicket
 import { and, desc, eq, sql, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Scope } from "../../utils/scope";
+import { buildPartitionCond } from "../../utils/scope-conditions";
 import type { TicketWithLikes } from "./ticket.types";
 
 const assignedUser = alias(user, "assigned_user");
@@ -38,13 +39,20 @@ function buildTicketScopeConds(scope?: Scope, op: TicketScopeOp = "read"): SQL[]
   if (scope.orgRole === "branch_manager" && scope.branchId) {
     conds.push(eq(tickets.branchId, scope.branchId));
   }
-  if ((scope.orgRole === "agent" || scope.orgRole === "homeworker") && scope.userId) {
-    conds.push(
-      op === "delete"
+  const selfCond =
+    scope.userId
+      ? op === "delete"
         ? eq(tickets.userId, scope.userId)
-        : or(eq(tickets.assignedTo, scope.userId), eq(tickets.userId, scope.userId))!,
-    );
+        : or(eq(tickets.assignedTo, scope.userId), eq(tickets.userId, scope.userId))!
+      : undefined;
+  if ((scope.orgRole === "agent" || scope.orgRole === "homeworker") && selfCond) {
+    conds.push(selfCond);
   }
+  // The creator-or-assignee condition doubles as the homeworker owner rule. The
+  // NULL-branch arm is TRANSITIONAL: legacy tickets keep a NULL branch_id until
+  // the Phase 8 migration rewrites it.
+  const partition = buildPartitionCond(scope, tickets.branchId, selfCond, { allowNullBranchForOwner: true });
+  if (partition) conds.push(partition);
   return conds;
 }
 
@@ -157,7 +165,7 @@ export const ticketRepository = {
 
   async create(ticket: InsertTicket, scope?: Scope): Promise<Ticket> {
     const values: InsertTicket = scope
-      ? ({ ...ticket, orgId: (ticket as any).orgId ?? scope.orgId ?? null, branchId: (ticket as any).branchId ?? scope.branchId ?? null } as InsertTicket)
+      ? { ...ticket, orgId: scope.orgId || null, branchId: ticket.branchId ?? scope.branchId ?? null }
       : ticket;
     const [result] = await db.insert(tickets).values(values).returning();
     return result;

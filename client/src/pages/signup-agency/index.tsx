@@ -573,13 +573,13 @@ export default function SignupAgencyPage() {
                       <div className="flex-1">
                         <div className="text-sm font-semibold">This agency has homeworkers</div>
                         <div className="mt-0.5 text-xs text-black/60 dark:text-white/60">
-                          Homeworkers are remote agents who only see their own deals. We'll create a Homeworkers group you can assign agents to after signup.
+                          Homeworkers are remote agents who only see their own deals. Each homeworker you invite gets their own branch.
                         </div>
                       </div>
                     </label>
                     {hasHomeworkers && (
                       <div className="mt-4 space-y-1.5">
-                        <Label htmlFor="homeworker-commission">Commission % for homeworkers</Label>
+                        <Label htmlFor="homeworker-commission">Default profit share % for new homeworkers</Label>
                         <div className="flex items-center gap-2">
                           <Input
                             id="homeworker-commission"
@@ -597,6 +597,7 @@ export default function SignupAgencyPage() {
                           />
                           <span className="text-sm text-black/60 dark:text-white/60">%</span>
                         </div>
+                        <p className="text-xs text-black/60 dark:text-white/60">This is the default share for new homeworkers; you can change it per homeworker when inviting.</p>
                         {homeworkerCommission !== "" && (Number(homeworkerCommission) < 1 || Number(homeworkerCommission) > 100) && (
                           <p className="text-xs text-red-600">Enter a value between 1 and 100</p>
                         )}

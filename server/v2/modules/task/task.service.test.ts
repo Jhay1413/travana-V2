@@ -13,6 +13,8 @@ vi.mock("./task.repository", () => ({
     remove: vi.fn(),
     completeByEntity: vi.fn(),
     reassignByEntity: vi.fn(),
+    findEntityBranchId: vi.fn(),
+    entityInScope: vi.fn(),
   },
   entityLink: (entityType: string, entityId: string) => `/${entityType}s/${entityId}`,
 }));
@@ -23,7 +25,14 @@ vi.mock("../notification/notification.repository", () => ({
   },
 }));
 
+vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
+vi.mock("../branch-member/branch-member.repository", () => ({
+  branchMemberRepository: { findActiveContextByUserIdInOrg: vi.fn() },
+}));
+
 import { taskService } from "./task.service";
+import { branchRepository } from "../branch/branch.repository";
+import { branchMemberRepository } from "../branch-member/branch-member.repository";
 import { taskRepository } from "./task.repository";
 import { notificationRepository } from "../notification/notification.repository";
 import type { Scope } from "../../utils/scope";
@@ -34,10 +43,14 @@ const SCOPE: Scope = {
   orgRole: "agent",
   orgRoles: ["agent"],
   userId: "u1",
+  branchType: "shop",
+  ownsHomeworkerBranch: false,
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(taskRepository.findEntityBranchId).mockResolvedValue(null);
+  vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue(undefined as never);
 });
 
 describe("taskService.create", () => {
@@ -211,5 +224,97 @@ describe("taskService.update", () => {
       SCOPE,
     );
     expect(result.description).toBe("Updated details for the client");
+  });
+});
+
+describe("task branch derivation (S4)", () => {
+  const ADMIN: Scope = { ...SCOPE, orgRole: "org_admin", orgRoles: ["org_admin"], branchId: "shop1" };
+  const createdWith = () => vi.mocked(taskRepository.create).mock.calls[0][0] as Record<string, unknown>;
+
+  beforeEach(() => {
+    vi.mocked(taskRepository.create).mockResolvedValue({ id: "t1", userId: "u1" } as never);
+  });
+
+  it("create: takes the branch from the linked entity's transaction", async () => {
+    vi.mocked(taskRepository.findEntityBranchId).mockResolvedValue("deal-branch");
+    await taskService.create({ entityType: "quote", entityId: "q1", userId: "u1", title: "T" } as never, SCOPE);
+    expect(taskRepository.findEntityBranchId).toHaveBeenCalledWith("quote", "q1");
+    expect(createdWith()).toMatchObject({ branchId: "deal-branch" });
+  });
+
+  it("create: without an entity, uses the assignee's active membership in the org", async () => {
+    vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue({ branchId: "assignee-branch" } as never);
+    await taskService.create({ userId: "hw", title: "T" } as never, ADMIN);
+    expect(branchMemberRepository.findActiveContextByUserIdInOrg).toHaveBeenCalledWith("hw", "org1");
+    expect(createdWith()).toMatchObject({ branchId: "assignee-branch" });
+  });
+
+  it("create: falls back to the caller's branch", async () => {
+    await taskService.create({ userId: "u2", title: "T" } as never, { ...SCOPE, branchId: "my-branch" });
+    expect(createdWith()).toMatchObject({ branchId: "my-branch" });
+  });
+
+  it("create: strips body orgId and branchId for non-admins", async () => {
+    await taskService.create({ userId: "u2", title: "T", orgId: "evil", branchId: "evil-branch" } as never, { ...SCOPE, branchId: "my-branch" });
+    expect(createdWith()).not.toHaveProperty("orgId");
+    expect(createdWith()).toMatchObject({ branchId: "my-branch" });
+    expect(branchRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it("create: an admin's body branchId must be inside their org", async () => {
+    vi.mocked(branchRepository.findById).mockResolvedValueOnce({ id: "b2" } as never);
+    await taskService.create({ userId: "u2", title: "T", branchId: "b2" } as never, ADMIN);
+    expect(createdWith()).toMatchObject({ branchId: "b2" });
+
+    vi.mocked(branchRepository.findById).mockResolvedValueOnce(null);
+    await expect(taskService.create({ userId: "u2", title: "T", branchId: "foreign" } as never, ADMIN)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("create: a system-scope (webhook) task gets the enquiry's branch instead of NULL", async () => {
+    vi.mocked(taskRepository.findEntityBranchId).mockResolvedValue("deal-branch");
+    const system: Scope = { ...SCOPE, orgRole: "org_admin", orgRoles: ["org_admin"], branchId: null, userId: null };
+    await taskService.create({ entityType: "enquiry", entityId: "e1", userId: "owner", title: "Call back" } as never, system);
+    expect(createdWith()).toMatchObject({ branchId: "deal-branch" });
+  });
+
+  it("update: reassignment re-homes via the task's entity, else the new assignee", async () => {
+    vi.mocked(taskRepository.findById).mockResolvedValue({ id: "t1", userId: "u1", entityType: "booking", entityId: "b1" } as never);
+    vi.mocked(taskRepository.findEntityBranchId).mockResolvedValue("deal-branch");
+    vi.mocked(taskRepository.update).mockResolvedValue({ id: "t1", userId: "u2" } as never);
+    await taskService.update("t1", { userId: "u2" }, ADMIN);
+    expect(vi.mocked(taskRepository.update).mock.calls[0][1]).toMatchObject({ branchId: "deal-branch" });
+
+    vi.mocked(taskRepository.findById).mockResolvedValue({ id: "t1", userId: "u1", entityType: null, entityId: null } as never);
+    vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue({ branchId: "assignee-branch" } as never);
+    await taskService.update("t1", { userId: "u2" }, ADMIN);
+    expect(vi.mocked(taskRepository.update).mock.calls[1][1]).toMatchObject({ branchId: "assignee-branch" });
+  });
+
+  it("update: a resave with the same assignee does not re-home, and body branchId is stripped for non-admins", async () => {
+    vi.mocked(taskRepository.findById).mockResolvedValue({ id: "t1", userId: "u1", entityType: null, entityId: null } as never);
+    vi.mocked(taskRepository.update).mockResolvedValue({ id: "t1", userId: "u1" } as never);
+    await taskService.update("t1", { userId: "u1", branchId: "evil" } as never, SCOPE);
+    expect(vi.mocked(taskRepository.update).mock.calls[0][1]).not.toHaveProperty("branchId");
+  });
+
+  it("reassignByEntity carries the deal's branch to the repository", async () => {
+    vi.mocked(taskRepository.findEntityBranchId).mockResolvedValue("deal-branch");
+    await taskService.reassignByEntity("quote", "q1", "u9");
+    expect(taskRepository.reassignByEntity).toHaveBeenCalledWith("quote", "q1", "u9", "deal-branch");
+  });
+});
+
+describe("taskService.listByEntity verifies the entity first (Q1)", () => {
+  it("404s without listing when the entity is outside the caller's partition", async () => {
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(false);
+    await expect(taskService.listByEntity("enquiry", "e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("enquiry", "e1", SCOPE);
+    expect(taskRepository.findByEntity).not.toHaveBeenCalled();
+  });
+
+  it("lists the entity's tasks once access is verified", async () => {
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(true);
+    vi.mocked(taskRepository.findByEntity).mockResolvedValue([{ id: "t1" }] as never);
+    await expect(taskService.listByEntity("quote", "q1", SCOPE)).resolves.toEqual([{ id: "t1" }]);
   });
 });

@@ -23,7 +23,7 @@ import {
   agentTargetTable,
   tour_operator,
 } from "@shared/schema";
-import { sql, eq, and, gte, lt, lte, isNull, ne, desc, inArray } from "drizzle-orm";
+import { sql, eq, and, gte, lt, lte, isNull, isNotNull, ne, desc, inArray } from "drizzle-orm";
 import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 import type {
   OrganizationOverviewCore,
@@ -31,6 +31,8 @@ import type {
   OrganizationOverviewTrendPoint,
   OrganizationOverviewTopRow,
   OrganizationOverviewBranchRow,
+  OverviewBranchType,
+  HomeworkerBranchRecord,
   AgentPerformanceRange,
   AgentPerformanceRow,
   AgentsPerformanceResponse,
@@ -62,7 +64,52 @@ const startOfWeek = ukStartOfWeek;
 const startOfMonth = ukStartOfMonth;
 const addDays = ukAddDays;
 
+function toBranchType(value: string): OverviewBranchType {
+  return value === "homeworker" ? "homeworker" : "shop";
+}
+
 export const organizationOverviewRepository = {
+  /** Identity of every homeworker branch in the org (active and archived), with owner name/avatar. */
+  async getHomeworkerBranches(orgId: string | null, branchId?: string): Promise<HomeworkerBranchRecord[]> {
+    const rows = await db
+      .select({
+        branchId: branches.id,
+        name: branches.name,
+        ownerUserId: branches.ownerUserId,
+        ownerFirstName: userTable.firstName,
+        ownerLastName: userTable.lastName,
+        ownerName: userTable.name,
+        ownerEmail: userTable.email,
+        ownerImage: userTable.image,
+        profitSharePercent: branches.profitSharePercent,
+        isActive: branches.isActive,
+      })
+      .from(branches)
+      .leftJoin(userTable, eq(userTable.id, branches.ownerUserId))
+      .where(
+        and(
+          eq(branches.branchType, "homeworker"),
+          // The legacy shared Homeworkers branch has no owner and is not a homeworker.
+          isNotNull(branches.ownerUserId),
+          orgId ? eq(branches.organizationId, orgId) : undefined,
+          branchId ? eq(branches.id, branchId) : undefined,
+        ),
+      );
+
+    return rows.map((r) => {
+      const fullName = [r.ownerFirstName, r.ownerLastName].filter(Boolean).join(" ").trim();
+      return {
+        branchId: r.branchId,
+        name: r.name,
+        ownerUserId: r.ownerUserId ?? null,
+        ownerName: fullName || r.ownerName || r.ownerEmail || null,
+        ownerAvatarUrl: r.ownerImage ?? null,
+        profitSharePercent: r.profitSharePercent !== null ? Number(r.profitSharePercent) : null,
+        isActive: r.isActive,
+      };
+    });
+  },
+
   async getStats(orgId: string | null, branchId?: string): Promise<OrganizationOverviewCore> {
     const now = new Date();
     const todayStart = startOfDay(now);
@@ -567,7 +614,7 @@ export const organizationOverviewRepository = {
           active: sql<number>`COUNT(*) FILTER (WHERE ${branches.isActive} = true)`,
         })
         .from(branches)
-        .where(eq(branches.organizationId, orgId)),
+        .where(and(eq(branches.organizationId, orgId), ne(branches.branchType, "homeworker"))),
       db
         .select({ count: sql<number>`COUNT(*)` })
         .from(branchMembers)
@@ -610,6 +657,9 @@ export const organizationOverviewRepository = {
             name: branches.name,
             code: branches.code,
             isActive: branches.isActive,
+            branchType: branches.branchType,
+            profitSharePercent: branches.profitSharePercent,
+            ownerUserId: branches.ownerUserId,
           })
           .from(branches)
           .where(eq(branches.organizationId, orgId))
@@ -619,6 +669,9 @@ export const organizationOverviewRepository = {
             name: branches.name,
             code: branches.code,
             isActive: branches.isActive,
+            branchType: branches.branchType,
+            profitSharePercent: branches.profitSharePercent,
+            ownerUserId: branches.ownerUserId,
           })
           .from(branches);
 
@@ -699,10 +752,14 @@ export const organizationOverviewRepository = {
       const qt = quoteByBranch.get(b.id);
       const commission = Number(bk?.commission ?? 0);
       const target = targetByBranch.get(b.id) ?? 0;
+      const isHomeworker = b.branchType === "homeworker";
       return {
         id: b.id,
         name: b.name,
         code: b.code ?? null,
+        branchType: toBranchType(b.branchType),
+        profitSharePercent: isHomeworker && b.profitSharePercent !== null ? Number(b.profitSharePercent) : null,
+        ownerUserId: isHomeworker ? b.ownerUserId ?? null : null,
         bookings: Number(bk?.bookings ?? 0),
         commission,
         quotes: Number(qt?.quotes ?? 0),
@@ -905,44 +962,82 @@ export const organizationOverviewRepository = {
     };
   },
 
+  // Org-wide target: shop targets of shop branches plus the agent targets of homeworker
+  // branches, so it matches the org-wide KPI commission it is compared against.
   async getOrgMonthlyTarget(orgId: string | null, when: Date, branchId?: string): Promise<number> {
     if (!orgId) return 0;
-    const [row] = await db
-      .select({
-        total: sql<number>`COALESCE(SUM(${shopTargetTable.targetAmount}), 0)`,
-      })
-      .from(shopTargetTable)
-      .innerJoin(branches, eq(branches.id, shopTargetTable.branchId))
-      .where(
-        and(
-          eq(branches.organizationId, orgId),
-          eq(shopTargetTable.year, ukYearMonth(when).year),
-          eq(shopTargetTable.month, ukYearMonth(when).month),
-          branchId ? eq(shopTargetTable.branchId, branchId) : undefined,
+    const { year, month } = ukYearMonth(when);
+    const [[shopRow], [homeworkerRow]] = await Promise.all([
+      db
+        .select({ total: sql<number>`COALESCE(SUM(${shopTargetTable.targetAmount}), 0)` })
+        .from(shopTargetTable)
+        .innerJoin(branches, eq(branches.id, shopTargetTable.branchId))
+        .where(
+          and(
+            eq(branches.organizationId, orgId),
+            ne(branches.branchType, "homeworker"),
+            eq(shopTargetTable.year, year),
+            eq(shopTargetTable.month, month),
+            branchId ? eq(shopTargetTable.branchId, branchId) : undefined,
+          ),
         ),
-      );
-    return row ? Number(row.total) : 0;
+      db
+        .select({ total: sql<number>`COALESCE(SUM(${agentTargetTable.targetAmount}), 0)` })
+        .from(agentTargetTable)
+        .innerJoin(branches, eq(branches.id, agentTargetTable.branchId))
+        .where(
+          and(
+            eq(branches.organizationId, orgId),
+            eq(branches.branchType, "homeworker"),
+            eq(agentTargetTable.year, year),
+            eq(agentTargetTable.month, month),
+            branchId ? eq(agentTargetTable.branchId, branchId) : undefined,
+          ),
+        ),
+    ]);
+    return Number(shopRow?.total ?? 0) + Number(homeworkerRow?.total ?? 0);
   },
 
   async getOrgYearlyTargets(orgId: string | null, year: number, branchId?: string): Promise<Map<number, number>> {
     const map = new Map<number, number>();
     if (!orgId) return map;
-    const rows = await db
-      .select({
-        month: shopTargetTable.month,
-        total: sql<number>`COALESCE(SUM(${shopTargetTable.targetAmount}), 0)`,
-      })
-      .from(shopTargetTable)
-      .innerJoin(branches, eq(branches.id, shopTargetTable.branchId))
-      .where(
-        and(
-          eq(branches.organizationId, orgId),
-          eq(shopTargetTable.year, year),
-          branchId ? eq(shopTargetTable.branchId, branchId) : undefined,
-        ),
-      )
-      .groupBy(shopTargetTable.month);
-    for (const r of rows) map.set(Number(r.month), Number(r.total));
+    const [shopRows, homeworkerRows] = await Promise.all([
+      db
+        .select({
+          month: shopTargetTable.month,
+          total: sql<number>`COALESCE(SUM(${shopTargetTable.targetAmount}), 0)`,
+        })
+        .from(shopTargetTable)
+        .innerJoin(branches, eq(branches.id, shopTargetTable.branchId))
+        .where(
+          and(
+            eq(branches.organizationId, orgId),
+            ne(branches.branchType, "homeworker"),
+            eq(shopTargetTable.year, year),
+            branchId ? eq(shopTargetTable.branchId, branchId) : undefined,
+          ),
+        )
+        .groupBy(shopTargetTable.month),
+      db
+        .select({
+          month: agentTargetTable.month,
+          total: sql<number>`COALESCE(SUM(${agentTargetTable.targetAmount}), 0)`,
+        })
+        .from(agentTargetTable)
+        .innerJoin(branches, eq(branches.id, agentTargetTable.branchId))
+        .where(
+          and(
+            eq(branches.organizationId, orgId),
+            eq(branches.branchType, "homeworker"),
+            eq(agentTargetTable.year, year),
+            branchId ? eq(agentTargetTable.branchId, branchId) : undefined,
+          ),
+        )
+        .groupBy(agentTargetTable.month),
+    ]);
+    for (const r of [...shopRows, ...homeworkerRows]) {
+      map.set(Number(r.month), (map.get(Number(r.month)) ?? 0) + Number(r.total));
+    }
     return map;
   },
 
@@ -1234,6 +1329,7 @@ export const organizationOverviewRepository = {
             id: branches.id,
             name: branches.name,
             code: branches.code,
+            branchType: branches.branchType,
           })
           .from(branches)
           .where(eq(branches.organizationId, orgId))
@@ -1242,6 +1338,7 @@ export const organizationOverviewRepository = {
             id: branches.id,
             name: branches.name,
             code: branches.code,
+            branchType: branches.branchType,
           })
           .from(branches);
 
@@ -1327,6 +1424,7 @@ export const organizationOverviewRepository = {
         id: b.id,
         name: b.name,
         code: b.code ?? null,
+        branchType: toBranchType(b.branchType),
         today,
         week,
         month,

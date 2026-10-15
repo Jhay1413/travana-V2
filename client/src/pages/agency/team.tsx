@@ -65,7 +65,7 @@ export default function AgencyTeamPage() {
   }, [list, currentUser, isBranchManager]);
 
   const invitableRoles: InviteOrgRole[] | undefined = isBranchManager
-    ? ["agent", "homeworker"]
+    ? ["agent"]
     : undefined;
 
   const handleRoleChange = (member: OrgMember, newRole: string) => {

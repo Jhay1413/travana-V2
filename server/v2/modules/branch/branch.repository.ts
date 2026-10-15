@@ -5,11 +5,13 @@ import { and, eq, ne, asc } from "drizzle-orm";
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export const branchRepository = {
-  async findAllByOrg(orgId: string): Promise<Branch[]> {
+  async findAllByOrg(orgId: string, branchType?: 'shop' | 'homeworker'): Promise<Branch[]> {
+    const conditions = [eq(branches.organizationId, orgId)];
+    if (branchType) conditions.push(eq(branches.branchType, branchType));
     return db
       .select()
       .from(branches)
-      .where(eq(branches.organizationId, orgId))
+      .where(and(...conditions))
       .orderBy(asc(branches.name));
   },
 
@@ -41,11 +43,12 @@ export const branchRepository = {
     return row ?? null;
   },
 
+  /** Counts shop branches only; homeworker branches never count toward limits or the keep-one rule. */
   async countByOrg(orgId: string): Promise<number> {
     const rows = await db
       .select({ id: branches.id })
       .from(branches)
-      .where(eq(branches.organizationId, orgId));
+      .where(and(eq(branches.organizationId, orgId), ne(branches.branchType, 'homeworker')));
     return rows.length;
   },
 

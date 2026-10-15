@@ -61,6 +61,8 @@ export interface AgentPerformanceRow {
   target: number;
   achievedPercent: number;
   isHomeworker: boolean;
+  /** Present when the server tags the row's branch type; isHomeworker is the fallback. */
+  branchType?: OverviewBranchType;
   branches: Array<{ id: string; name: string; code: string | null }>;
 }
 
@@ -91,10 +93,14 @@ export interface OverviewStatsParams {
   branchId?: string;
 }
 
+export type OverviewBranchType = "shop" | "homeworker";
+
 export interface BranchPerformanceRow {
   id: string;
   name: string;
   code: string | null;
+  /** Optional so older payloads without the field still type-check; treated as "shop". */
+  branchType?: OverviewBranchType;
   today: number;
   week: number;
   month: number;
@@ -148,6 +154,9 @@ export interface OrganizationOverviewBranchRow {
   id: string;
   name: string;
   code: string | null;
+  branchType?: OverviewBranchType;
+  profitSharePercent?: number | null;
+  ownerUserId?: string | null;
   bookings: number;
   commission: number;
   quotes: number;
@@ -174,6 +183,23 @@ export interface OrganizationOverviewAttention {
   recentTasks: OrganizationOverviewAttentionItem[];
 }
 
+export interface HomeworkerOverviewRow {
+  branchId: string;
+  name: string;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  ownerAvatarUrl: string | null;
+  profitSharePercent: number | null;
+  status: "active" | "archived";
+  today: number;
+  week: number;
+  month: number;
+  rangeBookings: number;
+  avgPerBooking: number;
+  target: number;
+  achievedPercent: number;
+}
+
 interface OrganizationOverviewBase {
   organization: OrganizationSummary | null;
   kpis: OrganizationOverviewKpis;
@@ -186,11 +212,16 @@ interface OrganizationOverviewBase {
   attention: OrganizationOverviewAttention;
 }
 
-export interface SingleBranchOverview extends OrganizationOverviewBase {
+interface HomeworkersOverview {
+  /** Optional: absent on servers that predate the homeworker redesign. */
+  homeworkers?: HomeworkerOverviewRow[];
+}
+
+export interface SingleBranchOverview extends OrganizationOverviewBase, HomeworkersOverview {
   kind: "single-branch";
 }
 
-export interface MultiBranchOverview extends OrganizationOverviewBase {
+export interface MultiBranchOverview extends OrganizationOverviewBase, HomeworkersOverview {
   kind: "multi-branch";
   branchLeaderboard: OrganizationOverviewBranchRow[];
 }

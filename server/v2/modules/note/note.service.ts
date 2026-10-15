@@ -14,14 +14,14 @@ function effectiveOrgId(scope: ScopeOrTrusted): string | null {
 async function assertTransactionInScope(transactionId: string, scope: ScopeOrTrusted) {
   const orgId = effectiveOrgId(scope);
   if (!orgId) return;
-  const ok = await noteRepository.transactionBelongsToOrg(transactionId, orgId);
+  const ok = await noteRepository.transactionBelongsToOrg(transactionId, orgId, scope);
   if (!ok) throw new AppError("Notes not found", 404);
 }
 
 async function assertClientInScope(clientId: string, scope: ScopeOrTrusted) {
   const orgId = effectiveOrgId(scope);
   if (!orgId) return;
-  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId);
+  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId, scope);
   if (!ok) throw new AppError("Notes not found", 404);
 }
 
@@ -35,6 +35,17 @@ async function loadScopedNote(id: string, scope: ScopeOrTrusted): Promise<Note> 
   const row = await noteRepository.findByIdWithOrg(id);
   if (!row || row.orgId !== orgId) {
     throw new AppError("Note not found", 404);
+  }
+  // Notes carry no branch of their own: they inherit the partition of the deal
+  // or client they belong to.
+  if (row.transaction_id) {
+    if (!(await noteRepository.transactionBelongsToOrg(row.transaction_id, orgId, scope))) {
+      throw new AppError("Note not found", 404);
+    }
+  } else if (row.client_id) {
+    if (!(await noteRepository.clientBelongsToOrg(row.client_id, orgId, scope))) {
+      throw new AppError("Note not found", 404);
+    }
   }
   const n = await noteRepository.findById(id);
   if (!n) throw new AppError("Note not found", 404);

@@ -107,6 +107,21 @@ export async function branchBelongsToOrg(branchId: string, orgId: string): Promi
   return !!row;
 }
 
+export async function getBranchInfo(
+  branchId: string,
+): Promise<{ branchType: "shop" | "homeworker"; ownerUserId: string | null } | null> {
+  const [row] = await db
+    .select({ branchType: branches.branchType, ownerUserId: branches.ownerUserId })
+    .from(branches)
+    .where(eq(branches.id, branchId))
+    .limit(1);
+  if (!row) return null;
+  return {
+    branchType: row.branchType === "homeworker" ? "homeworker" : "shop",
+    ownerUserId: row.ownerUserId ?? null,
+  };
+}
+
 export async function bulkUpsertAgentTargets(branchId: string, targets: AgentTargetInput[]) {
   if (targets.length === 0) return [];
 
@@ -166,8 +181,10 @@ export async function getAllAgents(branchId: string): Promise<AgentInfo[]> {
   return agents.filter((a) => !socialOnly.has(a.id));
 }
 
-export async function getTargetSummaryByDateRange(branchId: string, startYear: number, startMonth: number, endYear: number, endMonth: number) {
-  const shopTargets = await getShopTargetsByDateRange(branchId, startYear, startMonth, endYear, endMonth);
+export async function getTargetSummaryByDateRange(branchId: string, startYear: number, startMonth: number, endYear: number, endMonth: number, includeShopTargets = true) {
+  const shopTargets = includeShopTargets
+    ? await getShopTargetsByDateRange(branchId, startYear, startMonth, endYear, endMonth)
+    : [];
 
   const agentTargetSums = await db
     .select({

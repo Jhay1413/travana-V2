@@ -1,4 +1,7 @@
 import { AppError } from '../../utils/error-handler';
+import { assertNoHomeworkerRoleChange } from '../../utils/homeworker-role';
+import { userOrgRolesRepository } from '../user-org-roles/user-org-roles.repository';
+import { branchMemberRepository } from '../branch-member/branch-member.repository';
 import { platformAdminRepository, type ListUsersFilters } from './platform-admin.repository';
 import {
   platformAdminAuditRepository,
@@ -111,7 +114,14 @@ export const platformAdminService = {
     if (!u) throw new AppError('User not found', 404);
     if (u.orgId !== orgId) throw new AppError('User does not belong to this organization', 404);
 
-    await platformAdminRepository.setUserOrgRole(userId, orgId, newRole);
+    // Role union, not just the primary: a legacy {agent, homeworker} user is still a homeworker.
+    const heldRoles = await userOrgRolesRepository.findRolesByUserAndOrg(userId, orgId);
+    assertNoHomeworkerRoleChange([...heldRoles, u.orgRole], newRole);
+
+    // setOrgRoleAtomic keeps user.orgRole, branch_members.orgRole and the
+    // user_org_roles junction in sync, so a homeworker can never retain an
+    // 'agent' row (or vice versa) after a role change.
+    await branchMemberRepository.setOrgRoleAtomic(orgId, userId, newRole);
     await recordAudit({
       actor,
       action: 'user.role.change',

@@ -1,14 +1,21 @@
 import { z } from "zod";
+import { homeworkerRoleInviteBody } from "../homeworker/homeworker.validator";
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 const optionalDate = dateString.nullable().optional();
 const optionalString = z.string().trim().nullable().optional();
 
-export const inviteEmployeeBodySchema = z.object({
+const branchInviteEmployeeBody = z.object({
   email: z.string().email("Valid email is required"),
   branchId: z.string().uuid("branchId must be a UUID"),
-  orgRole: z.enum(["agent", "branch_manager", "homeworker", "referral_agent"]),
+  orgRole: z.enum(["agent", "branch_manager", "referral_agent"]),
 });
+
+// Homeworkers get their own branch on invite, so they carry no branchId.
+export const inviteEmployeeBodySchema = z.discriminatedUnion("orgRole", [
+  homeworkerRoleInviteBody,
+  branchInviteEmployeeBody,
+]);
 
 export const updateEmployeeBodySchema = z.object({
   status: z.enum(["Active", "Probation", "On Leave", "Terminated"]).optional(),

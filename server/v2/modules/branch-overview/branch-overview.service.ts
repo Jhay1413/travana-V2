@@ -39,6 +39,11 @@ async function resolveBranchId(scope: Scope, override?: string): Promise<string 
     throw new AppError("Branch not found", 404);
   }
 
+  // Only admins may read org-wide stats; everyone else needs a branch.
+  if (!scope.branchId && scope.orgRole !== "org_admin") {
+    throw new AppError("Branch context required", 400);
+  }
+
   return scope.branchId;
 }
 
@@ -48,6 +53,7 @@ export const branchOverviewService = {
     return branchOverviewRepository.getStats({
       orgId: effectiveOrgId(scope),
       branchId,
+      partitionScope: scope,
     });
   },
 
@@ -60,7 +66,7 @@ export const branchOverviewService = {
   ): Promise<AgentsPerformanceResponse> {
     const branchId = await resolveBranchId(scope, branchOverride);
     return branchOverviewRepository.getAgentsPerformance(
-      { orgId: effectiveOrgId(scope), branchId },
+      { orgId: effectiveOrgId(scope), branchId, partitionScope: scope },
       range,
       from,
       to,

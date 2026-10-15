@@ -2,6 +2,8 @@ import { clientRepository } from "./client.repository";
 import { AppError } from "../../utils/error-handler";
 import type { Client, InsertClient } from "./client.types";
 import type { Scope } from "../../utils/scope";
+import { stripOwnershipFields } from "../../utils/ownership-fields";
+import { branchRepository } from "../branch/branch.repository";
 
 export const clientService = {
   async listClients(scope: Scope): Promise<Client[]> {
@@ -21,7 +23,8 @@ export const clientService = {
   },
 
   async updateClient(id: string, data: Partial<InsertClient>, scope: Scope): Promise<Client> {
-    const client = await clientRepository.update(id, data, scope);
+    const safe = await stripOwnershipFields(data, scope, async (b, o) => !!(await branchRepository.findById(b, o)));
+    const client = await clientRepository.update(id, safe, scope);
     if (!client) {
       throw new AppError("Client not found", 404);
     }

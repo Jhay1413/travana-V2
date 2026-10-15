@@ -401,7 +401,9 @@ function SidenavInner({
   // Conversations awaiting a reply, shown as a badge on the "Inbox" nav
   // item. Shares unreadBadgeCount with the inbox's own header badge so the two
   // can never disagree.
-  const { data: conversationBadges } = useConversationBadgeCounts();
+  // Homeworkers are denied the inbox server-side, so skip the badge poll.
+  const isHomeworker = roles.includes("homeworker");
+  const { data: conversationBadges } = useConversationBadgeCounts(undefined, { enabled: roles.length > 0 && !isHomeworker });
   const conversationCount = unreadBadgeCount(conversationBadges);
 
   const badgeCounts = useMemo<Partial<Record<NavBadgeKey, number>>>(

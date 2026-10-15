@@ -14,7 +14,7 @@ import { branchRepository } from "../../modules/branch/branch.repository";
 import { userOrgRolesRepository } from "../../modules/user-org-roles/user-org-roles.repository";
 import { primaryRole } from "../../modules/user-org-roles/user-org-roles.service";
 
-async function resolveOrgAndBranchForUser(
+export async function resolveOrgAndBranchForUser(
   user: {
     id: string;
     role?: string | null;
@@ -27,6 +27,8 @@ async function resolveOrgAndBranchForUser(
   orgRoles: string[];
   orgId: string | null;
   branchId: string | null;
+  branchType: "shop" | "homeworker" | null;
+  ownsHomeworkerBranch: boolean;
   orgName: string | null;
   branchName: string | null;
 }> {
@@ -34,6 +36,8 @@ async function resolveOrgAndBranchForUser(
   let orgRoles: string[] = [];
   let orgId: string | null = user.orgId ?? null;
   let branchId: string | null = null;
+  let branchType: "shop" | "homeworker" | null = null;
+  let ownsHomeworkerBranch = false;
 
   if (user.role === "platform_admin") {
     // Impersonating: pretend to be an org_admin inside the target org so the
@@ -50,10 +54,12 @@ async function resolveOrgAndBranchForUser(
       orgRoles = ["platform_admin"];
     }
   } else {
-    const membership = await branchMemberRepository.findActiveByUserId(user.id);
+    const membership = await branchMemberRepository.findActiveContextByUserId(user.id);
     if (membership) {
       orgId = membership.orgId;
       branchId = membership.branchId;
+      branchType = membership.branchType === "homeworker" ? "homeworker" : "shop";
+      ownsHomeworkerBranch = membership.branchType === "homeworker" && membership.ownerUserId === user.id;
     }
     if (orgId) {
       const fromJunction = await userOrgRolesRepository.findRolesByUserAndOrg(user.id, orgId);
@@ -76,6 +82,8 @@ async function resolveOrgAndBranchForUser(
     orgRoles,
     orgId,
     branchId,
+    branchType,
+    ownsHomeworkerBranch,
     orgName: org?.name ?? null,
     branchName: branch?.name ?? null,
   };

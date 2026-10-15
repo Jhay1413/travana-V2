@@ -7,6 +7,8 @@ import { clientRepository } from '../client/client.repository';
 import { AppError } from '../../utils/error-handler';
 import type { NeonClient, InsertClientTable } from '@shared/schema';
 import type { Scope } from '../../utils/scope';
+import { stripOwnershipFields } from '../../utils/ownership-fields';
+import { branchRepository } from '../branch/branch.repository';
 
 // A duplicate-group member, enriched with the numbers that tell the user which
 // record to keep as the main client.
@@ -46,7 +48,8 @@ export const neonClientService = {
   },
 
   async createNeonClient(data: InsertClientTable, scope: Scope): Promise<NeonClient> {
-    return neonClientRepository.create(data, scope);
+    const safe = await stripOwnershipFields(data, scope, async (b, o) => !!(await branchRepository.findById(b, o)));
+    return neonClientRepository.create(safe as InsertClientTable, scope);
   },
 
   /** Candidate clients matching a contact's phone/email, for link suggestions. */
@@ -59,7 +62,8 @@ export const neonClientService = {
   },
 
   async updateNeonClient(id: string, data: Partial<InsertClientTable>, scope: Scope): Promise<NeonClient> {
-    const client = await neonClientRepository.update(id, data, scope);
+    const safe = await stripOwnershipFields(data, scope, async (b, o) => !!(await branchRepository.findById(b, o)));
+    const client = await neonClientRepository.update(id, safe, scope);
     if (!client) throw new AppError('Neon client not found', 404);
     return client;
   },

@@ -10,6 +10,7 @@ import {
 } from "@shared/schema";
 import { eq, desc, asc, sql, count, or, and, ilike, inArray, isNull, getTableColumns, type SQL } from "drizzle-orm";
 import type { Scope } from "../../utils/scope";
+import { buildPartitionCond } from "../../utils/scope-conditions";
 import { phoneDigitsCondition } from "../../utils/phone-search";
 import { clientNameCondition } from "../../utils/client-name-search";
 
@@ -30,6 +31,8 @@ function buildClientScopeConds(scope?: Scope): SQL[] {
   if (scope.orgRole === "homeworker" && scope.userId) {
     conds.push(eq(clientTable.createdBy, scope.userId));
   }
+  const partition = buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy);
+  if (partition) conds.push(partition);
   return conds;
 }
 

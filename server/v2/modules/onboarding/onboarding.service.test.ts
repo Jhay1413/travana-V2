@@ -220,12 +220,13 @@ describe("onboardingService.signup — agency assembly", () => {
     expect(arg.agents[0].user.orgRole).toBe("branch_manager");
   });
 
-  it("appends a Homeworkers branch when hasHomeworkers is set", async () => {
+  it("does not create a shared Homeworkers branch when hasHomeworkers is set", async () => {
     await onboardingService.signup(payload({ hasHomeworkers: true, homeworkerCommission: 50 }));
 
     const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
-    expect(arg.branchInputs).toHaveLength(2); // 1 real branch + Homeworkers
-    expect(arg.branchInputs[1]).toMatchObject({ name: "Homeworkers", branchType: "homeworker" });
+    expect(arg.branchInputs).toHaveLength(1); // only the real shop branch
+    expect(arg.branchInputs.every((b) => b.branchType === "shop")).toBe(true);
+    expect(arg.organization).toMatchObject({ homeworkerCommission: 50 }); // org default kept
   });
 });
 

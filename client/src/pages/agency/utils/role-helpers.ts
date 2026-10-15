@@ -18,3 +18,15 @@ export function isMemberSuspended(m: OrgMember): boolean {
   if (m.branches.length === 0) return false;
   return m.branches.every((b) => !b.isActive);
 }
+
+export const HOMEWORKER_ROLE_LOCK_HINT = "Homeworkers are invite-only; archive instead";
+
+/**
+ * Options for a member's role dropdown. Homeworker is invite-only, so it is only
+ * listed for members who already are homeworkers (where the control is disabled).
+ */
+export function roleOptionsForMember(currentRole: string | null | undefined): Array<{ value: string; label: string }> {
+  return currentRole === "homeworker"
+    ? [...ASSIGNABLE_ROLES]
+    : ASSIGNABLE_ROLES.filter((r) => r.value !== "homeworker");
+}

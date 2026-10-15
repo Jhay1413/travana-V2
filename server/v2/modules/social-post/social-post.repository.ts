@@ -1,4 +1,5 @@
 import { db } from "../../config/database";
+import { buildPartitionCond, type ScopeOrTrusted } from "../../utils/scope-conditions";
 import {
   travel_deal,
   quote,
@@ -56,7 +57,7 @@ export const socialPostRepository = {
     return result ?? null;
   },
 
-  async quoteBelongsToOrg(quoteId: string, orgId: string): Promise<boolean> {
+  async quoteBelongsToOrg(quoteId: string, orgId: string, scope?: ScopeOrTrusted): Promise<boolean> {
     // Scope by transaction.org_id (the canonical pattern) rather than the client's
     // org — free/marketing quotes used for social posts often have no client, so a
     // client join would wrongly exclude them.
@@ -64,7 +65,11 @@ export const socialPostRepository = {
       .select({ id: quote.id })
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .where(and(eq(quote.id, quoteId), eq(transaction.org_id, orgId)))
+      .where(and(
+        eq(quote.id, quoteId),
+        eq(transaction.org_id, orgId),
+        scope ? buildPartitionCond(scope, transaction.branch_id, transaction.user_id) : undefined,
+      ))
       .limit(1);
     return !!row;
   },

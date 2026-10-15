@@ -138,19 +138,8 @@ export const onboardingService = {
       branchType: "shop",
     }));
 
-    if (hasHomeworkers) {
-      branchInputs.push({
-        name: "Homeworkers",
-        address: "",
-        phone: "",
-        email: "",
-        openingPattern: "mon-fri",
-        bankHolidaysOpen: false,
-        openingHours: [],
-        isActive: true,
-        branchType: "homeworker",
-      });
-    }
+    // No shared "Homeworkers" branch: each homeworker gets their own branch when
+    // invited. hasHomeworkers only enables the org-level default commission.
 
     const ownerId = crypto.randomUUID();
     const orgName = payload.agencyName.trim();

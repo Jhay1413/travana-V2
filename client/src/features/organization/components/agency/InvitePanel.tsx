@@ -7,6 +7,7 @@ import { useBranches } from "@/features/organization/api/use-branch-queries";
 import { useSendInvite } from "@/features/invite/api/use-invite-mutations";
 import { ASSIGNABLE_ROLES } from "@/pages/agency/utils/role-helpers";
 import type { InviteOrgRole } from "@/features/invite/api/invite.api";
+import { HomeworkerInviteFields, buildInviteBody, useShareInput } from "@/features/homeworkers";
 
 const ALL_INVITABLE_ROLES: InviteOrgRole[] = ["branch_manager", "agent", "homeworker", "social_media_manager", "referral_agent"];
 
@@ -36,6 +37,8 @@ export function InvitePanel({
   }, [availableRoles]);
 
   const [email, setEmail] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const share = useShareInput();
   const [branchId, setBranchId] = useState(defaultBranchId);
   const [orgRole, setOrgRole] = useState<InviteOrgRole>(
     (roleOptions[0]?.value as InviteOrgRole | undefined) ?? "agent",
@@ -55,15 +58,20 @@ export function InvitePanel({
     }
   }, [roleOptions, orgRole]);
 
+  const isHomeworker = orgRole === "homeworker";
+  const shareInvalid = isHomeworker && share.error !== null;
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !branchId) return;
+    if (!email.trim() || (!isHomeworker && !branchId) || shareInvalid) return;
     sendInvite.mutate(
-      { email: email.trim(), branchId, orgRole },
+      buildInviteBody({ email, orgRole, branchId, profitSharePercent: share.value, displayName }),
       {
         onSuccess: () => {
           toast({ title: "Invite sent", description: `${email} will receive an email shortly.` });
           setEmail("");
+          setDisplayName("");
+          share.reset();
         },
         onError: (err: any) =>
           toast({
@@ -75,7 +83,8 @@ export function InvitePanel({
     );
   };
 
-  const noBranches = branchPickList.length === 0;
+  // Homeworkers get their own branch, so the branch list is irrelevant for them.
+  const noBranches = branchPickList.length === 0 && !isHomeworker;
   const branchLocked = !!lockedBranchId;
 
   return (
@@ -91,7 +100,7 @@ export function InvitePanel({
             : "You need at least one active branch before inviting members."}
         </div>
       )}
-      <div className="grid gap-2 md:grid-cols-[1fr_180px_180px_auto]">
+      <div className={`grid gap-2 ${isHomeworker ? "md:grid-cols-[1fr_180px_auto]" : "md:grid-cols-[1fr_180px_180px_auto]"}`}>
         <Input
           type="email"
           value={email}
@@ -101,6 +110,7 @@ export function InvitePanel({
           required
           data-testid="input-invite-email"
         />
+        {!isHomeworker && (
         <select
           value={branchId}
           onChange={(e) => setBranchId(e.target.value)}
@@ -116,6 +126,7 @@ export function InvitePanel({
             </option>
           ))}
         </select>
+        )}
         <select
           value={orgRole}
           onChange={(e) => setOrgRole(e.target.value as InviteOrgRole)}
@@ -129,7 +140,7 @@ export function InvitePanel({
         </select>
         <Button
           type="submit"
-          disabled={noBranches || sendInvite.isPending || !email.trim() || !branchId}
+          disabled={noBranches || sendInvite.isPending || !email.trim() || (!isHomeworker && !branchId) || shareInvalid}
           style={{ background: brandColor ?? undefined }}
           data-testid="button-send-invite"
         >
@@ -141,6 +152,18 @@ export function InvitePanel({
           Send invite
         </Button>
       </div>
+      {isHomeworker && (
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <HomeworkerInviteFields
+            share={share.value}
+            onShareChange={share.setValue}
+            shareError={share.error}
+            displayName={displayName}
+            onDisplayNameChange={setDisplayName}
+            disabled={sendInvite.isPending}
+          />
+        </div>
+      )}
       <div className="mt-2 text-xs text-black/50 dark:text-white/50">
         They'll get an email with a 7-day link to set their password and finish their profile.
       </div>

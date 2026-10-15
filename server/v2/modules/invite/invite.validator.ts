@@ -1,11 +1,15 @@
 import { z } from 'zod';
+import { homeworkerRoleInviteBody } from '../homeworker/homeworker.validator';
+
+// Homeworkers get their own branch on invite, so they carry no branchId.
+const branchInviteBody = z.object({
+  email:    z.string().email(),
+  branchId: z.string().uuid(),
+  orgRole:  z.enum(['branch_manager', 'agent', 'referral_agent', 'social_media_manager']),
+});
 
 export const sendInviteSchema = z.object({
-  body: z.object({
-    email:    z.string().email(),
-    branchId: z.string().uuid(),
-    orgRole:  z.enum(['branch_manager', 'agent', 'homeworker', 'referral_agent', 'social_media_manager']),
-  }),
+  body: z.discriminatedUnion('orgRole', [homeworkerRoleInviteBody, branchInviteBody]),
 });
 
 export const acceptInviteQuerySchema = z.object({

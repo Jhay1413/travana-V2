@@ -7,6 +7,7 @@ import { DashboardCard } from "@/features/agent-overview/components/dashboard-ui
 import { PipelineLivePanel } from "@/features/agent-overview/components/pipeline-live-panel";
 import { AdminStatBoxes } from "@/features/organization/components/organization-overview/admin-stat-boxes";
 import { MultiBranchStatsCard } from "@/features/organization/components/organization-overview/multi-branch-stats-card";
+import { HomeworkersOverviewCard } from "@/features/organization/components/organization-overview/homeworkers-overview-card";
 import { TourOperatorLeagueCard } from "@/features/organization/components/organization-overview/tour-operator-league-card";
 import { CommissionTrendCard } from "@/features/organization/components/organization-overview/commission-trend-card";
 
@@ -122,6 +123,8 @@ export default function OrganizationOverviewPage() {
           <MultiBranchStatsCard branchId={branchId} />
           <TourOperatorLeagueCard rows={data.tourOperatorBreakdown} />
         </div>
+
+        <HomeworkersOverviewCard rows={data.homeworkers} />
 
         <div className="grid min-w-0 gap-4 xl:grid-cols-[1.55fr_.7fr]">
           <CommissionTrendCard trend={data.trend} />

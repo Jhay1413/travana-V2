@@ -90,8 +90,8 @@ export function resolveAnalyticsAccess(scope: Scope): AnalyticsAccess {
   return { allowed: false, level: "own", reason: "You don't have access to pipeline data." };
 }
 
-function toResolvedScope(access: AnalyticsAccess): ResolvedAnalyticsScope {
-  return { level: access.level, orgId: access.orgId, branchId: access.branchId, userId: access.userId };
+function toResolvedScope(access: AnalyticsAccess, scope: Scope): ResolvedAnalyticsScope {
+  return { level: access.level, orgId: access.orgId, branchId: access.branchId, userId: access.userId, partitionScope: scope };
 }
 
 function startOfDay(d: Date): Date {
@@ -190,7 +190,7 @@ export const internalChatAnalyticsService = {
 
     const resolved = resolvePeriod(period, from, to);
     const stats = await internalChatAnalyticsRepository.getPipelineStats({
-      resolvedScope: toResolvedScope(access),
+      resolvedScope: toResolvedScope(access, scope),
       from: resolved.from,
       to: resolved.to,
     });

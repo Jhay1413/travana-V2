@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { isAuthenticated, requirePlatformAdmin } from '../middlewares/auth';
 import { orgBranchScope } from '../middlewares/org-branch-scope';
+import { denyOrgRole } from '../middlewares/auth/require-org-role';
 import { errorHandler } from '../middlewares/error.middleware';
 
 import onboardingRoutes from '../modules/onboarding/onboarding.routes';
@@ -68,6 +69,7 @@ import adminImportRoutes from '../modules/admin-import/admin-import.routes';
 import quoteShareRoutes from '../modules/quote-share/quote-share.routes';
 import portalRoutes from '../modules/portal/portal.routes';
 import branchRoutes from '../modules/branch/branch.routes';
+import homeworkerRoutes from '../modules/homeworker/homeworker.routes';
 import organizationRoutes from '../modules/organization/organization.routes';
 import planRoutes from '../modules/plan/plan.routes';
 import inviteRoutes from '../modules/invite/invite.routes';
@@ -83,6 +85,8 @@ import usageRoutes from '../modules/usage/usage.routes';
 
 const router = Router();
 const auth = [isAuthenticated, orgBranchScope] as const;
+// Homeworkers get everything an agent can, except social posting and the inbox.
+const noHomeworker = denyOrgRole(['homeworker']);
 
 router.use('/files',              fileRoutes);
 router.use('/onboarding',         onboardingRoutes);
@@ -90,6 +94,7 @@ router.use('/onboarding',         onboardingRoutes);
 router.use('/sendseven-webhook',  sendsevenWebhookRoutes);
 router.use('/users',              ...auth, userRoutes);
 router.use('/branches',           ...auth, branchRoutes);
+router.use('/homeworkers',        ...auth, homeworkerRoutes);
 router.use('/organizations',      organizationRoutes);
 router.use('/plans',              ...auth, planRoutes);
 router.use('/invites',            inviteRoutes);
@@ -117,15 +122,15 @@ router.use('/tasks',              ...auth, taskRoutes);
 router.use('/tags',               isAuthenticated, tagRoutes);
 router.use('/chat',               isAuthenticated, chatRoutes);
 router.use('/conversation-integration', isAuthenticated, requirePlatformAdmin, conversationIntegrationRoutes);
-router.use('/conversations',      ...auth, sendSevenContext, conversationsRoutes);
-router.use('/messages',           ...auth, sendSevenContext, messagesRoutes);
-router.use('/channels',           ...auth, sendSevenContext, channelsRoutes);
-router.use('/comments',           ...auth, sendSevenContext, commentsRoutes);
+router.use('/conversations',      ...auth, noHomeworker, sendSevenContext, conversationsRoutes);
+router.use('/messages',           ...auth, noHomeworker, sendSevenContext, messagesRoutes);
+router.use('/channels',           ...auth, noHomeworker, sendSevenContext, channelsRoutes);
+router.use('/comments',           ...auth, noHomeworker, sendSevenContext, commentsRoutes);
 router.use('/contact-links',      ...auth, contactLinkRoutes);
 router.use('/bot-config',         ...auth, botConfigRoutes);
 router.use('/knowledge-base',     ...auth, knowledgeBaseRoutes);
-router.use('/inboxes',            ...auth, sendSevenContext, inboxesRoutes);
-router.use('/social-posts',       ...auth, socialPostRoutes);
+router.use('/inboxes',            ...auth, noHomeworker, sendSevenContext, inboxesRoutes);
+router.use('/social-posts',       ...auth, noHomeworker, socialPostRoutes);
 router.use('/image-upscale',      ...auth, imageUpscaleRoutes);
 router.use('/emails',             isAuthenticated, emailRoutes);
 router.use('/facebook',           isAuthenticated, facebookRoutes);

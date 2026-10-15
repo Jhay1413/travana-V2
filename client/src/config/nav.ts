@@ -202,6 +202,7 @@ const ORG_ADMIN_NAV: NavConfig = [
       { path: "/agency/profile", label: "Profile & Branding", icon: Sparkles },
       { path: "/agency/team", label: "Teams & Roles", icon: Users },
       { path: "/agency/branches", label: "Branches", icon: Building2 },
+      { path: "/agency/homeworkers", label: "Homeworkers", icon: Briefcase },
       { path: "/agency/messaging", label: "Messaging", icon: RadioTower },
       { path: "/hr", label: "HR", icon: HeartHandshake },
     ],
@@ -285,9 +286,20 @@ const SOCIAL_MEDIA_NAV: NavConfig = [
   },
 ];
 
+// Homeworkers get the agent nav minus Social Posts and Inbox, which the server
+// denies for that role.
+const HOMEWORKER_HIDDEN_PATHS = ["/social-posts", "/conversations"];
+const HOMEWORKER_NAV: NavConfig = AGENT_NAV.map((section) => ({
+  ...section,
+  items: [
+    ...section.items.filter((item) => !(isNavItem(item) && HOMEWORKER_HIDDEN_PATHS.includes(item.path))),
+    { path: "/my-statement", label: "My Statement", icon: CircleDollarSign },
+  ],
+}));
+
 export const NAV_BY_ROLE: Record<OrgRole, NavConfig> = {
   agent: AGENT_NAV,
-  homeworker: AGENT_NAV,
+  homeworker: HOMEWORKER_NAV,
   branch_manager: BRANCH_MANAGER_NAV,
   org_admin: ORG_ADMIN_NAV,
   platform_admin: PLATFORM_ADMIN_NAV,

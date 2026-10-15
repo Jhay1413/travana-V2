@@ -1,7 +1,7 @@
 import { db } from "../../config/database";
 import { notes, transaction, clientTable, user, type Note, type InsertNote } from "@shared/schema";
 import { and, eq, desc, or, sql } from "drizzle-orm";
-import { buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { buildPartitionCond, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export type NoteWithAuthor = Note & { author_name: string | null };
 
@@ -98,21 +98,29 @@ export const noteRepository = {
     return result ?? null;
   },
 
-  async transactionBelongsToOrg(transactionId: string, orgId: string): Promise<boolean> {
+  async transactionBelongsToOrg(transactionId: string, orgId: string, scope?: ScopeOrTrusted): Promise<boolean> {
     const [row] = await db
       .select({ id: transaction.id })
       .from(transaction)
       .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(transaction.id, transactionId), eq(clientTable.orgId, orgId)))
+      .where(and(
+        eq(transaction.id, transactionId),
+        eq(clientTable.orgId, orgId),
+        scope ? buildPartitionCond(scope, transaction.branch_id, transaction.user_id) : undefined,
+      ))
       .limit(1);
     return !!row;
   },
 
-  async clientBelongsToOrg(clientId: string, orgId: string): Promise<boolean> {
+  async clientBelongsToOrg(clientId: string, orgId: string, scope?: ScopeOrTrusted): Promise<boolean> {
     const [row] = await db
       .select({ id: clientTable.id })
       .from(clientTable)
-      .where(and(eq(clientTable.id, clientId), eq(clientTable.orgId, orgId)))
+      .where(and(
+        eq(clientTable.id, clientId),
+        eq(clientTable.orgId, orgId),
+        scope ? buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy) : undefined,
+      ))
       .limit(1);
     return !!row;
   },

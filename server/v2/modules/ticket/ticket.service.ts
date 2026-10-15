@@ -1,6 +1,8 @@
 import { ticketRepository, type TicketListMode } from "./ticket.repository";
 import { realtimeService } from "../../realtime/realtime.service";
 import { notificationRepository } from "../notification/notification.repository";
+import { branchMemberRepository } from "../branch-member/branch-member.repository";
+import { branchRepository } from "../branch/branch.repository";
 import { AppError } from "../../utils/error-handler";
 import { sanitizeRichText } from "../../utils/sanitize-rich-text";
 import type { Ticket, InsertTicket } from "@shared/schema";
@@ -61,6 +63,64 @@ async function notifyTicketAssignee(ticket: Ticket, actingUserId: string | null 
   }
 }
 
+// Shop and homeworker data are isolated from each other, so a ticket must not be
+// assigned across that boundary by ordinary staff: the assignee could never open
+// it (or the reverse). The assignee's side comes from their active branch membership.
+//
+// org_admin / platform_admin oversee both sides, so they may assign across it; the
+// ticket is then re-homed into the assignee's branch (returned here) so the
+// assignee can open it. Returns the branch_id to write, or undefined for no change.
+async function resolveAssignmentBranch(
+  assigneeId: string | null | undefined,
+  scope: Scope,
+  currentBranchId: string | null | undefined,
+): Promise<string | undefined> {
+  if (!assigneeId || assigneeId === scope.userId) return undefined;
+  // The assignee must be an active member of the caller's org. A platform_admin who
+  // is not impersonating has scope.orgId === '' (no org), so they are not org-filtered.
+  const assignee = scope.orgId
+    ? await branchMemberRepository.findActiveContextByUserIdInOrg(assigneeId, scope.orgId)
+    : await branchMemberRepository.findActiveContextByUserId(assigneeId);
+  if (!assignee && scope.orgId) {
+    throw new AppError("Assignee is not an active member of this organisation", 400);
+  }
+  const assigneeIsHomeworkerSide = assignee?.branchType === "homeworker";
+
+  if (scope.orgRole !== "org_admin" && scope.orgRole !== "platform_admin") {
+    const callerIsHomeworkerSide = scope.branchType === "homeworker";
+    if (callerIsHomeworkerSide !== assigneeIsHomeworkerSide) {
+      throw new AppError("Tickets cannot be assigned across shop and homeworker branches", 400);
+    }
+    return undefined;
+  }
+
+  if (!assignee) return undefined;
+  if (assigneeIsHomeworkerSide) {
+    return assignee.branchId !== currentBranchId ? assignee.branchId : undefined;
+  }
+  // Shop assignee: only a ticket currently in a homeworker branch needs moving back.
+  if (currentBranchId && currentBranchId !== assignee.branchId) {
+    // Use the assignee's org (not scope.orgId, which is '' for a non-impersonating
+    // platform_admin) so the shop re-home also works for them.
+    const current = await branchRepository.findById(currentBranchId, assignee.orgId);
+    if (current?.branchType === "homeworker") return assignee.branchId;
+  }
+  return undefined;
+}
+
+function isAdminScope(scope: Scope): boolean {
+  return scope.orgRole === "org_admin" || scope.orgRole === "platform_admin";
+}
+
+// Admins may pick a branch for a new ticket, but only one inside their own org.
+// A platform_admin with no org context cannot be validated, so the value is dropped.
+async function resolveRequestedBranch(branchId: string | null | undefined, scope: Scope): Promise<string | undefined> {
+  if (!branchId || !isAdminScope(scope) || !scope.orgId) return undefined;
+  const found = await branchRepository.findById(branchId, scope.orgId);
+  if (!found) throw new AppError("Branch not found in this organisation", 400);
+  return found.id;
+}
+
 export const ticketService = {
   async listTickets(scope: Scope, mode: TicketListMode = "mine") {
     if (mode === "all" && !hasAnyRole(scope.orgRoles, ADMIN_TICKET_ROLES)) {
@@ -90,7 +150,14 @@ export const ticketService = {
   },
 
   async createTicket(data: InsertTicket, scope: Scope): Promise<Ticket> {
-    const values = data.description ? { ...data, description: sanitizeRichText(data.description) } : data;
+    // orgId always comes from the caller's scope, never the request body; branchId
+    // only from an admin, validated to be inside their org.
+    const { orgId: _ignoredOrgId, branchId: requestedBranchId, ...body } = data;
+    const requestedBranch = await resolveRequestedBranch(requestedBranchId, scope);
+    const rehomeTo = await resolveAssignmentBranch(body.assignedTo, scope, requestedBranch ?? scope.branchId);
+    const chosenBranch = rehomeTo ?? requestedBranch;
+    const base = body.description ? { ...body, description: sanitizeRichText(body.description) } : body;
+    const values: InsertTicket = chosenBranch ? { ...base, branchId: chosenBranch } : base;
     const ticket = await ticketRepository.create(values, scope);
     publishChanged(scope.orgId, ticket.id);
     await notifyTicketAssignee(ticket, scope.userId);
@@ -106,7 +173,8 @@ export const ticketService = {
     // merely echoes the current assignee back.
     const previous = editable.assignedTo !== undefined ? await ticketRepository.findById(id, scope, scope.userId ?? null) : undefined;
 
-    const ticket = await ticketRepository.update(id, values, scope);
+    const rehomeTo = await resolveAssignmentBranch(editable.assignedTo, scope, previous?.branchId);
+    const ticket = await ticketRepository.update(id, rehomeTo ? { ...values, branchId: rehomeTo } : values, scope);
     if (!ticket) {
       throw new AppError("Ticket not found", 404);
     }

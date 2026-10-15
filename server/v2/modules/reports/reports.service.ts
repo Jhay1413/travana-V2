@@ -52,9 +52,14 @@ function resolveRange(from?: string, to?: string): { from: Date; to: Date } {
 }
 
 function resolveScope(scope: Scope, branchIdFilter?: string) {
+  // Only admins may pick a branch via the query string; a branch_manager with no
+  // branch of their own must not be able to aim the report at an arbitrary
+  // (e.g. homeworker) branch.
+  const isAdmin = scope.orgRole === "org_admin" || scope.orgRole === "platform_admin";
   return {
     orgId: effectiveOrgId(scope),
-    branchId: scope.branchId ?? branchIdFilter ?? null,
+    branchId: scope.branchId ?? (isAdmin ? branchIdFilter : undefined) ?? null,
+    partitionScope: scope,
   };
 }
 

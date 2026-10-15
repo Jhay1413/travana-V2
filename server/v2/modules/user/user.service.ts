@@ -75,6 +75,9 @@ export const userService = {
   },
 
   async createUser(userData: InsertUser, scope: Scope): Promise<User> {
+    if (userData.orgRole === "homeworker") {
+      throw new AppError("Use POST /homeworkers", 400);
+    }
     const callerOrgId = effectiveOrgId(scope);
     const data: InsertUser = callerOrgId
       ? { ...userData, orgId: callerOrgId }

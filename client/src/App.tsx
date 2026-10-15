@@ -57,6 +57,7 @@ const TasksPage = lazy(() => import("@/pages/tasks"));
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const PipelinePage = lazy(() => import("@/pages/pipeline"));
 const ChatPage = lazy(() => import("@/pages/chat"));
+const MyStatementPage = lazy(() => import("@/pages/my-statement"));
 const ConversationsPage = lazy(() => import("@/pages/conversations"));
 const HubPage = lazy(() => import("@/pages/hub"));
 const SocialPostsPage = lazy(() => import("@/pages/social-posts"));
@@ -95,6 +96,8 @@ const ALL_ROLES: OrgRole[] = [
   "homeworker",
   "referral_agent",
 ];
+import { INBOX_SOCIAL_ROLES } from "@/config/homeworker-access";
+
 const STAFF_ROLES: OrgRole[] = ["platform_admin", "org_admin", "branch_manager", "agent", "homeworker"];
 // Client pages (client list/details + deal drill-downs) are also open to
 // social media managers, who get org-wide read access to client deal history.
@@ -196,12 +199,13 @@ function AuthenticatedRouter() {
         <RoleRoute path="/opportunities" allow={STAFF_ROLES} component={OpportunitiesPage} />
         <RoleRoute path="/my-profile" allow={STAFF_ROLES} component={MyProfilePage} />
         <RoleRoute path="/chat" allow={STAFF_ROLES} component={ChatPage} />
-        <RoleRoute path="/conversations" allow={STAFF_ROLES} component={ConversationsPage} />
+        <RoleRoute path="/my-statement" allow={["homeworker"]} component={MyStatementPage} />
+        <RoleRoute path="/conversations" allow={INBOX_SOCIAL_ROLES} component={ConversationsPage} />
         <RoleRoute path="/email" allow={STAFF_ROLES} component={EmailInbox} />
         <RoleRoute path="/destination-guru" allow={STAFF_ROLES} component={DestinationGuruPage} />
         <RoleRoute path="/sms-center" allow={STAFF_ROLES} component={SmsCenterPage} />
-        <RoleRoute path="/social-posts" allow={STAFF_ROLES} component={SocialPostsPage} />
-        <RoleRoute path="/social-posts/quotes/:quoteId" allow={STAFF_ROLES} component={SocialQuotePage} />
+        <RoleRoute path="/social-posts" allow={INBOX_SOCIAL_ROLES} component={SocialPostsPage} />
+        <RoleRoute path="/social-posts/quotes/:quoteId" allow={INBOX_SOCIAL_ROLES} component={SocialQuotePage} />
         <RoleRoute path="/tickets" allow={STAFF_ROLES} component={TicketsPage} />
         <RoleRoute path="/tickets/:ticketId" allow={STAFF_ROLES} component={TicketsPage} />
         {/* /hub is handled standalone (outside AppLayout) above — TheHUB has its own shell. */}

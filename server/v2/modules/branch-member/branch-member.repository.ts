@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { branchMembers, branches, user, userOrgRoles, type BranchMember } from "@shared/schema";
-import { and, eq, isNull, notInArray } from "drizzle-orm";
+import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -21,11 +21,49 @@ type MemberWithUser = {
 };
 
 export const branchMemberRepository = {
-  async findActiveByUserId(userId: string) {
+  /**
+   * Active membership joined with its branch so callers learn the branch
+   * partition (shop vs homeworker) and ownership in one query. Ordered so a user
+   * with several active memberships always resolves to the same one.
+   */
+  async findActiveContextByUserId(userId: string) {
+    return branchMemberRepository.findActiveContext(userId);
+  },
+
+  /** Same as findActiveContextByUserId but only a membership in the given org. */
+  async findActiveContextByUserIdInOrg(userId: string, orgId: string) {
+    return branchMemberRepository.findActiveContext(userId, orgId);
+  },
+
+  async findActiveContext(userId: string, orgId?: string) {
     const [result] = await db
-      .select()
+      .select({
+        id: branchMembers.id,
+        orgId: branchMembers.orgId,
+        branchId: branchMembers.branchId,
+        userId: branchMembers.userId,
+        orgRole: branchMembers.orgRole,
+        isActive: branchMembers.isActive,
+        joinedAt: branchMembers.joinedAt,
+        branchType: branches.branchType,
+        ownerUserId: branches.ownerUserId,
+        profitSharePercent: branches.profitSharePercent,
+      })
       .from(branchMembers)
-      .where(and(eq(branchMembers.userId, userId), eq(branchMembers.isActive, true)))
+      .innerJoin(branches, eq(branches.id, branchMembers.branchId))
+      // Archived branches never provide context.
+      .where(and(
+        eq(branchMembers.userId, userId),
+        eq(branchMembers.isActive, true),
+        eq(branches.isActive, true),
+        orgId ? eq(branchMembers.orgId, orgId) : undefined,
+      ))
+      // A migrated homeworker may keep a leftover old membership: their OWN branch wins.
+      .orderBy(
+        sql`CASE WHEN ${branches.ownerUserId} = ${userId} THEN 0 ELSE 1 END`,
+        asc(branchMembers.joinedAt),
+        asc(branchMembers.id),
+      )
       .limit(1);
     return result;
   },
@@ -112,7 +150,15 @@ export const branchMemberRepository = {
       await tx.update(user).set({ orgRole, updatedAt: new Date() }).where(eq(user.id, userId));
       await this.setRoleForUser(orgId, userId, orgRole, tx);
 
-      const rolesToKeep = Array.from(new Set(orgRole === "referral_agent" ? [orgRole] : [orgRole, "agent"]));
+      // Make sure the requested role is actually held even when the user has no
+      // active branch membership (auth unions junction rows with branch_members).
+      await tx
+        .insert(userOrgRoles)
+        .values({ userId, orgId, role: orgRole })
+        .onConflictDoNothing({ target: [userOrgRoles.userId, userOrgRoles.orgId, userOrgRoles.role] });
+
+      const exclusive = orgRole === "referral_agent" || orgRole === "homeworker";
+      const rolesToKeep = Array.from(new Set(exclusive ? [orgRole] : [orgRole, "agent"]));
       await tx
         .delete(userOrgRoles)
         .where(

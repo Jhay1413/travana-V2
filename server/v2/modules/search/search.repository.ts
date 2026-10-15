@@ -3,16 +3,20 @@ import { clientTable, booking, transaction } from '@shared/schema';
 import { and, asc, eq, or, ilike, sql } from 'drizzle-orm';
 import { phoneDigitsCondition } from '../../utils/phone-search';
 import { clientNameCondition } from '../../utils/client-name-search';
+import type { Scope } from '../../utils/scope';
+import { buildPartitionCond } from '../../utils/scope-conditions';
 
 interface SearchOpts {
   orgId: string | null;
+  /** Caller scope; the shop/homeworker partition is always applied. */
+  scope: Scope;
   limit?: number;
   offset?: number;
 }
 
 export const searchRepository = {
   async globalSearch(searchTerm: string, opts: SearchOpts) {
-    const { orgId, limit = 15, offset = 0 } = opts;
+    const { orgId, scope, limit = 15, offset = 0 } = opts;
     const term = `%${searchTerm}%`;
     // Shared with the client list/search endpoint so both agree on what a
     // multi-word name query matches (see utils/client-name-search).
@@ -29,8 +33,9 @@ export const searchRepository = {
 
     // Exclude merged (soft-archived) duplicates from search results.
     const activeOnly = eq(clientTable.status, "active");
+    const partition = buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy);
     const whereClause = orgId
-      ? and(matchCondition, eq(clientTable.orgId, orgId), activeOnly)
+      ? and(matchCondition, eq(clientTable.orgId, orgId), activeOnly, partition)
       : and(matchCondition, activeOnly);
 
     const rows = await db
@@ -69,7 +74,7 @@ export const searchRepository = {
 
     // Bookings are only matched on the first page; client results drive the
     // infinite-scroll pagination via nextOffset.
-    const bookings = offset === 0 ? await this.searchBookings(searchTerm, { orgId, limit }) : [];
+    const bookings = offset === 0 ? await this.searchBookings(searchTerm, { orgId, scope, limit }) : [];
 
     return {
       clients: pageRows.map((c) => ({
@@ -85,8 +90,8 @@ export const searchRepository = {
     };
   },
 
-  async searchBookings(searchTerm: string, opts: { orgId: string | null; limit?: number }) {
-    const { orgId, limit = 15 } = opts;
+  async searchBookings(searchTerm: string, opts: { orgId: string | null; scope: Scope; limit?: number }) {
+    const { orgId, scope, limit = 15 } = opts;
     const term = `%${searchTerm}%`;
 
     const matchCondition = or(
@@ -94,8 +99,9 @@ export const searchRepository = {
       ilike(booking.supplier_ref, term),
     );
     const activeOnly = eq(booking.is_active, true);
+    const partition = buildPartitionCond(scope, transaction.branch_id, transaction.user_id);
     const whereClause = orgId
-      ? and(matchCondition, eq(transaction.org_id, orgId), activeOnly)
+      ? and(matchCondition, eq(transaction.org_id, orgId), activeOnly, partition)
       : and(matchCondition, activeOnly);
 
     const rows = await db

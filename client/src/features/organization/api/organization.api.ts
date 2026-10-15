@@ -48,6 +48,8 @@ export interface Organization {
   settings:     OrganizationSettings;
   createdAt:    string;
   trialEndsAt:  string | null;
+  /** Default profit share (integer percent) for new homeworkers; null when unset. */
+  homeworkerCommission?: number | null;
 }
 
 export type OrganizationUpdate = Partial<{

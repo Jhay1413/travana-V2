@@ -1,7 +1,7 @@
 import { PauseCircle, PlayCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrgMember } from "@/features/organization/api/organization.api";
-import { ASSIGNABLE_ROLES, isMemberSuspended } from "@/pages/agency/utils/role-helpers";
+import { HOMEWORKER_ROLE_LOCK_HINT, isMemberSuspended, roleOptionsForMember } from "@/pages/agency/utils/role-helpers";
 
 export function MemberRow({
   member,
@@ -20,6 +20,7 @@ export function MemberRow({
 }) {
   const suspended = isMemberSuspended(member);
   const controlsDisabled = isCurrentUser || isMutating || isReadOnly;
+  const isHomeworker = member.user.orgRole === "homeworker";
   return (
     <tr
       className="border-b border-black/5 last:border-0 dark:border-white/10"
@@ -36,12 +37,12 @@ export function MemberRow({
         <select
           value={member.user.orgRole ?? "agent"}
           onChange={(e) => onRoleChange(e.target.value)}
-          disabled={controlsDisabled}
-          title={isReadOnly ? "Only the agency owner can change roles" : undefined}
+          disabled={controlsDisabled || isHomeworker}
+          title={isHomeworker ? HOMEWORKER_ROLE_LOCK_HINT : isReadOnly ? "Only the agency owner can change roles" : undefined}
           className="rounded-lg border border-black/10 bg-white px-2 py-1 text-xs disabled:opacity-50 dark:border-white/10 dark:bg-white/5"
           data-testid={`select-role-${member.user.id}`}
         >
-          {ASSIGNABLE_ROLES.map((r) => (
+          {roleOptionsForMember(member.user.orgRole).map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
         </select>

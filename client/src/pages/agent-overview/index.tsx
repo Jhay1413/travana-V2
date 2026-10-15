@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { SquarePlus } from "lucide-react";
+import { useRoles } from "@/hooks/use-role";
+import { MyHomeworkerBranchCard } from "@/features/homeworkers";
+import { omitHomeworkerDeniedTabs } from "@/config/homeworker-access";
 import {
   useAgentStats,
   useCurrentUser,
@@ -39,6 +42,9 @@ export default function AgentOverviewPage() {
   const [creatingTask, setCreatingTask] = useState(false);
 
   const { data: currentUser } = useCurrentUser();
+  const { hasRole } = useRoles();
+  const isHomeworker = hasRole("homeworker");
+  const dashboardTabs = omitHomeworkerDeniedTabs(DASHBOARD_TABS, isHomeworker, ["conversations"]);
   const { data: shopTargetsData } = useShopTargets();
   const { data: agentTargetsData } = useAgentTargetsByUserId(currentUser?.id || "");
   const { data: agentStats } = useAgentStats({ enabled: !!currentUser?.id });
@@ -91,6 +97,8 @@ export default function AgentOverviewPage() {
       <section className="min-w-0 flex-1 space-y-4">
         <ProfitStatBoxes profitStats={profitStats} isAgentView={isAgentView} />
 
+        {isHomeworker && <MyHomeworkerBranchCard />}
+
         <div className="grid gap-4 min-w-0 xl:grid-cols-[1.55fr_.7fr]">
           <DashboardCard className="min-w-0" testId="card-agent-dashboard">
             <div className="flex items-start justify-between gap-2">
@@ -111,7 +119,7 @@ export default function AgentOverviewPage() {
 
             <div className="mt-3">
               <SegmentedTabs
-                tabs={DASHBOARD_TABS}
+                tabs={dashboardTabs}
                 value={tab}
                 onChange={setTab}
                 testIdPrefix="tab-overview"
@@ -121,7 +129,7 @@ export default function AgentOverviewPage() {
             <div className="mt-4">
               {tab === "tasks" && <TasksTab userId={userId} />}
               {tab === "tickets" && <TicketsTab userId={userId} />}
-              {tab === "conversations" && <ConversationsTab />}
+              {tab === "conversations" && !isHomeworker && <ConversationsTab />}
               {tab === "my-courses" && <MyCoursesTab />}
               {tab === "notes" && <NotesTab />}
             </div>

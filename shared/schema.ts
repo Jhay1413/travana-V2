@@ -63,12 +63,29 @@ export const branches = pgTable("branches", {
   isDefault: boolean("is_default").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   branchType: varchar("branch_type", { length: 16 }).notNull().default("shop"),
+  // Homeworker branches: exactly one owning user and a profit share percent.
+  // Both stay NULL for shop branches (and for the legacy shared branch).
+  ownerUserId: text("owner_user_id").references(() => user.id, { onDelete: "set null" }),
+  profitSharePercent: numeric("profit_share_percent", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-  idx_branches_org: index("idx_branches_org_id").on(table.organizationId),
-}));
+}, (table) => [
+  index("idx_branches_org_id").on(table.organizationId),
+  index("idx_branches_org_type").on(table.organizationId, table.branchType),
+  unique("branches_owner_user_id_unique").on(table.ownerUserId),
+  check("branches_branch_type_check", sql`${table.branchType} IN ('shop', 'homeworker')`),
+  check("branches_profit_share_range", sql`${table.profitSharePercent} IS NULL OR ${table.profitSharePercent} BETWEEN 0 AND 100`),
+  check("branches_homeworker_fields_check", sql`${table.branchType} = 'homeworker' OR (${table.ownerUserId} IS NULL AND ${table.profitSharePercent} IS NULL)`),
+]);
 
-export const insertBranchSchema = createInsertSchema(branches).omit({ id: true, createdAt: true });
+const percentString = z
+  .string()
+  .regex(/^\d{1,3}(\.\d{1,2})?$/, "must be a number with up to 2 decimals")
+  .refine((v) => Number(v) <= 100, "must be between 0 and 100");
+
+export const insertBranchSchema = createInsertSchema(branches, {
+  branchType: z.enum(["shop", "homeworker"]),
+  profitSharePercent: percentString.nullable().optional(),
+}).omit({ id: true, createdAt: true });
 export type Branch = typeof branches.$inferSelect;
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 
@@ -218,6 +235,8 @@ export const clientTable = pgTable("client_table", {
   mergedIntoId: uuid("merged_into_id").references((): AnyPgColumn => clientTable.id, { onDelete: "set null" }),
   mergedAt: timestamp("merged_at"),
   mergedBy: text("merged_by").references(() => user.id, { onDelete: "set null" }),
+  // Audit link: set on a copy of a client duplicated into a homeworker branch.
+  splitFromClientId: uuid("split_from_client_id").references((): AnyPgColumn => clientTable.id, { onDelete: "set null" }),
 });
 
 export const insertClientTableSchema = createInsertSchema(clientTable).omit({ id: true, createdAt: true });
@@ -2371,6 +2390,39 @@ export const agentTargetTable = pgTable("agent_target_table", {
 export const insertAgentTargetSchema = createInsertSchema(agentTargetTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type AgentTarget = typeof agentTargetTable.$inferSelect;
 export type InsertAgentTarget = z.infer<typeof insertAgentTargetSchema>;
+
+// One row per homeworker branch per period; freezes the share percent used.
+// orgId is uuid (not text) because organization.id is uuid.
+export const homeworkerPayoutStatement = pgTable("homeworker_payout_statement", {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+  periodStart: date("period_start", { mode: "string" }).notNull(),
+  periodEnd: date("period_end", { mode: "string" }).notNull(),
+  grossProfit: numeric("gross_profit", { precision: 12, scale: 2 }).notNull(),
+  sharePercent: numeric("share_percent", { precision: 5, scale: 2 }).notNull(),
+  homeworkerShare: numeric("homeworker_share", { precision: 12, scale: 2 }).notNull(),
+  orgShare: numeric("org_share", { precision: 12, scale: 2 }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("draft"),
+  finalisedBy: text("finalised_by").references(() => user.id, { onDelete: "set null" }),
+  finalisedAt: timestamp("finalised_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  unique("homeworker_payout_branch_period_unique").on(table.branchId, table.periodStart),
+  index("idx_homeworker_payout_org_period").on(table.orgId, table.periodStart),
+  check("homeworker_payout_status_check", sql`${table.status} IN ('draft', 'final')`),
+  check("homeworker_payout_period_order", sql`${table.periodEnd} > ${table.periodStart}`),
+  check("homeworker_payout_share_range", sql`${table.sharePercent} BETWEEN 0 AND 100`),
+]);
+
+export const insertHomeworkerPayoutStatementSchema = createInsertSchema(homeworkerPayoutStatement, {
+  status: z.enum(["draft", "final"]),
+  sharePercent: percentString,
+}).omit({ id: true, createdAt: true, updatedAt: true });
+export type HomeworkerPayoutStatement = typeof homeworkerPayoutStatement.$inferSelect;
+export type InsertHomeworkerPayoutStatement = z.infer<typeof insertHomeworkerPayoutStatementSchema>;
 
 export const destinationGuruTable = pgTable("destination_guru", {
   id: uuid().default(sql`gen_random_uuid()`).primaryKey(),

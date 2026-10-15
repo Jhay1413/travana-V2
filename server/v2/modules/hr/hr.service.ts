@@ -6,6 +6,7 @@ import type { Scope } from "../../utils/scope";
 import { s3Client, S3_BUCKET } from "../../config/s3";
 import { hrRepository, type HrRepositoryRow, type HrNoteRow } from "./hr.repository";
 import { inviteService } from "../invite/invite.service";
+import { homeworkerService } from "../homeworker/homeworker.service";
 import type { HrDocument, HrLeave } from "@shared/schema";
 import type {
   AddDocumentPayload,
@@ -278,10 +279,20 @@ export const hrService = {
   },
 
   async invite(payload: InviteEmployeePayload, scope: Scope) {
+    if (!scope.orgId || !scope.userId) throw new AppError("Missing scope context", 400);
+    // Homeworkers get their own branch: one creation path, org admins only.
+    if (payload.orgRole === "homeworker") {
+      const { orgRole: _role, ...input } = payload;
+      return homeworkerService.invite(input, {
+        orgId: scope.orgId,
+        userId: scope.userId,
+        orgRole: scope.orgRole,
+        orgRoles: scope.orgRoles,
+      });
+    }
     if (scope.orgRole === "branch_manager" && payload.branchId !== scope.branchId) {
       throw new AppError("Branch managers can only invite onto their own branch", 403);
     }
-    if (!scope.orgId || !scope.userId) throw new AppError("Missing scope context", 400);
     return inviteService.send(
       { email: payload.email, branchId: payload.branchId, orgRole: payload.orgRole },
       {
@@ -289,7 +300,7 @@ export const hrService = {
         userId: scope.userId,
         orgRole: scope.orgRole,
         branchId: scope.branchId,
-      } as any,
+      },
     );
   },
 

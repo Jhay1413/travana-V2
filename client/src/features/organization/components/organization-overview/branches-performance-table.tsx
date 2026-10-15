@@ -28,7 +28,7 @@ import {
   useTourOperators,
   useTransactions,
 } from "@/hooks/queries";
-import { currency } from "./helpers";
+import { currency, isHomeworkerRow } from "./helpers";
 import { CommissionTrendCard } from "./commission-trend-card";
 import { AgentsPerformanceCard } from "./agents-performance-card";
 import {
@@ -106,7 +106,8 @@ export function BranchesPerformanceTable() {
     year: "numeric",
   });
 
-  const branchRows = data?.rows ?? [];
+  // Homeworker branches are shown in their own overview section, not in shop branch rankings.
+  const branchRows = (data?.rows ?? []).filter((b) => !isHomeworkerRow(b));
   const branchNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const b of branchRows) map.set(b.id, b.name);

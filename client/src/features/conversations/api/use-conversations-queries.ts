@@ -34,11 +34,12 @@ export function useConversation(id: string | null, enabled = true) {
   });
 }
 
-export function useConversationBadgeCounts(inboxId?: string) {
+export function useConversationBadgeCounts(inboxId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: conversationsKeys.badgeCounts(inboxId),
     queryFn: () => conversationsApi.badgeCounts(inboxId),
     staleTime: 15_000,
+    enabled: options?.enabled ?? true,
   });
 }
 

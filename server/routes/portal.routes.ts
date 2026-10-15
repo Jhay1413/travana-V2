@@ -73,6 +73,9 @@ portalRouter.post("/login", async (req: Request, res: Response) => {
       .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName, portalPin: clientTable.portalPin, mustChangePin: clientTable.mustChangePin })
       .from(clientTable)
       .where(eq(clientTable.email, email.toLowerCase().trim()))
+      // Several rows can share an email (a client duplicated into a homeworker branch has no PIN):
+      // prefer the record that has portal access, then the oldest, so a PIN-less copy never shadows it.
+      .orderBy(sql`(${clientTable.portalPin} IS NOT NULL) DESC`, asc(clientTable.createdAt))
       .limit(1);
 
     if (!client) {

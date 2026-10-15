@@ -8,6 +8,7 @@ export type LeaveType = "Annual" | "Sick" | "Unpaid" | "Other";
 export type ReminderKind = "probation_end" | "contract_end" | "work_anniversary";
 export type InvitableRole = "agent" | "branch_manager" | "homeworker" | "referral_agent";
 export type DocumentCategory = "Contract" | "NDA" | "Right to Work" | "Policies" | "Training" | "Other";
+import type { InviteBodyFor } from "@/features/invite/api/invite.api";
 export type DocStatus = "Uploaded" | "Missing" | "Expiring Soon";
 
 export interface LeaveEntry {
@@ -104,11 +105,7 @@ export interface UpdateEmployeeInput {
   taxId?:            string | null;
 }
 
-export interface InviteEmployeeInput {
-  email:    string;
-  branchId: string;
-  orgRole:  InvitableRole;
-}
+export type InviteEmployeeInput = InviteBodyFor<InvitableRole>;
 
 export interface RequestLeaveInput {
   type:    LeaveType;

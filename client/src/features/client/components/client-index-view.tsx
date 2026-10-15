@@ -17,6 +17,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useClientQuoteViews } from "@/features/quote";
 import { useDeleteTask, useToggleTask } from "@/hooks/mutations";
+import { useRoles } from "@/hooks/use-role";
+import { omitHomeworkerDeniedTabs } from "@/config/homeworker-access";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import type { HolidaySelection } from "@/features/client/types";
 import type { EnquiryTable } from "@/features/quote/types";
@@ -395,6 +397,8 @@ export function ClientIndexView({
   onNewTicket,
 }: ClientIndexViewProps) {
   const [tab, setTab] = useState<ClientIndexTab>(resolveInitialTab);
+  const { hasRole } = useRoles();
+  const isHomeworker = hasRole("homeworker");
 
   // Total times the client has opened any of their quotes — shown as a badge on the Views tab.
   const { data: clientQuoteViews } = useClientQuoteViews(clientId);
@@ -506,7 +510,7 @@ export function ClientIndexView({
           </div>
 
           <div className="mt-3 flex w-full items-center gap-1 rounded-sm border border-black/10 bg-black/[0.03] p-1 dark:border-white/10 dark:bg-white/[0.04]">
-            {CLIENT_INDEX_TABS.map((t) => (
+            {omitHomeworkerDeniedTabs(CLIENT_INDEX_TABS, isHomeworker, ["chats"]).map((t) => (
               <button
                 key={t.value}
                 type="button"
@@ -530,7 +534,7 @@ export function ClientIndexView({
             {tab === "notes" && (
               <ClientNotesList clientId={clientId} users={users} dealsByTransactionId={dealsByTransactionId} onOpenDeal={onOpenDeal} />
             )}
-            {tab === "chats" && <ClientChatsTab clientId={clientId} />}
+            {tab === "chats" && !isHomeworker && <ClientChatsTab clientId={clientId} />}
             {tab === "tickets" && <ClientTicketsTab tickets={rawTickets} users={users} onNewTicket={onNewTicket} />}
             {tab === "views" && <ViewsList clientId={clientId} onOpenDeal={onOpenDeal} />}
             {tab === "files" && (

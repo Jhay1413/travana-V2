@@ -6,9 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DashboardCard, InitialsAvatar } from "@/features/agent-overview/components/dashboard-ui";
 import { useOrganizationAgentsPerformance } from "@/hooks/queries";
-import { currency } from "./helpers";
+import { currency, filterOverviewRows, type OverviewRowFilter } from "./helpers";
 
-type Filter = "all" | "branches" | "homeworkers";
+type Filter = OverviewRowFilter;
 
 interface StatRow {
   key: string;
@@ -16,7 +16,6 @@ interface StatRow {
   name: string;
   href: string;
   avatarUrl: string | null;
-  isHomeworker: boolean;
   branches: Array<{ id: string; name: string; code: string | null }>;
   today: number;
   week: number;
@@ -49,13 +48,13 @@ export function MultiBranchStatsCard({ branchId }: { branchId?: string } = {}) {
   const [filter, setFilter] = useState<Filter>("all");
   const agentsQ = useOrganizationAgentsPerformance({ range: "month", branchId });
 
-  const allRows: StatRow[] = (agentsQ.data?.rows ?? []).map((a) => ({
+  // Filter on the raw rows so branchType (with the isHomeworker fallback) decides.
+  const rows: StatRow[] = filterOverviewRows(agentsQ.data?.rows ?? [], filter).map((a) => ({
     key: `agent-${a.id}`,
     id: a.id,
     name: a.name,
     href: `/agents/${a.id}`,
     avatarUrl: a.avatarUrl,
-    isHomeworker: a.isHomeworker === true,
     branches: a.branches ?? [],
     today: a.today,
     week: a.week,
@@ -65,12 +64,6 @@ export function MultiBranchStatsCard({ branchId }: { branchId?: string } = {}) {
     target: a.target,
   }));
 
-  const rows =
-    filter === "branches"
-      ? allRows.filter((r) => !r.isHomeworker)
-      : filter === "homeworkers"
-        ? allRows.filter((r) => r.isHomeworker)
-        : allRows;
 
   const isLoading = agentsQ.isLoading;
   const isError = agentsQ.isError;
