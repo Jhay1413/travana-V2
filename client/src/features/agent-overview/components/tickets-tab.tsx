@@ -1,48 +1,29 @@
 import { useMemo } from "react";
-import { Link, useLocation } from "wouter";
-import { ChevronRight } from "lucide-react";
+import { useLocation } from "wouter";
 import { useTicketsByUser } from "@/features/tickets/api/use-ticket-queries";
-import type { Ticket } from "@/features/tickets";
-import { useUsers } from "@/features/user/api/use-user-queries";
-import type { User } from "@/features/user";
 import { cn } from "@/lib/utils";
-import { InitialsAvatar, timeAgo } from "./dashboard-ui";
+import { EmptyLine, HomeLink, HomePill, RowButton } from "./home/home-ui";
 
 function statusPill(status: string): string {
   const s = (status || "").toLowerCase();
-  if (s === "open") return "bg-red-500 text-white";
-  if (s.includes("progress")) return "bg-amber-500 text-white";
-  if (s === "resolved") return "bg-emerald-500 text-white";
-  return "bg-black/10 text-black/60 dark:bg-white/10 dark:text-white/60";
+  if (s === "open") return "bg-status-failed-bg text-status-failed-fg";
+  if (s.includes("progress")) return "bg-stage-inplay-bg text-stage-inplay-fg";
+  if (s === "resolved") return "bg-status-scheduled-bg text-status-scheduled-fg";
+  return "bg-status-draft-bg text-status-draft-fg";
 }
 
-/**
- * Ticket row avatar. `assignedTo` on a ticket always references a staff
- * `user` (see shared/schema.ts) — never a client — so its presence is what
- * distinguishes a staff-assigned ticket from one that's just about a
- * customer. When assigned, show that user's profile picture (same
- * image -> profileImageUrl -> avatar fallback order as AssignedAgentButton
- * in holiday-header-actions.tsx), falling back to their initials rendered in
- * the `solid` (dark) style so it reads visually distinct from the
- * colour-coded customer-initials avatar used for unassigned tickets.
- */
-function TicketAvatar({ ticket, assignedUser }: { ticket: Ticket; assignedUser: User | undefined }) {
-  if (ticket.assignedTo) {
-    const avatarUrl = assignedUser?.image ?? assignedUser?.profileImageUrl ?? assignedUser?.avatar ?? null;
-    if (avatarUrl) {
-      return (
-        <img
-          src={avatarUrl}
-          alt=""
-          className="h-8 w-8 shrink-0 rounded-full object-cover"
-          data-testid={`img-dashboard-ticket-assignee-${ticket.id}`}
-        />
-      );
-    }
-    const name = assignedUser?.name ?? ticket.assignedToName ?? "?";
-    return <InitialsAvatar name={name} className="h-8 w-8 text-[11px]" solid />;
-  }
-  return <InitialsAvatar name={ticket.clientName || ticket.subject} className="h-8 w-8 text-[11px]" />;
+function priorityDot(priority: string): string {
+  const p = (priority || "").toLowerCase();
+  if (p === "urgent" || p === "high") return "bg-priority-high";
+  if (p === "medium") return "bg-priority-medium";
+  return "bg-priority-low";
+}
+
+function dueLabel(due: string | null): string | null {
+  if (!due) return null;
+  const d = new Date(due);
+  if (isNaN(d.getTime())) return null;
+  return `Due ${d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`;
 }
 
 export function TicketsTab({ userId }: { userId: string }) {
@@ -56,83 +37,45 @@ export function TicketsTab({ userId }: { userId: string }) {
     // rather than changing that shared default.
     assignedOnly: true,
   });
-  const { data: usersData } = useUsers();
-
-  const usersById = useMemo(() => {
-    const map = new Map<string, User>();
-    (usersData ?? []).forEach((u) => map.set(u.id, u));
-    return map;
-  }, [usersData]);
 
   const tickets = useMemo(() => {
     if (!ticketsData || !Array.isArray(ticketsData)) return [];
     return [...ticketsData]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 8);
+      .slice(0, 5);
   }, [ticketsData]);
 
   return (
-    <div className="flex min-h-[300px] flex-col" data-testid="panel-dashboard-tickets">
-      <div className="flex-1 space-y-1">
-        {tickets.length === 0 ? (
-          <div
-            className="rounded-lg border border-dashed border-black/10 p-8 text-center text-xs text-black/45 dark:border-white/10 dark:text-white/45"
-            data-testid="empty-dashboard-tickets"
+    <div className="flex flex-col" data-testid="panel-dashboard-tickets">
+      {tickets.length === 0 ? (
+        <EmptyLine testId="empty-dashboard-tickets">No open tickets assigned to you.</EmptyLine>
+      ) : (
+        tickets.map((ticket) => (
+          <RowButton
+            key={ticket.id}
+            onActivate={() => navigate(`/tickets/${ticket.id}`)}
+            className="flex items-center gap-3 rounded-none border-t border-social-border py-3 hover:bg-social-page"
+            testId={`row-dashboard-ticket-${ticket.id}`}
           >
-            No open tickets
-          </div>
-        ) : (
-          tickets.map((ticket) => (
-            <div
-              key={ticket.id}
-              role="link"
-              tabIndex={0}
-              onClick={() => navigate(`/tickets/${ticket.id}`)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  navigate(`/tickets/${ticket.id}`);
-                }
-              }}
-              className="group flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
-              data-testid={`row-dashboard-ticket-${ticket.id}`}
-            >
-              <TicketAvatar ticket={ticket} assignedUser={ticket.assignedTo ? usersById.get(ticket.assignedTo) : undefined} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="truncate text-sm font-medium">{ticket.subject}</span>
-                  <span className="shrink-0 text-xs text-black/40 dark:text-white/40">
-                    {timeAgo(ticket.createdAt)}
-                  </span>
-                </div>
-                <div className="mt-0.5 truncate text-[13px] text-[#a195a5] dark:text-white/50">
-                  {[ticket.clientName, ticket.type, ticket.priority && `${ticket.priority} priority`]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </div>
+            <span
+              className={cn("h-2 w-2 shrink-0 rounded-full", priorityDot(ticket.priority))}
+              title={`${ticket.priority} priority`}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-semibold xl:text-[14px]">{ticket.subject}</div>
+              <div className="truncate text-[11px] text-social-muted xl:text-[12px]">
+                {[ticket.id.slice(0, 8), ticket.clientName, dueLabel(ticket.dueDate)].filter(Boolean).join(" · ")}
               </div>
-              <span
-                className={cn(
-                  "shrink-0 rounded-sm px-2.5 py-1 text-[11px] font-semibold",
-                  statusPill(ticket.status),
-                )}
-              >
-                {ticket.status}
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-black/30 transition group-hover:translate-x-0.5 dark:text-white/30" />
             </div>
-          ))
-        )}
-      </div>
+            <HomePill className={statusPill(ticket.status)}>{ticket.status}</HomePill>
+          </RowButton>
+        ))
+      )}
 
-      <div className="mt-4">
-        <Link
-          href="/tickets"
-          className="text-sm font-semibold text-[#fe9a00] hover:underline"
-          data-testid="link-view-all-tickets"
-        >
-          View All Tickets
-        </Link>
+      <div className="mt-3.5">
+        <HomeLink href="/tickets" testId="link-view-all-tickets">
+          Open tickets
+        </HomeLink>
       </div>
     </div>
   );

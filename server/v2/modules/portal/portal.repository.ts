@@ -1,3 +1,4 @@
+// Intentionally outside the shop/homeworker partition: portal reads are client-facing and token-gated, not staff reads.
 import { db } from '../../config/database';
 import {
   chatConversations,

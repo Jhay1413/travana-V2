@@ -3,5 +3,6 @@
 // subpaths. Populated as part of the feature-based structure migration
 // (see docs/client-structure-migration-plan.md).
 export { inviteApi } from "./api/invite.api";
+export type { InviteBodyFor, SendInvitePayload, InviteOrgRole } from "./api/invite.api";
 export * from "./api/use-invite-queries";
 export * from "./api/use-invite-mutations";

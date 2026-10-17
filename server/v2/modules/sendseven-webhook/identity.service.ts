@@ -6,7 +6,7 @@ import type { InsertClientTable, NeonClient } from "@shared/schema";
 // A system (non-user) scope for background work — org-wide access, no branch/user
 // restriction. Used by the webhook worker which has no request/user.
 export function systemScope(orgId: string): Scope {
-  return { orgId, branchId: null, orgRole: "org_admin", orgRoles: ["org_admin"], userId: null };
+  return { orgId, branchId: null, orgRole: "org_admin", orgRoles: ["org_admin"], userId: null, branchType: null, ownsHomeworkerBranch: false };
 }
 
 export interface WebhookContact {

@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { HOMEWORKER_INVITE_ONLY_HINT, addableRoles, isHomeworkerLocked } from "@/features/platform-admin/lib/role-options";
 import type { AssignableOrgRole } from "@/features/platform-admin/api/platform-admin.api";
 
 const ALL_ROLES: AssignableOrgRole[] = [
@@ -58,17 +59,8 @@ export function RoleChipEditor({
   const removeRole = useRemoveUserRole();
   const [picker, setPicker] = useState<AssignableOrgRole | "">("");
 
-  const addable = useMemo(() => {
-    const has = new Set(roles);
-    const hasReferral = roles.includes("referral_agent");
-    const hasInternal = roles.some((r) => INTERNAL_ROLES.has(r));
-    return ALL_ROLES.filter((r) => {
-      if (has.has(r)) return false;
-      if (r === "referral_agent" && hasInternal) return false;
-      if (INTERNAL_ROLES.has(r) && hasReferral) return false;
-      return true;
-    });
-  }, [roles]);
+  const addable = useMemo(() => addableRoles(roles as AssignableOrgRole[], ALL_ROLES, INTERNAL_ROLES), [roles]);
+  const homeworkerLocked = isHomeworkerLocked(roles);
 
   const lastRole = roles.length <= 1;
   const busy     = addRole.isPending || removeRole.isPending;
@@ -84,7 +76,7 @@ export function RoleChipEditor({
           key={r}
           label={ROLE_LABEL[r as AssignableOrgRole] ?? r}
           onRemove={
-            disabled || lastRole
+            disabled || lastRole || homeworkerLocked
               ? undefined
               : () => removeRole.mutate({ orgId, userId, role: r as AssignableOrgRole })
           }
@@ -92,7 +84,12 @@ export function RoleChipEditor({
           testId={`chip-role-${r}-${userId}`}
         />
       ))}
-      {!disabled && addable.length > 0 && (
+      {homeworkerLocked && (
+        <span className="text-xs text-black/40 dark:text-white/40" title={HOMEWORKER_INVITE_ONLY_HINT} data-testid={`hint-homeworker-locked-${userId}`}>
+          Invite-only
+        </span>
+      )}
+      {!disabled && !homeworkerLocked && addable.length > 0 && (
         <Select
           value={picker}
           onValueChange={(v) => {

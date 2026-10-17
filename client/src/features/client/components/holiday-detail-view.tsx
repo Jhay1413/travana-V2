@@ -92,7 +92,8 @@ import {
   useSetDealLost,
   useSetPrimaryQuote,
 } from "@/hooks/mutations";
-import { useRole } from "@/hooks/use-role";
+import { useRole, useRoles } from "@/hooks/use-role";
+import { omitHomeworkerDeniedTabs } from "@/config/homeworker-access";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -465,11 +466,13 @@ function HolidayNoteCard({
   replies,
   transactionId,
   avatarByUserId,
+  readOnly = false,
 }: {
   note: TransactionNote;
   replies: TransactionNote[];
   transactionId: string;
   avatarByUserId: Map<string, string | null>;
+  readOnly?: boolean;
 }) {
   const isSystem = note.description === "system";
   const [isEditing, setIsEditing] = useState(false);
@@ -524,7 +527,7 @@ function HolidayNoteCard({
             <span className="font-semibold text-[#3b82f6]">{authorName}</span>
             <span className="text-black/45"> – {formatNoteDateTime(note.createdAt)}</span>
           </div>
-          {!isSystem && (
+          {!isSystem && !readOnly && (
             <div className="flex shrink-0 items-center gap-1.5 text-[#7c98b0]">
               <button
                 type="button"
@@ -613,7 +616,7 @@ function HolidayNoteCard({
   );
 }
 
-function HolidayNotesTab({ transactionId }: { transactionId: string }) {
+function HolidayNotesTab({ transactionId, readOnly = false }: { transactionId: string; readOnly?: boolean }) {
   const { data: notesData, isLoading } = useNotes(transactionId);
   const { data: users = [] } = useUsers();
   const avatarByUserId = useMemo(
@@ -639,7 +642,7 @@ function HolidayNotesTab({ transactionId }: { transactionId: string }) {
     );
   }
   if (topLevelNotes.length === 0) {
-    return <p className="py-8 text-center text-[13px] text-black/40">No notes yet. Add one below.</p>;
+    return <p className="py-8 text-center text-[13px] text-black/40">{readOnly ? "No notes yet." : "No notes yet. Add one below."}</p>;
   }
   return (
     <div className="space-y-3" data-testid="holiday-detail-notes">
@@ -650,6 +653,7 @@ function HolidayNotesTab({ transactionId }: { transactionId: string }) {
           replies={repliesByParent.get(note.id) || []}
           transactionId={transactionId}
           avatarByUserId={avatarByUserId}
+          readOnly={readOnly}
         />
       ))}
     </div>
@@ -680,7 +684,7 @@ function taskInitials(name: string): string {
     .join("");
 }
 
-function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityType: "enquiry" | "quote" | "booking" }) {
+function HolidayTasksTab({ entityId, entityType, readOnly = false }: { entityId: string; entityType: "enquiry" | "quote" | "booking"; readOnly?: boolean }) {
   // Booking tasks are stored under the "quote" entity type — same mapping
   // QuoteTasksSection applies.
   const taskEntityType = entityType === "booking" ? "quote" : entityType;
@@ -709,7 +713,7 @@ function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityTyp
     return (
       <div className="flex flex-col items-center gap-3 py-8">
         <p className="text-[13px] text-black/40">No tasks yet.</p>
-        <Button
+        {!readOnly && (<Button
           size="sm"
           className="h-7 rounded-lg bg-[#3b82f6] px-3 text-xs text-white hover:bg-[#3b82f6]/90"
           data-testid="holiday-tasks-empty-new-task"
@@ -717,15 +721,15 @@ function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityTyp
         >
           <Plus className="mr-1 h-3.5 w-3.5" />
           New Task
-        </Button>
-        <CreateTaskDialog
+        </Button>)}
+        {!readOnly && <CreateTaskDialog
           presentation="drawer"
           open={showAddTask}
           onOpenChange={setShowAddTask}
           entityType={taskEntityType}
           entityId={entityId}
           defaultAssignedToId={currentUser?.id}
-        />
+        />}
       </div>
     );
   }
@@ -742,9 +746,11 @@ function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityTyp
             <div key={task.id} className="flex items-start gap-3 px-2 py-4" data-testid={`holiday-task-${task.id}`}>
               <button
                 type="button"
+                disabled={readOnly}
                 onClick={() => toggleMutation.mutate(task.id)}
                 title={task.completed ? "Mark as pending" : "Mark as done"}
                 className={cn(
+                  readOnly && "cursor-default",
                   "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 transition",
                   task.completed
                     ? "border-emerald-500 bg-emerald-500 text-white"
@@ -789,7 +795,7 @@ function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityTyp
                     {taskInitials(assigneeName)}
                   </span>
                 )}
-                <DropdownMenu>
+                {!readOnly && (<DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
@@ -811,7 +817,7 @@ function HolidayTasksTab({ entityId, entityType }: { entityId: string; entityTyp
                       <Trash2 className="h-3.5 w-3.5" /> Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
-                </DropdownMenu>
+                </DropdownMenu>)}
               </div>
             </div>
           );
@@ -846,19 +852,24 @@ function DetailTabsCard({
   entityType,
   clientId,
   clientName,
+  readOnly = false,
 }: {
   transactionId: string;
   entityId: string;
   entityType: "enquiry" | "quote" | "booking";
   clientId: string;
   clientName: string;
+  /** Read-only roles get no creation or editing; the Tickets tab (a reply composer) is dropped. */
+  readOnly?: boolean;
 }) {
   const [tab, setTab] = useState<DetailTab>("notes");
+  const { hasRole } = useRoles();
+  const isHomeworker = hasRole("homeworker");
   return (
     <Card className="mt-6 rounded-2xl border border-black/10 bg-white p-3 shadow-sm" data-testid="holiday-detail-tabs-card">
       <Tabs value={tab} onValueChange={(v) => setTab(v as DetailTab)}>
         <TabsList className="h-8 rounded-[6px] border border-black/10 bg-black/[0.02] p-0.5">
-          {DETAIL_TABS.map((t) => (
+          {omitHomeworkerDeniedTabs(DETAIL_TABS, isHomeworker, ["inbox"]).filter((t) => !(readOnly && t.value === "tickets")).map((t) => (
             <TabsTrigger key={t.value} value={t.value} className="rounded-[4px] px-4 py-0.5 text-[13px] font-semibold data-[state=active]:font-bold 3xl:text-sm" data-testid={`holiday-detail-tab-${t.value}`}>
               {t.label}
             </TabsTrigger>
@@ -866,7 +877,7 @@ function DetailTabsCard({
         </TabsList>
 
         <TabsContent value="notes" className="mt-3" data-testid="holiday-detail-tab-panel-notes">
-          <HolidayNotesTab transactionId={transactionId} />
+          <HolidayNotesTab transactionId={transactionId} readOnly={readOnly} />
         </TabsContent>
 
         {/* Conversations are tracked against the client's linked contact, not
@@ -876,12 +887,14 @@ function DetailTabsCard({
         </TabsContent>
 
         <TabsContent value="tasks" className="mt-3" data-testid="holiday-detail-tab-panel-tasks">
-          <HolidayTasksTab entityId={entityId} entityType={entityType} />
+          <HolidayTasksTab entityId={entityId} entityType={entityType} readOnly={readOnly} />
         </TabsContent>
 
-        <TabsContent value="tickets" className="mt-3" data-testid="holiday-detail-tab-panel-tickets">
-          <HolidayTicketsTab clientId={clientId} clientName={clientName} entityId={entityId} entityType={entityType} transactionId={transactionId} />
-        </TabsContent>
+        {!readOnly && (
+          <TabsContent value="tickets" className="mt-3" data-testid="holiday-detail-tab-panel-tickets">
+            <HolidayTicketsTab clientId={clientId} clientName={clientName} entityId={entityId} entityType={entityType} transactionId={transactionId} />
+          </TabsContent>
+        )}
       </Tabs>
     </Card>
   );
@@ -1428,6 +1441,7 @@ function QuoteHolidayDetail({
   onBack,
   onOpenExpiryDialog,
   showDetailTabs = true,
+  readOnly = false,
 }: HolidayDetailContentProps & {
   /** Opens the single, shared "Update Expiry" dialog owned by the page (see
    *  pages/client/index.tsx) — keeps exactly one <QuoteExpiryDialog> mounted
@@ -1495,7 +1509,12 @@ function QuoteHolidayDetail({
               {quote.pricePerPerson > 0 && (
                 <span className="text-base font-semibold ">{currency.format(quote.pricePerPerson)}pp</span>
               )}
-              {quote.isCopyQuote && (
+              {quote.isCopyQuote && readOnly && (
+                <span className="inline-flex items-center rounded-full border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-700" data-testid="pill-holiday-quote-copy">
+                  Copy Quote
+                </span>
+              )}
+              {quote.isCopyQuote && !readOnly && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
@@ -1533,7 +1552,7 @@ function QuoteHolidayDetail({
                 dateExpiry={quoteData?.date_expiry}
                 dateCreated={quoteData?.date_created}
                 isLost={isLost}
-                onUpdateExpiry={() => onOpenExpiryDialog(quoteData?.date_expiry)}
+                onUpdateExpiry={readOnly ? undefined : () => onOpenExpiryDialog(quoteData?.date_expiry)}
               />
               <ViewsPill quoteId={id} />
             </div>
@@ -1562,15 +1581,17 @@ function QuoteHolidayDetail({
                   the expiry date to keep it active.
                 </p>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 shrink-0 rounded-xl border-red-500/30 bg-white/70 px-3 text-xs font-semibold text-red-700 hover:bg-red-500/10"
-                onClick={() => onOpenExpiryDialog(quoteData?.date_expiry)}
-                data-testid="button-extend-expiry"
-              >
-                Extend expiry
-              </Button>
+              {!readOnly && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 shrink-0 rounded-xl border-red-500/30 bg-white/70 px-3 text-xs font-semibold text-red-700 hover:bg-red-500/10"
+                  onClick={() => onOpenExpiryDialog(quoteData?.date_expiry)}
+                  data-testid="button-extend-expiry"
+                >
+                  Extend expiry
+                </Button>
+              )}
             </div>
           )}
           <FieldsGrid left={fields.left} right={fields.right} />
@@ -1580,9 +1601,9 @@ function QuoteHolidayDetail({
         </div>
       </Card>
       {showDetailTabs && (
-        <DetailTabsCard transactionId={quote.transaction_id} entityId={id} entityType="quote" clientId={clientId} clientName={clientName} />
+        <DetailTabsCard transactionId={quote.transaction_id} entityId={id} entityType="quote" clientId={clientId} clientName={clientName} readOnly={readOnly} />
       )}
-      <HolidayComposer transactionId={quote.transaction_id} />
+      {!readOnly && <HolidayComposer transactionId={quote.transaction_id} />}
     </>
   );
 }
@@ -1696,7 +1717,7 @@ export function BookingActionsMenu({
 
 // ─── Booking ────────────────────────────────────────────────────────────────
 
-function BookingHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs = true }: HolidayDetailContentProps) {
+function BookingHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs = true, readOnly = false }: HolidayDetailContentProps) {
   const { data: bookingData, isLoading, error } = useBooking(id);
   const { primaryImage, galleryImages } = useQuoteImages(bookingData);
 
@@ -1755,9 +1776,9 @@ function BookingHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs
         </div>
       </Card>
       {showDetailTabs && (
-        <DetailTabsCard transactionId={booking.transaction_id} entityId={id} entityType="booking" clientId={clientId} clientName={clientName} />
+        <DetailTabsCard transactionId={booking.transaction_id} entityId={id} entityType="booking" clientId={clientId} clientName={clientName} readOnly={readOnly} />
       )}
-      <HolidayComposer transactionId={booking.transaction_id} />
+      {!readOnly && <HolidayComposer transactionId={booking.transaction_id} />}
     </>
   );
 }
@@ -2053,7 +2074,7 @@ function formatBudgetType(budgetType?: string | null): string {
   return budgetType === "PER_PERSON" ? "pp" : ` ${budgetType.toLowerCase()}`;
 }
 
-function EnquiryHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs = true }: HolidayDetailContentProps) {
+function EnquiryHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs = true, readOnly = false }: HolidayDetailContentProps) {
   const { data: enquiry, isLoading, error } = useEnquiry(id);
   const { data: users = [] } = useUsers();
 
@@ -2124,9 +2145,9 @@ function EnquiryHolidayDetail({ id, clientId, clientName, onBack, showDetailTabs
         </div>
       </Card>
       {showDetailTabs && (
-        <DetailTabsCard transactionId={enquiry.transaction_id} entityId={id} entityType="enquiry" clientId={clientId} clientName={clientName} />
+        <DetailTabsCard transactionId={enquiry.transaction_id} entityId={id} entityType="enquiry" clientId={clientId} clientName={clientName} readOnly={readOnly} />
       )}
-      <HolidayComposer transactionId={enquiry.transaction_id} />
+      {!readOnly && <HolidayComposer transactionId={enquiry.transaction_id} />}
     </>
   );
 }
@@ -2141,6 +2162,8 @@ interface HolidayDetailContentProps {
   /** Shows the Notes / Inbox / Tasks / Tickets tabs card. Defaults to true so
    *  every existing caller keeps rendering it unchanged. */
   showDetailTabs?: boolean;
+  /** Hides every write control (social_media_manager). Defaults to false. */
+  readOnly?: boolean;
 }
 
 export interface HolidayDetailViewProps {
@@ -2155,6 +2178,9 @@ export interface HolidayDetailViewProps {
    *  which preserves today's rendering (e.g. pages/client/index.tsx). The
    *  social-post quote page passes false to hide it. */
   showDetailTabs?: boolean;
+  /** Hides every write control (social_media_manager). Defaults to false, so
+   *  other consumers (pages/social-quote) are unchanged. */
+  readOnly?: boolean;
 }
 
 export function HolidayDetailView({
@@ -2164,6 +2190,7 @@ export function HolidayDetailView({
   onBack,
   onOpenExpiryDialog,
   showDetailTabs = true,
+  readOnly = false,
 }: HolidayDetailViewProps) {
   return (
     <div data-testid="holiday-detail-view">
@@ -2176,6 +2203,7 @@ export function HolidayDetailView({
           onBack={onBack}
           onOpenExpiryDialog={onOpenExpiryDialog}
           showDetailTabs={showDetailTabs}
+          readOnly={readOnly}
         />
       )}
       {selection.type === "booking" && (
@@ -2186,6 +2214,7 @@ export function HolidayDetailView({
           clientName={clientName}
           onBack={onBack}
           showDetailTabs={showDetailTabs}
+          readOnly={readOnly}
         />
       )}
       {selection.type === "enquiry" && (
@@ -2196,6 +2225,7 @@ export function HolidayDetailView({
           clientName={clientName}
           onBack={onBack}
           showDetailTabs={showDetailTabs}
+          readOnly={readOnly}
         />
       )}
     </div>

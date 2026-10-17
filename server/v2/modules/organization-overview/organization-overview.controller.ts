@@ -3,7 +3,7 @@ import { organizationOverviewService } from "./organization-overview.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
-import type { OverviewBranchQuery } from "./organization-overview.validator";
+import type { CompareQuery, OverviewBranchQuery } from "./organization-overview.validator";
 
 const ALLOWED_RANGES = new Set(["day", "week", "month", "custom"] as const);
 
@@ -54,5 +54,17 @@ export const organizationOverviewController = {
       (req.query as unknown as OverviewBranchQuery).branchId,
     );
     return successResponse(res, data, "Branches performance retrieved successfully");
+  }),
+
+  getCompare: asyncHandler(async (req: Request, res: Response) => {
+    const { period, against, branchId } = req.query as unknown as CompareQuery;
+    const data = await organizationOverviewService.getCompare(getScope(req), period, against, branchId);
+    return successResponse(res, data, "Comparison retrieved successfully");
+  }),
+
+  getProfitSources: asyncHandler(async (req: Request, res: Response) => {
+    const { branchId } = req.query as unknown as OverviewBranchQuery;
+    const data = await organizationOverviewService.getProfitSources(getScope(req), branchId);
+    return successResponse(res, data, "Profit sources retrieved successfully");
   }),
 };

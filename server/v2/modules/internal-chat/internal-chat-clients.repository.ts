@@ -1,6 +1,8 @@
 import { and, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { db } from "../../config/database";
 import { phoneDigitsCondition } from "../../utils/phone-search";
+import type { Scope } from "../../utils/scope";
+import { buildPartitionCond } from "../../utils/scope-conditions";
 import {
   accomodation_list,
   board_basis,
@@ -45,6 +47,9 @@ export interface ResolvedClientScope {
   orgId?: string;
   branchId?: string;
   userId?: string;
+  // The caller's full scope, used only to layer the shop/homeworker partition
+  // on top of the level filter (see buildPartitionCond).
+  partitionScope?: Scope;
 }
 
 export interface ClientIdentityRow {
@@ -157,8 +162,12 @@ export interface ClientDetailRowsResult<T> {
 // for this specific client (via findClientById), so — exactly like
 // getClientPipelineCounts — this deliberately does NOT re-apply branch/user
 // transaction scope on top.
-function buildClientRecordTxnConds(clientId: string, orgId: string): SQL[] {
-  return [eq(transaction.client_id, clientId), eq(transaction.org_id, orgId), eq(transaction.is_test, false)];
+function buildClientRecordTxnConds(clientId: string, orgId: string, partitionScope?: Scope): SQL[] {
+  const conds = [eq(transaction.client_id, clientId), eq(transaction.org_id, orgId), eq(transaction.is_test, false)];
+  // Only the shop/homeworker partition is re-applied (never branch/user pinning).
+  const partition = partitionScope ? buildPartitionCond(partitionScope, transaction.branch_id, transaction.user_id) : undefined;
+  if (partition) conds.push(partition);
+  return conds;
 }
 
 const IDENTITY_COLUMNS = {
@@ -187,6 +196,11 @@ function buildClientVisibilityConds(resolved: ResolvedClientScope): SQL[] {
     conds.push(eq(clientTable.branchId, resolved.branchId));
   } else if (resolved.level === "own" && resolved.userId) {
     conds.push(eq(clientTable.createdBy, resolved.userId));
+  }
+
+  if (resolved.partitionScope) {
+    const partition = buildPartitionCond(resolved.partitionScope, clientTable.branchId, clientTable.createdBy);
+    if (partition) conds.push(partition);
   }
 
   return conds;
@@ -263,12 +277,8 @@ export const internalChatClientsRepository = {
   // including quotes created through the free-quote flow (a large share of
   // real, client-attached quotes have isFreeQuote=true). Returns counts +
   // latest transaction status/date only — NO prices/amounts.
-  async getClientPipelineCounts(clientId: string, orgId: string): Promise<ClientPipelineCountsRow> {
-    const txConds: SQL[] = [
-      eq(transaction.client_id, clientId),
-      eq(transaction.org_id, orgId),
-      eq(transaction.is_test, false),
-    ];
+  async getClientPipelineCounts(clientId: string, orgId: string, partitionScope?: Scope): Promise<ClientPipelineCountsRow> {
+    const txConds: SQL[] = buildClientRecordTxnConds(clientId, orgId, partitionScope);
 
     const [enquiryRow, quoteRow, bookingRow, latestTxRow] = await Promise.all([
       db
@@ -317,8 +327,8 @@ export const internalChatClientsRepository = {
   // resolved the same way as transaction.repository.ts#enrichTransactions:
   // enquiry_destination joined to destination, falling back to park (holiday
   // park-only enquiries store their destination as a park id).
-  async getClientEnquiryDetails(clientId: string, orgId: string): Promise<ClientDetailRowsResult<ClientEnquiryDetailRow>> {
-    const txConds = buildClientRecordTxnConds(clientId, orgId);
+  async getClientEnquiryDetails(clientId: string, orgId: string, partitionScope?: Scope): Promise<ClientDetailRowsResult<ClientEnquiryDetailRow>> {
+    const txConds = buildClientRecordTxnConds(clientId, orgId, partitionScope);
 
     const rows = await db
       .select({
@@ -387,8 +397,8 @@ export const internalChatClientsRepository = {
   // destination -> country join chain already used across the codebase
   // (see portal.repository.ts#findClientQuotes, quote.repository.ts's public
   // deal-feed query) — reused here rather than reinvented.
-  async getClientQuoteDetails(clientId: string, orgId: string): Promise<ClientDetailRowsResult<ClientQuoteDetailRow>> {
-    const txConds = buildClientRecordTxnConds(clientId, orgId);
+  async getClientQuoteDetails(clientId: string, orgId: string, partitionScope?: Scope): Promise<ClientDetailRowsResult<ClientQuoteDetailRow>> {
+    const txConds = buildClientRecordTxnConds(clientId, orgId, partitionScope);
 
     const rows = await db
       .select({
@@ -444,8 +454,8 @@ export const internalChatClientsRepository = {
   // resort/country/board-basis names resolved via the booking's PRIMARY
   // accommodation (booking_accomodation(is_primary=true) -> ...), mirroring
   // portal.repository.ts#findClientBookings.
-  async getClientBookingDetails(clientId: string, orgId: string): Promise<ClientDetailRowsResult<ClientBookingDetailRow>> {
-    const txConds = buildClientRecordTxnConds(clientId, orgId);
+  async getClientBookingDetails(clientId: string, orgId: string, partitionScope?: Scope): Promise<ClientDetailRowsResult<ClientBookingDetailRow>> {
+    const txConds = buildClientRecordTxnConds(clientId, orgId, partitionScope);
 
     const rows = await db
       .select({

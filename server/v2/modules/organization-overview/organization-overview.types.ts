@@ -31,6 +31,7 @@ export interface OrganizationOverviewKpis {
   prevWeekCloseRate: number;
   quoteViewsCount: number;
   quotesSentCount: number;
+  /** Month profit (booking commission incl. upsells) divided by month bookings; 0 when none. */
   avgCommission: number;
   openQuotesValue: number;
   openQuotesCount: number;
@@ -57,7 +58,12 @@ export interface AgentPerformanceRow {
   rangeCommission: number;
   rangeSales: number;
   rangeQuotes: number;
+  /** Booking-only commission per booking (kept for the leaderboard page). */
   avgPerBooking: number;
+  /** Range commission incl. upsells per range booking; 0 when none. */
+  ppb: number;
+  /** Active deals owned by the agent with at least one open quote (range-independent). */
+  openDeals: number;
   target: number;
   achievedPercent: number;
 }
@@ -70,10 +76,13 @@ export interface AgentsPerformanceResponse {
   unlisted: { today: number; week: number; month: number; rangeBookings: number };
 }
 
+export type OverviewBranchType = "shop" | "homeworker";
+
 export interface BranchPerformanceRow {
   id: string;
   name: string;
   code: string | null;
+  branchType: OverviewBranchType;
   today: number;
   week: number;
   month: number;
@@ -91,6 +100,34 @@ export interface BranchesPerformanceResponse {
   from: string;
   to: string;
   rows: BranchPerformanceRow[];
+}
+
+/** A homeworker branch row as the repository returns it (identity only, no numbers). */
+export interface HomeworkerBranchRecord {
+  branchId: string;
+  name: string;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  ownerAvatarUrl: string | null;
+  profitSharePercent: number | null;
+  isActive: boolean;
+}
+
+export interface HomeworkerOverviewRow {
+  branchId: string;
+  name: string;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  ownerAvatarUrl: string | null;
+  profitSharePercent: number | null;
+  status: "active" | "archived";
+  today: number;
+  week: number;
+  month: number;
+  rangeBookings: number;
+  avgPerBooking: number;
+  target: number;
+  achievedPercent: number;
 }
 
 export interface OrganizationOverviewFunnel {
@@ -125,6 +162,11 @@ export interface OrganizationOverviewBranchRow {
   id: string;
   name: string;
   code: string | null;
+  branchType: OverviewBranchType;
+  /** Homeworker branches only; null for shop branches. */
+  profitSharePercent: number | null;
+  /** Homeworker branches only; null for shop branches. */
+  ownerUserId: string | null;
   bookings: number;
   commission: number;
   quotes: number;
@@ -167,13 +209,77 @@ export interface OrganizationOverviewCore extends OrganizationOverviewBase {
   branchLeaderboard: OrganizationOverviewBranchRow[];
 }
 
-export interface SingleBranchOverview extends OrganizationOverviewBase {
+export interface HomeworkersOverview {
+  /** One row per homeworker branch, kept separate from the shop branch leaderboard. */
+  homeworkers: HomeworkerOverviewRow[];
+}
+
+export interface SingleBranchOverview extends OrganizationOverviewBase, HomeworkersOverview {
   kind: "single-branch";
 }
 
-export interface MultiBranchOverview extends OrganizationOverviewBase {
+export interface MultiBranchOverview extends OrganizationOverviewBase, HomeworkersOverview {
   kind: "multi-branch";
   branchLeaderboard: OrganizationOverviewBranchRow[];
 }
 
 export type OrganizationOverviewStats = SingleBranchOverview | MultiBranchOverview;
+
+export type ComparePeriod = "week" | "month" | "year";
+export type CompareAgainst = "prev" | "year" | "two_years";
+
+export interface CompareMeasures {
+  profit: number;
+  bookings: number;
+  ppb: number;
+  closeRate: number;
+}
+
+export interface CompareWindow {
+  from: string;
+  to: string;
+}
+
+export interface OrganizationOverviewCompare {
+  period: ComparePeriod;
+  against: CompareAgainst;
+  now: CompareMeasures;
+  other: CompareMeasures;
+  labels: { now: string; other: string };
+  windows: { now: CompareWindow; other: CompareWindow };
+}
+
+/** Raw per-window totals as the repository returns them. */
+export interface CompareWindowTotals {
+  profit: number;
+  bookings: number;
+  quotedDeals: number;
+}
+
+export interface CompareTotals {
+  now: CompareWindowTotals;
+  other: CompareWindowTotals;
+}
+
+export type LeadSourceKey = "SHOP" | "FACEBOOK" | "WHATSAPP" | "INSTAGRAM" | "PHONE_ENQUIRY" | "none";
+
+export interface ProfitSourceRow {
+  /** A LeadSourceKey today; kept as the raw string so a future enum value never collides with "none". */
+  source: string;
+  label: string;
+  profit: number;
+  bookings: number;
+}
+
+export interface ProfitSourcesResponse {
+  month: string;
+  rows: ProfitSourceRow[];
+  totals: { profit: number; bookings: number };
+}
+
+/** Raw lead-source group as the repository returns it. */
+export interface ProfitSourceTotal {
+  source: string;
+  profit: number;
+  bookings: number;
+}

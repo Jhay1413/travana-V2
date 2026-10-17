@@ -7,6 +7,8 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { authStorage } from "./storage";
+import { sessionDb } from "../../config/session-database";
+import { resolveAccountBlock } from "./resolve-account-block";
 
 const getOidcConfig = memoize(
   async () => {
@@ -22,7 +24,7 @@ export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
-    conString: process.env.NEON_DATABASE_URL || process.env.DATABASE_URL,
+    pool: sessionDb,
     createTableIfMissing: false,
     ttl: sessionTtl,
     tableName: "sessions",
@@ -53,11 +55,12 @@ function updateUserSession(
 }
 
 async function upsertUser(claims: any) {
+  // returns the stored user so the caller can check the account's standing
   const firstName = claims["first_name"] || "";
   const lastName = claims["last_name"] || "";
   const name = [firstName, lastName].filter(Boolean).join(" ") || claims["email"] || "User";
 
-  await authStorage.upsertUser({
+  return authStorage.upsertUser({
     id: claims["sub"],
     name,
     email: claims["email"] || "",
@@ -67,6 +70,21 @@ async function upsertUser(claims: any) {
     image: claims["profile_image_url"] || null,
     role: "Agent",
   });
+}
+
+/** OIDC verify step: upserts the user, then refuses deactivated or suspended accounts. */
+export async function verifyOidcLogin(
+  tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
+  verified: passport.AuthenticateCallback,
+): Promise<void> {
+  const user = {};
+  updateUserSession(user, tokens);
+  const stored = await upsertUser(tokens.claims());
+  if (await resolveAccountBlock(stored, false)) {
+    verified(null, false);
+    return;
+  }
+  verified(null, user);
 }
 
 export async function setupAuth(app: Express) {
@@ -85,15 +103,7 @@ export async function setupAuth(app: Express) {
   if (process.env.REPL_ID) {
     config = await getOidcConfig();
 
-    const verify: VerifyFunction = async (
-      tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
-      verified: passport.AuthenticateCallback
-    ) => {
-      const user = {};
-      updateUserSession(user, tokens);
-      await upsertUser(tokens.claims());
-      verified(null, user);
-    };
+    const verify: VerifyFunction = verifyOidcLogin;
 
     // Keep track of registered strategies
     const registeredStrategies = new Set<string>();

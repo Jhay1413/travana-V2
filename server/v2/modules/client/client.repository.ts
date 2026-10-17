@@ -22,6 +22,7 @@ import {
 } from "@shared/schema";
 import { eq, desc, and, inArray, sql, type SQL } from "drizzle-orm";
 import type { Scope } from "../../utils/scope";
+import { buildPartitionCond } from "../../utils/scope-conditions";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -35,6 +36,8 @@ function buildScopeWhere(scope: Scope): SQL | undefined {
   if ((scope.orgRole === "agent" || scope.orgRole === "homeworker") && scope.userId) {
     conds.push(eq(clientTable.createdBy, scope.userId));
   }
+  const partition = buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy);
+  if (partition) conds.push(partition);
   return and(...conds);
 }
 

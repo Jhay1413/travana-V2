@@ -9,9 +9,12 @@ vi.mock("./transaction.repository", () => ({
     createWithQuoteAndChildren: vi.fn(),
     createWithBookingAndChildren: vi.fn(),
     update: vi.fn(),
+    updateAndRehome: vi.fn(),
     remove: vi.fn(),
     findExpiringQuotes: vi.fn(),
     findPipelineByStatus: vi.fn(),
+    findPipelineCandidates: vi.fn(),
+    countPipelineQuickByColumn: vi.fn(),
     applyFutureDeal: vi.fn(),
     applyLost: vi.fn(),
   },
@@ -57,6 +60,10 @@ vi.mock("../booking/booking.repository", () => ({
     upsertCruise: vi.fn(),
   },
 }));
+vi.mock("../branch-member/branch-member.repository", () => ({
+  branchMemberRepository: { findActiveContextByUserIdInOrg: vi.fn(), findActiveContextByUserId: vi.fn() },
+}));
+vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn(), findOrgIdById: vi.fn() } }));
 vi.mock("../note/note.repository", () => ({ noteRepository: { create: vi.fn() } }));
 vi.mock("../task/task.service", () => ({ taskService: { reassignByEntity: vi.fn() } }));
 vi.mock("../quote/quote.service", () => ({ newQuoteService: { createQuote: vi.fn() } }));
@@ -66,6 +73,8 @@ vi.mock("../wallet/wallet.service", () => ({ walletService: { applyBookingCredit
 vi.mock("../neon-client/neon-client.repository", () => ({ neonClientRepository: { findById: vi.fn(), update: vi.fn() } }));
 
 import { transactionService } from "./transaction.service";
+import { branchMemberRepository } from "../branch-member/branch-member.repository";
+import { branchRepository } from "../branch/branch.repository";
 import { transactionRepository } from "./transaction.repository";
 import { newQuoteRepository } from "../quote/quote.repository";
 import { newQuoteService } from "../quote/quote.service";
@@ -82,6 +91,7 @@ const SCOPE = { orgId: "org1", orgRole: "agent" } as never;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue({ branchId: "shop1", branchType: "shop", orgId: "org1" } as never);
 });
 
 describe("transactionService.getTransactionById", () => {
@@ -129,6 +139,69 @@ describe("transactionService.updateTransaction", () => {
     await transactionService.updateTransaction("t1", { user_id: "same" }, SCOPE);
 
     expect(taskService.reassignByEntity).not.toHaveBeenCalled();
+  });
+});
+
+describe("transactionService.updateTransaction deal reassignment across the partition (Q2)", () => {
+  const ADMIN = { orgId: "org1", orgRole: "org_admin", orgRoles: ["org_admin"], branchType: "shop" } as never;
+  const AGENT = { orgId: "org1", orgRole: "agent", orgRoles: ["agent"], branchType: "shop" } as never;
+  const HOMEWORKER = { orgId: "org1", orgRole: "homeworker", orgRoles: ["homeworker"], branchType: "homeworker" } as never;
+
+  beforeEach(() => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", user_id: "old", branch_id: "shop1" } as never);
+    vi.mocked(transactionRepository.update).mockResolvedValue({ id: "t1" } as never);
+    vi.mocked(transactionRepository.updateAndRehome).mockResolvedValue({ id: "t1" } as never);
+    vi.mocked(newQuoteRepository.findByTransactionId).mockResolvedValue([] as never);
+    vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue(undefined as never);
+    vi.mocked(enquiryTableRepository.findByTransactionId).mockResolvedValue(undefined as never);
+  });
+
+  it("admin handing a deal to a homeworker re-homes it (with its tasks and tickets) into their branch", async () => {
+    vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue({ branchId: "hw1", branchType: "homeworker", orgId: "org1" } as never);
+    await transactionService.updateTransaction("t1", { user_id: "hw" }, ADMIN);
+    expect(branchMemberRepository.findActiveContextByUserIdInOrg).toHaveBeenCalledWith("hw", "org1");
+    expect(transactionRepository.updateAndRehome).toHaveBeenCalledWith("t1", { user_id: "hw" }, ADMIN, "hw1");
+    expect(transactionRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("admin moving a deal back to shop staff re-homes it into the shop branch", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", user_id: "hw", branch_id: "hw1" } as never);
+    await transactionService.updateTransaction("t1", { user_id: "u2" }, ADMIN);
+    expect(transactionRepository.updateAndRehome).toHaveBeenCalledWith("t1", { user_id: "u2" }, ADMIN, "shop1");
+  });
+
+  it("no re-home when the new owner is already in the deal's branch", async () => {
+    await transactionService.updateTransaction("t1", { user_id: "u2" }, ADMIN);
+    expect(transactionRepository.updateAndRehome).not.toHaveBeenCalled();
+    expect(transactionRepository.update).toHaveBeenCalled();
+  });
+
+  it("non-admin shop staff get 400 handing a deal to a homeworker", async () => {
+    vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue({ branchId: "hw1", branchType: "homeworker", orgId: "org1" } as never);
+    await expect(transactionService.updateTransaction("t1", { user_id: "hw" }, AGENT)).rejects.toMatchObject({ statusCode: 400 });
+    expect(transactionRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("a homeworker gets 400 handing a deal to shop staff", async () => {
+    await expect(transactionService.updateTransaction("t1", { user_id: "u2" }, HOMEWORKER)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("400s when the new owner is not an active member of the org", async () => {
+    vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue(undefined as never);
+    await expect(transactionService.updateTransaction("t1", { user_id: "foreign" }, ADMIN)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("strips org_id and (for non-admins) branch_id from the patch", async () => {
+    await transactionService.updateTransaction("t1", { status: "on_quote", org_id: "evil", branch_id: "evil-b" } as never, AGENT);
+    expect(vi.mocked(transactionRepository.update).mock.calls[0][1]).toEqual({ status: "on_quote" });
+  });
+
+  it("lets an admin set branch_id only inside their org", async () => {
+    vi.mocked(branchRepository.findById).mockResolvedValueOnce({ id: "b2" } as never);
+    await transactionService.updateTransaction("t1", { branch_id: "b2" } as never, ADMIN);
+    expect(vi.mocked(transactionRepository.update).mock.calls[0][1]).toEqual({ branch_id: "b2" });
+    vi.mocked(branchRepository.findById).mockResolvedValueOnce(null);
+    await expect(transactionService.updateTransaction("t1", { branch_id: "foreign" } as never, ADMIN)).rejects.toMatchObject({ statusCode: 400 });
   });
 });
 
@@ -452,6 +525,64 @@ describe("transactionService.listPipelineByStatus — pinning", () => {
 
     await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1");
 
-    expect(transactionRepository.findPipelineByStatus).toHaveBeenCalledWith(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1", undefined);
+    expect(transactionRepository.findPipelineByStatus).toHaveBeenCalledWith(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1", undefined, undefined);
+  });
+});
+
+describe("transactionService.listPipelineByStatus — filters and totals", () => {
+  const FILTERS = { search: "paris", priorities: ["high" as const], quick: "no_task" as const };
+
+  it("forwards filters to the SQL-ordered path", async () => {
+    const page = { items: [], total: 0, page: 1, hasMore: false, totalProfit: 5, totalValue: 10 };
+    vi.mocked(transactionRepository.findPipelineByStatus).mockResolvedValue(page);
+
+    const res = await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "value_desc", "user-1", undefined, FILTERS);
+
+    expect(transactionRepository.findPipelineByStatus).toHaveBeenCalledWith(SCOPE, "quoted", 1, 10, undefined, undefined, "value_desc", "user-1", undefined, FILTERS);
+    expect(res).toMatchObject({ totalValue: 10, totalProfit: 5 });
+  });
+
+  it("forwards filters on the oldest-activity path and returns the real totals", async () => {
+    vi.mocked(transactionRepository.findPipelineCandidates).mockResolvedValue({ items: [], total: 3, totalValue: 120.5, totalProfit: 40 });
+
+    const res = await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "oldest-activity", undefined, undefined, FILTERS);
+
+    expect(transactionRepository.findPipelineCandidates).toHaveBeenCalledWith(SCOPE, "quoted", undefined, undefined, 60, undefined, FILTERS, true);
+    expect(res).toMatchObject({ total: 3, totalValue: 120.5, totalProfit: 40 });
+  });
+});
+
+describe("transactionService.listPipelineByStatus — totals only on page 1", () => {
+  it("asks for money totals on page 1 and not on later pages (oldest-activity path)", async () => {
+    vi.mocked(transactionRepository.findPipelineCandidates).mockResolvedValue({ items: [], total: 0, totalValue: 0, totalProfit: 0 });
+
+    await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "oldest-activity");
+    await transactionService.listPipelineByStatus(SCOPE, "quoted", 2, 10, undefined, undefined, "oldest-activity");
+
+    const calls = vi.mocked(transactionRepository.findPipelineCandidates).mock.calls;
+    expect(calls[calls.length - 2][7]).toBe(true);
+    expect(calls[calls.length - 1][7]).toBe(false);
+  });
+});
+
+describe("transactionService.getPipelineCounts", () => {
+  it("sums the three open-column rows", async () => {
+    vi.mocked(transactionRepository.countPipelineQuickByColumn).mockResolvedValue([
+      { all: 5, due_today: 1, no_task: 2, quiet_7: 3 },
+      { all: 4, due_today: 0, no_task: 1, quiet_7: 1 },
+      { all: 1, due_today: 1, no_task: 0, quiet_7: 0 },
+    ]);
+
+    const res = await transactionService.getPipelineCounts(SCOPE, { agentId: "a1", search: "x" });
+
+    expect(res).toEqual({ all: 10, due_today: 2, no_task: 3, quiet_7: 4 });
+    expect(transactionRepository.countPipelineQuickByColumn).toHaveBeenCalledWith(SCOPE, "a1", undefined, { search: "x" });
+  });
+
+  it("404s a branch outside the caller's org", async () => {
+    vi.mocked(branchRepository.findOrgIdById).mockResolvedValue("other-org" as never);
+
+    await expect(transactionService.getPipelineCounts(SCOPE, { branchId: "b9" })).rejects.toMatchObject({ statusCode: 404 });
+    expect(transactionRepository.countPipelineQuickByColumn).not.toHaveBeenCalled();
   });
 });

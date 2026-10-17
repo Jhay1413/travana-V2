@@ -2,46 +2,16 @@ import { db } from '../../config/database';
 import {
   ticketReplies,
   ticketReplyLikes,
-  tickets,
   type TicketReply,
   type InsertTicketReply,
 } from '@shared/schema';
 import { and, eq, asc, sql } from 'drizzle-orm';
-import type { TicketReplyWithLikes, TicketReplyWithOrg } from './ticket.types';
+import type { TicketReplyWithLikes } from './ticket.types';
 
 export const ticketReplyRepository = {
   async findById(id: string): Promise<TicketReply | undefined> {
     const [result] = await db.select().from(ticketReplies).where(eq(ticketReplies.id, id)).limit(1);
     return result;
-  },
-
-  /** The reply plus the org of the ticket it belongs to, for scope checks. */
-  async findByIdWithOrg(id: string): Promise<TicketReplyWithOrg | null> {
-    const [result] = await db
-      .select({
-        id: ticketReplies.id,
-        ticketId: ticketReplies.ticketId,
-        userId: ticketReplies.userId,
-        parentReplyId: ticketReplies.parentReplyId,
-        content: ticketReplies.content,
-        createdAt: ticketReplies.createdAt,
-        updatedAt: ticketReplies.updatedAt,
-        ticketOrgId: tickets.orgId,
-      })
-      .from(ticketReplies)
-      .leftJoin(tickets, eq(ticketReplies.ticketId, tickets.id))
-      .where(eq(ticketReplies.id, id))
-      .limit(1);
-    return result ?? null;
-  },
-
-  async ticketBelongsToOrg(ticketId: string, orgId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: tickets.id })
-      .from(tickets)
-      .where(and(eq(tickets.id, ticketId), eq(tickets.orgId, orgId)))
-      .limit(1);
-    return !!row;
   },
 
   async findByTicketId(ticketId: string, viewerUserId: string | null): Promise<TicketReplyWithLikes[]> {

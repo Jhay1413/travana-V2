@@ -1,11 +1,22 @@
 import axiosClient from "@/api/client/axios-client";
 import type { Quote, CreateQuoteData, QuoteFilters, PortalStatus } from "@/features/quote/types";
+import { buildEngagementParams, type QuoteEngagementScope } from "./engagement-params";
 
 interface FreeQuotesResponse {
   quotes: any[];
   page: number;
   pageSize: number;
   hasMore: boolean;
+}
+
+export type SocialStatusFilter = "not_generated" | "draft" | "scheduled" | "posted";
+
+export interface FreeQuoteStatusCounts {
+  total: number;
+  not_generated: number;
+  draft: number;
+  scheduled: number;
+  posted: number;
 }
 
 export const quoteApi = {
@@ -18,7 +29,7 @@ export const quoteApi = {
     return data;
   },
 
-  getFreeQuotes: async (page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all", tags: string[] = []): Promise<FreeQuotesResponse> => {
+  getFreeQuotes: async (page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all", tags: string[] = [], socialStatus?: SocialStatusFilter): Promise<FreeQuotesResponse> => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (scheduledOnly) params.set("scheduledOnly", "true");
     if (scheduledOnly && scheduleFilter !== "none") params.set("scheduleFilter", scheduleFilter);
@@ -29,8 +40,25 @@ export const quoteApi = {
     if (showOnPortal && portalStatus !== "all") params.set("portalStatus", portalStatus);
     if (search) params.set("search", search);
     if (tags.length > 0) params.set("tags", tags.join(","));
+    if (socialStatus) params.set("socialStatus", socialStatus);
     const { data } = await axiosClient.get<FreeQuotesResponse>(`/api/v2/quotes/free?${params}`);
     return data;
+  },
+
+  getFreeQuoteStatusCounts: async (search = "", tags: string[] = []): Promise<FreeQuoteStatusCounts> => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (tags.length > 0) params.set("tags", tags.join(","));
+    const { data } = await axiosClient.get<FreeQuoteStatusCounts>(`/api/v2/quotes/free/status-counts?${params}`);
+    return data;
+  },
+
+  setPortalVisibility: async (id: string, showOnPortal: boolean): Promise<void> => {
+    await axiosClient.patch(`/api/v2/quotes/${id}/portal-visibility`, { show_on_portal: showOnPortal });
+  },
+
+  setFeatured: async (id: string, isFeatured: boolean): Promise<void> => {
+    await axiosClient.patch(`/api/v2/quotes/${id}/featured`, { is_featured: isFeatured });
   },
 
   getById: async (id: string): Promise<Quote> => {
@@ -161,10 +189,13 @@ export const quoteApi = {
     return data;
   },
 
-  getRecentClientEngagement: async (limit = 10): Promise<QuoteEngagementRow[]> => {
+  getRecentClientEngagement: async (
+    limit = 10,
+    scope: QuoteEngagementScope = {},
+  ): Promise<QuoteEngagementRow[]> => {
     const { data } = await axiosClient.get<QuoteEngagementRow[]>(
       `/api/v2/quotes/engagement/recent`,
-      { params: { limit } },
+      { params: buildEngagementParams(limit, scope) },
     );
     return data;
   },

@@ -2,7 +2,10 @@ import { Router } from 'express';
 import { neonClientController } from './neon-client.controller';
 import { validate } from '../../middlewares/validation.middleware';
 import { requireOrgRole } from '../../middlewares/auth/require-org-role';
+import { blockReadOnlyClientRoles } from '../../middlewares/auth/block-read-only-roles';
 import {
+  portalPinParamsValidator,
+  setPortalPinValidator,
   createNeonClientValidator,
   updateNeonClientValidator,
   importNeonClientsValidator,
@@ -30,10 +33,10 @@ router.get(
   neonClientController.getDuplicatePhoneGroup,
 );
 router.get('/:id', neonClientController.getNeonClientById);
-router.post('/', validate(createNeonClientValidator), neonClientController.createNeonClient);
-router.post('/import', validate(importNeonClientsValidator), neonClientController.importNeonClients);
+router.post('/', blockReadOnlyClientRoles, validate(createNeonClientValidator), neonClientController.createNeonClient);
+router.post('/import', blockReadOnlyClientRoles, validate(importNeonClientsValidator), neonClientController.importNeonClients);
 // ':id' is the SOURCE (duplicate) client; body.targetId is the survivor.
-router.post('/:id/merge', validate(mergeNeonClientValidator), neonClientController.mergeNeonClient);
+router.post('/:id/merge', blockReadOnlyClientRoles, validate(mergeNeonClientValidator), neonClientController.mergeNeonClient);
 // ':id' is the MAIN client to keep; body.sourceIds are the duplicates folded into it.
 router.post(
   '/:id/merge-duplicates',
@@ -41,7 +44,23 @@ router.post(
   validate(mergeDuplicateGroupValidator),
   neonClientController.mergeDuplicateGroup,
 );
-router.patch('/:id', validate(updateNeonClientValidator), neonClientController.updateNeonClient);
-router.delete('/:id', neonClientController.deleteNeonClient);
+router.patch('/:id', blockReadOnlyClientRoles, validate(updateNeonClientValidator), neonClientController.updateNeonClient);
+router.delete('/:id', blockReadOnlyClientRoles, neonClientController.deleteNeonClient);
+
+// Portal PIN: read is open to anyone who can see the client; writes are blocked
+// for read-only roles. All scoped through the client lookup in the service.
+router.get('/:id/portal-pin', validate(portalPinParamsValidator), neonClientController.getPortalPin);
+router.put(
+  '/:id/portal-pin',
+  blockReadOnlyClientRoles,
+  validate(setPortalPinValidator),
+  neonClientController.setPortalPin,
+);
+router.delete(
+  '/:id/portal-pin',
+  blockReadOnlyClientRoles,
+  validate(portalPinParamsValidator),
+  neonClientController.removePortalPin,
+);
 
 export default router;

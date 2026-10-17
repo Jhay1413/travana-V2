@@ -4,8 +4,19 @@ import fs from "fs";
 import path from "path";
 import axios from "axios";
 import type { OnlySocialsPost, OnlySocialsMediaUploadResponse } from "../modules/social-post/social-post.types";
+import type { SocialChannelInfo } from "../modules/social-settings/social-settings.types";
 
 const ACCOUNT_ID = 81085;
+
+export function getOnlySocialsChannelInfo(): SocialChannelInfo {
+  return {
+    provider: "onlysocials",
+    accountId: ACCOUNT_ID,
+    workspaceConfigured: !!process.env.ONLY_SOCIALS_WORKSPACE,
+    apiKeyConfigured: !!process.env.ONLYSOCIAL_API_KEY,
+    label: "Facebook Page via OnlySocials",
+  };
+}
 
 function getApiBase(): string {
   const workspace = process.env.ONLY_SOCIALS_WORKSPACE;

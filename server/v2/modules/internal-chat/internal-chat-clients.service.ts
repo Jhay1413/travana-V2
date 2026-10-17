@@ -71,8 +71,8 @@ export function resolveClientAccess(scope: Scope): ClientAccess {
   return { allowed: false, level: "own", reason: "You don't have access to client records." };
 }
 
-function toResolvedScope(access: ClientAccess): ResolvedClientScope {
-  return { level: access.level, orgId: access.orgId, branchId: access.branchId, userId: access.userId };
+function toResolvedScope(access: ClientAccess, scope: Scope): ResolvedClientScope {
+  return { level: access.level, orgId: access.orgId, branchId: access.branchId, userId: access.userId, partitionScope: scope };
 }
 
 // Identity-only summary — deliberately excludes every contact field
@@ -291,7 +291,7 @@ export const internalChatClientsService = {
     if (!access.allowed) {
       return { allowed: false, reason: access.reason ?? "You don't have access to client records." };
     }
-    const rows = await internalChatClientsRepository.searchClients(toResolvedScope(access), query);
+    const rows = await internalChatClientsRepository.searchClients(toResolvedScope(access, scope), query);
     return { allowed: true, results: rows.map(toIdentitySummary) };
   },
 
@@ -301,7 +301,7 @@ export const internalChatClientsService = {
       return { allowed: false, reason: access.reason ?? "You don't have access to client records." };
     }
 
-    const resolved = toResolvedScope(access);
+    const resolved = toResolvedScope(access, scope);
     const row = await internalChatClientsRepository.findClientById(resolved, clientId);
     if (!row) {
       return { allowed: true, found: false, reason: "That client wasn't found, or isn't visible to you." };
@@ -314,7 +314,7 @@ export const internalChatClientsService = {
       return { allowed: true, found: false, reason: "That client wasn't found, or isn't visible to you." };
     }
 
-    const counts = await internalChatClientsRepository.getClientPipelineCounts(row.id, row.orgId);
+    const counts = await internalChatClientsRepository.getClientPipelineCounts(row.id, row.orgId, scope);
 
     return {
       allowed: true,
@@ -348,7 +348,7 @@ export const internalChatClientsService = {
       return { allowed: false, reason: access.reason ?? "You don't have access to client records." };
     }
 
-    const resolved = toResolvedScope(access);
+    const resolved = toResolvedScope(access, scope);
     const row = await internalChatClientsRepository.findClientById(resolved, clientId);
     if (!row || !row.orgId) {
       return { allowed: true, found: false, reason: "That client wasn't found, or isn't visible to you." };
@@ -360,13 +360,13 @@ export const internalChatClientsService = {
 
     const [enquiryResult, quoteResult, bookingResult] = await Promise.all([
       wantEnquiries
-        ? internalChatClientsRepository.getClientEnquiryDetails(row.id, row.orgId)
+        ? internalChatClientsRepository.getClientEnquiryDetails(row.id, row.orgId, scope)
         : Promise.resolve(undefined),
       wantQuotes
-        ? internalChatClientsRepository.getClientQuoteDetails(row.id, row.orgId)
+        ? internalChatClientsRepository.getClientQuoteDetails(row.id, row.orgId, scope)
         : Promise.resolve(undefined),
       wantBookings
-        ? internalChatClientsRepository.getClientBookingDetails(row.id, row.orgId)
+        ? internalChatClientsRepository.getClientBookingDetails(row.id, row.orgId, scope)
         : Promise.resolve(undefined),
     ]);
 

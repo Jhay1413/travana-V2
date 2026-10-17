@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { getRequestActor } from '../../utils/request-actor';
 import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
 import { AppError } from '../../utils/error-handler';
@@ -20,14 +21,7 @@ function getStrParam(req: Request, key: string): string {
 }
 
 function buildActor(req: Request): AdminActor {
-  const userId = getUserId(req);
-  if (!userId) throw new AppError('Unauthorized', 401);
-  const fwd = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim();
-  return {
-    userId,
-    ipAddress: fwd || req.socket.remoteAddress || null,
-    userAgent: (req.headers['user-agent'] as string | undefined) ?? null,
-  };
+  return getRequestActor(req);
 }
 
 export const platformAdminController = {

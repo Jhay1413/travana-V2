@@ -1,46 +1,37 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { escapeHtml } from '../../utils/escape-html';
 import { AppError } from '../../utils/error-handler';
-import { getPublicBaseUrl } from '../../utils/public-url';
-import { getEmailProvider } from '../../../services/email-provider';
 import { inviteRepository, type PendingInviteRow } from './invite.repository';
 import { branchRepository } from '../branch/branch.repository';
+import { homeworkerService } from '../homeworker/homeworker.service';
+import type { InviteHomeworkerInput } from '../homeworker/homeworker.types';
+import { INVITE_TTL_MS, newInviteCredentials, sendInviteEmail } from './invite-email.service';
+import type { RequestActor } from '../../utils/request-actor';
+import { organizationSeatService } from '../organization/organization-seat.service';
+import { organizationAuditService, type OrgAuditAction } from '../organization/organization-audit.service';
 
-export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export { INVITE_TTL_MS };
 const ALLOWED_ROLES = ['branch_manager', 'agent', 'homeworker', 'referral_agent', 'social_media_manager'] as const;
 type AllowedRole = (typeof ALLOWED_ROLES)[number];
+type BranchInviteRole = Exclude<AllowedRole, 'homeworker'>;
 
-// Branch managers can only invite "downstream" — agents and homeworkers.
-const BRANCH_MANAGER_INVITABLE: ReadonlySet<AllowedRole> = new Set<AllowedRole>(['agent', 'homeworker']);
+// Branch managers can only invite "downstream" — agents. Homeworkers are
+// org-level units and only org admins may invite them.
+const BRANCH_MANAGER_INVITABLE: ReadonlySet<AllowedRole> = new Set<AllowedRole>(['agent']);
 
-function buildInviteUrl(token: string): string {
-  const base = getPublicBaseUrl() || 'http://localhost:5000';
-  return `${base}/accept-invite?token=${encodeURIComponent(token)}`;
-}
-
-function buildInviteEmail(orgName: string, inviterName: string | null, url: string) {
-  const subject = `You've been invited to join ${orgName} on Travana`;
-  const text = `${inviterName ? `${inviterName} has` : 'You have been'} invited you to join ${orgName} on Travana.
-
-Click the link below to set up your account:
-${url}
-
-This invitation expires in 7 days.`;
-  const html = `
-    <p>${inviterName ? `<strong>${escapeHtml(inviterName)}</strong> has` : 'You have been'} invited you to join <strong>${escapeHtml(orgName)}</strong> on Travana.</p>
-    <p>Click the button below to set up your account:</p>
-    <p><a href="${url}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#fff;text-decoration:none;border-radius:8px">Accept invitation</a></p>
-    <p style="color:#888;font-size:12px">This invitation expires in 7 days.</p>
-  `;
-  return { subject, text, html };
-}
-
-export interface SendInvitePayload {
+export interface BranchInvitePayload {
   email:    string;
   branchId: string;
-  orgRole:  AllowedRole;
+  orgRole:  BranchInviteRole;
+  firstName?: string;
+  lastName?:  string;
 }
+
+export interface HomeworkerInvitePayload extends InviteHomeworkerInput {
+  orgRole: 'homeworker';
+}
+
+export type SendInvitePayload = BranchInvitePayload | HomeworkerInvitePayload;
 
 export interface AcceptInvitePayload {
   token:       string;
@@ -55,13 +46,15 @@ export interface ActorContext {
   userId:      string | null;
   orgRole:     string;
   branchId:    string | null;
+  /** Who is acting, for the audit log (ip, user agent, impersonation). */
+  requestActor?: RequestActor;
 }
 
 function isBranchManager(actor: ActorContext): boolean {
   return actor.orgRole === 'branch_manager';
 }
 
-function assertManagerCanInvite(actor: ActorContext, payload: SendInvitePayload) {
+function assertManagerCanInvite(actor: ActorContext, payload: BranchInvitePayload) {
   if (!isBranchManager(actor)) return;
   if (!actor.branchId) {
     throw new AppError('You must belong to a branch to invite teammates', 403);
@@ -70,7 +63,7 @@ function assertManagerCanInvite(actor: ActorContext, payload: SendInvitePayload)
     throw new AppError('You can only invite to your own branch', 403);
   }
   if (!BRANCH_MANAGER_INVITABLE.has(payload.orgRole)) {
-    throw new AppError('Branch managers can only invite agents or homeworkers', 403);
+    throw new AppError('Branch managers can only invite agents', 403);
   }
 }
 
@@ -84,12 +77,32 @@ function assertManagerCanActOnInvite(actor: ActorContext, invite: PendingInviteR
   }
 }
 
+async function audit(
+  actor: ActorContext,
+  action: OrgAuditAction,
+  targetUserId: string | null,
+  metadata: Record<string, unknown>,
+): Promise<void> {
+  if (!actor.requestActor) return;
+  await organizationAuditService.record({ actor: actor.requestActor, action, orgId: actor.orgId, targetUserId, metadata });
+}
+
 export const inviteService = {
-  async send(payload: SendInvitePayload, actor: ActorContext) {
+  async send(payload: SendInvitePayload, actor: ActorContext, requestOrigin?: string | null) {
     const email = payload.email.toLowerCase().trim();
     if (!email) throw new AppError('Email is required', 400);
     if (!ALLOWED_ROLES.includes(payload.orgRole)) {
       throw new AppError('Invalid role', 400);
+    }
+
+    // Homeworkers get their own branch: one creation path, org admins only.
+    if (payload.orgRole === 'homeworker') {
+      if (isBranchManager(actor)) {
+        throw new AppError('Only organisation admins can invite homeworkers', 403);
+      }
+      const { orgRole: _role, ...input } = payload;
+      // The homeworker service checks seats and writes the audit row itself.
+      return homeworkerService.invite(input, actor, requestOrigin);
     }
 
     assertManagerCanInvite(actor, payload);
@@ -105,25 +118,34 @@ export const inviteService = {
       if (existing.orgId !== actor.orgId) {
         throw new AppError('This email is already invited to another organisation', 409);
       }
+      if (existing.orgRole !== payload.orgRole) {
+        throw new AppError('This email already has a pending invite for a different role; revoke it first', 409);
+      }
       // Re-issue token for an existing pending invite (acts like resend)
-      return this.resend(existing.id, actor);
+      return this.resend(existing.id, actor, requestOrigin);
+    }
+
+    // Referral partners use the referral hub, not a seat.
+    if (payload.orgRole !== 'referral_agent') {
+      await organizationSeatService.assertSeatAvailable(actor.orgId);
     }
 
     const orgName = await inviteRepository.getOrgName(actor.orgId);
     if (!orgName) throw new AppError('Organisation not found', 404);
 
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiry = new Date(Date.now() + INVITE_TTL_MS);
+    const { token, expiry } = newInviteCredentials();
     const userId = crypto.randomUUID();
+    const firstName = payload.firstName?.trim() ?? '';
+    const lastName = payload.lastName?.trim() ?? '';
 
     const created = await inviteRepository.createPendingUserWithBranchMembership(
       {
         id: userId,
-        name: email,
+        name: `${firstName} ${lastName}`.trim() || email,
         email,
         emailVerified: false,
-        firstName: '',
-        lastName: '',
+        firstName,
+        lastName,
         phoneNumber: '',
         role: 'Agent',
         orgId: actor.orgId,
@@ -143,12 +165,13 @@ export const inviteService = {
       },
     );
 
-    await this.sendInviteEmail(email, orgName, token);
+    await this.sendInviteEmail(email, orgName, token, requestOrigin);
+    await audit(actor, 'invite.send', created.id, { email, orgRole: payload.orgRole, branchId: payload.branchId });
 
     return { userId: created.id, email, branchId: payload.branchId, expiresAt: expiry };
   },
 
-  async resend(userId: string, actor: ActorContext) {
+  async resend(userId: string, actor: ActorContext, requestOrigin?: string | null) {
     const found = await inviteRepository.findById(userId);
     if (!found || found.orgId !== actor.orgId || !found.inviteToken) {
       throw new AppError('Invite not found', 404);
@@ -162,8 +185,7 @@ export const inviteService = {
     const orgName = await inviteRepository.getOrgName(actor.orgId);
     if (!orgName) throw new AppError('Organisation not found', 404);
 
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiry = new Date(Date.now() + INVITE_TTL_MS);
+    const { token, expiry } = newInviteCredentials();
 
     await inviteRepository.updateUser(userId, {
       inviteToken: token,
@@ -171,7 +193,8 @@ export const inviteService = {
       invitedAt: new Date(),
     });
 
-    await this.sendInviteEmail(found.email, orgName, token);
+    await this.sendInviteEmail(found.email, orgName, token, requestOrigin);
+    await audit(actor, 'invite.resend', userId, { email: found.email });
 
     return { userId, email: found.email, expiresAt: expiry };
   },
@@ -235,24 +258,25 @@ export const inviteService = {
   async revoke(userId: string, actor: ActorContext) {
     const found = await inviteRepository.findById(userId);
     if (!found || found.orgId !== actor.orgId) throw new AppError('Invite not found', 404);
-    if (!found.inviteToken) throw new AppError('This member has already accepted — suspend them instead', 400);
+    if (!found.inviteToken) throw new AppError('This member has already accepted — suspend or remove them instead', 400);
 
     if (isBranchManager(actor)) {
       const member = await inviteRepository.findBranchMembershipForUser(actor.orgId, userId);
       assertManagerCanActOnInvite(actor, { branchId: member?.branchId ?? null });
     }
 
-    await inviteRepository.deletePendingUser(userId, actor.orgId);
+    // An unaccepted homeworker owns an empty branch: delete it with the user so no orphan is left.
+    const ownedBranch = await inviteRepository.findOwnedHomeworkerBranch(userId, actor.orgId);
+    if (ownedBranch) {
+      await inviteRepository.deletePendingUserWithBranch(userId, actor.orgId, ownedBranch.id);
+    } else {
+      await inviteRepository.deletePendingUser(userId, actor.orgId);
+    }
+    // The user row is gone, so the id goes in metadata (the audit FK would reject it as a target).
+    await audit(actor, 'invite.revoke', null, { revokedUserId: userId, email: found.email });
   },
 
-  async sendInviteEmail(email: string, orgName: string, token: string) {
-    try {
-      const url = buildInviteUrl(token);
-      const { subject, html, text } = buildInviteEmail(orgName, null, url);
-      const provider = getEmailProvider();
-      await provider.send({ to: email, subject, html, text });
-    } catch (err) {
-      console.error('[invite] email failed (invite still recorded):', err);
-    }
+  async sendInviteEmail(email: string, orgName: string, token: string, requestOrigin?: string | null) {
+    await sendInviteEmail(email, orgName, token, requestOrigin);
   },
 };

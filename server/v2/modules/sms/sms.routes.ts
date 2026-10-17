@@ -1,3 +1,4 @@
+import { blockReadOnlyClientRoles } from '../../middlewares/auth/block-read-only-roles';
 import { Router } from 'express';
 import { smsController } from './sms.controller';
 import { isAuthenticated } from '../../middlewares/auth';
@@ -18,6 +19,6 @@ router.post('/preview-recipients', smsController.previewRecipients);
 router.post('/send', validate(sendSmsValidator), smsController.send);
 router.get('/messages', smsController.listMessages);
 router.get('/credits/summary', smsController.creditsSummary);
-router.put('/clients/:id/opt-in', smsController.setOptIn);
+router.put('/clients/:id/opt-in', blockReadOnlyClientRoles, smsController.setOptIn);
 
 export default router;

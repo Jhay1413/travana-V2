@@ -29,7 +29,7 @@ export const authApi = {
     return data;
   },
 
-  updateProfile: async (profileData: { phoneNumber?: string; email?: string }): Promise<AuthUser> => {
+  updateProfile: async (profileData: { phoneNumber?: string }): Promise<AuthUser> => {
     const { data } = await axiosClient.patch<AuthUser>("/api/auth/profile", profileData);
     return data;
   },

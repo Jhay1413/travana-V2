@@ -12,7 +12,7 @@ export function VipTierCard({ tier, enrolledAt }: VipTierCardProps) {
 
   return (
     <div
-      className={`rounded-2xl border p-4 bg-gradient-to-br ${
+      className={`rounded-xl border p-4 bg-gradient-to-br ${
         tierCfg
           ? `${tierCfg.bg} ${tierCfg.border}`
           : "from-black/[0.02] to-black/[0.04] border-black/10"

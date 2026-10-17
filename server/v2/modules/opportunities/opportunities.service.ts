@@ -1,5 +1,5 @@
 import { opportunitiesRepository, type OpportunityFilters } from './opportunities.repository';
-import type { Scope } from '../../utils/scope';
+import { holdsHomeworkerRole, type Scope } from '../../utils/scope';
 
 function formatClientName(title: string | null, firstName: string | null, surname: string | null): string {
   return [title !== 'NULL' ? title : '', firstName, surname].filter(Boolean).join(' ') || 'Unknown';
@@ -62,6 +62,14 @@ export const opportunitiesService = {
   },
 
   async getAgents(scope: Scope) {
-    return opportunitiesRepository.findAgents(scope);
+    if (scope.orgRole === 'platform_admin') return opportunitiesRepository.findAgentsAcrossPlatform();
+    // A homeworker (primary or secondary role) is isolated: they only ever see themselves.
+    if (holdsHomeworkerRole(scope)) {
+      return scope.userId ? opportunitiesRepository.findSelfAsAgent(scope.userId, scope.orgId) : [];
+    }
+    if (scope.branchId && (scope.orgRole === 'branch_manager' || scope.orgRole === 'agent')) {
+      return opportunitiesRepository.findAgentsInBranch(scope.orgId, scope.branchId);
+    }
+    return opportunitiesRepository.findAgentsInOrg(scope.orgId, scope.branchId, scope);
   },
 };

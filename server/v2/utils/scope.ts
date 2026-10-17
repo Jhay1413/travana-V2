@@ -35,6 +35,10 @@ export interface Scope {
   orgRole: OrgRole;
   orgRoles: OrgRole[];
   userId: string | null;
+  /** Partition of the caller's active branch; null when they have none. */
+  branchType: "shop" | "homeworker" | null;
+  /** True only when the caller is inside a homeworker branch they own. */
+  ownsHomeworkerBranch: boolean;
 }
 
 export function getScope(req: Request): Scope {
@@ -44,7 +48,18 @@ export function getScope(req: Request): Scope {
     orgRole: (req.orgRole || "agent") as OrgRole,
     orgRoles: (req.orgRoles ?? (req.orgRole ? [req.orgRole] : [])) as OrgRole[],
     userId: getUserId(req),
+    branchType: req.branchType ?? null,
+    ownsHomeworkerBranch: req.ownsHomeworkerBranch === true,
   };
+}
+
+/**
+ * Does the caller hold the homeworker role at all? Checks the full role union,
+ * not just the primary: homeworker ranks below agent, so a legacy user holding
+ * {homeworker, agent} has primary 'agent' and would otherwise slip through.
+ */
+export function holdsHomeworkerRole(scope: Pick<Scope, "orgRole"> & { orgRoles?: OrgRole[] }): boolean {
+  return scope.orgRole === "homeworker" || (scope.orgRoles ?? []).includes("homeworker");
 }
 
 /** Permission allowlist: does the user have ANY of these roles? */

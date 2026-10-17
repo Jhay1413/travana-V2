@@ -6,6 +6,7 @@ import {
   type UpdateEmployeeInput,
 } from "./hr.api";
 import { hrKeys } from "./use-hr-queries";
+import { invalidateHomeworkerData } from "@/features/homeworkers/api/invalidate";
 
 function invalidateAllHr(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: hrKeys.employees() });
@@ -16,7 +17,10 @@ export function useInviteEmployee() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: InviteEmployeeInput) => hrApi.invite(input),
-    onSuccess: () => invalidateAllHr(qc),
+    onSuccess: () => {
+      invalidateAllHr(qc);
+      invalidateHomeworkerData(qc);
+    },
   });
 }
 

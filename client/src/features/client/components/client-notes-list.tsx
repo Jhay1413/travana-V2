@@ -18,21 +18,9 @@ import { useToast } from "@/hooks/use-toast";
 import { formatNoteDate, parseTimestamp } from "@/lib/note-time";
 import type { TransactionNote } from "@/features/quote/types";
 import type { User as ApiUser } from "@/features/user/types";
-import type { HolidaySelection } from "@/features/client/types";
+import type { DealKind, DealLabelInfo, DealLabelLookup, HolidaySelection } from "@/features/client/types";
 
-/** Which kind of deal (transaction) a note belongs to. */
-export type DealKind = "enquiry" | "quote" | "booking";
-
-/** Everything a note row needs to render + open the deal it belongs to. */
-export interface DealLabelInfo {
-  kind: DealKind;
-  /** The enquiry/quote/booking's own id — NOT the transaction id — passed to onOpenDeal as `{ type: kind, id }`. */
-  id: string;
-  title: string;
-}
-
-/** transaction_id → deal label info, built once by the page from its already-loaded enquiries/quotes/bookings. */
-export type DealLabelLookup = Map<string, DealLabelInfo>;
+export type { DealKind, DealLabelInfo, DealLabelLookup };
 
 const DEAL_KIND_LABEL: Record<DealKind, string> = {
   enquiry: "Enquiry",
@@ -89,6 +77,7 @@ function ClientNoteRow({
   authorName,
   dealInfo,
   onOpenDeal,
+  readOnly = false,
 }: {
   clientId: string;
   note: TransactionNote;
@@ -96,6 +85,8 @@ function ClientNoteRow({
   /** Resolved deal label when the note has a transaction_id; null falls back to a generic "Deal" pill. */
   dealInfo: DealLabelInfo | null;
   onOpenDeal?: (selection: HolidaySelection) => void;
+  /** Hides edit + delete (social_media_manager is read-only). */
+  readOnly?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -148,7 +139,7 @@ function ClientNoteRow({
             <DealPill dealInfo={dealInfo} onOpenDeal={onOpenDeal} data-testid={`client-index-note-deal-${note.id}`} />
           )}
         </div>
-        {!isEditing && (
+        {!isEditing && !readOnly && (
           <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
             <button
               type="button"
@@ -230,6 +221,7 @@ export function ClientNotesList({
   users,
   dealsByTransactionId,
   onOpenDeal,
+  readOnly = false,
 }: {
   clientId: string;
   users: ApiUser[];
@@ -237,6 +229,8 @@ export function ClientNotesList({
   dealsByTransactionId?: DealLabelLookup;
   /** Opens a deal's pill in the detail layout — the same handler AllHolidaysPanel's onSelect uses (not a URL navigation: the page's `?holiday=` parsing is a separate code path and calling it directly here is simpler than round-tripping through a URL update). */
   onOpenDeal?: (selection: HolidaySelection) => void;
+  /** Hides the composer and the per-note edit/delete actions. */
+  readOnly?: boolean;
 }) {
   const { data: notes, isLoading, isError, refetch } = useClientNotes(clientId, { includeDeals: true });
   const { toast } = useToast();
@@ -302,19 +296,22 @@ export function ClientNotesList({
                 authorName={authorName}
                 dealInfo={dealInfo}
                 onOpenDeal={onOpenDeal}
+                readOnly={readOnly}
               />
             );
           })}
         </div>
       )}
 
-      <div className="mt-3" data-testid="client-index-note-composer">
-        <NoteEditor
-          placeholder="Add a note about this customer…"
-          onSubmit={handleCreate}
-          isLoading={createMutation.isPending}
-        />
-      </div>
+      {!readOnly && (
+        <div className="mt-3" data-testid="client-index-note-composer">
+          <NoteEditor
+            placeholder="Add a note about this customer…"
+            onSubmit={handleCreate}
+            isLoading={createMutation.isPending}
+          />
+        </div>
+      )}
     </div>
   );
 }

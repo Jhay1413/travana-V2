@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute, useSearch } from "wouter";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,7 @@ import type { QuoteFormValues } from "@/features/quote/types/quote-form.types";
 import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 
-import { transformNeonClientData, transformTicket, filesFor } from "@/features/client/components/client-types";
-import { ClientFormDrawer } from "@/features/client/components/modals/ClientFormDrawer";
+import { transformNeonClientData } from "@/features/client/components/client-types";
 import { MergeClientDialog } from "@/features/client/components/modals/MergeClientDialog";
 import { UploadFileDialog } from "@/features/client/components/modals/UploadFileDialog";
 import { AllHolidaysPanel } from "@/features/client/components/all-holidays-panel";
@@ -33,9 +32,20 @@ import { HolidayDetailView } from "@/features/client/components/holiday-detail-v
 import { HolidayHeaderActions } from "@/features/client/components/holiday-header-actions";
 import { useQuoteExpiry } from "@/features/quote/components/hooks";
 import { QuoteExpiryDialog } from "@/features/quote/components/QuoteExpiryDialog";
-import { ClientIndexView } from "@/features/client/components/client-index-view";
-import { ClientIndexHeader, type ClientCreateKind } from "@/features/client/components/client-index-header";
-import type { HolidaySelection } from "@/features/client/types";
+import { ClientPageHeader } from "@/features/client/components/page/client-page-header";
+import { ClientStatBoxes } from "@/features/client/components/page/client-stat-boxes";
+import { ClientDashboardCard } from "@/features/client/components/page/client-dashboard-card";
+import { PortalAccessCard, ReferralNetworkCard, ReferredByCard } from "@/features/client/components/page/side-cards";
+import { LiveDealsRail } from "@/features/client/components/page/live-deals-rail";
+import { useLiveDealsState } from "@/features/client/components/page/use-live-deals-state";
+import { EditClientModal } from "@/features/client/components/page/modals/edit-client-modal";
+import { ReferrerModal } from "@/features/client/components/page/modals/referrer-modal";
+import { PortalPinModal } from "@/features/client/components/page/modals/portal-pin-modal";
+import { ShareClientModal } from "@/features/client/components/page/modals/share-client-modal";
+import { computeClientStats } from "@/features/client/lib/client-stats";
+import { isClientReadOnly } from "@/features/client/lib/client-access";
+import { buildDealLabels, buildTaskHolidays } from "@/features/client/lib/deal-labels";
+import type { ClientCreateKind, HolidaySelection } from "@/features/client/types";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/features/booking/components/booking-create-dialog";
 import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
@@ -54,8 +64,13 @@ export default function ClientPage() {
   const search = useSearch();
   const { toast } = useToast();
 
-  const { role } = useRole();
-  const [q, setQ] = useState("");
+  const { role, orgRole } = useRole();
+  const readOnly = isClientReadOnly(orgRole);
+  const [showReferrerModal, setShowReferrerModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  // Rail view state lives here so it survives opening a deal and coming back.
+  const liveDealsState = useLiveDealsState();
   const [showQuoteCreateDialog, setShowQuoteCreateDialog] = useState(false);
   const [showBookingCreateDialog, setShowBookingCreateDialog] = useState(false);
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
@@ -96,16 +111,22 @@ export default function ClientPage() {
     setConvertingEnquiryId(null);
   });
 
+  // ?create=enquiry|quote|booking|task|ticket opens that dialog once. It waits
+  // for the current user (so the role is known) and never fires for a
+  // read-only role.
+  const createHandled = useRef(false);
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const create = params.get("create");
+    if (createHandled.current || !currentUser) return;
+    createHandled.current = true;
+    if (readOnly) return;
+    const create = new URLSearchParams(window.location.search).get("create");
     if (create === "enquiry") enquiryActions.setShowEnquiryWizard(true);
     else if (create === "quote") setShowQuoteCreateDialog(true);
     else if (create === "booking") setShowBookingCreateDialog(true);
     else if (create === "task") taskCreate.setShowTaskDialog(true);
     else if (create === "ticket") ticketCreate.setShowTicketDialog(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentUser, readOnly]);
 
   // Deep-link support: /clients/:id?holiday=quote:<id> (or booking:/enquiry:)
   // opens the client page with that holiday selected in the center detail view —
@@ -214,30 +235,10 @@ export default function ClientPage() {
     [transactions],
   );
 
-  const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);
   const tasks = useMemo(() => tasksData ?? [], [tasksData]);
-  const files = useMemo(() => (client ? filesFor(client.id) : []), [client]);
-
-  function getUserName(userId: string) {
-    const user = usersData?.find((u) => u.id === userId);
-    return user?.name || "Unassigned";
-  }
-
-  const filteredTickets = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (!query) return tickets;
-    return tickets.filter((t) =>
-      `${t.id} ${t.subject} ${t.status} ${t.type} ${t.priority}`.toLowerCase().includes(query),
-    );
-  }, [q, tickets]);
-  void filteredTickets;
-
-  const filteredFiles = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (!query) return files;
-    return files.filter((f) => `${f.id} ${f.name} ${f.type} ${f.updated}`.toLowerCase().includes(query));
-  }, [q, files]);
-  void setQ;
+  const stats = useMemo(() => computeClientStats(enquiries, quotes, bookings), [enquiries, quotes, bookings]);
+  const taskHolidays = useMemo(() => buildTaskHolidays(enquiries, quotes, bookings), [enquiries, quotes, bookings]);
+  const dealLabels = useMemo(() => buildDealLabels(enquiries, quotes, bookings), [enquiries, quotes, bookings]);
 
   if (isLoadingClient) {
     return (
@@ -272,67 +273,82 @@ export default function ClientPage() {
     editForm.updateNeonClientMutation.mutate(
       { id: clientId, data: { referredByClientId } },
       {
-        onSuccess: () => toast({ title: referredByClientId ? "Referrer saved" : "Referrer removed" }),
+        onSuccess: () => {
+          setShowReferrerModal(false);
+          toast({ title: referredByClientId ? "Referrer saved" : "Referrer removed" });
+        },
         onError: () => toast({ title: referredByClientId ? "Failed to save referrer" : "Failed to remove referrer", variant: "destructive" }),
       },
     );
 
-  // Two layouts share one page: the redesigned overview (main column + "Live
-  // Deals" on the right) when nothing is selected, and the original
-  // three-column holidays / detail / details layout once a deal is opened.
+  // Two layouts share one page: the redesigned overview (header, stat boxes,
+  // dashboard card, side cards and the Live deals rail) when nothing is
+  // selected, and the original three-column holidays / detail / details layout
+  // once a deal is opened.
   const overviewLayout = (
     <section
-      className="text-compact -m-4 grid h-[calc(100vh-3.5rem)] grid-cols-1 gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[1fr_290px] xl:grid-cols-[1fr_320px] 3xl:grid-cols-[1fr_360px]"
+      className="-m-4 flex min-h-[calc(100vh-3.5rem)] flex-col bg-social-page md:-m-6 xl:h-[calc(100vh-3.5rem)] xl:min-h-0 xl:flex-row xl:overflow-hidden"
       data-testid="section-client-profile"
     >
-      <div className="flex min-h-0 min-w-0 flex-col">
-        <ClientIndexHeader
-          client={client}
+      <div className="flex min-w-0 flex-1 flex-col xl:min-h-0 xl:overflow-y-auto">
+        <ClientPageHeader
+          name={client.name}
+          phone={client.phone}
           clientData={clientData}
           isFavorited={isFavorited}
-          onToggleFavorite={handleToggleClientPin}
-          onChangeBadge={handleChangeClientBadge}
-          onEdit={editForm.openEditDialog}
-          onMerge={() => setShowMergeDialog(true)}
+          readOnly={readOnly}
           aiReplyEnabled={!!clientData?.aiReplyEnabled}
+          onEdit={editForm.openEditDialog}
+          onShare={() => setShowShareModal(true)}
+          onTogglePin={handleToggleClientPin}
+          onChangeBadge={handleChangeClientBadge}
+          onNewDeal={handleCreate}
+          onAddTask={() => taskCreate.setShowTaskDialog(true)}
+          onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
+          onMerge={() => setShowMergeDialog(true)}
           onToggleAiReply={handleToggleAiReply}
-          onCreate={handleCreate}
         />
-        <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto bg-white p-4 md:py-6 md:pl-8 md:pr-6 dark:bg-transparent">
-          <ClientIndexView
-            clientId={clientId}
-            client={client}
-            clientData={clientData}
-            onSelectReferrer={(id) => saveReferrer(id)}
-            onClearReferrer={() => saveReferrer(null)}
-            onCreateTask={() => taskCreate.setShowTaskDialog(true)}
-            enquiries={enquiries}
-            quotes={quotes}
-            bookings={bookings}
-            tasks={tasks}
-            navigate={navigate}
-            onOpenDeal={setHolidaySelection}
-            clientFiles={fileActions.clientFilesData}
-            filteredFiles={filteredFiles}
-            onDeleteFile={fileActions.deleteFile}
-            onUploadFile={() => fileActions.setShowUploadFileModal(true)}
-            role={role}
-            rawTickets={ticketsData ?? []}
-            users={usersData ?? []}
-            onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
-          />
+        <div className="p-4 md:p-6" data-testid="client-index-view">
+          <div className="grid gap-5 2xl:grid-cols-[1.45fr_1fr]">
+            <div className="flex min-w-0 flex-col gap-5">
+              <ClientStatBoxes stats={stats} />
+              <ClientDashboardCard
+                clientId={clientId}
+                clientName={client.name}
+                role={role}
+                readOnly={readOnly}
+                tasks={tasks}
+                users={usersData ?? []}
+                taskHolidays={taskHolidays}
+                dealLabels={dealLabels}
+                rawTickets={ticketsData ?? []}
+                clientFiles={fileActions.clientFilesData}
+                onAddTask={() => taskCreate.setShowTaskDialog(true)}
+                onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
+                onUploadFile={() => fileActions.setShowUploadFileModal(true)}
+                onDeleteFile={fileActions.deleteFile}
+                onOpenDeal={setHolidaySelection}
+                onOpenTicket={(ticketId) => navigate(`/tickets/${ticketId}`)}
+                onViewAllTasks={() => navigate("/tasks")}
+              />
+            </div>
+            <div className="flex min-w-0 flex-col gap-5">
+              <ReferredByCard referrerId={clientData?.referredByClientId} readOnly={readOnly} onChange={() => setShowReferrerModal(true)} />
+              <PortalAccessCard clientId={clientId} readOnly={readOnly} onChangePin={() => setShowPinModal(true)} />
+              <ReferralNetworkCard clientId={clientId} />
+            </div>
+          </div>
         </div>
       </div>
-      <AllHolidaysPanel
-        variant="live-deals"
-        className="hidden lg:flex"
+      <LiveDealsRail
         enquiries={enquiries}
         quotes={quotes}
         bookings={bookings}
-        selection={holidaySelection}
+        state={liveDealsState}
+        isLoading={isLoadingTransactions}
+        readOnly={readOnly}
         onSelect={setHolidaySelection}
-        onCreate={handleCreate}
-        isLoadingTransactions={isLoadingTransactions}
+        onNewDeal={handleCreate}
       />
     </section>
   );
@@ -349,7 +365,7 @@ export default function ClientPage() {
           bookings={bookings}
           selection={holidaySelection}
           onSelect={setHolidaySelection}
-          onCreate={handleCreate}
+          onCreate={readOnly ? undefined : handleCreate}
           isLoadingTransactions={isLoadingTransactions}
         />
 
@@ -379,6 +395,7 @@ export default function ClientPage() {
                 clientName={client.name}
                 onDeleted={() => setHolidaySelection(null)}
                 onOpenExpiryDialog={quoteExpiry.openExpiryDialog}
+                readOnly={readOnly}
               />
             )}
           </div>
@@ -394,6 +411,7 @@ export default function ClientPage() {
               queryClient.invalidateQueries({ queryKey: transactionKeys.list({ clientId }) });
             }}
             onOpenExpiryDialog={quoteExpiry.openExpiryDialog}
+            readOnly={readOnly}
           />
         )}
           </div>
@@ -457,7 +475,6 @@ export default function ClientPage() {
       />
 
       <CreateTaskDialog
-        presentation="drawer"
         open={taskCreate.showTaskDialog}
         onOpenChange={taskCreate.setShowTaskDialog}
         entityType="client"
@@ -493,16 +510,26 @@ export default function ClientPage() {
         setUploadFile={fileActions.setUploadFile}
         onUpload={fileActions.handleUploadFile}
       />
-      <ClientFormDrawer
-        mode="edit"
-        presentation="drawer"
+      <EditClientModal
         open={editForm.showEditClient}
         onOpenChange={editForm.setShowEditClient}
-        editForm={editForm.editForm}
-        setEditForm={editForm.setEditForm}
+        form={editForm.editForm}
+        setForm={editForm.setEditForm}
         onSave={editForm.handleSaveClient}
         isPending={editForm.isPending}
       />
+      <ReferrerModal
+        open={showReferrerModal}
+        onOpenChange={setShowReferrerModal}
+        clientId={clientId}
+        firstName={clientData?.firstName || "this client"}
+        hasReferrer={!!clientData?.referredByClientId}
+        isPending={editForm.updateNeonClientMutation.isPending}
+        onSelect={saveReferrer}
+        onClear={() => saveReferrer(null)}
+      />
+      <PortalPinModal clientId={clientId} open={showPinModal} onOpenChange={setShowPinModal} />
+      <ShareClientModal open={showShareModal} onOpenChange={setShowShareModal} />
 
       <EnquiryWizard
         presentation="drawer"

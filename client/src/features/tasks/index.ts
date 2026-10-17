@@ -5,3 +5,4 @@
 export { taskApi } from "./api/task.api";
 export * from "./api/use-task-queries";
 export * from "./api/use-task-mutations";
+export { CreateTaskDialog } from "./components/tasks/CreateTaskDialog";

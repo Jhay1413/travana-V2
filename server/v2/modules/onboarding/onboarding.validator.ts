@@ -1,68 +1,13 @@
 import { z } from "zod";
 
-const SLUG_MESSAGE = "Agency URL must be 3–40 characters: lowercase letters, numbers and hyphens";
-
-const dayHoursSchema = z.object({
-  day: z.string().min(1),
-  open: z.boolean(),
-  openTime: z.string().regex(/^\d{2}:\d{2}$/),
-  closeTime: z.string().regex(/^\d{2}:\d{2}$/),
-});
-
-const branchSchema = z.object({
-  name: z.string().min(1, "Branch name is required"),
-  address: z.string().min(1, "Branch address is required"),
-  phone: z.string().min(1, "Branch phone is required"),
-  email: z.string().email("Branch email must be valid"),
-  openingPattern: z.enum(["mon-fri", "mon-sat", "seven-days"]),
-  bankHolidaysOpen: z.boolean(),
-  openingHours: z.array(dayHoursSchema).length(7),
-});
-
-const contactPersonSchema = z.object({
-  name: z.string().optional(),
-  relationship: z.enum(["Spouse", "Parent", "Sibling", "Child", "Friend", "Other", ""]).optional(),
-  phone: z.string().optional(),
-});
-
-const agentSchema = z.object({
-  name: z.string().min(1, "Agent name is required"),
-  email: z.string().email("Agent email must be valid"),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  role: z.enum(["Agent", "Senior Agent", "Manager", "Admin"]),
-  active: z.boolean(),
-  branchIndex: z.number().int().min(0).optional(),
-  contactPerson: contactPersonSchema.optional(),
-});
-
 export const signupSchema = z.object({
-  body: z
-    .object({
-      agencyName: z.string().min(1, "Agency name is required"),
-      slug: z
-        .string()
-        .min(3, SLUG_MESSAGE)
-        .max(40, SLUG_MESSAGE)
-        .regex(/^[a-z0-9-]+$/, SLUG_MESSAGE),
-      brandColor: z.string().optional(),
-      logoUrl: z.string().url().optional(),
-      ownerName: z.string().min(1, "Owner name is required"),
-      ownerEmail: z.string().email("Owner email must be valid"),
-      ownerPhone: z.string().min(1, "Owner phone is required"),
-      password: z.string().min(8, "Password must be at least 8 characters"),
-      branches: z.array(branchSchema).min(1, "At least one branch is required"),
-      agents: z.array(agentSchema).default([]),
-      hasHomeworkers: z.boolean().default(false),
-      homeworkerCommission: z.number().int().min(1).max(100).optional(),
-    })
-    .refine(
-      (data) => !data.hasHomeworkers || typeof data.homeworkerCommission === "number",
-      {
-        message: "Homeworker commission % is required when 'has homeworkers' is on",
-        path: ["homeworkerCommission"],
-      },
-    ),
+  body: z.object({
+    businessName: z.string().trim().min(2, "Business name is required"),
+    firstName: z.string().trim().min(1, "First name is required"),
+    lastName: z.string().trim().min(1, "Last name is required"),
+    email: z.string().trim().email("Email must be valid"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+  }),
 });
 
 export const verifyEmailSchema = z.object({

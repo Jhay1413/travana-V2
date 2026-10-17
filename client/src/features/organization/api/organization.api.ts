@@ -48,6 +48,8 @@ export interface Organization {
   settings:     OrganizationSettings;
   createdAt:    string;
   trialEndsAt:  string | null;
+  /** Default profit share (integer percent) for new homeworkers; null when unset. */
+  homeworkerCommission?: number | null;
 }
 
 export type OrganizationUpdate = Partial<{
@@ -82,6 +84,17 @@ export interface OrgMember {
     orgRole: string | null;
   };
   branches: OrgMemberBranch[];
+  /** Every org-level role held (user_org_roles); absent on older servers. */
+  roles?: string[];
+}
+
+/** GET /organizations/me/seats. `limit`/`available` are null when the plan is unlimited. */
+export interface SeatUsage {
+  limit: number | null;
+  activeMembers: number;
+  pendingInvites: number;
+  used: number;
+  available: number | null;
 }
 
 export const organizationApi = {
@@ -105,8 +118,20 @@ export const organizationApi = {
     return data;
   },
 
-  setMemberSuspended: async (userId: string, suspended: boolean): Promise<{ userId: string; suspended: boolean }> => {
-    const { data } = await axiosClient.patch(`/api/v2/organizations/me/members/${userId}/suspended`, { suspended });
+  getSeats: async (): Promise<SeatUsage> => {
+    const { data } = await axiosClient.get<SeatUsage>("/api/v2/organizations/me/seats");
+    return data;
+  },
+
+  setMemberSuspended: async (
+    userId: string,
+    suspended: boolean,
+    notify?: boolean,
+  ): Promise<{ userId: string; suspended: boolean }> => {
+    const { data } = await axiosClient.patch(`/api/v2/organizations/me/members/${userId}/suspended`, {
+      suspended,
+      ...(notify !== undefined ? { notify } : {}),
+    });
     return data;
   },
 

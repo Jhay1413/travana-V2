@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
     isTestTransactionForQuote: vi.fn(),
     findOrganizationBrandingById: vi.fn(),
     create: vi.fn(),
+    findByIdWithOrg: vi.fn(),
+    quoteBelongsToOrg: vi.fn(),
+    findByQuoteId: vi.fn(),
   },
 }));
 
@@ -203,6 +206,30 @@ describe("socialPostService.generatePost family pricing", () => {
     mocks.repo.create.mockImplementation(async (data: Record<string, unknown>) => data);
   });
 
+  it("updates the existing deal instead of creating a second one", async () => {
+    mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 0 });
+    mocks.repo.findByQuoteId.mockResolvedValue({ id: "deal-1", quote_id: "quote-1", onlySocialsId: 9 });
+    mocks.repo.update.mockImplementation(async (_id: string, data: Record<string, unknown>) => ({ id: "deal-1", ...data }));
+
+    await socialPostService.generatePost(params, { orgId: null });
+
+    expect(mocks.repo.create).not.toHaveBeenCalled();
+    expect(mocks.repo.update).toHaveBeenCalledTimes(1);
+    const [id, data] = mocks.repo.update.mock.calls[0] as [string, Record<string, unknown>];
+    expect(id).toBe("deal-1");
+    expect(data).not.toHaveProperty("onlySocialsId");
+    expect(data).not.toHaveProperty("postSchedule");
+    expect(data).toMatchObject({ title: "Sunny Escape", nights: 7, price: "988.12" });
+  });
+
+  it("creates a deal when none exists for the quote", async () => {
+    mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 0 });
+    mocks.repo.findByQuoteId.mockResolvedValue(undefined);
+    await socialPostService.generatePost(params, { orgId: null });
+    expect(mocks.repo.update).not.toHaveBeenCalled();
+    expect(mocks.repo.create).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the total price and Family of 4 for 2 adults + 2 children", async () => {
     mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 2 });
     await socialPostService.generatePost(params, { orgId: null });
@@ -345,5 +372,41 @@ describe("formatPostHTML line breaks", () => {
     expect(body).toContain("🌙 7 Nights<br>\n✈️ Manchester");
     expect(body).toContain("<br>\n<br>\n");
     expect(body).not.toMatch(/\n\n/);
+  });
+});
+
+describe("socialPostService shop/homeworker partition", () => {
+  const SMM = {
+    orgId: "org1", branchId: "b1", orgRole: "social_media_manager", orgRoles: ["social_media_manager"],
+    userId: "u1", branchType: "shop", ownsHomeworkerBranch: false,
+  } as never;
+
+  beforeEach(() => {
+    mocks.repo.findById.mockReset();
+    mocks.repo.findByIdWithOrg.mockReset();
+    mocks.repo.quoteBelongsToOrg.mockReset();
+    mocks.repo.findByQuoteId.mockReset();
+    mocks.repo.update.mockClear();
+  });
+
+  it("passes the caller scope to the quote check", async () => {
+    mocks.repo.quoteBelongsToOrg.mockResolvedValue(true);
+    mocks.repo.findByQuoteId.mockResolvedValue(null);
+    await socialPostService.getTravelDealByQuoteId("q1", SMM);
+    expect(mocks.repo.quoteBelongsToOrg).toHaveBeenCalledWith("q1", "org1", SMM);
+  });
+
+  it("hides a homeworker's quote from shop staff (404)", async () => {
+    mocks.repo.quoteBelongsToOrg.mockResolvedValue(false);
+    await expect(socialPostService.getTravelDealByQuoteId("q1", SMM)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("hides a deal whose quote is in a homeworker branch (404)", async () => {
+    mocks.repo.findById.mockResolvedValue({ id: "d1", quote_id: "q1" });
+    mocks.repo.findByIdWithOrg.mockResolvedValue({ id: "d1", orgId: "org1" });
+    mocks.repo.quoteBelongsToOrg.mockResolvedValue(false);
+    await expect(socialPostService.updateTravelDeal("d1", {}, SMM)).rejects.toMatchObject({ statusCode: 404 });
+    expect(mocks.repo.quoteBelongsToOrg).toHaveBeenCalledWith("q1", "org1", SMM);
+    expect(mocks.repo.update).not.toHaveBeenCalled();
   });
 });

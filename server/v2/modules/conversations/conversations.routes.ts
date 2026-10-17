@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { validate } from "../../middlewares/validation.middleware";
 import { conversationsController as c } from "./conversations.controller";
-import { conversationIdParamValidator } from "./conversations.validator";
+import { aiSuggestReplyValidator, conversationIdParamValidator, listConversationsQueryValidator } from "./conversations.validator";
 
 const router = Router();
 
 // ── Collection-level (static paths first, before the /:conversation_id param) ──
-router.get("/", c.list);
+router.get("/", validate(listConversationsQueryValidator), c.list);
 router.post("/", c.create);
 router.get("/badge-counts", c.badgeCounts);
 router.post("/bulk-close", c.bulkClose);
@@ -43,7 +43,7 @@ router.post("/:conversation_id/bot-session/disable", c.botDisable);
 // SendSeven's native bots.
 router.get("/:conversation_id/ai-state", validate(conversationIdParamValidator), c.aiState);
 // On-demand composer suggestion (side-effect-free) — any authenticated agent.
-router.post("/:conversation_id/ai-suggest-reply", validate(conversationIdParamValidator), c.aiSuggestReply);
+router.post("/:conversation_id/ai-suggest-reply", validate(aiSuggestReplyValidator), c.aiSuggestReply);
 // Presence ping while composing — any agent with conversation access.
 router.post("/:conversation_id/typing", validate(conversationIdParamValidator), c.typing);
 router.post("/:conversation_id/ai-state/enable", validate(conversationIdParamValidator), c.aiEnable);

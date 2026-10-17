@@ -5,39 +5,29 @@ import { AppError } from '../../utils/error-handler';
 import { sanitizeRichText } from '../../utils/sanitize-rich-text';
 import type { TicketReply, InsertTicketReply } from '@shared/schema';
 import type { Scope } from '../../utils/scope';
-import type { TicketReplyWithLikes } from './ticket.types';
-
-type ScopeOrTrusted = Scope | { orgId: null };
-
-function effectiveOrgId(scope: ScopeOrTrusted): string | null {
-  if (scope.orgId === null) return null;
-  if ((scope as Scope).orgRole === 'platform_admin') return null;
-  return (scope as Scope).orgId || null;
-}
+import type { ScopeOrTrusted } from '../../utils/scope-conditions';
+import type { TicketReplyWithLikes, TicketScopeRef } from './ticket.types';
 
 function isPlatformAdmin(scope: ScopeOrTrusted): boolean {
   return (scope as Scope).orgRole === 'platform_admin';
 }
 
-async function assertTicketInScope(ticketId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await ticketReplyRepository.ticketBelongsToOrg(ticketId, orgId);
-  if (!ok) throw new AppError('Ticket not found', 404);
+/**
+ * The ticket, only if the caller may see it under the ticket's own scope rules
+ * (org, branch, creator/assignee, partition). Replies inherit that boundary:
+ * out of scope reads as "not found", never "forbidden".
+ */
+async function requireTicket(ticketId: string, scope: ScopeOrTrusted): Promise<TicketScopeRef> {
+  const ticket = await ticketRepository.findByIdScoped(ticketId, scope);
+  if (!ticket) throw new AppError('Ticket not found', 404);
+  return ticket;
 }
 
 async function loadScopedReply(id: string, scope: ScopeOrTrusted): Promise<TicketReply> {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) {
-    const r = await ticketReplyRepository.findById(id);
-    if (!r) throw new AppError('Reply not found', 404);
-    return r;
-  }
-  const row = await ticketReplyRepository.findByIdWithOrg(id);
-  if (!row || row.ticketOrgId !== orgId) {
-    throw new AppError('Reply not found', 404);
-  }
-  const { ticketOrgId: _ticketOrgId, ...reply } = row;
+  const reply = await ticketReplyRepository.findById(id);
+  if (!reply) throw new AppError('Reply not found', 404);
+  const ticket = await ticketRepository.findByIdScoped(reply.ticketId, scope);
+  if (!ticket) throw new AppError('Reply not found', 404);
   return reply;
 }
 
@@ -52,13 +42,13 @@ function cleanContent(content: string): string {
 
 export const ticketReplyService = {
   async listByTicketId(ticketId: string, scope: ScopeOrTrusted): Promise<TicketReplyWithLikes[]> {
-    await assertTicketInScope(ticketId, scope);
+    await requireTicket(ticketId, scope);
     const viewerUserId = (scope as Scope).userId ?? null;
     return ticketReplyRepository.findByTicketId(ticketId, viewerUserId);
   },
 
   async createReply(data: InsertTicketReply, scope: ScopeOrTrusted): Promise<TicketReply> {
-    await assertTicketInScope(data.ticketId, scope);
+    const ticket = await requireTicket(data.ticketId, scope);
 
     // Threads are one level deep: a reply to a child is re-pointed at the
     // child's top-level parent, so every UI can render parent + children
@@ -82,12 +72,16 @@ export const ticketReplyService = {
 
     // Notifications are a side effect: the reply is saved either way, so a
     // failure here must not turn into a 500 that makes the user post twice.
-    const ticket = await ticketRepository.findById(data.ticketId).catch(() => undefined);
+    // Each person is told at most once, and never the replier: the creator and
+    // the assignee ("on your ticket"), then the author of the comment replied to.
+    const notified = new Set<string>([data.userId]);
     const notifications: Promise<unknown>[] = [];
-    if (ticket && ticket.userId !== data.userId) {
+    for (const recipient of [ticket.userId, ticket.assignedTo]) {
+      if (!recipient || notified.has(recipient)) continue;
+      notified.add(recipient);
       notifications.push(
         notificationRepository.create({
-          userId: ticket.userId,
+          userId: recipient,
           type: 'ticket_reply',
           title: 'New reply on your ticket',
           message: `Someone replied to "${ticket.subject}"`,
@@ -96,13 +90,14 @@ export const ticketReplyService = {
         }),
       );
     }
-    if (repliedTo && repliedTo.userId !== data.userId && repliedTo.userId !== ticket?.userId) {
+    if (repliedTo && !notified.has(repliedTo.userId)) {
+      notified.add(repliedTo.userId);
       notifications.push(
         notificationRepository.create({
           userId: repliedTo.userId,
           type: 'ticket_reply',
           title: 'New reply to your comment',
-          message: `Someone replied to your comment${ticket ? ` on "${ticket.subject}"` : ''}`,
+          message: `Someone replied to your comment on "${ticket.subject}"`,
           link: `/tickets/${data.ticketId}`,
           read: false,
         }),

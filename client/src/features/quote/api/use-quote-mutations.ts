@@ -4,6 +4,27 @@ import axiosClient from "@/api/client/axios-client";
 import { quoteKeys, transactionKeys, dashboardKeys } from "@/hooks/queries";
 import type { CreateQuoteData } from "@/features/quote/types";
 
+export function useSetPortalVisibility() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, showOnPortal }: { id: string; showOnPortal: boolean }) =>
+      quoteApi.setPortalVisibility(id, showOnPortal),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
+    },
+  });
+}
+
+export function useSetFeatured() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isFeatured }: { id: string; isFeatured: boolean }) => quoteApi.setFeatured(id, isFeatured),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
+    },
+  });
+}
+
 export function useCreateSocialQuote() {
   const queryClient = useQueryClient();
   return useMutation({

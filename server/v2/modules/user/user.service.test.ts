@@ -7,6 +7,7 @@ vi.mock("./user.repository", () => ({
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
+    createHrRecord: vi.fn(),
   },
 }));
 // user.service imports the live db client only for createUser's HR-record insert.
@@ -26,6 +27,15 @@ const PLATFORM_ADMIN_SCOPE = { orgId: "o1", orgRole: "platform_admin", orgRoles:
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("userService.createUser - homeworker", () => {
+  it("rejects orgRole homeworker with 400 (use POST /homeworkers) before touching the repository", async () => {
+    await expect(
+      userService.createUser({ email: "a@b.com", orgRole: "homeworker" } as never, ORG_SCOPE),
+    ).rejects.toMatchObject({ statusCode: 400, message: "Use POST /homeworkers" });
+    expect(userRepository.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("userService.getUserById — tenant isolation", () => {
@@ -59,7 +69,7 @@ describe("userService.updateUser — org pinning", () => {
     vi.mocked(userRepository.findById).mockResolvedValue({ id: "u2", orgId: "o1" } as never);
     vi.mocked(userRepository.update).mockResolvedValue({ id: "u2", orgId: "o1" } as never);
 
-    await userService.updateUser("u2", { orgId: "attacker-org", firstName: "Ada" } as never, ORG_SCOPE);
+    await userService.updateUser("u2", { orgId: "attacker-org", firstName: "Ada" } as never, SELF_SCOPE);
 
     expect(vi.mocked(userRepository.update).mock.calls[0][1]).toMatchObject({ orgId: "o1", firstName: "Ada" });
   });
@@ -141,11 +151,79 @@ describe("userService.updateUser — privilege escalation guard", () => {
   });
 });
 
+describe("userService.updateUser — self or platform admin only", () => {
+  it("refuses an org admin editing another member (403)", async () => {
+    const orgAdminScope = { orgId: "o1", orgRole: "org_admin", orgRoles: ["org_admin"], userId: "admin2" } as never;
+    await expect(
+      userService.updateUser("u3", { firstName: "Mallory" } as never, orgAdminScope),
+    ).rejects.toMatchObject({ statusCode: 403, message: "You can only edit your own profile" });
+    expect(userRepository.findById).not.toHaveBeenCalled();
+    expect(userRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses a caller with no user id (403)", async () => {
+    await expect(
+      userService.updateUser("u3", { firstName: "X" } as never, ORG_SCOPE),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it("lets a platform admin edit another user's profile fields", async () => {
+    vi.mocked(userRepository.findById).mockResolvedValue({ id: "u3", orgId: "o1" } as never);
+    vi.mocked(userRepository.update).mockResolvedValue({ id: "u3", orgId: "o1" } as never);
+    await expect(
+      userService.updateUser("u3", { firstName: "Ada" } as never, PLATFORM_ADMIN_SCOPE),
+    ).resolves.toMatchObject({ id: "u3" });
+  });
+});
+
+describe("userService.deleteUser — never hard-deletes", () => {
+  it("answers 409 for a user in the caller's org and does not delete", async () => {
+    vi.mocked(userRepository.findById).mockResolvedValue({ id: "u2", orgId: "o1" } as never);
+    await expect(userService.deleteUser("u2", ORG_SCOPE)).rejects.toMatchObject({
+      statusCode: 409,
+      message: "Users can't be deleted. Remove them from Teams & Roles instead; their history is kept.",
+    });
+    expect(userRepository.remove).not.toHaveBeenCalled();
+  });
+
+  it("answers 409 for a platform admin too", async () => {
+    vi.mocked(userRepository.findById).mockResolvedValue({ id: "u2", orgId: "o1" } as never);
+    await expect(userService.deleteUser("u2", PLATFORM_ADMIN_SCOPE)).rejects.toMatchObject({ statusCode: 409 });
+    expect(userRepository.remove).not.toHaveBeenCalled();
+  });
+});
+
 describe("userService.deleteUser — tenant isolation", () => {
   it("refuses to delete a user from another org", async () => {
     vi.mocked(userRepository.findById).mockResolvedValue({ id: "u2", orgId: "other" } as never);
 
     await expect(userService.deleteUser("u2", ORG_SCOPE)).rejects.toMatchObject({ statusCode: 404 });
     expect(userRepository.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe("userService.createUser - privileged fields", () => {
+  it.each(["role", "orgRole", "password", "banned", "emailVerified", "inviteToken", "id"])(
+    "refuses %s with 403 before touching the repository",
+    async (field) => {
+      await expect(
+        userService.createUser({ email: "a@b.com", firstName: "A", lastName: "B", [field]: "x" } as never, PLATFORM_ADMIN_SCOPE),
+      ).rejects.toMatchObject({ statusCode: 403 });
+      expect(userRepository.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it("creates a plain Agent login with a generated id and display name", async () => {
+    vi.mocked(userRepository.create).mockResolvedValue({ id: "x", orgId: null } as never);
+    await userService.createUser({ email: "a@b.com", firstName: "Ada", lastName: "L", phoneNumber: "" } as never, PLATFORM_ADMIN_SCOPE);
+    const data = vi.mocked(userRepository.create).mock.calls[0][0];
+    expect(data).toMatchObject({ role: "Agent", name: "Ada L", email: "a@b.com" });
+    expect(typeof data.id).toBe("string");
+  });
+
+  it("creates the HR record through the repository when the user has an org", async () => {
+    vi.mocked(userRepository.create).mockResolvedValue({ id: "x", orgId: "o1" } as never);
+    await userService.createUser({ email: "a@b.com", firstName: "A", lastName: "B", phoneNumber: "" } as never, PLATFORM_ADMIN_SCOPE);
+    expect(userRepository.createHrRecord).toHaveBeenCalledWith("o1", "x");
   });
 });

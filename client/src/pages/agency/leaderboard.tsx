@@ -155,7 +155,7 @@ export default function AgencyLeaderboardPage() {
 
   const rows: Row[] = useMemo(() => {
     if (isAgents) return (agentsQuery.data?.rows ?? []).map(toAgentRow);
-    return (branchesQuery.data?.rows ?? []).map(toBranchRow);
+    return (branchesQuery.data?.rows ?? []).filter((b) => b.branchType !== "homeworker").map(toBranchRow);
   }, [isAgents, agentsQuery.data, branchesQuery.data]);
 
   const podium = rows.slice(0, 3);

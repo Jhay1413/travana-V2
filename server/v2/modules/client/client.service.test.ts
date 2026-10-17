@@ -10,7 +10,13 @@ vi.mock("./client.repository", () => ({
   },
 }));
 
+vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
+
+vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
+
 import { clientService } from "./client.service";
+import { branchRepository } from "../branch/branch.repository";
+import { branchRepository } from "../branch/branch.repository";
 import { clientRepository } from "./client.repository";
 
 const SCOPE = { orgId: "o1", orgRole: "agent" } as never;
@@ -64,5 +70,24 @@ describe("clientService.deleteClient", () => {
     vi.mocked(clientRepository.remove).mockResolvedValue(true as never);
 
     await expect(clientService.deleteClient("c1", SCOPE)).resolves.toBeUndefined();
+  });
+});
+
+describe("clientService.updateClient ownership fields (S3)", () => {
+  it("strips orgId/branchId/createdBy before the repository for a non-admin", async () => {
+    vi.mocked(clientRepository.update).mockResolvedValue({ id: "c1" } as never);
+    await clientService.updateClient("c1", { firstName: "X", orgId: "evil", branchId: "b", createdBy: "u" } as never, { orgId: "o1", orgRole: "agent" } as never);
+    expect(vi.mocked(clientRepository.update).mock.calls[0][1]).toEqual({ firstName: "X" });
+  });
+
+  it("lets an admin move a client to a branch in their org, and 400s otherwise", async () => {
+    vi.mocked(clientRepository.update).mockResolvedValue({ id: "c1" } as never);
+    const admin = { orgId: "o1", orgRole: "org_admin" } as never;
+    vi.mocked(branchRepository.findById).mockResolvedValueOnce({ id: "b2" } as never);
+    await clientService.updateClient("c1", { branchId: "b2" } as never, admin);
+    expect(vi.mocked(clientRepository.update).mock.calls[0][1]).toEqual({ branchId: "b2" });
+
+    vi.mocked(branchRepository.findById).mockResolvedValueOnce(null);
+    await expect(clientService.updateClient("c1", { branchId: "foreign" } as never, admin)).rejects.toMatchObject({ statusCode: 400 });
   });
 });

@@ -3,10 +3,13 @@ import multer from "multer";
 import { quoteController } from "./quote.controller";
 import { quoteImageController } from "./quote-image.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { addImagesValidator, reorderImagesValidator, presignQuoteImagesValidator } from "./quote.validator";
+import { freeQuotesQueryValidator, freeQuoteStatusCountsValidator, addImagesValidator, reorderImagesValidator, presignQuoteImagesValidator, recentEngagementQueryValidator } from "./quote.validator";
 import { requireOrgRole } from "../../middlewares/auth/require-org-role";
+import { restrictSocialManagerToFreeQuotes } from "./quote-social-guard.middleware";
 
 const router = Router();
+// social_media_manager may only write social (free) quotes, never deal quotes.
+router.use(restrictSocialManagerToFreeQuotes);
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -25,8 +28,9 @@ const upload = multer({
 // routes below so "/images/presign" is never captured as an :id param.
 router.post("/images/presign", validate(presignQuoteImagesValidator), quoteImageController.presignUploads);
 
-router.get("/free", quoteController.listFreeQuotes);
-router.get("/engagement/recent", quoteController.listRecentClientEngagement);
+router.get("/free", validate(freeQuotesQueryValidator), quoteController.listFreeQuotes);
+router.get("/free/status-counts", validate(freeQuoteStatusCountsValidator), quoteController.getFreeQuoteStatusCounts);
+router.get("/engagement/recent", validate(recentEngagementQueryValidator), quoteController.listRecentClientEngagement);
 router.get("/", quoteController.listQuotes);
 router.get("/:id", quoteController.getQuoteById);
 router.post("/social-post", upload.array("images", 50), quoteController.createSocialQuote);

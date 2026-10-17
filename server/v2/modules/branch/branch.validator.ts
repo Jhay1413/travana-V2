@@ -20,6 +20,12 @@ const branchCoreFields = {
   isActive:         z.boolean().optional(),
 };
 
+export const listBranchesSchema = z.object({
+  query: z.object({
+    type: z.enum(['shop', 'homeworker']).optional(),
+  }),
+});
+
 export const createBranchSchema = z.object({
   body: z.object(branchCoreFields),
 });

@@ -1,11 +1,20 @@
 import { db } from "../../config/database";
-import { user, branchMembers, type User, type InsertUser, type UpsertUser } from "@shared/schema";
+import { user, branchMembers, hrRecordsTable, type User, type InsertUser, type UpsertUser } from "@shared/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Scope } from "../../utils/scope";
+import { buildUserPartitionCond } from "../../utils/scope-conditions";
 import { notSuspendedOrBanned } from "../../utils/user-conditions";
 import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
 
 export const userRepository = {
+  /** Idempotent: every org user gets one HR record. */
+  async createHrRecord(orgId: string, userId: string): Promise<void> {
+    await db
+      .insert(hrRecordsTable)
+      .values({ orgId, userId })
+      .onConflictDoNothing({ target: hrRecordsTable.userId });
+  },
+
   async findById(id: string): Promise<User | undefined> {
     const [result] = await db.select().from(user).where(eq(user.id, id)).limit(1);
     return result;
@@ -163,6 +172,9 @@ export const userRepository = {
     if (ids.length === 0) return [];
     // This path already filters on active membership, but still needs the ban
     // check — a platform-admin ban leaves branch membership untouched.
-    return await db.select().from(user).where(and(inArray(user.id, ids), notSuspendedOrBanned()));
+    return await db
+      .select()
+      .from(user)
+      .where(and(inArray(user.id, ids), notSuspendedOrBanned(), buildUserPartitionCond(scope, user.id)));
   },
 };

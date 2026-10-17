@@ -6,6 +6,9 @@ vi.mock("./quote.service", () => ({
     createQuote: vi.fn(),
     duplicateQuote: vi.fn(),
     deleteQuote: vi.fn(),
+    listFreeQuotesPaginated: vi.fn(),
+    getFreeQuoteStatusCounts: vi.fn(),
+    getRecentClientEngagement: vi.fn(),
   },
 }));
 // These two are imported at module load but unused by the methods under test.
@@ -101,5 +104,97 @@ describe("quoteController — error propagation", () => {
     await Promise.resolve();
 
     expect(next).toHaveBeenCalledWith(err);
+  });
+});
+
+describe("quoteController.listFreeQuotes — socialStatus param", () => {
+  beforeEach(() => {
+    vi.mocked(newQuoteService.listFreeQuotesPaginated).mockResolvedValue([] as never);
+  });
+
+  it("forwards a valid socialStatus as the last service argument", async () => {
+    const res = mockRes();
+
+    await quoteController.listFreeQuotes(req({ query: { socialStatus: "scheduled" } }), res, vi.fn());
+
+    const args = vi.mocked(newQuoteService.listFreeQuotesPaginated).mock.calls[0];
+    expect(args[12]).toBe("scheduled");
+    expect(res.json.mock.calls[0][0]).toMatchObject({ success: true });
+  });
+
+  it("keeps existing params working when socialStatus is absent", async () => {
+    await quoteController.listFreeQuotes(
+      req({ query: { page: "2", pageSize: "5", search: "rome", tags: "A, B", unscheduledOnly: "true" } }),
+      mockRes(),
+      vi.fn(),
+    );
+
+    const args = vi.mocked(newQuoteService.listFreeQuotesPaginated).mock.calls[0];
+    expect(args[0]).toBe(2);
+    expect(args[1]).toBe(5);
+    expect(args[4]).toBe("rome");
+    expect(args[8]).toBe(true);
+    expect(args[11]).toEqual(["A", "B"]);
+    expect(args[12]).toBeUndefined();
+  });
+});
+
+describe("quoteController.getFreeQuoteStatusCounts", () => {
+  it("returns the counts with search and tags parsed from the query", async () => {
+    const counts = { total: 10, not_generated: 4, draft: 3, scheduled: 2, posted: 1 };
+    vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mockResolvedValue(counts as never);
+    const res = mockRes();
+
+    await quoteController.getFreeQuoteStatusCounts(req({ query: { search: "rome", tags: "Summer, Beach" } }), res, vi.fn());
+
+    const args = vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mock.calls[0];
+    expect(args[0]).toBe("rome");
+    expect(args[1]).toEqual(["Summer", "Beach"]);
+    expect(args[2]).toMatchObject({ orgId: "o1" });
+    expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, data: counts });
+  });
+
+  it("accepts tags supplied as a repeated query param (array)", async () => {
+    vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mockResolvedValue({} as never);
+
+    await quoteController.getFreeQuoteStatusCounts(req({ query: { tags: ["Summer", "Beach"] } }), mockRes(), vi.fn());
+
+    expect(vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mock.calls[0][1]).toEqual(["Summer", "Beach"]);
+  });
+
+  it("defaults to empty search and no tags", async () => {
+    vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mockResolvedValue({} as never);
+
+    await quoteController.getFreeQuoteStatusCounts(req({ query: {} }), mockRes(), vi.fn());
+
+    const args = vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mock.calls[0];
+    expect(args[0]).toBe("");
+    expect(args[1]).toEqual([]);
+  });
+});
+
+describe("quoteController.listRecentClientEngagement — query parsing", () => {
+  const call = async (query: Record<string, unknown>) => {
+    vi.mocked(newQuoteService.getRecentClientEngagement).mockResolvedValue([] as never);
+    await quoteController.listRecentClientEngagement(req({ query }), mockRes(), vi.fn());
+    return vi.mocked(newQuoteService.getRecentClientEngagement).mock.lastCall;
+  };
+
+  it("with no params: limit 10, mine false, no period (legacy behaviour)", async () => {
+    const c = await call({});
+    expect(c?.[1]).toBe(10);
+    expect(c?.[2]).toEqual({ mine: false, period: undefined });
+  });
+
+  it("forwards mine=true and a valid period", async () => {
+    const c = await call({ limit: "5", mine: "true", period: "yesterday" });
+    expect(c?.[1]).toBe(5);
+    expect(c?.[2]).toEqual({ mine: true, period: "yesterday" });
+  });
+
+  it("clamps limit to 50, falls back to 10 on junk, and ignores an unknown period", async () => {
+    expect((await call({ limit: "500" }))?.[1]).toBe(50);
+    expect((await call({ limit: "abc" }))?.[1]).toBe(10);
+    expect((await call({ period: "month" }))?.[2]).toEqual({ mine: false, period: undefined });
   });
 });

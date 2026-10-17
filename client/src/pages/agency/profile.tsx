@@ -93,8 +93,8 @@ export default function AgencyProfilePage() {
   const save = () => {
     if (!org) return;
     const existing = org.settings ?? {};
+    // Only the sections this form edits; never echo untouched keys such as `onboarding`.
     const settings: OrganizationSettings = {
-      ...existing,
       profile: { ...existing.profile, ...profile },
       branding: { ...existing.branding, iconUrl },
     };

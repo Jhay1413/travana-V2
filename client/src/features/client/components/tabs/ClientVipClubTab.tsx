@@ -17,15 +17,15 @@ export function ClientVipClubTab({ clientId }: Props) {
   if (isLoading) {
     return (
       <div className="grid gap-3 animate-pulse" data-testid="vip-tab-loading">
-        <div className="h-28 rounded-2xl border border-black/10 bg-black/[0.03]" />
+        <div className="h-28 rounded-xl border border-social-border bg-muted" />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-20 rounded-2xl border border-black/10 bg-black/[0.03]" />
+            <div key={i} className="h-20 rounded-xl border border-social-border bg-muted" />
           ))}
         </div>
-        <div className="h-48 rounded-2xl border border-black/10 bg-black/[0.03]" />
-        <div className="h-48 rounded-2xl border border-black/10 bg-black/[0.03]" />
-        <div className="h-48 rounded-2xl border border-black/10 bg-black/[0.03]" />
+        <div className="h-48 rounded-xl border border-social-border bg-muted" />
+        <div className="h-48 rounded-xl border border-social-border bg-muted" />
+        <div className="h-48 rounded-xl border border-social-border bg-muted" />
       </div>
     );
   }

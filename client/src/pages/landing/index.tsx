@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -6,12 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plane, Users, FileText, TrendingUp, Shield, Zap, Loader2, Eye, EyeOff, Sparkles } from "lucide-react";
 import { useLogin } from "@/hooks/mutations";
+import { clearAuthNotice, peekAuthNotice } from "@/lib/auth-notice";
 
 export default function LandingPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const loginMutation = useLogin();
+  // Why the last session ended (suspended or deactivated); shown once.
+  const [authNotice] = useState(() => peekAuthNotice(typeof window === "undefined" ? null : window.sessionStorage));
+  useEffect(() => {
+    clearAuthNotice(typeof window === "undefined" ? null : window.sessionStorage);
+  }, []);
   const [, setLocation] = useLocation();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -85,6 +91,11 @@ export default function LandingPage() {
             >
               <div className="rounded-3xl bg-white/5 border border-white/10 p-8 backdrop-blur-xl">
                 <h2 className="text-2xl font-semibold mb-6">Sign In</h2>
+                {authNotice && (
+                  <p role="alert" className="mb-5 rounded-xl bg-ticket-amber-bg px-3 py-2 text-sm font-medium text-ticket-amber-fg" data-testid="text-auth-notice">
+                    {authNotice}
+                  </p>
+                )}
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="email" className="text-white/70">Email</Label>

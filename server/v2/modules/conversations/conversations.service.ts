@@ -1,11 +1,10 @@
 import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
-import { suggestAiReply } from "../sendseven-webhook/suggest-reply.service";
+import { suggestAiReply, type SuggestReplyOptions } from "../sendseven-webhook/suggest-reply.service";
 import { userRepository } from "../user/user.repository";
 import { AppError } from "../../utils/error-handler";
 import { realtimeService } from "../../realtime/realtime.service";
 import { conversationsRepository } from "./conversations.repository";
 import { conversationsAssignmentRepository, type ConversationType, type LocalConversationState } from "./conversations-assignment.repository";
-import { AppError } from "../../utils/error-handler";
 import type { ListConversationsParams, SsBadgeCounts, SsConversation, SsConversationList } from "./conversations.types";
 
 // Fans a state change out to every agent in the org over SSE so their inbox
@@ -199,7 +198,8 @@ export const conversationsService = {
   enableAi: (orgId: string, id: string) => sendsevenWebhookService.enableAi(orgId, id),
   disableAi: (orgId: string, id: string) => sendsevenWebhookService.disableAi(orgId, id),
   // On-demand composer suggestion — side-effect-free, see suggest-reply.service.
-  suggestReply: (orgId: string, id: string, userId?: string | null) => suggestAiReply(orgId, id, userId),
+  suggestReply: (orgId: string, id: string, userId?: string | null, opts?: SuggestReplyOptions) =>
+    suggestAiReply(orgId, id, userId, opts),
 
   // "<agent> is typing…" — broadcast to the org so a colleague in the same
   // conversation sees it. Nothing is stored: the event is cosmetic and the

@@ -10,6 +10,7 @@ import { useBranches } from "@/hooks/queries";
 import { useInviteEmployee } from "@/hooks/mutations";
 import { type InvitableRole } from "@/features/hr/api/hr.api";
 import { INVITE_ROLES } from "./helpers";
+import { HomeworkerInviteFields, buildInviteBody, useShareInput } from "@/features/homeworkers";
 
 export function InviteEmployeeDialog({
   open, onClose,
@@ -21,17 +22,26 @@ export function InviteEmployeeDialog({
   const [email, setEmail]       = useState("");
   const [branchId, setBranchId] = useState<string>("");
   const [role, setRole]         = useState<InvitableRole>("agent");
+  const [displayName, setDisplayName] = useState("");
+  const share = useShareInput();
+  const isHomeworker = role === "homeworker";
+  const shareInvalid = isHomeworker && share.error !== null;
 
   const branches = useBranches();
   const send = useInviteEmployee();
 
+  const handleCancel = () => {
+    setEmail(""); setBranchId(""); setRole("agent"); setDisplayName(""); share.reset();
+    onClose(null);
+  };
+
   const handleSend = () => {
     send.mutate(
-      { email: email.trim(), branchId, orgRole: role },
+      buildInviteBody({ email, orgRole: role, branchId, profitSharePercent: share.value, displayName }),
       {
         onSuccess: () => {
           const sent = email.trim();
-          setEmail(""); setBranchId(""); setRole("agent");
+          setEmail(""); setBranchId(""); setRole("agent"); setDisplayName(""); share.reset();
           onClose(sent);
         },
         onError: (err: any) => {
@@ -46,11 +56,11 @@ export function InviteEmployeeDialog({
   };
 
   const roleOptions = isBranchManager
-    ? INVITE_ROLES.filter((r) => r.value === "agent" || r.value === "homeworker")
+    ? INVITE_ROLES.filter((r) => r.value === "agent")
     : INVITE_ROLES;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose(null)}>
+    <Dialog open={open} onOpenChange={(o) => !o && handleCancel()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Invite an employee</DialogTitle>
@@ -61,6 +71,7 @@ export function InviteEmployeeDialog({
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="name@agency.com" data-testid="input-invite-email" />
           </div>
+          {!isHomeworker && (
           <div className="space-y-1.5">
             <Label>Branch</Label>
             <select value={branchId} onChange={(e) => setBranchId(e.target.value)}
@@ -70,6 +81,7 @@ export function InviteEmployeeDialog({
               {(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </div>
+          )}
           <div className="space-y-1.5">
             <Label>Role</Label>
             <select value={role} onChange={(e) => setRole(e.target.value as InvitableRole)}
@@ -78,14 +90,24 @@ export function InviteEmployeeDialog({
               {roleOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
             {isBranchManager && (
-              <p className="text-xs text-slate-500">Branch managers can invite agents or homeworkers.</p>
+              <p className="text-xs text-slate-500">Branch managers can invite agents.</p>
             )}
           </div>
+          {isHomeworker && (
+            <HomeworkerInviteFields
+              share={share.value}
+              onShareChange={share.setValue}
+              shareError={share.error}
+              displayName={displayName}
+              onDisplayNameChange={setDisplayName}
+              disabled={send.isPending}
+            />
+          )}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onClose(null)}>Cancel</Button>
+          <Button variant="ghost" onClick={handleCancel}>Cancel</Button>
           <Button onClick={handleSend}
-            disabled={!email.trim() || !branchId || send.isPending}
+            disabled={!email.trim() || (!isHomeworker && !branchId) || shareInvalid || send.isPending}
             data-testid="button-send-invite">
             {send.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
             Send invite

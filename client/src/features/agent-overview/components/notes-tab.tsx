@@ -1,16 +1,9 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  CheckCircle2,
-  Circle,
-  Flame,
-  Plus,
-  Target,
-  Trophy,
-  X,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Check, Plus, X } from "lucide-react";
+import { londonDayKey } from "@/lib/london-day";
+import { cn } from "@/lib/utils";
+import { currency } from "./helpers";
+import { EmptyLine } from "./home/home-ui";
 
 type DailyGoal = {
   id: string;
@@ -19,12 +12,39 @@ type DailyGoal = {
   createdAt: string;
 };
 
-export function NotesTab() {
-  const todayKey = new Date().toISOString().slice(0, 10);
+function Bar({ pct, testId }: { pct: number; testId?: string }) {
+  return (
+    <div className="my-2 h-1.5 overflow-hidden rounded-[3px] bg-social-border" data-testid={testId}>
+      <div className="h-full rounded-[3px] bg-social-orange" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+    </div>
+  );
+}
+
+/** Read-only first row: this month's profit against the agent's own target. */
+function MonthlyProfitRow({ monthProfit, target }: { monthProfit: number; target: number }) {
+  const pct = target > 0 ? Math.round((monthProfit / target) * 100) : 0;
+  return (
+    <div className="border-t border-social-border py-3" data-testid="goal-monthly-profit">
+      <div className="flex justify-between gap-3 text-[13px] xl:text-[14px]">
+        <b className="font-semibold">Monthly profit</b>
+        <span className="whitespace-nowrap text-social-muted">
+          {currency.format(monthProfit)} of {target > 0 ? currency.format(target) : "no target set"}
+        </span>
+      </div>
+      <Bar pct={pct} testId="bar-monthly-profit" />
+      <div className="text-[11px] text-social-muted xl:text-[12px]">
+        {target > 0 ? `${Math.min(pct, 100)}% of this month's target` : "Your target will show here once one is set"}
+      </div>
+    </div>
+  );
+}
+
+export function NotesTab({ monthProfit = 0, target = 0 }: { monthProfit?: number; target?: number }) {
+  const todayKey = londonDayKey(new Date());
   const [dailyGoals, setDailyGoals] = useState<DailyGoal[]>(() => {
     try {
       const stored = localStorage.getItem(`daily-goals-${todayKey}`);
-      return stored ? JSON.parse(stored) : [];
+      return stored ? (JSON.parse(stored) as DailyGoal[]) : [];
     } catch {
       return [];
     }
@@ -46,151 +66,91 @@ export function NotesTab() {
     saveDailyGoals([...dailyGoals, goal]);
     setNewGoalText("");
   };
-  const toggleGoalComplete = (id: string) => {
-    saveDailyGoals(
-      dailyGoals.map((g) => (g.id === id ? { ...g, completed: !g.completed } : g)),
-    );
-  };
-  const removeGoal = (id: string) => {
-    saveDailyGoals(dailyGoals.filter((g) => g.id !== id));
-  };
+  const toggleGoalComplete = (id: string) =>
+    saveDailyGoals(dailyGoals.map((g) => (g.id === id ? { ...g, completed: !g.completed } : g)));
+  const removeGoal = (id: string) => saveDailyGoals(dailyGoals.filter((g) => g.id !== id));
+
   const completedGoals = dailyGoals.filter((g) => g.completed).length;
-  const goalProgress =
-    dailyGoals.length > 0 ? Math.round((completedGoals / dailyGoals.length) * 100) : 0;
+  const goalProgress = dailyGoals.length > 0 ? Math.round((completedGoals / dailyGoals.length) * 100) : 0;
 
   return (
-    <div className="grid gap-4" data-testid="panel-daily-goals-overview">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Target className="h-4 w-4 text-indigo-600" />
-          <span className="text-sm font-semibold">Today's Goals</span>
-          {dailyGoals.length > 0 && (
-            <span className="text-xs text-black/50 dark:text-white/50">
-              {completedGoals}/{dailyGoals.length}
-            </span>
-          )}
-        </div>
-        {dailyGoals.length > 0 && goalProgress === 100 && (
-          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-            <Trophy className="h-3 w-3" />
-            All done!
-          </div>
-        )}
-      </div>
+    <div data-testid="panel-daily-goals-overview">
+      <MonthlyProfitRow monthProfit={monthProfit} target={target} />
 
-      {dailyGoals.length > 0 && (
-        <div className="relative h-2 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-          <motion.div
-            className={`absolute inset-y-0 left-0 rounded-full ${goalProgress === 100 ? "bg-emerald-500" : "bg-indigo-500"}`}
-            initial={{ width: 0 }}
-            animate={{ width: `${goalProgress}%` }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            data-testid="bar-daily-goals-progress"
+      <div className="border-t border-social-border py-3">
+        <div className="flex justify-between gap-3 text-[13px] xl:text-[14px]">
+          <b className="font-semibold">Today&apos;s goals</b>
+          <span className="whitespace-nowrap text-social-muted" data-testid="text-daily-goals-progress">
+            {dailyGoals.length > 0 ? `${completedGoals} of ${dailyGoals.length} done` : "None yet"}
+          </span>
+        </div>
+        {dailyGoals.length > 0 && <Bar pct={goalProgress} testId="bar-daily-goals-progress" />}
+
+        <div className="mt-2.5 flex gap-2">
+          <input
+            placeholder="Add a goal for today..."
+            className="h-9 min-w-0 flex-1 rounded-lg border border-social-border bg-card px-3 text-[13px] outline-none focus:border-social-orange"
+            value={newGoalText}
+            onChange={(e) => setNewGoalText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addDailyGoal();
+            }}
+            data-testid="input-add-daily-goal"
           />
+          <button
+            type="button"
+            onClick={addDailyGoal}
+            disabled={!newGoalText.trim()}
+            className="inline-flex h-9 items-center gap-1 rounded-lg bg-social-orange px-3 text-[13px] font-semibold text-slate-900 hover:bg-social-orange/90 disabled:opacity-50"
+            data-testid="button-add-daily-goal"
+          >
+            <Plus className="h-4 w-4" />
+            Add
+          </button>
         </div>
-      )}
 
-      <div className="flex gap-2">
-        <Input
-          placeholder="Add a goal for today..."
-          className="h-9 rounded-xl border-black/10 bg-white/70 text-sm dark:border-white/10 dark:bg-white/5"
-          value={newGoalText}
-          onChange={(e) => setNewGoalText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") addDailyGoal();
-          }}
-          data-testid="input-add-daily-goal"
-        />
-        <Button
-          size="sm"
-          className="h-9 rounded-xl bg-indigo-600 px-3 text-white hover:bg-indigo-700"
-          onClick={addDailyGoal}
-          disabled={!newGoalText.trim()}
-          data-testid="button-add-daily-goal"
-        >
-          <Plus className="mr-1 h-4 w-4" />
-          Add
-        </Button>
-      </div>
-
-      {dailyGoals.length === 0 ? (
-        <div
-          className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] p-8 text-center dark:border-white/10 dark:bg-white/[0.02]"
-          data-testid="empty-daily-goals"
-        >
-          <Target className="mx-auto h-8 w-8 text-black/20 dark:text-white/20" />
-          <p className="mt-2 text-sm text-black/50 dark:text-white/50">
-            No goals set for today
-          </p>
-          <p className="mt-1 text-xs text-black/35 dark:text-white/35">
-            Add goals above to start tracking your day
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2" data-testid="list-daily-goals">
-          <AnimatePresence mode="popLayout">
+        {dailyGoals.length === 0 ? (
+          <EmptyLine testId="empty-daily-goals">No goals set for today. Add one above to start tracking your day.</EmptyLine>
+        ) : (
+          <div className="mt-1.5" data-testid="list-daily-goals">
             {dailyGoals.map((goal) => (
-              <motion.div
+              <div
                 key={goal.id}
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, x: -20, transition: { duration: 0.15 } }}
-                className={`group flex items-center gap-3 rounded-2xl border p-3 transition ${goal.completed ? "border-emerald-500/20 bg-emerald-500/5" : "border-black/10 bg-black/5 hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7"}`}
+                className="group flex items-center gap-3 py-2"
                 data-testid={`card-daily-goal-${goal.id}`}
               >
                 <button
                   type="button"
-                  className="flex-shrink-0"
+                  aria-label={goal.completed ? "Mark goal not done" : "Mark goal done"}
                   onClick={() => toggleGoalComplete(goal.id)}
+                  className={cn(
+                    "grid h-5 w-5 shrink-0 place-items-center rounded-full border-[1.5px] transition",
+                    goal.completed ? "border-emerald-500 bg-emerald-500 text-white" : "border-dashboard-check bg-card hover:border-emerald-500",
+                  )}
                   data-testid={`button-toggle-goal-${goal.id}`}
                 >
-                  {goal.completed ? (
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                  ) : (
-                    <Circle className="h-5 w-5 text-black/30 transition hover:text-indigo-500 dark:text-white/30" />
-                  )}
+                  {goal.completed && <Check className="h-3 w-3" strokeWidth={3.5} />}
                 </button>
                 <span
-                  className={`flex-1 text-sm ${goal.completed ? "text-black/40 line-through dark:text-white/40" : "text-black/80 dark:text-white/80"}`}
+                  className={cn("flex-1 text-[13px] xl:text-[14px]", goal.completed && "text-social-muted line-through")}
                   data-testid={`text-daily-goal-${goal.id}`}
                 >
                   {goal.text}
                 </span>
                 <button
                   type="button"
-                  className="flex-shrink-0 opacity-0 transition group-hover:opacity-100"
+                  aria-label="Remove goal"
+                  className="shrink-0 text-social-muted opacity-0 transition hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
                   onClick={() => removeGoal(goal.id)}
                   data-testid={`button-remove-goal-${goal.id}`}
                 >
-                  <X className="h-4 w-4 text-black/30 transition hover:text-red-500 dark:text-white/30" />
+                  <X className="h-4 w-4" />
                 </button>
-              </motion.div>
+              </div>
             ))}
-          </AnimatePresence>
-        </div>
-      )}
-
-      {dailyGoals.length > 0 && (
-        <div
-          className="flex items-center justify-between rounded-2xl border border-black/5 bg-black/[0.02] p-3 dark:border-white/5 dark:bg-white/[0.02]"
-          data-testid="card-daily-goals-stats"
-        >
-          <div className="flex items-center gap-4 text-xs text-black/50 dark:text-white/50">
-            <span className="flex items-center gap-1">
-              <Flame className="h-3 w-3 text-orange-500" />
-              {completedGoals} completed
-            </span>
-            <span>{dailyGoals.length - completedGoals} remaining</span>
           </div>
-          <span
-            className={`text-xs font-semibold ${goalProgress === 100 ? "text-emerald-600" : "text-indigo-600"}`}
-            data-testid="text-daily-goals-progress"
-          >
-            {goalProgress}%
-          </span>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

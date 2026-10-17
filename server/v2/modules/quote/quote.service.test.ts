@@ -26,6 +26,9 @@ vi.mock("./quote.repository", () => ({
     saveImagesToAccommodation: vi.fn(),
     saveImagesToLodge: vi.fn(),
     isEmbeddableFreeQuote: vi.fn(),
+    findFreeQuotesPaginated: vi.fn(),
+    countFreeQuotesBySocialStatus: vi.fn(),
+    findRecentClientEngagement: vi.fn(),
   },
 }));
 vi.mock("../transaction/transaction.repository", () => ({
@@ -640,5 +643,95 @@ describe("newQuoteService — free-quote embedding lifecycle", () => {
     await flush();
 
     expect(newQuoteRepository.isEmbeddableFreeQuote).toHaveBeenCalledWith("q1");
+  });
+});
+
+describe("newQuoteService — free-quote social status", () => {
+  it("forwards socialStatus as the last repository argument", async () => {
+    vi.mocked(newQuoteRepository.findFreeQuotesPaginated).mockResolvedValue([] as never);
+
+    await newQuoteService.listFreeQuotesPaginated(0, 12, false, "none", "", "", "", TRUSTED, false, false, "all", [], "draft");
+
+    const args = vi.mocked(newQuoteRepository.findFreeQuotesPaginated).mock.calls[0];
+    expect(args[12]).toBe("draft");
+    expect(args[7]).toBe(TRUSTED);
+  });
+
+  it("leaves socialStatus undefined when not supplied (existing callers unchanged)", async () => {
+    vi.mocked(newQuoteRepository.findFreeQuotesPaginated).mockResolvedValue([] as never);
+
+    await newQuoteService.listFreeQuotesPaginated(0, 12, false, "none", "", "", "", TRUSTED);
+
+    expect(vi.mocked(newQuoteRepository.findFreeQuotesPaginated).mock.calls[0][12]).toBeUndefined();
+  });
+
+  it("getFreeQuoteStatusCounts passes search, tags and scope to the repository and returns its counts", async () => {
+    const counts = { total: 10, not_generated: 4, draft: 3, scheduled: 2, posted: 1 };
+    vi.mocked(newQuoteRepository.countFreeQuotesBySocialStatus).mockResolvedValue(counts as never);
+
+    const result = await newQuoteService.getFreeQuoteStatusCounts("rome", ["Summer"], TRUSTED);
+
+    expect(newQuoteRepository.countFreeQuotesBySocialStatus).toHaveBeenCalledWith("rome", ["Summer"], TRUSTED);
+    expect(result).toEqual(counts);
+  });
+});
+
+describe("newQuoteService.getRecentClientEngagement", () => {
+  const scopeFor = (orgRole: string) => ({ orgId: "o1", orgRole, userId: "u1" }) as never;
+
+  beforeEach(() => {
+    vi.mocked(newQuoteRepository.findRecentClientEngagement).mockResolvedValue([] as never);
+  });
+
+  it("without params: agents are limited to themselves, managers/admins stay org-wide (unchanged)", async () => {
+    await newQuoteService.getRecentClientEngagement(scopeFor("agent"), 10);
+    expect(newQuoteRepository.findRecentClientEngagement).toHaveBeenLastCalledWith({
+      orgId: "o1", userId: "u1", limit: 10, viewedFrom: undefined, viewedBefore: undefined,
+    });
+
+    for (const role of ["org_admin", "branch_manager", "platform_admin"]) {
+      await newQuoteService.getRecentClientEngagement(scopeFor(role), 10);
+      expect(vi.mocked(newQuoteRepository.findRecentClientEngagement).mock.lastCall?.[0].userId).toBeNull();
+    }
+  });
+
+  it("mine=true forces the scope user for every role", async () => {
+    for (const role of ["agent", "org_admin", "branch_manager", "platform_admin"]) {
+      await newQuoteService.getRecentClientEngagement(scopeFor(role), 10, { mine: true });
+      expect(vi.mocked(newQuoteRepository.findRecentClientEngagement).mock.lastCall?.[0].userId).toBe("u1");
+    }
+  });
+
+  it("keeps org scoping (platform_admin is unscoped, others use their org)", async () => {
+    await newQuoteService.getRecentClientEngagement(scopeFor("platform_admin"), 10, { mine: true });
+    expect(vi.mocked(newQuoteRepository.findRecentClientEngagement).mock.lastCall?.[0].orgId).toBeNull();
+    await newQuoteService.getRecentClientEngagement(scopeFor("agent"), 10, { mine: true });
+    expect(vi.mocked(newQuoteRepository.findRecentClientEngagement).mock.lastCall?.[0].orgId).toBe("o1");
+  });
+
+  it("passes London-day period bounds to the repository", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-16T12:00:00Z")); // Fri 13:00 BST
+    try {
+      const bounds = async (period: "today" | "yesterday" | "week" | "all") => {
+        await newQuoteService.getRecentClientEngagement(scopeFor("agent"), 10, { period });
+        const arg = vi.mocked(newQuoteRepository.findRecentClientEngagement).mock.lastCall?.[0];
+        return [arg?.viewedFrom?.toISOString(), arg?.viewedBefore?.toISOString()];
+      };
+      expect(await bounds("today")).toEqual(["2026-10-15T23:00:00.000Z", undefined]);
+      expect(await bounds("yesterday")).toEqual(["2026-10-14T23:00:00.000Z", "2026-10-15T23:00:00.000Z"]);
+      expect(await bounds("week")).toEqual(["2026-10-11T23:00:00.000Z", undefined]);
+      expect(await bounds("all")).toEqual([undefined, undefined]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("newQuoteService.getRecentClientEngagement - mine without a user", () => {
+  it("throws 401 instead of widening to org-wide", async () => {
+    const scope = { orgId: "o1", orgRole: "org_admin" } as never;
+    await expect(newQuoteService.getRecentClientEngagement(scope, 10, { mine: true })).rejects.toMatchObject({ statusCode: 401 });
+    expect(newQuoteRepository.findRecentClientEngagement).not.toHaveBeenCalled();
   });
 });

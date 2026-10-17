@@ -1,4 +1,5 @@
-export { default as ConversationsInbox } from "./components/conversations-inbox";
+export { ConversationsInbox } from "./components/inbox/conversations-inbox";
+export { NewMessageDialog } from "./components/inbox/new-message";
 export { InboxWorkspace } from "./components/inbox-workspace";
 export { CommentsPanel } from "./components/comments-panel";
 export { SendSevenIntegrationCard } from "./components/sendseven-integration-card";

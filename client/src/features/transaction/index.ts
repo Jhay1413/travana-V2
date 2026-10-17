@@ -7,3 +7,13 @@ export * from "./api/use-transaction-queries";
 export * from "./api/use-transaction-mutations";
 export * from "./lib/main-quote";
 export * from "./lib/resolve-deal-target";
+export * from "./lib/pipeline-query";
+export type {
+  PipelineSort,
+  PipelineQuick,
+  DealPriority,
+  PipelineQueryFilters,
+  PipelineColumnPage,
+  PipelineCounts,
+  PipelineCountsParams,
+} from "./api/transaction.api";

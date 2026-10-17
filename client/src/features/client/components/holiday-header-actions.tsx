@@ -131,13 +131,15 @@ interface HeaderActionsProps {
   clientId: string;
   clientName: string;
   onDeleted: () => void;
+  /** Hides reassign and the edit/delete/stage menu (social_media_manager). */
+  readOnly?: boolean;
 }
 
 function HeaderActionsSkeleton() {
   return <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-black/5 dark:bg-white/10" />;
 }
 
-function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryDialog }: HeaderActionsProps & {
+function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryDialog, readOnly = false }: HeaderActionsProps & {
   onOpenExpiryDialog: (dateExpiry: string | Date | null | undefined) => void;
 }) {
   const queryClient = useQueryClient();
@@ -165,11 +167,13 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryD
 
   return (
     <>
-      <AssignedAgentButton
-        transactionId={quote.transaction_id}
-        userId={quoteData.user_id}
-        onReallocated={() => queryClient.invalidateQueries({ queryKey: quoteKeys.all })}
-      />
+      {!readOnly && (
+        <AssignedAgentButton
+          transactionId={quote.transaction_id}
+          userId={quoteData.user_id}
+          onReallocated={() => queryClient.invalidateQueries({ queryKey: quoteKeys.all })}
+        />
+      )}
       {quoteData.quote_ref && <CircleAction icon={Eye} label="View Quote" href={quoteData.quote_ref} testId="client-header-link" />}
       <CircleAction icon={Share2} label="Share Quote" onClick={openShare} testId="client-header-share" />
       {guruDestination && (
@@ -181,17 +185,19 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryD
         />
       )}
       <CircleAction icon={Pin} label={isFavorited ? "Unpin" : "Pin"} onClick={togglePin} active={isFavorited} testId="client-header-pin" />
-      <QuoteActionsMenu
-        quoteId={id}
-        quoteData={quoteData}
-        quote={quote}
-        quoteImageUrls={quoteImageUrls}
-        clientId={clientId}
-        clientName={clientName}
-        onDeleted={onDeleted}
-        onOpenExpiryDialog={onOpenExpiryDialog}
-        trigger="icon"
-      />
+      {!readOnly && (
+        <QuoteActionsMenu
+          quoteId={id}
+          quoteData={quoteData}
+          quote={quote}
+          quoteImageUrls={quoteImageUrls}
+          clientId={clientId}
+          clientName={clientName}
+          onDeleted={onDeleted}
+          onOpenExpiryDialog={onOpenExpiryDialog}
+          trigger="icon"
+        />
+      )}
       <QuoteShareDialog
         open={showSharePopup}
         onOpenChange={setShowSharePopup}
@@ -213,7 +219,7 @@ function QuoteHeaderActions({ id, clientId, clientName, onDeleted, onOpenExpiryD
   );
 }
 
-function BookingHeaderActions({ id, clientId, clientName, onDeleted }: HeaderActionsProps) {
+function BookingHeaderActions({ id, clientId, clientName, onDeleted, readOnly = false }: HeaderActionsProps) {
   const queryClient = useQueryClient();
   const { data: bookingData, isLoading } = useBooking(id);
   const booking = useMemo(() => (bookingData ? transformQuoteData(bookingData) : null), [bookingData]);
@@ -227,18 +233,20 @@ function BookingHeaderActions({ id, clientId, clientName, onDeleted }: HeaderAct
 
   return (
     <>
-      <AssignedAgentButton
-        transactionId={booking.transaction_id}
-        userId={bookingData.user_id}
-        onReallocated={() => queryClient.invalidateQueries({ queryKey: bookingKeys.all })}
-      />
+      {!readOnly && (
+        <AssignedAgentButton
+          transactionId={booking.transaction_id}
+          userId={bookingData.user_id}
+          onReallocated={() => queryClient.invalidateQueries({ queryKey: bookingKeys.all })}
+        />
+      )}
       <CircleAction icon={Pin} label={isFavorited ? "Unpin" : "Pin"} onClick={togglePin} active={isFavorited} testId="client-header-pin" />
-      <BookingActionsMenu bookingId={id} clientId={clientId} booking={booking} onDeleted={onDeleted} trigger="icon" />
+      {!readOnly && <BookingActionsMenu bookingId={id} clientId={clientId} booking={booking} onDeleted={onDeleted} trigger="icon" />}
     </>
   );
 }
 
-function EnquiryHeaderActions({ id, clientId, clientName, onDeleted }: HeaderActionsProps) {
+function EnquiryHeaderActions({ id, clientId, clientName, onDeleted, readOnly = false }: HeaderActionsProps) {
   const queryClient = useQueryClient();
   const { data: enquiry, isLoading } = useEnquiry(id);
 
@@ -254,21 +262,25 @@ function EnquiryHeaderActions({ id, clientId, clientName, onDeleted }: HeaderAct
 
   return (
     <>
-      <AssignedAgentButton
-        transactionId={enquiry.transaction_id}
-        userId={enquiry.user_id}
-        onReallocated={() => queryClient.invalidateQueries({ queryKey: enquiryKeys.all })}
-      />
+      {!readOnly && (
+        <AssignedAgentButton
+          transactionId={enquiry.transaction_id}
+          userId={enquiry.user_id}
+          onReallocated={() => queryClient.invalidateQueries({ queryKey: enquiryKeys.all })}
+        />
+      )}
       <CircleAction icon={Pin} label={isEnquiryPinned ? "Unpin" : "Pin"} onClick={togglePin} active={isEnquiryPinned} testId="client-header-pin" />
-      <EnquiryActionsMenu
-        enquiryId={id}
-        clientId={clientId}
-        clientName={clientName}
-        enquiry={enquiry}
-        destinationName={destinationName}
-        onDeleted={onDeleted}
-        trigger="icon"
-      />
+      {!readOnly && (
+        <EnquiryActionsMenu
+          enquiryId={id}
+          clientId={clientId}
+          clientName={clientName}
+          enquiry={enquiry}
+          destinationName={destinationName}
+          onDeleted={onDeleted}
+          trigger="icon"
+        />
+      )}
     </>
   );
 }
@@ -283,9 +295,11 @@ export interface HolidayHeaderActionsProps {
   /** Opens the single, shared "Update Expiry" dialog owned by the page (see
    *  pages/client/index.tsx) — only used for the quote variant. */
   onOpenExpiryDialog: (dateExpiry: string | Date | null | undefined) => void;
+  /** Hides reassign and the edit/delete/stage menu (social_media_manager). Defaults to false. */
+  readOnly?: boolean;
 }
 
-export function HolidayHeaderActions({ selection, clientId, clientName, onDeleted, onOpenExpiryDialog }: HolidayHeaderActionsProps) {
+export function HolidayHeaderActions({ selection, clientId, clientName, onDeleted, onOpenExpiryDialog, readOnly = false }: HolidayHeaderActionsProps) {
   return (
     <TooltipProvider>
       <div className="flex items-center gap-2.5">
@@ -297,13 +311,14 @@ export function HolidayHeaderActions({ selection, clientId, clientName, onDelete
             clientName={clientName}
             onDeleted={onDeleted}
             onOpenExpiryDialog={onOpenExpiryDialog}
+            readOnly={readOnly}
           />
         )}
         {selection.type === "booking" && (
-          <BookingHeaderActions id={selection.id} clientId={clientId} clientName={clientName} onDeleted={onDeleted} />
+          <BookingHeaderActions id={selection.id} clientId={clientId} clientName={clientName} onDeleted={onDeleted} readOnly={readOnly} />
         )}
         {selection.type === "enquiry" && (
-          <EnquiryHeaderActions id={selection.id} clientId={clientId} clientName={clientName} onDeleted={onDeleted} />
+          <EnquiryHeaderActions id={selection.id} clientId={clientId} clientName={clientName} onDeleted={onDeleted} readOnly={readOnly} />
         )}
       </div>
     </TooltipProvider>

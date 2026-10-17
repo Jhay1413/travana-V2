@@ -7,6 +7,15 @@ import { clientRepository } from '../client/client.repository';
 import { AppError } from '../../utils/error-handler';
 import type { NeonClient, InsertClientTable } from '@shared/schema';
 import type { Scope } from '../../utils/scope';
+import { stripOwnershipFields } from '../../utils/ownership-fields';
+import { branchRepository } from '../branch/branch.repository';
+import { fireAutoTriggerForClient } from '../sms/sms.service';
+import { stripSystemManagedFields, assertValidReferrer } from './neon-client.guards';
+import bcrypt from 'bcryptjs';
+
+const PORTAL_PIN_BCRYPT_ROUNDS = 10;
+
+export type PortalPinStatus = { hasPin: boolean; mustChangePin: boolean };
 
 // A duplicate-group member, enriched with the numbers that tell the user which
 // record to keep as the main client.
@@ -41,12 +50,15 @@ export const neonClientService = {
 
   async getNeonClientById(id: string, scope: Scope): Promise<NeonClient> {
     const client = await neonClientRepository.findById(id, scope);
-    if (!client) throw new AppError('Neon client not found', 404);
+    if (!client) throw new AppError('Client not found', 404);
     return client;
   },
 
   async createNeonClient(data: InsertClientTable, scope: Scope): Promise<NeonClient> {
-    return neonClientRepository.create(data, scope);
+    const clean = stripSystemManagedFields(data);
+    await assertValidReferrer(null, clean.referredByClientId, scope);
+    const safe = await stripOwnershipFields(clean, scope, async (b, o) => !!(await branchRepository.findById(b, o)));
+    return neonClientRepository.create(safe as InsertClientTable, scope);
   },
 
   /** Candidate clients matching a contact's phone/email, for link suggestions. */
@@ -59,19 +71,73 @@ export const neonClientService = {
   },
 
   async updateNeonClient(id: string, data: Partial<InsertClientTable>, scope: Scope): Promise<NeonClient> {
-    const client = await neonClientRepository.update(id, data, scope);
-    if (!client) throw new AppError('Neon client not found', 404);
+    const clean = stripSystemManagedFields(data);
+    if (clean.referredByClientId) {
+      const current = await neonClientRepository.findById(id, scope);
+      if (!current) throw new AppError('Client not found', 404);
+      await assertValidReferrer(id, clean.referredByClientId, scope, current.referredByClientId);
+    }
+    const safe = await stripOwnershipFields(clean, scope, async (b, o) => !!(await branchRepository.findById(b, o)));
+    const client = await neonClientRepository.update(id, safe, scope);
+    if (!client) throw new AppError('Client not found', 404);
     return client;
+  },
+
+  /** Whether the client has a portal PIN. The hash itself is never exposed. */
+  async getPortalPinStatus(id: string, scope: Scope): Promise<PortalPinStatus> {
+    const client = await this.getNeonClientById(id, scope);
+    return { hasPin: !!client.portalPin, mustChangePin: client.mustChangePin };
+  },
+
+  /** Staff-chosen PIN is final: stored hashed, forced-change flag cleared. */
+  async setPortalPin(id: string, pin: string, scope: Scope): Promise<PortalPinStatus> {
+    await this.getNeonClientById(id, scope);
+    const hash = await bcrypt.hash(pin, PORTAL_PIN_BCRYPT_ROUNDS);
+    await neonClientRepository.setPortalPin(id, hash);
+    void fireAutoTriggerForClient({
+      clientId: id,
+      autoTrigger: 'on_pin_set',
+      triggerSource: 'portal.staff.set-pin',
+      dedupeSince: new Date(Date.now() - 5 * 60 * 1000),
+    });
+    return { hasPin: true, mustChangePin: false };
+  },
+
+  async removePortalPin(id: string, scope: Scope): Promise<void> {
+    await this.getNeonClientById(id, scope);
+    await neonClientRepository.setPortalPin(id, null);
   },
 
   async deleteNeonClient(id: string, scope: Scope): Promise<void> {
     const removed = await neonClientRepository.remove(id, scope);
-    if (!removed) throw new AppError('Neon client not found', 404);
+    if (!removed) throw new AppError('Client not found', 404);
   },
 
   async bulkImportClients(clients: NeonClientImport[], scope: Scope) {
     if (!clients.length) throw new AppError('No clients to import', 400);
-    return neonClientRepository.bulkInsert(clients, scope);
+
+    // Rows are stripped of system-managed fields and their referrer is checked
+    // against the caller's scope; a bad row becomes a row error rather than
+    // failing the whole import. Row numbers stay 1-based against the upload.
+    const accepted: NeonClientImport[] = [];
+    const originalRow: number[] = [];
+    const errors: Array<{ row: number; id: string; error: string }> = [];
+    for (let i = 0; i < clients.length; i++) {
+      const row = stripSystemManagedFields(clients[i]!);
+      try {
+        await assertValidReferrer(null, row.referredByClientId, scope);
+        accepted.push(row);
+        originalRow.push(i + 1);
+      } catch (err) {
+        errors.push({ row: i + 1, id: '-', error: err instanceof AppError ? err.message : 'Invalid row' });
+      }
+    }
+    const result = accepted.length
+      ? await neonClientRepository.bulkInsert(accepted, scope)
+      : { imported: 0, errors: [] };
+    for (const e of result.errors) errors.push({ ...e, row: originalRow[e.row - 1] ?? e.row });
+    errors.sort((x, y) => x.row - y.row);
+    return { imported: result.imported, errors };
   },
 
   /**

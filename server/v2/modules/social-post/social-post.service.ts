@@ -203,7 +203,7 @@ async function resolveMediaIds(
 async function assertQuoteInScope(quoteId: string, scope: ScopeOrTrusted) {
   const orgId = effectiveOrgId(scope);
   if (!orgId) return;
-  const ok = await socialPostRepository.quoteBelongsToOrg(quoteId, orgId);
+  const ok = await socialPostRepository.quoteBelongsToOrg(quoteId, orgId, scope);
   if (!ok) throw new AppError("Quote not found", 404);
 }
 
@@ -214,6 +214,10 @@ async function assertDealInScope(dealId: string, scope: ScopeOrTrusted): Promise
   if (!orgId) return deal;
   const row = await socialPostRepository.findByIdWithOrg(dealId);
   if (!row || row.orgId !== orgId) {
+    throw new AppError("Travel deal not found", 404);
+  }
+  // A deal inherits the shop/homeworker partition of the quote it was made from.
+  if (deal.quote_id && !(await socialPostRepository.quoteBelongsToOrg(deal.quote_id, orgId, scope))) {
     throw new AppError("Travel deal not found", 404);
   }
   return deal;
@@ -540,8 +544,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
     const postHTML = toOnlySocialsBody(formatPostHTML(deal, subtitle, resortSummary, contact));
 
-    return await socialPostRepository.create({
-      quote_id: quoteId,
+    const generated = {
       title: safeTitle,
       subtitle,
       post: postHTML,
@@ -553,7 +556,14 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       departureAirport: departureAirport || null,
       luggageTransfers: transferType && transferType !== "none" ? transferType : null,
       price: displayPrice,
-    });
+    };
+
+    // Regenerating must not create a second deal for the quote: refresh the
+    // generated fields on the existing row, leaving onlySocialsId/postSchedule alone.
+    const existing = await socialPostRepository.findByQuoteId(quoteId);
+    if (existing) return await socialPostRepository.update(existing.id, generated);
+
+    return await socialPostRepository.create({ quote_id: quoteId, ...generated });
   },
 
   async getTravelDealByQuoteId(quoteId: string, scope: ScopeOrTrusted): Promise<TravelDeal | null> {

@@ -18,7 +18,7 @@ export function VipPendingCommissions({ rows }: VipPendingCommissionsProps) {
   const pending = rows.filter((r) => r.referralStatus === "PENDING");
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="vip-pending-commissions">
+    <div className="rounded-xl border border-social-border bg-card p-4" data-testid="vip-pending-commissions">
       <div className="mb-3 flex items-center gap-2">
         <Hourglass className="h-4 w-4 text-amber-500" />
         <span className="text-xs font-semibold text-black/80">Pending Commissions</span>

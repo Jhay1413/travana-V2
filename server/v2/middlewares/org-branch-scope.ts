@@ -4,6 +4,8 @@ import { branchMemberRepository } from '../modules/branch-member/branch-member.r
 import { userOrgRolesRepository } from '../modules/user-org-roles/user-org-roles.repository';
 import { primaryRole } from '../modules/user-org-roles/user-org-roles.service';
 import { getUserId } from '../../utils/get-user-id';
+import { accountBlock, rejectBlockedSession } from './auth/account-standing';
+import { resolveAccountBlock } from './auth/resolve-account-block';
 
 export async function orgBranchScope(req: Request, res: Response, next: NextFunction): Promise<void> {
   const sessionUser = (req as any).user;
@@ -20,6 +22,14 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
     return;
   }
 
+  // Banned (deactivated or removed) accounts are refused before anything else,
+  // platform admins included. Their session is destroyed so the cookie is dead.
+  const banBlock = accountBlock(dbUser, null);
+  if (banBlock) {
+    rejectBlockedSession(req, res, banBlock);
+    return;
+  }
+
   if (dbUser.role === 'platform_admin') {
     // Impersonating: scope the request to the target org as if we were an org_admin there.
     // This makes tenant services apply org filtering instead of the cross-tenant
@@ -30,6 +40,8 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
       req.branchId = null;
       req.orgRoles = ['org_admin'];
       req.orgRole  = 'org_admin';
+      req.branchType = null;
+      req.ownsHomeworkerBranch = false;
       return next();
     }
 
@@ -37,10 +49,21 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
     req.branchId = null;
     req.orgRoles = ['platform_admin'];
     req.orgRole  = 'platform_admin';
+    req.branchType = null;
+    req.ownsHomeworkerBranch = false;
     return next();
   }
 
-  const membership = await branchMemberRepository.findActiveByUserId(userId);
+  const membership = await branchMemberRepository.findActiveContextByUserId(userId);
+
+  // Suspension = memberships exist but none is active. The standing query only runs
+  // when there is no active context, so the normal request pays nothing extra.
+  const block = await resolveAccountBlock(dbUser, Boolean(membership));
+  if (block) {
+    rejectBlockedSession(req, res, block);
+    return;
+  }
+
   const orgId      = membership?.orgId ?? dbUser.orgId ?? null;
 
   if (!orgId) {
@@ -59,6 +82,8 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
   const roles = Array.from(roleSet);
   req.orgId    = orgId;
   req.branchId = membership?.branchId ?? null;
+  req.branchType = membership ? (membership.branchType === 'homeworker' ? 'homeworker' : 'shop') : null;
+  req.ownsHomeworkerBranch = membership?.branchType === 'homeworker' && membership.ownerUserId === userId;
   req.orgRoles = roles;
   req.orgRole  = primaryRole(roles) ?? (dbUser.orgRole ?? '');
   return next();

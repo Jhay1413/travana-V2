@@ -56,13 +56,60 @@ export const setLostValidator = z.object({
 // Activity" views — other pre-existing query params (page, limit, agentId,
 // quoteStatus) are still parsed manually in the controller and are left
 // unvalidated here.
+const PIPELINE_SORTS = [
+  "newest",
+  "oldest",
+  "oldest-activity",
+  "latest_activity",
+  "value_desc",
+  "profit_desc",
+  "name_asc",
+  "quiet_first",
+] as const;
+
+const PIPELINE_QUICK = ["due_today", "no_task", "quiet_7"] as const;
+
+const prioritiesCsv = z
+  .string()
+  .regex(/^(low|medium|high)(,(low|medium|high))*$/, "priority must be a comma list of low, medium, high");
+
+const uuidCsv = z
+  .string()
+  .refine(
+    (value) => {
+      const ids = value.split(",");
+      return ids.length <= 50 && ids.every((id) => z.string().uuid().safeParse(id).success);
+    },
+    { message: "tourOperatorId must be a comma list of up to 50 uuids" },
+  );
+
+// Empty is allowed (`?search=`); the controller treats it as absent.
+const searchTerm = z.string().trim().max(100);
+
 export const listPipelineByStatusValidator = z.object({
   params: z.object({ status: z.string() }),
   query: z.object({
-    sort: z.enum(["newest", "oldest", "oldest-activity"]).optional(),
+    sort: z.enum(PIPELINE_SORTS).optional(),
     branchId: z.string().uuid("Invalid branchId").optional(),
+    agentId: z.string().optional(),
+    search: searchTerm.optional(),
+    priority: prioritiesCsv.optional(),
+    tourOperatorId: uuidCsv.optional(),
+    quick: z.enum(PIPELINE_QUICK).optional(),
   }),
 });
+
+export const pipelineCountsValidator = z.object({
+  query: z.object({
+    branchId: z.string().uuid("Invalid branchId").optional(),
+    agentId: z.string().optional(),
+    search: searchTerm.optional(),
+    priority: prioritiesCsv.optional(),
+    tourOperatorId: uuidCsv.optional(),
+  }),
+});
+
+export type PipelineCountsQuery = z.infer<typeof pipelineCountsValidator>["query"];
 
 // The `validate()` middleware only checks req.query against this schema —
 // it doesn't reassign req.query with the parsed result — so the controller

@@ -6,8 +6,11 @@ import { bookingUpsellController } from "./booking-upsell.controller";
 import { validate } from "../../middlewares/validation.middleware";
 import { addImagesValidator, reorderImagesValidator } from "./booking.validator";
 import { createUpsellValidator, listUpsellsValidator } from "./booking-upsell.validator";
+import { blockReadOnlyClientWrites } from '../../middlewares/auth/block-read-only-roles';
 
 const router = Router();
+// social_media_manager is read-only on client data: refuse every write method.
+router.use(blockReadOnlyClientWrites);
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const upload = multer({
   storage: multer.memoryStorage(),

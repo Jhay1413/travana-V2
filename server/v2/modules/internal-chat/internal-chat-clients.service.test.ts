@@ -81,3 +81,43 @@ describe("internalChatClientsService.getClientRecords - quotes", () => {
     }
   });
 });
+
+describe("internalChatClientsService partitionScope pass-through", () => {
+  it("hands the caller's full scope to the repository on search and detail lookups", async () => {
+    vi.mocked(internalChatClientsRepository.searchClients).mockResolvedValue([]);
+    vi.mocked(internalChatClientsRepository.findClientById).mockResolvedValue(null);
+
+    await internalChatClientsService.searchClients(SCOPE, "ash");
+    await internalChatClientsService.getClientDetails(SCOPE, "c1");
+
+    expect(vi.mocked(internalChatClientsRepository.searchClients).mock.calls[0][0]).toMatchObject({ partitionScope: SCOPE });
+    expect(vi.mocked(internalChatClientsRepository.findClientById).mock.calls[0][0]).toMatchObject({ partitionScope: SCOPE });
+  });
+});
+
+describe("internalChatClientsService deal queries receive the partition scope (B2)", () => {
+  it("getClientDetails passes scope to getClientPipelineCounts", async () => {
+    vi.mocked(internalChatClientsRepository.findClientById).mockResolvedValue({
+      id: "c1", firstName: "A", surename: "B", status: "active", createdAt: new Date(), assignedAgentName: null, orgId: "org-1",
+    } as never);
+    vi.mocked(internalChatClientsRepository.getClientPipelineCounts).mockResolvedValue({
+      enquiries: 0, quotes: 0, bookings: 0, latestStatus: null, latestDate: null,
+    });
+    await internalChatClientsService.getClientDetails(SCOPE, "c1");
+    expect(internalChatClientsRepository.getClientPipelineCounts).toHaveBeenCalledWith("c1", "org-1", SCOPE);
+  });
+
+  it("getClientRecords passes scope to every details query", async () => {
+    vi.mocked(internalChatClientsRepository.findClientById).mockResolvedValue({
+      id: "c1", firstName: "A", surename: "B", status: "active", createdAt: new Date(), assignedAgentName: null, orgId: "org-1",
+    } as never);
+    const empty = { rows: [], truncated: false };
+    vi.mocked(internalChatClientsRepository.getClientEnquiryDetails).mockResolvedValue(empty);
+    vi.mocked(internalChatClientsRepository.getClientQuoteDetails).mockResolvedValue(empty);
+    vi.mocked(internalChatClientsRepository.getClientBookingDetails).mockResolvedValue(empty);
+    await internalChatClientsService.getClientRecords(SCOPE, "c1", "all");
+    expect(internalChatClientsRepository.getClientEnquiryDetails).toHaveBeenCalledWith("c1", "org-1", SCOPE);
+    expect(internalChatClientsRepository.getClientQuoteDetails).toHaveBeenCalledWith("c1", "org-1", SCOPE);
+    expect(internalChatClientsRepository.getClientBookingDetails).toHaveBeenCalledWith("c1", "org-1", SCOPE);
+  });
+});

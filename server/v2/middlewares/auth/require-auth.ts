@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { authStorage } from "./storage";
 import { isAuthenticated } from "./session";
 import { getUserId } from "../../utils/get-user-id";
@@ -13,8 +13,13 @@ import { organizationRepository } from "../../modules/organization/organization.
 import { branchRepository } from "../../modules/branch/branch.repository";
 import { userOrgRolesRepository } from "../../modules/user-org-roles/user-org-roles.repository";
 import { primaryRole } from "../../modules/user-org-roles/user-org-roles.service";
+import { sanitizeUser } from "../../modules/user/user.sanitize";
+import { rejectBlockedSession } from "./account-standing";
+import { resolveAccountBlock } from "./resolve-account-block";
+import { requireActiveAccount } from "./require-active-account";
+import { authProfileSchema } from "./auth-profile.validator";
 
-async function resolveOrgAndBranchForUser(
+export async function resolveOrgAndBranchForUser(
   user: {
     id: string;
     role?: string | null;
@@ -27,6 +32,8 @@ async function resolveOrgAndBranchForUser(
   orgRoles: string[];
   orgId: string | null;
   branchId: string | null;
+  branchType: "shop" | "homeworker" | null;
+  ownsHomeworkerBranch: boolean;
   orgName: string | null;
   branchName: string | null;
 }> {
@@ -34,6 +41,8 @@ async function resolveOrgAndBranchForUser(
   let orgRoles: string[] = [];
   let orgId: string | null = user.orgId ?? null;
   let branchId: string | null = null;
+  let branchType: "shop" | "homeworker" | null = null;
+  let ownsHomeworkerBranch = false;
 
   if (user.role === "platform_admin") {
     // Impersonating: pretend to be an org_admin inside the target org so the
@@ -50,10 +59,12 @@ async function resolveOrgAndBranchForUser(
       orgRoles = ["platform_admin"];
     }
   } else {
-    const membership = await branchMemberRepository.findActiveByUserId(user.id);
+    const membership = await branchMemberRepository.findActiveContextByUserId(user.id);
     if (membership) {
       orgId = membership.orgId;
       branchId = membership.branchId;
+      branchType = membership.branchType === "homeworker" ? "homeworker" : "shop";
+      ownsHomeworkerBranch = membership.branchType === "homeworker" && membership.ownerUserId === user.id;
     }
     if (orgId) {
       const fromJunction = await userOrgRolesRepository.findRolesByUserAndOrg(user.id, orgId);
@@ -76,79 +87,143 @@ async function resolveOrgAndBranchForUser(
     orgRoles,
     orgId,
     branchId,
+    branchType,
+    ownsHomeworkerBranch,
     orgName: org?.name ?? null,
     branchName: branch?.name ?? null,
   };
 }
 
+export async function loginHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const { email: rawEmail, password } = req.body ?? {};
+    if (!rawEmail || !password || typeof rawEmail !== "string") {
+      res.status(400).json({ message: "Email and password are required" });
+      return;
+    }
+    const email = rawEmail.toLowerCase().trim();
+
+    const foundUser = await authStorage.getUserByEmail(email);
+    if (!foundUser || !foundUser.password) {
+      res.status(401).json({ message: "Invalid email or password" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(password, foundUser.password);
+    if (!valid) {
+      res.status(401).json({ message: "Invalid email or password" });
+      return;
+    }
+
+    // Only after the password is proven do we reveal the account's standing.
+    const block = await resolveAccountBlock(foundUser, false);
+    if (block) {
+      res.status(403).json({ message: block.message, code: block.code });
+      return;
+    }
+
+    if (!foundUser.emailVerified) {
+      res.status(403).json({
+        message: "Please verify your email before signing in",
+        code: "EMAIL_NOT_VERIFIED",
+        email: foundUser.email,
+      });
+      return;
+    }
+
+    req.login({ userId: foundUser.id, authType: "password" } as Express.User, async (err: unknown) => {
+      if (err) {
+        console.error("Login error:", err);
+        res.status(500).json({ message: "Login failed" });
+        return;
+      }
+      const ctx = await resolveOrgAndBranchForUser(foundUser, req.session);
+      res.json({ ...sanitizeUser(foundUser), ...ctx });
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Login failed" });
+  }
+}
+
+/** GET /api/auth/user: the signed-in user with org context; blocked accounts lose their session. */
+export async function currentUserHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const foundUser = await authStorage.getUser(userId);
+    if (!foundUser) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    const ctx = await resolveOrgAndBranchForUser(foundUser, req.session);
+    // A user with no active membership may be suspended (ban is checked regardless).
+    const block = await resolveAccountBlock(foundUser, ctx.branchId !== null);
+    if (block) {
+      rejectBlockedSession(req, res, block);
+      return;
+    }
+    res.json({ ...sanitizeUser(foundUser), ...ctx });
+  } catch (error) {
+    console.error("Error fetching user:", error);
+    res.status(500).json({ message: "Failed to fetch user" });
+  }
+}
+
+/** PATCH /api/auth/profile: phone only. Email cannot be changed here; sending the current one is a no-op. */
+export async function updateProfileHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const userId = getUserId(req);
+    if (!userId) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const parsed = authProfileSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ message: parsed.error.errors[0]?.message ?? "Invalid profile" });
+      return;
+    }
+    const { phoneNumber, email } = parsed.data;
+
+    const current = await authStorage.getUser(userId);
+    if (!current) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    if (email !== undefined && email.toLowerCase() !== current.email.toLowerCase()) {
+      res.status(400).json({ message: "Email can't be changed here. Ask your administrator." });
+      return;
+    }
+    if (phoneNumber === undefined) {
+      res.status(400).json({ message: "No fields to update" });
+      return;
+    }
+
+    const updated = await authStorage.updateUser(userId, { phoneNumber });
+    if (!updated) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    const ctx = await resolveOrgAndBranchForUser(updated, req.session);
+    res.json({ ...sanitizeUser(updated), ...ctx });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({ message: "Failed to update profile" });
+  }
+}
+
 export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/register", registrationController.register);
 
-  app.post("/api/auth/login", async (req: any, res) => {
-    try {
-      const { email: rawEmail, password } = req.body;
-      if (!rawEmail || !password || typeof rawEmail !== "string") {
-        return res.status(400).json({ message: "Email and password are required" });
-      }
-      const email = rawEmail.toLowerCase().trim();
+  app.post("/api/auth/login", loginHandler);
 
-      const foundUser = await authStorage.getUserByEmail(email);
-      if (!foundUser || !foundUser.password) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
+  app.get("/api/auth/user", isAuthenticated, currentUserHandler);
 
-      const valid = await bcrypt.compare(password, foundUser.password);
-      if (!valid) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
 
-      if (foundUser.banned) {
-        return res.status(403).json({ message: "Account is banned" });
-      }
-
-      if (!foundUser.emailVerified) {
-        return res.status(403).json({
-          message: "Please verify your email before signing in",
-          code: "EMAIL_NOT_VERIFIED",
-          email: foundUser.email,
-        });
-      }
-
-      req.login({ userId: foundUser.id, authType: "password" }, async (err: any) => {
-        if (err) {
-          console.error("Login error:", err);
-          return res.status(500).json({ message: "Login failed" });
-        }
-        const { password: _, ...safeUser } = foundUser;
-        const ctx = await resolveOrgAndBranchForUser(foundUser, req.session);
-        return res.json({ ...safeUser, ...ctx });
-      });
-    } catch (error) {
-      console.error("Login error:", error);
-      res.status(500).json({ message: "Login failed" });
-    }
-  });
-
-  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = getUserId(req);
-      if (!userId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      const foundUser = await authStorage.getUser(userId);
-      if (!foundUser) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      const { password: _, ...safeUser } = foundUser;
-      const ctx = await resolveOrgAndBranchForUser(foundUser, req.session);
-      res.json({ ...safeUser, ...ctx });
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
-  app.post("/api/auth/change-password", isAuthenticated, async (req: any, res) => {
+  app.post("/api/auth/change-password", isAuthenticated, requireActiveAccount, async (req: any, res) => {
     try {
       const userId = getUserId(req);
       if (!userId) {
@@ -193,35 +268,7 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  app.patch("/api/auth/profile", isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = getUserId(req);
-      if (!userId) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-
-      const { phoneNumber, email } = req.body;
-      const updateData: Record<string, any> = {};
-
-      if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
-      if (email !== undefined) updateData.email = email;
-
-      if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ message: "No fields to update" });
-      }
-
-      const updated = await authStorage.updateUser(userId, updateData);
-      if (!updated) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      const { password: _, ...safeUser } = updated;
-      const ctx = await resolveOrgAndBranchForUser(updated, req.session);
-      res.json({ ...safeUser, ...ctx });
-    } catch (error) {
-      console.error("Update profile error:", error);
-      res.status(500).json({ message: "Failed to update profile" });
-    }
-  });
+  app.patch("/api/auth/profile", isAuthenticated, requireActiveAccount, updateProfileHandler);
 
   const avatarUpload = multer({
     storage: multer.diskStorage({
@@ -307,7 +354,7 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/auth/avatar", isAuthenticated, avatarUpload.single("avatar"), async (req: any, res) => {
+  app.post("/api/auth/avatar", isAuthenticated, requireActiveAccount, avatarUpload.single("avatar"), async (req: any, res) => {
     try {
       const userId = getUserId(req);
       if (!userId) {
@@ -325,9 +372,8 @@ export function registerAuthRoutes(app: Express): void {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const { password: _, ...safeUser } = updated;
       const ctx = await resolveOrgAndBranchForUser(updated, req.session);
-      res.json({ ...safeUser, ...ctx, avatar: avatarUrl });
+      res.json({ ...sanitizeUser(updated), ...ctx, avatar: avatarUrl });
     } catch (error) {
       console.error("Avatar upload error:", error);
       res.status(500).json({ message: "Failed to upload avatar" });

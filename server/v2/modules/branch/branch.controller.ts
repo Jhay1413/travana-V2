@@ -2,14 +2,16 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
 import { branchService } from './branch.service';
 import { successResponse } from '../../utils/response';
+import { getScope } from '../../utils/scope';
 
 export const branchController = {
   list:    asyncHandler(async (req: Request, res: Response) => {
-    const data = await branchService.list(req.orgId);
+    const type = req.query.type === 'homeworker' ? 'homeworker' : 'shop';
+    const data = await branchService.list(getScope(req), type);
     successResponse(res, data);
   }),
   getById: asyncHandler(async (req: Request, res: Response) => {
-    const data = await branchService.getById(req.params.id as string, req.orgId);
+    const data = await branchService.getById(req.params.id as string, getScope(req));
     successResponse(res, data);
   }),
   create:  asyncHandler(async (req: Request, res: Response) => {

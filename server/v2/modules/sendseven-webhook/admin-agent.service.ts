@@ -164,9 +164,9 @@ async function executeGetMyTicketsTool(orgId: string, clientId: string): Promise
   }
 }
 
-async function executeGetMyFilesTool(clientId: string): Promise<Record<string, unknown>> {
+async function executeGetMyFilesTool(orgId: string, clientId: string): Promise<Record<string, unknown>> {
   try {
-    const files = await adminDataService.getFiles(clientId);
+    const files = await adminDataService.getFiles(orgId, clientId);
     return { files };
   } catch (err) {
     console.error("[admin-agent] get_my_files failed:", err);
@@ -232,11 +232,11 @@ async function executeOpenTicketTool(
   }
 }
 
-async function executeGetMyFileLinkTool(clientId: string, rawArguments: string): Promise<Record<string, unknown>> {
+async function executeGetMyFileLinkTool(orgId: string, clientId: string, rawArguments: string): Promise<Record<string, unknown>> {
   const fileId = parseFileIdArg(rawArguments);
   if (!fileId) return { error: "'fileId' must be a non-empty string, obtained from get_my_files" };
   try {
-    const url = await adminDataService.getFileLink(clientId, fileId);
+    const url = await adminDataService.getFileLink(orgId, clientId, fileId);
     if (!url) return { error: "That document isn't available on your account, or the link couldn't be generated right now." };
     return { url };
   } catch (err) {
@@ -452,9 +452,9 @@ export const adminAgent = {
                   : toolCall.type === "function" && toolCall.function.name === GET_MY_TICKETS_TOOL_NAME
                     ? await executeGetMyTicketsTool(orgId, clientId)
                     : toolCall.type === "function" && toolCall.function.name === GET_MY_FILES_TOOL_NAME
-                      ? await executeGetMyFilesTool(clientId)
+                      ? await executeGetMyFilesTool(orgId, clientId)
                       : toolCall.type === "function" && toolCall.function.name === GET_MY_FILE_LINK_TOOL_NAME
-                        ? await executeGetMyFileLinkTool(clientId, toolCall.function.arguments)
+                        ? await executeGetMyFileLinkTool(orgId, clientId, toolCall.function.arguments)
                         : toolCall.type === "function" && toolCall.function.name === OPEN_TICKET_TOOL_NAME
                           ? await executeOpenTicketTool(orgId, clientId, toolCall.function.arguments, pending)
                           : { error: "Unknown tool" };

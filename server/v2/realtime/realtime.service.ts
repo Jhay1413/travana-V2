@@ -9,8 +9,10 @@ export const MAX_CONNECTIONS_PER_USER = 5;
 
 interface TrackedConnection {
   id: number;
-  close: () => void;
+  close: (reason: CloseReason) => void;
 }
+
+export type CloseReason = "replaced" | "revoked";
 
 // Per-user connection bookkeeping. Deliberately kept here and NOT in
 // event-bus.ts — the bus stays a pure pub/sub primitive with no notion of
@@ -38,13 +40,21 @@ export const realtimeService = {
    * connection count for that user and an `unregister` function the caller
    * MUST invoke on stream close.
    */
-  registerConnection(userId: string, close: () => void): { count: number; unregister: () => void } {
+  /** Closes every open stream of a user (access revoked). Safe when they have none. */
+  closeUserConnections(userId: string): number {
+    const connections = [...(connectionsByUser.get(userId) ?? [])];
+    for (const conn of connections) conn.close("revoked");
+    connectionsByUser.delete(userId);
+    return connections.length;
+  },
+
+  registerConnection(userId: string, close: (reason: CloseReason) => void): { count: number; unregister: () => void } {
     const id = nextConnectionId++;
     const connections = connectionsByUser.get(userId) ?? [];
 
     if (connections.length >= MAX_CONNECTIONS_PER_USER) {
       const oldest = connections.shift();
-      oldest?.close();
+      oldest?.close("replaced");
     }
 
     connections.push({ id, close });

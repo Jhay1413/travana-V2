@@ -17,8 +17,9 @@ export const conversationsKeys = {
   aiState: (id: string) => [...conversationsKeys.all, "ai-state", id] as const,
 };
 
-export function useConversations(query: ListConversationsQuery = {}) {
+export function useConversations(query: ListConversationsQuery = {}, options?: { enabled?: boolean }) {
   return useQuery({
+    enabled: options?.enabled ?? true,
     queryKey: conversationsKeys.list(query),
     queryFn: () => conversationsApi.list(query),
     staleTime: 15_000,
@@ -34,11 +35,12 @@ export function useConversation(id: string | null, enabled = true) {
   });
 }
 
-export function useConversationBadgeCounts(inboxId?: string) {
+export function useConversationBadgeCounts(inboxId?: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: conversationsKeys.badgeCounts(inboxId),
     queryFn: () => conversationsApi.badgeCounts(inboxId),
     staleTime: 15_000,
+    enabled: options?.enabled ?? true,
   });
 }
 

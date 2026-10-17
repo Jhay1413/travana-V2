@@ -11,9 +11,11 @@ import { walletService } from "../wallet/wallet.service";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { AppError } from "../../utils/error-handler";
 import { branchService } from "../branch/branch.service";
+import { branchMemberRepository } from "../branch-member/branch-member.repository";
+import { branchRepository } from "../branch/branch.repository";
 import type { Scope } from "../../utils/scope";
 import { effectiveExpiry } from "../../utils/expiry";
-import type { PipelineCandidateItem } from "./transaction.types";
+import type { PipelineCandidateItem, PipelineFilters, PipelineQuickCounts, PipelineSort } from "./transaction.types";
 import type {
   InsertTransaction,
   InsertEnquiryTable,
@@ -193,14 +195,17 @@ async function listPipelineByOldestActivity(
   agentId?: string,
   quoteStatusFilter?: string,
   branchId?: string,
+  filters?: PipelineFilters,
 ) {
-  const { items, total } = await transactionRepository.findPipelineCandidates(
+  const { items, total, totalValue, totalProfit } = await transactionRepository.findPipelineCandidates(
     scope,
     column,
     agentId,
     quoteStatusFilter,
     OLDEST_ACTIVITY_CANDIDATE_CAP,
     branchId,
+    filters,
+    page === 1,
   );
 
   // No activity at all (null/undefined last_activity_at) sorts first, then
@@ -225,7 +230,32 @@ async function listPipelineByOldestActivity(
   const start = (page - 1) * limit;
   const pageItems = sorted.slice(start, start + limit);
 
-  return { items: pageItems, total: cappedTotal, page, hasMore: start + limit < cappedTotal, totalProfit: 0, totalValue: 0 };
+  return { items: pageItems, total: cappedTotal, page, hasMore: start + limit < cappedTotal, totalProfit, totalValue };
+}
+
+// Where a deal belongs after its owner changes. The new owner must be an active
+// member of the caller's org. Non-admins may not hand a deal across the
+// shop/homeworker boundary (400); admins may, and the deal (plus its tasks and
+// tickets) is re-homed into the new owner's branch. Returns the branch to move to.
+async function resolveOwnerBranch(
+  newOwnerId: string,
+  currentBranchId: string | null | undefined,
+  scope: Scope,
+): Promise<string | undefined> {
+  const assignee = scope.orgId
+    ? await branchMemberRepository.findActiveContextByUserIdInOrg(newOwnerId, scope.orgId)
+    : await branchMemberRepository.findActiveContextByUserId(newOwnerId);
+  if (!assignee) {
+    if (scope.orgId) throw new AppError("New owner is not an active member of this organisation", 400);
+    return undefined;
+  }
+  if (scope.orgRole === "org_admin" || scope.orgRole === "platform_admin") {
+    return assignee.branchId !== currentBranchId ? assignee.branchId : undefined;
+  }
+  if ((scope.branchType === "homeworker") !== (assignee.branchType === "homeworker")) {
+    throw new AppError("Deals cannot be reassigned across shop and homeworker branches", 400);
+  }
+  return undefined;
 }
 
 export const transactionService = {
@@ -246,13 +276,30 @@ export const transactionService = {
     return await transactionRepository.findAllLightweight(scope);
   },
 
-  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest" | "oldest-activity", pinnedForUserId?: string, branchId?: string) {
+  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: PipelineSort, pinnedForUserId?: string, branchId?: string, filters?: PipelineFilters) {
     if (branchId) await branchService.assertBranchInOrg(branchId, scope.orgId || null);
     await activateDueFutureDealsOnce();
     if (sort === "oldest-activity") {
-      return await listPipelineByOldestActivity(scope, column, page, limit, agentId, quoteStatusFilter, branchId);
+      return await listPipelineByOldestActivity(scope, column, page, limit, agentId, quoteStatusFilter, branchId, filters);
     }
-    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter, sort, pinnedForUserId, branchId);
+    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter, sort, pinnedForUserId, branchId, filters);
+  },
+
+  // Chip counts over the open columns (enquiry + quoted + in_play), summed.
+  async getPipelineCounts(scope: Scope, params: { agentId?: string; branchId?: string } & Omit<PipelineFilters, "quick">): Promise<PipelineQuickCounts> {
+    const { agentId, branchId, ...filters } = params;
+    if (branchId) await branchService.assertBranchInOrg(branchId, scope.orgId || null);
+    await activateDueFutureDealsOnce();
+    const rows = await transactionRepository.countPipelineQuickByColumn(scope, agentId, branchId, filters);
+    return rows.reduce<PipelineQuickCounts>(
+      (acc, r) => ({
+        all: acc.all + r.all,
+        due_today: acc.due_today + r.due_today,
+        no_task: acc.no_task + r.no_task,
+        quiet_7: acc.quiet_7 + r.quiet_7,
+      }),
+      { all: 0, due_today: 0, no_task: 0, quiet_7: 0 },
+    );
   },
 
   async getTransactionById(id: string, scope: Scope) {
@@ -586,7 +633,26 @@ export const transactionService = {
     const oldTxn = await transactionRepository.findById(id, scope);
     if (!oldTxn) throw new AppError("Transaction not found", 404);
 
-    const txn = await transactionRepository.update(id, data, scope);
+    // Tenancy fields are not request-controlled: org_id never; branch_id only for
+    // admins, and only to a branch of their own org.
+    const { org_id: _ignoredOrg, branch_id: requestedBranch, ...rest } = data;
+    const isAdmin = scope.orgRole === "org_admin" || scope.orgRole === "platform_admin";
+    let patch: Partial<InsertTransaction> = rest;
+    if (isAdmin && requestedBranch && scope.orgId) {
+      if (!(await branchRepository.findById(requestedBranch, scope.orgId))) {
+        throw new AppError("Branch not found in this organisation", 400);
+      }
+      patch = { ...rest, branch_id: requestedBranch };
+    }
+
+    // Changing the owner can move the deal across the shop/homeworker partition.
+    let rehomeTo: string | undefined;
+    if (patch.user_id && patch.user_id !== oldTxn.user_id) {
+      rehomeTo = await resolveOwnerBranch(patch.user_id, oldTxn.branch_id, scope);
+    }
+    const txn = rehomeTo
+      ? await transactionRepository.updateAndRehome(id, patch, scope, rehomeTo)
+      : await transactionRepository.update(id, patch, scope);
     if (!txn) throw new AppError("Transaction not found", 404);
 
     if (data.user_id && data.user_id !== oldTxn.user_id) {

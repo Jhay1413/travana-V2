@@ -1,4 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
+import { ORGANIZATION_OVERVIEW_ENDPOINTS } from "@/api/endpoints";
 
 export interface OrganizationSummary {
   id: string;
@@ -22,6 +23,10 @@ export interface OrganizationOverviewKpis {
   monthCommission: number;
   ytdCommission: number;
   monthBookingsCount: number;
+  /**
+   * Average profit per booking: this month's commission (incl. upsells) divided
+   * by this month's bookings. The field name is kept for compatibility.
+   */
   avgCommission: number;
   openQuotesValue: number;
   openQuotesCount: number;
@@ -58,9 +63,15 @@ export interface AgentPerformanceRow {
   rangeSales: number;
   rangeQuotes: number;
   avgPerBooking: number;
+  /** Profit incl. upsells / bookings in the range. Optional until the server ships it. */
+  ppb?: number;
+  /** Distinct active deals with at least one open quote. Optional until the server ships it. */
+  openDeals?: number;
   target: number;
   achievedPercent: number;
   isHomeworker: boolean;
+  /** Present when the server tags the row's branch type; isHomeworker is the fallback. */
+  branchType?: OverviewBranchType;
   branches: Array<{ id: string; name: string; code: string | null }>;
 }
 
@@ -91,10 +102,14 @@ export interface OverviewStatsParams {
   branchId?: string;
 }
 
+export type OverviewBranchType = "shop" | "homeworker";
+
 export interface BranchPerformanceRow {
   id: string;
   name: string;
   code: string | null;
+  /** Optional so older payloads without the field still type-check; treated as "shop". */
+  branchType?: OverviewBranchType;
   today: number;
   week: number;
   month: number;
@@ -148,6 +163,9 @@ export interface OrganizationOverviewBranchRow {
   id: string;
   name: string;
   code: string | null;
+  branchType?: OverviewBranchType;
+  profitSharePercent?: number | null;
+  ownerUserId?: string | null;
   bookings: number;
   commission: number;
   quotes: number;
@@ -174,6 +192,23 @@ export interface OrganizationOverviewAttention {
   recentTasks: OrganizationOverviewAttentionItem[];
 }
 
+export interface HomeworkerOverviewRow {
+  branchId: string;
+  name: string;
+  ownerUserId: string | null;
+  ownerName: string | null;
+  ownerAvatarUrl: string | null;
+  profitSharePercent: number | null;
+  status: "active" | "archived";
+  today: number;
+  week: number;
+  month: number;
+  rangeBookings: number;
+  avgPerBooking: number;
+  target: number;
+  achievedPercent: number;
+}
+
 interface OrganizationOverviewBase {
   organization: OrganizationSummary | null;
   kpis: OrganizationOverviewKpis;
@@ -186,11 +221,16 @@ interface OrganizationOverviewBase {
   attention: OrganizationOverviewAttention;
 }
 
-export interface SingleBranchOverview extends OrganizationOverviewBase {
+interface HomeworkersOverview {
+  /** Optional: absent on servers that predate the homeworker redesign. */
+  homeworkers?: HomeworkerOverviewRow[];
+}
+
+export interface SingleBranchOverview extends OrganizationOverviewBase, HomeworkersOverview {
   kind: "single-branch";
 }
 
-export interface MultiBranchOverview extends OrganizationOverviewBase {
+export interface MultiBranchOverview extends OrganizationOverviewBase, HomeworkersOverview {
   kind: "multi-branch";
   branchLeaderboard: OrganizationOverviewBranchRow[];
 }
@@ -200,7 +240,7 @@ export type OrganizationOverviewStats = SingleBranchOverview | MultiBranchOvervi
 export const organizationOverviewApi = {
   getStats: async (params?: OverviewStatsParams): Promise<OrganizationOverviewStats> => {
     const { data } = await axiosClient.get<{ data: OrganizationOverviewStats }>(
-      "/api/v2/organization-overview/stats",
+      ORGANIZATION_OVERVIEW_ENDPOINTS.stats,
       { params: params?.branchId ? { branchId: params.branchId } : undefined },
     );
     return data?.data ?? (data as unknown as OrganizationOverviewStats);
@@ -209,7 +249,7 @@ export const organizationOverviewApi = {
     params: AgentsPerformanceParams,
   ): Promise<AgentsPerformanceResponse> => {
     const { data } = await axiosClient.get<{ data: AgentsPerformanceResponse }>(
-      "/api/v2/organization-overview/agents-performance",
+      ORGANIZATION_OVERVIEW_ENDPOINTS.agentsPerformance,
       { params },
     );
     return data?.data ?? (data as unknown as AgentsPerformanceResponse);
@@ -218,7 +258,7 @@ export const organizationOverviewApi = {
     params: BranchesPerformanceParams,
   ): Promise<BranchesPerformanceResponse> => {
     const { data } = await axiosClient.get<{ data: BranchesPerformanceResponse }>(
-      "/api/v2/organization-overview/branches-performance",
+      ORGANIZATION_OVERVIEW_ENDPOINTS.branchesPerformance,
       { params },
     );
     return data?.data ?? (data as unknown as BranchesPerformanceResponse);

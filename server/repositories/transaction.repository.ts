@@ -563,7 +563,7 @@ export const transactionRepository = {
     const rawQuotes = await db.select().from(quote).where(and(eq(quote.transaction_id, id), isNull(quote.deleted_at)));
     const [bookingResult] = await db.select().from(booking).where(eq(booking.transaction_id, id)).limit(1);
     const [client] = txn.client_id ? await db.select().from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
-    const [agent] = txn.user_id ? await db.select().from(user).where(eq(user.id, txn.user_id)).limit(1) : [undefined];
+    const [agent] = txn.user_id ? await db.select({ id: user.id, name: user.name, email: user.email, image: user.image, phoneNumber: user.phoneNumber, firstName: user.firstName, lastName: user.lastName }).from(user).where(eq(user.id, txn.user_id)).limit(1) : [undefined];
 
     const quoteIds = rawQuotes.map(q => q.id);
     let allAccoms: any[] = [];

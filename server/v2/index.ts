@@ -7,7 +7,7 @@ import { errorHandler } from "./middlewares/error.middleware";
 import { runDaysBeforeDepartureSweep } from "./modules/sms/sms.cron";
 import quotePublicRoutes from "./modules/quote/quote-public.routes";
 import websitePublicRoutes from "./modules/website-public/website-public.routes";
-import portalRoutes, { portalStaffRouter } from "./modules/portal/portal.routes";
+import portalRoutes from "./modules/portal/portal.routes";
 import cron from "node-cron";
 
 const app = express();
@@ -85,7 +85,6 @@ app.use((req, res, next) => {
   await setupAuth(app);
   registerAuthRoutes(app);
 
-  app.use("/api/portal", portalStaffRouter);
 
   app.use("/api", routes);
 

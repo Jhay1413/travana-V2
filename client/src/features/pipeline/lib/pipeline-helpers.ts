@@ -1,4 +1,5 @@
 import type { Transaction } from "@/features/quote/types";
+import { isLondonTomorrow, isSameLondonDay } from "@/lib/london-day";
 import type { PipelineColumnStatus } from "@/features/transaction/api/use-transaction-queries";
 
 /** Pipeline board columns. "Enquiry" / "Quoted" / "In Play" / "Booked" are the
@@ -54,10 +55,11 @@ export const STAGE_TO_STATUS: Partial<Record<PipelineStage, string>> = {
 
 export const PRIORITY_OPTIONS: Array<"low" | "medium" | "high"> = ["low", "medium", "high"];
 
-export const PRIORITY_META: Record<"low" | "medium" | "high", { label: string; color: string }> = {
-  high: { label: "High", color: "#f59e0b" },
-  medium: { label: "Medium", color: "#eab308" },
-  low: { label: "Low", color: "#4caf50" },
+/** Priority label plus its dot colour (design tokens, so dark mode follows). */
+export const PRIORITY_META: Record<"low" | "medium" | "high", { label: string; color: string; dotClass: string }> = {
+  high: { label: "High", color: "hsl(var(--priority-high))", dotClass: "bg-priority-high" },
+  medium: { label: "Medium", color: "hsl(var(--priority-medium))", dotClass: "bg-priority-medium" },
+  low: { label: "Low", color: "hsl(var(--priority-low))", dotClass: "bg-priority-low" },
 };
 
 export function formatCurrency(amount: number): string {
@@ -71,31 +73,49 @@ export function formatDate(dateString: string | null | undefined): string {
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-/** Total customer value: sales price − discounts + service charge, summed across quotes/booking. */
+const num = (raw: string | number | null | undefined): number => {
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : 0;
+  return parseFloat(raw || "0") || 0;
+};
+
+type WithServiceCommission = { package_commission?: string | number | null; service_commission?: string | number | null };
+
+/** Customer total of one quote/booking row: sales price − discounts + service charge. */
+function rowValue(r: { sales_price?: string | null; discounts?: string | null; service_charge?: string | null }): number {
+  return num(r.sales_price) - num(r.discounts) + num(r.service_charge);
+}
+
+/** Commission of one quote/booking row: package commission + line-item service commission. */
+function rowProfit(r: object): number {
+  const c = r as WithServiceCommission;
+  return num(c.package_commission) + num(c.service_commission);
+}
+
+/** Total customer value: sales price − discounts + service charge. Stage-aware to
+ *  match the server's column totals: bookings read the booking row, quoted deals
+ *  sum their quotes, enquiries have no value. */
 export function getTransactionValue(t: Transaction): number {
-  if (t.quotes?.length) {
-    return t.quotes.reduce((s, q) => {
-      return s + (parseFloat(q.sales_price || "0") || 0) - (parseFloat(q.discounts || "0") || 0) + (parseFloat(q.service_charge || "0") || 0);
-    }, 0);
-  }
-  if (t.booking) {
-    return (parseFloat(t.booking.sales_price || "0") || 0) - (parseFloat(t.booking.discounts || "0") || 0) + (parseFloat(t.booking.service_charge || "0") || 0);
-  }
+  if (t.status === "on_booking") return t.booking ? rowValue(t.booking) : 0;
+  if (t.status === "on_quote") return (t.quotes ?? []).reduce((s, q) => s + rowValue(q), 0);
   return 0;
 }
 
+/** Package commission + line-item service commission, stage-aware like the value. */
 export function getTransactionProfit(t: Transaction): number {
-  if (t.quotes?.length) {
-    return t.quotes.reduce((s, q) => {
-      const pkg = parseFloat((q as unknown as { package_commission?: string }).package_commission || "0") || 0;
-      const svc = parseFloat((q as unknown as { service_commission?: string }).service_commission || "0") || 0;
-      return s + pkg + svc;
-    }, 0);
-  }
-  if (t.booking) {
-    return parseFloat(t.booking.package_commission || "0") || 0;
-  }
+  if (t.status === "on_booking") return t.booking ? rowProfit(t.booking) : 0;
+  if (t.status === "on_quote") return (t.quotes ?? []).reduce((s, q) => s + rowProfit(q), 0);
   return 0;
+}
+
+/** Whether the deal has a quote or booking to show money for. */
+export function hasQuoteOrBooking(t: Transaction): boolean {
+  return t.status === "on_booking" ? !!t.booking : !!t.quotes?.length;
+}
+
+/** Joined client phone (pipeline endpoints only). */
+export function getClientPhone(t: Transaction): string | null {
+  const phone = (t as Transaction & { client_phone?: string | null }).client_phone;
+  return phone && phone !== "NULL" ? phone : null;
 }
 
 /** Enquiry-stage cards show the enquiry's budget rather than a computed value. */
@@ -188,10 +208,6 @@ export function getTransactionNavUrl(t: Transaction, stage: PipelineStage): stri
   return `/clients/${t.client_id}`;
 }
 
-function isSameCalendarDay(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-}
-
 /** Formats a task due date as "Today 15:15" / "Tomorrow 15:15" / "Mon 14 Sep 09:30", or "No date". */
 export function formatDueDateTime(due: string | null | undefined, now: Date = new Date()): string {
   if (!due) return "No date";
@@ -200,11 +216,9 @@ export function formatDueDateTime(due: string | null | undefined, now: Date = ne
 
   const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
 
-  if (isSameCalendarDay(d, now)) return `Today ${time}`;
-
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  if (isSameCalendarDay(d, tomorrow)) return `Tomorrow ${time}`;
+  // Day boundaries are Europe/London, the zone the server uses for "due today".
+  if (isSameLondonDay(d, now)) return `Today ${time}`;
+  if (isLondonTomorrow(d, now)) return `Tomorrow ${time}`;
 
   const weekday = d.toLocaleDateString("en-GB", { weekday: "short" });
   const day = d.getDate();
