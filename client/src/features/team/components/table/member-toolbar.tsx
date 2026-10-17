@@ -30,7 +30,7 @@ function FilterSelect({ label, value, onChange, children }: { label: string; val
 export function MemberToolbar({ filters, onChange, counts, branches }: MemberToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-3 px-4 py-4 xl:px-5" data-testid="member-toolbar">
-      <Segmented<StatusTab>
+      <Segmented
         label="Member status"
         variant="black"
         value={filters.status}

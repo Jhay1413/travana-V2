@@ -29,7 +29,7 @@ export function CommissionChartCard({ trend, className }: { trend: OrganizationO
         title={`Commission against target, ${year}`}
         sub="Each bar is a month's commission. The dark tick marks that month's target."
         right={
-          <Segmented<View>
+          <Segmented
             value={view}
             onChange={setView}
             variant="black"

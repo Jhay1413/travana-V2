@@ -96,7 +96,7 @@ export function ClientDashboardCard({
         }
       />
       <div className="overflow-x-auto pb-1">
-        <Segmented<ClientTabKey>
+        <Segmented
           value={activeTab}
           onChange={setTab}
           items={items}

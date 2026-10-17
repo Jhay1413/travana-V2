@@ -112,7 +112,7 @@ export function FiltersPopover({ filters, onFiltersChange, channelCounts, tagOpt
           </div>
           <div>
             <SectionLabel>Assigned to</SectionLabel>
-            <Segmented<AssignedFilter>
+            <Segmented
               value={draft.assigned}
               onChange={(assigned) => setDraft((d) => ({ ...d, assigned }))}
               items={[

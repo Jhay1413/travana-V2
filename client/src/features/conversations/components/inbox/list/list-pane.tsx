@@ -182,7 +182,7 @@ export function ListPane(props: ListPaneProps) {
             data-testid="conversation-search"
           />
         </div>
-        <Segmented<ListTab>
+        <Segmented
           value={tab}
           onChange={props.onTabChange}
           height={38}

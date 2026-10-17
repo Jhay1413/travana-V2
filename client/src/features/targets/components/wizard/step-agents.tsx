@@ -48,7 +48,7 @@ export function StepAgents({ data, plan, calc, branchId, onBranch, onAgent, onAg
   return (
     <div>
       {data.branches.length > 1 && (
-        <Segmented<string>
+        <Segmented
           value={branchId}
           onChange={onBranch}
           label="Shop"

@@ -71,7 +71,7 @@ export function TargetsOverview({ tab, year }: TargetsOverviewProps) {
         />
       )}
 
-      <Segmented<TargetsTab>
+      <Segmented
         value={tab}
         onChange={(t) => go(tabPath(t, year, currentYear))}
         label="Level"

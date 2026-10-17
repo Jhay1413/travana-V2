@@ -115,7 +115,7 @@ export function TicketPage({ ticketId }: { ticketId: string }) {
     return (
       <div className={shell} data-testid="section-ticket-page">
         <TicketMobileHeader ticket={ticket} users={users} now={now} menu={menu} />
-        <UnderlineTabs<MobileTab>
+        <UnderlineTabs
           label="Ticket sections"
           testIdPrefix="ticket-mobile-tab"
           value={mobileTab}
@@ -148,7 +148,7 @@ export function TicketPage({ ticketId }: { ticketId: string }) {
           <>
             {centre}
             <div className="flex w-[400px] flex-none flex-col gap-2.5">
-              <Segmented<SideTab>
+              <Segmented
                 label="Side panel"
                 variant="black"
                 height={38}

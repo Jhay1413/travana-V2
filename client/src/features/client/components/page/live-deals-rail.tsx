@@ -240,7 +240,7 @@ export function LiveDealsRail({ enquiries, quotes, bookings, state, isLoading, r
           />
         )}
 
-        <Segmented<LiveDealsTab>
+        <Segmented
           value={tab}
           onChange={setTab}
           label="Deal stage"

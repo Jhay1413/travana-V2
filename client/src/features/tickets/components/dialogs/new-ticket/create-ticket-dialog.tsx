@@ -70,7 +70,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated, initialClien
 
             <div className={LABEL}>What kind of ticket?</div>
             <div data-testid="select-type">
-              <Segmented<TicketTypeValue>
+              <Segmented
                 label="Kind of ticket"
                 variant="black"
                 height={42}
@@ -129,7 +129,7 @@ export function CreateTicketDialog({ open, onOpenChange, onCreated, initialClien
               <div className="sm:col-span-2">
                 <div className={LABEL}>Priority</div>
                 <div data-testid="select-priority">
-                  <Segmented<TicketPriorityValue>
+                  <Segmented
                     label="Priority"
                     variant="black"
                     height={42}
