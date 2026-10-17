@@ -51,7 +51,7 @@ export function AgentsTab({ data, onOpenAgent }: AgentsTabProps) {
       <section className={cn(TARGETS_CARD, "overflow-hidden")}>
         <div className="flex flex-wrap items-center justify-between gap-4 px-5 pb-3.5 pt-4">
           {data.branches.length > 1 ? (
-            <Segmented<string>
+            <Segmented
               value={branchId}
               onChange={setBranchId}
               label="Shop"

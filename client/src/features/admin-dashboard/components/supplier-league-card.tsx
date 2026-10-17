@@ -17,7 +17,7 @@ export function SupplierLeagueCard({ rows, className }: { rows: TourOperatorBrea
         id="supplier-league-title"
         title="Supplier league"
         right={
-          <Segmented<SupplierMeasure>
+          <Segmented
             value={by}
             onChange={setBy}
             variant="black"

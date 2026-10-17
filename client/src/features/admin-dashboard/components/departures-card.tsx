@@ -20,7 +20,7 @@ export function DeparturesCard({ className }: { className?: string }) {
         pill={<SamplePill />}
         sub="Next 7 days, to Friday 23 October"
         right={
-          <Segmented<DepartureShow>
+          <Segmented
             value={show}
             onChange={setShow}
             variant="black"

@@ -24,7 +24,7 @@ export function CompareCard({ branchId, className }: { branchId?: string; classN
         id="compare-title"
         title="Compare with earlier periods"
         right={
-          <Segmented<ComparePeriod>
+          <Segmented
             value={period}
             onChange={changePeriod}
             variant="black"
@@ -35,7 +35,7 @@ export function CompareCard({ branchId, className }: { branchId?: string; classN
       />
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <span className="text-[12px] text-social-muted xl:text-[13px]">Compare with</span>
-        <Segmented<CompareAgainst>
+        <Segmented
           value={against}
           onChange={setAgainst}
           variant="black"

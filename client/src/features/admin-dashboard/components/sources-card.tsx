@@ -22,7 +22,7 @@ export function SourcesCard({ branchId, className }: { branchId?: string; classN
         title="Where profit comes from"
         sub="This month, by where the enquiry came from"
         right={
-          <Segmented<SourceMeasure>
+          <Segmented
             value={by}
             onChange={setBy}
             variant="black"
