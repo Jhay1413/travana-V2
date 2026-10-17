@@ -30,6 +30,14 @@ describe("homeworker nav", () => {
     expect(paths("agent")).not.toContain("/my-statement");
   });
 
+  it("offers My Targets to homeworkers only", () => {
+    expect(paths("homeworker")).toContain("/my-targets");
+    for (const role of ["agent", "branch_manager", "referral_agent", "social_media_manager"] as const) {
+      expect(allPaths(role)).not.toContain("/my-targets");
+    }
+    expect(allPaths("org_admin")).not.toContain("/my-targets");
+  });
+
   it("hides Social Posts and Inbox", () => {
     const p = paths("homeworker");
     expect(p).not.toContain("/social-posts");
@@ -44,5 +52,22 @@ describe("homeworker nav", () => {
   it("leaves the agent nav untouched", () => {
     expect(paths("agent")).toContain("/social-posts");
     expect(paths("agent")).toContain("/conversations");
+  });
+});
+
+describe("social media manager nav", () => {
+  it("offers Social Posts", () => {
+    expect(paths("social_media_manager")).toContain("/social-posts");
+    expect(paths("social_media_manager")).not.toContain("/conversations");
+  });
+
+  it("does not offer the Dashboard, which the role cannot access", () => {
+    expect(paths("social_media_manager")).not.toContain("/agent-overview");
+  });
+
+  it("does not offer Pipeline, which the role cannot access", () => {
+    expect(paths("social_media_manager")).not.toContain("/pipeline");
+    expect(paths("agent")).toContain("/pipeline");
+    expect(paths("homeworker")).toContain("/pipeline");
   });
 });

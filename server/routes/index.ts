@@ -1,42 +1,15 @@
 import { Router } from "express";
-import userRoutes from "./user.routes";
-import clientRoutes from "./client.routes";
-import quoteRoutes from "./quote.routes";
-import tourOperatorRoutes from "./tourOperator.routes";
-import airportRoutes from "./airport.routes";
-import ticketRoutes from "./ticket.routes";
-import ticketAttachmentRoutes from "./ticketAttachment.routes";
-import ticketReplyRoutes from "./ticketReply.routes";
-import notificationRoutes from "./notification.routes";
-import dashboardRoutes from "./dashboard.routes";
-import adminImportRoutes from "./adminImport.routes";
-import settingsRoutes from "./settings.routes";
-import userProfileRoutes from "./userProfile.routes";
-import facebookRoutes from "./facebook.routes";
-import quoteShareRoutes from "./quote-share.routes";
-import auditRoutes from "./audit.routes";
-import walletRoutes from "./wallet.routes";
-import aiAskRoutes from "./ai-ask.routes";
 
 const router = Router();
 
-router.use("/users", userRoutes);
-router.use("/clients", clientRoutes);
-router.use("/quotes", quoteRoutes);
-router.use("/tour-operators", tourOperatorRoutes);
-router.use("/airports", airportRoutes);
-router.use("/tickets", ticketRoutes);
-router.use("/attachments", ticketAttachmentRoutes);
-router.use("/replies", ticketReplyRoutes);
-router.use("/notifications", notificationRoutes);
-router.use("/dashboard", dashboardRoutes);
-router.use("/admin", adminImportRoutes);
-router.use("/settings", settingsRoutes);
-router.use("/user-profiles", userProfileRoutes);
-router.use("/facebook", facebookRoutes);
-router.use("/quote-share", quoteShareRoutes);
-router.use("/audit", auditRoutes);
-router.use("/wallet", walletRoutes);
-router.use("/ai", aiAskRoutes);
+// Every legacy v1 router has been UNMOUNTED (files stay on disk, unused). v2 serves the
+// same features under /api/v2/* behind isAuthenticated + orgBranchScope. Verified by grep
+// that neither client/ nor server/ calls any of these prefixes:
+//   /users /clients /quotes /tour-operators /airports /notifications /dashboard /facebook
+//   /tickets /attachments /replies /admin /settings /user-profiles /quote-share /audit /ai
+// and /wallet (the client portal now reads GET /api/portal/wallet/transactions instead of
+// /api/wallet/client/:id/transactions; same service, same rows).
+// Public endpoints (quote-public, website-public, portal, facebook webhook) are mounted
+// directly in server/index.ts, not here.
 
 export default router;

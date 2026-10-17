@@ -10,29 +10,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { isQuoteExpired, isEnquiryExpired, isBookingExpired, isQuoteLost, isEnquiryLost } from "@/lib/deal-expiry";
 import { useDealPin } from "@/hooks/use-deal-pin";
 import { PinToggleButton } from "@/components/shared/pin-toggle-button";
 import type { EnquiryTable, Quote } from "@/features/quote/types";
 import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
-import { isPrimaryQuote } from "@/features/client/components/client-types";
-
-// Quote joins (destination, departing airport, operator name) aren't declared on the
-// base `Quote` type, but the transactions API returns them alongside it — same shape
-// ContactPanel's LiveQuoteRecord casts around in the conversations inbox.
-type QuoteRow = Quote & {
-  destination_name?: string | null;
-  main_tour_operator_name?: string | null;
-  main_tour_operator_logo_url?: string | null;
-  departing_airport_name?: string | null;
-  departing_airport_code?: string | null;
-};
-
-// Bookings get the same operator joins from the transactions API.
-type BookingRow = HolidayBooking & {
-  main_tour_operator_name?: string | null;
-  main_tour_operator_logo_url?: string | null;
-};
+import {
+  buildBookingRows,
+  buildEnquiryRows,
+  buildQuoteRows,
+  sortRows,
+  type HolidayRowData,
+} from "@/features/client/lib/live-deal-rows";
 
 // ─── Formatting helpers ─────────────────────────────────────────────────────
 
@@ -42,166 +30,6 @@ const holidayCurrency = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 0,
 });
 
-// Customer-facing net total = sales_price − discounts + service_charge — same
-// formula used for quote/booking rows elsewhere on this page (see
-// use-client-quote-groups.ts's NET_PRICE).
-function netPrice(sales: string | null | undefined, discounts: string | null | undefined, serviceCharge: string | null | undefined): number {
-  return parseFloat(sales || "0") - parseFloat(discounts || "0") + parseFloat(serviceCharge || "0");
-}
-
-function formatShortDate(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-// Quotes/bookings/enquiries don't carry a return date — derive it from travel_date + nights.
-function computeReturnDate(travelDate: string | null | undefined, nights: number | null | undefined): string | null {
-  if (!travelDate || !nights) return null;
-  const d = new Date(travelDate);
-  if (isNaN(d.getTime())) return null;
-  d.setDate(d.getDate() + nights);
-  return formatShortDate(d.toISOString());
-}
-
-// "CODE - dd/mm/yyyy → dd/mm/yyyy" — matches the Live Quotes row in the conversations
-// inbox ContactPanel exactly; any missing piece is dropped rather than invented.
-function buildDateLine(code: string | null, travelDate: string | null | undefined, nights: number | null | undefined): string | null {
-  const departureDate = formatShortDate(travelDate);
-  const returnDate = computeReturnDate(travelDate, nights);
-  const dateRange = [departureDate, returnDate].filter(Boolean).join(" → ");
-  const line = [code, dateRange || null].filter(Boolean).join(" - ");
-  return line || null;
-}
-
-// ─── Row model ──────────────────────────────────────────────────────────────
-
-interface HolidayRowData {
-  id: string;
-  type: HolidaySelection["type"];
-  title: string;
-  price: number;
-  operatorName: string | null;
-  operatorLogoUrl: string | null;
-  destinationName: string | null;
-  dateLine: string | null;
-  createdAt: string | null;
-  expired: boolean;
-  /** Lost deals get their own section and take precedence over `expired`. */
-  lost: boolean;
-  /** True for a quote duplicated from another — rendered nested with a "Copy" pill. */
-  isCopy: boolean;
-  /** Copies duplicated from this row, nested underneath it. Empty for enquiries/bookings/copies. */
-  copies: HolidayRowData[];
-}
-
-function buildQuoteRow(qr: QuoteRow): HolidayRowData {
-  const code = qr.departing_airport_code || qr.departing_airport_name || null;
-  return {
-    id: qr.id,
-    type: "quote" as const,
-    title: qr.title || "Untitled quote",
-    price: netPrice(qr.sales_price, qr.discounts, qr.service_charge),
-    operatorName: qr.main_tour_operator_name ?? null,
-    operatorLogoUrl: qr.main_tour_operator_logo_url ?? null,
-    destinationName: qr.destination_name ?? null,
-    dateLine: buildDateLine(code, qr.travel_date, qr.num_of_nights),
-    createdAt: qr.date_created,
-    expired: isQuoteExpired(qr),
-    lost: isQuoteLost(qr),
-    isCopy: Boolean(qr.isQuoteCopy),
-    copies: [],
-  };
-}
-
-// A quote's transaction that has already progressed to a booking is superseded —
-// the API still returns the quote row alongside the booking (it isn't deleted,
-// just won), so it must be dropped here or it lingers in the Quotes tab forever.
-function buildQuoteRows(quotes: Quote[], bookedTransactionIds: Set<string>): HolidayRowData[] {
-  const quoteRows = (quotes as QuoteRow[]).filter((q) => !bookedTransactionIds.has(q.transaction_id));
-  const primaries = quoteRows.filter(isPrimaryQuote);
-  const copies = quoteRows.filter((q) => q.isQuoteCopy);
-
-  const primaryRowsById = new Map(primaries.map((q) => [q.id, buildQuoteRow(q)]));
-  // Group copies under the primary they belong to; older copies may not have
-  // parent_quote_id set, so fall back to matching by transaction — a copy
-  // always shares its origin transaction with the primary it was duplicated
-  // from. If neither resolves (e.g. the primary was soft-deleted), the copy
-  // is rendered as its own top-level row so it never disappears.
-  const primaryByTransactionId = new Map<string, QuoteRow>();
-  for (const q of primaries) {
-    if (!primaryByTransactionId.has(q.transaction_id)) primaryByTransactionId.set(q.transaction_id, q);
-  }
-
-  const orphanCopyRows: HolidayRowData[] = [];
-  for (const copy of copies) {
-    const parentId = copy.parent_quote_id && primaryRowsById.has(copy.parent_quote_id)
-      ? copy.parent_quote_id
-      : primaryByTransactionId.get(copy.transaction_id)?.id;
-    const parentRow = parentId ? primaryRowsById.get(parentId) : undefined;
-    if (parentRow) {
-      parentRow.copies.push(buildQuoteRow(copy));
-    } else {
-      orphanCopyRows.push(buildQuoteRow(copy));
-    }
-  }
-
-  return [...primaryRowsById.values(), ...orphanCopyRows];
-}
-
-function buildEnquiryRows(enquiries: EnquiryTable[]): HolidayRowData[] {
-  return enquiries.map((e) => ({
-    id: e.id,
-    type: "enquiry" as const,
-    title: e.title || "Untitled enquiry",
-    price: 0,
-    operatorName: null,
-    operatorLogoUrl: null,
-    destinationName: e.destinations?.[0]?.name ?? null,
-    dateLine: buildDateLine(null, e.travel_date, e.no_of_nights),
-    createdAt: e.date_created,
-    expired: isEnquiryExpired(e),
-    lost: isEnquiryLost(e),
-    isCopy: false,
-    copies: [],
-  }));
-}
-
-function buildBookingRows(bookings: HolidayBooking[]): HolidayRowData[] {
-  return bookings.map((b) => {
-    const br = b as BookingRow;
-    return {
-      id: b.id,
-      type: "booking" as const,
-      title: b.title || "Untitled booking",
-      price: netPrice(b.sales_price, b.discounts, b.service_charge),
-      operatorName: br.main_tour_operator_name ?? null,
-      operatorLogoUrl: br.main_tour_operator_logo_url ?? null,
-      // Bookings carry no destination join in the transactions payload.
-      destinationName: null,
-      dateLine: buildDateLine(null, b.travel_date, b.num_of_nights),
-      createdAt: b.date_created,
-      expired: isBookingExpired(b),
-      lost: false,
-      isCopy: false,
-      copies: [],
-    };
-  });
-}
-
-// Pinned rows lead; within the pinned and unpinned blocks the user's date order holds.
-function sortRows(rows: HolidayRowData[], order: "newest" | "oldest", pinnedKeys: ReadonlySet<string>): HolidayRowData[] {
-  const isPinned = (r: HolidayRowData) => pinnedKeys.has(`${r.type}:${r.id}`);
-  return [...rows]
-    .map((row) => (row.copies.length > 0 ? { ...row, copies: sortRows(row.copies, order, pinnedKeys) } : row))
-    .sort((a, b) => {
-      const pinDiff = Number(isPinned(b)) - Number(isPinned(a));
-      if (pinDiff !== 0) return pinDiff;
-      const diff = new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
-      return order === "newest" ? diff : -diff;
-    });
-}
 
 // ─── Chips ──────────────────────────────────────────────────────────────────
 
@@ -277,7 +105,6 @@ function HolidayListRow({
   selected,
   pinned = false,
   isLast = false,
-  roomy = false,
   isCopyRow = false,
   onSelect,
   onTogglePin,
@@ -286,8 +113,6 @@ function HolidayListRow({
   selected: boolean;
   /** This row's own favourite — matched by `${type}:${id}` against the caller's pinned set. */
   pinned?: boolean;
-  /** Live Deals sizing — a notch larger than the compact holidays list. */
-  roomy?: boolean;
   /** Last row in its list — the separator hairline is dropped so the list ends clean. */
   isLast?: boolean;
   /** Nested "Copy" variant — slightly smaller, carries a "Copy" pill next to the title. */
@@ -295,13 +120,8 @@ function HolidayListRow({
   onSelect: () => void;
   onTogglePin: () => void;
 }) {
-  // Live Deals uses a smaller operator logo than the compact holidays list;
-  // copy rows drop a size further still since they're nested and secondary.
-  const chipSize = isCopyRow
-    ? "h-6 w-6 text-[10px]"
-    : roomy
-      ? "h-7 w-7 text-[11px] 2xl:h-8 2xl:w-8 2xl:text-xs 3xl:h-8 3xl:w-8 3xl:text-xs"
-      : undefined;
+  // Copy rows use a smaller operator logo since they're nested and secondary.
+  const chipSize = isCopyRow ? "h-6 w-6 text-[10px]" : undefined;
   return (
     <div
       role="button"
@@ -336,7 +156,7 @@ function HolidayListRow({
               <span
                 className={cn(
                   "truncate font-semibold",
-                  isCopyRow ? "text-[13px]" : roomy ? "text-[15px]" : "text-[13px] 3xl:text-sm",
+                  isCopyRow ? "text-[13px]" : "text-[13px] 3xl:text-sm",
                   row.expired && "text-red-500",
                 )}
               >
@@ -345,13 +165,13 @@ function HolidayListRow({
               {isCopyRow && <CopyPill />}
             </span>
             {row.price > 0 && (
-              <span className={cn("shrink-0 font-semibold text-black/60 dark:text-white/60", isCopyRow ? "text-[13px]" : roomy ? "text-[15px]" : "text-[13px] 3xl:text-sm")}>
+              <span className={cn("shrink-0 font-semibold text-black/60 dark:text-white/60", isCopyRow ? "text-[13px]" : "text-[13px] 3xl:text-sm")}>
                 {holidayCurrency.format(row.price)}
               </span>
             )}
           </div>
           {row.destinationName && (
-            <div className={cn("mt-0.5 truncate text-[#a195a5] dark:text-white/50", roomy ? "text-[13px]" : "text-xs 3xl:text-[13px]")}>{row.destinationName}</div>
+            <div className="mt-0.5 truncate text-xs text-[#a195a5] 3xl:text-[13px] dark:text-white/50">{row.destinationName}</div>
           )}
         </div>
       </div>
@@ -360,10 +180,10 @@ function HolidayListRow({
       <div className="mt-1.5 flex items-center gap-3">
         {row.dateLine ? (
           <>
-            <span className={cn("shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 dark:text-white/30", roomy ? "w-7 2xl:w-8" : "w-9 3xl:w-10")} aria-hidden>
+            <span className="w-9 shrink-0 text-center text-[10px] tracking-[0.2em] text-[#a195a5]/70 3xl:w-10 dark:text-white/30" aria-hidden>
               ···
             </span>
-            <span className={cn("min-w-0 flex-1 truncate text-[#a195a5] dark:text-white/50", roomy ? "text-[13px]" : "text-xs")}>{row.dateLine}</span>
+            <span className="min-w-0 flex-1 truncate text-xs text-[#a195a5] dark:text-white/50">{row.dateLine}</span>
           </>
         ) : (
           <span className="flex-1" />
@@ -385,7 +205,6 @@ function HolidayGroupRow({
   selection,
   pinnedKeys,
   isLast,
-  roomy,
   onSelect,
   onTogglePin,
 }: {
@@ -394,7 +213,6 @@ function HolidayGroupRow({
   /** Favourited `${type}:${id}` keys — built once per panel, not per row. */
   pinnedKeys: ReadonlySet<string>;
   isLast: boolean;
-  roomy: boolean;
   onSelect: (selection: HolidaySelection) => void;
   onTogglePin: (row: HolidayRowData) => void;
 }) {
@@ -402,7 +220,6 @@ function HolidayGroupRow({
   return (
     <div>
       <HolidayListRow
-        roomy={roomy}
         row={row}
         isLast={hasCopies || isLast}
         selected={selection?.type === row.type && selection.id === row.id}
@@ -415,7 +232,6 @@ function HolidayGroupRow({
           {row.copies.map((copy, index) => (
             <HolidayListRow
               key={copy.id}
-              roomy={roomy}
               isCopyRow
               row={copy}
               isLast={index === row.copies.length - 1 && isLast}
@@ -452,8 +268,6 @@ interface AllHolidaysPanelProps {
   onCreate?: (kind: "enquiry" | "quote" | "booking" | "task" | "ticket") => void;
   isLoadingTransactions?: boolean;
   className?: string;
-  /** "live-deals": the overview's right-hand column (title "Live Deals", border on the left, roomier rows). */
-  variant?: "holidays" | "live-deals";
 }
 
 export function AllHolidaysPanel({
@@ -465,9 +279,7 @@ export function AllHolidaysPanel({
   onCreate,
   isLoadingTransactions,
   className,
-  variant = "holidays",
 }: AllHolidaysPanelProps) {
-  const isLiveDeals = variant === "live-deals";
   const [tab, setTab] = useState<HolidayTab>("quotes");
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -555,14 +367,13 @@ export function AllHolidaysPanel({
   return (
     <Card
       className={cn(
-        "flex flex-col overflow-hidden rounded-none border-0 border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]",
-        isLiveDeals ? "border-l" : "border-r",
+        "flex flex-col overflow-hidden rounded-none border-0 border-r border-black/10 bg-white p-0 shadow-none dark:border-white/10 dark:bg-white/[0.04]",
         className,
       )}
       data-testid="all-holidays-panel"
     >
       <div className="flex h-[76px] shrink-0 items-center justify-between gap-2 border-b border-black/10 px-4 3xl:px-6 dark:border-white/10">
-        <h2 className={cn("font-semibold", isLiveDeals ? "text-lg" : "text-sm 3xl:text-base")}>{isLiveDeals ? "Live Deals" : "All Holidays"}</h2>
+        <h2 className="text-sm font-semibold 3xl:text-base">All Holidays</h2>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -714,7 +525,6 @@ export function AllHolidaysPanel({
             <div className="space-y-1">
               {activeRows.map((row, index) => (
                 <HolidayGroupRow
-                  roomy={isLiveDeals}
                   key={row.id}
                   row={row}
                   isLast={index === activeRows.length - 1}
@@ -743,7 +553,6 @@ export function AllHolidaysPanel({
                   <div className="mt-1 space-y-1">
                     {expiredRows.map((row, index) => (
                       <HolidayGroupRow
-                        roomy={isLiveDeals}
                         key={row.id}
                         row={row}
                         isLast={index === expiredRows.length - 1}
@@ -775,7 +584,6 @@ export function AllHolidaysPanel({
                   <div className="mt-1 space-y-1">
                     {lostRows.map((row, index) => (
                       <HolidayGroupRow
-                        roomy={isLiveDeals}
                         key={row.id}
                         row={row}
                         isLast={index === lostRows.length - 1}

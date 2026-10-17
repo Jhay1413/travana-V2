@@ -2,13 +2,13 @@ import { db } from "../../config/database";
 import { branches, type Branch, type InsertBranch } from "@shared/schema";
 import { and, eq, ne, asc } from "drizzle-orm";
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export const branchRepository = {
-  async findAllByOrg(orgId: string, branchType?: 'shop' | 'homeworker'): Promise<Branch[]> {
+  async findAllByOrg(orgId: string, branchType?: 'shop' | 'homeworker', tx?: Tx): Promise<Branch[]> {
     const conditions = [eq(branches.organizationId, orgId)];
     if (branchType) conditions.push(eq(branches.branchType, branchType));
-    return db
+    return (tx ?? db)
       .select()
       .from(branches)
       .where(and(...conditions))
@@ -44,8 +44,8 @@ export const branchRepository = {
   },
 
   /** Counts shop branches only; homeworker branches never count toward limits or the keep-one rule. */
-  async countByOrg(orgId: string): Promise<number> {
-    const rows = await db
+  async countByOrg(orgId: string, tx?: Tx): Promise<number> {
+    const rows = await (tx ?? db)
       .select({ id: branches.id })
       .from(branches)
       .where(and(eq(branches.organizationId, orgId), ne(branches.branchType, 'homeworker')));
@@ -81,14 +81,16 @@ export const branchRepository = {
   },
 
   /** Atomic: insert a branch, optionally clearing the default flag on every other branch in the org. */
-  async createAtomic(data: InsertBranch, makeDefault: boolean): Promise<Branch> {
-    return db.transaction(async (tx) => {
+  async createAtomic(data: InsertBranch, makeDefault: boolean, outerTx?: Tx): Promise<Branch> {
+    const run = async (tx: Tx) => {
       const created = await this.create(data, tx);
       if (makeDefault) {
         await this.clearDefaultExcept(data.organizationId, created.id, tx);
       }
       return created;
-    });
+    };
+    // Inside a caller-owned transaction (e.g. a locked onboarding step) reuse it.
+    return outerTx ? run(outerTx) : db.transaction(run);
   },
 
   /** Atomic: update a branch, optionally clearing the default flag on every other branch in the org. */

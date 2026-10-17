@@ -1314,7 +1314,10 @@ export const notes = pgTable('notes', {
   parent_id: varchar(),
   transaction_id: uuid().references(() => transaction.id, { onDelete: "cascade" }),
   client_id: uuid("client_id").references(() => clientTable.id, { onDelete: "set null" }),
-});
+}, (table) => [
+  // Pipeline board last-activity lookups filter notes by transaction_id.
+  index("idx_notes_transaction_id").on(table.transaction_id),
+]);
 
 export const insertNoteSchema = createInsertSchema(notes).omit({ id: true, createdAt: true });
 export type InsertNote = z.infer<typeof insertNoteSchema>;
@@ -1516,6 +1519,8 @@ export const clientFiles = pgTable("client_files", {
   category: text("category"),
   allocationType: text("allocation_type"),
   allocationId: text("allocation_id"),
+  // Null for rows uploaded before uploader tracking existed.
+  uploadedBy: text("uploaded_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -1854,7 +1859,10 @@ export const tasks = pgTable("tasks", {
   createdAt: timestamp("created_at").defaultNow(),
   orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
-});
+}, (table) => [
+  // Pipeline board next-task / last-activity lookups filter tasks by entity_id.
+  index("idx_tasks_entity_id").on(table.entityId),
+]);
 
 export const insertTasksSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
 export type TaskNew = typeof tasks.$inferSelect;
@@ -2197,6 +2205,23 @@ export const orgBotConfig = pgTable("org_bot_config", {
 export type OrgBotConfig = typeof orgBotConfig.$inferSelect;
 export const insertOrgBotConfigSchema = createInsertSchema(orgBotConfig).omit({ orgId: true, updatedBy: true, createdAt: true, updatedAt: true });
 
+// Per-org defaults for the Social Posts feature (link/price toggles, quick
+// schedule times, timezone). One row per org; absent row = built-in defaults.
+export const orgSocialSettings = pgTable("org_social_settings", {
+  orgId: uuid("org_id").primaryKey().references(() => organization.id, { onDelete: "cascade" }),
+  defaultViewLink: boolean("default_view_link").notNull().default(true),
+  defaultPriceBadge: boolean("default_price_badge").notNull().default(true),
+  timeShortcuts: text("time_shortcuts").array().notNull().default(sql`ARRAY['09:00','12:30','19:00']::text[]`),
+  timezone: text("timezone").notNull().default("Europe/London"),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export type OrgSocialSettings = typeof orgSocialSettings.$inferSelect;
+export type InsertOrgSocialSettings = typeof orgSocialSettings.$inferInsert;
+export const insertOrgSocialSettingsSchema = createInsertSchema(orgSocialSettings).omit({ orgId: true, updatedBy: true, createdAt: true, updatedAt: true });
+
 // Company knowledge the AI is grounded on (one row per entry). RAG-ready.
 export const orgKnowledgeBase = pgTable("org_knowledge_base", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2380,7 +2405,14 @@ export const agentTargetTable = pgTable("agent_target_table", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   year: integer().notNull(),
   month: integer().notNull(),
+  // The EFFECTIVE target; every consumer (dashboard, org overview, onboarding) reads this.
   targetAmount: numeric("target_amount", { precision: 10, scale: 2 }).notNull(),
+  // Homeworker overrides: 'self' = the owner set it, 'admin' = an org admin overrode it.
+  source: text("source").notNull().default("admin"),
+  // The owner's own figure, kept while an admin override is in force so it can be reverted.
+  selfAmount: numeric("self_amount", { precision: 10, scale: 2 }),
+  note: text("note"),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
@@ -2390,6 +2422,20 @@ export const agentTargetTable = pgTable("agent_target_table", {
 export const insertAgentTargetSchema = createInsertSchema(agentTargetTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type AgentTarget = typeof agentTargetTable.$inferSelect;
 export type InsertAgentTarget = z.infer<typeof insertAgentTargetSchema>;
+
+// Stored business (organisation-wide) monthly target; may drift from the sum of shop targets.
+export const orgTargetTable = pgTable("org_target_table", {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  year: integer().notNull(),
+  month: integer().notNull(),
+  targetAmount: numeric("target_amount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  unique("org_target_org_year_month_unique").on(table.organizationId, table.year, table.month)
+]);
+export type OrgTarget = typeof orgTargetTable.$inferSelect;
 
 // One row per homeworker branch per period; freezes the share percent used.
 // orgId is uuid (not text) because organization.id is uuid.

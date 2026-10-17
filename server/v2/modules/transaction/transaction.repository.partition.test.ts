@@ -45,6 +45,17 @@ describe("transaction repository private scope builder applies the partition", (
     ["getStats", (s) => transactionRepository.getStats(s)],
     ["findAll", (s) => transactionRepository.findAll(s, {})],
     ["findPipelineByStatus", (s) => transactionRepository.findPipelineByStatus(s, "enquiry", 1, 10)],
+    [
+      "findPipelineByStatus (filtered)",
+      (s) =>
+        transactionRepository.findPipelineByStatus(s, "enquiry", 1, 10, undefined, undefined, "latest_activity", undefined, undefined, {
+          search: "x",
+          priorities: ["low"],
+          quick: "no_task",
+        }),
+    ],
+    ["findPipelineCandidates", (s) => transactionRepository.findPipelineCandidates(s, "enquiry", undefined, undefined, 60)],
+    ["countPipelineQuickByColumn", (s) => transactionRepository.countPipelineQuickByColumn(s, undefined, undefined, { search: "x" })],
   ];
 
   it.each(calls)("%s: shop agent excludes homeworker branches", async (_name, run) => {

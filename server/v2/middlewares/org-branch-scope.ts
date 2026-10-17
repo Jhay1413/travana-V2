@@ -4,6 +4,8 @@ import { branchMemberRepository } from '../modules/branch-member/branch-member.r
 import { userOrgRolesRepository } from '../modules/user-org-roles/user-org-roles.repository';
 import { primaryRole } from '../modules/user-org-roles/user-org-roles.service';
 import { getUserId } from '../../utils/get-user-id';
+import { accountBlock, rejectBlockedSession } from './auth/account-standing';
+import { resolveAccountBlock } from './auth/resolve-account-block';
 
 export async function orgBranchScope(req: Request, res: Response, next: NextFunction): Promise<void> {
   const sessionUser = (req as any).user;
@@ -17,6 +19,14 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
   const dbUser = await authStorage.getUser(userId);
   if (!dbUser) {
     res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+
+  // Banned (deactivated or removed) accounts are refused before anything else,
+  // platform admins included. Their session is destroyed so the cookie is dead.
+  const banBlock = accountBlock(dbUser, null);
+  if (banBlock) {
+    rejectBlockedSession(req, res, banBlock);
     return;
   }
 
@@ -45,6 +55,15 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
   }
 
   const membership = await branchMemberRepository.findActiveContextByUserId(userId);
+
+  // Suspension = memberships exist but none is active. The standing query only runs
+  // when there is no active context, so the normal request pays nothing extra.
+  const block = await resolveAccountBlock(dbUser, Boolean(membership));
+  if (block) {
+    rejectBlockedSession(req, res, block);
+    return;
+  }
+
   const orgId      = membership?.orgId ?? dbUser.orgId ?? null;
 
   if (!orgId) {

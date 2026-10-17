@@ -1,4 +1,5 @@
 import type { Branch, HomeworkerPayoutStatement, InsertBranch, InsertUser, User } from '@shared/schema';
+import type { RequestActor } from '../../utils/request-actor';
 
 export type HomeworkerStatus = 'pending' | 'active' | 'suspended' | 'archived';
 
@@ -19,6 +20,8 @@ export interface HomeworkerActor {
   userId:    string | null;
   orgRole:   string;
   orgRoles?: string[];
+  /** Who is acting, for the audit log; absent in unit tests. */
+  requestActor?: RequestActor;
 }
 
 export interface InviteHomeworkerResult {

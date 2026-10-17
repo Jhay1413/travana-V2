@@ -27,6 +27,7 @@ export const socialPostRepository = {
       .select()
       .from(travel_deal)
       .where(eq(travel_deal.quote_id, quoteId))
+      .orderBy(desc(travel_deal.created_at))
       .limit(1);
     return result;
   },

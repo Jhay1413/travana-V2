@@ -126,6 +126,11 @@ export const socialPostApi = {
     return res;
   },
 
+  unschedule: async (id: string): Promise<TravelDeal> => {
+    const { data: res } = await axiosClient.delete<TravelDeal>(`/api/v2/social-posts/${id}/schedule`);
+    return res;
+  },
+
   uploadMedia: async (files: File[]): Promise<UploadedMedia[]> => {
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));

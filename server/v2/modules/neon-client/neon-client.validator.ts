@@ -6,19 +6,47 @@ const badgeEnum = z
   .or(z.null())
   .optional();
 
+// Columns that are system-managed (portal credentials, merge/split lineage, VIP
+// state, lifecycle status). They are stripped from create/update payloads — the
+// PIN has its own endpoint (/:id/portal-pin) and the rest are only ever written
+// by server workflows.
+export const SYSTEM_MANAGED_CLIENT_FIELDS = {
+  portalPin: true,
+  mustChangePin: true,
+  status: true,
+  mergedIntoId: true,
+  splitFromClientId: true,
+  vipEnrolledAt: true,
+  vipTier: true,
+} as const;
+
+const editableClientSchema = insertClientTableSchema.omit(SYSTEM_MANAGED_CLIENT_FIELDS);
+
 export const createNeonClientValidator = z.object({
-  body: insertClientTableSchema.extend({ badge: badgeEnum }),
+  body: editableClientSchema.extend({ badge: badgeEnum }),
 });
 
 export const updateNeonClientValidator = z.object({
   params: z.object({ id: z.string().uuid() }),
-  body: insertClientTableSchema.partial().extend({ badge: badgeEnum }),
+  // strict(): a payload carrying a system-managed field is rejected with 400
+  // rather than silently dropped, so a bad caller finds out.
+  body: editableClientSchema.partial().extend({ badge: badgeEnum }).strict(),
+});
+
+export const portalPinParamsValidator = z.object({
+  params: z.object({ id: z.string().uuid() }),
+});
+
+export const setPortalPinValidator = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({ pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits") }),
 });
 
 // Drop identity/tenant columns from import rows — these are assigned
 // server-side from the caller's scope, never trusted from the payload.
 const importClientRowSchema = insertClientTableSchema
   .omit({ orgId: true, branchId: true, createdBy: true })
+  .omit(SYSTEM_MANAGED_CLIENT_FIELDS)
   .extend({ badge: badgeEnum });
 
 export const importNeonClientsValidator = z.object({

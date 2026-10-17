@@ -144,7 +144,91 @@ export function AttachmentView({ attachment }: { attachment: MessageAttachment }
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
-export function MessageBubble({ message, conversation }: { message: ConversationMessage; conversation: Conversation }) {
+export type MessageThreadVariant = "classic" | "inbox";
+
+// The redesigned inbox look. "classic" (the default) is untouched and still used
+// by the client Chats tab and the ticket thread panel.
+function InboxMessageBubble({ message }: { message: ConversationMessage }) {
+  const outbound = message.direction === "outbound";
+
+  if (message.isNote) {
+    return (
+      <div className="flex justify-center">
+        <div className="w-[88%] rounded-[14px] border-[1.5px] border-dashed border-[#FCD34D] bg-[#FFFBEB] px-3.5 py-2.5 text-[14px] leading-[1.55] text-slate-800 dark:bg-amber-950/30 dark:text-amber-100">
+          <div className="mb-1 text-[12px] font-semibold text-amber-800 dark:text-amber-200">
+            🔒 Internal note · {message.authorName ?? "Team"} · {clockTime(message.sentAt)}
+          </div>
+          <p className="whitespace-pre-wrap">{message.body}</p>
+          <div className="mt-1 text-right text-[11px] text-muted-foreground">Only your team can see this</div>
+        </div>
+      </div>
+    );
+  }
+
+  // System / call-to-action only messages read as a centred pill, not a bubble.
+  if (message.cta && !message.body && !(message.attachments && message.attachments.length > 0)) {
+    return (
+      <div className="flex justify-center">
+        <span className="rounded-full bg-[#EEF2F7] px-3 py-1 text-[12px] text-slate-600 dark:bg-white/10 dark:text-slate-300">
+          {message.cta.label}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("flex items-end gap-2", outbound ? "justify-end" : "justify-start")}>
+      {outbound && message.isAi && (
+        <span
+          className="order-2 block h-6 w-6 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-blue-600 to-indigo-600"
+          title="Luna (AI)"
+        >
+          <img src={lunaImg} alt="Luna" className="h-full w-full scale-[1.55] object-cover object-[50%_8%]" />
+        </span>
+      )}
+      <div className="max-w-[78%]">
+        <div
+          className={cn(
+            "px-3.5 py-2.5 text-[14px] leading-[1.55]",
+            outbound
+              ? "rounded-2xl rounded-br-[4px] bg-social-navy-ink text-white"
+              : "rounded-2xl rounded-bl-[4px] border border-social-border bg-white text-slate-900 dark:bg-card dark:text-foreground",
+          )}
+        >
+          {message.body && <p className="whitespace-pre-wrap">{message.body}</p>}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className={cn("flex flex-col gap-1.5", message.body && "mt-2")}>
+              {message.attachments.map((a) => (
+                <AttachmentView key={a.id} attachment={a} />
+              ))}
+            </div>
+          )}
+          {message.cta && (
+            <>
+              <div className={cn("my-2 h-px", outbound ? "bg-white/20" : "bg-black/10")} />
+              <div className="text-center text-sm font-semibold">{message.cta.label}</div>
+            </>
+          )}
+        </div>
+        <div className={cn("mt-1 text-[11px] text-muted-foreground", outbound ? "text-right" : "text-left")}>
+          {clockTime(message.sentAt)}
+          {outbound && (message.read ? " · ✓ Read" : " · Sent")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function MessageBubble({
+  message,
+  conversation,
+  variant = "classic",
+}: {
+  message: ConversationMessage;
+  conversation: Conversation;
+  variant?: MessageThreadVariant;
+}) {
+  if (variant === "inbox") return <InboxMessageBubble message={message} />;
   const outbound = message.direction === "outbound";
   const meta = CHANNELS[conversation.channel];
   const ChannelIcon = meta.icon;
@@ -247,7 +331,16 @@ export function groupMessagesByDay(messages: ConversationMessage[]): MessageDayG
   return out;
 }
 
-export function DayDivider({ label }: { label: string }) {
+export function DayDivider({ label, variant = "classic" }: { label: string; variant?: MessageThreadVariant }) {
+  if (variant === "inbox") {
+    return (
+      <div className="flex items-center gap-3">
+        <span className="h-px flex-1 bg-social-border" />
+        <span className="text-[12px] font-semibold text-muted-foreground">{label}</span>
+        <span className="h-px flex-1 bg-social-border" />
+      </div>
+    );
+  }
   return (
     <div className="flex justify-center">
       <span className="rounded-lg border border-black/15 bg-white px-6 py-1.5 text-sm text-black/50 dark:border-white/15 dark:bg-transparent dark:text-white/50">

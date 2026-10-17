@@ -34,6 +34,8 @@ interface MultiSearchableSelectProps {
   addNewLabel?: string;
   /** Maximum number of chips to render before collapsing to a "+N more" count (default: 3) */
   maxChips?: number;
+  /** Extra classes for the selected-value chips (e.g. a lighter weight or size). */
+  chipClassName?: string;
 }
 
 /**
@@ -63,6 +65,7 @@ export function MultiSearchableSelect({
   onAddNew,
   addNewLabel = "Add new",
   maxChips = 3,
+  chipClassName,
 }: MultiSearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -177,7 +180,7 @@ export function MultiSearchableSelect({
               <Badge
                 key={val}
                 variant="secondary"
-                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+                className={cn("flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium", chipClassName)}
               >
                 <span className="max-w-[120px] truncate">{labelFor(val)}</span>
                 <span
@@ -195,7 +198,7 @@ export function MultiSearchableSelect({
               </Badge>
             ))}
             {overflow > 0 && (
-              <Badge variant="secondary" className="rounded-md px-1.5 py-0.5 text-[11px] font-medium">
+              <Badge variant="secondary" className={cn("rounded-md px-1.5 py-0.5 text-[11px] font-medium", chipClassName)}>
                 +{overflow} more
               </Badge>
             )}

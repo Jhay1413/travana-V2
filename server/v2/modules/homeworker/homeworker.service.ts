@@ -3,6 +3,9 @@ import { AppError } from '../../utils/error-handler';
 import { homeworkerRepository } from './homeworker.repository';
 import { placeholderNameForEmail } from '../../utils/homeworker-name';
 import { newInviteCredentials, sendInviteEmail } from '../invite/invite-email.service';
+import { organizationSeatService } from '../organization/organization-seat.service';
+import { organizationAuditService } from '../organization/organization-audit.service';
+import { userAccessService } from '../user/user-access.service';
 import type {
   HomeworkerActor,
   HomeworkerListItem,
@@ -95,7 +98,7 @@ function toResultPeriod(period: StatementPeriod): StatementResultPeriod {
 
 export const homeworkerService = {
   /** The single creation path for a homeworker branch (invite, HR, platform admin). */
-  async invite(input: InviteHomeworkerInput, actor: HomeworkerActor): Promise<InviteHomeworkerResult> {
+  async invite(input: InviteHomeworkerInput, actor: HomeworkerActor, requestOrigin?: string | null): Promise<InviteHomeworkerResult> {
     assertAdmin(actor);
     const email = input.email.toLowerCase().trim();
     if (!email) throw new AppError('Email is required', 400);
@@ -111,6 +114,9 @@ export const homeworkerService = {
 
     const org = await homeworkerRepository.findOrgDefaults(actor.orgId);
     if (!org) throw new AppError('Organisation not found', 404);
+
+    // Every invite path takes a seat: active members plus pending invites must stay under the plan.
+    await organizationSeatService.assertSeatAvailable(actor.orgId);
 
     const profitSharePercent = resolveShare(input.profitSharePercent, org.homeworkerCommission);
     const { token, expiry } = newInviteCredentials();
@@ -153,7 +159,16 @@ export const homeworkerService = {
       },
     });
 
-    await sendInviteEmail(email, org.name, token);
+    await sendInviteEmail(email, org.name, token, requestOrigin);
+    if (actor.requestActor) {
+      await organizationAuditService.record({
+        actor: actor.requestActor,
+        action: 'invite.send',
+        orgId: actor.orgId,
+        targetUserId: created.user.id,
+        metadata: { email, orgRole: 'homeworker', branchId: created.branch.id },
+      });
+    }
 
     return { userId: created.user.id, branchId: created.branch.id, email, expiresAt: expiry };
   },
@@ -213,6 +228,8 @@ export const homeworkerService = {
 
     const archived = await homeworkerRepository.archiveAtomic(branchId, orgId);
     if (!archived) throw new AppError('Homeworker not found', 404);
+    // Archiving closes their access; committed, so end any live session too.
+    if (archived.ownerUserId) await userAccessService.revokeAccess(archived.ownerUserId);
     return archived;
   },
 

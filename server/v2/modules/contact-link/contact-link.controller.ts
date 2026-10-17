@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/async-handler";
 import { successResponse } from "../../utils/response";
 import { getScope } from "../../utils/scope";
+import { toPublicClient } from "../neon-client/neon-client.serializer";
 import { contactLinkService } from "./contact-link.service";
 
 // HTTP layer for linking a SendSeven contact to a CRM client. All actions are
@@ -15,7 +16,15 @@ export const contactLinkController = {
     const email = (req.query.email as string) || undefined;
     const name = (req.query.name as string) || undefined;
     const status = await contactLinkService.getStatus(contactId, { phone, email, name }, getScope(req));
-    return successResponse(res, status, "Contact link status");
+    return successResponse(
+      res,
+      {
+        ...status,
+        linkedClient: status.linkedClient ? toPublicClient(status.linkedClient) : null,
+        suggestions: status.suggestions.map(toPublicClient),
+      },
+      "Contact link status",
+    );
   }),
 
   // GET /api/v2/contact-links/by-client/:clientId
@@ -30,14 +39,14 @@ export const contactLinkController = {
     const contactId = req.params.contactId as string;
     const { clientId } = req.body as { clientId: string };
     const client = await contactLinkService.link(contactId, clientId, getScope(req));
-    return successResponse(res, client, "Contact linked to client");
+    return successResponse(res, toPublicClient(client), "Contact linked to client");
   }),
 
   // POST /api/v2/contact-links/:contactId/client  { firstName, surename, phoneNumber, ... }
   createAndLink: asyncHandler(async (req: Request, res: Response) => {
     const contactId = req.params.contactId as string;
     const client = await contactLinkService.createAndLink(contactId, req.body, getScope(req));
-    return successResponse(res, client, "Client created and linked", 201);
+    return successResponse(res, toPublicClient(client), "Client created and linked", 201);
   }),
 
   // DELETE /api/v2/contact-links/:contactId

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ALLOWED_IMAGE_MIME_TYPES } from "../../utils/image-storage";
+import { ENGAGEMENT_PERIODS, SOCIAL_STATUSES } from "./quote.types";
 
 export const addImagesValidator = z.object({
   body: z.object({
@@ -42,3 +43,34 @@ export const presignQuoteImagesValidator = z.object({
 });
 
 export type PresignQuoteImagesBody = z.infer<typeof presignQuoteImagesValidator>["body"];
+
+// GET /free — only socialStatus is validated here; every other existing param
+// keeps flowing through untouched.
+export const freeQuotesQueryValidator = z.object({
+  query: z
+    .object({
+      socialStatus: z.enum(SOCIAL_STATUSES).optional(),
+    })
+    .passthrough(),
+});
+
+// GET /engagement/recent — all params optional; limit stays lenient (the
+// controller clamps/defaults it exactly as before).
+export const recentEngagementQueryValidator = z.object({
+  query: z
+    .object({
+      mine: z.enum(["true", "false"]).optional(),
+      period: z.enum(ENGAGEMENT_PERIODS).optional(),
+    })
+    .passthrough(),
+});
+
+// GET /free/status-counts
+export const freeQuoteStatusCountsValidator = z.object({
+  query: z
+    .object({
+      search: z.string().optional(),
+      tags: z.union([z.string(), z.array(z.string())]).optional(),
+    })
+    .passthrough(),
+});

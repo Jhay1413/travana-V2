@@ -1,9 +1,8 @@
 import { userRepository } from "./user.repository";
 import { AppError } from "../../utils/error-handler";
-import { db } from "../../config/database";
-import { hrRecordsTable } from "@shared/schema";
 import type { User, InsertUser } from "./user.types";
 import { hasAnyRole, type Scope } from "../../utils/scope";
+import { randomUUID } from "crypto";
 
 function effectiveOrgId(scope: Scope): string | null {
   return scope.orgRole === "platform_admin" ? null : (scope.orgId || null);
@@ -36,6 +35,12 @@ const PRIVILEGED_FIELDS = ["role", "orgRole", "email", "banned", "banReason", "b
  * so failing loudly would only be user-hostile noise.
  */
 const SELF_EDITABLE_FIELDS = ["name", "image", "firstName", "lastName", "phoneNumber"] as const;
+
+const CREATE_FORBIDDEN_FIELDS = [
+  ...PRIVILEGED_FIELDS.filter((f) => f !== "email"),
+  "password", "emailVerified", "inviteToken", "inviteTokenExpiry", "resetToken", "resetTokenExpiry",
+  "verificationToken", "verificationTokenExpiry", "id",
+] as const;
 
 function assertNoPrivilegedFields(data: Partial<InsertUser>, scope: Scope): void {
   if (hasAnyRole(scope.orgRoles, ["platform_admin"])) return;
@@ -74,30 +79,45 @@ export const userService = {
     return loadScopedUser(id, scope);
   },
 
-  async createUser(userData: InsertUser, scope: Scope): Promise<User> {
+  /**
+   * Platform-admin tool: creates a plain login record with a safe default role.
+   * Privileged fields are refused outright (never silently dropped); orgs get people
+   * through invites, homeworkers through POST /homeworkers.
+   */
+  async createUser(userData: Partial<InsertUser>, scope: Scope): Promise<User> {
     if (userData.orgRole === "homeworker") {
       throw new AppError("Use POST /homeworkers", 400);
     }
+    const attempted = CREATE_FORBIDDEN_FIELDS.filter((field) => field in userData);
+    if (attempted.length > 0) {
+      throw new AppError(`Insufficient privilege to set field(s): ${attempted.join(", ")}`, 403);
+    }
     const callerOrgId = effectiveOrgId(scope);
-    const data: InsertUser = callerOrgId
-      ? { ...userData, orgId: callerOrgId }
-      : userData;
+    const data = {
+      ...userData,
+      id: randomUUID(),
+      role: "Agent",
+      name: userData.name ?? `${userData.firstName ?? ""} ${userData.lastName ?? ""}`.trim(),
+      ...(callerOrgId ? { orgId: callerOrgId } : {}),
+    } as InsertUser;
     const created = await userRepository.create(data);
     if (created.orgId) {
-      await db
-        .insert(hrRecordsTable)
-        .values({ orgId: created.orgId, userId: created.id })
-        .onConflictDoNothing({ target: hrRecordsTable.userId });
+      await userRepository.createHrRecord(created.orgId, created.id);
     }
     return created;
   },
 
   async updateUser(id: string, data: Partial<InsertUser>, scope: Scope): Promise<User> {
+    const isPlatformAdmin = hasAnyRole(scope.orgRoles, ["platform_admin"]);
+    const isSelf = scope.userId === id;
+    // Editing someone else's account is a platform-admin power. Org admins change
+    // other members through Teams & Roles (role, suspend, profile endpoints).
+    if (!isSelf && !isPlatformAdmin) {
+      throw new AppError("You can only edit your own profile", 403);
+    }
     await loadScopedUser(id, scope);
     assertNoPrivilegedFields(data, scope);
 
-    const isPlatformAdmin = hasAnyRole(scope.orgRoles, ["platform_admin"]);
-    const isSelf = scope.userId === id;
     const scopedData = isSelf && !isPlatformAdmin ? restrictToSelfEditableFields(data) : data;
 
     const callerOrgId = effectiveOrgId(scope);
@@ -111,8 +131,15 @@ export const userService = {
     return user;
   },
 
-  async deleteUser(id: string, scope: Scope): Promise<void> {
+  /**
+   * Users are never hard-deleted: they own history (deals, tasks, tickets, audit).
+   * The supported path is Remove in Teams & Roles, which reassigns work and deactivates.
+   */
+  async deleteUser(id: string, scope: Scope): Promise<never> {
     await loadScopedUser(id, scope);
-    await userRepository.remove(id);
+    throw new AppError(
+      "Users can't be deleted. Remove them from Teams & Roles instead; their history is kept.",
+      409,
+    );
   },
 };

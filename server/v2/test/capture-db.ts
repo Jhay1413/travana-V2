@@ -8,6 +8,7 @@ import type { SQL } from "drizzle-orm";
 
 export const whereCalls: unknown[] = [];
 export const orderByCalls: unknown[][] = [];
+export const havingCalls: unknown[] = [];
 let rows: unknown[] = [];
 
 export function setRows(next: unknown[]): void {
@@ -17,6 +18,7 @@ export function setRows(next: unknown[]): void {
 export function resetCapture(): void {
   whereCalls.length = 0;
   orderByCalls.length = 0;
+  havingCalls.length = 0;
   rows = [];
 }
 
@@ -32,6 +34,12 @@ function makeChain(): object {
         if (prop === "where") {
           return (cond: unknown) => {
             whereCalls.push(cond);
+            return proxy;
+          };
+        }
+        if (prop === "having") {
+          return (cond: unknown) => {
+            havingCalls.push(cond);
             return proxy;
           };
         }
@@ -66,4 +74,10 @@ export function renderOrderBy(index: number): string {
       return q.sql;
     })
     .join(", ");
+}
+
+/** Renders the n-th captured HAVING clause to SQL text + params. */
+export function renderHaving(index: number): { text: string; params: unknown[] } {
+  const q = dialect.sqlToQuery(havingCalls[index] as SQL);
+  return { text: q.sql, params: q.params };
 }

@@ -11,3 +11,7 @@ export * from "./api/use-client-queries";
 export * from "./api/use-neon-client-queries";
 export * from "./api/use-client-mutations";
 export * from "./api/use-neon-client-mutations";
+export * from "./api/use-client-search";
+export { CreateTicketDialog } from "./components/modals/CreateTicketDialog";
+export { useClientTaskCreate, useClientTicketCreate } from "./components/hooks";
+export { isLostBooking } from "./lib/client-stats";

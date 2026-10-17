@@ -89,9 +89,10 @@ beforeEach(() => {
 
 describe("suggestAiReply", () => {
   it("returns the model's reply text, passing the SendSeven contact name through", async () => {
-    const suggestion = await suggestAiReply(ORG_ID, CONV_ID, "user-1");
+    const { suggestions } = await suggestAiReply(ORG_ID, CONV_ID, "user-1");
 
-    expect(suggestion).toBe("Suggested reply text");
+    expect(suggestions).toEqual([{ label: "Option 1", text: "Suggested reply text" }]);
+    expect(generateTurn).toHaveBeenCalledTimes(1);
     const args = vi.mocked(generateTurn).mock.calls[0];
     // No state row → no linked client record…
     expect(args[2]).toBeNull();
@@ -211,5 +212,93 @@ describe("suggestAiReply — a guessed deal is passed through as unconfirmed", (
 
     const retrieved = vi.mocked(generateTurn).mock.calls[0][7] as { deal?: { unconfirmed?: boolean } };
     expect(retrieved.deal?.unconfirmed).toBe(false);
+  });
+});
+
+describe("suggestAiReply — tones and multiple drafts", () => {
+  it("count 3 with no tone makes three calls labelled Friendly / Professional / Short", async () => {
+    const { suggestions } = await suggestAiReply(ORG_ID, CONV_ID, "user-1", { count: 3 });
+
+    expect(generateTurn).toHaveBeenCalledTimes(3);
+    expect(suggestions.map((s) => s.label)).toEqual(["Friendly", "Professional", "Short"]);
+    const prompts = vi.mocked(generateTurn).mock.calls.map((c) => c[3] as string);
+    expect(prompts[0]).toContain("warm, upbeat, first names");
+    expect(prompts[1]).toContain("polite, precise, no slang");
+    expect(prompts[2]).toContain("two or three sentences at most");
+  });
+
+  it("a single tone puts its style line in the prompt", async () => {
+    const { suggestions } = await suggestAiReply(ORG_ID, CONV_ID, null, { tone: "short" });
+
+    expect(suggestions).toHaveLength(1);
+    expect(vi.mocked(generateTurn).mock.calls[0][3]).toContain("two or three sentences at most");
+  });
+
+  it("a tone with count > 1 labels the drafts Option 1/2/3", async () => {
+    const { suggestions } = await suggestAiReply(ORG_ID, CONV_ID, null, { tone: "friendly", count: 3 });
+
+    expect(suggestions.map((s) => s.label)).toEqual(["Option 1", "Option 2", "Option 3"]);
+    for (const c of vi.mocked(generateTurn).mock.calls) expect(c[3]).toContain("warm, upbeat, first names");
+  });
+
+  it("no tone and count 1 adds no style line", async () => {
+    await suggestAiReply(ORG_ID, CONV_ID);
+
+    expect(vi.mocked(generateTurn).mock.calls[0][3]).not.toContain("Style for this reply");
+  });
+
+  it("stays side-effect-free with several drafts", async () => {
+    await suggestAiReply(ORG_ID, CONV_ID, null, { count: 3 });
+
+    expect(messagesRepository.send).not.toHaveBeenCalled();
+    expect(conversationStateRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("marks the style line as an instruction, not part of the chat", async () => {
+    await suggestAiReply(ORG_ID, CONV_ID, null, { tone: "short" });
+
+    expect(vi.mocked(generateTurn).mock.calls[0][3]).toContain("[Instruction to Luna, not part of the chat]");
+  });
+
+  it("returns the surviving drafts when one of three rejects", async () => {
+    vi.mocked(generateTurn)
+      .mockResolvedValueOnce({ reply: "A" } as never)
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce({ reply: "C" } as never);
+
+    const { suggestions } = await suggestAiReply(ORG_ID, CONV_ID, null, { count: 3 });
+
+    expect(suggestions).toEqual([
+      { label: "Friendly", text: "A" },
+      { label: "Short", text: "C" },
+    ]);
+  });
+
+  it("throws a 502 AppError when every draft rejects", async () => {
+    // Once-variants: clearAllMocks in beforeEach does not reset implementations.
+    vi.mocked(generateTurn)
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockRejectedValueOnce(new Error("boom"));
+
+    await expect(suggestAiReply(ORG_ID, CONV_ID, null, { count: 3 })).rejects.toMatchObject({
+      statusCode: 502,
+      message: "Luna couldn't draft a reply",
+    });
+  });
+
+  it("clamps count to 1..3", async () => {
+    await suggestAiReply(ORG_ID, CONV_ID, null, { count: 10 });
+    expect(generateTurn).toHaveBeenCalledTimes(3);
+
+    vi.mocked(generateTurn).mockClear();
+    await suggestAiReply(ORG_ID, CONV_ID, null, { count: 0 });
+    expect(generateTurn).toHaveBeenCalledTimes(1);
+  });
+
+  it("builds the context once regardless of draft count", async () => {
+    await suggestAiReply(ORG_ID, CONV_ID, null, { count: 3 });
+
+    expect(messagesRepository.list).toHaveBeenCalledTimes(1);
   });
 });

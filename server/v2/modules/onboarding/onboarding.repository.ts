@@ -1,32 +1,15 @@
 import { db } from "../../config/database";
-import { organization, branches, branchMembers, user, userProfiles, hrRecordsTable, userOrgRoles } from "@shared/schema";
-import type { InsertOrganization, InsertBranch, InsertUser, InsertBranchMember } from "@shared/schema";
+import { organization, branches, branchMembers, user, hrRecordsTable, userOrgRoles } from "@shared/schema";
+import type { InsertOrganization, InsertBranch, InsertUser } from "@shared/schema";
 import { sql } from "drizzle-orm";
-
-export interface OnboardingAgentInput {
-  userValues: InsertUser;
-  branchMember: InsertBranchMember;
-}
-
-export interface AgentProfileInput {
-  address?: string | null;
-  emergencyContactName?: string | null;
-  emergencyContactRelationship?: string | null;
-  emergencyContactPhone?: string | null;
-}
+import { organizationRepository } from "../organization/organization.repository";
 
 export interface OnboardingSignupInput {
   organization: InsertOrganization;
-  branchInputs: Array<Omit<InsertBranch, "organizationId">>;
+  /** The single placeholder branch created at signup; it becomes the default. */
+  branchInput: Omit<InsertBranch, "organizationId">;
   ownerUser: InsertUser;
   ownerBranchMemberRoleAndActive: { orgRole: string; isActive: boolean };
-  agents: Array<{
-    user: InsertUser;
-    /** Index into branchInputs (defaults to 0). */
-    branchIndex?: number;
-    branchMemberRoleAndActive: { orgRole: string; isActive: boolean };
-    profile?: AgentProfileInput;
-  }>;
 }
 
 export interface OnboardingSignupResult {
@@ -37,9 +20,9 @@ export interface OnboardingSignupResult {
 
 export const onboardingRepository = {
   /**
-   * Atomic agency signup: create the organisation, all initial branches, the
-   * owner user + their branch_member row, and every agent user + branch_member.
-   * Either the whole signup commits or none of it does.
+   * Atomic agency signup: create the organisation, its default branch, and the
+   * owner user + their branch_member row. Either the whole signup commits or
+   * none of it does.
    *
    * Caller is responsible for hashing passwords and generating verification
    * tokens before calling.
@@ -58,15 +41,13 @@ export const onboardingRepository = {
         WHERE org_id IS NULL
       `);
 
-      const branchIds: string[] = [];
-      for (let i = 0; i < input.branchInputs.length; i++) {
-        const [branch] = await tx
-          .insert(branches)
-          .values({ ...input.branchInputs[i], organizationId: org.id, isDefault: i === 0 })
-          .returning();
-        branchIds.push(branch.id);
-      }
-      const defaultBranchId = branchIds[0];
+      const [branch] = await tx
+        .insert(branches)
+        .values({ ...input.branchInput, organizationId: org.id, isDefault: true })
+        .returning();
+
+      // Only this branch may ever be claimed by the setup wizard.
+      await organizationRepository.mergeSettingsSection(org.id, "onboarding", { placeholderBranchId: branch.id }, tx);
 
       const [ownerUser] = await tx
         .insert(user)
@@ -75,7 +56,7 @@ export const onboardingRepository = {
 
       await tx.insert(branchMembers).values({
         orgId: org.id,
-        branchId: defaultBranchId,
+        branchId: branch.id,
         userId: ownerUser.id,
         orgRole: input.ownerBranchMemberRoleAndActive.orgRole,
         isActive: input.ownerBranchMemberRoleAndActive.isActive,
@@ -96,51 +77,7 @@ export const onboardingRepository = {
         .values({ orgId: org.id, userId: ownerUser.id })
         .onConflictDoNothing({ target: hrRecordsTable.userId });
 
-      for (const agent of input.agents) {
-        const [agentUser] = await tx
-          .insert(user)
-          .values({ ...agent.user, orgId: org.id })
-          .returning();
-        const branchId = branchIds[agent.branchIndex ?? 0] ?? defaultBranchId;
-        await tx.insert(branchMembers).values({
-          orgId: org.id,
-          branchId,
-          userId: agentUser.id,
-          orgRole: agent.branchMemberRoleAndActive.orgRole,
-          isActive: agent.branchMemberRoleAndActive.isActive,
-        });
-
-        if (agent.user.orgRole) {
-          await tx
-            .insert(userOrgRoles)
-            .values({ userId: agentUser.id, orgId: org.id, role: agent.user.orgRole })
-            .onConflictDoNothing({ target: [userOrgRoles.userId, userOrgRoles.orgId, userOrgRoles.role] });
-        }
-
-        await tx
-          .insert(hrRecordsTable)
-          .values({ orgId: org.id, userId: agentUser.id })
-          .onConflictDoNothing({ target: hrRecordsTable.userId });
-
-        const profile = agent.profile;
-        const hasProfile =
-          profile &&
-          (profile.address ||
-            profile.emergencyContactName ||
-            profile.emergencyContactRelationship ||
-            profile.emergencyContactPhone);
-        if (hasProfile) {
-          await tx.insert(userProfiles).values({
-            userId: agentUser.id,
-            address: profile!.address ?? null,
-            emergencyContactName: profile!.emergencyContactName ?? null,
-            emergencyContactRelationship: profile!.emergencyContactRelationship ?? null,
-            emergencyContactPhone: profile!.emergencyContactPhone ?? null,
-          });
-        }
-      }
-
-      return { orgId: org.id, ownerId: ownerUser.id, branchIds };
+      return { orgId: org.id, ownerId: ownerUser.id, branchIds: [branch.id] };
     });
   },
 };

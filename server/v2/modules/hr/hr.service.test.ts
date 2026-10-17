@@ -51,6 +51,7 @@ describe("hrService.invite", () => {
     expect(homeworkerService.invite).toHaveBeenCalledWith(
       { email: "a@b.com", profitSharePercent: "40", displayName: "Jo" },
       { orgId: "o1", userId: "admin1", orgRole: "org_admin", orgRoles: ["org_admin"] },
+      undefined,
     );
     expect(inviteService.send).not.toHaveBeenCalled();
     expect(result).toMatchObject({ branchId: "hb1" });
@@ -73,6 +74,7 @@ describe("hrService.invite", () => {
     expect(inviteService.send).toHaveBeenCalledWith(
       { email: "a@b.com", branchId: "b1", orgRole: "agent" },
       { orgId: "o1", userId: "m1", orgRole: "branch_manager", branchId: "b1" },
+      undefined,
     );
     expect(homeworkerService.invite).not.toHaveBeenCalled();
   });
@@ -82,5 +84,16 @@ describe("hrService.invite", () => {
       hrService.invite({ email: "a@b.com", orgRole: "agent", branchId: "b2" }, MANAGER_SCOPE),
     ).rejects.toMatchObject({ statusCode: 403 });
     expect(inviteService.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("hrService.invite - link origin", () => {
+  it("passes the request origin to both invite arms", async () => {
+    vi.mocked(homeworkerService.invite).mockResolvedValue({} as never);
+    vi.mocked(inviteService.send).mockResolvedValue({} as never);
+    await hrService.invite({ email: "a@b.com", orgRole: "homeworker" }, MANAGER_SCOPE, "http://localhost:5000");
+    await hrService.invite({ email: "a@b.com", orgRole: "agent", branchId: "b1" }, MANAGER_SCOPE, "http://localhost:5000");
+    expect(vi.mocked(homeworkerService.invite).mock.calls.at(-1)?.[2]).toBe("http://localhost:5000");
+    expect(vi.mocked(inviteService.send).mock.calls.at(-1)?.[2]).toBe("http://localhost:5000");
   });
 });

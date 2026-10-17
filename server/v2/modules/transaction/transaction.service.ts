@@ -15,7 +15,7 @@ import { branchMemberRepository } from "../branch-member/branch-member.repositor
 import { branchRepository } from "../branch/branch.repository";
 import type { Scope } from "../../utils/scope";
 import { effectiveExpiry } from "../../utils/expiry";
-import type { PipelineCandidateItem } from "./transaction.types";
+import type { PipelineCandidateItem, PipelineFilters, PipelineQuickCounts, PipelineSort } from "./transaction.types";
 import type {
   InsertTransaction,
   InsertEnquiryTable,
@@ -195,14 +195,17 @@ async function listPipelineByOldestActivity(
   agentId?: string,
   quoteStatusFilter?: string,
   branchId?: string,
+  filters?: PipelineFilters,
 ) {
-  const { items, total } = await transactionRepository.findPipelineCandidates(
+  const { items, total, totalValue, totalProfit } = await transactionRepository.findPipelineCandidates(
     scope,
     column,
     agentId,
     quoteStatusFilter,
     OLDEST_ACTIVITY_CANDIDATE_CAP,
     branchId,
+    filters,
+    page === 1,
   );
 
   // No activity at all (null/undefined last_activity_at) sorts first, then
@@ -227,7 +230,7 @@ async function listPipelineByOldestActivity(
   const start = (page - 1) * limit;
   const pageItems = sorted.slice(start, start + limit);
 
-  return { items: pageItems, total: cappedTotal, page, hasMore: start + limit < cappedTotal, totalProfit: 0, totalValue: 0 };
+  return { items: pageItems, total: cappedTotal, page, hasMore: start + limit < cappedTotal, totalProfit, totalValue };
 }
 
 // Where a deal belongs after its owner changes. The new owner must be an active
@@ -273,13 +276,30 @@ export const transactionService = {
     return await transactionRepository.findAllLightweight(scope);
   },
 
-  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest" | "oldest-activity", pinnedForUserId?: string, branchId?: string) {
+  async listPipelineByStatus(scope: Scope, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: PipelineSort, pinnedForUserId?: string, branchId?: string, filters?: PipelineFilters) {
     if (branchId) await branchService.assertBranchInOrg(branchId, scope.orgId || null);
     await activateDueFutureDealsOnce();
     if (sort === "oldest-activity") {
-      return await listPipelineByOldestActivity(scope, column, page, limit, agentId, quoteStatusFilter, branchId);
+      return await listPipelineByOldestActivity(scope, column, page, limit, agentId, quoteStatusFilter, branchId, filters);
     }
-    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter, sort, pinnedForUserId, branchId);
+    return await transactionRepository.findPipelineByStatus(scope, column, page, limit, agentId, quoteStatusFilter, sort, pinnedForUserId, branchId, filters);
+  },
+
+  // Chip counts over the open columns (enquiry + quoted + in_play), summed.
+  async getPipelineCounts(scope: Scope, params: { agentId?: string; branchId?: string } & Omit<PipelineFilters, "quick">): Promise<PipelineQuickCounts> {
+    const { agentId, branchId, ...filters } = params;
+    if (branchId) await branchService.assertBranchInOrg(branchId, scope.orgId || null);
+    await activateDueFutureDealsOnce();
+    const rows = await transactionRepository.countPipelineQuickByColumn(scope, agentId, branchId, filters);
+    return rows.reduce<PipelineQuickCounts>(
+      (acc, r) => ({
+        all: acc.all + r.all,
+        due_today: acc.due_today + r.due_today,
+        no_task: acc.no_task + r.no_task,
+        quiet_7: acc.quiet_7 + r.quiet_7,
+      }),
+      { all: 0, due_today: 0, no_task: 0, quiet_7: 0 },
+    );
   },
 
   async getTransactionById(id: string, scope: Scope) {

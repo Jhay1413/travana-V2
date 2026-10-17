@@ -31,7 +31,11 @@ const upload = multer({
 });
 
 // Auth + org/branch scope are applied where this router is mounted (routes/index.ts).
+import { blockReadOnlyClientWrites } from '../../middlewares/auth/block-read-only-roles';
+
 const router = Router();
+// social_media_manager is read-only on client data: refuse every write method.
+router.use(blockReadOnlyClientWrites);
 
 router.get("/note/:noteId", validate(listByNoteValidator), noteAttachmentController.listByNoteId);
 router.get("/transaction/:transactionId", validate(listByTransactionValidator), noteAttachmentController.listByTransactionId);

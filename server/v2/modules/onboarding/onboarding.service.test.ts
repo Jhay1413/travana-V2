@@ -9,6 +9,7 @@ vi.mock("../user/user.repository", () => ({
     findByVerificationToken: vi.fn(),
   },
 }));
+vi.mock("../plan/plan.repository", () => ({ planRepository: { findByCode: vi.fn() } }));
 vi.mock("../../utils/public-url", () => ({ getPublicBaseUrl: () => "http://localhost:5000" }));
 const providerSend = vi.hoisted(() => vi.fn());
 const providerName = vi.hoisted(() => ({ value: "resend" }));
@@ -16,52 +17,35 @@ vi.mock("../../../services/email-provider", () => ({
   getEmailProvider: () => ({ name: providerName.value, send: providerSend }),
   isRealEmailProvider: (p: { name: string }) => p.name !== "console",
 }));
-vi.mock("../invite/invite.service", () => ({
-  INVITE_TTL_MS: 7 * 24 * 60 * 60 * 1000,
-  inviteService: { sendInviteEmail: vi.fn() },
-}));
 
-import { onboardingService } from "./onboarding.service";
+import { onboardingService, slugifyBusinessName } from "./onboarding.service";
 import { onboardingRepository } from "./onboarding.repository";
 import { organizationRepository } from "../organization/organization.repository";
 import { userRepository } from "../user/user.repository";
-import { inviteService } from "../invite/invite.service";
-
-function branch(name = "Main") {
-  return {
-    name,
-    address: "1 High St",
-    phone: "0123",
-    email: `${name}@acme.com`,
-    openingPattern: "mon-fri",
-    bankHolidaysOpen: false,
-    openingHours: [],
-  };
-}
+import { planRepository } from "../plan/plan.repository";
 
 function payload(over: Record<string, unknown> = {}) {
   return {
-    agencyName: "Acme Travel",
-    slug: "acme-travel",
-    ownerName: "Ada Lovelace",
-    ownerEmail: "ada@acme.com",
-    ownerPhone: "0123456789",
+    businessName: "Acme Travel",
+    firstName: "Ada",
+    lastName: "Lovelace",
+    email: "Ada@acme.com",
     password: "supersecret",
-    branches: [branch()],
-    agents: [],
-    hasHomeworkers: false,
     ...over,
   } as never;
+}
+
+function lastInput() {
+  return vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   providerName.value = "resend";
   providerSend.mockResolvedValue(undefined);
-  vi.mocked(inviteService.sendInviteEmail).mockResolvedValue(undefined);
-  // default: no conflicts
+  vi.mocked(planRepository.findByCode).mockResolvedValue({ code: "starter", seatLimit: 15 } as never);
   vi.mocked(userRepository.findByEmail).mockResolvedValue(undefined as never);
-  vi.mocked(organizationRepository.findBySlug).mockResolvedValue(undefined as never);
+  vi.mocked(organizationRepository.findBySlug).mockResolvedValue(null);
   vi.mocked(onboardingRepository.signupAgency).mockResolvedValue({
     orgId: "org1",
     ownerId: "u1",
@@ -69,7 +53,44 @@ beforeEach(() => {
   } as never);
 });
 
-describe("onboardingService.signup — conflict guards", () => {
+describe("slugifyBusinessName", () => {
+  it("lowercases, hyphenates and strips accents and punctuation", () => {
+    expect(slugifyBusinessName("  Café Voyages & Co.! ")).toBe("cafe-voyages-co");
+  });
+
+  it("pads names that are too short and falls back for non-latin names", () => {
+    expect(slugifyBusinessName("AB")).toBe("ab-agency");
+    expect(slugifyBusinessName("旅行")).toBe("agency");
+  });
+
+  it("stays within 40 characters even with a collision suffix", () => {
+    const slug = slugifyBusinessName("x".repeat(100));
+    expect(slug.length + "-50".length).toBeLessThanOrEqual(40);
+    expect(slug).toMatch(/^[a-z0-9-]+$/);
+  });
+});
+
+describe("onboardingService verification links", () => {
+  it("points the signup email at the requesting origin outside production", async () => {
+    await onboardingService.signup(payload(), "https://dev.example.repl.co");
+    const { text } = providerSend.mock.calls[0][0] as { text: string };
+    expect(text).toContain("https://dev.example.repl.co/verify-email?token=");
+  });
+
+  it("points the resend email at the requesting origin outside production", async () => {
+    vi.mocked(userRepository.findByEmail).mockResolvedValue({
+      id: "u1",
+      name: "Ada",
+      emailVerified: false,
+      verificationTokenExpiry: null,
+    } as never);
+    await onboardingService.resendVerification("ada@acme.com", "http://localhost:5173");
+    const { text } = providerSend.mock.calls[0][0] as { text: string };
+    expect(text).toContain("http://localhost:5173/verify-email?token=");
+  });
+});
+
+describe("onboardingService.signup", () => {
   it("rejects when the owner email already exists (409)", async () => {
     vi.mocked(userRepository.findByEmail).mockResolvedValue({ id: "existing" } as never);
 
@@ -77,100 +98,117 @@ describe("onboardingService.signup — conflict guards", () => {
     expect(onboardingRepository.signupAgency).not.toHaveBeenCalled();
   });
 
-  it("rejects when the agency slug is taken (409)", async () => {
-    vi.mocked(organizationRepository.findBySlug).mockResolvedValue({ id: "org-existing" } as never);
-
-    await expect(onboardingService.signup(payload())).rejects.toMatchObject({ statusCode: 409 });
-    expect(onboardingRepository.signupAgency).not.toHaveBeenCalled();
+  it("generates the slug from the business name", async () => {
+    await onboardingService.signup(payload());
+    expect(lastInput().organization.slug).toBe("acme-travel");
   });
 
-  it("rejects when an agent email already exists (409)", async () => {
-    // owner lookup passes (null), the agent lookup hits an existing user.
-    vi.mocked(userRepository.findByEmail)
-      .mockResolvedValueOnce(undefined as never) // owner
-      .mockResolvedValueOnce({ id: "dupe" } as never); // agent
-
-    await expect(
-      onboardingService.signup(payload({ agents: [{ name: "Bob", email: "bob@x.com", role: "Agent", active: true, branchIndex: 0 }] })),
-    ).rejects.toMatchObject({ statusCode: 409 });
-  });
-});
-
-describe("onboardingService.signup — agents are created as pending invites", () => {
-  const bob = { name: "Bob Boss", email: "Bob@X.com", role: "Manager", active: true, branchIndex: 0 };
-
-  it("creates agents with an invite token, no password, unverified and an inactive membership", async () => {
-    await onboardingService.signup(payload({ agents: [bob] }));
-
-    const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
-    const agent = arg.agents[0];
-    expect(agent.user).toMatchObject({
-      email: "bob@x.com",
-      emailVerified: false,
-      invitedBy: arg.ownerUser.id,
-      inviteAgencyName: "Acme Travel",
-    });
-    expect(agent.user.password).toBeUndefined();
-    expect(typeof agent.user.inviteToken).toBe("string");
-    expect(agent.user.inviteTokenExpiry).toBeInstanceOf(Date);
-    expect(agent.branchMemberRoleAndActive.isActive).toBe(false);
-  });
-
-  it("sends each agent an invite email via the invite service after the transaction", async () => {
-    await onboardingService.signup(payload({ agents: [bob] }));
-
-    const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
-    expect(inviteService.sendInviteEmail).toHaveBeenCalledWith("bob@x.com", "Acme Travel", arg.agents[0].user.inviteToken);
-  });
-
-  it("does not fail signup when an agent invite email throws", async () => {
-    vi.mocked(inviteService.sendInviteEmail).mockRejectedValue(new Error("boom"));
-
-    await expect(onboardingService.signup(payload({ agents: [bob] }))).resolves.toMatchObject({ orgId: "org1" });
-  });
-
-  it("rejects duplicate agent emails case-insensitively (409) before touching the DB", async () => {
-    const dupes = [bob, { ...bob, name: "Bobby", email: "bob@x.COM" }];
-
-    await expect(onboardingService.signup(payload({ agents: dupes }))).rejects.toMatchObject({ statusCode: 409 });
-    expect(onboardingRepository.signupAgency).not.toHaveBeenCalled();
-  });
-
-  it("rejects an agent whose email equals the owner email (409)", async () => {
-    await expect(
-      onboardingService.signup(payload({ agents: [{ ...bob, email: "ADA@acme.com" }] })),
-    ).rejects.toMatchObject({ statusCode: 409 });
-  });
-
-  it("drops an empty contact person and keeps a partially filled one", async () => {
-    await onboardingService.signup(
-      payload({
-        agents: [
-          { ...bob, contactPerson: { name: " ", phone: "", relationship: "Spouse" } },
-          { ...bob, email: "c@x.com", contactPerson: { name: "Cat", phone: "", relationship: "" } },
-        ],
-      }),
+  it("appends -2, -3 on slug collision", async () => {
+    vi.mocked(organizationRepository.findBySlug).mockImplementation(async (slug: string) =>
+      slug === "acme-travel" || slug === "acme-travel-2" ? ({ id: "x" } as never) : null,
     );
 
-    const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
-    expect(arg.agents[0].profile).toMatchObject({ emergencyContactName: null, emergencyContactRelationship: null });
-    expect(arg.agents[1].profile).toMatchObject({ emergencyContactName: "Cat", emergencyContactRelationship: null });
-  });
-});
-
-describe("onboardingService.signup — robustness", () => {
-  it("works when agents and hasHomeworkers are omitted (no schema defaults applied)", async () => {
-    const p = payload() as unknown as Record<string, unknown>;
-    delete p.agents;
-    delete p.hasHomeworkers;
-
-    await expect(onboardingService.signup(p as never)).resolves.toMatchObject({ orgId: "org1" });
+    await onboardingService.signup(payload());
+    expect(lastInput().organization.slug).toBe("acme-travel-3");
   });
 
-  it("maps a Postgres unique violation (23505) to a 409", async () => {
-    vi.mocked(onboardingRepository.signupAgency).mockRejectedValue(Object.assign(new Error("dup"), { code: "23505" }));
+  it("creates ONE default branch named after the business with the owner email and default hours", async () => {
+    await onboardingService.signup(payload());
+    const input = lastInput();
+
+    expect(input.branchInput).toMatchObject({
+      name: "Acme Travel",
+      email: "ada@acme.com",
+      phone: "",
+      address: "",
+      branchType: "shop",
+      openingPattern: "mon-fri",
+      bankHolidaysOpen: false,
+    });
+    const hours = input.branchInput.openingHours as Array<{ day: string; open: boolean; openTime: string; closeTime: string }>;
+    expect(hours).toHaveLength(7);
+    expect(hours.slice(0, 5).every((h) => h.open && h.openTime === "08:00" && h.closeTime === "17:00")).toBe(true);
+    expect(hours.slice(5).every((h) => !h.open)).toBe(true);
+    expect(input).not.toHaveProperty("agents");
+  });
+
+  it("creates an org_admin owner with no phone and marks onboarding pending", async () => {
+    const result = await onboardingService.signup(payload());
+    const input = lastInput();
+
+    expect(input.organization).toMatchObject({
+      name: "Acme Travel",
+      plan: "starter",
+      seatLimit: 15,
+      homeworkerCommission: null,
+      settings: { onboarding: { status: "pending", version: 1 } },
+    });
+    expect(input.ownerUser).toMatchObject({
+      email: "ada@acme.com",
+      name: "Ada Lovelace",
+      firstName: "Ada",
+      lastName: "Lovelace",
+      phoneNumber: "",
+      orgRole: "org_admin",
+      emailVerified: false,
+    });
+    expect(input.ownerUser.password).not.toBe("supersecret");
+    expect(result).toMatchObject({
+      orgId: "org1",
+      userId: "u1",
+      branchIds: ["b1"],
+      message: "Agency created — check your email to verify your account",
+    });
+  });
+
+  const slugClash = () => Object.assign(new Error("dup"), { code: "23505", constraint: "organization_slug_unique" });
+
+  it("retries a slug race with a new random suffix and succeeds", async () => {
+    vi.mocked(onboardingRepository.signupAgency)
+      .mockRejectedValueOnce(slugClash())
+      .mockResolvedValueOnce({ orgId: "org1", ownerId: "u1", branchIds: ["b1"] } as never);
+
+    await expect(onboardingService.signup(payload())).resolves.toMatchObject({ orgId: "org1" });
+
+    const slugs = vi.mocked(onboardingRepository.signupAgency).mock.calls.map((c) => c[0].organization.slug);
+    expect(slugs[0]).toBe("acme-travel");
+    expect(slugs[1]).toMatch(/^acme-travel-[0-9a-f]{6}$/);
+  });
+
+  it("gives up with 409 after 3 slug-race attempts", async () => {
+    vi.mocked(onboardingRepository.signupAgency).mockRejectedValue(slugClash());
 
     await expect(onboardingService.signup(payload())).rejects.toMatchObject({ statusCode: 409 });
+    expect(onboardingRepository.signupAgency).toHaveBeenCalledTimes(3);
+  });
+
+  it("409s immediately, without retrying, when the clash is the user email", async () => {
+    vi.mocked(onboardingRepository.signupAgency).mockRejectedValue(
+      Object.assign(new Error("dup"), { code: "23505", constraint: "user_email_unique" }),
+    );
+
+    await expect(onboardingService.signup(payload())).rejects.toMatchObject({
+      statusCode: 409,
+      message: "An account with this email already exists",
+    });
+    expect(onboardingRepository.signupAgency).toHaveBeenCalledTimes(1);
+  });
+
+  it("finds the violation through a wrapped cause", async () => {
+    vi.mocked(onboardingRepository.signupAgency).mockRejectedValue(
+      Object.assign(new Error("wrapped"), { cause: { code: "23505", constraint: "user_email_key" } }),
+    );
+    await expect(onboardingService.signup(payload())).rejects.toMatchObject({ statusCode: 409 });
+    expect(onboardingRepository.signupAgency).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to a random suffix after five sequential slug lookups", async () => {
+    vi.mocked(organizationRepository.findBySlug).mockResolvedValue({ id: "x" } as never);
+
+    await onboardingService.signup(payload());
+
+    expect(organizationRepository.findBySlug).toHaveBeenCalledTimes(5);
+    expect(lastInput().organization.slug).toMatch(/^acme-travel-[0-9a-f]{6}$/);
   });
 
   it("rethrows other repository errors untouched", async () => {
@@ -191,42 +229,19 @@ describe("onboardingService.signup — robustness", () => {
   });
 
   it("escapes the owner name in the verification email HTML", async () => {
-    await onboardingService.signup(payload({ ownerName: '<script>alert(1)</script>' }));
+    await onboardingService.signup(payload({ firstName: "<script>alert(1)</script>" }));
 
-    const sent = providerSend.mock.calls[0][0] as { html: string; subject: string };
+    const sent = providerSend.mock.calls[0][0] as { html: string };
     expect(sent.html).not.toContain("<script>");
-    expect(sent.html).toContain("&lt;script&gt;");
-    expect(sent.subject).toContain("Travana");
-  });
-});
-
-describe("onboardingService.signup — agency assembly", () => {
-  it("creates the org (starter plan) with an org_admin owner and returns the ids", async () => {
-    const result = await onboardingService.signup(payload());
-
-    const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
-    expect(arg.organization).toMatchObject({ slug: "acme-travel", plan: "starter" });
-    expect(arg.ownerUser).toMatchObject({ email: "ada@acme.com", orgRole: "org_admin", emailVerified: false });
-    expect(result).toMatchObject({ orgId: "org1", userId: "u1", branchIds: ["b1"] });
   });
 
-  it("maps agent job titles to org roles (Manager → branch_manager)", async () => {
-    await onboardingService.signup(
-      payload({ agents: [{ name: "Bob Boss", email: "bob@x.com", role: "Manager", active: true, branchIndex: 0 }] }),
-    );
-
-    const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
-    expect(arg.agents[0].branchMemberRoleAndActive.orgRole).toBe("branch_manager");
-    expect(arg.agents[0].user.orgRole).toBe("branch_manager");
-  });
-
-  it("does not create a shared Homeworkers branch when hasHomeworkers is set", async () => {
-    await onboardingService.signup(payload({ hasHomeworkers: true, homeworkerCommission: 50 }));
-
-    const arg = vi.mocked(onboardingRepository.signupAgency).mock.calls[0][0];
-    expect(arg.branchInputs).toHaveLength(1); // only the real shop branch
-    expect(arg.branchInputs.every((b) => b.branchType === "shop")).toBe(true);
-    expect(arg.organization).toMatchObject({ homeworkerCommission: 50 }); // org default kept
+  it("with no starter plan row: seatLimit explicitly null and a warning", async () => {
+    vi.mocked(planRepository.findByCode).mockResolvedValue(null as never);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await onboardingService.signup(payload());
+    expect(lastInput().organization).toHaveProperty("seatLimit", null);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
 
@@ -305,3 +320,4 @@ describe("onboardingService.verifyEmail", () => {
     });
   });
 });
+

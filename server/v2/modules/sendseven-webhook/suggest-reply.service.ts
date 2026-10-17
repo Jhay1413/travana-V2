@@ -27,7 +27,30 @@ import type { EnquirySlots, RetrievedContext, RetrievedMatch } from "../ai-conve
 
 const HISTORY_LIMIT = 20;
 
-export async function suggestAiReply(orgId: string, conversationId: string, userId?: string | null): Promise<string> {
+export type ReplyTone = "friendly" | "professional" | "short";
+export interface SuggestReplyOptions {
+  tone?: ReplyTone;
+  count?: number;
+}
+export interface ReplySuggestion {
+  label: string;
+  text: string;
+}
+
+const TONE_STYLE: Record<ReplyTone, string> = {
+  friendly: "warm, upbeat, first names",
+  professional: "polite, precise, no slang",
+  short: "two or three sentences at most",
+};
+const TONE_LABEL: Record<ReplyTone, string> = { friendly: "Friendly", professional: "Professional", short: "Short" };
+const TONE_ORDER: ReplyTone[] = ["friendly", "professional", "short"];
+
+export async function suggestAiReply(
+  orgId: string,
+  conversationId: string,
+  userId?: string | null,
+  opts?: SuggestReplyOptions,
+): Promise<{ suggestions: ReplySuggestion[] }> {
   // The state row (if any) is org-stamped — reject a cross-org id outright. A
   // conversation with no state row is still fine: the message fetch below runs
   // against THIS org's SendSeven workspace, so a foreign id just 404s there.
@@ -117,24 +140,48 @@ export async function suggestAiReply(orgId: string, conversationId: string, user
   }
   const retrieved: RetrievedContext = { kb: kbMatches, quotes: quoteMatches, deal };
 
-  const turn = await generateTurn(
-    botConfig,
-    kb,
-    client,
-    transcript,
-    state?.enquiryStatus ?? null,
-    slots,
-    // ALWAYS "known", even when no CRM client is linked. This button is used on
-    // manual and pre-AI conversations, where an agent is already talking to the
-    // customer — a draft that opens by asking for their name and phone number
-    // is useless there, and often plain wrong (they may have been a client for
-    // years). The agent can ask for details themselves if they actually need
-    // them. The client record above is still looked up when it exists, for the
-    // customer's real name and context; this only suppresses the onboarding ask.
-    true,
+  const count = Math.min(3, Math.max(1, Math.floor(opts?.count ?? 1)));
+  // Several drafts with no explicit tone: vary them across the three tones.
+  const plan: { label: string; tone?: ReplyTone }[] = Array.from({ length: count }, (_, i) => {
+    if (opts?.tone) return { label: count > 1 ? `Option ${i + 1}` : TONE_LABEL[opts.tone], tone: opts.tone };
+    if (count > 1) return { label: TONE_LABEL[TONE_ORDER[i]], tone: TONE_ORDER[i] };
+    return { label: "Option 1" };
+  });
+
+  // One failed draft must not discard the others: keep whatever settled OK and
+  // only fail when nothing did.
+  const settled = await Promise.allSettled(
+    plan.map(async ({ label, tone }) => {
+      // generateTurn has no separate instruction argument, so the style line is
+      // appended to the transcript, clearly marked as not part of the chat.
+      const styled = tone
+        ? `${transcript}
+
+[Instruction to Luna, not part of the chat] Style for this reply: ${TONE_STYLE[tone]}.`
+        : transcript;
+      const turn = await generateTurn(
+        botConfig,
+        kb,
+        client,
+        styled,
+        state?.enquiryStatus ?? null,
+        slots,
+        // ALWAYS "known", even when no CRM client is linked. This button is used on
+        // manual and pre-AI conversations, where an agent is already talking to the
+        // customer — a draft that opens by asking for their name and phone number
+        // is useless there, and often plain wrong (they may have been a client for
+        // years). The agent can ask for details themselves if they actually need
+        // them. The client record above is still looked up when it exists, for the
+        // customer's real name and context; this only suppresses the onboarding ask.
+        true,
     retrieved,
     { orgId, feature: "staff_chat", userId: userId ?? undefined },
     contactName,
+      );
+      return { label, text: turn.reply };
+    }),
   );
-  return turn.reply;
+  const suggestions = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  if (!suggestions.length) throw new AppError("Luna couldn't draft a reply", 502);
+  return { suggestions };
 }

@@ -1,8 +1,11 @@
+import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { BadgePoundSterling, CalendarCheck, Target, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { currency } from "./helpers";
+import { bookingWord, computeTargetStats, upsellWord } from "../lib/tile-math";
+import { StatTile } from "./home/stat-tile";
 
 // Icons follow Icons.txt at the repo root (Home section).
 export function StatCard({
@@ -61,14 +64,6 @@ export interface ProfitStats {
   monthUpsellAmount?: number;
 }
 
-function bookingWord(count: number): string {
-  return count === 1 ? "Booking" : "Bookings";
-}
-
-function upsellWord(count: number): string {
-  return count === 1 ? "Upsell" : "Upsells";
-}
-
 // The profit headline ALREADY includes upsell commission, so the amount is worded
 // "incl. £X" (a part of the total), never "+£X". A "+" would read as extra on top and
 // lead agents to double-count it when checking progress against target.
@@ -86,137 +81,147 @@ function BookingCountSubtext({
   testId: string;
 }) {
   return (
-    <>
-      <span className="font-semibold text-[#fe9a00]">{count}</span> {bookingWord(count)}
+    <span>
+      <span className="font-semibold text-social-orange-text">{count}</span> {bookingWord(count)}
       {!!upsellCount && (
         <>
           {" · "}
-          <span className="font-semibold text-[#fe9a00]">{upsellCount}</span> {upsellWord(upsellCount)}
+          <span className="font-semibold text-social-orange-text">{upsellCount}</span> {upsellWord(upsellCount)}
           {!!upsellAmount && (
-            <span className="whitespace-nowrap" data-testid={testId}>
-              {" "}(incl. {currency.format(upsellAmount)})
-            </span>
+            <span data-testid={testId}> (incl. {currency.format(upsellAmount)})</span>
           )}
         </>
       )}{" "}
       {period}
-    </>
+    </span>
   );
 }
 
 export function ProfitStatBoxes({
   profitStats,
   isAgentView,
+  targetHref,
+  className,
 }: {
   profitStats: ProfitStats;
   isAgentView: boolean;
+  /** Where the current role can set its target; shown as "Set a target" when none is set. */
+  targetHref?: string | null;
+  /** Grid column classes; defaults to 2 columns, 5 from lg. */
+  className?: string;
 }) {
   const target = isAgentView ? profitStats.agentSalesTarget : profitStats.salesTarget;
-  const pct = target > 0 ? Math.round((profitStats.monthProfit / target) * 100) : 0;
-  const toTargetPct = Math.max(0, 100 - pct);
-  const remaining = Math.max(0, target - profitStats.monthProfit);
-  const monthAvg = profitStats.monthAvgBookingValue ?? 0;
-  const ppb = Math.round(monthAvg > 0 ? monthAvg : profitStats.avgBookingValue);
-  const bookingsToTarget = ppb > 0 ? Math.ceil(remaining / ppb) : 0;
-
-  let runToTargetText: string;
-  if (target <= 0) {
-    runToTargetText = "No target set";
-  } else if (remaining <= 0) {
-    runToTargetText = "Target reached";
-  } else if (ppb <= 0) {
-    runToTargetText = "No bookings yet to estimate";
-  } else {
-    runToTargetText = `${bookingsToTarget} ${bookingWord(bookingsToTarget)} at ${currency.format(ppb)}ppb`;
-  }
-
+  const stats = computeTargetStats({
+    monthProfit: profitStats.monthProfit,
+    target,
+    monthAvgBookingValue: profitStats.monthAvgBookingValue,
+    avgBookingValue: profitStats.avgBookingValue,
+  });
   const monthBookingsCount = profitStats.monthBookingsCount ?? profitStats.bookingsCount;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-      <StatCard label="Todays Profit" icon={BadgePoundSterling} iconClass="text-emerald-500" testId="stat-box-todays-profit">
-        <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-todays-profit">
-          {currency.format(profitStats.todayProfit)}
-        </p>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {profitStats.todayBookingsCount !== undefined ? (
-            <BookingCountSubtext
-              count={profitStats.todayBookingsCount}
-              upsellCount={profitStats.todayUpsellsCount}
-              upsellAmount={profitStats.todayUpsellAmount}
-              period="today"
-              testId="stat-upsell-amount-todays-profit"
-            />
-          ) : (
-            "Total from today's bookings"
-          )}
-        </p>
-      </StatCard>
-
-      <StatCard label="This Weeks Profit" icon={BadgePoundSterling} iconClass="text-blue-500" testId="stat-box-weeks-profit">
-        <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-weeks-profit">
-          {currency.format(profitStats.weekProfit)}
-        </p>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {profitStats.weekBookingsCount !== undefined ? (
-            <BookingCountSubtext
-              count={profitStats.weekBookingsCount}
-              upsellCount={profitStats.weekUpsellsCount}
-              upsellAmount={profitStats.weekUpsellAmount}
-              period="this week"
-              testId="stat-upsell-amount-weeks-profit"
-            />
-          ) : (
-            "Total from this week's bookings"
-          )}
-        </p>
-      </StatCard>
-
-      <StatCard label="This Month" icon={CalendarCheck} iconClass="text-emerald-500" testId="stat-box-this-month">
-        <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-this-month">
-          {currency.format(profitStats.monthProfit)}
-        </p>
-        <p className="mt-2 text-xs text-muted-foreground">
+    <div className={cn("grid gap-3", className ?? "grid-cols-2 lg:grid-cols-3 xl:grid-cols-5")}>
+      <StatTile
+        label="Todays Profit"
+        glyph="pound"
+        tone="green"
+        value={currency.format(profitStats.todayProfit)}
+        valueTestId="stat-value-todays-profit"
+        testId="stat-box-todays-profit"
+      >
+        {profitStats.todayBookingsCount !== undefined ? (
           <BookingCountSubtext
-            count={monthBookingsCount}
-            upsellCount={profitStats.monthUpsellsCount}
-            upsellAmount={profitStats.monthUpsellAmount}
-            period="this Month"
-            testId="stat-upsell-amount-this-month"
+            count={profitStats.todayBookingsCount}
+            upsellCount={profitStats.todayUpsellsCount}
+            upsellAmount={profitStats.todayUpsellAmount}
+            period="today"
+            testId="stat-upsell-amount-todays-profit"
           />
-        </p>
-      </StatCard>
+        ) : (
+          "Total from today's bookings"
+        )}
+      </StatTile>
 
-      <StatCard label="Target" icon={Target} iconClass="text-amber-500" testId="stat-box-target">
-        <p className="mt-2 text-xl font-semibold tracking-tight" data-testid="stat-value-target">
-          {currency.format(target)}
-        </p>
-        <div className="mt-3 flex items-center gap-2">
-          <div
-            className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/10"
-            data-testid="progress-bar-target"
-          >
-            <div
-              className="h-full rounded-full bg-[#fe9a00] transition-all duration-700 ease-out"
-              style={{ width: `${Math.min(pct, 100)}%` }}
-            />
-          </div>
-          <span className="shrink-0 text-xs text-muted-foreground">{toTargetPct}% to target</span>
-        </div>
-      </StatCard>
+      <StatTile
+        label="This Weeks Profit"
+        glyph="pound"
+        tone="blue"
+        value={currency.format(profitStats.weekProfit)}
+        valueTestId="stat-value-weeks-profit"
+        testId="stat-box-weeks-profit"
+      >
+        {profitStats.weekBookingsCount !== undefined ? (
+          <BookingCountSubtext
+            count={profitStats.weekBookingsCount}
+            upsellCount={profitStats.weekUpsellsCount}
+            upsellAmount={profitStats.weekUpsellAmount}
+            period="this week"
+            testId="stat-upsell-amount-weeks-profit"
+          />
+        ) : (
+          "Total from this week's bookings"
+        )}
+      </StatTile>
 
-      <StatCard label="Run To Target" icon={BadgePoundSterling} iconClass="text-[#ff0015]" testId="stat-box-run-to-target">
-        <p
-          className="mt-2 flex flex-wrap items-baseline gap-x-1 text-lg font-semibold tracking-tight"
-          data-testid="stat-value-run-to-target"
-        >
-          {currency.format(remaining)}
-          <span className="whitespace-nowrap text-base font-semibold text-black/30 dark:text-white/30">
-            / {currency.format(target)}
-          </span>
-        </p>
-        <p className="mt-2 text-xs font-semibold text-[#ff0015]">{runToTargetText}</p>
-      </StatCard>
+      <StatTile
+        label="This Month"
+        glyph="calendar"
+        tone="green"
+        value={currency.format(profitStats.monthProfit)}
+        valueTestId="stat-value-this-month"
+        testId="stat-box-this-month"
+      >
+        <BookingCountSubtext
+          count={monthBookingsCount}
+          upsellCount={profitStats.monthUpsellsCount}
+          upsellAmount={profitStats.monthUpsellAmount}
+          period="this Month"
+          testId="stat-upsell-amount-this-month"
+        />
+      </StatTile>
+
+      <StatTile
+        label="Target"
+        glyph="target"
+        tone="orange"
+        value={currency.format(target)}
+        valueTestId="stat-value-target"
+        barPct={stats.hasTarget ? stats.barPct : 0}
+        barTestId="progress-bar-target"
+        testId="stat-box-target"
+      >
+        {stats.hasTarget ? (
+          <span>{stats.reached ? "Target reached" : `${stats.toTargetPct}% to target`}</span>
+        ) : (
+          <>
+            <span>No target set</span>
+            {targetHref && (
+              <>
+                {" · "}
+                <Link
+                  href={targetHref}
+                  className="font-semibold text-social-orange-text hover:underline"
+                  data-testid="link-set-target"
+                >
+                  Set a target
+                </Link>
+              </>
+            )}
+          </>
+        )}
+      </StatTile>
+
+      <StatTile
+        label="Run To Target"
+        glyph="pound"
+        tone="red"
+        value={currency.format(stats.remaining)}
+        suffix={`/ ${currency.format(target)}`}
+        valueTestId="stat-value-run-to-target"
+        testId="stat-box-run-to-target"
+      >
+        <span className="font-semibold text-red-600">{stats.runToTargetText}</span>
+      </StatTile>
     </div>
   );
 }

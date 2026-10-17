@@ -4,6 +4,7 @@ import type { Client, InsertClient } from "./client.types";
 import type { Scope } from "../../utils/scope";
 import { stripOwnershipFields } from "../../utils/ownership-fields";
 import { branchRepository } from "../branch/branch.repository";
+import { stripSystemManagedFields, assertValidReferrer } from "../neon-client/neon-client.guards";
 
 export const clientService = {
   async listClients(scope: Scope): Promise<Client[]> {
@@ -19,11 +20,19 @@ export const clientService = {
   },
 
   async createClient(data: InsertClient, scope: Scope): Promise<Client> {
-    return await clientRepository.create(data, scope);
+    const clean = stripSystemManagedFields(data);
+    await assertValidReferrer(null, clean.referredByClientId, scope);
+    return await clientRepository.create(clean, scope);
   },
 
   async updateClient(id: string, data: Partial<InsertClient>, scope: Scope): Promise<Client> {
-    const safe = await stripOwnershipFields(data, scope, async (b, o) => !!(await branchRepository.findById(b, o)));
+    const clean = stripSystemManagedFields(data);
+    if (clean.referredByClientId) {
+      const current = await clientRepository.findById(id, scope);
+      if (!current) throw new AppError("Client not found", 404);
+      await assertValidReferrer(id, clean.referredByClientId, scope, current.referredByClientId);
+    }
+    const safe = await stripOwnershipFields(clean, scope, async (b, o) => !!(await branchRepository.findById(b, o)));
     const client = await clientRepository.update(id, safe, scope);
     if (!client) {
       throw new AppError("Client not found", 404);

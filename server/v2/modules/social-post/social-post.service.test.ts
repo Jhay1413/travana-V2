@@ -206,6 +206,30 @@ describe("socialPostService.generatePost family pricing", () => {
     mocks.repo.create.mockImplementation(async (data: Record<string, unknown>) => data);
   });
 
+  it("updates the existing deal instead of creating a second one", async () => {
+    mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 0 });
+    mocks.repo.findByQuoteId.mockResolvedValue({ id: "deal-1", quote_id: "quote-1", onlySocialsId: 9 });
+    mocks.repo.update.mockImplementation(async (_id: string, data: Record<string, unknown>) => ({ id: "deal-1", ...data }));
+
+    await socialPostService.generatePost(params, { orgId: null });
+
+    expect(mocks.repo.create).not.toHaveBeenCalled();
+    expect(mocks.repo.update).toHaveBeenCalledTimes(1);
+    const [id, data] = mocks.repo.update.mock.calls[0] as [string, Record<string, unknown>];
+    expect(id).toBe("deal-1");
+    expect(data).not.toHaveProperty("onlySocialsId");
+    expect(data).not.toHaveProperty("postSchedule");
+    expect(data).toMatchObject({ title: "Sunny Escape", nights: 7, price: "988.12" });
+  });
+
+  it("creates a deal when none exists for the quote", async () => {
+    mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 0 });
+    mocks.repo.findByQuoteId.mockResolvedValue(undefined);
+    await socialPostService.generatePost(params, { orgId: null });
+    expect(mocks.repo.update).not.toHaveBeenCalled();
+    expect(mocks.repo.create).toHaveBeenCalledTimes(1);
+  });
+
   it("uses the total price and Family of 4 for 2 adults + 2 children", async () => {
     mocks.repo.findPassengerCountsForQuote.mockResolvedValue({ adults: 2, children: 2 });
     await socialPostService.generatePost(params, { orgId: null });

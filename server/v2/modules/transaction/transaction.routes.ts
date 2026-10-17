@@ -2,14 +2,18 @@ import { Router } from "express";
 import multer from "multer";
 import { transactionController } from "./transaction.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { updatePriorityValidator, setFutureDealValidator, setLostValidator, listPipelineByStatusValidator } from "./transaction.validator";
+import { updatePriorityValidator, setFutureDealValidator, setLostValidator, listPipelineByStatusValidator, pipelineCountsValidator } from "./transaction.validator";
+import { blockReadOnlyClientWrites } from '../../middlewares/auth/block-read-only-roles';
 
 const router = Router();
+// social_media_manager is read-only on client data: refuse every write method.
+router.use(blockReadOnlyClientWrites);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 router.get("/", transactionController.listTransactions);
 router.get("/pipeline", transactionController.listTransactionsLightweight);
 router.get("/pipeline/:status", validate(listPipelineByStatusValidator), transactionController.listPipelineByStatus);
+router.get("/pipeline-counts", validate(pipelineCountsValidator), transactionController.getPipelineCounts);
 router.get("/expiring-quotes", transactionController.getExpiringQuotes);
 router.get("/stats", transactionController.getStats);
 // Registered before the generic /:id routes below so these specific-path

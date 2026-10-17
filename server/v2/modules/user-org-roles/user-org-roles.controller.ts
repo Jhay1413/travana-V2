@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { getRequestActor } from '../../utils/request-actor';
 import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
 import { AppError } from '../../utils/error-handler';
@@ -6,14 +7,7 @@ import { getUserId } from '../../utils/get-user-id';
 import { userOrgRolesService, type RoleChangeActor } from './user-org-roles.service';
 
 function buildActor(req: Request): RoleChangeActor {
-  const userId = getUserId(req);
-  if (!userId) throw new AppError('Unauthorized', 401);
-  const fwd = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim();
-  return {
-    userId,
-    ipAddress: fwd || req.socket.remoteAddress || null,
-    userAgent: (req.headers['user-agent'] as string | undefined) ?? null,
-  };
+  return getRequestActor(req);
 }
 
 // The self-service "also sell" toggle is gated to users who are already at

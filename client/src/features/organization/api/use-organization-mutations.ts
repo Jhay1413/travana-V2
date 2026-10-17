@@ -25,8 +25,8 @@ export function useUpdateMemberRole() {
 export function useSetMemberSuspended() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ userId, suspended }: { userId: string; suspended: boolean }) =>
-      organizationApi.setMemberSuspended(userId, suspended),
+    mutationFn: ({ userId, suspended, notify }: { userId: string; suspended: boolean; notify?: boolean }) =>
+      organizationApi.setMemberSuspended(userId, suspended, notify),
     onSuccess: () => qc.invalidateQueries({ queryKey: organizationKeys.members() }),
   });
 }

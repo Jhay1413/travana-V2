@@ -15,7 +15,6 @@ import {
 import { useRole } from "@/hooks/use-role";
 import {
   useCurrentOrganization,
-  useOrgMembers,
   useBranches,
   usePlans,
 } from "@/hooks/queries";
@@ -26,7 +25,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { OwnerOnlyGate } from "@/features/organization/components/agency/OwnerOnlyGate";
 import { PageLoading } from "@/features/organization/components/agency/PageLoading";
-import { isMemberSuspended } from "./utils/role-helpers";
+import { useOrgSeats } from "@/features/organization/api/use-organization-queries";
+import { pendingNote } from "@/features/team/lib/seat-math";
 import type {
   OrganizationBillingContact,
   OrganizationSettings,
@@ -78,7 +78,7 @@ const BLANK_BILLING: OrganizationBillingContact = {
 export default function AgencyBillingPage() {
   const { can } = useRole();
   const { data: org, isLoading: orgLoading } = useCurrentOrganization();
-  const { data: members } = useOrgMembers();
+  const { data: seats } = useOrgSeats();
   const { data: branches } = useBranches();
   const { data: plans, isLoading: plansLoading } = usePlans();
   const updateOrg = useUpdateOrganization();
@@ -106,9 +106,11 @@ export default function AgencyBillingPage() {
   const currentPlan = plans.find((p) => p.code === currentPlanCode) ?? plans[0];
   if (!currentPlan) return <PageLoading />;
 
-  const seatLimit = currentPlan.seatLimit;
+  // Same numbers as the Teams page and the server's seat checks.
+  const seatLimit = seats ? seats.limit : currentPlan.seatLimit;
   const branchLimit = currentPlan.branchLimit;
-  const seatsUsed = (members ?? []).filter((m) => !isMemberSuspended(m)).length;
+  const seatsUsed = seats?.used ?? 0;
+  const pendingInvites = seats?.pendingInvites ?? 0;
   const branchesUsed = (branches ?? []).length;
   const seatPct =
     seatLimit && seatLimit > 0
@@ -118,12 +120,6 @@ export default function AgencyBillingPage() {
     branchLimit && branchLimit > 0
       ? Math.min(100, Math.round((branchesUsed / branchLimit) * 100))
       : 0;
-
-  const switchPlan = (p: Plan) => {
-    const patch: { plan: PlanCode; seatLimit?: number } = { plan: p.code };
-    if (p.seatLimit !== null) patch.seatLimit = p.seatLimit;
-    updateOrg.mutate(patch);
-  };
 
   const planFeatures = (p: Plan): string[] => [
     formatLimit(p.branchLimit, "branches"),
@@ -142,7 +138,6 @@ export default function AgencyBillingPage() {
         .filter(([, v]) => v !== ""),
     ) as OrganizationBillingContact;
     const settings: OrganizationSettings = {
-      ...(org.settings ?? {}),
       billing: next,
     };
     updateOrg.mutate(
@@ -166,6 +161,7 @@ export default function AgencyBillingPage() {
         plan={currentPlan}
         org={org}
         seatsUsed={seatsUsed}
+        pendingInvites={pendingInvites}
         branchesUsed={branchesUsed}
         seatLimit={seatLimit}
         branchLimit={branchLimit}
@@ -189,7 +185,8 @@ export default function AgencyBillingPage() {
       <InvoiceHistoryCard plan={currentPlan} orgCreatedAt={org.createdAt} />
 
       <div>
-        <h3 className="mb-3 text-sm font-semibold">Upgrade or change plan</h3>
+        <h3 className="mb-3 text-sm font-semibold">Plans</h3>
+        <p className="mb-3 text-xs text-black/55 dark:text-white/55">Contact us to change plan.</p>
         <div className="grid gap-3 md:grid-cols-3">
           {plans.map((p) => {
             const isCurrent = currentPlanCode === p.code;
@@ -228,14 +225,8 @@ export default function AgencyBillingPage() {
                     Current plan
                   </Button>
                 ) : (
-                  <Button
-                    onClick={() => switchPlan(p)}
-                    disabled={updateOrg.isPending}
-                    className="w-full"
-                    style={{ background: org.brandColor ?? undefined }}
-                    data-testid={`button-switch-plan-${p.code}`}
-                  >
-                    Switch to {p.name}
+                  <Button disabled className="w-full" variant="outline" data-testid={`button-switch-plan-${p.code}`}>
+                    Contact us to change plan
                   </Button>
                 )}
               </div>
@@ -251,6 +242,7 @@ function CurrentPlanCard({
   plan,
   org,
   seatsUsed,
+  pendingInvites,
   branchesUsed,
   seatLimit,
   branchLimit,
@@ -260,6 +252,7 @@ function CurrentPlanCard({
   plan: Plan;
   org: { brandColor: string | null };
   seatsUsed: number;
+  pendingInvites: number;
   branchesUsed: number;
   seatLimit: number | null;
   branchLimit: number | null;
@@ -295,7 +288,7 @@ function CurrentPlanCard({
               <Users className="h-4 w-4" /> Seats used
             </div>
             <span className="text-sm font-semibold" data-testid="text-seat-usage">
-              {seatsUsed} / {seatLimit ?? "∞"}
+              {seatLimit === null ? `${seatsUsed} / Unlimited` : `${seatsUsed} / ${seatLimit}`}
             </span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
@@ -305,9 +298,14 @@ function CurrentPlanCard({
               data-testid="bar-seat-usage"
             />
           </div>
+          {pendingNote(pendingInvites) && (
+            <div className="mt-1 text-xs text-black/55 dark:text-white/55" data-testid="text-seat-pending">
+              {pendingNote(pendingInvites)}
+            </div>
+          )}
           {seatLimit !== null && seatPct >= 80 && (
             <div className="mt-2 text-xs text-amber-700">
-              You're approaching your seat limit. Consider upgrading.
+              You're approaching your seat limit. Contact us to add seats.
             </div>
           )}
         </div>

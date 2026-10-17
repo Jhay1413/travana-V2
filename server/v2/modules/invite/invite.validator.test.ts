@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sendInviteSchema, acceptInviteSubmitSchema } from "./invite.validator";
+import { sendInviteSchema, acceptInviteSubmitSchema, inviteUserIdParams } from "./invite.validator";
 
 describe("sendInviteSchema", () => {
   const valid = { email: "x@y.com", branchId: "11111111-1111-1111-1111-111111111111", orgRole: "agent" };
@@ -47,5 +47,19 @@ describe("acceptInviteSubmitSchema", () => {
 
   it("rejects a missing first name", () => {
     expect(acceptInviteSubmitSchema.safeParse({ body: { ...valid, firstName: "" } }).success).toBe(false);
+  });
+});
+
+describe("sendInviteSchema names and params", () => {
+  const valid = { email: "x@y.com", branchId: "11111111-1111-1111-1111-111111111111", orgRole: "agent" };
+
+  it("accepts optional first and last name on the branch arm and bounds them", () => {
+    expect(sendInviteSchema.safeParse({ body: { ...valid, firstName: "Ada", lastName: "Lovelace" } }).success).toBe(true);
+    expect(sendInviteSchema.safeParse({ body: { ...valid, firstName: "x".repeat(61) } }).success).toBe(false);
+  });
+
+  it("inviteUserIdParams takes a text id and rejects an empty one", () => {
+    expect(inviteUserIdParams.safeParse({ params: { userId: "user_1" } }).success).toBe(true);
+    expect(inviteUserIdParams.safeParse({ params: { userId: "" } }).success).toBe(false);
   });
 });

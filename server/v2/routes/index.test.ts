@@ -18,7 +18,7 @@ describe("homeworker deny on inbox and social mounts", () => {
     expect(source).toMatch(/const noHomeworker = denyOrgRole\(\["?'?homeworker"?'?\]\)/);
   });
 
-  for (const path of ["/conversations", "/messages", "/inboxes", "/social-posts", "/comments", "/channels"]) {
+  for (const path of ["/conversations", "/messages", "/inboxes", "/social-posts", "/social-settings", "/comments", "/channels"]) {
     it(`${path} applies noHomeworker after the auth stack`, () => {
       const line = mountLine(path);
       const authIdx = line.indexOf("...auth");
@@ -31,4 +31,14 @@ describe("homeworker deny on inbox and social mounts", () => {
   it("auth stack includes orgBranchScope", () => {
     expect(source).toMatch(/const auth = \[isAuthenticated, orgBranchScope\]/);
   });
+});
+
+describe("blocked users cannot reach session-only routers", () => {
+  for (const path of ["/airports", "/notifications", "/favorites", "/tags", "/chat", "/emails", "/facebook", "/quote-share"]) {
+    it(`${path} uses the full auth stack (isAuthenticated + orgBranchScope), not isAuthenticated alone`, () => {
+      const line = mountLine(path);
+      expect(line).toContain("...auth");
+      expect(line).not.toMatch(/\bisAuthenticated,/);
+    });
+  }
 });

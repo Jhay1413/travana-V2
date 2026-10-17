@@ -14,6 +14,15 @@ vi.mock("./homeworker.repository", () => ({
     hasPendingInvite: vi.fn(),
   },
 }));
+vi.mock("../organization/organization-seat.service", () => ({
+  organizationSeatService: { assertSeatAvailable: vi.fn() },
+}));
+vi.mock("../organization/organization-audit.service", () => ({
+  organizationAuditService: { record: vi.fn() },
+}));
+vi.mock("../user/user-session.repository", () => ({
+  userSessionRepository: { deleteByUserId: vi.fn() },
+}));
 vi.mock("../invite/invite-email.service", () => ({
   newInviteCredentials: () => ({ token: "tok", expiry: new Date("2030-01-01T00:00:00Z") }),
   sendInviteEmail: vi.fn(),
@@ -22,6 +31,9 @@ vi.mock("../invite/invite-email.service", () => ({
 import { homeworkerService, deriveHomeworkerStatus } from "./homeworker.service";
 import { homeworkerRepository } from "./homeworker.repository";
 import { sendInviteEmail } from "../invite/invite-email.service";
+import { organizationSeatService } from "../organization/organization-seat.service";
+import { organizationAuditService } from "../organization/organization-audit.service";
+import { userSessionRepository } from "../user/user-session.repository";
 
 const ADMIN = { orgId: "o1", userId: "admin1", orgRole: "org_admin", orgRoles: ["org_admin"] };
 
@@ -42,6 +54,54 @@ function createdRecords() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("homeworkerService.invite - seats and audit", () => {
+  it("refuses with the seat error before creating anything", async () => {
+    vi.mocked(homeworkerRepository.findUserByEmail).mockResolvedValue(null);
+    vi.mocked(homeworkerRepository.findOrgDefaults).mockResolvedValue({ name: "Acme", homeworkerCommission: null });
+    vi.mocked(organizationSeatService.assertSeatAvailable).mockRejectedValueOnce(
+      Object.assign(new Error("All 10 seats are in use"), { statusCode: 409 }),
+    );
+
+    await expect(homeworkerService.invite({ email: "jo@example.com" }, ADMIN)).rejects.toMatchObject({ statusCode: 409 });
+    expect(homeworkerRepository.createHomeworkerAtomic).not.toHaveBeenCalled();
+    expect(sendInviteEmail).not.toHaveBeenCalled();
+    expect(organizationSeatService.assertSeatAvailable).toHaveBeenCalledWith("o1");
+  });
+
+  it("writes an invite.send audit row when the actor is known", async () => {
+    vi.mocked(homeworkerRepository.findOrgDefaults).mockResolvedValue({ name: "Acme", homeworkerCommission: null });
+    mockCreate();
+    const requestActor = { userId: "admin1", ipAddress: null, userAgent: null, impersonating: false };
+
+    await homeworkerService.invite({ email: "jo@example.com" }, { ...ADMIN, requestActor });
+
+    expect(organizationAuditService.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "invite.send", orgId: "o1", actor: requestActor }),
+    );
+  });
+});
+
+describe("homeworkerService.archive - sessions", () => {
+  it("deletes the owner's sessions after the archive commits", async () => {
+    vi.mocked(homeworkerRepository.findHomeworkerBranch).mockResolvedValue({ id: "hb1", isActive: true, ownerUserId: "hw1" } as never);
+    vi.mocked(homeworkerRepository.hasPendingInvite).mockResolvedValue(false);
+    vi.mocked(homeworkerRepository.archiveAtomic).mockResolvedValue({ id: "hb1", ownerUserId: "hw1" } as never);
+
+    await homeworkerService.archive("hb1", "o1");
+
+    expect(userSessionRepository.deleteByUserId).toHaveBeenCalledWith("hw1");
+  });
+
+  it("does not touch sessions when the archive finds nothing", async () => {
+    vi.mocked(homeworkerRepository.findHomeworkerBranch).mockResolvedValue({ id: "hb1", isActive: true, ownerUserId: "hw1" } as never);
+    vi.mocked(homeworkerRepository.hasPendingInvite).mockResolvedValue(false);
+    vi.mocked(homeworkerRepository.archiveAtomic).mockResolvedValue(null);
+
+    await expect(homeworkerService.archive("hb1", "o1")).rejects.toMatchObject({ statusCode: 404 });
+    expect(userSessionRepository.deleteByUserId).not.toHaveBeenCalled();
+  });
 });
 
 describe("homeworkerService.invite", () => {
@@ -76,7 +136,7 @@ describe("homeworkerService.invite", () => {
       openingPattern: "mon-fri",
       openingHours: [],
     });
-    expect(sendInviteEmail).toHaveBeenCalledWith("jo.bloggs@example.com", "Acme", "tok");
+    expect(sendInviteEmail).toHaveBeenCalledWith("jo.bloggs@example.com", "Acme", "tok", undefined);
     expect(result).toEqual({
       userId: userValues.id,
       branchId: "hb1",
@@ -323,5 +383,14 @@ describe("homeworkerService.assertCanAddMember", () => {
     vi.mocked(homeworkerRepository.countMembers).mockResolvedValue(0);
 
     await expect(homeworkerService.assertCanAddMember("b1", "o1")).resolves.toBeUndefined();
+  });
+});
+
+describe("homeworkerService.invite - link origin", () => {
+  it("hands the request origin to the invite email", async () => {
+    mockCreate();
+    vi.mocked(homeworkerRepository.findOrgDefaults).mockResolvedValue({ name: "Org", homeworkerCommission: null } as never);
+    await homeworkerService.invite({ email: "h@x.com" }, ADMIN, "http://localhost:5000");
+    expect(sendInviteEmail).toHaveBeenCalledWith("h@x.com", "Org", "tok", "http://localhost:5000");
   });
 });

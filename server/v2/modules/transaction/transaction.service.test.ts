@@ -13,6 +13,8 @@ vi.mock("./transaction.repository", () => ({
     remove: vi.fn(),
     findExpiringQuotes: vi.fn(),
     findPipelineByStatus: vi.fn(),
+    findPipelineCandidates: vi.fn(),
+    countPipelineQuickByColumn: vi.fn(),
     applyFutureDeal: vi.fn(),
     applyLost: vi.fn(),
   },
@@ -61,7 +63,7 @@ vi.mock("../booking/booking.repository", () => ({
 vi.mock("../branch-member/branch-member.repository", () => ({
   branchMemberRepository: { findActiveContextByUserIdInOrg: vi.fn(), findActiveContextByUserId: vi.fn() },
 }));
-vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
+vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn(), findOrgIdById: vi.fn() } }));
 vi.mock("../note/note.repository", () => ({ noteRepository: { create: vi.fn() } }));
 vi.mock("../task/task.service", () => ({ taskService: { reassignByEntity: vi.fn() } }));
 vi.mock("../quote/quote.service", () => ({ newQuoteService: { createQuote: vi.fn() } }));
@@ -523,6 +525,64 @@ describe("transactionService.listPipelineByStatus — pinning", () => {
 
     await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1");
 
-    expect(transactionRepository.findPipelineByStatus).toHaveBeenCalledWith(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1", undefined);
+    expect(transactionRepository.findPipelineByStatus).toHaveBeenCalledWith(SCOPE, "quoted", 1, 10, undefined, undefined, "newest", "user-1", undefined, undefined);
+  });
+});
+
+describe("transactionService.listPipelineByStatus — filters and totals", () => {
+  const FILTERS = { search: "paris", priorities: ["high" as const], quick: "no_task" as const };
+
+  it("forwards filters to the SQL-ordered path", async () => {
+    const page = { items: [], total: 0, page: 1, hasMore: false, totalProfit: 5, totalValue: 10 };
+    vi.mocked(transactionRepository.findPipelineByStatus).mockResolvedValue(page);
+
+    const res = await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "value_desc", "user-1", undefined, FILTERS);
+
+    expect(transactionRepository.findPipelineByStatus).toHaveBeenCalledWith(SCOPE, "quoted", 1, 10, undefined, undefined, "value_desc", "user-1", undefined, FILTERS);
+    expect(res).toMatchObject({ totalValue: 10, totalProfit: 5 });
+  });
+
+  it("forwards filters on the oldest-activity path and returns the real totals", async () => {
+    vi.mocked(transactionRepository.findPipelineCandidates).mockResolvedValue({ items: [], total: 3, totalValue: 120.5, totalProfit: 40 });
+
+    const res = await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "oldest-activity", undefined, undefined, FILTERS);
+
+    expect(transactionRepository.findPipelineCandidates).toHaveBeenCalledWith(SCOPE, "quoted", undefined, undefined, 60, undefined, FILTERS, true);
+    expect(res).toMatchObject({ total: 3, totalValue: 120.5, totalProfit: 40 });
+  });
+});
+
+describe("transactionService.listPipelineByStatus — totals only on page 1", () => {
+  it("asks for money totals on page 1 and not on later pages (oldest-activity path)", async () => {
+    vi.mocked(transactionRepository.findPipelineCandidates).mockResolvedValue({ items: [], total: 0, totalValue: 0, totalProfit: 0 });
+
+    await transactionService.listPipelineByStatus(SCOPE, "quoted", 1, 10, undefined, undefined, "oldest-activity");
+    await transactionService.listPipelineByStatus(SCOPE, "quoted", 2, 10, undefined, undefined, "oldest-activity");
+
+    const calls = vi.mocked(transactionRepository.findPipelineCandidates).mock.calls;
+    expect(calls[calls.length - 2][7]).toBe(true);
+    expect(calls[calls.length - 1][7]).toBe(false);
+  });
+});
+
+describe("transactionService.getPipelineCounts", () => {
+  it("sums the three open-column rows", async () => {
+    vi.mocked(transactionRepository.countPipelineQuickByColumn).mockResolvedValue([
+      { all: 5, due_today: 1, no_task: 2, quiet_7: 3 },
+      { all: 4, due_today: 0, no_task: 1, quiet_7: 1 },
+      { all: 1, due_today: 1, no_task: 0, quiet_7: 0 },
+    ]);
+
+    const res = await transactionService.getPipelineCounts(SCOPE, { agentId: "a1", search: "x" });
+
+    expect(res).toEqual({ all: 10, due_today: 2, no_task: 3, quiet_7: 4 });
+    expect(transactionRepository.countPipelineQuickByColumn).toHaveBeenCalledWith(SCOPE, "a1", undefined, { search: "x" });
+  });
+
+  it("404s a branch outside the caller's org", async () => {
+    vi.mocked(branchRepository.findOrgIdById).mockResolvedValue("other-org" as never);
+
+    await expect(transactionService.getPipelineCounts(SCOPE, { branchId: "b9" })).rejects.toMatchObject({ statusCode: 404 });
+    expect(transactionRepository.countPipelineQuickByColumn).not.toHaveBeenCalled();
   });
 });

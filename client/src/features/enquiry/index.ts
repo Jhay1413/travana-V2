@@ -7,3 +7,4 @@ export { enquiryApi } from "./api/enquiry.api";
 export * from "./api/use-enquiry-queries";
 export * from "./api/use-enquiry-mutations";
 export { EnquiryWizard } from "./components/enquiry-wizard";
+export { buildEnquiryTransaction } from "./lib/build-enquiry-transaction";

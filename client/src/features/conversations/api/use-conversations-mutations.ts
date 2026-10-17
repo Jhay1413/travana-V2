@@ -13,6 +13,7 @@ import type {
   OpenOrCreateConversationRequest,
   SnoozeConversationRequest,
   TranscriptExportRequest,
+  AiSuggestReplyBody,
 } from "./conversations.api";
 
 // Invalidate everything under the conversations root (list + badge counts +
@@ -204,6 +205,7 @@ export function useDisableConversationAi() {
 // server-side); the composer puts the returned text into the reply box.
 export function useAiSuggestReply() {
   return useMutation({
-    mutationFn: (id: string) => conversationsApi.aiSuggestReply(id),
+    mutationFn: (arg: { id: string } & AiSuggestReplyBody) =>
+      conversationsApi.aiSuggestReply(arg.id, { tone: arg.tone, count: arg.count }),
   });
 }

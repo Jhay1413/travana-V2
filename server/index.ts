@@ -7,7 +7,7 @@ import { setupAuth, registerAuthRoutes } from "./v2/middlewares/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import quotePublicRoutes from "./routes/quote-public.routes";
 import websitePublicRoutes from "./routes/website-public.routes";
-import portalRoutes, { portalStaffRouter } from "./routes/portal.routes";
+import portalRoutes from "./routes/portal.routes";
 import { warmPool } from "./v2/config/database";
 import { startImageUpscaleWorker } from "./v2/modules/image-upscale/image-upscale.worker";
 
@@ -85,8 +85,6 @@ app.use((req, res, next) => {
 
   await setupAuth(app);
   registerAuthRoutes(app);
-
-  app.use("/api/portal", portalStaffRouter);
 
   // v2 routes mounted under /api/v2/* (parallel to v1 at /api/*)
   app.use("/api/v2", v2Routes);

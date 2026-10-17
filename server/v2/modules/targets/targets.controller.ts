@@ -2,7 +2,10 @@ import type { Request, Response } from "express";
 import * as targetsService from "./targets.service";
 import { getScope } from "../../utils/scope";
 import { AppError } from "../../utils/error-handler";
-import type { ShopTargetInput, AgentTargetInput } from "./targets.types";
+import { getRequestActor } from "../../utils/request-actor";
+import { asyncHandler } from "../../utils/async-handler";
+import { successResponse } from "../../utils/response";
+import type { ShopTargetInput, AgentTargetInput, MonthsInput, OverrideInput, AllocationInput } from "./targets.types";
 
 function branchOverrideFrom(req: Request): string | undefined {
   const fromQuery = (req.query.branchId as string);
@@ -56,7 +59,7 @@ export async function upsertShopTargets(req: Request, res: Response) {
       return res.status(400).json({ error: "Targets array cannot be empty" });
     }
 
-    const result = await targetsService.upsertShopTargets(getScope(req), targets, branchOverrideFrom(req));
+    const result = await targetsService.upsertShopTargets(getScope(req), targets, branchOverrideFrom(req), getRequestActor(req));
     res.json(result);
   } catch (error) {
     return handleError(res, error, "Failed to upsert shop targets");
@@ -98,7 +101,7 @@ export async function upsertAgentTargets(req: Request, res: Response) {
       return res.status(400).json({ error: "Targets array cannot be empty" });
     }
 
-    const result = await targetsService.upsertAgentTargets(getScope(req), targets, branchOverrideFrom(req));
+    const result = await targetsService.upsertAgentTargets(getScope(req), targets, branchOverrideFrom(req), getRequestActor(req));
     res.json(result);
   } catch (error) {
     return handleError(res, error, "Failed to upsert agent targets");
@@ -113,3 +116,50 @@ export async function getAgents(req: Request, res: Response) {
     return handleError(res, error, "Failed to fetch agents");
   }
 }
+
+// ─── Year view and redesign writes (successResponse envelope; errors via the global handler) ───
+
+function userIdParam(req: Request): string {
+  const { userId } = req.params as Record<string, string | string[]>;
+  return Array.isArray(userId) ? userId[0] : userId;
+}
+
+export const getYear = asyncHandler(async (req: Request, res: Response) => {
+  const data = await targetsService.getTargetsYear(getScope(req), Number(req.query.year));
+  successResponse(res, data);
+});
+
+export const setBusiness = asyncHandler(async (req: Request, res: Response) => {
+  const data = await targetsService.setBusinessTargets(getScope(req), getRequestActor(req), req.body as MonthsInput);
+  successResponse(res, data, "Business target saved");
+});
+
+export const setMine = asyncHandler(async (req: Request, res: Response) => {
+  const data = await targetsService.setMyTargets(getScope(req), getRequestActor(req), req.body as MonthsInput);
+  successResponse(res, data, "Target saved");
+});
+
+export const setHomeworkerOverride = asyncHandler(async (req: Request, res: Response) => {
+  const data = await targetsService.setHomeworkerOverride(
+    getScope(req),
+    getRequestActor(req),
+    userIdParam(req),
+    req.body as OverrideInput,
+  );
+  successResponse(res, data, "Homeworker target overridden");
+});
+
+export const revertHomeworkerOverride = asyncHandler(async (req: Request, res: Response) => {
+  const data = await targetsService.revertHomeworkerOverride(
+    getScope(req),
+    getRequestActor(req),
+    userIdParam(req),
+    Number(req.query.year),
+  );
+  successResponse(res, data, "Override removed");
+});
+
+export const saveAllocation = asyncHandler(async (req: Request, res: Response) => {
+  const data = await targetsService.saveAllocation(getScope(req), getRequestActor(req), req.body as AllocationInput);
+  successResponse(res, data, "Targets saved");
+});

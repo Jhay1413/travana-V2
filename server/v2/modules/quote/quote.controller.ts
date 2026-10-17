@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
 import { getScope } from "../../utils/scope";
 import { uploadImageToS3 } from "../../utils/image-storage";
-import type { PortalStatus } from "./quote.types";
+import { ENGAGEMENT_PERIODS, SOCIAL_STATUSES, type PortalStatus, type SocialStatus } from "./quote.types";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   // New-enum identity pass-through
@@ -50,6 +50,12 @@ function normalizeQuoteStatus(data: any) {
   return data;
 }
 
+// Accepts "A,B" or repeated ?tags=A&tags=B (validated upstream as string | string[]).
+function parseTagsParam(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.join(",") : typeof value === "string" ? value : "";
+  return raw.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
 export const quoteController = {
   listQuotes: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
@@ -85,12 +91,23 @@ export const quoteController = {
     const portalStatus: PortalStatus =
       portalStatusParam === "active" || portalStatusParam === "expired" ? portalStatusParam : "all";
     // Comma-separated tag names, e.g. ?tags=Summer,Beach. Empty/absent ⇒ no tag filtering.
-    const tagsParam = req.query.tags as string;
-    const tags = tagsParam ? tagsParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
+    const tags = parseTagsParam(req.query.tags);
 
-    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus, tags);
+    const socialStatusParam = req.query.socialStatus as string | undefined;
+    const socialStatus = SOCIAL_STATUSES.find((st): st is SocialStatus => st === socialStatusParam);
+
+    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus, tags, socialStatus);
 
     return successResponse(res, { quotes, page, pageSize, hasMore: quotes.length === pageSize }, "Free quotes retrieved successfully");
+  }),
+
+  // GET /quotes/free/status-counts - derived social-status counts, honouring search + tags.
+  getFreeQuoteStatusCounts: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const search = (req.query.search as string) || "";
+    const tags = parseTagsParam(req.query.tags);
+    const counts = await newQuoteService.getFreeQuoteStatusCounts(search, tags, scope);
+    return successResponse(res, counts, "Free quote status counts retrieved successfully");
   }),
 
   getQuoteById: asyncHandler(async (req: Request, res: Response) => {
@@ -292,7 +309,11 @@ export const quoteController = {
     const scope = getScope(req);
     const limitRaw = Number.parseInt((req.query.limit as string) ?? "10", 10);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 50) : 10;
-    const rows = await newQuoteService.getRecentClientEngagement(scope, limit);
+    // mine/period are validated by recentEngagementQueryValidator upstream.
+    const mine = req.query.mine === "true";
+    const periodRaw = req.query.period;
+    const period = ENGAGEMENT_PERIODS.find((p) => p === periodRaw);
+    const rows = await newQuoteService.getRecentClientEngagement(scope, limit, { mine, period });
     return successResponse(res, rows, "Recent client engagement");
   }),
 

@@ -1,4 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
+import { ORGANIZATION_OVERVIEW_ENDPOINTS } from "@/api/endpoints";
 
 export interface OrganizationSummary {
   id: string;
@@ -22,6 +23,10 @@ export interface OrganizationOverviewKpis {
   monthCommission: number;
   ytdCommission: number;
   monthBookingsCount: number;
+  /**
+   * Average profit per booking: this month's commission (incl. upsells) divided
+   * by this month's bookings. The field name is kept for compatibility.
+   */
   avgCommission: number;
   openQuotesValue: number;
   openQuotesCount: number;
@@ -58,6 +63,10 @@ export interface AgentPerformanceRow {
   rangeSales: number;
   rangeQuotes: number;
   avgPerBooking: number;
+  /** Profit incl. upsells / bookings in the range. Optional until the server ships it. */
+  ppb?: number;
+  /** Distinct active deals with at least one open quote. Optional until the server ships it. */
+  openDeals?: number;
   target: number;
   achievedPercent: number;
   isHomeworker: boolean;
@@ -231,7 +240,7 @@ export type OrganizationOverviewStats = SingleBranchOverview | MultiBranchOvervi
 export const organizationOverviewApi = {
   getStats: async (params?: OverviewStatsParams): Promise<OrganizationOverviewStats> => {
     const { data } = await axiosClient.get<{ data: OrganizationOverviewStats }>(
-      "/api/v2/organization-overview/stats",
+      ORGANIZATION_OVERVIEW_ENDPOINTS.stats,
       { params: params?.branchId ? { branchId: params.branchId } : undefined },
     );
     return data?.data ?? (data as unknown as OrganizationOverviewStats);
@@ -240,7 +249,7 @@ export const organizationOverviewApi = {
     params: AgentsPerformanceParams,
   ): Promise<AgentsPerformanceResponse> => {
     const { data } = await axiosClient.get<{ data: AgentsPerformanceResponse }>(
-      "/api/v2/organization-overview/agents-performance",
+      ORGANIZATION_OVERVIEW_ENDPOINTS.agentsPerformance,
       { params },
     );
     return data?.data ?? (data as unknown as AgentsPerformanceResponse);
@@ -249,7 +258,7 @@ export const organizationOverviewApi = {
     params: BranchesPerformanceParams,
   ): Promise<BranchesPerformanceResponse> => {
     const { data } = await axiosClient.get<{ data: BranchesPerformanceResponse }>(
-      "/api/v2/organization-overview/branches-performance",
+      ORGANIZATION_OVERVIEW_ENDPOINTS.branchesPerformance,
       { params },
     );
     return data?.data ?? (data as unknown as BranchesPerformanceResponse);

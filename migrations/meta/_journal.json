@@ -407,6 +407,20 @@
       "when": 1791985415924,
       "tag": "0057_homeworker_branches",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792081379808,
+      "tag": "0058_dark_hawkeye",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792144986378,
+      "tag": "0059_quiet_shaman",
+      "breakpoints": true
     }
   ]
 }

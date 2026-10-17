@@ -434,6 +434,17 @@ export const quotePublicRepository = {
     return result?.userId || null;
   },
 
+  /** The agent who owns the quote's deal and the org the deal belongs to. */
+  async getOwnerByQuoteId(quoteId: string): Promise<{ userId: string; orgId: string | null } | null> {
+    const [result] = await db
+      .select({ userId: transaction.user_id, orgId: transaction.org_id })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(eq(quote.id, quoteId))
+      .limit(1);
+    return result ?? null;
+  },
+
   async notifyAgent(quoteId: string, title: string, message: string, link?: string) {
     const agentUserId = await this.getAgentUserIdByQuoteId(quoteId);
     if (!agentUserId) return;

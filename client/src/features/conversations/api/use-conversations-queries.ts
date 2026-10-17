@@ -17,8 +17,9 @@ export const conversationsKeys = {
   aiState: (id: string) => [...conversationsKeys.all, "ai-state", id] as const,
 };
 
-export function useConversations(query: ListConversationsQuery = {}) {
+export function useConversations(query: ListConversationsQuery = {}, options?: { enabled?: boolean }) {
   return useQuery({
+    enabled: options?.enabled ?? true,
     queryKey: conversationsKeys.list(query),
     queryFn: () => conversationsApi.list(query),
     staleTime: 15_000,

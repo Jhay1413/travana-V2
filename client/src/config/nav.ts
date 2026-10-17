@@ -278,9 +278,7 @@ const SOCIAL_MEDIA_NAV: NavConfig = [
   {
     id: "main",
     items: [
-      { path: "/agent-overview", label: "Dashboard", icon: LayoutGrid },
       { path: "/social-posts", label: "Social Posts", icon: Share2 },
-      { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/my-profile", label: "My Profile", icon: UserCircle },
     ],
   },
@@ -293,6 +291,7 @@ const HOMEWORKER_NAV: NavConfig = AGENT_NAV.map((section) => ({
   ...section,
   items: [
     ...section.items.filter((item) => !(isNavItem(item) && HOMEWORKER_HIDDEN_PATHS.includes(item.path))),
+    { path: "/my-targets", label: "My Targets", icon: Target },
     { path: "/my-statement", label: "My Statement", icon: CircleDollarSign },
   ],
 }));

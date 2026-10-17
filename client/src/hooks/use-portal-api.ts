@@ -516,18 +516,11 @@ export interface PortalWalletTransaction {
 }
 
 export function usePortalWalletTransactions() {
-  const clientId = localStorage.getItem("portal_client_id");
   return useQuery<PortalWalletTransaction[]>({
-    queryKey: [...portalKeys.walletTransactions, clientId],
-    queryFn: async () => {
-      if (!clientId) return [];
-      const { data } = await import("../api/client/axios-client").then((m) =>
-        m.default.get<PortalWalletTransaction[]>(`/api/wallet/client/${clientId}/transactions`)
-      );
-      return data;
-    },
+    queryKey: portalKeys.walletTransactions,
+    queryFn: () => portalFetch("/api/portal/wallet/transactions") as Promise<PortalWalletTransaction[]>,
     retry: false,
-    enabled: !!getPortalToken() && !!clientId,
+    enabled: !!getPortalToken(),
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     refetchInterval: 30000,

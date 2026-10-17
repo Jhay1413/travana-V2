@@ -35,7 +35,7 @@ function EmptyState({ icon: Icon, title, hint, action }: {
   action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-3xl border border-black/10 bg-white/60 py-10 text-center">
+    <div className="rounded-xl border border-dashed border-social-border py-10 text-center">
       <Icon className="mx-auto mb-2 h-8 w-8 text-black/20" />
       <p className="text-sm font-medium text-black/50">{title}</p>
       <p className="mt-1 text-xs text-black/35">{hint}</p>
@@ -368,7 +368,7 @@ function LinkedContactChats({ contactId }: { contactId: string }) {
           ))}
         </div>
 
-        <div className="flex h-[34rem] min-h-0 flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/70">
+        <div className="flex h-[34rem] min-h-0 flex-col overflow-hidden rounded-xl border border-social-border bg-card">
           {selected ? (
             <ConversationThread conversation={selected} />
           ) : (
@@ -452,7 +452,7 @@ function LinkedContactThreadBox({ contactId }: { contactId: string }) {
           })}
         </div>
       )}
-      <div className="flex h-[34rem] min-h-0 flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/70">
+      <div className="flex h-[34rem] min-h-0 flex-col overflow-hidden rounded-xl border border-social-border bg-card">
         <ConversationThread conversation={selected} />
       </div>
     </div>

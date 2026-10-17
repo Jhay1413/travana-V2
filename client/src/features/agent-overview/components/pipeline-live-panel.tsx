@@ -1,183 +1,22 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { User } from "lucide-react";
 import { usePipelineColumn } from "@/hooks/queries";
 import type { Transaction } from "@/features/quote/types";
-import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { SortBy } from "@/features/opportunities";
-import { currency } from "./helpers";
-import { SegmentedTabs } from "./dashboard-ui";
-import { PinToggleButton } from "@/components/shared/pin-toggle-button";
-import { useDealPin, type PinnableDealType } from "@/hooks/use-deal-pin";
-import { resolveDealTarget, type DealTarget, type DealTargetType } from "@/features/transaction";
+import { useDealPin } from "@/hooks/use-deal-pin";
+import {
+  LIVE_TABS,
+  VIEW_OPTIONS,
+  loadView,
+  resolveTabTarget,
+  saveView,
+  type LiveTab,
+  type LiveView,
+} from "../lib/live-panel";
+import { EmptyLine, UnderlineTabs } from "./home/home-ui";
+import { LiveRow } from "./live/live-row";
 
-type LiveTab = "enquiry" | "quotes" | "bookings";
-
-const TABS: Array<{ value: LiveTab; label: string }> = [
-  { value: "enquiry", label: "Enquiry" },
-  { value: "quotes", label: "Quotes" },
-  { value: "bookings", label: "Bookings" },
-];
-
-// How the panel's list is ordered/filtered. "newest"/"oldest" reuse the same
-// sort VALUES (and semantics) as the Opportunities list's sortByOptions, with
-// shorter labels to fit this panel's compact header — "price-high"/"price-low"
-// are excluded because this panel only ever shows a small top-N slice per
-// stage, so a true price sort isn't available without fetching (and pricing)
-// the entire pipeline. "oldest-activity" sorts by last_activity_at (deals
-// with no/stale activity first) — computed server-side from notes/tasks/
-// quote/enquiry/booking timestamps, not the same as "oldest" (by created_at).
-// "In Play" reuses the existing pipeline stage concept (see
-// PipelineColumnStatus / PipelineStage "In Play") as a filter, applicable
-// only within the Quotes tab.
-// `Extract<SortBy, ...>` ties "newest"/"oldest" to the shared sortByOptions
-// values at compile time (source of truth); the panel uses its own, shorter
-// display labels below rather than sortByOptions' full "Newest First"/"Oldest First".
-type LiveView = Extract<SortBy, "newest" | "oldest"> | "oldest-activity" | "in_play";
-
-const VIEW_OPTIONS: Array<{ value: LiveView; label: string }> = [
-  { value: "newest", label: "Latest" },
-  { value: "oldest", label: "Oldest" },
-  { value: "oldest-activity", label: "Activity" },
-  { value: "in_play", label: "In Play" },
-];
-
-const VIEW_STORAGE_KEY = "pipeline-live.view";
-
-function loadView(): LiveView {
-  try {
-    const raw = window.localStorage.getItem(VIEW_STORAGE_KEY);
-    return raw === "oldest" || raw === "oldest-activity" || raw === "in_play" ? raw : "newest";
-  } catch {
-    return "newest";
-  }
-}
-
-function saveView(view: LiveView) {
-  try {
-    window.localStorage.setItem(VIEW_STORAGE_KEY, view);
-  } catch {
-    // Storage may be unavailable (private mode, quota) — the choice just won't persist.
-  }
-}
-
-const CHIP_PALETTE = [
-  "bg-red-500",
-  "bg-sky-500",
-  "bg-orange-500",
-  "bg-emerald-600",
-  "bg-indigo-500",
-];
-
-function OperatorChip({ name }: { name: string | null }) {
-  const label = (name || "•")[0]?.toUpperCase() || "•";
-  const hash = [...(name || "x")].reduce((s, c) => s + c.charCodeAt(0), 0);
-  return (
-    <span
-      className={cn(
-        "grid h-9 w-9 shrink-0 place-items-center rounded-[6px] text-sm font-bold text-white",
-        CHIP_PALETTE[hash % CHIP_PALETTE.length],
-      )}
-      title={name || undefined}
-      aria-hidden
-    >
-      {label}
-    </span>
-  );
-}
-
-// The tour operator's uploaded logo as a rounded square, falling back to the
-// initial chip when there's no logo or the image fails to load.
-function OperatorMark({ name, logoUrl }: { name: string | null; logoUrl: string | null }) {
-  const [failed, setFailed] = useState(false);
-  if (!logoUrl || failed) return <OperatorChip name={name} />;
-  return (
-    <img
-      src={logoUrl}
-      alt={name || "Tour operator"}
-      title={name || undefined}
-      onError={() => setFailed(true)}
-      className="h-9 w-9 shrink-0 rounded-[6px] border border-black/5 bg-white object-contain"
-    />
-  );
-}
-
-function formatTravelDate(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-// Quotes don't carry a return date — derive it from travel_date + num_of_nights.
-// "NCL - 31/10/2026 → 03/11/2026"; parts degrade gracefully when missing.
-function travelLineFor(q: { departing_airport_code?: string | null; travel_date?: string | null; num_of_nights?: number | null } | undefined): string | null {
-  if (!q) return null;
-  const depart = formatTravelDate(q.travel_date);
-  let ret: string | null = null;
-  if (q.travel_date && q.num_of_nights) {
-    const d = new Date(q.travel_date);
-    if (!isNaN(d.getTime())) {
-      d.setDate(d.getDate() + q.num_of_nights);
-      ret = formatTravelDate(d.toISOString());
-    }
-  }
-  const range = [depart, ret].filter(Boolean).join(" → ");
-  const line = [q.departing_airport_code || null, range || null].filter(Boolean).join(" - ");
-  return line || null;
-}
-
-function dealValue(t: Transaction): number {
-  if (t.quotes?.length) {
-    return t.quotes.reduce(
-      (s, q) =>
-        s +
-        (parseFloat(q.sales_price || "0") || 0) -
-        (parseFloat(q.discounts || "0") || 0) +
-        (parseFloat(q.service_charge || "0") || 0),
-      0,
-    );
-  }
-  if (t.booking) {
-    return (
-      (parseFloat(t.booking.sales_price || "0") || 0) -
-      (parseFloat(t.booking.discounts || "0") || 0) +
-      (parseFloat(t.booking.service_charge || "0") || 0)
-    );
-  }
-  return parseFloat((t.enquiry as any)?.budget || "0") || 0;
-}
-
-
-// Client-linked deals open in the client dashboard's new detail view (via the
-// ?holiday= deep link); only client-less deals fall back to the standalone pages.
-// Note: lib/deal-links.ts's `dealDeepLinkHref` implements the same mapping for
-// entityType/entityId task rows — kept separate here since this operates on a
-// full `Transaction` and picks the primary quote; keep the two in sync if this
-// logic changes.
-// The single entity a card represents for the active tab. Both the card's link
-// and its pin resolve through here (shared with the Pipeline board) so the pin
-// always attaches to exactly what the card opens.
-const TAB_FOCUS: Record<LiveTab, DealTargetType> = { enquiry: "enquiry", quotes: "quote", bookings: "booking" };
-
-function resolveTabTarget(t: Transaction, tab: LiveTab): DealTarget | null {
-  return resolveDealTarget(t, TAB_FOCUS[tab]);
-}
-
-const STANDALONE_DEAL_PATH: Record<PinnableDealType, string> = {
-  enquiry: "/enquiries",
-  booking: "/bookings",
-  quote: "/quotes",
-};
-
-function dealHref(t: Transaction, tab: LiveTab): string {
-  const target = resolveTabTarget(t, tab);
-  if (!target) return "/pipeline";
-  return t.client_id
-    ? `/clients/${t.client_id}?holiday=${target.type}:${target.id}`
-    : `${STANDALONE_DEAL_PATH[target.type]}/${target.id}`;
-}
+const SHOWN = 8;
 
 export function PipelineLivePanel({
   userId = "",
@@ -262,14 +101,14 @@ export function PipelineLivePanel({
           if (bt === null) return 1;
           return at - bt;
         })
-        .slice(0, 8);
+        .slice(0, SHOWN);
     }
     return [...list]
       .sort((a, b) => {
         const diff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         return view === "oldest" ? -diff : diff;
       })
-      .slice(0, 8);
+      .slice(0, SHOWN);
   }, [tab, view, byOldestActivity, showInPlayOnly, enquiryQ.data, quoteQ.data, inPlayQ.data, bookingQ.data]);
 
   // Pinned cards lead; the existing order holds within the pinned and unpinned blocks.
@@ -290,13 +129,11 @@ export function PipelineLivePanel({
 
   return (
     <div className={className} data-testid="panel-pipeline-live">
-      {/* Horizontal padding lives on the sections, not the panel, so the
-          separator under the title spans the full panel width. */}
       <div className="flex items-center justify-between gap-2 px-5">
-        <div className="text-sm font-semibold">{title}</div>
+        <h2 className="text-[15px] font-semibold xl:text-base">{title}</h2>
         <Select value={view} onValueChange={(v) => handleViewChange(v as LiveView)}>
           <SelectTrigger
-            className="h-7 w-[84px] rounded-[6px] border-black/10 bg-white px-2 text-xs text-[#7c98b0] shadow-none dark:border-white/10 dark:bg-white/5 dark:text-white/55"
+            className="h-7 w-[84px] rounded-lg border-social-border bg-card px-2 text-[12px] text-social-muted shadow-none"
             data-testid="select-pipeline-live-view"
           >
             <SelectValue />
@@ -311,104 +148,31 @@ export function PipelineLivePanel({
         </Select>
       </div>
 
-      <div className="mt-4 border-t border-black/10 px-5 pt-4 dark:border-white/10">
-        <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} testIdPrefix="pipeline-live-tab" fullWidth transparent />
-      </div>
-
-      <div className="mt-4 space-y-2 px-4">
+      <div className="mt-3.5 px-5">
+        <UnderlineTabs
+          tabs={LIVE_TABS}
+          value={tab}
+          onChange={setTab}
+          label="Pipeline Live stages"
+          testIdPrefix="pipeline-live-tab"
+        />
         {isLoading ? (
-          <div className="py-6 text-center text-xs text-muted-foreground">Loading…</div>
+          <EmptyLine>Loading…</EmptyLine>
         ) : showInPlayOnly && tab !== "quotes" ? (
-          <div className="py-6 text-center text-xs text-muted-foreground">In Play applies to quotes only</div>
+          <EmptyLine>In Play applies to quotes only</EmptyLine>
         ) : items.length === 0 ? (
-          <div className="py-6 text-center text-xs text-muted-foreground">
-            No {tab === "enquiry" ? "enquiries" : tab} yet
-          </div>
+          <EmptyLine>No {tab === "enquiry" ? "enquiries" : tab} yet</EmptyLine>
         ) : (
-          orderedItems.map((t) => {
-            const title =
-              t.quotes?.[0]?.title || t.booking?.title || t.enquiry?.title || `#${t.id.slice(0, 8)}`;
-            const q0: any = t.quotes?.[0];
-            const location =
-              q0?.destination_name ||
-              (t.booking as any)?.destination_name ||
-              (t.enquiry as any)?.destination_name ||
-              null;
-            const operator =
-              q0?.main_tour_operator_name || (t.booking as any)?.main_tour_operator_name || null;
-            const operatorLogo =
-              q0?.main_tour_operator_logo_url || (t.booking as any)?.main_tour_operator_logo_url || null;
-            const value = dealValue(t);
-            const travelLine = travelLineFor(q0);
-            const clientName = (t as any).client_name || t.client?.name || null;
-            const clientPhone = (t as any).client_phone || null;
-            const clientLine = [clientName, clientPhone].filter(Boolean).join(" - ");
-            const pinTarget = resolveTabTarget(t, tab);
-            return (
-              <div
-                key={t.id}
-                role="link"
-                tabIndex={0}
-                onClick={() => navigate(dealHref(t, tab))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    navigate(dealHref(t, tab));
-                  }
-                }}
-                className="cursor-pointer rounded-lg p-3 transition hover:bg-[#e9f8ff] dark:hover:bg-white/[0.05]"
-                data-testid={`card-pipeline-live-${t.id}`}
-              >
-                <div className="flex items-start gap-3">
-                  <OperatorMark name={operator} logoUrl={operatorLogo} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium">{title}</span>
-                      {value > 0 && (
-                        <span className="shrink-0 text-sm font-semibold text-black/60 dark:text-white/60">
-                          {currency.format(value)}
-                        </span>
-                      )}
-                    </div>
-                    {location && (
-                      <div className="mt-0.5 truncate text-[13px] text-[#a195a5] dark:text-white/50">
-                        {location}
-                      </div>
-                    )}
-                    {travelLine && (
-                      <div className="mt-0.5 truncate text-xs text-[#a195a5] dark:text-white/50">
-                        {travelLine}
-                      </div>
-                    )}
-                    {(clientLine || pinTarget) && (
-                      <div className="mt-1.5 flex items-center gap-1 text-xs text-black/60 dark:text-white/60">
-                        {clientLine ? (
-                          <span className="flex min-w-0 flex-1 items-center gap-1">
-                            <User className="h-3 w-3 shrink-0 text-amber-500" />
-                            <span className="truncate">{clientLine}</span>
-                          </span>
-                        ) : (
-                          <span className="flex-1" />
-                        )}
-                        {pinTarget && (
-                          <PinToggleButton
-                            pinned={pinnedKeys.has(`${pinTarget.type}:${pinTarget.id}`)}
-                            onToggle={() =>
-                              togglePin(pinTarget.type, pinTarget.id, {
-                                label: pinTarget.title || title,
-                                subtitle: [clientName, location].filter(Boolean).join(" · "),
-                              })
-                            }
-                            data-testid={`button-pipeline-live-pin-${t.id}`}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })
+          orderedItems.map((t) => (
+            <LiveRow
+              key={t.id}
+              deal={t}
+              tab={tab}
+              pinned={isPinnedDeal(t)}
+              onOpen={navigate}
+              onTogglePin={(type, id, label, subtitle) => togglePin(type, id, { label, subtitle })}
+            />
+          ))
         )}
       </div>
     </div>

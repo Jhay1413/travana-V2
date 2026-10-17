@@ -1,6 +1,7 @@
 import { db } from "../../config/database";
 import { branchMembers, branches, user, userOrgRoles, type BranchMember } from "@shared/schema";
 import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { REMOVED_REASON_PREFIX } from "../../utils/removed-user";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -17,6 +18,7 @@ type MemberWithUser = {
     banned: boolean | null;
     orgRole: string | null;
   };
+  roles: string[];
   branches: Array<{ branchId: string; branchName: string; orgRole: string; isActive: boolean }>;
 };
 
@@ -66,6 +68,18 @@ export const branchMemberRepository = {
       )
       .limit(1);
     return result;
+  },
+
+  /** Membership counts across every org for a user (suspended = rows exist, none active). */
+  async findStandingByUserId(userId: string): Promise<{ total: number; active: number }> {
+    const [row] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        active: sql<number>`(count(*) FILTER (WHERE ${branchMembers.isActive} = true))::int`,
+      })
+      .from(branchMembers)
+      .where(eq(branchMembers.userId, userId));
+    return { total: Number(row?.total ?? 0), active: Number(row?.active ?? 0) };
   },
 
   async findByUserAndBranch(userId: string, branchId: string): Promise<BranchMember | null> {
@@ -205,7 +219,23 @@ export const branchMemberRepository = {
       .from(user)
       .leftJoin(branchMembers, and(eq(branchMembers.userId, user.id), eq(branchMembers.orgId, orgId)))
       .leftJoin(branches, eq(branches.id, branchMembers.branchId))
-      .where(and(eq(user.orgId, orgId), isNull(user.inviteToken)));
+      .where(and(
+        eq(user.orgId, orgId),
+        isNull(user.inviteToken),
+        // Removed members disappear from the team list (history is kept).
+        sql`NOT (${user.banned} IS TRUE AND ${user.banReason} LIKE ${REMOVED_REASON_PREFIX + '%'})`,
+      ));
+
+    const roleRows = await db
+      .select({ userId: userOrgRoles.userId, role: userOrgRoles.role })
+      .from(userOrgRoles)
+      .where(eq(userOrgRoles.orgId, orgId));
+    const rolesByUser = new Map<string, string[]>();
+    for (const r of roleRows) {
+      const list = rolesByUser.get(r.userId) ?? [];
+      list.push(r.role);
+      rolesByUser.set(r.userId, list);
+    }
 
     const byUser = new Map<string, MemberWithUser>();
     for (const r of rows) {
@@ -222,6 +252,7 @@ export const branchMemberRepository = {
           banned: r.banned,
           orgRole: r.userOrgRole,
         },
+        roles: rolesByUser.get(r.userId) ?? [],
         branches: [],
       };
       if (r.branchId && r.branchName) {

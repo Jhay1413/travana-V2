@@ -61,6 +61,71 @@
 
   --tracking-normal: 0em;
   --spacing: 0.25rem;
+  /* Social workspace */
+  --color-social-navy: hsl(var(--social-navy));
+  --color-social-navy-ink: hsl(var(--social-navy-ink));
+  --color-admin-hero: hsl(var(--admin-hero));
+  --color-admin-on-accent: hsl(var(--admin-on-accent));
+  --color-social-orange: hsl(var(--social-orange));
+  --color-social-orange-text: hsl(var(--social-orange-text));
+  --color-social-page: hsl(var(--social-page));
+  --color-social-border: hsl(var(--social-border));
+  --color-social-muted: hsl(var(--social-muted));
+  --color-status-scheduled-bg: hsl(var(--status-scheduled-bg));
+  --color-status-scheduled-fg: hsl(var(--status-scheduled-fg));
+  --color-status-posted-bg: hsl(var(--status-posted-bg));
+  --color-status-posted-fg: hsl(var(--status-posted-fg));
+  --color-status-draft-bg: hsl(var(--status-draft-bg));
+  --color-status-draft-fg: hsl(var(--status-draft-fg));
+  --color-status-failed-bg: hsl(var(--status-failed-bg));
+  --color-status-failed-fg: hsl(var(--status-failed-fg));
+  /* Pipeline workspace */
+  --color-pipeline-column-bg: hsl(var(--pipeline-column-bg));
+  --color-pipeline-card-border: hsl(var(--pipeline-card-border));
+  --color-pipeline-money-bg: hsl(var(--pipeline-money-bg));
+  --color-pipeline-task-bg: hsl(var(--pipeline-task-bg));
+  --color-pipeline-notask-bg: hsl(var(--pipeline-notask-bg));
+  --color-pipeline-notask-border: hsl(var(--pipeline-notask-border));
+  --color-pipeline-drop-bg: hsl(var(--pipeline-drop-bg));
+  --color-pipeline-profit: hsl(var(--pipeline-profit));
+  --color-stage-enquiry-bg: hsl(var(--stage-enquiry-bg));
+  --color-stage-enquiry-fg: hsl(var(--stage-enquiry-fg));
+  --color-stage-enquiry-dot: hsl(var(--stage-enquiry-dot));
+  --color-stage-quoted-bg: hsl(var(--stage-quoted-bg));
+  --color-stage-quoted-fg: hsl(var(--stage-quoted-fg));
+  --color-stage-quoted-dot: hsl(var(--stage-quoted-dot));
+  --color-stage-inplay-bg: hsl(var(--stage-inplay-bg));
+  --color-stage-inplay-fg: hsl(var(--stage-inplay-fg));
+  --color-stage-inplay-dot: hsl(var(--stage-inplay-dot));
+  --color-stage-booked-bg: hsl(var(--stage-booked-bg));
+  --color-stage-booked-fg: hsl(var(--stage-booked-fg));
+  --color-stage-booked-dot: hsl(var(--stage-booked-dot));
+  --color-stage-lost-bg: hsl(var(--stage-lost-bg));
+  --color-stage-lost-fg: hsl(var(--stage-lost-fg));
+  --color-stage-lost-dot: hsl(var(--stage-lost-dot));
+  --color-stage-future-bg: hsl(var(--stage-future-bg));
+  --color-stage-future-fg: hsl(var(--stage-future-fg));
+  --color-stage-future-dot: hsl(var(--stage-future-dot));
+  --color-priority-low: hsl(var(--priority-low));
+  --color-priority-medium: hsl(var(--priority-medium));
+  --color-priority-high: hsl(var(--priority-high));
+  --color-priority-urgent: hsl(var(--priority-urgent));
+  --color-ticket-dashed: hsl(var(--ticket-dashed));
+  --color-ticket-amber-bg: hsl(var(--ticket-amber-bg));
+  --color-ticket-amber-fg: hsl(var(--ticket-amber-fg));
+  --color-role-owner-bg: hsl(var(--role-owner-bg));
+  --color-role-owner-fg: hsl(var(--role-owner-fg));
+  --color-role-branch-bg: hsl(var(--role-branch-bg));
+  --color-role-branch-fg: hsl(var(--role-branch-fg));
+  --color-role-agent-bg: hsl(var(--role-agent-bg));
+  --color-role-agent-fg: hsl(var(--role-agent-fg));
+  --color-role-social-bg: hsl(var(--role-social-bg));
+  --color-role-social-fg: hsl(var(--role-social-fg));
+  --color-role-home-bg: hsl(var(--role-home-bg));
+  --color-role-home-fg: hsl(var(--role-home-fg));
+  --color-role-referral-bg: hsl(var(--role-referral-bg));
+  --color-role-referral-fg: hsl(var(--role-referral-fg));
+  --color-dashboard-check: hsl(var(--dashboard-check));
 }
 
 :root {
@@ -89,6 +154,7 @@
   --destructive-foreground: 0 0% 100%;
 
   --border: 240 12% 90%;
+  --button-outline: hsl(var(--border));
   --input: 240 12% 88%;
   --ring: 217 91% 60%;
 
@@ -102,6 +168,71 @@
   --sidebar-ring: 217 91% 60%;
 
   --radius: 1rem;
+  /* Social workspace */
+  --social-navy: 216 37% 28%;
+  --social-navy-ink: 217 37% 19%;
+  --admin-hero: 216 39% 23%;
+  --admin-on-accent: 222 47% 11%;
+  --social-orange: 38 92% 50%;
+  --social-orange-text: 32 95% 44%;
+  --social-page: 216 33% 97%;
+  --social-border: 215 27% 91%;
+  --social-muted: 216 11% 47%;
+  --status-scheduled-bg: 149 80% 90%;
+  --status-scheduled-fg: 163 94% 24%;
+  --status-posted-bg: 214 95% 93%;
+  --status-posted-fg: 224 76% 48%;
+  --status-draft-bg: 213 36% 95%;
+  --status-draft-fg: 215 19% 35%;
+  --status-failed-bg: 0 93% 94%;
+  --status-failed-fg: 0 74% 42%;
+  /* Pipeline workspace */
+  --pipeline-column-bg: 215 27% 94%;
+  --pipeline-card-border: 215 27% 91%;
+  --pipeline-money-bg: 216 33% 97%;
+  --pipeline-task-bg: 215 50% 97%;
+  --pipeline-notask-bg: 48 100% 96%;
+  --pipeline-notask-border: 46 97% 65%;
+  --pipeline-drop-bg: 43 100% 95%;
+  --pipeline-profit: 162 94% 24%;
+  --stage-enquiry-bg: 160 84% 91%;
+  --stage-enquiry-fg: 162 94% 24%;
+  --stage-enquiry-dot: 160 84% 39%;
+  --stage-quoted-bg: 214 95% 93%;
+  --stage-quoted-fg: 224 76% 48%;
+  --stage-quoted-dot: 217 91% 60%;
+  --stage-inplay-bg: 48 96% 89%;
+  --stage-inplay-fg: 26 83% 31%;
+  --stage-inplay-dot: 38 92% 50%;
+  --stage-booked-bg: 217 37% 19%;
+  --stage-booked-fg: 0 0% 100%;
+  --stage-booked-dot: 217 37% 19%;
+  --stage-lost-bg: 0 93% 94%;
+  --stage-lost-fg: 0 74% 42%;
+  --stage-lost-dot: 0 84% 60%;
+  --stage-future-bg: 215 27% 91%;
+  --stage-future-fg: 217 19% 27%;
+  --stage-future-dot: 215 20% 65%;
+  --priority-low: 160 84% 39%;
+  --priority-medium: 38 92% 50%;
+  --priority-high: 0 84% 60%;
+  --priority-urgent: 0 84% 60%;
+  --ticket-dashed: 215 24% 82%;
+  --ticket-amber-bg: 48 96% 89%;
+  --ticket-amber-fg: 26 83% 30%;
+  --role-owner-bg: 226 100% 94%;
+  --role-owner-fg: 245 58% 51%;
+  --role-branch-bg: 214 95% 93%;
+  --role-branch-fg: 224 76% 48%;
+  --role-agent-bg: 149 80% 90%;
+  --role-agent-fg: 163 94% 24%;
+  --role-social-bg: 48 96% 89%;
+  --role-social-fg: 26 83% 30%;
+  --role-home-bg: 356 100% 95%;
+  --role-home-fg: 343 80% 35%;
+  --role-referral-bg: 213 36% 95%;
+  --role-referral-fg: 215 19% 35%;
+  --dashboard-check: 215 22% 82%;
 }
 
 .dark {
@@ -130,8 +261,74 @@
   --destructive-foreground: 210 20% 96%;
 
   --border: 240 8% 16%;
+  --button-outline: hsl(var(--border));
   --input: 240 8% 20%;
   --ring: 217 91% 60%;
+  /* Social workspace */
+  --social-navy: 216 37% 36%;
+  --social-navy-ink: 217 37% 22%;
+  --admin-hero: 216 39% 17%;
+  --admin-on-accent: 222 47% 11%;
+  --social-orange: 38 92% 50%;
+  --social-orange-text: 38 92% 60%;
+  --social-page: 222 20% 8%;
+  --social-border: 217 15% 20%;
+  --social-muted: 216 12% 65%;
+  --status-scheduled-bg: 160 50% 14%;
+  --status-scheduled-fg: 152 60% 70%;
+  --status-posted-bg: 222 50% 18%;
+  --status-posted-fg: 213 90% 75%;
+  --status-draft-bg: 215 20% 18%;
+  --status-draft-fg: 214 20% 75%;
+  --status-failed-bg: 0 50% 18%;
+  --status-failed-fg: 0 90% 78%;
+  /* Pipeline workspace */
+  --pipeline-column-bg: 222 15% 13%;
+  --pipeline-card-border: 217 15% 22%;
+  --pipeline-money-bg: 222 15% 14%;
+  --pipeline-task-bg: 222 20% 15%;
+  --pipeline-notask-bg: 38 40% 13%;
+  --pipeline-notask-border: 38 60% 35%;
+  --pipeline-drop-bg: 38 40% 14%;
+  --pipeline-profit: 152 60% 60%;
+  --stage-enquiry-bg: 160 50% 14%;
+  --stage-enquiry-fg: 152 60% 70%;
+  --stage-enquiry-dot: 160 84% 39%;
+  --stage-quoted-bg: 222 50% 18%;
+  --stage-quoted-fg: 213 90% 75%;
+  --stage-quoted-dot: 217 91% 60%;
+  --stage-inplay-bg: 38 45% 15%;
+  --stage-inplay-fg: 43 96% 70%;
+  --stage-inplay-dot: 38 92% 50%;
+  --stage-booked-bg: 216 37% 36%;
+  --stage-booked-fg: 0 0% 100%;
+  --stage-booked-dot: 216 37% 60%;
+  --stage-lost-bg: 0 50% 18%;
+  --stage-lost-fg: 0 90% 78%;
+  --stage-lost-dot: 0 84% 60%;
+  --stage-future-bg: 215 20% 18%;
+  --stage-future-fg: 214 20% 75%;
+  --stage-future-dot: 215 20% 65%;
+  --priority-low: 160 84% 45%;
+  --priority-medium: 38 92% 55%;
+  --priority-high: 0 84% 65%;
+  --priority-urgent: 0 84% 65%;
+  --ticket-dashed: 215 15% 30%;
+  --ticket-amber-bg: 38 40% 16%;
+  --ticket-amber-fg: 43 96% 70%;
+  --role-owner-bg: 243 40% 20%;
+  --role-owner-fg: 230 94% 82%;
+  --role-branch-bg: 222 50% 18%;
+  --role-branch-fg: 213 90% 78%;
+  --role-agent-bg: 160 50% 14%;
+  --role-agent-fg: 152 60% 70%;
+  --role-social-bg: 38 40% 16%;
+  --role-social-fg: 43 96% 70%;
+  --role-home-bg: 340 40% 18%;
+  --role-home-fg: 350 90% 80%;
+  --role-referral-bg: 215 20% 18%;
+  --role-referral-fg: 214 20% 75%;
+  --dashboard-check: 215 20% 30%;
 }
 
 @layer base {

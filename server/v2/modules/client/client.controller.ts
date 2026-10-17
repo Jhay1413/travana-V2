@@ -3,28 +3,29 @@ import { clientService } from "./client.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
+import { toPublicClient } from "../neon-client/neon-client.serializer";
 
 export const clientController = {
   listClients: asyncHandler(async (req: Request, res: Response) => {
     const clients = await clientService.listClients(getScope(req));
-    return successResponse(res, clients, "Clients retrieved successfully");
+    return successResponse(res, clients.map(toPublicClient), "Clients retrieved successfully");
   }),
 
   getClientById: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const client = await clientService.getClientById(id, getScope(req));
-    return successResponse(res, client, "Client retrieved successfully");
+    return successResponse(res, toPublicClient(client), "Client retrieved successfully");
   }),
 
   createClient: asyncHandler(async (req: Request, res: Response) => {
     const client = await clientService.createClient(req.body, getScope(req));
-    return successResponse(res, client, "Client created successfully", 201);
+    return successResponse(res, toPublicClient(client), "Client created successfully", 201);
   }),
 
   updateClient: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     const client = await clientService.updateClient(id, req.body, getScope(req));
-    return successResponse(res, client, "Client updated successfully");
+    return successResponse(res, toPublicClient(client), "Client updated successfully");
   }),
 
   deleteClient: asyncHandler(async (req: Request, res: Response) => {
@@ -37,6 +38,6 @@ export const clientController = {
     const sourceId = req.params.id as string;
     const { targetId } = req.body as { targetId: string };
     const client = await clientService.mergeClients(sourceId, targetId, getScope(req));
-    return successResponse(res, client, "Clients merged successfully");
+    return successResponse(res, toPublicClient(client), "Clients merged successfully");
   }),
 };

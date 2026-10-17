@@ -1,6 +1,6 @@
 // Single source of truth for client-side deal expiry classification — shared
 // by the client page's holidays panel (all-holidays-panel.tsx) and the
-// conversations inbox's client-details panel (conversations-inbox.tsx).
+// conversations inbox's client-details panel (inbox/client-pane).
 //
 // This intentionally matches the UI rule (inactive status OR date_expiry in
 // the past) rather than the server's date_created + 7d fallback used in

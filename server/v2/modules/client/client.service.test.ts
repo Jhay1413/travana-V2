@@ -12,7 +12,10 @@ vi.mock("./client.repository", () => ({
 
 vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
 
+vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
+
 import { clientService } from "./client.service";
+import { branchRepository } from "../branch/branch.repository";
 import { branchRepository } from "../branch/branch.repository";
 import { clientRepository } from "./client.repository";
 

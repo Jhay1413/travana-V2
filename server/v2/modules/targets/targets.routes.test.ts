@@ -9,6 +9,12 @@ vi.mock("./targets.controller", () => ({
   getAgentTargetsByUserId: vi.fn(),
   upsertAgentTargets: vi.fn(),
   getAgents: vi.fn(),
+  getYear: vi.fn(),
+  setBusiness: vi.fn(),
+  setMine: vi.fn(),
+  setHomeworkerOverride: vi.fn(),
+  revertHomeworkerOverride: vi.fn(),
+  saveAllocation: vi.fn(),
 }));
 
 import router from "./targets.routes";
@@ -35,24 +41,31 @@ function run(handler: Handler, orgRole: string) {
 }
 
 describe("targets routes - write guard", () => {
-  for (const [method, path, ctrl] of [
-    ["post", "/shop", controller.upsertShopTargets],
-    ["post", "/agent", controller.upsertAgentTargets],
+  for (const [method, path, ctrl, allowed] of [
+    ["post", "/shop", controller.upsertShopTargets, ["org_admin", "platform_admin"]],
+    ["post", "/agent", controller.upsertAgentTargets, ["org_admin", "branch_manager", "platform_admin"]],
+    ["put", "/business", controller.setBusiness, ["org_admin", "platform_admin"]],
+    ["put", "/homeworkers/:userId/override", controller.setHomeworkerOverride, ["org_admin", "platform_admin"]],
+    ["delete", "/homeworkers/:userId/override", controller.revertHomeworkerOverride, ["org_admin", "platform_admin"]],
   ] as const) {
-    it(`${method.toUpperCase()} ${path} rejects agent and homeworker`, () => {
+    const denied = ["agent", "homeworker", "social_media_manager", "branch_manager", "org_admin", "platform_admin"].filter(
+      (r) => !(allowed as readonly string[]).includes(r),
+    );
+
+    it(`${method.toUpperCase()} ${path} rejects ${denied.join(", ")}`, () => {
       const [guard, validator, final] = handlersFor(method, path);
       expect(validator).toBeTypeOf("function");
       expect(final).toBe(ctrl);
-      for (const role of ["agent", "homeworker", "social_media_manager"]) {
+      for (const role of denied) {
         const { res, next } = run(guard, role);
         expect(res.status).toHaveBeenCalledWith(403);
         expect(next).not.toHaveBeenCalled();
       }
     });
 
-    it(`${method.toUpperCase()} ${path} allows org_admin, branch_manager, platform_admin`, () => {
+    it(`${method.toUpperCase()} ${path} allows ${allowed.join(", ")}`, () => {
       const [guard] = handlersFor(method, path);
-      for (const role of ["org_admin", "branch_manager", "platform_admin"]) {
+      for (const role of allowed) {
         const { next } = run(guard, role);
         expect(next).toHaveBeenCalledOnce();
       }
@@ -60,9 +73,15 @@ describe("targets routes - write guard", () => {
   }
 
   it("GET routes stay unguarded", () => {
-    // validate(branchQueryValidator) + controller, no role guard.
+    // validate(...) + controller, no role guard.
     expect(handlersFor("get", "/shop")).toHaveLength(2);
     expect(handlersFor("get", "/agent")).toHaveLength(2);
     expect(handlersFor("get", "/overview")).toHaveLength(2);
+    expect(handlersFor("get", "/year")).toEqual([expect.any(Function), controller.getYear]);
+  });
+
+  it("PUT /mine and POST /allocation are role-checked in the service, not the route", () => {
+    expect(handlersFor("put", "/mine")).toEqual([expect.any(Function), controller.setMine]);
+    expect(handlersFor("post", "/allocation")).toEqual([expect.any(Function), controller.saveAllocation]);
   });
 });

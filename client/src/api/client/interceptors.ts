@@ -1,4 +1,5 @@
 import axiosClient from "./axios-client";
+import { writeAuthNotice } from "@/lib/auth-notice";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 
 axiosClient.interceptors.request.use(
@@ -22,6 +23,8 @@ axiosClient.interceptors.response.use(
   },
   (error: AxiosError) => {
     if (error.response?.status === 401) {
+      // A suspended or removed user's session is ended by the server; keep the reason for the sign-in page.
+      writeAuthNotice(typeof window === "undefined" ? null : window.sessionStorage, (error.response.data as { code?: unknown } | undefined)?.code);
       const url = error.config?.url || "";
       const skipRedirectPaths = ["/api/auth/", "/api/v2/users/profiles/", "/api/public/", "/api/v2/quote-share/"];
       if (!skipRedirectPaths.some((p) => url.includes(p))) {

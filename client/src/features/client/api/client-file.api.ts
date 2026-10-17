@@ -1,9 +1,11 @@
 import axiosClient from "@/api/client/axios-client";
+import { CLIENT_FILE_ENDPOINTS } from "@/api/endpoints";
 import type { ClientFile } from "@shared/schema";
+import type { ClientFileItem } from "@/features/client/types/client-file.types";
 
 export const clientFileApi = {
-  getByClient: async (clientId: string): Promise<ClientFile[]> => {
-    const { data } = await axiosClient.get<ClientFile[]>(`/api/v2/client-files/client/${clientId}`);
+  getByClient: async (clientId: string): Promise<ClientFileItem[]> => {
+    const { data } = await axiosClient.get<ClientFileItem[]>(CLIENT_FILE_ENDPOINTS.byClient(clientId));
     return data;
   },
 
@@ -19,7 +21,7 @@ export const clientFileApi = {
     if (meta.allocationType) formData.append("allocationType", meta.allocationType);
     if (meta.allocationId) formData.append("allocationId", meta.allocationId);
     const { data } = await axiosClient.post<ClientFile>(
-      `/api/v2/client-files/client/${clientId}`,
+      CLIENT_FILE_ENDPOINTS.byClient(clientId),
       formData,
       { headers: { "Content-Type": "multipart/form-data" } }
     );
@@ -27,16 +29,16 @@ export const clientFileApi = {
   },
 
   delete: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/v2/client-files/${id}`);
+    await axiosClient.delete(CLIENT_FILE_ENDPOINTS.byId(id));
   },
 
   getDownloadUrl: (id: string): string => {
-    return `/api/v2/client-files/${id}/download`;
+    return CLIENT_FILE_ENDPOINTS.download(id);
   },
 
   // Same endpoint served with an "inline" disposition so the browser renders the
   // file in a preview (image/PDF) instead of downloading it.
   getPreviewUrl: (id: string): string => {
-    return `/api/v2/client-files/${id}/download?inline=1`;
+    return CLIENT_FILE_ENDPOINTS.preview(id);
   },
 };

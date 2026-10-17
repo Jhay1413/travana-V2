@@ -16,6 +16,7 @@ export function useGeneratePost() {
     mutationFn: (data: GeneratePostParams) => socialPostApi.generate(data),
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     },
   });
 }
@@ -27,6 +28,7 @@ export function useSavePost() {
       socialPostApi.update(id, data),
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     },
   });
 }
@@ -38,7 +40,7 @@ export function useScheduleOnOnlySocials() {
       socialPostApi.scheduleOnOnlySocials(id, formData),
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
-      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     },
   });
 }
@@ -51,7 +53,18 @@ export function useRescheduleOnOnlySocials() {
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
       queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
-      queryClient.invalidateQueries({ queryKey: socialPostKeys.media(deal.id) });
+      queryClient.invalidateQueries({ queryKey: socialPostKeys.media(deal.id) });
+    },
+  });
+}
+
+export function useUnschedulePost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => socialPostApi.unschedule(id),
+    onSuccess: (deal) => {
+      queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);
+      queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
     },
   });
 }

@@ -1,11 +1,13 @@
 import { db } from "../../config/database";
+import { publicClientColumns } from "../neon-client/neon-client.serializer";
 import { transaction, tickets, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks, favorites } from "@shared/schema";
 import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, getTableColumns, type SQL, type Column } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
 import { buildPartitionCond, buildTransactionRecordScopeConds } from "../../utils/scope-conditions";
-import type { NextTask, PipelineCandidateItem } from "./transaction.types";
+import type { NextTask, PipelineCandidateItem, PipelineFilters, PipelineQuickCounts, PipelineSqlSort, PipelineTotals } from "./transaction.types";
+import { dealProfitExpr, dealValueExpr, pipelineFilterConds, quickCond, sortExpr } from "./transaction-pipeline.sql";
 
 interface ConnectingLeg extends Partial<InsertQuoteFlight> {}
 interface BookingConnectingLeg extends Partial<InsertBookingFlight> {}
@@ -400,7 +402,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
     )`, main_tour_operator_logo_url: sql<string | null>`(
       SELECT tour_operator_table.logo_url FROM tour_operator_table
       WHERE tour_operator_table.id = quote_table.main_tour_operator_id
-    )` }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, quoteLostCond, isNull(quote.deleted_at))),
+    )` }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, quoteLostCond, isNull(quote.deleted_at))).orderBy(quote.date_created),
     db.select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, travel_date: booking.travel_date, adult: booking.adult, child: booking.child, infant: booking.infant, sales_price: booking.sales_price, package_commission: booking.package_commission, holiday_type_id: booking.holiday_type_id, hays_ref: booking.hays_ref, supplier_ref: booking.supplier_ref, booking_status: booking.booking_status, discounts: booking.discounts, service_charge: booking.service_charge, date_created: booking.date_created, destination_name: sql<string | null>`(
       SELECT d.name FROM booking_accomodation ba
       JOIN accomodation_list_table al ON ba.accomodation_id = al.id
@@ -612,7 +614,7 @@ const PIPELINE_COLUMNS = ["enquiry", "quoted", "in_play", "booking", "future", "
 // before calling. Phase 3: status-derivation model — each column maps purely
 // to transaction.status + (for quoted/in_play) the primary quote's quote_status.
 // No time-window filters; expiry is display-only.
-function buildPipelineConditions(scope: Scope | undefined, column: string, agentId?: string, quoteStatusFilter?: string, branchId?: string): SQL {
+function buildPipelineConditions(scope: Scope | undefined, column: string, agentId?: string, quoteStatusFilter?: string, branchId?: string, filters?: PipelineFilters): SQL {
   // Base conditions shared by every column.
   const conditions: SQL[] = [
     sql`${transaction.client_id} IS NOT NULL`,
@@ -742,6 +744,10 @@ function buildPipelineConditions(scope: Scope | undefined, column: string, agent
     )`);
   }
 
+  // Optional board filters (search / priority / tour operator / quick chip).
+  // Always ANDed onto the scope + column conditions above, never replacing them.
+  conditions.push(...pipelineFilterConds(filters));
+
   return and(...conditions)!;
 }
 
@@ -751,6 +757,7 @@ function buildPipelineConditions(scope: Scope | undefined, column: string, agent
 // last_activity_at is computed in JS, not a SQL column) and never reaches
 // this function. The future column overrides this with its own ordering.
 function buildPipelineOrderBy(column: string, sort?: "newest" | "oldest"): SQL {
+  // (Redesign sorts go through buildPipelineOrderByForSort below.)
   if (column === "future") {
     // Sort by the earmarked future date, soonest first, falling back to created_at.
     const futureDealDateExpr = sql`(
@@ -770,6 +777,37 @@ function buildPipelineOrderBy(column: string, sort?: "newest" | "oldest"): SQL {
     return sql`${futureDealDateExpr} ASC NULLS LAST, ${transaction.created_at} DESC`;
   }
   return sort === "oldest" ? sql`${transaction.created_at} ASC` : sql`${transaction.created_at} DESC`;
+}
+
+// The redesign's SQL-side sorts. Unlike newest/oldest these also apply to the
+// future column (the user explicitly picked one), so they bypass the
+// future-date ordering above.
+function buildPipelineOrderByForSort(column: string, sort?: PipelineSqlSort): SQL {
+  if (sort && sort !== "newest" && sort !== "oldest") return sortExpr(sort, column === "lost");
+  return buildPipelineOrderBy(column, sort);
+}
+
+// Whole-column aggregates (no LIMIT). value/profit use the card formula and are
+// only computed when withMoney is set (page 1); otherwise it is a plain count.
+async function aggregatePipelineColumn(where: SQL, column: string, withMoney: boolean): Promise<PipelineTotals> {
+  if (!withMoney) {
+    const [countRow] = await db.select({ total: count() }).from(transaction).where(where);
+    return { total: Number(countRow?.total ?? 0), totalValue: 0, totalProfit: 0 };
+  }
+  const includeLost = column === "lost";
+  const [row] = await db
+    .select({
+      total: count(),
+      totalValue: sql<string | null>`COALESCE(SUM(${dealValueExpr(includeLost)}), 0)`,
+      totalProfit: sql<string | null>`COALESCE(SUM(${dealProfitExpr(includeLost)}), 0)`,
+    })
+    .from(transaction)
+    .where(where);
+  const round2 = (v: string | number | null | undefined): number => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+  };
+  return { total: Number(row?.total ?? 0), totalValue: round2(row?.totalValue), totalProfit: round2(row?.totalProfit) };
 }
 
 // Per-user pin lookup for the board. Returns the time the viewing user pinned
@@ -936,25 +974,24 @@ export const transactionRepository = {
     return enrichTransactionsLightweight(txns);
   },
 
-  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: "newest" | "oldest", pinnedForUserId?: string, branchId?: string): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
+  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: PipelineSqlSort, pinnedForUserId?: string, branchId?: string, filters?: PipelineFilters): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
     const emptyPage = { items: [] as any[], total: 0, page, hasMore: false, totalProfit: 0, totalValue: 0 };
 
     if (!(PIPELINE_COLUMNS as readonly string[]).includes(column)) {
       return emptyPage;
     }
 
-    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter, branchId);
-    const baseOrderBy = buildPipelineOrderBy(column, sort);
+    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter, branchId, filters);
+    const baseOrderBy = buildPipelineOrderByForSort(column, sort);
 
-    const [countResult] = await db.select({ total: count() }).from(transaction).where(where);
-    const total = countResult?.total || 0;
-
-    const totalProfit = 0;
-    const totalValue = 0;
     const offset = (page - 1) * limit;
+    const totalsPromise = aggregatePipelineColumn(where, column, page === 1);
 
     if (!pinnedForUserId) {
-      const txns = await db.select().from(transaction).where(where).orderBy(baseOrderBy).limit(limit).offset(offset);
+      const [{ total, totalValue, totalProfit }, txns] = await Promise.all([
+        totalsPromise,
+        db.select().from(transaction).where(where).orderBy(baseOrderBy).limit(limit).offset(offset),
+      ]);
       const enriched = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
       return { items: enriched, total, page, hasMore: page * limit < total, totalProfit, totalValue };
     }
@@ -963,13 +1000,16 @@ export const transactionRepository = {
     // column's normal order — applied in SQL so it holds across pagination.
     const pinnedAt = buildPinnedAtExpr(pinnedForUserId);
     const orderByClause = sql`(${pinnedAt}) IS NOT NULL DESC, (${pinnedAt}) DESC NULLS LAST, ${baseOrderBy}`;
-    const rows = await db
-      .select({ ...getTableColumns(transaction), pinned_at: sql<Date | string | null>`(${pinnedAt})` })
-      .from(transaction)
-      .where(where)
-      .orderBy(orderByClause)
-      .limit(limit)
-      .offset(offset);
+    const [{ total, totalValue, totalProfit }, rows] = await Promise.all([
+      totalsPromise,
+      db
+        .select({ ...getTableColumns(transaction), pinned_at: sql<Date | string | null>`(${pinnedAt})` })
+        .from(transaction)
+        .where(where)
+        .orderBy(orderByClause)
+        .limit(limit)
+        .offset(offset),
+    ]);
     const pinnedAtById = new Map<string, Date | string | null>(rows.map((r) => [r.id, r.pinned_at]));
     const txns: Transaction[] = rows.map(({ pinned_at: _pinnedAt, ...txn }) => txn);
     const enriched = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
@@ -997,18 +1037,45 @@ export const transactionRepository = {
   // general-purpose paginated listing. `total` is the true, uncapped count of
   // matching rows (see listPipelineByOldestActivity for how it's reconciled
   // with the capped page actually served).
-  async findPipelineCandidates(scope: Scope | undefined, column: string, agentId: string | undefined, quoteStatusFilter: string | undefined, cap: number, branchId?: string): Promise<{ items: PipelineCandidateItem[]; total: number }> {
+  async findPipelineCandidates(scope: Scope | undefined, column: string, agentId: string | undefined, quoteStatusFilter: string | undefined, cap: number, branchId?: string, filters?: PipelineFilters, withMoney = true): Promise<{ items: PipelineCandidateItem[] } & PipelineTotals> {
     if (!(PIPELINE_COLUMNS as readonly string[]).includes(column)) {
-      return { items: [], total: 0 };
+      return { items: [], total: 0, totalValue: 0, totalProfit: 0 };
     }
 
-    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter, branchId);
-    const [countResult] = await db.select({ total: count() }).from(transaction).where(where);
-    const total = countResult?.total || 0;
-
-    const txns = await db.select().from(transaction).where(where).orderBy(sql`${transaction.created_at} ASC`).limit(cap);
+    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter, branchId, filters);
+    const [{ total, totalValue, totalProfit }, txns] = await Promise.all([
+      aggregatePipelineColumn(where, column, withMoney),
+      db.select().from(transaction).where(where).orderBy(sql`${transaction.created_at} ASC`).limit(cap),
+    ]);
     const items = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
-    return { items, total };
+    return { items, total, totalValue, totalProfit };
+  },
+
+  // Chip counts over the OPEN columns (enquiry, quoted, in_play): one row per
+  // column with the filtered total and a per-quick-chip count. `quick` is not
+  // accepted here — the chips are what is being counted.
+  async countPipelineQuickByColumn(scope: Scope | undefined, agentId: string | undefined, branchId: string | undefined, filters: Omit<PipelineFilters, "quick"> | undefined): Promise<PipelineQuickCounts[]> {
+    const openColumns = ["enquiry", "quoted", "in_play"] as const;
+    return Promise.all(
+      openColumns.map(async (column) => {
+        const where = buildPipelineConditions(scope, column, agentId, undefined, branchId, filters);
+        const [row] = await db
+          .select({
+            all: count(),
+            due_today: sql<number>`COUNT(*) FILTER (WHERE ${quickCond("due_today")})::int`,
+            no_task: sql<number>`COUNT(*) FILTER (WHERE ${quickCond("no_task")})::int`,
+            quiet_7: sql<number>`COUNT(*) FILTER (WHERE ${quickCond("quiet_7")})::int`,
+          })
+          .from(transaction)
+          .where(where);
+        return {
+          all: Number(row?.all ?? 0),
+          due_today: Number(row?.due_today ?? 0),
+          no_task: Number(row?.no_task ?? 0),
+          quiet_7: Number(row?.quiet_7 ?? 0),
+        };
+      }),
+    );
   },
 
   async create(data: InsertTransaction, scope?: Scope): Promise<Transaction> {
@@ -1066,8 +1133,8 @@ export const transactionRepository = {
     const [enquiryResult] = await db.select().from(enquiry_table).where(and(eq(enquiry_table.transaction_id, id), isNull(enquiry_table.deleted_at))).limit(1);
     const rawQuotes = await db.select().from(quote).where(and(eq(quote.transaction_id, id), isNull(quote.deleted_at)));
     const [bookingResult] = await db.select().from(booking).where(eq(booking.transaction_id, id)).limit(1);
-    const [client] = txn.client_id ? await db.select().from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
-    const [agent] = txn.user_id ? await db.select().from(user).where(eq(user.id, txn.user_id)).limit(1) : [undefined];
+    const [client] = txn.client_id ? await db.select(publicClientColumns).from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
+    const [agent] = txn.user_id ? await db.select({ id: user.id, name: user.name, email: user.email, image: user.image, phoneNumber: user.phoneNumber, firstName: user.firstName, lastName: user.lastName }).from(user).where(eq(user.id, txn.user_id)).limit(1) : [undefined];
 
     const quoteIds = rawQuotes.map(q => q.id);
     let allAccoms: any[] = [];

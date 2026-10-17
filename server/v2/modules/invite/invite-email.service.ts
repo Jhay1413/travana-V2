@@ -1,12 +1,13 @@
 import crypto from 'crypto';
 import { escapeHtml } from '../../utils/escape-html';
 import { getPublicBaseUrl } from '../../utils/public-url';
+import { isProductionRuntime, resolveLinkBase } from '../../utils/link-base';
 import { getEmailProvider } from '../../../services/email-provider';
 
 export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-function buildInviteUrl(token: string): string {
-  const base = getPublicBaseUrl() || 'http://localhost:5000';
+export function buildInviteUrl(token: string, requestOrigin?: string | null): string {
+  const base = resolveLinkBase({ configured: getPublicBaseUrl(), requestOrigin, isProduction: isProductionRuntime() });
   return `${base}/accept-invite?token=${encodeURIComponent(token)}`;
 }
 
@@ -36,9 +37,9 @@ export function newInviteCredentials(): { token: string; expiry: Date } {
 }
 
 /** Sends the invite email; failures are logged, never thrown (the invite is already recorded). */
-export async function sendInviteEmail(email: string, orgName: string, token: string): Promise<void> {
+export async function sendInviteEmail(email: string, orgName: string, token: string, requestOrigin?: string | null): Promise<void> {
   try {
-    const url = buildInviteUrl(token);
+    const url = buildInviteUrl(token, requestOrigin);
     const { subject, html, text } = buildInviteEmail(orgName, null, url);
     const provider = getEmailProvider();
     await provider.send({ to: email, subject, html, text });

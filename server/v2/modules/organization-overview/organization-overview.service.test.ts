@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("./organization-overview.repository", () => ({
   organizationOverviewRepository: {
@@ -6,6 +6,8 @@ vi.mock("./organization-overview.repository", () => ({
     getHomeworkerBranches: vi.fn(),
     getAgentsPerformance: vi.fn(),
     getBranchesPerformance: vi.fn(),
+    getCompareTotals: vi.fn(),
+    getProfitSourceTotals: vi.fn(),
   },
 }));
 vi.mock("../plan/plan.service", () => ({ planService: { getOrgPlan: vi.fn() } }));
@@ -14,6 +16,7 @@ vi.mock("../branch/branch.service", () => ({ branchService: { assertBranchInOrg:
 import { organizationOverviewService, buildHomeworkerRows } from "./organization-overview.service";
 import { organizationOverviewRepository as repo } from "./organization-overview.repository";
 import { planService } from "../plan/plan.service";
+import { branchService } from "../branch/branch.service";
 import type { AgentPerformanceRow, HomeworkerBranchRecord } from "./organization-overview.types";
 
 const scope = { orgRole: "org_admin", orgId: "o1", branchId: null } as never;
@@ -47,6 +50,8 @@ function agentRow(over: Partial<AgentPerformanceRow> = {}): AgentPerformanceRow 
     rangeSales: 1000,
     rangeQuotes: 9,
     avgPerBooking: 50,
+    ppb: 50,
+    openDeals: 2,
     target: 400,
     achievedPercent: 50,
     ...over,
@@ -116,7 +121,7 @@ describe("organizationOverviewService.getStats - homeworkers list", () => {
 
     const result = await organizationOverviewService.getStats(scope);
 
-    expect(repo.getAgentsPerformance).toHaveBeenCalledWith("o1", "month", undefined, undefined, undefined);
+    expect(repo.getAgentsPerformance).toHaveBeenCalledWith("o1", "month", undefined, undefined, undefined, { includeOpenDeals: false });
     expect(result.kind).toBe("multi-branch");
     expect(result.homeworkers).toHaveLength(1);
     expect(result.homeworkers[0].branchId).toBe("hb1");
@@ -184,5 +189,150 @@ describe("organizationOverviewService.getBranchesPerformance", () => {
     const result = await organizationOverviewService.getBranchesPerformance(scope, "month");
 
     expect(result.rows).toEqual([{ id: "b1", branchType: "shop" }]);
+  });
+});
+
+describe("organizationOverviewService - fail-closed org scope", () => {
+  const noOrg = { orgRole: "platform_admin", orgId: "", branchId: null } as never;
+
+  it.each([
+    ["getStats", () => organizationOverviewService.getStats(noOrg)],
+    ["getAgentsPerformance", () => organizationOverviewService.getAgentsPerformance(noOrg, "month")],
+    ["getBranchesPerformance", () => organizationOverviewService.getBranchesPerformance(noOrg, "month")],
+    ["getCompare", () => organizationOverviewService.getCompare(noOrg, "week", "prev")],
+    ["getProfitSources", () => organizationOverviewService.getProfitSources(noOrg)],
+  ])("%s throws 403 when there is no org context", async (_name, call) => {
+    await expect(call()).rejects.toMatchObject({ statusCode: 403, message: "Select an organisation first" });
+    expect(repo.getStats).not.toHaveBeenCalled();
+    expect(repo.getCompareTotals).not.toHaveBeenCalled();
+    expect(repo.getProfitSourceTotals).not.toHaveBeenCalled();
+  });
+
+  it("a platform admin acting inside an org is scoped to that org", async () => {
+    vi.mocked(repo.getProfitSourceTotals).mockResolvedValue([]);
+    const inOrg = { orgRole: "platform_admin", orgId: "o9", branchId: null } as never;
+
+    await organizationOverviewService.getProfitSources(inOrg);
+
+    expect(vi.mocked(repo.getProfitSourceTotals).mock.calls[0][0]).toBe("o9");
+  });
+});
+
+describe("organizationOverviewService.getCompare", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-17T14:30:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("derives ppb and close rate from the raw totals, clamping close rate at 100", async () => {
+    vi.mocked(repo.getCompareTotals).mockResolvedValue({
+      now: { profit: 1200, bookings: 4, quotedDeals: 16 },
+      other: { profit: 500, bookings: 5, quotedDeals: 2 },
+    });
+
+    const result = await organizationOverviewService.getCompare(scope, "month", "prev");
+
+    expect(result.now).toEqual({ profit: 1200, bookings: 4, ppb: 300, closeRate: 25 });
+    expect(result.other).toEqual({ profit: 500, bookings: 5, ppb: 100, closeRate: 100 });
+  });
+
+  it("returns 0 ppb and close rate for empty windows", async () => {
+    vi.mocked(repo.getCompareTotals).mockResolvedValue({
+      now: { profit: 0, bookings: 0, quotedDeals: 0 },
+      other: { profit: 0, bookings: 0, quotedDeals: 0 },
+    });
+
+    const result = await organizationOverviewService.getCompare(scope, "week", "prev");
+
+    expect(result.now).toEqual({ profit: 0, bookings: 0, ppb: 0, closeRate: 0 });
+  });
+
+  it("passes London windows to the repository and returns them as ISO strings with labels", async () => {
+    vi.mocked(repo.getCompareTotals).mockResolvedValue({
+      now: { profit: 0, bookings: 0, quotedDeals: 0 },
+      other: { profit: 0, bookings: 0, quotedDeals: 0 },
+    });
+
+    const result = await organizationOverviewService.getCompare(scope, "month", "year", "b1");
+
+    const [orgId, windows, branchId] = vi.mocked(repo.getCompareTotals).mock.calls[0];
+    expect(orgId).toBe("o1");
+    expect(branchId).toBe("b1");
+    expect(windows.now.from.toISOString()).toBe("2026-09-30T23:00:00.000Z");
+    expect(result.windows.other).toEqual({ from: "2025-09-30T23:00:00.000Z", to: "2025-10-17T14:30:00.000Z" });
+    expect(result.labels).toEqual({ now: "This month so far", other: "Same point last year" });
+    expect(result).toMatchObject({ period: "month", against: "year" });
+  });
+
+  it("normalises year/year to prev", async () => {
+    vi.mocked(repo.getCompareTotals).mockResolvedValue({
+      now: { profit: 0, bookings: 0, quotedDeals: 0 },
+      other: { profit: 0, bookings: 0, quotedDeals: 0 },
+    });
+
+    const result = await organizationOverviewService.getCompare(scope, "year", "year");
+
+    expect(result.against).toBe("prev");
+  });
+
+  it("checks the branch belongs to the org before querying", async () => {
+    vi.mocked(branchService.assertBranchInOrg).mockRejectedValueOnce(new Error("Branch not found"));
+
+    await expect(organizationOverviewService.getCompare(scope, "week", "prev", "bx")).rejects.toThrow("Branch not found");
+
+    expect(branchService.assertBranchInOrg).toHaveBeenCalledWith("bx", "o1");
+    expect(repo.getCompareTotals).not.toHaveBeenCalled();
+  });
+});
+
+describe("organizationOverviewService.getProfitSources", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-31T23:30:00Z")); // London is already 1 April
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("labels, drops empty rows, sorts by profit then label and totals the rest", async () => {
+    vi.mocked(repo.getProfitSourceTotals).mockResolvedValue([
+      { source: "WHATSAPP", profit: 100, bookings: 1 },
+      { source: "none", profit: 400, bookings: 3 },
+      { source: "FACEBOOK", profit: 100, bookings: 2 },
+      { source: "SHOP", profit: 0, bookings: 0 },
+      { source: "PHONE_ENQUIRY", profit: 250.5, bookings: 1 },
+    ]);
+
+    const result = await organizationOverviewService.getProfitSources(scope);
+
+    expect(result.rows.map((r) => [r.source, r.label])).toEqual([
+      ["none", "Not recorded"],
+      ["PHONE_ENQUIRY", "Phone enquiry"],
+      ["FACEBOOK", "Facebook"],
+      ["WHATSAPP", "WhatsApp"],
+    ]);
+    expect(result.totals).toEqual({ profit: 850.5, bookings: 7 });
+  });
+
+  it("uses the London month window and labels it YYYY-MM", async () => {
+    vi.mocked(repo.getProfitSourceTotals).mockResolvedValue([]);
+
+    const result = await organizationOverviewService.getProfitSources(scope, "b1");
+
+    const [orgId, start, end, branchId] = vi.mocked(repo.getProfitSourceTotals).mock.calls[0];
+    expect(orgId).toBe("o1");
+    expect(branchId).toBe("b1");
+    expect(start.toISOString()).toBe("2026-03-31T23:00:00.000Z");
+    expect(end.toISOString()).toBe("2026-04-30T23:00:00.000Z");
+    expect(result.month).toBe("2026-04");
+    expect(result.rows).toEqual([]);
+    expect(result.totals).toEqual({ profit: 0, bookings: 0 });
+  });
+
+  it("keeps an unknown source key with its title-cased label", async () => {
+    vi.mocked(repo.getProfitSourceTotals).mockResolvedValue([{ source: "WALK_IN", profit: 10, bookings: 1 }]);
+
+    const result = await organizationOverviewService.getProfitSources(scope);
+
+    expect(result.rows[0]).toMatchObject({ source: "WALK_IN", label: "Walk In" });
   });
 });

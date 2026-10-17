@@ -7,7 +7,33 @@ import { getScope } from "../../utils/scope";
 import { authStorage } from "../../middlewares/auth";
 import { normalizeEnquiry } from "../../utils/enum-normalizers";
 import { uploadImageToS3 } from "../../utils/image-storage";
-import type { ListPipelineByStatusQuery } from "./transaction.validator";
+import type { ListPipelineByStatusQuery, PipelineCountsQuery } from "./transaction.validator";
+import type { DealPriority, PipelineFilters } from "./transaction.types";
+
+function splitCsv(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const parts = Array.from(new Set(value.split(",").map((p) => p.trim()).filter(Boolean)));
+  return parts.length > 0 ? parts : undefined;
+}
+
+// Turns the (already validated) raw query strings into the service's filter shape.
+// Only keys that were actually passed are set, so no-filter calls stay filter-free.
+function buildPipelineFilters(query: {
+  search?: string;
+  priority?: string;
+  tourOperatorId?: string;
+  quick?: PipelineFilters["quick"];
+}): PipelineFilters {
+  const filters: PipelineFilters = {};
+  const search = query.search?.trim();
+  if (search) filters.search = search;
+  const priorities = splitCsv(query.priority) as DealPriority[] | undefined;
+  if (priorities) filters.priorities = priorities;
+  const tourOperatorIds = splitCsv(query.tourOperatorId);
+  if (tourOperatorIds) filters.tourOperatorIds = tourOperatorIds;
+  if (query.quick) filters.quick = query.quick;
+  return filters;
+}
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   // New-enum identity pass-through
@@ -140,10 +166,26 @@ export const transactionController = {
     // Already validated against the enum by listPipelineByStatusValidator —
     // validate() checks req.query but doesn't reassign it, so this reads the
     // raw query typed against the validator's own inferred shape.
-    const { sort, branchId } = req.query as unknown as ListPipelineByStatusQuery;
+    const { sort, branchId, search, priority, tourOperatorId, quick } = req.query as unknown as ListPipelineByStatusQuery;
     const scope = getScope(req);
-    const result = await transactionService.listPipelineByStatus(scope, column, page, limit, agentId || undefined, quoteStatusFilter || undefined, sort, scope.userId ?? undefined, branchId);
+    const filters = buildPipelineFilters({ search, priority, tourOperatorId, quick });
+    const result = await transactionService.listPipelineByStatus(scope, column, page, limit, agentId || undefined, quoteStatusFilter || undefined, sort, scope.userId ?? undefined, branchId, filters);
     return successResponse(res, result, "Pipeline data retrieved");
+  }),
+
+  getPipelineCounts: asyncHandler(async (req: Request, res: Response) => {
+    // Validated by pipelineCountsValidator (validate() doesn't reassign req.query).
+    const { branchId, search, priority, tourOperatorId } = req.query as unknown as PipelineCountsQuery;
+    const agentId = req.query.agentId as string | undefined;
+    const { priorities, tourOperatorIds, search: term } = buildPipelineFilters({ search, priority, tourOperatorId });
+    const counts = await transactionService.getPipelineCounts(getScope(req), {
+      agentId: agentId || undefined,
+      branchId,
+      search: term,
+      priorities,
+      tourOperatorIds,
+    });
+    return successResponse(res, counts, "Pipeline counts retrieved");
   }),
 
   getTransactionById: asyncHandler(async (req: Request, res: Response) => {

@@ -1,123 +1,68 @@
-import { Link, useLocation } from "wouter";
-import { Ellipsis, Mail, MessageCircle } from "lucide-react";
-// Deep import on purpose — the conversations feature barrel pulls the whole
+import { useLocation } from "wouter";
+import { Instagram, Mail, MessageCircle, Send, type LucideIcon } from "lucide-react";
+// Deep imports on purpose — the conversations feature barrel pulls the whole
 // inbox into the bundle (see app-sidenav.tsx for the same pattern).
 import { useConversations } from "@/features/conversations/api/use-conversations-queries";
+import type { SsConversation } from "@/features/conversations/api/conversations.api";
 import { cn } from "@/lib/utils";
+import { EmptyLine, HomeLink, PersonAvatar, RowButton } from "./home/home-ui";
 
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const SHOWN = 5;
 
-// "25m ago" / "3h ago" / "Yesterday" / "Monday" / "12 Aug" — like the design.
-function inboxTime(date?: string | null): string {
+/** "25m" / "3h" / "2d" since the last message. */
+export function waitLabel(date: string | null | undefined, now: number = Date.now()): string {
   if (!date) return "";
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return "";
-  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
+  const t = new Date(date).getTime();
+  if (isNaN(t)) return "";
+  const mins = Math.max(0, Math.floor((now - t) / 60000));
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24 && d.getDate() === new Date().getDate()) return `${hrs}h ago`;
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const daysBack = Math.ceil((startOfToday.getTime() - d.getTime()) / 86_400_000);
-  if (daysBack <= 1) return "Yesterday";
-  if (daysBack < 7) return WEEKDAYS[d.getDay()];
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
 }
 
-function MessengerIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-9 w-9" aria-hidden>
-      <defs>
-        <linearGradient id="msgr-grad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#00B2FF" />
-          <stop offset="100%" stopColor="#006AFF" />
-        </linearGradient>
-      </defs>
-      <circle cx="12" cy="12" r="11" fill="url(#msgr-grad)" />
-      <path
-        fill="#fff"
-        d="M12 4.9c-4.06 0-7.2 2.97-7.2 6.67 0 2.09.99 3.94 2.6 5.17v2.36l2.4-1.32c.7.19 1.44.3 2.2.3 4.06 0 7.2-2.97 7.2-6.67S16.06 4.9 12 4.9zm.76 8.98-1.87-2-3.64 2 4-4.25 1.92 2 3.59-2-4 4.25z"
-      />
-    </svg>
-  );
-}
-
-function InstagramIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-9 w-9" aria-hidden>
-      <defs>
-        <radialGradient id="ig-grad" cx="0.3" cy="1.1" r="1.3">
-          <stop offset="0%" stopColor="#FFDD55" />
-          <stop offset="30%" stopColor="#FF543E" />
-          <stop offset="60%" stopColor="#C837AB" />
-          <stop offset="100%" stopColor="#3771C8" />
-        </radialGradient>
-      </defs>
-      <circle cx="12" cy="12" r="11" fill="url(#ig-grad)" />
-      <rect x="6.8" y="6.8" width="10.4" height="10.4" rx="3.2" fill="none" stroke="#fff" strokeWidth="1.5" />
-      <circle cx="12" cy="12" r="2.5" fill="none" stroke="#fff" strokeWidth="1.5" />
-      <circle cx="15.35" cy="8.65" r="0.85" fill="#fff" />
-    </svg>
-  );
-}
-
-function ChannelIcon({ channelType }: { channelType?: string | null }) {
+function channelBadge(channelType?: string | null): { icon: LucideIcon; className: string; label: string } {
   const t = (channelType || "").toLowerCase();
-  if (t.includes("messenger") || t.includes("facebook")) return <MessengerIcon />;
-  if (t.includes("instagram")) return <InstagramIcon />;
-  if (t.includes("email") || t.includes("mail")) {
-    return (
-      <span className="grid h-9 w-9 place-items-center rounded-full bg-slate-500 text-white">
-        <Mail className="h-4.5 w-4.5" />
-      </span>
-    );
-  }
-  return (
-    <span className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500 text-white">
-      <MessageCircle className="h-4.5 w-4.5" />
-    </span>
-  );
+  if (t.includes("messenger") || t.includes("facebook")) return { icon: Send, className: "bg-blue-500", label: "Messenger" };
+  if (t.includes("instagram")) return { icon: Instagram, className: "bg-pink-500", label: "Instagram" };
+  if (t.includes("email") || t.includes("mail")) return { icon: Mail, className: "bg-amber-500", label: "Email" };
+  return { icon: MessageCircle, className: "bg-emerald-500", label: "Chat" };
 }
 
-function contactName(c: any): string {
-  const contact = c.contact as Record<string, any> | null | undefined;
-  return (
-    contact?.name ||
-    [contact?.first_name, contact?.last_name].filter(Boolean).join(" ") ||
-    c.subject ||
-    "Unknown contact"
-  );
-}
-
-function agentInitials(c: any): string {
-  const u = c.assigned_user as Record<string, any> | null | undefined;
-  const name =
-    [u?.firstName, u?.lastName].filter(Boolean).join(" ") || u?.name || u?.username || "";
-  return (
-    name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p: string) => p[0]?.toUpperCase())
-      .join("") || "—"
-  );
-}
-
-function statusPill(c: any): { label: string; className: string } | null {
-  if (c.needs_reply) return { label: "Needs Reply", className: "bg-red-500 text-white" };
-  if ((c.status || "").toLowerCase() === "closed")
-    return { label: "Closed", className: "bg-emerald-600 text-white" };
-  return null;
+function contactName(c: SsConversation): string {
+  const contact = c.contact as Record<string, unknown> | null | undefined;
+  const name = typeof contact?.name === "string" ? contact.name : "";
+  const first = typeof contact?.first_name === "string" ? contact.first_name : "";
+  const last = typeof contact?.last_name === "string" ? contact.last_name : "";
+  return name || [first, last].filter(Boolean).join(" ") || c.subject || "Unknown contact";
 }
 
 // A snooze is only active while `snoozed_until` is in the future — same rule
 // as the inbox's own map.ts (isSnoozeActive), duplicated here since that
 // helper isn't exported and this widget works off the raw list item rather
 // than the mapped UI Conversation.
-function isSnoozed(c: any): boolean {
+function isSnoozed(c: SsConversation): boolean {
   const until = c.snoozed_until ? Date.parse(c.snoozed_until) : NaN;
   return !Number.isNaN(until) && until > Date.now();
+}
+
+function ChannelAvatar({ name, channelType }: { name: string; channelType?: string | null }) {
+  const { icon: Icon, className, label } = channelBadge(channelType);
+  return (
+    <span className="relative h-[38px] w-[38px] shrink-0">
+      <PersonAvatar name={name} size={38} />
+      <span
+        title={label}
+        className={cn(
+          "absolute -bottom-1 -right-1 grid h-[17px] w-[17px] place-items-center rounded-full border-2 border-card text-white",
+          className,
+        )}
+      >
+        <Icon className="h-[9px] w-[9px]" strokeWidth={2.4} />
+      </span>
+    </span>
+  );
 }
 
 export function ConversationsTab() {
@@ -129,96 +74,49 @@ export function ConversationsTab() {
   // `snoozed_until` — see conversations/types.ts), so a client-side check on
   // top is required to actually exclude them.
   const { data } = useConversations({ pageSize: 8, status: "open" });
-  const conversations = (data?.items ?? []).filter((c: any) => !isSnoozed(c));
+  const conversations = (data?.items ?? []).filter((c) => !isSnoozed(c)).slice(0, SHOWN);
 
   return (
-    <div className="flex min-h-[300px] flex-col" data-testid="panel-dashboard-conversations">
-      <div className="flex-1 space-y-2">
-        {conversations.length === 0 ? (
-          <div
-            className="rounded-lg border border-dashed border-black/10 p-8 text-center text-xs text-black/45 dark:border-white/10 dark:text-white/45"
-            data-testid="empty-dashboard-conversations"
-          >
-            No conversations yet
-          </div>
-        ) : (
-          conversations.map((c) => {
-            const name = contactName(c);
-            const preview = c.last_message?.text || c.subject || "";
-            const pill = statusPill(c);
-            return (
-              <div
-                key={c.id}
-                role="link"
-                tabIndex={0}
-                onClick={() => navigate(`/conversations?conversation=${c.id}`)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    navigate(`/conversations?conversation=${c.id}`);
-                  }
-                }}
-                className="group flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2.5 transition hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
-                data-testid={`row-dashboard-conversation-${c.id}`}
-              >
-                <ChannelIcon channelType={c.channel_type} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <span className="truncate text-sm font-medium">{name}</span>
-                    <span className="shrink-0 text-xs font-semibold text-[#fe9a00]">
-                      - {inboxTime(c.last_message_at || c.created_at)}
-                    </span>
-                  </div>
-                  {preview && (
-                    <div className="mt-0.5 truncate pl-2 text-[13px] text-[#a195a5] dark:text-white/40">
-                      {preview}
-                    </div>
-                  )}
+    <div className="flex flex-col" data-testid="panel-dashboard-conversations">
+      {conversations.length === 0 ? (
+        <EmptyLine testId="empty-dashboard-conversations">You are all caught up.</EmptyLine>
+      ) : (
+        conversations.map((c) => {
+          const name = contactName(c);
+          const preview = c.last_message?.text || c.subject || "";
+          const wait = waitLabel(c.last_message_at || c.created_at);
+          const href = `/conversations?conversation=${c.id}`;
+          return (
+            <RowButton
+              key={c.id}
+              onActivate={() => navigate(href)}
+              className="flex items-center gap-3 rounded-none border-t border-social-border py-3 hover:bg-social-page xl:gap-3.5"
+              testId={`row-dashboard-conversation-${c.id}`}
+            >
+              <ChannelAvatar name={name} channelType={c.channel_type} />
+              <div className="min-w-0 flex-1">
+                <div className={cn("truncate text-[13px] xl:text-[14px]", c.needs_reply ? "font-semibold" : "font-medium")}>
+                  {name}
                 </div>
-                <div className="flex shrink-0 items-center gap-2 self-center">
-                  {pill && (
-                    <span
-                      className={cn(
-                        "rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                        pill.className,
-                      )}
-                      data-testid={`pill-dashboard-conversation-${c.id}`}
-                    >
-                      {pill.label}
-                    </span>
-                  )}
-                  <span
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-[10px] font-bold text-red-400"
-                    aria-hidden
-                  >
-                    {agentInitials(c)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/conversations?conversation=${c.id}`);
-                    }}
-                    className="grid h-7 w-7 place-items-center rounded-full text-black/50 transition hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/10 dark:hover:text-white"
-                    aria-label="Open conversation"
-                  >
-                    <Ellipsis className="h-4 w-4" />
-                  </button>
-                </div>
+                {preview && <div className="truncate text-[11px] text-social-muted xl:text-[12px]">{preview}</div>}
               </div>
-            );
-          })
-        )}
-      </div>
+              {c.needs_reply && (
+                <span
+                  className="whitespace-nowrap text-[11px] font-semibold text-amber-800 xl:text-[12px] dark:text-amber-400"
+                  data-testid={`pill-dashboard-conversation-${c.id}`}
+                >
+                  Needs reply{wait ? ` · ${wait}` : ""}
+                </span>
+              )}
+            </RowButton>
+          );
+        })
+      )}
 
-      <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/5">
-        <Link
-          href="/conversations"
-          className="text-sm font-semibold text-[#fe9a00] hover:underline"
-          data-testid="link-view-all-conversations"
-        >
-          Open Inbox
-        </Link>
+      <div className="mt-3.5">
+        <HomeLink href="/conversations" testId="link-view-all-conversations">
+          Open inbox
+        </HomeLink>
       </div>
     </div>
   );

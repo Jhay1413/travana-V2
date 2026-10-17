@@ -1,29 +1,21 @@
 import { useState } from "react";
-import {
-  ChevronRight,
-  Download,
-  FileText,
-  Trash2,
-  X,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Download, FileText, Paperclip, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { FileItem } from "../client-types";
-import type { ClientFile } from "@shared/schema";
+import type { ClientFileItem } from "@/features/client/types";
 import { clientFileApi } from "@/api";
 
 interface ClientFilesTabProps {
-  clientFiles: ClientFile[];
+  clientFiles: ClientFileItem[];
   onDeleteFile: (id: string) => void;
-  filteredFiles?: FileItem[];
   onUploadFile: () => void;
   role: string;
+  /** Read-only roles can neither upload nor delete. */
+  readOnly?: boolean;
 }
 
 function formatDate(d: string | Date | null) {
@@ -56,11 +48,11 @@ function isPdfMime(mime: string) {
 export function ClientFilesTab({
   clientFiles,
   onDeleteFile,
-  filteredFiles,
   onUploadFile,
   role,
+  readOnly = false,
 }: ClientFilesTabProps) {
-  const [previewFile, setPreviewFile] = useState<ClientFile | null>(null);
+  const [previewFile, setPreviewFile] = useState<ClientFileItem | null>(null);
 
   // Inline URL renders in the dialog (image/PDF); download URL forces a save.
   const previewUrl = previewFile ? clientFileApi.getPreviewUrl(previewFile.id) : "";
@@ -68,78 +60,68 @@ export function ClientFilesTab({
 
   return (
     <>
-      <Card className="min-w-0 overflow-hidden rounded-3xl border-black/10 bg-white/70 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold" data-testid="text-files-title">
-              Files
-            </div>
-            <div className="mt-1 text-xs text-black/55" data-testid="text-files-subtitle">
-              Upload and manage client documents.
-            </div>
-          </div>
-          <Button
-            size="sm"
-            className="h-9 rounded-2xl bg-black px-3 text-white hover:bg-black/90"
-            data-testid="button-files-upload"
+      <div data-testid="list-files">
+        {!readOnly && (
+          <button
+            type="button"
             onClick={onUploadFile}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-ticket-dashed text-sm font-medium text-social-muted transition hover:text-foreground"
+            data-testid="button-files-upload"
           >
-            <FileText className="mr-2 h-4 w-4" />
-            Upload File
-          </Button>
-        </div>
-
-        <div className="mt-4 grid min-w-0 gap-3" data-testid="list-files">
-          {clientFiles.map((f) => (
-            <button
+            <Paperclip className="h-4 w-4" strokeWidth={1.8} /> Add files
+          </button>
+        )}
+        {clientFiles.map((f) => {
+          const meta = [
+            fileExt(f.originalName),
+            f.allocationType || "Client level",
+            f.uploadedByName || null,
+            formatDate(f.createdAt),
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <div
               key={f.id}
-              type="button"
-              onClick={() => setPreviewFile(f)}
-              className="flex w-full min-w-0 items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/60 p-3 text-left transition hover:bg-black/[0.03]"
+              className="mt-0 flex items-center gap-3.5 border-t border-social-border py-4 first:mt-3"
               data-testid={`row-file-uploaded-${f.id}`}
             >
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="truncate text-sm font-semibold" data-testid={`text-file-uploaded-name-${f.id}`}>
-                    {f.title || f.originalName}
-                  </div>
-                  {f.category && (
-                    <span className="shrink-0 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                      {f.category}
+              <button type="button" onClick={() => setPreviewFile(f)} className="flex min-w-0 flex-1 items-center gap-3.5 text-left">
+                <span className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] bg-muted">
+                  <FileText className="h-4 w-4" strokeWidth={1.8} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-semibold" data-testid={`text-file-uploaded-name-${f.id}`}>
+                      {f.title || f.originalName}
                     </span>
-                  )}
-                </div>
-                {/* Long file names are clipped with an ellipsis; the full line is on hover. */}
-                <div
-                  className="mt-1 truncate text-xs text-black/55"
-                  title={`${fileExt(f.originalName)} · ${f.originalName} · ${f.allocationType || "Client level"} · ${formatDate(f.createdAt)}`}
-                  data-testid={`text-file-uploaded-meta-${f.id}`}
-                >
-                  {fileExt(f.originalName)} · {f.originalName} · {f.allocationType || "Client level"} · {formatDate(f.createdAt)}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {role === "Admin" && (
-                  <span
-                    role="button"
-                    onClick={(e) => { e.stopPropagation(); onDeleteFile(f.id); }}
-                    className="rounded-xl border border-red-500/20 bg-red-500/10 p-1.5 text-red-600 transition hover:bg-red-500/20"
-                    data-testid={`button-delete-file-${f.id}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    {f.category && (
+                      <span className="shrink-0 rounded-full bg-status-scheduled-bg px-2 py-0.5 text-[10px] font-semibold text-status-scheduled-fg">
+                        {f.category}
+                      </span>
+                    )}
                   </span>
-                )}
-                <ChevronRight className="h-4 w-4 text-black/35" aria-hidden />
-              </div>
-            </button>
-          ))}
-          {clientFiles.length === 0 && (
-            <div className="rounded-2xl border border-black/10 bg-white/60 p-4 text-center">
-              <div className="text-sm text-black/55">No files uploaded yet.</div>
+                  <span className="mt-0.5 block truncate text-xs text-social-muted" title={meta} data-testid={`text-file-uploaded-meta-${f.id}`}>
+                    {meta}
+                  </span>
+                </span>
+              </button>
+              {role === "Admin" && !readOnly && (
+                <button
+                  type="button"
+                  aria-label={`Delete ${f.originalName}`}
+                  onClick={() => onDeleteFile(f.id)}
+                  className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-social-muted transition hover:bg-muted hover:text-destructive"
+                  data-testid={`button-delete-file-${f.id}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
-          )}
-        </div>
-      </Card>
+          );
+        })}
+        {clientFiles.length === 0 && <p className="mt-3 border-t border-social-border py-6 text-sm text-social-muted">No files yet.</p>}
+      </div>
 
       <Dialog open={!!previewFile} onOpenChange={(open) => { if (!open) setPreviewFile(null); }}>
         <DialogContent className="max-w-4xl rounded-3xl p-0 overflow-hidden" data-testid="dialog-file-preview">

@@ -17,6 +17,12 @@ vi.mock("./invite.repository", () => ({
   },
 }));
 vi.mock("../homeworker/homeworker.service", () => ({ homeworkerService: { invite: vi.fn() } }));
+vi.mock("../organization/organization-seat.service", () => ({
+  organizationSeatService: { assertSeatAvailable: vi.fn() },
+}));
+vi.mock("../organization/organization-audit.service", () => ({
+  organizationAuditService: { record: vi.fn() },
+}));
 vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
 vi.mock("../../utils/public-url", () => ({ getPublicBaseUrl: () => "http://localhost:5000" }));
 vi.mock("../../../services/email-provider", () => ({ getEmailProvider: () => ({ send: vi.fn() }) }));
@@ -25,6 +31,8 @@ import { inviteService } from "./invite.service";
 import { inviteRepository } from "./invite.repository";
 import { homeworkerService } from "../homeworker/homeworker.service";
 import { branchRepository } from "../branch/branch.repository";
+import { organizationSeatService } from "../organization/organization-seat.service";
+import { organizationAuditService } from "../organization/organization-audit.service";
 
 // A branch manager actor bound to branch b1.
 const MANAGER = { orgId: "o1", userId: "m1", orgRole: "branch_manager", branchId: "b1" };
@@ -77,7 +85,7 @@ describe("inviteService.send — homeworker delegation", () => {
       ADMIN,
     );
 
-    expect(homeworkerService.invite).toHaveBeenCalledWith({ email: "x@y.com", profitSharePercent: "40", displayName: "Jo" }, ADMIN);
+    expect(homeworkerService.invite).toHaveBeenCalledWith({ email: "x@y.com", profitSharePercent: "40", displayName: "Jo" }, ADMIN, undefined);
     expect(inviteRepository.createPendingUserWithBranchMembership).not.toHaveBeenCalled();
     expect(result).toMatchObject({ userId: "u9", branchId: "hb1" });
   });
@@ -225,5 +233,129 @@ describe("inviteService.revoke — guards", () => {
     vi.mocked(inviteRepository.findById).mockResolvedValue({ id: "u1", orgId: "o1", inviteToken: null } as never);
 
     await expect(inviteService.revoke("u1", MANAGER)).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Seats, names and audit
+// ---------------------------------------------------------------------------
+
+describe("inviteService.send — seats, names and audit", () => {
+  const REQUEST_ACTOR = { userId: "a1", ipAddress: "1.1.1.1", userAgent: "ua", impersonating: false };
+  const ADMIN = { orgId: "o1", userId: "a1", orgRole: "org_admin", branchId: null, requestActor: REQUEST_ACTOR };
+  const payload = { email: "New@Y.com", branchId: "b1", orgRole: "agent" as const };
+
+  beforeEach(() => {
+    vi.mocked(branchRepository.findById).mockResolvedValue({ id: "b1" } as never);
+    vi.mocked(inviteRepository.findByEmail).mockResolvedValue(null);
+    vi.mocked(inviteRepository.getOrgName).mockResolvedValue("Acme");
+    vi.mocked(inviteRepository.createPendingUserWithBranchMembership).mockImplementation(
+      async (values) => ({ id: values.id }) as never,
+    );
+  });
+
+  it("409s with the seat error BEFORE creating anything", async () => {
+    vi.mocked(organizationSeatService.assertSeatAvailable).mockRejectedValueOnce(
+      Object.assign(new Error("All 10 seats are in use"), { statusCode: 409 }),
+    );
+
+    await expect(inviteService.send(payload, ADMIN)).rejects.toMatchObject({ statusCode: 409 });
+    expect(inviteRepository.createPendingUserWithBranchMembership).not.toHaveBeenCalled();
+    expect(organizationAuditService.record).not.toHaveBeenCalled();
+  });
+
+  it("checks seats after the existing-user check, and skips referral partners", async () => {
+    vi.mocked(inviteRepository.findByEmail).mockResolvedValue({ id: "x", inviteToken: null, orgId: "o1" } as never);
+    await expect(inviteService.send(payload, ADMIN)).rejects.toMatchObject({ statusCode: 409 });
+    expect(organizationSeatService.assertSeatAvailable).not.toHaveBeenCalled();
+
+    vi.mocked(inviteRepository.findByEmail).mockResolvedValue(null);
+    await inviteService.send({ ...payload, orgRole: "referral_agent" }, ADMIN);
+    expect(organizationSeatService.assertSeatAvailable).not.toHaveBeenCalled();
+
+    await inviteService.send(payload, ADMIN);
+    expect(organizationSeatService.assertSeatAvailable).toHaveBeenCalledWith("o1");
+  });
+
+  it("does not seat-check a resend of an existing pending invite", async () => {
+    vi.mocked(inviteRepository.findByEmail).mockResolvedValue({
+      id: "u5", orgId: "o1", inviteToken: "t", orgRole: "agent", email: "new@y.com",
+    } as never);
+    vi.mocked(inviteRepository.findById).mockResolvedValue({ id: "u5", orgId: "o1", inviteToken: "t", email: "new@y.com" } as never);
+
+    await inviteService.send(payload, ADMIN);
+
+    expect(organizationSeatService.assertSeatAvailable).not.toHaveBeenCalled();
+    expect(inviteRepository.createPendingUserWithBranchMembership).not.toHaveBeenCalled();
+    expect(organizationAuditService.record).toHaveBeenCalledWith(expect.objectContaining({ action: "invite.resend" }));
+  });
+
+  it("stores the optional first and last name and uses them as the display name", async () => {
+    await inviteService.send({ ...payload, firstName: " Ada ", lastName: "Lovelace" }, ADMIN);
+
+    const values = vi.mocked(inviteRepository.createPendingUserWithBranchMembership).mock.calls[0][0];
+    expect(values).toMatchObject({ firstName: "Ada", lastName: "Lovelace", name: "Ada Lovelace", email: "new@y.com" });
+  });
+
+  it("falls back to the email as the name and empty first/last name", async () => {
+    await inviteService.send(payload, ADMIN);
+
+    const values = vi.mocked(inviteRepository.createPendingUserWithBranchMembership).mock.calls[0][0];
+    expect(values).toMatchObject({ firstName: "", lastName: "", name: "new@y.com" });
+  });
+
+  it("writes an invite.send audit row for the new user", async () => {
+    await inviteService.send(payload, ADMIN);
+
+    expect(organizationAuditService.record).toHaveBeenCalledWith({
+      actor: REQUEST_ACTOR,
+      action: "invite.send",
+      orgId: "o1",
+      targetUserId: expect.any(String),
+      metadata: { email: "new@y.com", orgRole: "agent", branchId: "b1" },
+    });
+  });
+
+  it("leaves the homeworker arm to the homeworker service (it checks seats and audits itself)", async () => {
+    vi.mocked(homeworkerService.invite).mockResolvedValue({ userId: "u9", branchId: "hb1", email: "x@y.com", expiresAt: new Date(0) });
+
+    await inviteService.send({ email: "x@y.com", orgRole: "homeworker" }, ADMIN);
+
+    expect(organizationSeatService.assertSeatAvailable).not.toHaveBeenCalled();
+    expect(organizationAuditService.record).not.toHaveBeenCalled();
+  });
+});
+
+describe("inviteService resend / revoke audit", () => {
+  const REQUEST_ACTOR = { userId: "a1", ipAddress: null, userAgent: null, impersonating: false };
+  const ADMIN = { orgId: "o1", userId: "a1", orgRole: "org_admin", branchId: null, requestActor: REQUEST_ACTOR };
+
+  it("audits a resend", async () => {
+    vi.mocked(inviteRepository.findById).mockResolvedValue({ id: "u5", orgId: "o1", inviteToken: "t", email: "a@b.com" } as never);
+    vi.mocked(inviteRepository.getOrgName).mockResolvedValue("Acme");
+
+    await inviteService.resend("u5", ADMIN);
+
+    expect(organizationAuditService.record).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "invite.resend", targetUserId: "u5", orgId: "o1" }),
+    );
+  });
+
+  it("audits a revoke with the user id in metadata (the user row no longer exists)", async () => {
+    vi.mocked(inviteRepository.findById).mockResolvedValue({ id: "u5", orgId: "o1", inviteToken: "t", email: "a@b.com" } as never);
+    vi.mocked(inviteRepository.findOwnedHomeworkerBranch).mockResolvedValue(null);
+
+    await inviteService.revoke("u5", ADMIN);
+
+    expect(organizationAuditService.record).toHaveBeenCalledWith({
+      actor: REQUEST_ACTOR, action: "invite.revoke", orgId: "o1", targetUserId: null,
+      metadata: { revokedUserId: "u5", email: "a@b.com" },
+    });
+  });
+
+  it("does not audit a failed revoke", async () => {
+    vi.mocked(inviteRepository.findById).mockResolvedValue({ id: "u5", orgId: "o1", inviteToken: null } as never);
+    await expect(inviteService.revoke("u5", ADMIN)).rejects.toMatchObject({ statusCode: 400 });
+    expect(organizationAuditService.record).not.toHaveBeenCalled();
   });
 });

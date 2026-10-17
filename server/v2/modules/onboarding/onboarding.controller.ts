@@ -2,10 +2,12 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
 import { onboardingService } from './onboarding.service';
 import { successResponse } from '../../utils/response';
+import { requestOrigin } from '../../utils/link-base';
+
 
 export const onboardingController = {
   signup: asyncHandler(async (req: Request, res: Response) => {
-    const result = await onboardingService.signup(req.body);
+    const result = await onboardingService.signup(req.body, requestOrigin(req));
     successResponse(res, result, 'Account created — check your email to verify', 201);
   }),
   verifyEmail: asyncHandler(async (req: Request, res: Response) => {
@@ -13,7 +15,7 @@ export const onboardingController = {
     successResponse(res, null, 'Your email has been verified. You can now sign in.');
   }),
   resendVerification: asyncHandler(async (req: Request, res: Response) => {
-    await onboardingService.resendVerification(req.body.email);
+    await onboardingService.resendVerification(req.body.email, requestOrigin(req));
     successResponse(res, null, 'If that account exists and is unverified, a new verification email has been sent.');
   }),
 };

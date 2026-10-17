@@ -24,7 +24,8 @@ import type {
   InsertQuoteAirportParking,
   InsertPassenger,
 } from "@shared/schema";
-import type { PortalStatus } from "./quote.types";
+import type { PortalStatus, RecentEngagementOptions, SocialStatus, SocialStatusCounts } from "./quote.types";
+import { getLondonDayRange } from "../../utils/london-time";
 
 type ScopeOrTrusted = Scope | { orgId: null };
 
@@ -371,6 +372,12 @@ async function createFreeSocialCopy(
 }
 
 export const newQuoteService = {
+  /** True for a social (free) quote; null when the quote does not exist. */
+  async isFreeQuote(id: string): Promise<boolean | null> {
+    const q = await newQuoteRepository.findById(id);
+    return q ? q.isFreeQuote === true : null;
+  },
+
   async listQuotes(scope: ScopeOrTrusted) {
     return newQuoteRepository.findAll(scope);
   },
@@ -384,8 +391,12 @@ export const newQuoteService = {
     return newQuoteRepository.findByStatus(status, scope);
   },
 
-  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all", tagNames: string[] = []) {
-    return newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus, tagNames);
+  async listFreeQuotesPaginated(page: number = 0, pageSize: number = 12, scheduledOnly = false, scheduleFilter = "none", search = "", rangeStart = "", rangeEnd = "", scope: ScopeOrTrusted, unscheduledOnly = false, showOnPortal = false, portalStatus: PortalStatus = "all", tagNames: string[] = [], socialStatus?: SocialStatus) {
+    return newQuoteRepository.findFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus, tagNames, socialStatus);
+  },
+
+  async getFreeQuoteStatusCounts(search: string = "", tagNames: string[] = [], scope: ScopeOrTrusted): Promise<SocialStatusCounts> {
+    return newQuoteRepository.countFreeQuotesBySocialStatus(search, tagNames, scope);
   },
 
   async getQuoteById(id: string, scope: ScopeOrTrusted) {
@@ -914,12 +925,25 @@ export const newQuoteService = {
     return row;
   },
 
-  async getRecentClientEngagement(scope: ScopeOrTrusted, limit = 10) {
+  async getRecentClientEngagement(scope: ScopeOrTrusted, limit = 10, options: RecentEngagementOptions = {}) {
     const orgId = effectiveOrgId(scope);
     const role = (scope as Scope).orgRole;
     const isManagerLevel = role === "platform_admin" || role === "org_admin" || role === "branch_manager";
-    const userId = isManagerLevel ? null : (scope as Scope).userId;
-    return newQuoteRepository.findRecentClientEngagement({ orgId, userId, limit });
+    // mine=true narrows every role (managers/admins included) to their own
+    // quotes; without it managers keep the org-wide view.
+    const scopeUserId = (scope as Scope).userId;
+    // Never widen: "mine" without an identifiable user must not fall back to org-wide.
+    if (options.mine && !scopeUserId) throw new AppError("Unauthorized", 401);
+    const userId = options.mine || !isManagerLevel ? scopeUserId : null;
+    // "all" (or no period) = unfiltered; the rest are London-day ranges.
+    const range = options.period && options.period !== "all" ? getLondonDayRange(options.period) : undefined;
+    return newQuoteRepository.findRecentClientEngagement({
+      orgId,
+      userId,
+      limit,
+      viewedFrom: range?.from,
+      viewedBefore: range?.to,
+    });
   },
 };
 

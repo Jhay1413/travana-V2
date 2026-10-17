@@ -27,6 +27,8 @@ function req(over: Record<string, unknown> = {}) {
     orgRole: "org_admin",
     orgRoles: ["org_admin"],
     user: { authType: "password", userId: "admin1" },
+    get: (name: string) => (name === "origin" ? "http://localhost:5000" : undefined),
+    protocol: "http",
     ...over,
   } as never;
 }
@@ -57,7 +59,11 @@ describe("homeworkerController", () => {
     expect(res.status).toHaveBeenCalledWith(201);
     expect(homeworkerService.invite).toHaveBeenCalledWith(
       { email: "a@b.com" },
-      { orgId: "o1", userId: "admin1", orgRole: "org_admin", orgRoles: ["org_admin"] },
+      {
+        orgId: "o1", userId: "admin1", orgRole: "org_admin", orgRoles: ["org_admin"],
+        requestActor: { userId: "admin1", ipAddress: null, userAgent: null, impersonating: false },
+      },
+      "http://localhost:5000",
     );
     expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, data: { branchId: "b1" } });
   });

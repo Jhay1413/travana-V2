@@ -544,8 +544,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
     const postHTML = toOnlySocialsBody(formatPostHTML(deal, subtitle, resortSummary, contact));
 
-    return await socialPostRepository.create({
-      quote_id: quoteId,
+    const generated = {
       title: safeTitle,
       subtitle,
       post: postHTML,
@@ -557,7 +556,14 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       departureAirport: departureAirport || null,
       luggageTransfers: transferType && transferType !== "none" ? transferType : null,
       price: displayPrice,
-    });
+    };
+
+    // Regenerating must not create a second deal for the quote: refresh the
+    // generated fields on the existing row, leaving onlySocialsId/postSchedule alone.
+    const existing = await socialPostRepository.findByQuoteId(quoteId);
+    if (existing) return await socialPostRepository.update(existing.id, generated);
+
+    return await socialPostRepository.create({ quote_id: quoteId, ...generated });
   },
 
   async getTravelDealByQuoteId(quoteId: string, scope: ScopeOrTrusted): Promise<TravelDeal | null> {

@@ -3,6 +3,8 @@ import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
 import { AppError } from '../../utils/error-handler';
 import { getScope } from '../../utils/scope';
+import { getRequestActor } from '../../utils/request-actor';
+import { requestOrigin } from '../../utils/link-base';
 import { homeworkerService } from './homeworker.service';
 import type { HomeworkerActor } from './homeworker.types';
 
@@ -23,7 +25,8 @@ function actorFromRequest(req: Request): HomeworkerActor {
 
 export const homeworkerController = {
   invite: asyncHandler(async (req: Request, res: Response) => {
-    const data = await homeworkerService.invite(req.body, actorFromRequest(req));
+    const actor = { ...actorFromRequest(req), requestActor: getRequestActor(req) };
+    const data = await homeworkerService.invite(req.body, actor, requestOrigin(req));
     successResponse(res, data, 'Homeworker invited', 201);
   }),
 

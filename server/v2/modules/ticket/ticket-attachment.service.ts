@@ -7,7 +7,10 @@ import { ticketAttachmentRepository } from './ticket-attachment.repository';
 import { ticketReplyRepository } from './ticket-reply.repository';
 import { AppError } from '../../utils/error-handler';
 import type { TicketAttachment, InsertTicketAttachment } from '@shared/schema';
-import type { Scope } from '../../utils/scope';
+import type { OrgRole, Scope } from '../../utils/scope';
+import type { ScopeOrTrusted } from '../../utils/scope-conditions';
+import { ticketRepository } from './ticket.repository';
+import type { TicketScopeRef } from './ticket.types';
 
 // Ticket attachments are stored in S3 under "ticket-attachments/". Legacy rows
 // created before this migration hold a bare local filename (in uploads/) — they
@@ -15,6 +18,13 @@ import type { Scope } from '../../utils/scope';
 const S3_KEY_PREFIX = "ticket-attachments";
 const PRESIGNED_URL_EXPIRES_IN = 60 * 5; // 5 minutes
 const LOCAL_UPLOADS_DIR = path.join(process.cwd(), "uploads");
+
+// Resolves a legacy local filename inside uploads/ only; anything that escapes
+// the directory (../ or an absolute path) yields null.
+function resolveLocalPath(filename: string): string | null {
+  const resolved = path.resolve(LOCAL_UPLOADS_DIR, filename);
+  return resolved.startsWith(path.resolve(LOCAL_UPLOADS_DIR) + path.sep) ? resolved : null;
+}
 
 function isS3Key(filename: string): boolean {
   return filename.startsWith(`${S3_KEY_PREFIX}/`);
@@ -33,49 +43,60 @@ export interface TicketAttachmentUpload {
   replyId?: string | null;
 }
 
-type ScopeOrTrusted = Scope | { orgId: null };
+const ATTACHMENT_ADMIN_ROLES: OrgRole[] = ['branch_manager', 'org_admin', 'platform_admin'];
 
-function effectiveOrgId(scope: ScopeOrTrusted): string | null {
-  if (scope.orgId === null) return null;
-  if ((scope as Scope).orgRole === 'platform_admin') return null;
-  return (scope as Scope).orgId || null;
+/** The ticket, only if the caller may act on it under the ticket's own scope rules. */
+async function requireTicket(ticketId: string, scope: ScopeOrTrusted): Promise<TicketScopeRef> {
+  const ticket = await ticketRepository.findByIdScoped(ticketId, scope);
+  if (!ticket) throw new AppError('Ticket not found', 404);
+  return ticket;
 }
 
-async function assertTicketInScope(ticketId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await ticketAttachmentRepository.ticketBelongsToOrg(ticketId, orgId);
-  if (!ok) throw new AppError('Attachment not found', 404);
+async function loadScopedAttachment(
+  id: string,
+  scope: ScopeOrTrusted,
+): Promise<{ attachment: TicketAttachment; ticket: TicketScopeRef }> {
+  const attachment = await ticketAttachmentRepository.findById(id);
+  if (!attachment) throw new AppError('Attachment not found', 404);
+  const ticket = await ticketRepository.findByIdScoped(attachment.ticketId, scope);
+  if (!ticket) throw new AppError('Attachment not found', 404);
+  return { attachment, ticket };
 }
 
-async function loadScopedAttachment(id: string, scope: ScopeOrTrusted): Promise<TicketAttachment> {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) {
-    const a = await ticketAttachmentRepository.findById(id);
-    if (!a) throw new AppError('Attachment not found', 404);
-    return a;
-  }
-  const row = await ticketAttachmentRepository.findByIdWithOrg(id);
-  if (!row || row.ticketOrgId !== orgId) {
-    throw new AppError('Attachment not found', 404);
-  }
-  const a = await ticketAttachmentRepository.findById(id);
-  if (!a) throw new AppError('Attachment not found', 404);
-  return a;
+/**
+ * Who may delete an attachment, given the caller can already see its ticket:
+ * the reply's author for a reply file, the ticket's raiser for a ticket-level
+ * file, plus branch_manager / org_admin / platform_admin (their reach is
+ * already bounded by the ticket scope). Trusted internal callers always may.
+ */
+export function canDeleteAttachment(args: {
+  attachment: Pick<TicketAttachment, 'replyId'>;
+  ticket: Pick<TicketScopeRef, 'userId'>;
+  replyAuthorId: string | null;
+  scope: ScopeOrTrusted;
+}): boolean {
+  const { attachment, ticket, replyAuthorId, scope } = args;
+  if (scope.orgId === null) return true;
+  const s = scope as Scope;
+  if (ATTACHMENT_ADMIN_ROLES.includes(s.orgRole)) return true;
+  if (!s.userId) return false;
+  if (attachment.replyId) return replyAuthorId === s.userId;
+  return ticket.userId === s.userId;
 }
 
 export const ticketAttachmentService = {
   async listByTicketId(ticketId: string, scope: ScopeOrTrusted): Promise<TicketAttachment[]> {
-    await assertTicketInScope(ticketId, scope);
+    await requireTicket(ticketId, scope);
     return ticketAttachmentRepository.findByTicketId(ticketId);
   },
 
   async getAttachmentById(id: string, scope: ScopeOrTrusted): Promise<TicketAttachment> {
-    return loadScopedAttachment(id, scope);
+    const { attachment } = await loadScopedAttachment(id, scope);
+    return attachment;
   },
 
   async createAttachment(data: InsertTicketAttachment, scope: ScopeOrTrusted): Promise<TicketAttachment> {
-    await assertTicketInScope(data.ticketId, scope);
+    await requireTicket(data.ticketId, scope);
     return ticketAttachmentRepository.create(data);
   },
 
@@ -83,13 +104,16 @@ export const ticketAttachmentService = {
   // the S3 key). Used by both the staff upload endpoint and the AI admin bot.
   // On DB failure the S3 object is cleaned up so no orphan is left behind.
   async uploadAndCreate(ticketId: string, file: TicketAttachmentUpload, scope: ScopeOrTrusted): Promise<TicketAttachment> {
-    await assertTicketInScope(ticketId, scope);
+    await requireTicket(ticketId, scope);
     // A reply-level attachment must hang off a reply on this same ticket.
     const replyId = file.replyId || null;
     if (replyId) {
       const reply = await ticketReplyRepository.findById(replyId);
       if (!reply || reply.ticketId !== ticketId) {
         throw new AppError("Reply does not belong to this ticket", 400);
+      }
+      if (scope.orgId !== null && reply.userId !== (scope as Scope).userId) {
+        throw new AppError("You can only attach files to your own replies", 403);
       }
     }
     const ext = path.extname(file.originalName) || "";
@@ -127,7 +151,7 @@ export const ticketAttachmentService = {
     scope: ScopeOrTrusted,
     opts?: { inline?: boolean },
   ): Promise<TicketAttachmentDownloadTarget> {
-    const attachment = await loadScopedAttachment(id, scope);
+    const { attachment } = await loadScopedAttachment(id, scope);
     const disposition = opts?.inline ? "inline" : "attachment";
 
     if (isS3Key(attachment.filename)) {
@@ -144,20 +168,31 @@ export const ticketAttachmentService = {
       return { kind: "s3", url };
     }
 
-    const filePath = path.join(LOCAL_UPLOADS_DIR, attachment.filename);
-    if (!fs.existsSync(filePath)) throw new AppError('File not found on disk', 404);
+    const filePath = resolveLocalPath(attachment.filename);
+    if (!filePath || !fs.existsSync(filePath)) throw new AppError('File not found on disk', 404);
     return { kind: "local", filePath, originalName: attachment.originalName, mimeType: attachment.mimeType };
   },
 
   async deleteAttachment(id: string, scope: ScopeOrTrusted): Promise<TicketAttachment> {
-    const attachment = await loadScopedAttachment(id, scope);
-    if (isS3Key(attachment.filename)) {
-      await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: attachment.filename }));
-    } else {
-      const filePath = path.join(LOCAL_UPLOADS_DIR, attachment.filename);
-      if (fs.existsSync(filePath)) await fs.promises.unlink(filePath);
+    const { attachment, ticket } = await loadScopedAttachment(id, scope);
+    const replyAuthorId = attachment.replyId
+      ? ((await ticketReplyRepository.findById(attachment.replyId))?.userId ?? null)
+      : null;
+    if (!canDeleteAttachment({ attachment, ticket, replyAuthorId, scope })) {
+      throw new AppError('You can only delete attachments you added', 403);
     }
+    // Row first: a storage hiccup must never leave a row pointing at a half-deleted file.
     await ticketAttachmentRepository.remove(id);
+    try {
+      if (isS3Key(attachment.filename)) {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: attachment.filename }));
+      } else {
+        const filePath = resolveLocalPath(attachment.filename);
+        if (filePath && fs.existsSync(filePath)) await fs.promises.unlink(filePath);
+      }
+    } catch (err) {
+      console.warn(`[tickets] attachment ${id} row removed but file cleanup failed:`, err);
+    }
     return attachment;
   },
 };

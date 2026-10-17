@@ -3,6 +3,9 @@ import { assertNoHomeworkerRoleChange } from '../../utils/homeworker-role';
 import { userOrgRolesRepository } from '../user-org-roles/user-org-roles.repository';
 import { branchMemberRepository } from '../branch-member/branch-member.repository';
 import { platformAdminRepository, type ListUsersFilters } from './platform-admin.repository';
+import { userAccessService } from '../user/user-access.service';
+import { organizationSeatService } from '../organization/organization-seat.service';
+import { planRepository } from '../plan/plan.repository';
 import {
   platformAdminAuditRepository,
   type AuditFilters,
@@ -79,14 +82,20 @@ export const platformAdminService = {
   async changePlan(id: string, plan: string, seatLimit: number | undefined, actor: AdminActor) {
     const org = await platformAdminRepository.findOrgByIdWithCounts(id);
     if (!org) throw new AppError('Organization not found', 404);
-    await platformAdminRepository.updatePlan(id, plan, seatLimit);
+    // Seats follow the plan unless the caller sets an explicit limit (null = unlimited).
+    let effectiveLimit: number | null | undefined = seatLimit;
+    if (effectiveLimit === undefined) {
+      const planRow = await planRepository.findByCode(plan);
+      if (planRow) effectiveLimit = planRow.seatLimit;
+    }
+    await platformAdminRepository.updatePlan(id, plan, effectiveLimit);
     await recordAudit({
       actor,
       action: 'org.plan.change',
       targetOrgId: id,
       metadata: {
         from: { plan: org.plan, seatLimit: org.seatLimit },
-        to:   { plan, seatLimit: seatLimit ?? org.seatLimit },
+        to:   { plan, seatLimit: effectiveLimit === undefined ? org.seatLimit : effectiveLimit },
       },
     });
   },
@@ -118,6 +127,12 @@ export const platformAdminService = {
     const heldRoles = await userOrgRolesRepository.findRolesByUserAndOrg(userId, orgId);
     assertNoHomeworkerRoleChange([...heldRoles, u.orgRole], newRole);
 
+    // A referral partner holds no seat; an internal role takes one.
+    const allRoles = [...heldRoles, ...(u.orgRole ? [u.orgRole] : [])];
+    if (newRole !== 'referral_agent' && allRoles.length > 0 && allRoles.every((r) => r === 'referral_agent')) {
+      await organizationSeatService.assertSeatAvailable(orgId);
+    }
+
     // setOrgRoleAtomic keeps user.orgRole, branch_members.orgRole and the
     // user_org_roles junction in sync, so a homeworker can never retain an
     // 'agent' row (or vice versa) after a role change.
@@ -137,12 +152,14 @@ export const platformAdminService = {
     if (u.orgId !== orgId) throw new AppError('User does not belong to this organization', 404);
 
     await platformAdminRepository.setUserBanned(userId, orgId, true, reason);
+    // Committed: end their sessions and realtime streams so the ban bites immediately.
+    const sessionsDeleted = await userAccessService.revokeAccess(userId);
     await recordAudit({
       actor,
       action: 'user.deactivate',
       targetOrgId: orgId,
       targetUserId: userId,
-      metadata: { reason: reason ?? null },
+      metadata: { reason: reason ?? null, sessionsDeleted },
     });
   },
 

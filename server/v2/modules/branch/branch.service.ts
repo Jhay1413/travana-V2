@@ -1,5 +1,5 @@
 import { AppError } from '../../utils/error-handler';
-import { branchRepository } from './branch.repository';
+import { branchRepository, type Tx } from './branch.repository';
 import { planService } from '../plan/plan.service';
 import type { InsertBranch } from '@shared/schema';
 import { holdsHomeworkerRole, type Scope } from '../../utils/scope';
@@ -67,12 +67,14 @@ export const branchService = {
     return branch;
   },
 
-  async create(data: BranchInput, orgId: string) {
+  /** Pass `tx` to create inside a caller-held transaction; other callers are unaffected. */
+  async create(data: BranchInput, orgId: string, tx?: Tx) {
     if (!data.name?.trim()) throw new AppError('Branch name is required', 400);
 
-    await planService.assertCanAddBranch(orgId);
+    if (tx) await planService.assertCanAddBranch(orgId, tx);
+    else await planService.assertCanAddBranch(orgId);
 
-    const existingCount = await branchRepository.countByOrg(orgId);
+    const existingCount = tx ? await branchRepository.countByOrg(orgId, tx) : await branchRepository.countByOrg(orgId);
     const shouldBeDefault = data.isDefault === true || existingCount === 0;
 
     return branchRepository.createAtomic(
@@ -90,6 +92,7 @@ export const branchService = {
         isActive: data.isActive ?? true,
       } as InsertBranch,
       shouldBeDefault,
+      ...(tx ? [tx] : []),
     );
   },
 

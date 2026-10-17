@@ -1,3 +1,4 @@
+import type { AgentStatsWindows } from "./dashboard.types";
 import { db } from "../../config/database";
 import { clientTable, transaction, quote, booking, booking_upsell, user as userTable } from "@shared/schema";
 import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
@@ -328,7 +329,7 @@ export const dashboardRepository = {
     };
   },
 
-  async getAgentStats(userId: string): Promise<{
+  async getAgentStats(userId: string, windows: AgentStatsWindows): Promise<{
     todayProfit: number;
     weekProfit: number;
     monthProfit: number;
@@ -349,13 +350,8 @@ export const dashboardRepository = {
     totalOpenQuotesValue: number;
     quotesCount: number;
   }> {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dayOfWeek = now.getDay() || 7;
-    const weekStart = new Date(todayStart);
-    weekStart.setDate(weekStart.getDate() - (dayOfWeek - 1));
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    // Window boundaries are London-day UTC instants computed by the service.
+    const { todayStart, weekStart, monthStart, monthEnd } = windows;
 
     // Mirror the admin dashboard's agent-performance definition exactly so an
     // agent's own numbers match what admins see (organization-overview
@@ -449,14 +445,13 @@ export const dashboardRepository = {
     };
   },
 
-  async getMyProfit(userId: string): Promise<{ profitThisMonth: number }> {
+  async getMyProfit(userId: string, window: Pick<AgentStatsWindows, "monthStart" | "monthEnd">): Promise<{ profitThisMonth: number }> {
     try {
-      const now = new Date();
-      // Bound the month window exactly like getAgentStats / getAgentsPerformance:
-      // [startOfMonth, monthEnd) — first of this month inclusive, first of next
-      // month exclusive — so this figure matches the agent dashboard precisely.
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      // [monthStart, monthEnd): first of this London month inclusive, first of
+      // next month exclusive, computed by the service - same window as
+      // getAgentStats / getAgentsPerformance so this figure matches the dashboard.
+      const startOfMonth = window.monthStart;
+      const monthEnd = window.monthEnd;
 
       const [[bookingResult], [upsellResult]] = await Promise.all([
         db

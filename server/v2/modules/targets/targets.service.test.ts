@@ -14,6 +14,9 @@ vi.mock("./targets.repository", () => ({
   getShopTargetsByDateRange: vi.fn(),
   getAgentTargetsByDateRange: vi.fn(),
   getTargetSummaryByDateRange: vi.fn(),
+  withTransaction: vi.fn(),
+  getAgentTargetRowsForYear: vi.fn(),
+  upsertAgentTargetRows: vi.fn(),
 }));
 
 import * as targetsService from "./targets.service";
@@ -234,12 +237,19 @@ describe("targets - homeworker branches", () => {
   it("org_admin can write the homeworker agent target via branchId override", async () => {
     vi.mocked(targetsRepository.branchBelongsToOrg).mockResolvedValue(true as never);
     vi.mocked(targetsRepository.getActiveBranchMemberIds).mockResolvedValue(new Set(["hw1"]));
-    vi.mocked(targetsRepository.bulkUpsertAgentTargets).mockResolvedValue([] as never);
+    vi.mocked(targetsRepository.withTransaction).mockImplementation(async (fn) => fn({} as never));
+    vi.mocked(targetsRepository.getAgentTargetRowsForYear).mockResolvedValue([]);
+    vi.mocked(targetsRepository.getAgentTargetsByUserId).mockResolvedValue([] as never);
     const input = [{ userId: "hw1", month: 3, year: 2026, targetAmount: "900" }];
 
     await targetsService.upsertAgentTargets(adminScope, input as never, "hwb");
 
-    expect(targetsRepository.bulkUpsertAgentTargets).toHaveBeenCalledWith("hwb", input);
+    // Routed through the homeworker override bookkeeping, not the plain bulk upsert.
+    expect(targetsRepository.bulkUpsertAgentTargets).not.toHaveBeenCalled();
+    expect(targetsRepository.upsertAgentTargetRows).toHaveBeenCalledWith(
+      expect.anything(),
+      [expect.objectContaining({ branchId: "hwb", userId: "hw1", month: 3, targetAmount: "900", source: "admin" })],
+    );
   });
 
   it("org_admin override to a branch outside the org is 404", async () => {

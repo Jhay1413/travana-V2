@@ -278,17 +278,16 @@ export const hrService = {
     return buildReminders(rows);
   },
 
-  async invite(payload: InviteEmployeePayload, scope: Scope) {
+  async invite(payload: InviteEmployeePayload, scope: Scope, requestOrigin?: string | null) {
     if (!scope.orgId || !scope.userId) throw new AppError("Missing scope context", 400);
     // Homeworkers get their own branch: one creation path, org admins only.
     if (payload.orgRole === "homeworker") {
       const { orgRole: _role, ...input } = payload;
-      return homeworkerService.invite(input, {
-        orgId: scope.orgId,
-        userId: scope.userId,
-        orgRole: scope.orgRole,
-        orgRoles: scope.orgRoles,
-      });
+      return homeworkerService.invite(
+        input,
+        { orgId: scope.orgId, userId: scope.userId, orgRole: scope.orgRole, orgRoles: scope.orgRoles },
+        requestOrigin,
+      );
     }
     if (scope.orgRole === "branch_manager" && payload.branchId !== scope.branchId) {
       throw new AppError("Branch managers can only invite onto their own branch", 403);
@@ -301,6 +300,7 @@ export const hrService = {
         orgRole: scope.orgRole,
         branchId: scope.branchId,
       },
+      requestOrigin,
     );
   },
 
