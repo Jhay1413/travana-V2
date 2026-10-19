@@ -224,6 +224,16 @@ describe("organizationOverviewRepository.getOpenDealCounts", () => {
     expect(text).toContain('"quote_table"."deleted_at" is null');
     expect(params).toEqual(expect.arrayContaining(["o1", "b1", false]));
   });
+
+  it("narrows to one owning agent when a userId is given", async () => {
+    setRows([{ agentId: "u1", count: "1" }]);
+
+    await organizationOverviewRepository.getOpenDealCounts("o1", "b1", "u1");
+
+    const { text, params } = renderWhere(0);
+    expect(text).toContain('"transaction"."user_id" = ');
+    expect(params).toEqual(expect.arrayContaining(["o1", "b1", "u1"]));
+  });
 });
 
 describe("organizationOverviewRepository.getAgentsPerformance ppb and openDeals", () => {

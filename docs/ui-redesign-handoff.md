@@ -416,6 +416,60 @@ Homeworkers; setup checklist stays on top; branch selector kept. Not verified
 in a browser or against a real DB (compare/profit-sources SQL rendered and
 reviewed only; integration tests written, not run).
 
+## Done: Agent profile A3 (`/agents/:agentId[/earnings|/training|/hr|/pipeline]`) — 19 Oct 2026
+
+Prototype `#/admin/team/:id` (+ `/earn`, `/train`, `/hr`, `?eng=hw`) rebuilt on
+the existing `/agents/:agentId` route (MANAGER_ROLES; new `/agents/:agentId/:tab`
+route beside it). Client: new `client/src/features/agent-profile/` (api hooks,
+`state/use-profile-period`, lib: dates, period presets, period-target pro-rata,
+hero/health copy, before-start, tenure, week-model, chart-model, earnings-model,
+working-days, leave-calendar, holiday-model, documents-expiry, pills,
+profile-tabs, payouts-model; components: shell (breadcrumb by role, 132px
+photo card, pills, facts, tabs with HR lock), overview (period controls, navy
+hero, health, week planner), earnings (tiles incl. homeworker/"Hidden"
+variants, monthly Chart|Table with shaded period via the admin-dashboard
+`CommissionChart` `shadedMonths` prop, biggest deals, payouts), training
+(Hub courses, certificates & documents, leave calendar), hr (lock line,
+read-only contact, employment/engagement with `EmployeeEditDialog` via new
+`features/hr-v2/index.ts`, documents upload/open/delete, holiday, 1-2-1
+notes), pipeline (`PipelineBoard` embedded + `ExpiringQuotesSection`)).
+`pages/agent-stats/index.tsx` is a thin wrapper; `AGENT_PROFILE_ENDPOINTS` in
+`client/src/api/endpoints.ts`; `features/agent-overview/components/pipeline-tab.tsx`
+deleted; `profit-stat-boxes`, `whats-on-tab`, `expiring-quotes-section` kept.
+Server: NEW `server/v2/modules/agent-profile/` mounted at `/api/v2/agent-profile`
+(roles platform_admin/org_admin/branch_manager; branch managers see only their
+branch's members, deals, departures and tasks; platform admin without org →
+403; pay admins-only): `GET /:userId` (header: user, roles, branches,
+homeworker, startedAt hr→membership→account, openDeals, biggestDeal,
+bestMonth, lifetimeProfit, viewer flags), `/performance?from&to` (London
+half-open; profit incl. upsells, bookings, sales, ppb, quotesSent, quotedDeals,
+quoteViews, closeRate = bookings ÷ quoted deals, commissionRate, comparator org
+or branch), `/week?start=Monday` (departures + incomplete tasks per London
+day), `/monthly?year` (targets `getActualsForYear` per user + comparator +
+targets via new `targets.service.getMemberYearTargets`), `/biggest-deals`,
+`/training` (new `training-progress.repository.listEnrollmentDetailsByUser`),
+`/payouts` (new `homeworker.repository.listStatementsByBranch` + live month via
+`buildStatement`). Additive: `getOpenDealCounts(orgId, branchId?, userId?)`.
+HR: `holidayUsedDays` now = working days (branch opening pattern, default
+Mon–Fri) of approved Annual leave in the current London year
+(`server/v2/utils/leave-days.ts`; HR row selects `branchOpeningPattern`).
+
+Decisions: close rate = bookings ÷ quoted deals (as the admin dashboard);
+holiday days = working days this year, HR page aligned; attendance = LEAVE
+calendar from HR leave (Holiday/Sick/Leave/Pending/Not working/Today — no
+"Worked"/"Late"), homeworkers get the "not tracked" note; supplier
+accreditations → "Certificates and documents" = HR documents with an expiry
+(Valid / Expiring soon ≤60d / Expired); Pipeline kept as a 5th tab, What's On
+dropped here; no 1-2-1 goals (no data); contact card read-only (no admin
+endpoint for address/emergency contact); period target = Σ month targets
+pro-rata by overlapping days ("This month" = whole month); branch managers'
+figures = the agent's deals in the manager's branch (as targets). Accepted and
+commented: two comparator definitions (window via client org vs monthly via
+targets actuals); LOST bookings stay in profit/lifetime/best month; homeworker
+"Paid out" tile (profit × share) differs from statement amounts (commission −
+discounts − service charge, UTC months). Not verified in a browser or against a
+real DB; `agent-profile.repository.integration.test.ts` written, not run.
+
 ## Done: dev-only email link fix — 17 Oct 2026
 
 Outside production every emailed link (verification, team / homeworker / HR /
@@ -453,7 +507,7 @@ EXISTS`); re-run migrate.
 1. Shell: navy sidebar/header to the exact design (84px rail / 280px nav / 58px bar).
 2. Tickets queue + ticket page, then Teams & Roles, Client page, Home, Targets
    (Pipeline, Agent Dashboard, Tickets, Teams & Roles, Onboarding, Targets,
-   Client page and Admin Dashboard are done).
+   Client page, Admin Dashboard and Agent profile are done).
 3. Inbox triage view; social "Duplicate as draft" (needs an endpoint that copies
    post text without re-running the AI).
 

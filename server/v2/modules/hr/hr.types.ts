@@ -12,6 +12,8 @@ export interface LeaveEntry {
   type: LeaveType;
   from: string;        // YYYY-MM-DD
   to: string;          // YYYY-MM-DD
+  /** Working days inside this leave's own dates (person's branch opening pattern, default Mon-Fri). */
+  workingDays: number;
   status: LeaveStatus;
   reason?: string | null;
   decidedBy?: string | null;

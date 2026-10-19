@@ -8,7 +8,7 @@ export interface SqlWindow {
   to: Date;
 }
 
-function bookingInWindow(w: SqlWindow): SQL {
+export function bookingInWindow(w: SqlWindow): SQL {
   return sql`${booking.date_created} >= ${w.from.toISOString()} AND ${booking.date_created} < ${w.to.toISOString()}`;
 }
 

@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { Bar, CartesianGrid, Cell, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, Cell, ComposedChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { niceAxis, type ChartMonth, type MonthKind } from "../lib/chart-model";
 import { gbp } from "../lib/money";
 
@@ -39,7 +39,8 @@ function ChartTip({ active, payload }: TipProps) {
   );
 }
 
-export function CommissionChart({ months }: { months: ChartMonth[] }) {
+/** `shadedMonths` (YYYY-MM keys) get a soft band behind their bars, e.g. the period picked on a profile. */
+export function CommissionChart({ months, shadedMonths = [] }: { months: ChartMonth[]; shadedMonths?: readonly string[] }) {
   const patternId = useId().replace(/:/g, "");
   const fills: Record<MonthKind, string> = { on: NAVY, under: `url(#${patternId})`, none: GREY };
   const data = months.map((m) => ({
@@ -65,6 +66,11 @@ export function CommissionChart({ months }: { months: ChartMonth[] }) {
               <rect width="5" height="10" fill={ORANGE_DARK} />
             </pattern>
           </defs>
+          {months
+            .filter((m) => shadedMonths.includes(m.month))
+            .map((m) => (
+              <ReferenceArea key={`shade-${m.month}`} yAxisId="commission" x1={m.name} x2={m.name} fill="hsl(var(--social-navy))" fillOpacity={0.09} />
+            ))}
           <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
           <XAxis dataKey="name" tickLine={false} axisLine={{ stroke: "hsl(var(--border))" }} tick={{ fontSize: 12 }} interval={0} />
           {/* Separate X axis so the target tick overlays the commission bar instead of sitting beside it. */}

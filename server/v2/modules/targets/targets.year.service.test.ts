@@ -665,3 +665,61 @@ describe("legacy validateYear matches the new range", () => {
     await expect(service.upsertShopTargets(adm, [{ year: 1999, month: 1, targetAmount: "1" }])).rejects.toMatchObject({ statusCode: 400 });
   });
 });
+
+describe("getMemberYearTargets", () => {
+  it("sums an admin's view of one member across every shop and homeworker branch", async () => {
+    vi.mocked(repo.listBranchesByOrg).mockResolvedValue([shop("s1"), shop("s2"), hwBranch("h1", "hw1")]);
+    vi.mocked(repo.listMembers).mockResolvedValue([
+      { branchId: "s1", userId: "a1", name: "Ann", isActive: true },
+      { branchId: "s2", userId: "a1", name: "Ann", isActive: true },
+    ]);
+    vi.mocked(repo.getAgentTargetRowsForYear).mockResolvedValue([
+      row({ branchId: "s1", userId: "a1", month: 1, targetAmount: "1000.40" }),
+      row({ branchId: "s2", userId: "a1", month: 1, targetAmount: "500.00" }),
+      row({ branchId: "s1", userId: "a1", month: 12, targetAmount: "250.00" }),
+    ]);
+
+    const months = await service.getMemberYearTargets(admin, "a1", 2026);
+
+    expect(repo.getAgentTargetRowsForYear).toHaveBeenCalledWith(["s1", "s2", "h1"], 2026, "a1");
+    expect(months[0]).toBe(1500);
+    expect(months[11]).toBe(250);
+    expect(months[5]).toBe(0);
+  });
+
+  it("limits a branch manager to their own shop (no homeworker branches)", async () => {
+    vi.mocked(repo.listBranchesByOrg).mockResolvedValue([shop("s1"), shop("s2"), hwBranch("h1", "hw1")]);
+
+    await service.getMemberYearTargets(manager, "a1", 2026);
+
+    expect(repo.getAgentTargetRowsForYear).toHaveBeenCalledWith(["s1"], 2026, "a1");
+  });
+
+  it("ignores target rows of branches the user no longer belongs to", async () => {
+    vi.mocked(repo.listBranchesByOrg).mockResolvedValue([shop("s1"), shop("s2")]);
+    vi.mocked(repo.listMembers).mockResolvedValue([{ branchId: "s1", userId: "a1", name: "Ann", isActive: true }]);
+    vi.mocked(repo.getAgentTargetRowsForYear).mockResolvedValue([
+      row({ branchId: "s1", userId: "a1", month: 1, targetAmount: "100.00" }),
+      row({ branchId: "s2", userId: "a1", month: 1, targetAmount: "900.00" }),
+    ]);
+
+    expect((await service.getMemberYearTargets(admin, "a1", 2026))[0]).toBe(100);
+  });
+
+  it("reads a homeworker owner's branch for an admin", async () => {
+    vi.mocked(repo.listBranchesByOrg).mockResolvedValue([shop("s1"), hwBranch("h1", "hw1")]);
+    vi.mocked(repo.getAgentTargetRowsForYear).mockResolvedValue([
+      row({ branchId: "h1", userId: "hw1", month: 3, targetAmount: "900.00" }),
+    ]);
+
+    const months = await service.getMemberYearTargets(admin, "hw1", 2026);
+
+    expect(months[2]).toBe(900);
+  });
+
+  it("rejects a missing organisation and a manager without a branch", async () => {
+    await expect(service.getMemberYearTargets(platformNoOrg, "a1", 2026)).rejects.toMatchObject({ statusCode: 400 });
+    const noBranch = { ...(manager as object), branchId: null } as never;
+    await expect(service.getMemberYearTargets(noBranch, "a1", 2026)).rejects.toMatchObject({ statusCode: 400 });
+  });
+});

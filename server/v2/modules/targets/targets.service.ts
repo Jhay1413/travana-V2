@@ -17,6 +17,7 @@ import type {
   AgentTargetRowData,
   AgentTargetRowWrite,
   ActualRow,
+  BranchRecord,
   AllocationInput,
   MonthsInput,
   OverrideInput,
@@ -427,22 +428,31 @@ function buildHomeworkerRow(
   };
 }
 
+interface TargetBranchSelection {
+  admin: boolean;
+  manager: boolean;
+  selfUserId: string | undefined;
+  /** Every active shop in the org (what an admin can edit). */
+  shops: BranchRecord[];
+  visibleShops: BranchRecord[];
+  /** Shop branches whose agents the viewer can see. */
+  agentBranches: BranchRecord[];
+  visibleHomeworkers: BranchRecord[];
+}
+
 /**
- * Whole-year targets and actuals, scoped by role:
- * - org_admin / platform_admin (org required): business, every active shop, every shop agent, every homeworker.
- * - branch_manager: their own shop and its agents only (no business, no homeworkers).
- * - agent / homeworker / others: self only. `branches` is [] (shop targets are not shared with agents);
- *   a homeworker sees only their own homeworker row; `business` is null.
+ * Which branches a viewer sees on the targets pages: admins all active shops and homeworker
+ * branches; a branch manager their own shop; anyone else only themselves. One definition,
+ * shared by the whole-year view and getMemberYearTargets.
  */
-export async function getTargetsYear(scope: Scope, year: number, now: Date = new Date()): Promise<TargetsYear> {
-  const orgId = requireOrgId(scope);
-  const { elapsed, currentMonth } = yearProgress(year, now);
+async function selectTargetBranches(scope: Scope, orgId: string): Promise<TargetBranchSelection> {
   const admin = isAdminRole(scope);
   const manager = !admin && scope.orgRole === "branch_manager";
   // Self-only scope must know who "self" is; never fall back to an unfiltered query.
   if (!admin && !manager && !scope.userId) throw new AppError("Forbidden", 403);
   const selfUserId = admin || manager ? undefined : (scope.userId as string);
 
+  // Validated above, before any query: a self-only caller without an id never reaches the database.
   const allBranches = await targetsRepository.listBranchesByOrg(orgId);
   const shops = allBranches.filter((b) => b.branchType === "shop" && b.isActive);
   const homeworkerBranches = allBranches.filter((b) => b.branchType === "homeworker" && b.ownerUserId);
@@ -459,6 +469,43 @@ export async function getTargetsYear(scope: Scope, year: number, now: Date = new
     visibleShops = [];
     visibleHomeworkers = homeworkerBranches.filter((b) => b.ownerUserId === selfUserId);
   }
+  return { admin, manager, selfUserId, shops, visibleShops, agentBranches, visibleHomeworkers };
+}
+
+/**
+ * One member's monthly targets for a year: the sum of their agent-target rows over the branches the
+ * viewer can see (a shop agent: their shop rows; a homeworker: their own branch). Whole pounds.
+ */
+export async function getMemberYearTargets(scope: Scope, userId: string, year: number): Promise<MonthAmounts> {
+  const orgId = requireOrgId(scope);
+  const { agentBranches, visibleHomeworkers } = await selectTargetBranches(scope, orgId);
+  const branchIds = [...agentBranches, ...visibleHomeworkers].map((b) => b.id);
+  const [rows, members] = await Promise.all([
+    targetsRepository.getAgentTargetRowsForYear(branchIds, year, userId),
+    // Only rows in branches the user currently belongs to (a removed membership no longer counts).
+    targetsRepository.listMembers(orgId, agentBranches.map((b) => b.id), userId),
+  ]);
+  const memberBranches = new Set(members.map((m) => m.branchId));
+  const months = zeroMonths();
+  for (const r of rows) {
+    const isOwnHomeworkerBranch = visibleHomeworkers.some((b) => b.id === r.branchId && b.ownerUserId === userId);
+    if (!memberBranches.has(r.branchId) && !isOwnHomeworkerBranch) continue;
+    if (r.month >= 1 && r.month <= MONTHS_IN_YEAR) months[r.month - 1] += wholePounds(r.targetAmount);
+  }
+  return months;
+}
+
+/**
+ * Whole-year targets and actuals, scoped by role:
+ * - org_admin / platform_admin (org required): business, every active shop, every shop agent, every homeworker.
+ * - branch_manager: their own shop and its agents only (no business, no homeworkers).
+ * - agent / homeworker / others: self only. `branches` is [] (shop targets are not shared with agents);
+ *   a homeworker sees only their own homeworker row; `business` is null.
+ */
+export async function getTargetsYear(scope: Scope, year: number, now: Date = new Date()): Promise<TargetsYear> {
+  const orgId = requireOrgId(scope);
+  const { elapsed, currentMonth } = yearProgress(year, now);
+  const { admin, manager, selfUserId, shops, visibleShops, agentBranches, visibleHomeworkers } = await selectTargetBranches(scope, orgId);
 
   const agentBranchIds = agentBranches.map((b) => b.id);
   const targetBranchIds = [...agentBranchIds, ...visibleHomeworkers.map((b) => b.id)];

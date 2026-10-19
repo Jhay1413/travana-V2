@@ -58,3 +58,13 @@ export const CLIENT_FILE_ENDPOINTS = {
   download: (id: string) => `${API_V2}/client-files/${id}/download`,
   preview: (id: string) => `${API_V2}/client-files/${id}/download?inline=1`,
 } as const;
+
+export const AGENT_PROFILE_ENDPOINTS = {
+  header: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}`,
+  performance: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/performance`,
+  week: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/week`,
+  monthly: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/monthly`,
+  biggestDeals: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/biggest-deals`,
+  training: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/training`,
+  payouts: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/payouts`,
+} as const;

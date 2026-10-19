@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@aws-sdk/client-s3", () => ({
   PutObjectCommand: vi.fn(),
@@ -12,6 +12,7 @@ vi.mock("../invite/invite.service", () => ({ inviteService: { send: vi.fn() } })
 vi.mock("../homeworker/homeworker.service", () => ({ homeworkerService: { invite: vi.fn() } }));
 
 import { hrService } from "./hr.service";
+import { hrRepository } from "./hr.repository";
 import { inviteService } from "../invite/invite.service";
 import { homeworkerService } from "../homeworker/homeworker.service";
 
@@ -95,5 +96,72 @@ describe("hrService.invite - link origin", () => {
     await hrService.invite({ email: "a@b.com", orgRole: "agent", branchId: "b1" }, MANAGER_SCOPE, "http://localhost:5000");
     expect(vi.mocked(homeworkerService.invite).mock.calls.at(-1)?.[2]).toBe("http://localhost:5000");
     expect(vi.mocked(inviteService.send).mock.calls.at(-1)?.[2]).toBe("http://localhost:5000");
+  });
+});
+
+describe("hrService.get - holidayUsedDays", () => {
+  const baseRow = {
+    userId: "u1", name: "Ann", email: "a@x", phone: null, orgRole: "agent", branchId: "b1", branchName: "North",
+    branchOpeningPattern: "mon-fri", isActive: true, address: null, emergencyContactName: null,
+    emergencyContactRelationship: null, emergencyContactPhone: null, hrId: "hr1", status: "Active",
+    employmentType: "Full-time", startDate: null, probationEnd: null, managerUserId: null, managerName: null,
+    salary: null, salaryCurrency: null, contractType: null, contractEndDate: null, holidayAllowance: 28, taxId: null,
+  };
+  const leave = (type: string, status: string, fromDate: string, toDate: string) => ({
+    id: `${fromDate}-${type}`, hrRecordId: "hr1", type, status, fromDate, toDate, reason: null, decidedBy: null,
+    decidedAt: null, createdAt: new Date(0), updatedAt: new Date(0),
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-19T12:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  async function usedDays(pattern: string | null): Promise<number> {
+    const repo = hrRepository as unknown as Record<string, ReturnType<typeof vi.fn>>;
+    repo.getOne = vi.fn().mockResolvedValue({ ...baseRow, branchOpeningPattern: pattern });
+    repo.listDocumentsForRecord = vi.fn().mockResolvedValue([]);
+    repo.listNotesForRecord = vi.fn().mockResolvedValue([]);
+    repo.listLeavesForRecord = vi.fn().mockResolvedValue([
+      leave("Annual", "Approved", "2026-10-19", "2026-10-25"), // Mon-Sun
+      leave("Annual", "Approved", "2025-12-29", "2026-01-02"), // straddles the year start
+      leave("Annual", "Pending", "2026-11-02", "2026-11-06"),
+      leave("Sick", "Approved", "2026-03-02", "2026-03-06"),
+    ]);
+    const detail = await hrService.get("u1", ADMIN_SCOPE);
+    return detail.holidayUsedDays;
+  }
+
+  it("counts working days of approved Annual leave in the current London year only", async () => {
+    expect(await usedDays("mon-fri")).toBe(7); // 5 + Thu/Fri of 2026
+  });
+
+  it("uses the person's branch opening pattern, defaulting to Mon-Fri", async () => {
+    expect(await usedDays("mon-sat")).toBe(8);
+    expect(await usedDays(null)).toBe(7);
+  });
+});
+
+describe("hrService.get - per-leave workingDays", () => {
+  it("counts each leave's own working days by the branch pattern, not clipped to the year", async () => {
+    const repo = hrRepository as unknown as Record<string, ReturnType<typeof vi.fn>>;
+    repo.getOne = vi.fn().mockResolvedValue({
+      userId: "u1", name: "Ann", email: "a@x", phone: null, orgRole: "agent", branchId: "b1", branchName: "North",
+      branchOpeningPattern: "mon-fri", isActive: true, address: null, emergencyContactName: null,
+      emergencyContactRelationship: null, emergencyContactPhone: null, hrId: "hr1", status: "Active",
+      employmentType: "Full-time", startDate: null, probationEnd: null, managerUserId: null, managerName: null,
+      salary: null, salaryCurrency: null, contractType: null, contractEndDate: null, holidayAllowance: 28, taxId: null,
+    });
+    repo.listDocumentsForRecord = vi.fn().mockResolvedValue([]);
+    repo.listNotesForRecord = vi.fn().mockResolvedValue([]);
+    repo.listLeavesForRecord = vi.fn().mockResolvedValue([
+      { id: "l1", hrRecordId: "hr1", type: "Annual", status: "Approved", fromDate: "2025-12-29", toDate: "2026-01-02", reason: null, decidedBy: null, decidedAt: null, createdAt: new Date(0), updatedAt: new Date(0) },
+      { id: "l2", hrRecordId: "hr1", type: "Sick", status: "Pending", fromDate: "2026-10-23", toDate: "2026-10-26", reason: null, decidedBy: null, decidedAt: null, createdAt: new Date(0), updatedAt: new Date(0) },
+    ]);
+
+    const detail = await hrService.get("u1", ADMIN_SCOPE);
+
+    expect(detail.holidays.map((h) => h.workingDays)).toEqual([5, 2]); // Fri+Mon in the second
   });
 });

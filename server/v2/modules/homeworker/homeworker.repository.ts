@@ -14,7 +14,7 @@ import {
   userOrgRoles,
   type Branch,
 } from '@shared/schema';
-import { and, asc, count, eq, gt, isNotNull, lt, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, isNotNull, lt, sql } from 'drizzle-orm';
 import {
   bookingCommissionNumeric,
   bookingNetExpr,
@@ -275,6 +275,16 @@ export const homeworkerRepository = {
       )
       .limit(1);
     return row ?? null;
+  },
+
+  /** Stored statements (draft and final) of one homeworker branch in the org, newest period first. */
+  async listStatementsByBranch(orgId: string, branchId: string, limit = 24) {
+    return db
+      .select()
+      .from(homeworkerPayoutStatement)
+      .where(and(eq(homeworkerPayoutStatement.orgId, orgId), eq(homeworkerPayoutStatement.branchId, branchId)))
+      .orderBy(desc(homeworkerPayoutStatement.periodStart))
+      .limit(limit);
   },
 
   /** Any stored statement whose [start, end) overlaps [from, to): start < to AND end > from. */

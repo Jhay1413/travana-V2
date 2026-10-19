@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { describeUkNow, formatUkLocal, nextUkCallbackSlot, parseUkLocalDateTime, toUkWallClock, ukLocalToUtc } from "./uk-time";
+import { describeUkNow, formatUkLocal, nextUkCallbackSlot, londonMidnight, parseUkLocalDateTime, toUkWallClock, ukLocalToUtc } from "./uk-time";
 
 // The whole point of this util is that a UK wall-clock time survives the
 // GMT/BST switch intact — a callback booked for "10pm" must be 10pm in London
@@ -117,5 +117,12 @@ describe("nextUkCallbackSlot", () => {
   it("behaves the same in GMT as in BST", () => {
     expect(at("2026-01-15T10:30:00.000Z")).toBe("2026-01-15 11:00");
     expect(at("2026-01-15T16:30:00.000Z")).toBe("2026-01-16 10:00");
+  });
+});
+
+describe("londonMidnight", () => {
+  it("is 23:00Z the day before in summer and 00:00Z in winter", () => {
+    expect(londonMidnight("2026-07-01").toISOString()).toBe("2026-06-30T23:00:00.000Z");
+    expect(londonMidnight("2026-01-15").toISOString()).toBe("2026-01-15T00:00:00.000Z");
   });
 });
