@@ -136,7 +136,7 @@ export const organizationOverviewCompareRepository = {
    * Distinct active deals with at least one open quote, per owning agent
    * (transaction.user_id). Same open-quote definition as kpis.openQuotesCount.
    */
-  async getOpenDealCounts(orgId: string, branchId?: string): Promise<Map<string, number>> {
+  async getOpenDealCounts(orgId: string, branchId?: string, userId?: string): Promise<Map<string, number>> {
     const rows = await db
       .select({
         agentId: transaction.user_id,
@@ -155,6 +155,7 @@ export const organizationOverviewCompareRepository = {
           eq(transaction.is_test, false),
           eq(clientTable.orgId, orgId),
           branchId ? eq(transaction.branch_id, branchId) : undefined,
+          userId ? eq(transaction.user_id, userId) : undefined,
         ),
       )
       .groupBy(transaction.user_id);

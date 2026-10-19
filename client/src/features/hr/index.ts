@@ -5,3 +5,4 @@
 export { hrApi } from "./api/hr.api";
 export * from "./api/use-hr-queries";
 export * from "./api/use-hr-mutations";
+export type { DocumentCategory, DocumentEntry, EmployeeDetail, LeaveEntry, LeaveStatus } from "./api/hr.api";

@@ -245,3 +245,19 @@ describe("homeworkerRepository.insertStatement", () => {
     await expect(homeworkerRepository.insertStatement(record)).rejects.toThrow("boom");
   });
 });
+
+describe("homeworkerRepository.listStatementsByBranch", () => {
+  it("is scoped to the org and branch, newest period first", async () => {
+    selectRows = [{ id: "st1" }];
+
+    const rows = await homeworkerRepository.listStatementsByBranch("o1", "hb1", 12);
+
+    expect(rows).toEqual([{ id: "st1" }]);
+    const call = selectCalls[0];
+    const where = render(call.where as SQL);
+    expect(where.text).toContain('"homeworker_payout_statement"."org_id" = ');
+    expect(where.text).toContain('"homeworker_payout_statement"."branch_id" = ');
+    expect(where.params).toEqual(expect.arrayContaining(["o1", "hb1"]));
+    expect(call.orderBy).toHaveLength(1);
+  });
+});

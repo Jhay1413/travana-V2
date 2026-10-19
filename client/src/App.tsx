@@ -178,6 +178,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/branch-overview" allow={MANAGER_ROLES} component={BranchOverviewPage} />
         <RoleRoute path="/agency/overview" allow={ADMIN_ROLES} component={OrganizationOverviewPage} />
         <RoleRoute path="/agents/:agentId" allow={MANAGER_ROLES} component={AgentStatsPage} />
+        <RoleRoute path="/agents/:agentId/:tab" allow={MANAGER_ROLES} component={AgentStatsPage} />
 
         <RoleRoute path="/platform-admin/audit-log" allow={PLATFORM_ROLES} component={PlatformAdminAuditPage} />
         <RoleRoute path="/platform-admin/usage" allow={PLATFORM_ROLES} component={PlatformAdminUsagePage} />

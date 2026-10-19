@@ -17,6 +17,8 @@ export interface LeaveEntry {
   from:      string;
   to:        string;
   status:    LeaveStatus;
+  /** Working days of this leave by the person's opening pattern (added by the server). */
+  workingDays?: number;
   reason?:   string | null;
   decidedBy?: string | null;
   decidedAt?: string | null;
