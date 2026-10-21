@@ -16,6 +16,9 @@ interface GridToolbarProps {
   counts: FreeQuoteStatusCounts | undefined;
   when: WhenFilter;
   onWhenChange: (value: WhenFilter) => void;
+  from: string;
+  to: string;
+  onRangeChange: (range: { from: string; to: string }) => void;
   tag: TagFilter;
   onTagChange: (value: TagFilter) => void;
   tagNames: string[];
@@ -27,6 +30,7 @@ const WHEN_OPTIONS: { value: WhenFilter; label: string }[] = [
   { value: "today", label: "Today" },
   { value: "week", label: "Next 7 days" },
   { value: "month", label: "This month" },
+  { value: "custom", label: "Custom range…" },
 ];
 
 const TAG_OPTIONS: { value: TagFilter; label: string }[] = [
@@ -36,6 +40,7 @@ const TAG_OPTIONS: { value: TagFilter; label: string }[] = [
 ];
 
 const TRIGGER = "h-10 gap-2 rounded-[10px] border border-social-border bg-card px-3 text-[13px] font-medium";
+const DATE_INPUT = "h-10 rounded-[10px] border border-social-border bg-card px-3 text-[13px] text-foreground outline-none";
 const PREFIX = "font-normal text-social-muted";
 
 export function GridToolbar(props: GridToolbarProps) {
@@ -74,6 +79,35 @@ export function GridToolbar(props: GridToolbarProps) {
           ))}
         </SelectContent>
       </Select>
+
+      {props.when === "custom" && (
+        <>
+          <label className="flex items-center gap-1.5 text-[13px]">
+            <span className={PREFIX}>From</span>
+            <input
+              type="date"
+              value={props.from}
+              max={props.to || undefined}
+              onChange={(e) => props.onRangeChange({ from: e.target.value, to: props.to })}
+              aria-label="From date"
+              className={DATE_INPUT}
+              data-testid="input-when-from"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-[13px]">
+            <span className={PREFIX}>To</span>
+            <input
+              type="date"
+              value={props.to}
+              min={props.from || undefined}
+              onChange={(e) => props.onRangeChange({ from: props.from, to: e.target.value })}
+              aria-label="To date"
+              className={DATE_INPUT}
+              data-testid="input-when-to"
+            />
+          </label>
+        </>
+      )}
 
       <Select value={props.tag} onValueChange={(v) => TAG_OPTIONS.some((o) => o.value === v) && props.onTagChange(v as TagFilter)}>
         <SelectTrigger className={cn(TRIGGER, "w-[150px]")} aria-label="Tags" data-testid="select-tag-filter">

@@ -12,7 +12,7 @@ export interface QueuePrefs {
   search: string;
 }
 
-export const DEFAULT_PREFS: QueuePrefs = { scope: "mine", view: "list", chip: "open", sort: "due", filters: EMPTY_FILTERS, search: "" };
+export const DEFAULT_PREFS: QueuePrefs = { scope: "mine", view: "board", chip: "open", sort: "due", filters: EMPTY_FILTERS, search: "" };
 
 const SCOPES: readonly QueueScope[] = ["mine", "raised", "all"];
 const VIEWS: readonly QueueView[] = ["list", "board"];

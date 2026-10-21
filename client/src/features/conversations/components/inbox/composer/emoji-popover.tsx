@@ -14,7 +14,7 @@ export function EmojiPopover({ onPick }: EmojiPopoverProps) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="grid h-9 w-9 place-items-center rounded-lg text-black/55 transition hover:bg-black/5 hover:text-black dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white"
+          className="grid h-9 w-9 place-items-center rounded-[10px] border border-social-border text-black/55 transition hover:bg-black/5 hover:text-black dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white"
           title="Insert emoji"
           aria-label="Insert emoji"
           data-testid="conversation-composer-emoji"

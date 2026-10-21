@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { MessageCircle, Mail, Phone } from "lucide-react";
+import { MessageCircle, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InitialsAvatar } from "@/features/agent-overview/components/dashboard-ui";
 import { useNeonClient } from "@/hooks/queries";
@@ -7,12 +7,11 @@ import type { Transaction } from "@/features/quote/types";
 import { getClientPhone } from "@/features/pipeline/lib/pipeline-helpers";
 import { OUTLINE_ACTION } from "@/features/pipeline/shared/button-styles";
 
-/** Customer card: avatar, name link to the client page, phone / email, Call and Chat. */
+/** Customer card: avatar, name link to the client page, phone, Call and Chat. */
 export function DrawerCustomerCard({ transaction: t, clientName }: { transaction: Transaction; clientName: string }) {
   const [, setLocation] = useLocation();
   const { data: client } = useNeonClient(t.client_id || "");
   const phone = (client?.phoneNumber && client.phoneNumber !== "NULL" ? client.phoneNumber : null) ?? getClientPhone(t);
-  const email = client?.email || null;
   const btn = `${OUTLINE_ACTION} h-9 px-3.5`;
 
   return (
@@ -30,7 +29,6 @@ export function DrawerCustomerCard({ transaction: t, clientName }: { transaction
         </button>
         <div className="mt-0.5 flex flex-col gap-0.5 text-[12.5px] text-social-muted">
           {phone && <span className="inline-flex items-center gap-1.5"><Phone className="h-[13px] w-[13px]" strokeWidth={2} />{phone}</span>}
-          {email && <span className="inline-flex items-center gap-1.5"><Mail className="h-[13px] w-[13px]" strokeWidth={2} />{email}</span>}
         </div>
       </div>
       {phone && (

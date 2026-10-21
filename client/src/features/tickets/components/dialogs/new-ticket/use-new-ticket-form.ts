@@ -6,6 +6,8 @@ import { clientDisplayName } from "@/lib/utils";
 import { usePendingAttachments } from "@/features/attachment";
 import { useCreateTicket } from "../../../api/use-ticket-mutations";
 import { ticketErrorMessage } from "../../../lib/error-message";
+import { seededTransactionId, validTransactionId } from "./form-seed";
+import { useHolidayOptions } from "../holiday-picker";
 import { cleanContact, type PickedClient, type RawClientRow } from "../../../lib/raw-client";
 import type { Ticket, TicketPriorityValue, TicketStatusValue, TicketTypeValue } from "../../../types";
 
@@ -45,12 +47,14 @@ function initialState(status?: TicketStatusValue): NewTicketFormState {
 export function useNewTicketForm({
   open,
   initialClientId,
+  initialTransactionId,
   initialStatus,
   onClose,
   onCreated,
 }: {
   open: boolean;
   initialClientId?: string;
+  initialTransactionId?: string;
   initialStatus?: TicketStatusValue;
   onClose: () => void;
   onCreated?: (ticket: Ticket) => void;
@@ -62,6 +66,10 @@ export function useNewTicketForm({
   const [form, setForm] = useState<NewTicketFormState>(() => initialState(initialStatus));
   const [isUploading, setIsUploading] = useState(false);
   const { data: initialClient } = useClient(open && initialClientId ? initialClientId : "");
+
+  const holidayOptions = useHolidayOptions(form.client?.id, !!form.client);
+  const optionIds = holidayOptions.map((o) => o.id);
+  const optionKey = optionIds.join(",");
 
   const patch = (next: Partial<NewTicketFormState>) => setForm((prev) => ({ ...prev, ...next }));
 
@@ -81,6 +89,7 @@ export function useNewTicketForm({
         ? prev
         : {
             ...prev,
+            transactionId: prev.transactionId || seededTransactionId(initialClientId, initialClientId, initialTransactionId),
             client: {
               id: initialClientId,
               name: clientDisplayName(raw) || "Client",
@@ -89,12 +98,20 @@ export function useNewTicketForm({
             },
           },
     );
-  }, [open, initialClientId, initialClient]);
+  }, [open, initialClientId, initialTransactionId, initialClient]);
+
+  // A seeded or stale holiday that is not one of this client's holidays is dropped once the list has loaded.
+  useEffect(() => {
+    if (!form.transactionId || optionIds.length === 0) return;
+    if (validTransactionId(form.transactionId, optionIds) === "") setForm((prev) => ({ ...prev, transactionId: "" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optionKey, form.transactionId]);
 
   const setType = (type: TicketTypeValue) =>
     setForm((prev) => ({ ...prev, type, client: type === "Build" ? null : prev.client, transactionId: type === "Build" ? "" : prev.transactionId }));
 
-  const pickClient = (client: PickedClient | null) => patch({ client, transactionId: "" });
+  const pickClient = (client: PickedClient | null) =>
+    patch({ client, transactionId: seededTransactionId(client?.id, initialClientId, initialTransactionId) });
 
   const submit = () => {
     const needsClient = form.type !== "Build";
@@ -108,7 +125,7 @@ export function useNewTicketForm({
         clientId: needsClient ? form.client?.id ?? null : null,
         userId: currentUser?.id || form.assigneeId,
         assignedTo: form.assigneeId,
-        transactionId: needsClient ? form.transactionId || null : null,
+        transactionId: needsClient ? validTransactionId(form.transactionId, optionIds) || null : null,
         type: form.type,
         status: form.status,
         priority: form.priority,

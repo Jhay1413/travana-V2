@@ -191,7 +191,7 @@ function InboxMessageBubble({ message }: { message: ConversationMessage }) {
           className={cn(
             "px-3.5 py-2.5 text-[14px] leading-[1.55]",
             outbound
-              ? "rounded-2xl rounded-br-[4px] bg-social-navy-ink text-white"
+              ? "rounded-2xl rounded-br-[4px] bg-sky-100 text-black/85 dark:bg-sky-500/15 dark:text-white/90"
               : "rounded-2xl rounded-bl-[4px] border border-social-border bg-white text-slate-900 dark:bg-card dark:text-foreground",
           )}
         >
@@ -205,7 +205,7 @@ function InboxMessageBubble({ message }: { message: ConversationMessage }) {
           )}
           {message.cta && (
             <>
-              <div className={cn("my-2 h-px", outbound ? "bg-white/20" : "bg-black/10")} />
+              <div className="my-2 h-px bg-black/10" />
               <div className="text-center text-sm font-semibold">{message.cta.label}</div>
             </>
           )}
@@ -287,7 +287,7 @@ export function MessageBubble({
             "rounded-xl px-6 pb-2 pt-5 text-[15px] leading-relaxed",
             outbound
               ? "rounded-tr-none bg-sky-100 text-black/85 dark:bg-sky-500/15 dark:text-white/90"
-              : "rounded-tl-none bg-slate-200/70 text-black/85 dark:bg-white/[0.08] dark:text-white/90",
+              : "rounded-tl-none border border-social-border bg-white text-black/85 dark:bg-card dark:text-white/90",
           )}
         >
           {message.body && <p className="whitespace-pre-wrap">{message.body}</p>}

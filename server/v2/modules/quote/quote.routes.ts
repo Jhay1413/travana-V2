@@ -3,8 +3,9 @@ import multer from "multer";
 import { quoteController } from "./quote.controller";
 import { quoteImageController } from "./quote-image.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { freeQuotesQueryValidator, freeQuoteStatusCountsValidator, addImagesValidator, reorderImagesValidator, presignQuoteImagesValidator, recentEngagementQueryValidator } from "./quote.validator";
+import { freeQuotesQueryValidator, freeQuoteStatusCountsValidator, addImagesValidator, reorderImagesValidator, presignQuoteImagesValidator, recentEngagementQueryValidator, setAcceptedValidator } from "./quote.validator";
 import { requireOrgRole } from "../../middlewares/auth/require-org-role";
+import { blockReadOnlyClientRoles } from "../../middlewares/auth/block-read-only-roles";
 import { restrictSocialManagerToFreeQuotes } from "./quote-social-guard.middleware";
 
 const router = Router();
@@ -38,6 +39,7 @@ router.post("/", upload.array("images", 50), quoteController.createQuote);
 router.post("/:id/duplicate", quoteController.duplicateQuote);
 router.patch("/:id", upload.array("images", 50), quoteController.updateQuote);
 router.patch("/:id/primary", quoteController.setPrimaryQuote);
+router.patch("/:id/accepted", blockReadOnlyClientRoles, validate(setAcceptedValidator), quoteController.setAccepted);
 router.delete("/:id", quoteController.deleteQuote);
 
 router.post("/:id/flights", quoteController.addFlight);

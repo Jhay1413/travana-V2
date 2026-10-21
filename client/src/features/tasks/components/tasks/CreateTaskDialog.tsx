@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +25,7 @@ import {
 import { useCreateTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import type { FormPresentation } from "@/features/quote/types";
+import { fillEmptyAssignee, isOpening, resolveTaskFormDefaults } from "@/features/tasks/lib/task-defaults";
 
 interface CreateTaskDialogProps {
   open: boolean;
@@ -35,6 +37,25 @@ interface CreateTaskDialogProps {
   entityId?: string;
   /** "drawer" renders the right-hand Create drawer used across the app; defaults to a centered dialog. */
   presentation?: FormPresentation;
+  /** Dialog heading (default "New Task"). */
+  title?: string;
+  /** Dialog sub-heading. */
+  description?: string;
+  /** Submit button label (default "Create Task"). */
+  submitLabel?: string;
+  /** Label of the title field (default "Task"). */
+  taskLabel?: string;
+  /** Pre-filled due date, YYYY-MM-DD (default today). */
+  defaultDueDate?: string;
+  /** Pre-filled due time, HH:mm (default 09:00). */
+  defaultDueTime?: string;
+  hideDescription?: boolean;
+  /** Hides the assignee picker; the task goes to defaultAssignedToId. */
+  hideAssignee?: boolean;
+  /** "above-drawer" lifts the dialog and its overlay over a side drawer (z-[600]). */
+  layer?: "above-drawer";
+  /** Called after the task is created, before the dialog closes. */
+  onCreated?: () => void;
 }
 
 /** Two-digit zero padded. */
@@ -61,6 +82,16 @@ export function CreateTaskDialog({
   entityType,
   entityId,
   presentation = "dialog",
+  title: heading = "New Task",
+  description: subheading = "Create a task and allocate it to an agent.",
+  submitLabel = "Create Task",
+  taskLabel = "Task",
+  defaultDueDate,
+  defaultDueTime,
+  hideDescription = false,
+  hideAssignee = false,
+  layer,
+  onCreated,
 }: CreateTaskDialogProps) {
   const { toast } = useToast();
   const createMutation = useCreateTask(entityType ?? "", entityId ?? "");
@@ -71,14 +102,30 @@ export function CreateTaskDialog({
   const [assignedToId, setAssignedToId] = useState("");
 
   // Reset the form each time the dialog is opened, defaulting today + assignee.
+  const prevOpen = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    const opening = isOpening(prevOpen.current, open);
+    prevOpen.current = open;
+    if (!opening) return;
     setTitle("");
     setDescription("");
-    setDueDate(toDateInput(new Date()));
-    setDueTime("09:00");
-    setAssignedToId(defaultAssignedToId ?? "");
+    const initial = resolveTaskFormDefaults({ defaultDueDate, defaultDueTime, defaultAssignedToId }, toDateInput(new Date()));
+    setDueDate(initial.dueDate);
+    setDueTime(initial.dueTime);
+    setAssignedToId(initial.assignedToId);
+  }, [open]);
+
+  // A default assignee that arrives after opening fills an empty slot without touching other fields.
+  useEffect(() => {
+    if (open) setAssignedToId((cur) => fillEmptyAssignee(cur, defaultAssignedToId));
   }, [open, defaultAssignedToId]);
+
+  const assigneeMissing = hideAssignee && !assignedToId;
+  const assigneeNote = assigneeMissing ? (
+    <p className="text-xs text-red-600" data-testid="text-create-task-no-assignee">
+      Couldn't work out who to assign this to. Reload and try again.
+    </p>
+  ) : null;
 
   const canSubmit = !!title.trim() && !!dueDate && !!assignedToId;
 
@@ -97,7 +144,8 @@ export function CreateTaskDialog({
       },
       {
         onSuccess: () => {
-          toast({ title: "Task created" });
+          toast({ title: submitLabel === "Create Task" ? "Task created" : "Task added" });
+          onCreated?.();
           onOpenChange(false);
         },
         onError: () => toast({ title: "Failed to create task", variant: "destructive" }),
@@ -110,12 +158,12 @@ export function CreateTaskDialog({
       <FormDrawer
         open={open}
         onOpenChange={onOpenChange}
-        title="Create Task"
-        description="Create a task and allocate it to an agent."
+        title={heading === "New Task" ? "Create Task" : heading}
+        description={subheading}
         data-testid="create-task-drawer"
       >
         <div className="px-7 pb-6 pt-6 grid gap-4">
-          <DrawerField label="Task" className="max-w-[420px]">
+          <DrawerField label={taskLabel} className="max-w-[420px]">
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -124,7 +172,7 @@ export function CreateTaskDialog({
               data-testid="input-create-task-title"
             />
           </DrawerField>
-          <DrawerField label="Description" className="max-w-[560px]">
+          {!hideDescription && <DrawerField label="Description" className="max-w-[560px]">
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -132,15 +180,16 @@ export function CreateTaskDialog({
               className="min-h-[88px] rounded-md border border-black/[0.08] bg-[#f4f5f7] px-3 py-2 text-sm text-black/80 shadow-none placeholder:text-black/35 focus-visible:ring-1 focus-visible:ring-[#26cfb3]"
               data-testid="input-create-task-description"
             />
-          </DrawerField>
-          <DrawerField label="Assign To" className="max-w-[420px]">
+          </DrawerField>}
+          {assigneeNote}
+          {!hideAssignee && <DrawerField label="Assign To" className="max-w-[420px]">
             <UserReassignSelect
               value={assignedToId}
               onValueChange={setAssignedToId}
               className={drawerControlClass}
               data-testid="select-create-task-assign-to"
             />
-          </DrawerField>
+          </DrawerField>}
         </div>
         <FormDrawerSection title="Schedule" data-testid="drawer-section-task-schedule">
           <div className="flex flex-wrap gap-x-6 gap-y-4">
@@ -166,7 +215,7 @@ export function CreateTaskDialog({
           </div>
         </FormDrawerSection>
         <FormDrawerFooter
-          submitLabel="Create Task"
+          submitLabel={submitLabel}
           isLoading={createMutation.isPending}
           disabled={!canSubmit}
           hint={canSubmit ? undefined : "Enter a task, assignee and due date to save."}
@@ -179,17 +228,21 @@ export function CreateTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="z-[500] max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl" data-testid="dialog-create-task">
+      <DialogContent
+        overlayClassName={layer === "above-drawer" ? "z-[600]" : undefined}
+        className={cn(layer === "above-drawer" ? "z-[600]" : "z-[500]", "max-w-sm rounded-2xl border-black/10 bg-white/95 backdrop-blur-xl")}
+        data-testid="dialog-create-task"
+      >
         <DialogHeader>
-          <DialogTitle className="text-sm font-semibold">New Task</DialogTitle>
+          <DialogTitle className="text-sm font-semibold">{heading}</DialogTitle>
           <DialogDescription className="text-xs text-black/55">
-            Create a task and allocate it to an agent.
+            {subheading}
           </DialogDescription>
         </DialogHeader>
 
         <div className="mt-3 grid gap-3">
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-black/60">Task</Label>
+            <Label className="text-xs font-medium text-black/60">{taskLabel}</Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -199,25 +252,31 @@ export function CreateTaskDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-black/60">Description</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Add more detail (optional)…"
-              className="min-h-[72px] rounded-xl border-black/10 bg-white/70"
-              data-testid="input-create-task-description"
-            />
-          </div>
+          {!hideDescription && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Description</Label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Add more detail (optional)…"
+                className="min-h-[72px] rounded-xl border-black/10 bg-white/70"
+                data-testid="input-create-task-description"
+              />
+            </div>
+          )}
 
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-black/60">Assign To</Label>
-            <UserReassignSelect
-              value={assignedToId}
-              onValueChange={setAssignedToId}
-              data-testid="select-create-task-assign-to"
-            />
-          </div>
+          {assigneeNote}
+          {!hideAssignee && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Assign To</Label>
+              <UserReassignSelect
+                value={assignedToId}
+                onValueChange={setAssignedToId}
+                zClassName={layer === "above-drawer" ? "z-[650]" : undefined}
+                data-testid="select-create-task-assign-to"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">
@@ -247,7 +306,7 @@ export function CreateTaskDialog({
             onClick={handleSave}
             disabled={!canSubmit || createMutation.isPending}
           >
-            {createMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Create Task"}
+            {createMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : submitLabel}
           </Button>
         </div>
       </DialogContent>

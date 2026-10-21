@@ -1,5 +1,5 @@
 import type { Transaction } from "@/features/quote/types";
-import { isLondonTomorrow, isSameLondonDay } from "@/lib/london-day";
+import { formatDueDateTime } from "@/lib/task-due-format";
 import type { PipelineColumnStatus } from "@/features/transaction/api/use-transaction-queries";
 
 /** Pipeline board columns. "Enquiry" / "Quoted" / "In Play" / "Booked" are the
@@ -208,25 +208,6 @@ export function getTransactionNavUrl(t: Transaction, stage: PipelineStage): stri
   return `/clients/${t.client_id}`;
 }
 
-/** Formats a task due date as "Today 15:15" / "Tomorrow 15:15" / "Mon 14 Sep 09:30", or "No date". */
-export function formatDueDateTime(due: string | null | undefined, now: Date = new Date()): string {
-  if (!due) return "No date";
-  const d = new Date(due);
-  if (isNaN(d.getTime())) return "No date";
-
-  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
-
-  // Day boundaries are Europe/London, the zone the server uses for "due today".
-  if (isSameLondonDay(d, now)) return `Today ${time}`;
-  if (isLondonTomorrow(d, now)) return `Tomorrow ${time}`;
-
-  const weekday = d.toLocaleDateString("en-GB", { weekday: "short" });
-  const day = d.getDate();
-  // Slice to 3 letters — some ICU versions render "short" September as "Sept".
-  const month = d.toLocaleDateString("en-GB", { month: "short" }).slice(0, 3);
-  return `${weekday} ${day} ${month} ${time}`;
-}
-
 /** Formats the "no activity" line for a deal with no next task, from last_activity_at. */
 export function formatNoActivityLabel(lastActivityAt: string | null | undefined, now: Date = new Date()): string {
   if (!lastActivityAt) return "No activity";
@@ -237,3 +218,5 @@ export function formatNoActivityLabel(lastActivityAt: string | null | undefined,
   if (days === 1) return "No activity for 1 day";
   return `No activity for ${days} days`;
 }
+
+export { formatDueDateTime };

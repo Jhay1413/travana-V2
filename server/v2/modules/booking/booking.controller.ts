@@ -28,7 +28,9 @@ export const bookingController = {
   convertQuoteToBooking: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const quoteId = req.params.quoteId as string;
-    const { haysRef, supplierRef } = req.body;
+    // The validator guarantees non-empty strings; validate() does not write the trimmed values back.
+    const haysRef = String(req.body.haysRef).trim();
+    const supplierRef = String(req.body.supplierRef).trim();
     const b = await bookingService.convertQuoteToBooking(quoteId, haysRef, supplierRef, scope);
     return successResponse(res, b, "Quote converted to booking successfully", 201);
   }),

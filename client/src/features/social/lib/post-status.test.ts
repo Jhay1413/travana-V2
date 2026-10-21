@@ -45,3 +45,10 @@ describe("STATUS_META", () => {
     expect(STATUS_META.scheduled.badgeClass).toBe("bg-status-scheduled-bg text-status-scheduled-fg");
   });
 });
+
+describe("STATUS_META not_generated", () => {
+  it("reads Not scheduled", () => {
+    expect(STATUS_META.not_generated.label).toBe("Not scheduled");
+    expect(STATUS_META.not_generated.plural).toBe("Not scheduled");
+  });
+});

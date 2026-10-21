@@ -321,17 +321,51 @@ export const accomodation_list = pgTable('accomodation_list_table', {
 export type AccomodationList = typeof accomodation_list.$inferSelect;
 export type InsertAccomodationList = typeof accomodation_list.$inferInsert;
 
+// Platform-wide tour-operator catalogue: identity only (name, code, website,
+// phone, logo). Per-organisation settings (commission, balance weeks, login)
+// live in `org_tour_operator`. Quote/booking FKs point at THIS table's id.
 export const tour_operator = pgTable('tour_operator_table', {
   id: uuid()
     .default(sql`gen_random_uuid()`)
     .primaryKey(),
-  name: varchar(),
-  commission_percentage: decimal({ precision: 5, scale: 2 }),
-  org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  name: varchar().notNull(),
+  code: varchar("code", { length: 8 }),
+  website: text("website"),
+  phone: varchar("phone"),
   logo_url: text("logo_url"),
-});
+  created_by: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("uq_tour_operator_name_lower").on(sql`lower(${t.name})`),
+]);
 export type TourOperatorLookup = typeof tour_operator.$inferSelect;
 export type InsertTourOperatorLookup = typeof tour_operator.$inferInsert;
+
+// One row per (organisation, catalogue operator): that agency's commission,
+// balance-due weeks and portal login (password AES-256-GCM encrypted).
+export const org_tour_operator = pgTable('org_tour_operator', {
+  id: uuid()
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  org_id: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  tour_operator_id: uuid("tour_operator_id").notNull().references(() => tour_operator.id, { onDelete: "cascade" }),
+  commission_percentage: decimal("commission_percentage", { precision: 5, scale: 2 }),
+  balance_due_weeks: integer("balance_due_weeks").notNull().default(14),
+  username: varchar("username"),
+  encrypted_password: text("encrypted_password"),
+  is_active: boolean("is_active").notNull().default(true),
+  created_by: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  updated_by: text("updated_by"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  // Leading org_id also serves per-org lookups, so no separate org index.
+  uniqueIndex("uq_org_tour_operator_org_operator").on(t.org_id, t.tour_operator_id),
+  index("idx_org_tour_operator_operator").on(t.tour_operator_id),
+]);
+export type OrgTourOperator = typeof org_tour_operator.$inferSelect;
+export type InsertOrgTourOperator = typeof org_tour_operator.$inferInsert;
 
 // Per-organization, per-supplier scraper configuration. Each row lets one org
 // scrape one supplier (easyJet, TUI, …): login credentials (encrypted via
@@ -868,6 +902,9 @@ export const quote = pgTable('quote_table', {
   quote_token: varchar('quote_token', { length: 12 }),
   quote_sent_at: timestamp('quote_sent_at', { precision: 0, withTimezone: true }),
   quote_sent_via: varchar('quote_sent_via'),
+  // Manual "customer accepted" mark by the agent (the customer's own accept lives in quote_customer_actions).
+  accepted_at: timestamp('accepted_at', { precision: 0, withTimezone: true }),
+  accepted_by: text('accepted_by').references(() => user.id, { onDelete: 'set null' }),
   show_on_portal: boolean('show_on_portal').default(false),
   // Timestamp of when the quote was (last) added to the portal as a deal — set when
   // show_on_portal flips to true. Drives the "Latest Deals" 6-day recency window.
@@ -878,6 +915,7 @@ export const quote = pgTable('quote_table', {
   // Pipeline subqueries resolve quotes per transaction and filter by status;
   // leading transaction_id also serves the inArray(transaction_id) enrich lookups.
   index("idx_quote_transaction_status").on(table.transaction_id, table.quote_status),
+  index("idx_quote_main_tour_operator").on(table.main_tour_operator_id),
 ]);
 
 export const insertQuoteSchema = createInsertSchema(quote).omit({ id: true, date_created: true });
@@ -1083,6 +1121,7 @@ export const booking = pgTable('booking_table', {
   // on_booking pipeline column filters bookings to the current month by date_created.
   // (transaction_id already carries a unique index from its .unique() constraint.)
   index("idx_booking_date_created").on(table.date_created),
+  index("idx_booking_main_tour_operator").on(table.main_tour_operator_id),
 ]);
 
 export const insertBookingSchema = createInsertSchema(booking).omit({ id: true, date_created: true });
@@ -3093,3 +3132,27 @@ export const insertImageUpscaleJobSchema = createInsertSchema(imageUpscaleJob).o
 });
 export type ImageUpscaleJob = typeof imageUpscaleJob.$inferSelect;
 export type InsertImageUpscaleJob = typeof imageUpscaleJob.$inferInsert;
+
+// Departures & balances: the office's pre-departure checklist, one row per booking, created lazily
+// on the first tick (no row = every check false). `last_change_*` stamps the latest tick for the list.
+export const bookingDepartureChecks = pgTable("booking_departure_checks", {
+  bookingId: uuid("booking_id").primaryKey().references(() => booking.id, { onDelete: "cascade" }),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  checkIn: boolean("check_in").notNull().default(false),
+  ticketsInHouse: boolean("tickets_in_house").notNull().default(false),
+  passportInfo: boolean("passport_info").notNull().default(false),
+  ticketsPickUp: boolean("tickets_pick_up").notNull().default(false),
+  completed: boolean("completed").notNull().default(false),
+  fullyPaid: boolean("fully_paid").notNull().default(false),
+  lastChangeBy: text("last_change_by"),
+  lastChangeByName: text("last_change_by_name"),
+  lastChangeAt: timestamp("last_change_at", { withTimezone: true }),
+  lastChangeWhat: text("last_change_what"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_booking_departure_checks_org").on(table.orgId),
+]);
+
+export type BookingDepartureChecks = typeof bookingDepartureChecks.$inferSelect;
+export type InsertBookingDepartureChecks = typeof bookingDepartureChecks.$inferInsert;

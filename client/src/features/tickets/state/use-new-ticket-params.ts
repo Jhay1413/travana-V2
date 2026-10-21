@@ -5,10 +5,11 @@ import { TICKET_STATUSES, type TicketStatusValue } from "../types";
 export interface NewTicketParams {
   open: boolean;
   clientId?: string;
+  transactionId?: string;
   status?: TicketStatusValue;
 }
 
-/** Reads `?new=1&client=<id>&status=<status>` on /tickets and clears them when the dialog closes. */
+/** Reads `?new=1&client=<id>&transaction=<id>&status=<status>` on /tickets and clears them when the dialog closes. */
 export function useNewTicketParams() {
   const search = useSearch();
   const [, navigate] = useLocation();
@@ -19,14 +20,16 @@ export function useNewTicketParams() {
     return {
       open: q.get("new") === "1",
       clientId: q.get("client") || undefined,
+      transactionId: q.get("transaction") || undefined,
       status: (TICKET_STATUSES as readonly string[]).includes(status ?? "") ? (status as TicketStatusValue) : undefined,
     };
   }, [search]);
 
   const openNew = useCallback(
-    (opts?: { clientId?: string; status?: TicketStatusValue }) => {
+    (opts?: { clientId?: string; transactionId?: string; status?: TicketStatusValue }) => {
       const q = new URLSearchParams({ new: "1" });
       if (opts?.clientId) q.set("client", opts.clientId);
+      if (opts?.transactionId) q.set("transaction", opts.transactionId);
       if (opts?.status) q.set("status", opts.status);
       navigate(`/tickets?${q.toString()}`);
     },

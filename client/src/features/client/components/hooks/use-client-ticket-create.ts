@@ -4,6 +4,7 @@ import { attachmentApi } from "@/api";
 import { ticketKeys } from "@/hooks/queries";
 import { useCreateTicket } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
+import { ticketErrorMessage } from "@/features/tickets/lib/error-message";
 
 const EMPTY_TICKET_FORM = {
   subject: "",
@@ -27,7 +28,10 @@ export interface TicketLinkTarget {
   transactionId?: string | null;
 }
 
-export function useClientTicketCreate(clientId: string, currentUserId: string | undefined, link?: TicketLinkTarget) {
+export function useClientTicketCreate(clientId: string, currentUserId: string | undefined, link?: TicketLinkTarget,
+  /** Called after a ticket was created and the dialog closed itself. */
+  onCreated?: () => void,
+) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showTicketDialog, setShowTicketDialog] = useState(false);
@@ -94,7 +98,7 @@ export function useClientTicketCreate(clientId: string, currentUserId: string | 
         transactionId: link?.transactionId ?? null,
       },
       {
-        onSuccess: async (data: any) => {
+        onSuccess: async (data: { id?: string } | undefined) => {
           const ticketId = data?.id;
           queryClient.invalidateQueries({ queryKey: ticketKeys.byClient(clientId) });
           if (ticketId && ticketPendingFiles.length > 0) {
@@ -120,10 +124,11 @@ export function useClientTicketCreate(clientId: string, currentUserId: string | 
             toast({ title: "Ticket created successfully" });
           }
           setShowTicketDialog(false);
+          onCreated?.();
           resetTicketForm();
         },
-        onError: () => {
-          toast({ title: "Failed to create ticket", variant: "destructive" });
+        onError: (err: unknown) => {
+          toast({ title: ticketErrorMessage(err, "Failed to create ticket"), variant: "destructive" });
           setIsTicketUploading(false);
         },
       },

@@ -5,10 +5,13 @@ import {
   clientTable,
   transaction as transactionTable,
   booking as bookingTable,
+  bookingDepartureChecks,
   quote as quoteTable,
   organization as organizationTable,
 } from '@shared/schema';
 import { and, desc, eq, gte, isNotNull, inArray, sql } from 'drizzle-orm';
+
+let warnedMissingChecksTable = false;
 
 export const smsRepository = {
   /** List templates owned by an org, or all of them when orgId is null (platform_admin). */
@@ -217,6 +220,29 @@ export const smsRepository = {
         eq(bookingTable.travel_date, targetDate),
         isNotNull(transactionTable.client_id),
       ));
+  },
+
+  /** True when the office has marked this booking fully paid on the departures checklist. */
+  async isBookingFullyPaid(bookingId: string): Promise<boolean> {
+    try {
+      const [row] = await db
+        .select({ fullyPaid: bookingDepartureChecks.fullyPaid })
+        .from(bookingDepartureChecks)
+        .where(eq(bookingDepartureChecks.bookingId, bookingId))
+        .limit(1);
+      return row?.fullyPaid === true;
+    } catch (err) {
+      // Table not migrated yet: treat as not paid so the sweep keeps working.
+      const e = err as { code?: string; cause?: { code?: string } } | null;
+      if (e?.code === "42P01" || e?.cause?.code === "42P01") {
+        if (!warnedMissingChecksTable) {
+          warnedMissingChecksTable = true;
+          console.warn("[sms] booking_departure_checks does not exist yet; treating bookings as not fully paid");
+        }
+        return false;
+      }
+      throw err;
+    }
   },
 
   /**

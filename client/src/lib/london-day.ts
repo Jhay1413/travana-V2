@@ -31,7 +31,7 @@ const LONDON_PARTS = new Intl.DateTimeFormat("en-GB", {
 });
 
 /** Milliseconds London is ahead of UTC at the given instant (0 in winter, 3,600,000 in BST). */
-function londonOffsetMs(instant: number): number {
+export function londonOffsetMs(instant: number): number {
   const parts: Record<string, number> = {};
   for (const p of LONDON_PARTS.formatToParts(new Date(instant))) {
     if (p.type !== "literal") parts[p.type] = Number(p.value);

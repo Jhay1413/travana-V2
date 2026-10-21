@@ -2,7 +2,8 @@ import type { KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "../../../types";
 import { formatRowTime, rowStatus, type SnoozePresetId } from "../lib";
-import { ChannelAvatar, StatusPill, TagPill } from "../shared";
+import { ChannelAvatar, StatusPill, TagPill, toneFor } from "../shared";
+
 import { RowHoverActions } from "./row-hover-actions";
 
 function initialsOf(name: string): string {
@@ -63,7 +64,7 @@ export function ConversationRow({ conversation: c, selected, isDoneTab, staff, c
           </span>
           <div className="flex h-7 shrink-0 items-center gap-1.5">
             <div className="flex items-center gap-1.5 group-focus-within:hidden group-hover:hidden">
-              <span className={cn("text-[12px]", c.unread ? "font-bold text-social-orange-text" : "text-social-muted")}>
+              <span className={cn("text-[12px]", c.unread ? "font-semibold text-social-orange-text" : "text-social-muted")}>
                 {formatRowTime(c.lastActivityAt, now)}
               </span>
               {c.unread && <span className="h-2 w-2 rounded-full bg-social-orange" aria-label="Unread" />}
@@ -84,9 +85,6 @@ export function ConversationRow({ conversation: c, selected, isDoneTab, staff, c
             </div>
           </div>
         </div>
-        {c.conversationType && (
-          <p className="truncate text-[11px] text-social-muted">{c.conversationType === "admin" ? "Admin" : "Sales"}</p>
-        )}
         <div className="flex items-center justify-between gap-2">
           {draftPreview ? (
             <p className="flex min-w-0 items-center gap-1.5 text-[13px] text-social-muted">
@@ -102,7 +100,7 @@ export function ConversationRow({ conversation: c, selected, isDoneTab, staff, c
           )}
           {c.assignee ? (
             <span
-              className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-social-navy text-[10px] font-semibold text-white"
+              className={cn("grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full text-[10px] font-semibold", toneFor(c.assignee))}
               title={c.assignee}
             >
               {initialsOf(c.assignee)}

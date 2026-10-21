@@ -42,6 +42,7 @@ import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { operatorSelectOptions, OperatorRateHint, useOperatorNames } from "@/features/tour-operator";
 import {
   Form,
   FormField,
@@ -396,6 +397,7 @@ export function BookingRHFForm({
   const { data: packageTypesData } = usePackageTypes();
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
+  const operatorNames = useOperatorNames();
   const { data: boardBasisData } = useBoardBasis();
   const { data: roomTypeData } = useRoomTypes();
   const { data: countriesData } = useCountries();
@@ -564,15 +566,6 @@ export function BookingRHFForm({
         })
       ),
     [airportsData]
-  );
-
-  const tourOperatorOptions = useMemo(
-    () =>
-      (tourOperatorsData || []).map((op: { id: string; name: string | null }) => ({
-        value: op.id,
-        label: op.name || op.id,
-      })),
-    [tourOperatorsData]
   );
 
   const countryOptions = useMemo(
@@ -969,7 +962,7 @@ export function BookingRHFForm({
                   <FormLabel className="text-xs font-medium text-black/60">Tour Operator</FormLabel>
                   <FormControl>
                     <SearchableSelect
-                      options={tourOperatorOptions}
+                      options={operatorSelectOptions(tourOperatorsData, field.value, operatorNames[field.value ?? ""])}
                       value={field.value ?? ""}
                       onValueChange={(value) => {
                         field.onChange(value);
@@ -986,6 +979,7 @@ export function BookingRHFForm({
                       placeholder="Select operator..."
                     />
                   </FormControl>
+                  <OperatorRateHint operators={tourOperatorsData} selectedId={field.value} />
                   <FormMessage />
                 </FormItem>
               )}

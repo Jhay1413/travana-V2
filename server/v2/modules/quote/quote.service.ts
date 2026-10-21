@@ -8,6 +8,7 @@ import { enquiryTableRepository } from "../enquiry/enquiry.repository";
 import { destinationGuruService } from "../destination-guru/destination-guru.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { buildQuoteEmbeddingText, buildQuoteEmbeddingMetadata } from "./quote-embedding";
+import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
 import type {
@@ -410,28 +411,45 @@ export const newQuoteService = {
     await assertQuoteInScope(id, scope);
     const q = await newQuoteRepository.findWithDetails(id);
     if (!q) throw new AppError("Quote not found", 404);
+    const service_commission = await newQuoteRepository.getServiceCommission(id);
     // Surface the customer-facing total (sales − discount + service charge) and a per-person
     // figure derived from it, so the detail page displays consistent values regardless of any
     // previously-stored price_per_person.
     return {
       ...q,
+      service_commission,
       total_price: calcTotalPrice(q.sales_price, q.discounts, q.service_charge).toFixed(2),
       price_per_person: calcPricePerPerson(q.sales_price, q.adult, q.child, q.discounts, q.service_charge),
     };
   },
 
-  async createQuote(data: CreateQuotePayload, scope: ScopeOrTrusted) {
+  async createQuote(data: CreateQuotePayload, scope: ScopeOrTrusted, options?: { skipOperatorCheck?: boolean; sourceQuoteId?: string }) {
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
       childAges,
       cruiseTitle, cruiseLine, shipName, cruiseDate, cabinType, cabinNumber, embarkation, debarkation, cruiseExtras, cruiseOnly, preCruiseStay, postCruiseStay, cruiseItinerary,
+      // The accepted mark is only ever set through setAccepted, never on create.
+      accepted_at: _ignoredAcceptedAt, accepted_by: _ignoredAcceptedBy,
+      quote_sent_at: _ignoredSentAt, quote_sent_via: _ignoredSentVia, quote_token: _ignoredToken,
       ...quoteFields
     } = data;
 
     const cruiseData = buildCruiseData(data);
 
     await assertTransactionInScope(quoteFields.transaction_id, scope);
+    if (!options?.skipOperatorCheck) {
+      // "Copy to client" from a social quote: the copy may keep the SOURCE quote's
+      // operators even if the agency no longer lists them. Only operators the caller
+      // adds on top are checked. The source must be in the caller's scope.
+      let existing: () => Promise<string[]> = async () => [];
+      const sourceQuoteId = options?.sourceQuoteId;
+      if (sourceQuoteId) {
+        await assertQuoteInScope(sourceQuoteId, scope);
+        existing = () => newQuoteRepository.findTourOperatorIds(sourceQuoteId);
+      }
+      await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, existing);
+    }
 
     const txn = await transactionRepository.findById(quoteFields.transaction_id);
     if (!txn) throw new AppError("Transaction not found", 404);
@@ -527,6 +545,8 @@ export const newQuoteService = {
     if ((data as any).not_for_social) {
       throw new AppError("Cannot create social post for a quote marked as not for social", 400);
     }
+    // createQuote below runs with a trusted scope, so check the operators here.
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
 
     const txn = await transactionRepository.create(
       { status: 'on_quote', user_id: userId } as InsertTransaction,
@@ -541,6 +561,10 @@ export const newQuoteService = {
     const sourceQuote = await newQuoteRepository.findById(sourceQuoteId);
     if (!sourceQuote) throw new AppError("Quote not found", 404);
 
+    // A duplicate copies the source's operators (even ones the agency has since
+    // removed). Only operators the caller NEWLY supplies in `data` are checked.
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, () => newQuoteRepository.findTourOperatorIds(sourceQuoteId));
+
     // The duplicate dialog seeds its form with the source's image URLs, so a
     // submitted `images` array is already the user's final gallery — kept
     // source images included, removed ones absent. Merging the source's images
@@ -552,7 +576,7 @@ export const newQuoteService = {
       ? data.images.filter((url): url is string => typeof url === "string" && url.length > 0)
       : sourceImageUrls;
 
-    const { id: _sourceId, date_created: _sourceCreatedAt, transaction_id: _ignoredTransactionId, quote_token: _ignoreToken, ...sourceInsertData } = sourceQuote;
+    const { id: _sourceId, date_created: _sourceCreatedAt, transaction_id: _ignoredTransactionId, quote_token: _ignoreToken, quote_sent_at: _ignoreSentAt, quote_sent_via: _ignoreSentVia, accepted_at: _ignoreAcceptedAt, accepted_by: _ignoreAcceptedBy, ...sourceInsertData } = sourceQuote;
     const sourceDetails = await newQuoteRepository.findWithDetails(sourceQuoteId);
     const sourceExtras = sourceDetails ? {
       transfers: (sourceDetails.transfers || []).map((t: Record<string, unknown>) => ({ booking_ref: t.booking_ref, tour_operator_id: t.tour_operator_id, pick_up_location: t.pick_up_location, drop_off_location: t.drop_off_location, pick_up_time: t.pick_up_time, drop_off_time: t.drop_off_time, note: t.note, cost: t.cost, commission: t.commission, is_included_in_package: t.is_included_in_package })),
@@ -578,7 +602,7 @@ export const newQuoteService = {
       tags: data.tags ?? sourceDetails?.tags ?? [],
     };
 
-    const newQuote = await newQuoteService.createQuote(payload, scope);
+    const newQuote = await newQuoteService.createQuote(payload, scope, { skipOperatorCheck: true });
 
     // The child count comes across via the quote columns, but the individual
     // child ages live in the passengers table — copy them from the source so
@@ -595,6 +619,7 @@ export const newQuoteService = {
 
   async updateQuote(id: string, data: UpdateQuotePayload, scope: ScopeOrTrusted) {
     await assertQuoteInScope(id, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, () => newQuoteRepository.findTourOperatorIds(id));
 
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation,
@@ -794,6 +819,23 @@ export const newQuoteService = {
     }
   },
 
+  /**
+   * Manual "customer accepted" mark (or undo). Scope-checked like every other quote write.
+   * Free (social) quotes can't be accepted. Marking an already-accepted quote keeps the
+   * first stamp (date and user); clearing removes both. Returns the enriched detail row.
+   */
+  async setAccepted(id: string, accepted: boolean, userId: string, scope: ScopeOrTrusted) {
+    await assertQuoteInScope(id, scope);
+    const existing = await newQuoteRepository.findById(id);
+    if (!existing) throw new AppError("Quote not found", 404);
+    if (existing.isFreeQuote) throw new AppError("Free quotes can't be accepted", 400);
+    if (!(accepted && existing.accepted_at)) {
+      const updated = await newQuoteRepository.setAccepted(id, accepted, userId);
+      if (!updated) throw new AppError("Quote not found", 404);
+    }
+    return newQuoteService.getQuoteWithDetails(id, scope);
+  },
+
   /** Reassign the primary quote for a transaction.
    *
    * The chosen quote (quoteId) becomes isQuoteCopy=false (primary) and the
@@ -840,11 +882,16 @@ export const newQuoteService = {
 
   async addFlight(quoteId: string, data: Omit<InsertQuoteFlight, 'quote_id'>, scope: ScopeOrTrusted) {
     await assertQuoteInScope(quoteId, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
     return newQuoteRepository.addFlight({ ...data, quote_id: quoteId });
   },
 
   async updateFlight(flightId: string, data: Partial<InsertQuoteFlight>, scope: ScopeOrTrusted) {
     await assertFlightInScope(flightId, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => {
+      const current = await newQuoteRepository.findFlightTourOperatorId(flightId);
+      return current ? [current] : [];
+    });
     return newQuoteRepository.updateFlight(flightId, data);
   },
 
@@ -855,11 +902,16 @@ export const newQuoteService = {
 
   async addAccommodation(quoteId: string, data: Omit<InsertQuoteAccomodation, 'quote_id'>, scope: ScopeOrTrusted) {
     await assertQuoteInScope(quoteId, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
     return newQuoteRepository.addAccommodation({ ...data, quote_id: quoteId });
   },
 
   async updateAccommodation(accommodationId: string, data: Partial<InsertQuoteAccomodation>, scope: ScopeOrTrusted) {
     await assertAccommodationInScope(accommodationId, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => {
+      const current = await newQuoteRepository.findAccommodationTourOperatorId(accommodationId);
+      return current ? [current] : [];
+    });
     return newQuoteRepository.updateAccommodation(accommodationId, data);
   },
 
@@ -870,6 +922,7 @@ export const newQuoteService = {
 
   async addTransfer(quoteId: string, data: Omit<InsertQuoteTransfer, 'quote_id'>, scope: ScopeOrTrusted) {
     await assertQuoteInScope(quoteId, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
     return newQuoteRepository.addTransfer({ ...data, quote_id: quoteId });
   },
 

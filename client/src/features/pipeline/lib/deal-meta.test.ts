@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "@/features/quote/types";
-import { buildDealMeta, isDueToday } from "./deal-meta";
+import { buildDealMeta, isDueToday, nextTaskRowProps } from "./deal-meta";
 import { operatorCode } from "../shared/operator-tile";
 
 describe("buildDealMeta", () => {
@@ -30,5 +30,16 @@ describe("operatorCode", () => {
     expect(operatorCode("Jet2holidays")).toBe("JET");
     expect(operatorCode("P&O Cruises")).toBe("PC");
     expect(operatorCode(null)).toBe("");
+  });
+});
+
+describe("nextTaskRowProps", () => {
+  it("maps no task to the empty state", () => {
+    expect(nextTaskRowProps(null)).toEqual({ title: null, dueDate: null });
+    expect(nextTaskRowProps(undefined)).toEqual({ title: null, dueDate: null });
+  });
+  it("maps a task, keeping an untitled one as a task", () => {
+    expect(nextTaskRowProps({ title: "Call", due_date: "2026-10-21T10:00:00Z" })).toEqual({ title: "Call", dueDate: "2026-10-21T10:00:00Z" });
+    expect(nextTaskRowProps({ title: null, due_date: null })).toEqual({ title: "", dueDate: null });
   });
 });

@@ -9,6 +9,7 @@ import type { SQL } from "drizzle-orm";
 export const whereCalls: unknown[] = [];
 export const orderByCalls: unknown[][] = [];
 export const havingCalls: unknown[] = [];
+export const valuesCalls: unknown[] = [];
 let rows: unknown[] = [];
 
 export function setRows(next: unknown[]): void {
@@ -19,6 +20,7 @@ export function resetCapture(): void {
   whereCalls.length = 0;
   orderByCalls.length = 0;
   havingCalls.length = 0;
+  valuesCalls.length = 0;
   rows = [];
 }
 
@@ -34,6 +36,12 @@ function makeChain(): object {
         if (prop === "where") {
           return (cond: unknown) => {
             whereCalls.push(cond);
+            return proxy;
+          };
+        }
+        if (prop === "values") {
+          return (v: unknown) => {
+            valuesCalls.push(v);
             return proxy;
           };
         }

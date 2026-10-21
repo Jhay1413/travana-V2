@@ -11,11 +11,19 @@ vi.mock("./organization.repository", () => ({
   },
 }));
 
+vi.mock("../tour-operator/org-tour-operator.repository", () => ({
+  orgTourOperatorRepository: {
+    transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn("TX")),
+    linkSeedOperators: vi.fn(),
+  },
+}));
 vi.mock("../plan/plan.repository", () => ({ planRepository: { findByCode: vi.fn() } }));
 
 import { organizationService } from "./organization.service";
 import { organizationRepository } from "./organization.repository";
+import { orgTourOperatorRepository } from "../tour-operator/org-tour-operator.repository";
 import { planRepository } from "../plan/plan.repository";
+import { tourOperatorCommissionSeed } from "@shared/tour-operator-seed";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -105,5 +113,17 @@ describe("organizationService.update", () => {
   it("throws 404 when the org to update is missing", async () => {
     vi.mocked(organizationRepository.update).mockResolvedValue(undefined as never);
     await expect(organizationService.update("o1", { name: "New" })).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe("organizationService.create", () => {
+  it("links the new org to the seed operators at their seed commission in the same transaction", async () => {
+    vi.mocked(organizationRepository.create).mockResolvedValue({ id: "o9" } as never);
+
+    const org = await organizationService.create({ name: "X" } as never);
+
+    expect(org).toEqual({ id: "o9" });
+    expect(organizationRepository.create).toHaveBeenCalledWith({ name: "X" }, "TX");
+    expect(orgTourOperatorRepository.linkSeedOperators).toHaveBeenCalledWith("o9", tourOperatorCommissionSeed, null, "TX");
   });
 });

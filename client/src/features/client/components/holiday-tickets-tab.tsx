@@ -28,7 +28,7 @@ import type { User as ApiUser } from "@/features/user/types";
 // Every ticket the client has raised, newest first, rendered as a collapsible
 // card whose body is the ticket's thread: the original description as the
 // first post, followed by its replies (one level of threading). Visual
-// language matches the Notes tab — same rounded card, corner-straddling
+// language matches the Notes tab — same rounded-[10px] card, corner-straddling
 // avatar and blue-name/timestamp header — but each post gets an author-keyed
 // bubble colour and a Like / Reply / Edit / Delete action row.
 
@@ -508,9 +508,9 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
         </div>
       )}
 
-      <div className="mt-4 rounded-xl bg-black/[0.02] p-2" data-testid={`ticket-reply-composer-${ticket.id}`}>
+      <div className="mt-4 rounded-[10px] bg-black/[0.02] p-2" data-testid={`ticket-reply-composer-${ticket.id}`}>
         {replyingTo && (
-          <div className="mb-2 flex items-center gap-2 rounded-lg bg-sky-50 px-3 py-1.5 text-xs text-sky-800 dark:bg-sky-500/10 dark:text-sky-300">
+          <div className="mb-2 flex items-center gap-2 rounded-[10px] bg-sky-50 px-3 py-1.5 text-xs text-sky-800 dark:bg-sky-500/10 dark:text-sky-300">
             <span>
               Replying to <strong>{replyingTo.authorName}</strong>
             </span>
@@ -546,7 +546,7 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
             type="button"
             title="Attach files"
             onClick={() => fileInputRef.current?.click()}
-            className="grid h-7 w-7 place-items-center rounded-md text-black/45 transition hover:bg-black/5 hover:text-black dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
+            className="grid h-7 w-7 place-items-center rounded-[10px] text-black/45 transition hover:bg-black/5 hover:text-black dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white"
             data-testid="ticket-reply-attach"
           >
             <Paperclip className="h-4 w-4" />
@@ -556,7 +556,7 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
               {pendingFiles.map((file, index) => (
                 <div
                   key={`${file.name}-${index}`}
-                  className="flex items-center gap-1.5 rounded-lg bg-black/[0.04] px-2 py-1 text-xs dark:bg-white/10"
+                  className="flex items-center gap-1.5 rounded-[10px] bg-black/[0.04] px-2 py-1 text-xs dark:bg-white/10"
                   data-testid={`ticket-reply-pending-${index}`}
                 >
                   <Paperclip className="h-3 w-3 text-black/40 dark:text-white/40" />
@@ -614,13 +614,13 @@ function TicketCard({
             )}
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold", typeChipClass(ticket.type))}>
+            <span className={cn("inline-flex items-center rounded-[10px] border px-1.5 py-0.5 text-[10px] font-semibold", typeChipClass(ticket.type))}>
               {ticket.type}
             </span>
-            <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold", statusChipClass(ticket.status))}>
+            <span className={cn("inline-flex items-center rounded-[10px] border px-1.5 py-0.5 text-[10px] font-semibold", statusChipClass(ticket.status))}>
               {ticket.status}
             </span>
-            <span className={cn("inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold", priorityChipClass(ticket.priority))}>
+            <span className={cn("inline-flex items-center rounded-[10px] border px-1.5 py-0.5 text-[10px] font-semibold", priorityChipClass(ticket.priority))}>
               {ticket.priority}
             </span>
             <span className="text-[11px] text-black/40">Assigned to {assigneeName}</span>
@@ -640,7 +640,10 @@ export function HolidayTicketsTab({
   clientName,
   entityType,
   transactionId,
+  hideCreateButton = false,
 }: {
+  /** Drops the empty-state "New Ticket" button when the parent offers its own create control. */
+  hideCreateButton?: boolean;
   clientId: string;
   clientName: string;
   entityId: string;
@@ -685,15 +688,15 @@ export function HolidayTicketsTab({
     return (
       <div className="flex flex-col items-center gap-3 py-8">
         <p className="text-[13px] text-black/40">No tickets yet.</p>
-        <Button
+        {!hideCreateButton && <Button
           size="sm"
-          className="h-7 rounded-lg bg-[#3b82f6] px-3 text-xs text-white hover:bg-[#3b82f6]/90"
+          className="h-7 rounded-[10px] bg-[#3b82f6] px-3 text-xs text-white hover:bg-[#3b82f6]/90"
           data-testid="holiday-tickets-empty-new-ticket"
           onClick={() => ticketCreate.setShowTicketDialog(true)}
         >
           <Plus className="mr-1 h-3.5 w-3.5" />
           New Ticket
-        </Button>
+        </Button>}
         <CreateTicketDialog
           presentation="drawer"
           open={ticketCreate.showTicketDialog}

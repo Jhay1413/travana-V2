@@ -21,7 +21,15 @@ export const CHANNEL_META: Record<ConversationChannel, ChannelMeta> = {
   instagram: { label: "Instagram", color: "#E1306C", dark: "#BE185D", tint: "#FCE7F3", Icon: Instagram },
 };
 
-const AVATAR_TONES = ["#F97316", "#0EA5E9", "#8B5CF6", "#10B981", "#EC4899", "#64748B", "#EAB308", "#14B8A6"];
+/** Pastel avatar pairs (bg + dark initials); full class names so Tailwind keeps them. */
+export const AVATAR_TONES = [
+  "bg-avatar-blue-bg text-avatar-blue-fg",
+  "bg-avatar-rose-bg text-avatar-rose-fg",
+  "bg-avatar-green-bg text-avatar-green-fg",
+  "bg-avatar-violet-bg text-avatar-violet-fg",
+  "bg-avatar-amber-bg text-avatar-amber-fg",
+  "bg-avatar-sky-bg text-avatar-sky-fg",
+] as const;
 
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -31,7 +39,7 @@ function initialsOf(name: string): string {
   return (first + last).toUpperCase();
 }
 
-function toneFor(name: string): string {
+export function toneFor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   return AVATAR_TONES[hash % AVATAR_TONES.length];
@@ -56,8 +64,7 @@ export function ChannelAvatar({ name, avatarUrl, channel, size = 44, badge = tru
         <img src={avatarUrl} alt={name} className="h-full w-full rounded-full object-cover" />
       ) : (
         <div
-          className={cn("flex h-full w-full items-center justify-center rounded-full font-semibold text-white", TEXT_SIZE[size])}
-          style={{ backgroundColor: toneFor(name) }}
+          className={cn("flex h-full w-full items-center justify-center rounded-full font-semibold", toneFor(name), TEXT_SIZE[size])}
           aria-hidden="true"
         >
           {initialsOf(name)}

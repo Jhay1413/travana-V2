@@ -111,8 +111,58 @@
   --color-priority-high: hsl(var(--priority-high));
   --color-priority-urgent: hsl(var(--priority-urgent));
   --color-ticket-dashed: hsl(var(--ticket-dashed));
+  --color-departure-done-bg: hsl(var(--departure-done-bg));
+  --color-departure-done-border: hsl(var(--departure-done-border));
+  --color-qp-muted: hsl(var(--qp-muted));
+  --color-qp-orange-text: hsl(var(--qp-orange-text));
+  --color-qp-chip-bg: hsl(var(--qp-chip-bg));
+  --color-qp-chip-fg: hsl(var(--qp-chip-fg));
+  --color-qp-trip-out-bg: hsl(var(--qp-trip-out-bg));
+  --color-qp-trip-out-fg: hsl(var(--qp-trip-out-fg));
+  --color-qp-trip-transfer-bg: hsl(var(--qp-trip-transfer-bg));
+  --color-qp-trip-transfer-fg: hsl(var(--qp-trip-transfer-fg));
+  --color-qp-trip-hotel-bg: hsl(var(--qp-trip-hotel-bg));
+  --color-qp-trip-hotel-fg: hsl(var(--qp-trip-hotel-fg));
+  --color-qp-trip-return-bg: hsl(var(--qp-trip-return-bg));
+  --color-qp-trip-return-fg: hsl(var(--qp-trip-return-fg));
+  --color-qp-profit-bg: hsl(var(--qp-profit-bg));
+  --color-qp-profit-fg: hsl(var(--qp-profit-fg));
+  --color-qp-note-bg: hsl(var(--qp-note-bg));
+  --color-qp-note-border: hsl(var(--qp-note-border));
+  --color-qp-current-tint: hsl(var(--qp-current-tint));
+  --color-qp-current-border: hsl(var(--qp-current-border));
+  --color-qp-refs-border: hsl(var(--qp-refs-border));
+  --color-qp-refs-from: hsl(var(--qp-refs-from));
+  --color-qp-refs-to: hsl(var(--qp-refs-to));
+  --color-qp-best: hsl(var(--qp-best));
+  --color-qp-viewer-overlay: hsl(var(--qp-viewer-overlay));
+  --color-qp-overlay-fg: hsl(var(--qp-overlay-fg));
+  --color-qp-money-pkg: hsl(var(--qp-money-pkg));
+  --color-qp-money-comm: hsl(var(--qp-money-comm));
+  --color-qp-money-service: hsl(var(--qp-money-service));
+  --color-qp-live: hsl(var(--qp-live));
+  --color-qp-now-ring: hsl(var(--qp-now-ring));
+  --color-qp-step-done-bg: hsl(var(--qp-step-done-bg));
+  --color-qp-step-done-fg: hsl(var(--qp-step-done-fg));
   --color-ticket-amber-bg: hsl(var(--ticket-amber-bg));
   --color-ticket-amber-fg: hsl(var(--ticket-amber-fg));
+  --color-avatar-blue-bg: hsl(var(--avatar-blue-bg));
+  --color-avatar-blue-fg: hsl(var(--avatar-blue-fg));
+  --color-avatar-rose-bg: hsl(var(--avatar-rose-bg));
+  --color-avatar-rose-fg: hsl(var(--avatar-rose-fg));
+  --color-avatar-green-bg: hsl(var(--avatar-green-bg));
+  --color-avatar-green-fg: hsl(var(--avatar-green-fg));
+  --color-avatar-violet-bg: hsl(var(--avatar-violet-bg));
+  --color-avatar-violet-fg: hsl(var(--avatar-violet-fg));
+  --color-avatar-amber-bg: hsl(var(--avatar-amber-bg));
+  --color-avatar-amber-fg: hsl(var(--avatar-amber-fg));
+  --color-avatar-sky-bg: hsl(var(--avatar-sky-bg));
+  --color-avatar-sky-fg: hsl(var(--avatar-sky-fg));
+  --color-luna-bg: hsl(var(--luna-bg));
+  --color-luna-border: hsl(var(--luna-border));
+  --color-luna-fg: hsl(var(--luna-fg));
+  --color-luna-tile: hsl(var(--luna-tile));
+  --color-luna-title: hsl(var(--luna-title));
   --color-role-owner-bg: hsl(var(--role-owner-bg));
   --color-role-owner-fg: hsl(var(--role-owner-fg));
   --color-role-branch-bg: hsl(var(--role-branch-bg));
@@ -218,8 +268,58 @@
   --priority-high: 0 84% 60%;
   --priority-urgent: 0 84% 60%;
   --ticket-dashed: 215 24% 82%;
+  --departure-done-bg: 150 52% 96%;
+  --departure-done-border: 152 76% 80%;
+  --qp-muted: 216 11% 47%;
+  --qp-orange-text: 21 90% 40%;
+  --qp-chip-bg: 33 100% 95%;
+  --qp-chip-fg: 21 90% 40%;
+  --qp-trip-out-bg: 214 95% 93%;
+  --qp-trip-out-fg: 224 76% 48%;
+  --qp-trip-transfer-bg: 48 96% 89%;
+  --qp-trip-transfer-fg: 26 83% 30%;
+  --qp-trip-hotel-bg: 152 81% 90%;
+  --qp-trip-hotel-fg: 162 94% 24%;
+  --qp-trip-return-bg: 251 91% 95%;
+  --qp-trip-return-fg: 262 60% 45%;
+  --qp-profit-bg: 150 52% 96%;
+  --qp-profit-fg: 162 94% 24%;
+  --qp-note-bg: 48 100% 96%;
+  --qp-note-border: 43 96% 80%;
+  --qp-current-tint: 214 100% 97%;
+  --qp-current-border: 213 97% 87%;
+  --qp-refs-border: 152 76% 80%;
+  --qp-refs-from: 150 52% 97%;
+  --qp-refs-to: 0 0% 100%;
+  --qp-best: 160 84% 30%;
+  --qp-viewer-overlay: 222 47% 11%;
+  --qp-overlay-fg: 214 32% 91%;
+  --qp-money-pkg: 217 30% 28%;
+  --qp-money-comm: 218 24% 47%;
+  --qp-money-service: 215 20% 65%;
+  --qp-live: 160 84% 39%;
+  --qp-now-ring: 38 92% 50%;
+  --qp-step-done-bg: 160 84% 39%;
+  --qp-step-done-fg: 0 0% 100%;
   --ticket-amber-bg: 48 96% 89%;
   --ticket-amber-fg: 26 83% 30%;
+  --avatar-blue-bg: 214 95% 93%;
+  --avatar-blue-fg: 224 76% 48%;
+  --avatar-rose-bg: 351 100% 94%;
+  --avatar-rose-fg: 341 83% 40%;
+  --avatar-green-bg: 152 81% 90%;
+  --avatar-green-fg: 162 94% 24%;
+  --avatar-violet-bg: 251 91% 95%;
+  --avatar-violet-fg: 263 70% 50%;
+  --avatar-amber-bg: 48 96% 89%;
+  --avatar-amber-fg: 26 83% 30%;
+  --avatar-sky-bg: 204 94% 94%;
+  --avatar-sky-fg: 201 96% 32%;
+  --luna-bg: 250 100% 98%;
+  --luna-border: 251 91% 92%;
+  --luna-fg: 263 70% 50%;
+  --luna-tile: 251 91% 95%;
+  --luna-title: 261 72% 22%;
   --role-owner-bg: 226 100% 94%;
   --role-owner-fg: 245 58% 51%;
   --role-branch-bg: 214 95% 93%;
@@ -314,8 +414,58 @@
   --priority-high: 0 84% 65%;
   --priority-urgent: 0 84% 65%;
   --ticket-dashed: 215 15% 30%;
+  --departure-done-bg: 160 35% 13%;
+  --departure-done-border: 160 35% 24%;
+  --qp-muted: 216 12% 65%;
+  --qp-orange-text: 27 96% 61%;
+  --qp-chip-bg: 25 40% 17%;
+  --qp-chip-fg: 27 96% 61%;
+  --qp-trip-out-bg: 222 50% 20%;
+  --qp-trip-out-fg: 213 90% 78%;
+  --qp-trip-transfer-bg: 38 40% 16%;
+  --qp-trip-transfer-fg: 43 96% 70%;
+  --qp-trip-hotel-bg: 160 35% 13%;
+  --qp-trip-hotel-fg: 152 70% 70%;
+  --qp-trip-return-bg: 255 35% 20%;
+  --qp-trip-return-fg: 255 90% 82%;
+  --qp-profit-bg: 160 35% 13%;
+  --qp-profit-fg: 152 70% 70%;
+  --qp-note-bg: 43 30% 14%;
+  --qp-note-border: 43 30% 26%;
+  --qp-current-tint: 217 40% 15%;
+  --qp-current-border: 217 40% 28%;
+  --qp-refs-border: 160 35% 24%;
+  --qp-refs-from: 160 35% 11%;
+  --qp-refs-to: 222 20% 10%;
+  --qp-best: 160 84% 55%;
+  --qp-viewer-overlay: 222 47% 5%;
+  --qp-overlay-fg: 214 32% 91%;
+  --qp-money-pkg: 217 30% 62%;
+  --qp-money-comm: 218 30% 45%;
+  --qp-money-service: 215 14% 38%;
+  --qp-live: 160 84% 55%;
+  --qp-now-ring: 38 92% 56%;
+  --qp-step-done-bg: 160 84% 39%;
+  --qp-step-done-fg: 0 0% 100%;
   --ticket-amber-bg: 38 40% 16%;
   --ticket-amber-fg: 43 96% 70%;
+  --avatar-blue-bg: 222 50% 20%;
+  --avatar-blue-fg: 213 90% 78%;
+  --avatar-rose-bg: 345 40% 20%;
+  --avatar-rose-fg: 350 90% 80%;
+  --avatar-green-bg: 160 40% 16%;
+  --avatar-green-fg: 152 70% 70%;
+  --avatar-violet-bg: 255 35% 22%;
+  --avatar-violet-fg: 255 90% 82%;
+  --avatar-amber-bg: 38 40% 18%;
+  --avatar-amber-fg: 43 96% 70%;
+  --avatar-sky-bg: 205 45% 18%;
+  --avatar-sky-fg: 199 90% 72%;
+  --luna-bg: 252 30% 14%;
+  --luna-border: 252 30% 28%;
+  --luna-fg: 255 90% 78%;
+  --luna-tile: 252 35% 22%;
+  --luna-title: 255 90% 86%;
   --role-owner-bg: 243 40% 20%;
   --role-owner-fg: 230 94% 82%;
   --role-branch-bg: 222 50% 18%;
@@ -334,6 +484,23 @@
 @layer base {
   * {
     @apply border-border;
+  }
+
+  /* Scrollbars are hidden everywhere (user decision, 21 Oct 2026); scrolling by
+     wheel, touch, drag and keyboard still works. Applies to the page itself and
+     to every scrollable panel, drawer, table wrapper and list. */
+  *,
+  html,
+  body {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar,
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
 
   html {

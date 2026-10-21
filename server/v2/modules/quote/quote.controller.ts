@@ -131,7 +131,12 @@ export const quoteController = {
       body.images = [...(body.images || []), ...urls];
     }
     normalizeQuoteStatus(body);
-    const quote = await newQuoteService.createQuote(body, scope);
+    // Set by "Copy to client" from a social quote: the source's operators stay allowed.
+    const sourceQuoteId = typeof body.source_quote_id === "string" && body.source_quote_id ? body.source_quote_id : undefined;
+    delete body.source_quote_id;
+    const quote = sourceQuoteId
+      ? await newQuoteService.createQuote(body, scope, { sourceQuoteId })
+      : await newQuoteService.createQuote(body, scope);
     return successResponse(res, quote, "Quote created successfully", 201);
   }),
 
@@ -322,5 +327,16 @@ export const quoteController = {
     const id = req.params.id as string;
     const quote = await newQuoteService.setPrimaryQuote(id, scope);
     return successResponse(res, quote, "Primary quote updated successfully");
+  }),
+
+  // PATCH /quotes/:id/accepted — body validated by setAcceptedValidator.
+  setAccepted: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, error: "Unauthorized" });
+    const scope = getScope(req);
+    const id = req.params.id as string;
+    const accepted = req.body.accepted as boolean;
+    const quote = await newQuoteService.setAccepted(id, accepted, userId, scope);
+    return successResponse(res, quote, accepted ? "Quote marked as accepted" : "Quote acceptance cleared");
   }),
 };

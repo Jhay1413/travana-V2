@@ -14,6 +14,7 @@
  *   />
  */
 
+import { OperatorNamesProvider } from "@/features/tour-operator";
 import { useState } from "react";
 import {
   Dialog,
@@ -621,6 +622,7 @@ export function QuoteEditDialog({
   );
 
   const form = !isLoading && !isError && quoteData && (
+    <OperatorNamesProvider record={quoteData}>
     <QuoteRHFForm
       key={quoteId + open}
       layout={isDrawer ? "drawer" : "card"}
@@ -632,6 +634,7 @@ export function QuoteEditDialog({
       submitLabel="Save Changes"
       onCancel={isDrawer ? undefined : () => onOpenChange(false)}
     />
+    </OperatorNamesProvider>
   );
 
   if (isDrawer) {

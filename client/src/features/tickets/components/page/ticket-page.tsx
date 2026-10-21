@@ -65,7 +65,7 @@ export function TicketPage({ ticketId }: { ticketId: string }) {
   const { data: users = [] } = useUsers();
   const { result } = useTicketQueue();
   const now = useNow();
-  const wide = useMediaQuery("(min-width: 1560px)");
+  const wide = useMediaQuery("(min-width: 1500px)");
   const mobile = useMediaQuery("(max-width: 900px)");
   const [side, setSide] = useState<SideTab>("booking");
   const [mobileTab, setMobileTab] = useState<MobileTab>("conversation");
@@ -140,14 +140,14 @@ export function TicketPage({ ticketId }: { ticketId: string }) {
       <div className="flex min-h-0 flex-1 gap-4">
         {wide ? (
           <>
-            <div className="flex w-[340px] flex-none flex-col">{clientPanel}</div>
+            <div className="flex w-[310px] flex-none flex-col">{clientPanel}</div>
             {centre}
-            <div className="flex w-[400px] flex-none flex-col">{bookingPanel}</div>
+            <div className="flex w-[310px] flex-none flex-col">{bookingPanel}</div>
           </>
         ) : (
           <>
             {centre}
-            <div className="flex w-[400px] flex-none flex-col gap-2.5">
+            <div className="flex w-[310px] flex-none flex-col gap-2.5">
               <Segmented
                 label="Side panel"
                 variant="black"

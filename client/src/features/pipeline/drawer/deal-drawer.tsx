@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { ExternalLink, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { QuoteNotesSection } from "@/features/quote/components/QuoteNotesSection";
-import { QuoteTasksSection } from "@/features/quote/components/QuoteTasksSection";
+import { NextTaskRow } from "@/components/shared/next-task-row";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
+import { useCurrentUser } from "@/hooks/queries";
 import type { Transaction } from "@/features/quote/types";
 import {
   formatDate,
@@ -12,14 +14,16 @@ import {
   getTransactionTitle,
   type PipelineStage,
 } from "@/features/pipeline/lib/pipeline-helpers";
-import { buildDealMeta } from "@/features/pipeline/lib/deal-meta";
+import { buildDealMeta, nextTaskRowProps } from "@/features/pipeline/lib/deal-meta";
 import { ICON_BUTTON } from "@/features/pipeline/shared/button-styles";
-import { OperatorTile } from "@/features/pipeline/shared/operator-tile";
 import { StagePill } from "@/features/pipeline/shared/stage-pill";
+import { getTaskEntity } from "@/features/pipeline/lib/task-entity";
 import { DrawerStageStepper } from "./drawer-stage-stepper";
 import { DrawerCustomerCard } from "./drawer-customer-card";
 import { DrawerMoney } from "./drawer-money";
 import { DrawerFooter } from "./drawer-footer";
+import { DrawerTourOperator } from "./drawer-tour-operator";
+import { DrawerNotes } from "./drawer-notes";
 
 function Label({ children }: { children: string }) {
   return <div className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-[.06em] text-social-muted">{children}</div>;
@@ -33,27 +37,28 @@ interface DealDrawerProps {
   onMove: (to: PipelineStage) => void;
   onMarkLost: () => void;
   onAddQuote: () => void;
+  /** Open with the Add task pop-up already showing (from a card / row "+ Add task"). */
+  initialAddTask?: boolean;
+  /** Called after a task is created so the board can refresh its next-task line. */
+  onTaskCreated?: () => void;
 }
 
 /** Right-hand quick view of a deal: summary, customer, money, operator, tasks and notes. */
-export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove, onMarkLost, onAddQuote }: DealDrawerProps) {
+export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove, onMarkLost, onAddQuote, initialAddTask = false, onTaskCreated }: DealDrawerProps) {
   const [, setLocation] = useLocation();
+  const [addTaskOpen, setAddTaskOpen] = useState(initialAddTask && !!getTaskEntity(t, stage).id);
+  const { data: currentUser } = useCurrentUser();
   const navUrl = getTransactionNavUrl(t, stage);
   const naturalStage = stage === "Future" ? getStageForTransaction(t) : stage;
   const operator = getTourOperator(t);
 
-  // Notes are attached to the transaction; tasks to the stage-specific entity.
+  // Tasks attach to the stage-specific entity.
   // Booking tasks are stored under entityType "quote" with the booking's id
   // (see holiday-detail-view.tsx), so a Booked card must match that.
-  const mainQuote = t.quotes?.find((q) => !q.isQuoteCopy) || t.quotes?.[0];
-  const taskEntity: { type: "enquiry" | "quote"; id?: string; userId?: string } =
-    naturalStage === "Enquiry"
-      ? { type: "enquiry", id: t.enquiry?.id, userId: t.enquiry?.user_id }
-      : naturalStage === "Booked"
-        ? { type: "quote", id: t.booking?.id, userId: (t.booking as unknown as { user_id?: string } | undefined)?.user_id }
-        : { type: "quote", id: mainQuote?.id, userId: (mainQuote as unknown as { user_id?: string } | undefined)?.user_id };
+  const taskEntity = getTaskEntity(t, stage);
 
   const openFull = () => { onClose(); setLocation(navUrl); };
+  const firstName = clientName.split(" ")[0] || clientName;
 
   return (
     <>
@@ -89,29 +94,42 @@ export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove,
           <Label>Money</Label>
           <DrawerMoney transaction={t} onAddQuote={onAddQuote} />
 
-          {(operator.name || operator.logoUrl) && (
+          {(t.quotes?.length || t.booking || operator.name || operator.logoUrl) && (
             <>
               <Label>Tour operator</Label>
-              <div className="flex items-center gap-3 rounded-xl border border-pipeline-card-border px-3.5 py-2.5">
-                <OperatorTile name={operator.name} logoUrl={operator.logoUrl} size={38} />
-                <div className="flex-1 text-[14px] font-semibold">{operator.name}</div>
-              </div>
+              <DrawerTourOperator transaction={t} operator={operator} onOpen={openFull} />
             </>
           )}
 
-          <Label>Tasks</Label>
-          {taskEntity.id ? (
-            <QuoteTasksSection quoteId={taskEntity.id} entityType={taskEntity.type} assignedUserId={taskEntity.userId} className="!p-3" />
-          ) : (
-            <div className="rounded-xl bg-pipeline-money-bg p-3.5 text-center text-[13px] text-social-muted">No tasks available for this deal</div>
-          )}
+          <Label>Next task</Label>
+          <NextTaskRow
+            size="drawer"
+            {...nextTaskRowProps(t.next_task)}
+            onOpenQuote={openFull}
+            quoteLabel={naturalStage === "Enquiry" ? "View deal" : "View quote"}
+            onAddTask={taskEntity.id ? () => setAddTaskOpen(true) : undefined}
+            testId="drawer-next-task"
+          />
 
           <Label>Notes</Label>
-          <QuoteNotesSection transactionId={t.id} maxNotes={2} />
+          <DrawerNotes transactionId={t.id} firstName={firstName} />
         </div>
 
         <DrawerFooter stage={stage} naturalStage={naturalStage} onMarkLost={onMarkLost} onMove={onMove} onClose={onClose} />
       </aside>
+
+      <AddTaskModal
+        title="Add task"
+        subtitle={`${getTransactionTitle(t)} · ${clientName}`}
+        entityType={taskEntity.id ? taskEntity.type : undefined}
+        entityId={taskEntity.id}
+        assignedToId={t.user_id || currentUser?.id}
+        successToast="Task added"
+        open={addTaskOpen}
+        onOpenChange={setAddTaskOpen}
+        onCreated={onTaskCreated}
+        testIdPrefix="drawer-add-task"
+      />
     </>
   );
 }

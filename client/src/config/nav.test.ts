@@ -24,6 +24,32 @@ describe("homeworkers admin nav", () => {
   );
 });
 
+describe("departures nav", () => {
+  it.each(["org_admin", "branch_manager"] as const)("is offered to %s", (role) => {
+    expect(allPaths(role)).toContain("/agency/departures");
+  });
+
+  it.each(["agent", "homeworker", "referral_agent", "social_media_manager"] as const)("is not offered to %s", (role) => {
+    expect(allPaths(role)).not.toContain("/agency/departures");
+  });
+});
+
+describe("tour operators nav", () => {
+  it.each(["org_admin", "branch_manager", "agent", "homeworker"] as const)("offers the page to %s", (role) => {
+    expect(allPaths(role)).toContain("/agency/tour-operators");
+  });
+
+  it.each(["social_media_manager", "referral_agent"] as const)("does not offer the page to %s", (role) => {
+    expect(allPaths(role)).not.toContain("/agency/tour-operators");
+  });
+
+  it("keeps the global catalogue for platform admins only", () => {
+    expect(allPaths("platform_admin")).toContain("/settings/tour-operators");
+    expect(allPaths("org_admin")).not.toContain("/settings/tour-operators");
+    expect(allPaths("org_admin")).toContain("/settings/tags");
+  });
+});
+
 describe("homeworker nav", () => {
   it("offers My Statement to homeworkers only", () => {
     expect(paths("homeworker")).toContain("/my-statement");

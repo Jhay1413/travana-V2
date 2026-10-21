@@ -23,3 +23,10 @@ describe("sanitizePrefs", () => {
     expect(sanitizePrefs({ filters: { priorities: ["High", 4, null], kinds: "Sales" } }, true).filters).toEqual({ priorities: ["High"], kinds: [] });
   });
 });
+
+describe("DEFAULT_PREFS", () => {
+  it("opens on the board view", () => {
+    expect(DEFAULT_PREFS.view).toBe("board");
+    expect(sanitizePrefs({}, true).view).toBe("board");
+  });
+});

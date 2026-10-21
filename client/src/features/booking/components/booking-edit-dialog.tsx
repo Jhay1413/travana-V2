@@ -1,3 +1,5 @@
+import { OperatorNamesProvider } from "@/features/tour-operator";
+import { requestErrorMessage } from "@/lib/request-error";
 import { useMemo } from "react";
 import {
   Dialog,
@@ -268,8 +270,10 @@ function buildUpdatePayload(
 
   const payload: Record<string, unknown> = {
     holiday_type_id: values.packageType || null,
-    hays_ref: values.haysRef || null,
-    supplier_ref: values.supplierRef || null,
+    // The server requires non-empty references when the keys are sent, so an
+    // empty field means "unchanged" and the key is omitted.
+    ...(values.haysRef?.trim() ? { hays_ref: values.haysRef.trim() } : {}),
+    ...(values.supplierRef?.trim() ? { supplier_ref: values.supplierRef.trim() } : {}),
     booking_status: values.bookingStatus || "BOOKED",
     title: values.quoteTitle || null,
     main_tour_operator_id: values.tourOperatorId || null,
@@ -476,14 +480,16 @@ export function BookingEditDialog({
         onSuccess: async () => {
           let imageUploadFailed = false;
           let upsellsFailed = false;
+          let upsellsError: unknown = null;
 
           // Persist upsells via their dedicated endpoints (the booking PATCH
           // ignores them), diffing the form rows against what was loaded.
           try {
             const existingUpsells: UpsellRecord[] = ((bookingData as any)?.upsells ?? []) as UpsellRecord[];
             await reconcileUpsells(bookingId, values.upsells, existingUpsells);
-          } catch {
+          } catch (err) {
             upsellsFailed = true;
+            upsellsError = err;
           }
 
           if (deletedImageIds.length > 0) {
@@ -535,7 +541,9 @@ export function BookingEditDialog({
           toast({
             title: "Booking updated",
             description: partialFailure
-              ? `Changes saved, but some ${upsellsFailed ? "upsells" : "images"} failed to save.`
+              ? upsellsFailed
+              ? `Changes saved, but some upsells failed to save: ${requestErrorMessage(upsellsError, "please try again.")}`
+              : "Changes saved, but some images failed to save."
               : "Changes saved successfully.",
             variant: partialFailure ? "destructive" : "default",
           });
@@ -572,6 +580,7 @@ export function BookingEditDialog({
   );
 
   const form = !isLoading && !isError && bookingData && (
+    <OperatorNamesProvider record={bookingData}>
     <BookingRHFForm
       key={bookingId + open}
       layout={isDrawer ? "drawer" : "card"}
@@ -584,6 +593,7 @@ export function BookingEditDialog({
       onCancel={isDrawer ? undefined : () => onOpenChange(false)}
       clientId={clientId}
     />
+    </OperatorNamesProvider>
   );
 
   if (isDrawer) {

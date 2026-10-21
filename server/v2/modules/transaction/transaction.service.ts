@@ -9,12 +9,14 @@ import { referralService } from "../referral/referral.service";
 import { vipEnrollmentService } from "../../../services/vipEnrollment.service";
 import { walletService } from "../wallet/wallet.service";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
+import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
 import { branchService } from "../branch/branch.service";
 import { branchMemberRepository } from "../branch-member/branch-member.repository";
 import { branchRepository } from "../branch/branch.repository";
 import type { Scope } from "../../utils/scope";
 import { effectiveExpiry } from "../../utils/expiry";
+import { sanitizeRichText } from "../../utils/sanitize-rich-text";
 import type { PipelineCandidateItem, PipelineFilters, PipelineQuickCounts, PipelineSort } from "./transaction.types";
 import type {
   InsertTransaction,
@@ -366,13 +368,27 @@ export const transactionService = {
       ? (Array.isArray(notes) ? notes : [notes]).filter(Boolean)
       : [];
     for (const content of noteContents) {
-      await noteRepository.create({ transaction_id: txn.id, content, agent_id: agentId || agent_id || null });
+      await noteRepository.create({ transaction_id: txn.id, content: sanitizeRichText(String(content)), agent_id: agentId || agent_id || null });
     }
 
     return { transaction: txn, enquiry };
   },
 
-  async createTransactionWithQuote(transactionData: InsertTransaction, quoteData: QuoteRelationPayload, scope: Scope) {
+  async createTransactionWithQuote(transactionData: InsertTransaction, rawQuoteData: QuoteRelationPayload, scope: Scope) {
+    // "Copy to client" from a social quote sends the source's id: its operators stay
+    // allowed even if the agency no longer lists them. The key is STRIPPED here so it
+    // never reaches the insert.
+    const { source_quote_id: rawSourceId, ...quoteData } = rawQuoteData as QuoteRelationPayload & { source_quote_id?: unknown };
+    const sourceQuoteId = typeof rawSourceId === "string" && rawSourceId ? rawSourceId : undefined;
+    if (sourceQuoteId && !(await newQuoteRepository.quoteInScope(sourceQuoteId, scope))) {
+      throw new AppError("Quote not found", 404);
+    }
+    // Operators must be in the caller's list BEFORE anything is written.
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(
+      scope,
+      quoteData,
+      sourceQuoteId ? () => newQuoteRepository.findTourOperatorIds(sourceQuoteId) : async () => [],
+    );
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
@@ -462,6 +478,8 @@ export const transactionService = {
   },
 
   async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: BookingRelationPayload, scope: Scope) {
+    // Operators must be in the caller's list BEFORE anything is written.
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, bookingData, async () => []);
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,

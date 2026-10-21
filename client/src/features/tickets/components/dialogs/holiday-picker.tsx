@@ -1,17 +1,12 @@
 import { useMemo } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTransactions } from "@/hooks/queries";
+import { getTourOperator } from "@/features/pipeline";
 import { holidayLabelOf } from "@/features/transaction";
+import { groupHolidayOptions, type HolidayOption } from "../../lib/holiday-groups";
 import { formatShortDate } from "../../lib/ticket-display";
 
-export interface HolidayOption {
-  id: string;
-  kind: "booking" | "quote" | "enquiry";
-  title: string;
-  date: string | null;
-  /** "Booking · Majorca — 12 Jun 2026" */
-  label: string;
-}
+export type { HolidayOption } from "../../lib/holiday-groups";
 
 const KIND_PREFIX: Record<HolidayOption["kind"], string> = { booking: "Booking", quote: "Quote", enquiry: "Enquiry" };
 
@@ -24,13 +19,23 @@ export function useHolidayOptions(clientId: string | null | undefined, enabled =
       const { kind, title, date } = holidayLabelOf(t);
       if (!kind) continue;
       const when = formatShortDate(date);
-      out.push({ id: t.id, kind, title, date: date ?? null, label: `${KIND_PREFIX[kind]} · ${title}${when ? ` — ${when}` : ""}` });
+      const operator = getTourOperator(t);
+      out.push({
+        id: t.id,
+        kind,
+        title,
+        date: date ?? null,
+        label: `${KIND_PREFIX[kind]} · ${title}${when ? ` — ${when}` : ""}`,
+        ref: kind === "booking" ? t.booking?.hays_ref || t.booking?.supplier_ref || null : null,
+        operatorName: operator.name,
+        operatorLogoUrl: operator.logoUrl,
+      });
     }
     return out;
   }, [transactions]);
 }
 
-/** Select of the client's holidays; the empty value means "no holiday". */
+/** Select of the client's holidays, grouped Bookings / Quotes / Enquiries; the empty value means "no holiday". */
 export function HolidayPicker({
   clientId,
   value,
@@ -45,6 +50,7 @@ export function HolidayPicker({
   allowNone?: boolean;
 }) {
   const options = useHolidayOptions(clientId);
+  const groups = useMemo(() => groupHolidayOptions(options), [options]);
   return (
     <Select value={value || "none"} onValueChange={(v) => onChange(v === "none" ? "" : v)}>
       <SelectTrigger className="h-10 rounded-[10px] border-social-border bg-card text-[13px]" data-testid={testId}>
@@ -52,10 +58,17 @@ export function HolidayPicker({
       </SelectTrigger>
       <SelectContent className="z-[600]">
         {allowNone && <SelectItem value="none">No holiday</SelectItem>}
-        {options.map((o) => (
-          <SelectItem key={o.id} value={o.id}>
-            {o.label}
-          </SelectItem>
+        {groups.map((g) => (
+          <SelectGroup key={g.kind}>
+            <SelectLabel className="text-[11px] font-semibold uppercase tracking-[.06em] text-social-muted">
+              {g.heading} · {g.options.length}
+            </SelectLabel>
+            {g.options.map((o) => (
+              <SelectItem key={o.id} value={o.id}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         ))}
       </SelectContent>
     </Select>

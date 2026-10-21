@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { errorMessage } from "@/features/social";
@@ -99,14 +99,12 @@ export function GenerateEnquiryButton({
         disabled={generate.isPending}
         title={client ? "Draft an enquiry from this conversation" : "Link this contact to a client first"}
         className={cn(
-          "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition disabled:opacity-60",
-          client
-            ? "text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/5"
-            : "text-black/35 hover:bg-black/5 dark:text-white/35 dark:hover:bg-white/5",
+          "inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-social-border bg-card px-3.5 text-[13px] font-semibold transition hover:bg-muted disabled:opacity-60",
+          !client && "text-social-muted",
         )}
       >
-        {generate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-        {generate.isPending ? "Drafting…" : "Generate Enquiry"}
+        {generate.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-4 w-4" />}
+        {generate.isPending ? "Drafting…" : "Generate enquiry"}
       </button>
       {client && (
         <CreateEnquiryDrawer

@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { FreeQuoteStatusCounts } from "@/features/quote/api/quote.api";
 import { STATUS_META } from "@/features/social/lib/post-status";
-import type { StatusFilter } from "./grid-filters";
+import { statusChipCount, type StatusFilter } from "./grid-filters";
 
 interface StatusChipsProps {
   value: StatusFilter;
@@ -10,11 +10,10 @@ interface StatusChipsProps {
 }
 
 const CHIPS: { value: StatusFilter; label: string; count: (c: FreeQuoteStatusCounts) => number }[] = [
-  { value: "all", label: "All", count: (c) => c.total },
-  { value: "scheduled", label: STATUS_META.scheduled.plural, count: (c) => c.scheduled },
-  { value: "draft", label: STATUS_META.draft.plural, count: (c) => c.draft },
-  { value: "posted", label: STATUS_META.posted.plural, count: (c) => c.posted },
-  { value: "not_generated", label: STATUS_META.not_generated.plural, count: (c) => c.not_generated },
+  { value: "all", label: "All", count: (c) => statusChipCount("all", c) },
+  { value: "scheduled", label: STATUS_META.scheduled.plural, count: (c) => statusChipCount("scheduled", c) },
+  { value: "draft", label: STATUS_META.draft.plural, count: (c) => statusChipCount("draft", c) },
+  { value: "posted", label: STATUS_META.posted.plural, count: (c) => statusChipCount("posted", c) },
 ];
 
 /** Pill buttons that filter by post status, each showing its count. */

@@ -1,5 +1,7 @@
 import type { EnrichedQuote, EnrichedBooking, Passenger, EnrichedTransfer, EnrichedCarHire, EnrichedAttractionTicket, EnrichedLoungePass, EnrichedAirportParking } from "@/features/quote/types";
 
+import { computeQuoteMoney } from "@/features/quote/lib/quote-money";
+
 const currencyWhole = new Intl.NumberFormat("en-GB", {
   style: "currency",
   currency: "GBP",
@@ -154,6 +156,10 @@ export type QuoteDisplay = {
     walletCredit: number;
   };
   pricePerPerson: number;
+  /** Package commission + line-item commission — the same figure the pipeline card shows. */
+  profit: number;
+  /** profit ÷ total price × 100 (unrounded); null when the total price is not positive. */
+  marginPercent: number | null;
   tags: string[];
   notes: string[];
   lodge?: { name: string; type: string; code: string };
@@ -223,6 +229,14 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
   const totalPrice = (apiData as any).total_price != null
     ? parseFloat(String((apiData as any).total_price)) || 0
     : salesPrice - discounts + serviceCharge;
+
+  const money = computeQuoteMoney({
+    sales_price: apiData.sales_price,
+    discounts: apiData.discounts,
+    service_charge: apiData.service_charge,
+    package_commission: apiData.package_commission,
+    service_commission: apiData.service_commission,
+  });
 
   const childPassengers = (apiData.passengers || []).filter((p: Passenger) => p.type === "child");
   const result = {
@@ -295,6 +309,8 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
       role: "Agent" as const,
     },
     pricePerPerson: parseFloat(String(apiData.price_per_person || "0")) || 0,
+    profit: money.profit,
+    marginPercent: totalPrice > 0 ? (money.profit / totalPrice) * 100 : null,
     // package_commission stores the TOTAL commission: raw operator commission (price × %)
     // with the discount taken off and the service charge added. The raw operator portion is
     // recovered for display as packageCommission + discount − serviceCharge.

@@ -18,12 +18,15 @@ interface QuoteShareDialogProps {
   shareToken: string | null;
   shareCopied: boolean;
   shareLoading: boolean;
-  onCopy: (opts?: { silent?: boolean }) => void;
+  onCopy: (opts?: { silent?: boolean }) => void | Promise<void>;
   clientId?: string;
   /** The quote this dialog is sharing — threaded through to the SMS send so
    *  the server texts *this* quote's link rather than falling back to the
    *  client's most-recently-tokened quote (which may be a different one). */
   quoteId?: string;
+  /** Called after the link was copied ("link") or an SMS actually went out ("sms"),
+   *  so the caller can record the quote as sent. */
+  onSent?: (via: "link" | "sms") => void;
 }
 
 export function QuoteShareDialog({
@@ -35,6 +38,7 @@ export function QuoteShareDialog({
   onCopy,
   clientId,
   quoteId,
+  onSent,
 }: QuoteShareDialogProps) {
   const { toast } = useToast();
   const sendSms = useSendSms();
@@ -46,6 +50,7 @@ export function QuoteShareDialog({
   const smsResultToast = (data: { sent: number; skipped: number; results: any[] }, sentTitle: string) => {
     if (data.sent > 0) {
       toast({ title: sentTitle });
+      onSent?.("sms");
     } else if (data.skipped > 0) {
       const reason = data.results[0]?.status ?? "skipped";
       toast({
@@ -76,7 +81,14 @@ export function QuoteShareDialog({
   // When an SMS is going out we copy silently so the only toast is the send
   // result; with no client attached it's a plain copy-to-clipboard.
   const handleSend = () => {
-    onCopy({ silent: !!clientId });
+    // With a client attached, "sent" is recorded from the SMS result below; the
+    // copy is only a convenience. Without one, a successful copy IS the share.
+    // A failed clipboard write never marks the quote as shared.
+    Promise.resolve(onCopy({ silent: !!clientId }))
+      .then(() => {
+        if (!clientId) onSent?.("link");
+      })
+      .catch(() => toast({ title: "Couldn't copy link", variant: "destructive" }));
     if (!clientId || sendSms.isPending) return;
     setSendingAction("public");
     sendSms.mutate(

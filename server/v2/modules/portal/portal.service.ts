@@ -2,6 +2,7 @@ import { notificationRepository } from '../notification/notification.repository'
 import { pushNotificationService } from '../notification/push-notification.service';
 import { portalRepository, type PortalDealRow } from './portal.repository';
 import { verifyPortalToken } from './portal-auth';
+import { sanitizeRichText } from '../../utils/sanitize-rich-text';
 
 const PORTAL_SENDER_PREFIX = 'portal-client:';
 
@@ -127,7 +128,7 @@ export async function bridgePortalMessageToChat(
     await portalRepository.insertChatMessage({
       conversationId,
       senderId: portalSenderId(clientId),
-      content: messageText,
+      content: sanitizeRichText(messageText),
     });
 
     await portalRepository.touchConversation(conversationId);

@@ -300,6 +300,14 @@ export interface Quote {
   portal_added_at: string | null;
   is_featured: boolean | null;
   not_for_social: boolean | null;
+  /** Public share token (set once the quote link has been generated). */
+  quote_token?: string | null;
+  /** First time the quote was shared, and the channel of the latest share. */
+  quote_sent_at?: string | null;
+  quote_sent_via?: string | null;
+  /** Manual "customer accepted" mark by an agent (undone by clearing both). */
+  accepted_at?: string | null;
+  accepted_by?: string | null;
   /** Joined fields, populated server-side on the pipeline endpoints. */
   destination_name?: string | null;
   main_tour_operator_name?: string;
@@ -464,6 +472,8 @@ export interface DealImage {
 export interface Booking {
   id: string;
   transaction_id: string;
+  /** The quote this booking was converted from, when known. */
+  quote_id?: string | null;
   deal_type: string | null;
   pre_booked_seats: string | null;
   flight_meals: boolean | null;
@@ -520,6 +530,10 @@ export interface EnrichedQuoteCruise extends QuoteCruise {
 export interface EnrichedQuote extends Quote {
   // Backend-computed customer total = sales_price − discounts + service_charge.
   total_price?: string | null;
+  /** Sum of the line-item commissions (flights, accommodation, transfers, …); add package_commission for profit. */
+  service_commission?: number | string | null;
+  /** Name of the agent who manually marked the quote accepted. */
+  accepted_by_name?: string | null;
   holiday_type_name?: string;
   main_tour_operator_name?: string;
   lead_source?: string;
@@ -556,6 +570,10 @@ export interface EnrichedQuote extends Quote {
 export interface EnrichedBooking extends Booking {
   // Backend-computed customer total = sales_price − discounts + service_charge.
   total_price?: string | null;
+  /** Sum of the line-item commissions (flights, accommodation, transfers, …); add package_commission for profit. */
+  service_commission?: number | string | null;
+  /** Name of the deal owner (the agent who owns the transaction). */
+  owner_name?: string | null;
   holiday_type_name?: string;
   main_tour_operator_name?: string;
   lead_source?: string;
@@ -662,6 +680,7 @@ export interface CreateTransactionData {
 }
 
 export interface CreateQuoteData {
+  source_quote_id?: string;
   transaction_id: string;
   holiday_type_id: string;
   travel_date: string;

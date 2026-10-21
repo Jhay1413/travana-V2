@@ -11,6 +11,7 @@ import {
   park,
   travel_deal,
   clientTable,
+  user as userTable,
 } from "@shared/schema";
 import type {
   Quote, InsertQuote, QuoteFlight, InsertQuoteFlight, QuoteAccomodation, InsertQuoteAccomodation,
@@ -21,6 +22,7 @@ import { eq, asc, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilik
 import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 import type { QuoteEmbeddingDetails } from "./quote-embedding";
+import { fetchServiceCommissionMaps } from "../transaction/service-commission.repository";
 import { PORTAL_ACTIVE_WINDOW_DAYS, type PortalStatus, type SocialStatus, type SocialStatusCounts } from "./quote.types";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -191,6 +193,34 @@ export const newQuoteRepository = {
       .where(and(eq(transaction.id, transactionId), ...buildTransactionRecordScopeConds(scope)))
       .limit(1);
     return !!row;
+  },
+
+  /** Every tour-operator id stored on a quote (main operator plus each line item), de-duplicated. */
+  async findTourOperatorIds(quoteId: string): Promise<string[]> {
+    const result = await db.execute(sql`
+      SELECT ${quote.main_tour_operator_id} AS id FROM ${quote} WHERE ${quote.id} = ${quoteId}
+      UNION SELECT ${quote_flights.tour_operator_id} FROM ${quote_flights} WHERE ${quote_flights.quote_id} = ${quoteId}
+      UNION SELECT ${quote_accomodation.tour_operator_id} FROM ${quote_accomodation} WHERE ${quote_accomodation.quote_id} = ${quoteId}
+      UNION SELECT ${quote_transfers.tour_operator_id} FROM ${quote_transfers} WHERE ${quote_transfers.quote_id} = ${quoteId}
+      UNION SELECT ${quote_car_hire.tour_operator_id} FROM ${quote_car_hire} WHERE ${quote_car_hire.quote_id} = ${quoteId}
+      UNION SELECT ${quote_attraction_ticket.tour_operator_id} FROM ${quote_attraction_ticket} WHERE ${quote_attraction_ticket.quote_id} = ${quoteId}
+      UNION SELECT ${quote_lounge_pass.tour_operator_id} FROM ${quote_lounge_pass} WHERE ${quote_lounge_pass.quote_id} = ${quoteId}
+      UNION SELECT ${quote_airport_parking.tour_operator_id} FROM ${quote_airport_parking} WHERE ${quote_airport_parking.quote_id} = ${quoteId}
+      UNION SELECT ${quote_cruise.tour_operator_id} FROM ${quote_cruise} WHERE ${quote_cruise.quote_id} = ${quoteId}
+    `);
+    return (result.rows as Array<{ id: string | null }>).map((r) => r.id).filter((id): id is string => !!id);
+  },
+
+  /** The operator currently stored on one flight line (null when none). */
+  async findFlightTourOperatorId(flightId: string): Promise<string | null> {
+    const [row] = await db.select({ id: quote_flights.tour_operator_id }).from(quote_flights).where(eq(quote_flights.id, flightId)).limit(1);
+    return row?.id ?? null;
+  },
+
+  /** The operator currently stored on one accommodation line (null when none). */
+  async findAccommodationTourOperatorId(accommodationId: string): Promise<string | null> {
+    const [row] = await db.select({ id: quote_accomodation.tour_operator_id }).from(quote_accomodation).where(eq(quote_accomodation.id, accommodationId)).limit(1);
+    return row?.id ?? null;
   },
 
   async flightBelongsToOrg(flightId: string, orgId: string): Promise<boolean> {
@@ -802,6 +832,17 @@ export const newQuoteRepository = {
     return result;
   },
 
+  /** Manual "customer accepted" mark: set accepted_at/accepted_by, or clear both. */
+  async setAccepted(id: string, accepted: boolean, userId: string): Promise<Quote | undefined> {
+    return newQuoteRepository.update(id, accepted ? { accepted_at: new Date(), accepted_by: userId } : { accepted_at: null, accepted_by: null });
+  },
+
+  /** Sum of the line-item commissions for one quote (same maps as the transaction list). */
+  async getServiceCommission(id: string): Promise<number> {
+    const { quoteMap } = await fetchServiceCommissionMaps([id], []);
+    return quoteMap.get(id) ?? 0;
+  },
+
   async remove(id: string): Promise<void> {
     await db.update(quote).set({ deleted_at: new Date(), is_active: false }).where(eq(quote.id, id));
   },
@@ -955,8 +996,11 @@ export const newQuoteRepository = {
         lodge_code: lodges.lodge_code,
         park_name: park.name,
         park_location: park.county,
+        accepted_by_name: userTable.name,
+        main_tour_operator_logo_url: tour_operator.logo_url,
       })
       .from(quote)
+      .leftJoin(userTable, eq(quote.accepted_by, userTable.id))
       .leftJoin(package_type, eq(quote.holiday_type_id, package_type.id))
       .leftJoin(tour_operator, eq(quote.main_tour_operator_id, tour_operator.id))
       .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
@@ -1099,6 +1143,8 @@ export const newQuoteRepository = {
       park_location: q.park_location,
       holiday_type_name: q.holiday_type_name,
       main_tour_operator_name: q.main_tour_operator_name,
+      main_tour_operator_logo_url: q.main_tour_operator_logo_url,
+      accepted_by_name: q.accepted_by_name,
       lead_source: q.lead_source,
       user_id: q.user_id,
       country_id: accommodations[0]?.country_id || null,

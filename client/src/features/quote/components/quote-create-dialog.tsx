@@ -1,3 +1,4 @@
+import { sourceQuoteField } from "@/features/quote/lib/source-quote";
 import { useMemo, useState } from "react";
 import {
   Dialog,
@@ -229,6 +230,7 @@ export function QuoteCreateDialog({
   socialPost = false,
   markAsCopy = false,
   duplicateFromQuoteId,
+  sourceQuoteId,
   presentation = "dialog",
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
@@ -329,6 +331,7 @@ export function QuoteCreateDialog({
       const json: CreateQuoteData = {
         ...quotePayload,
         transaction_id: transactionId,
+        ...sourceQuoteField(sourceQuoteId),
         ...(imageUrls.length > 0 && { images: imageUrls }),
         ...(markAsCopy && initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
       } as CreateQuoteData;
@@ -387,6 +390,7 @@ export function QuoteCreateDialog({
         quote: {
           ...quotePayload,
           quote_status: values.status || "QUOTE_IN_PROGRESS",
+          ...sourceQuoteField(sourceQuoteId),
           ...(imageUrls.length > 0 && { images: imageUrls }),
           ...(markAsCopy && initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
         },

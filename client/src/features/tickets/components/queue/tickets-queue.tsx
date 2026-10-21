@@ -49,6 +49,7 @@ export function TicketsQueue() {
       open={params.open}
       onOpenChange={(open) => (open ? openNew() : close())}
       initialClientId={params.clientId}
+      initialTransactionId={params.transactionId}
       initialStatus={params.status}
       onCreated={(ticket) => navigate(`/tickets/${ticket.id}`)}
     />

@@ -9,6 +9,7 @@ import { tagService } from "../tag/tag.service";
 import { taskService } from "../task/task.service";
 import { walletService } from "../wallet/wallet.service";
 import { fireAutoTriggerForClient } from "../sms/sms.service";
+import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
 import type {
@@ -107,6 +108,22 @@ interface BookingRelationData extends CruisePayloadData {
 
 type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;
 
+/**
+ * hays_ref / supplier_ref are NOT NULL columns, so when the key is present the value
+ * must be a non-empty string: it is trimmed, and null / empty / whitespace is a 400.
+ */
+function normaliseBookingRefs(data: UpdateBookingPayload): Partial<Pick<InsertBooking, "hays_ref" | "supplier_ref">> {
+  const out: Partial<Pick<InsertBooking, "hays_ref" | "supplier_ref">> = {};
+  for (const key of ["hays_ref", "supplier_ref"] as const) {
+    if (!(key in data)) continue;
+    const raw: unknown = data[key];
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    if (!trimmed) throw new AppError("Reference cannot be empty", 400);
+    out[key] = trimmed;
+  }
+  return out;
+}
+
 // Build the cruise persistence payload from a form payload, or null when no
 // cruise data is present (so non-cruise bookings never touch booking_cruise).
 function buildCruiseData(src: CruisePayloadData & { main_tour_operator_id?: unknown }): Record<string, unknown> | null {
@@ -139,11 +156,13 @@ export const bookingService = {
     await assertBookingInScope(id, scope);
     const b = await bookingRepository.findWithDetails(id);
     if (!b) throw new AppError("Booking not found", 404);
+    const service_commission = await bookingRepository.getServiceCommission(id);
     // Surface the customer-facing total (sales − discount + service charge) and a per-person
     // figure derived from it, so the detail page displays consistent values regardless of any
     // previously-stored price_per_person.
     return {
       ...b,
+      service_commission,
       total_price: calcTotalPrice(b.sales_price, b.discounts, b.service_charge).toFixed(2),
       price_per_person: calcPricePerPerson(b.sales_price, b.adult, b.child, b.discounts, b.service_charge),
     };
@@ -393,6 +412,7 @@ export const bookingService = {
 
   async createBooking(data: InsertBooking & { childAges?: any[] }, scope: ScopeOrTrusted) {
     await assertTransactionInScope(data.transaction_id, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
 
     const txn = await transactionRepository.findById(data.transaction_id);
     if (!txn) throw new AppError("Transaction not found", 404);
@@ -443,8 +463,10 @@ export const bookingService = {
     return b;
   },
 
-  async updateBooking(id: string, data: UpdateBookingPayload, scope: ScopeOrTrusted) {
+  async updateBooking(id: string, rawData: UpdateBookingPayload, scope: ScopeOrTrusted) {
     await assertBookingInScope(id, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, rawData, () => bookingRepository.findTourOperatorIds(id));
+    const data: UpdateBookingPayload = { ...rawData, ...normaliseBookingRefs(rawData) };
 
     const {
       outboundFlight, inboundFlight, primaryAccommodation,
@@ -565,6 +587,7 @@ export const bookingService = {
 
   async addFlight(bookingId: string, flightData: Omit<InsertBookingFlight, 'booking_id'>, scope: ScopeOrTrusted) {
     await assertBookingInScope(bookingId, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, flightData, async () => []);
     return bookingRepository.addFlight({ ...flightData, booking_id: bookingId });
   },
 
@@ -575,6 +598,7 @@ export const bookingService = {
 
   async addAccommodation(bookingId: string, accommodationData: Omit<InsertBookingAccomodation, 'booking_id'>, scope: ScopeOrTrusted) {
     await assertBookingInScope(bookingId, scope);
+    await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, accommodationData, async () => []);
     return bookingRepository.addAccommodation({ ...accommodationData, booking_id: bookingId });
   },
 

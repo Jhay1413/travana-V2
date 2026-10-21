@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { escapeHtml, postToPlainText, truncateText } from "./preview-text";
+import { escapeHtml, postToPlainText, postToPreviewHtml, truncateText } from "./preview-text";
 
 describe("postToPlainText", () => {
   it("strips tags and keeps line breaks as newlines", () => {
@@ -35,5 +35,18 @@ describe("escapeHtml", () => {
     expect(escapeHtml(`<b>"Tom" & 'Jerry'</b>`)).toBe(
       "&lt;b&gt;&quot;Tom&quot; &amp; &#39;Jerry&#39;&lt;/b&gt;",
     );
+  });
+});
+
+describe("postToPreviewHtml", () => {
+  it("strips markup and escapes the remaining text", () => {
+    const out = postToPreviewHtml('Hi<script>alert(1)</script><img src=x onerror="alert(1)">');
+    expect(out).not.toMatch(/<script|<img|onerror=\"/i);
+  });
+  it("escapes entity-encoded markup so it cannot be re-parsed as HTML", () => {
+    expect(postToPreviewHtml("&lt;img src=x onerror=alert(1)&gt;")).toBe("&lt;img src=x onerror=alert(1)&gt;");
+  });
+  it("turns line breaks into <br>", () => {
+    expect(postToPreviewHtml("a<br>\nb")).toBe("a<br>b");
   });
 });

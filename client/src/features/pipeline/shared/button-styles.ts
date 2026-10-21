@@ -11,7 +11,7 @@ export const DANGER_GHOST =
   "h-10 gap-2 rounded-[10px] border border-[#FCA5A5] bg-card px-4 text-[13px] font-semibold text-stage-lost-fg hover:bg-stage-lost-bg dark:border-stage-lost-fg/40";
 
 /** Small amber text link ("+ Add quote", "Reopen"). */
-export const AMBER_LINK = "whitespace-nowrap text-[12px] font-semibold text-social-orange-text hover:underline";
+export { AMBER_LINK } from "@/components/shared/link-styles";
 
 /** 30px square icon button with a 4px radius and visible border (column collapse, drawer close). */
 export const ICON_BUTTON =

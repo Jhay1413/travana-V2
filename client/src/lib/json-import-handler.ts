@@ -426,6 +426,7 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   // silently blank dropdown, and TanStack coalesces them.
   queryClient.invalidateQueries({ queryKey: ["lookup", "board-basis"] });
   queryClient.invalidateQueries({ queryKey: ["lookup", "room-types"] });
+  // Prefix key: refreshes the agency list dropdowns and the Tour operators page (catalogue + links).
   queryClient.invalidateQueries({ queryKey: ["tourOperators"] });
 
   if (idMapping.warnings.length > 0) {
@@ -770,6 +771,7 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
     // full-list caches these dropdowns render from may now be behind.
     queryClient.invalidateQueries({ queryKey: ["lookup", "board-basis"] });
     queryClient.invalidateQueries({ queryKey: ["lookup", "room-types"] });
+    // Prefix key: refreshes the agency list dropdowns and the Tour operators page (catalogue + links).
     queryClient.invalidateQueries({ queryKey: ["tourOperators"] });
 
     // mapToIds find-or-creates the operator; without setting the id the form's

@@ -1,6 +1,8 @@
 import { jsonMapperRepository } from './json-mapper.repository';
 import { cruiseSettingsRepository } from '../../settings/cruise/cruise.repository';
 import { geoInferenceAiService, type InferredGeo } from './geo-inference.ai.service';
+import { tourOperatorLinkService } from '../tour-operator/tour-operator-link.service';
+import { findSeedCommission } from '@shared/tour-operator-seed';
 
 interface CruiseItineraryDayInput {
   day?: number | string;
@@ -73,10 +75,10 @@ interface JsonMappingInput {
 }
 
 export const jsonMapperService = {
-  // `orgId` scopes the ONE org-owned lookup in here (tour operators). Optional
-  // so nothing else that calls this has to change; when it is absent the
-  // behaviour is the old global search.
-  async mapJsonToIds(input: JsonMappingInput, orgId?: string | null) {
+  // `orgId` / `userId` are used only to link a resolved tour operator to the
+  // caller's organisation (the catalogue itself is global). Optional so nothing
+  // else that calls this has to change; without an orgId no link is made.
+  async mapJsonToIds(input: JsonMappingInput, orgId?: string | null, userId?: string | null, canWrite = false) {
     const warnings: string[] = [];
     let countryId = '';
     let destinationId = '';
@@ -94,15 +96,11 @@ export const jsonMapperService = {
     // concurrent lookups for the same name share one DB round-trip / create.
     const norm = (s?: string | null) => (s || '').trim().toLowerCase();
 
-    // Tour operators are org-owned, unlike every other lookup in this file. The
-    // id returned here goes straight into the quote form's operator dropdown,
-    // which lists ONLY this org's rows — so resolving to another org's row, or
-    // to a global seed, produces an id the form can't render and the field
-    // shows blank. Always end up on a row this org owns:
-    //   1. the org's own row, if it has one;
-    //   2. otherwise a copy of the matching global seed, carrying its
-    //      commission percentage (the quote's commission is calculated from it);
-    //   3. otherwise a fresh row, stamped with the org.
+    // Tour operators are a platform-wide catalogue. Resolve the name there
+    // (exact, then contains), create the catalogue row when it is missing, then
+    // make sure THIS org has a link to it: the quote form's dropdown lists the
+    // org's links, so an id without a link would render blank. A link made here
+    // has no commission yet (NULL) for the agency to fill in.
     const tourOpCache = new Map<string, Promise<string>>();
     const resolveTourOperator = (name?: string | null): Promise<string> => {
       const key = norm(name);
@@ -110,20 +108,34 @@ export const jsonMapperService = {
       let p = tourOpCache.get(key);
       if (!p) {
         p = (async () => {
-          const owned = await jsonMapperRepository.findTourOperatorByName(name!, orgId);
-          if (owned) return owned.id;
-          const seed = orgId ? await jsonMapperRepository.findGlobalTourOperatorByName(name!) : null;
-          const created = await jsonMapperRepository.createTourOperator(
-            seed?.name ?? name!.trim(),
-            orgId,
-            seed?.commission_percentage ?? null,
-          );
-          warnings.push(
-            seed
-              ? `Added "${seed.name}" to your tour operators (from the platform list)`
-              : `Created new tour operator: "${name}"`,
-          );
-          return created.id;
+          // Only writers (admins / branch managers) may add to the shared catalogue
+          // or to the agency's list; everyone else just resolves what exists.
+          const notInList = () => {
+            warnings.push(`"${name!.trim()}" isn't in your agency's tour operators. Ask an admin to add it on Tour Operators.`);
+            return '';
+          };
+          // The agency's own list wins: "Jet2" must pick the linked "Jet2 Holidays",
+          // not some other catalogue operator that merely contains the text.
+          if (orgId) {
+            const own = await tourOperatorLinkService.findLinkedOperatorByName(orgId, name!);
+            if (own) return own.id;
+          }
+          let operator = await jsonMapperRepository.findCatalogueOperatorByName(name!);
+          if (!operator) {
+            if (!canWrite) return notInList();
+            operator = await jsonMapperRepository.createCatalogueOperator(name!, userId ?? null);
+            warnings.push(`Created new tour operator: "${name}"`);
+          }
+          if (orgId) {
+            if (canWrite) {
+              // A seed operator keeps its seed rate; anything else has no rate yet (NULL).
+              const link = await tourOperatorLinkService.ensureLinkForOrg(orgId, operator.id, userId ?? null, findSeedCommission(operator.name));
+              if (link.created) warnings.push(`Added "${operator.name}" to your tour operators`);
+            } else if (!(await tourOperatorLinkService.isOperatorLinked(orgId, operator.id))) {
+              return notInList();
+            }
+          }
+          return operator.id;
         })();
         tourOpCache.set(key, p);
       }

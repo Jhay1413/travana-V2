@@ -4,12 +4,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useConvertToBooking } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 
+export interface QuoteConvertOptions {
+  /** Toast title on success: a fixed string, or a function of the HAYS ref that was just saved. Defaults to "Quote converted to booking". */
+  successToast?: string | ((haysRef: string) => string);
+}
+
 /**
  * Owns the Convert-to-Booking dialog: open state, the two ref-number fields,
  * and the confirm action which fires the mutation, refreshes quotes, and
  * navigates to the new booking.
  */
-export function useQuoteConvert(quoteId: string, clientId: string) {
+export function useQuoteConvert(quoteId: string, clientId: string, options: QuoteConvertOptions = {}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -28,7 +33,13 @@ export function useQuoteConvert(quoteId: string, clientId: string) {
           setConvertHaysRef("");
           setConvertTourRef("");
           queryClient.invalidateQueries({ queryKey: ["quotes"] });
-          toast({ title: "Quote converted to booking" });
+          const { successToast } = options;
+          toast({
+            title:
+              typeof successToast === "function"
+                ? successToast(convertHaysRef)
+                : (successToast ?? "Quote converted to booking"),
+          });
           const targetClientId = clientId || booking?.client_id;
           if (targetClientId) {
             setLocation(`/clients/${targetClientId}?holiday=booking:${booking.id}`);

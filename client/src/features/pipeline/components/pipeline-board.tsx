@@ -15,6 +15,7 @@ import { PipelinePageHeader } from "@/features/pipeline/header/pipeline-page-hea
 import { PipelineToolbar } from "@/features/pipeline/header/pipeline-toolbar";
 import { PipelineColumn } from "@/features/pipeline/board/pipeline-column";
 import { PipelineListView } from "@/features/pipeline/list/pipeline-list-view";
+import { getTaskEntity } from "@/features/pipeline/lib/task-entity";
 import { DealDrawer } from "@/features/pipeline/drawer/deal-drawer";
 import { PipelineDialogsHost } from "@/features/pipeline/dialogs/pipeline-dialogs";
 import { PipelineMobile } from "@/features/pipeline/mobile/pipeline-mobile";
@@ -72,6 +73,11 @@ export function PipelineBoard({
   const getName = useCallback((id: string | null) => (id ? clientNames.get(id) || "Unknown Client" : "Unknown Client"), [clientNames]);
 
   const openDrawer = useCallback((tx: Transaction, stage: PipelineStage) => setSelectedDeal({ tx, stage }), [setSelectedDeal]);
+  // Only pre-open the Add task pop-up when the deal has a record to attach the task to.
+  const openDrawerWithTask = useCallback(
+    (tx: Transaction, stage: PipelineStage) => setSelectedDeal({ tx, stage, addTask: !!getTaskEntity(tx, stage).id }),
+    [setSelectedDeal],
+  );
   const addQuote = useCallback(
     (tx: Transaction, stage: PipelineStage) => {
       if (getStageForTransaction(tx) === "Enquiry" && stage !== "Lost") moves.applyStageTransition(tx, "Enquiry", "Quoted");
@@ -89,9 +95,9 @@ export function PipelineBoard({
       onMarkLost: (t) => setLostConfirm({ tx: t, stage }),
       onRestore: (t) => parking.handleSetLost(t, stage, false),
       onAddQuote: (t) => addQuote(t, stage),
-      onAddTask: (t) => openDrawer(t, stage),
+      onAddTask: (t) => openDrawerWithTask(t, stage),
     }),
-    [addQuote, openDrawer, parking, setFutureDialog, setLostConfirm],
+    [addQuote, openDrawer, openDrawerWithTask, parking, setFutureDialog, setLostConfirm],
   );
 
   const handleDragStart = useCallback((_t: Transaction, s: PipelineStage) => setDragState({ active: true, fromStage: s }), []);
@@ -194,7 +200,7 @@ export function PipelineBoard({
                 selectedId={selectedId}
                 getClientName={getName}
                 onRowClick={openDrawer}
-                onAddTask={openDrawer}
+                onAddTask={openDrawerWithTask}
               />
             )}
           </>
@@ -205,6 +211,11 @@ export function PipelineBoard({
 
       {selected && (
         <DealDrawer
+          key={selected.tx.id}
+          initialAddTask={dialogs.selectedDeal?.addTask}
+          onTaskCreated={() => {
+            cache.invalidateStage(selected.stage);
+          }}
           transaction={selected.tx}
           stage={selected.stage}
           clientName={getName(selected.tx.client_id)}

@@ -1,8 +1,9 @@
 import { db } from "../../config/database";
 import { organization, branches, branchMembers, user, hrRecordsTable, userOrgRoles } from "@shared/schema";
 import type { InsertOrganization, InsertBranch, InsertUser } from "@shared/schema";
-import { sql } from "drizzle-orm";
 import { organizationRepository } from "../organization/organization.repository";
+import { orgTourOperatorRepository } from "../tour-operator/org-tour-operator.repository";
+import { tourOperatorCommissionSeed } from "@shared/tour-operator-seed";
 
 export interface OnboardingSignupInput {
   organization: InsertOrganization;
@@ -31,15 +32,10 @@ export const onboardingRepository = {
     return db.transaction(async (tx) => {
       const [org] = await tx.insert(organization).values(input.organization).returning();
 
-      // Seed the new org with copies of the global tour_operator catalog
-      // (rows where org_id IS NULL). Each org maintains its own copies and
-      // edits commissions independently. See migration 0013.
-      await tx.execute(sql`
-        INSERT INTO tour_operator_table (name, commission_percentage, org_id)
-        SELECT name, commission_percentage, ${org.id}
-        FROM tour_operator_table
-        WHERE org_id IS NULL
-      `);
+      // Tour operators are a platform-wide catalogue: a new org is linked to the SEED
+      // operators at their seed commission (missing catalogue rows are created).
+      // No user exists yet, so created_by is null.
+      await orgTourOperatorRepository.linkSeedOperators(org.id, tourOperatorCommissionSeed, null, tx);
 
       const [branch] = await tx
         .insert(branches)

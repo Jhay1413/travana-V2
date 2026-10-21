@@ -1,5 +1,7 @@
 import { AppError } from '../../utils/error-handler';
 import { organizationRepository } from './organization.repository';
+import { orgTourOperatorRepository } from '../tour-operator/org-tour-operator.repository';
+import { tourOperatorCommissionSeed } from '@shared/tour-operator-seed';
 import { planRepository } from '../plan/plan.repository';
 import type { InsertOrganization } from '@shared/schema';
 
@@ -17,7 +19,12 @@ export const organizationService = {
   },
 
   async create(data: InsertOrganization) {
-    return organizationRepository.create(data);
+    // A new org is linked to the seed tour operators at their seed commission, atomically.
+    return orgTourOperatorRepository.transaction(async (tx) => {
+      const org = await organizationRepository.create(data, tx);
+      await orgTourOperatorRepository.linkSeedOperators(org.id, tourOperatorCommissionSeed, null, tx);
+      return org;
+    });
   },
 
   async update(id: string, data: OrgUpdate) {

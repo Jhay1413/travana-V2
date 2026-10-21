@@ -81,6 +81,18 @@ describe("bookingController.convertQuoteToBooking", () => {
     expect(bookingService.convertQuoteToBooking).toHaveBeenCalledWith("q1", "H1", "S1", expect.objectContaining({ orgId: "o1" }));
     expect(res.status).toHaveBeenCalledWith(201);
   });
+
+  it("trims the references before they reach the service", async () => {
+    vi.mocked(bookingService.convertQuoteToBooking).mockResolvedValue({ id: "b1" } as never);
+
+    await bookingController.convertQuoteToBooking(
+      req({ params: { quoteId: "q1" }, body: { haysRef: "  H1 ", supplierRef: " S1  " } }),
+      mockRes(),
+      vi.fn(),
+    );
+
+    expect(bookingService.convertQuoteToBooking).toHaveBeenCalledWith("q1", "H1", "S1", expect.anything());
+  });
 });
 
 describe("bookingController.deleteBooking", () => {

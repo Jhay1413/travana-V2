@@ -2,6 +2,7 @@ import { noteRepository, type NoteWithAuthor } from "./note.repository";
 import { AppError } from "../../utils/error-handler";
 import type { Note, InsertNote } from "@shared/schema";
 import type { Scope } from "../../utils/scope";
+import { sanitizeRichText } from "../../utils/sanitize-rich-text";
 
 type ScopeOrTrusted = Scope | { orgId: null };
 
@@ -52,10 +53,16 @@ async function loadScopedNote(id: string, scope: ScopeOrTrusted): Promise<Note> 
   return n;
 }
 
+// Rows written before write-side sanitising existed may hold unsafe HTML, so
+// content is also cleaned on the way out. sanitizeRichText is idempotent.
+function cleanContent<T extends { content: string | null }>(note: T): T {
+  return typeof note.content === "string" ? { ...note, content: sanitizeRichText(note.content) } : note;
+}
+
 export const noteService = {
   async listByTransactionId(transactionId: string, scope: ScopeOrTrusted): Promise<NoteWithAuthor[]> {
     await assertTransactionInScope(transactionId, scope);
-    return noteRepository.findByTransactionId(transactionId);
+    return (await noteRepository.findByTransactionId(transactionId)).map(cleanContent);
   },
 
   async listByClientId(
@@ -64,11 +71,11 @@ export const noteService = {
     options?: { includeDeals?: boolean },
   ): Promise<NoteWithAuthor[]> {
     await assertClientInScope(clientId, scope);
-    return noteRepository.findByClientId(clientId, scope, options);
+    return (await noteRepository.findByClientId(clientId, scope, options)).map(cleanContent);
   },
 
   async getNote(id: string, scope: ScopeOrTrusted): Promise<Note> {
-    return loadScopedNote(id, scope);
+    return cleanContent(await loadScopedNote(id, scope));
   },
 
   async createNote(data: InsertNote, scope: ScopeOrTrusted): Promise<Note> {
@@ -83,12 +90,14 @@ export const noteService = {
     if (data.client_id) {
       await assertClientInScope(data.client_id, scope);
     }
-    return noteRepository.create(data);
+    // content (incl. replies) is rendered as HTML by the client.
+    const safe = typeof data.content === "string" ? { ...data, content: sanitizeRichText(data.content) } : data;
+    return noteRepository.create(safe);
   },
 
   async updateNote(id: string, content: string, scope: ScopeOrTrusted): Promise<Note> {
     await loadScopedNote(id, scope);
-    const note = await noteRepository.update(id, content);
+    const note = await noteRepository.update(id, sanitizeRichText(content));
     if (!note) throw new AppError("Note not found", 404);
     return note;
   },

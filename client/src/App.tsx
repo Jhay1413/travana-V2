@@ -113,6 +113,18 @@ const ADMIN_ROLES: OrgRole[] = ["platform_admin", "org_admin"];
 const PLATFORM_ROLES: OrgRole[] = ["platform_admin"];
 const REFERRAL_ROLES: OrgRole[] = ["referral_agent", "platform_admin"];
 
+/** /settings/tour-operators: the catalogue for platform admins, a redirect to /agency/tour-operators for everyone else. */
+function TourOperatorsCatalogueRoute() {
+  const { orgRole } = useRole();
+  if (!PLATFORM_ROLES.includes(orgRole)) return <Redirect to="/agency/tour-operators" />;
+  // The lookup page reads its table from the :tableSlug param.
+  return (
+    <Route path="/settings/:tableSlug">
+      <SettingsLookupPage />
+    </Route>
+  );
+}
+
 function LoadingScreen() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center">
@@ -188,8 +200,12 @@ function AuthenticatedRouter() {
         <RoleRoute path="/platform-admin" allow={PLATFORM_ROLES} component={PlatformAdminDashboard} />
         <RoleRoute path="/referral-hub" allow={REFERRAL_ROLES} component={ReferralAgentDashboard} />
 
+        <RoleRoute path="/agency/departures/balances" allow={MANAGER_ROLES} component={AgencyPage} />
+        <RoleRoute path="/agency/departures" allow={MANAGER_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency/team/invite" allow={MANAGER_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency/team" allow={MANAGER_ROLES} component={AgencyPage} />
+        {/* Staff read the list; writes are enforced by the server. Above '/agency/*'. */}
+        <RoleRoute path="/agency/tour-operators" allow={STAFF_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency/*" allow={ADMIN_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency" allow={ADMIN_ROLES} component={AgencyPage} />
         <RoleRoute path="/admin/import" allow={ADMIN_ROLES} component={AdminImportPage} />
@@ -201,6 +217,10 @@ function AuthenticatedRouter() {
         {/* Must stay above the '/settings/:tableSlug' catch-all below — Switch
             takes the first match, so the param route would swallow it. */}
         <RoleRoute path="/settings/client-duplicates" allow={ADMIN_ROLES} component={ClientDuplicatesPage} />
+        {/* The global operator catalogue is curated by platform admins only; other staff
+            with an old bookmark go to their own list. Social media managers and referral
+            agents are still denied by the route guard. */}
+        <RoleRoute path="/settings/tour-operators" allow={STAFF_ROLES} component={TourOperatorsCatalogueRoute} />
         <RoleRoute path="/settings/:tableSlug" allow={ADMIN_ROLES} component={SettingsLookupPage} />
         <RoleRoute path="/hr" allow={MANAGER_ROLES} component={HrPage} />
         <RoleRoute path="/hr-v2" allow={MANAGER_ROLES} component={HrV2Page} />

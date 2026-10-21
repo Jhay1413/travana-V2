@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { freeQuotesQueryValidator, freeQuoteStatusCountsValidator, recentEngagementQueryValidator } from "./quote.validator";
+import { freeQuotesQueryValidator, freeQuoteStatusCountsValidator, recentEngagementQueryValidator, setAcceptedValidator } from "./quote.validator";
 
 describe("freeQuotesQueryValidator", () => {
   it.each(["not_generated", "draft", "scheduled", "posted"])("accepts socialStatus %s", (socialStatus) => {
@@ -44,5 +44,24 @@ describe("recentEngagementQueryValidator", () => {
   it("rejects unknown period or mine values", () => {
     expect(parse({ period: "month" }).success).toBe(false);
     expect(parse({ mine: "yes" }).success).toBe(false);
+  });
+});
+
+describe("setAcceptedValidator", () => {
+  const id = "3f2b8c1e-5d4a-4e6b-9c7d-1a2b3c4d5e6f";
+
+  it.each([true, false])("accepts accepted=%s", (accepted) => {
+    expect(setAcceptedValidator.safeParse({ params: { id }, body: { accepted } }).success).toBe(true);
+  });
+
+  it("rejects a missing or non-boolean accepted", () => {
+    expect(setAcceptedValidator.safeParse({ params: { id }, body: {} }).success).toBe(false);
+    expect(setAcceptedValidator.safeParse({ params: { id }, body: { accepted: "true" } }).success).toBe(false);
+    expect(setAcceptedValidator.safeParse({ params: { id }, body: { accepted: 1 } }).success).toBe(false);
+  });
+
+  it("rejects extra body keys and a non-uuid id", () => {
+    expect(setAcceptedValidator.safeParse({ params: { id }, body: { accepted: true, extra: 1 } }).success).toBe(false);
+    expect(setAcceptedValidator.safeParse({ params: { id: "nope" }, body: { accepted: true } }).success).toBe(false);
   });
 });

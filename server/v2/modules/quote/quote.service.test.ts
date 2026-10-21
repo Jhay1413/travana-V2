@@ -29,7 +29,21 @@ vi.mock("./quote.repository", () => ({
     findFreeQuotesPaginated: vi.fn(),
     countFreeQuotesBySocialStatus: vi.fn(),
     findRecentClientEngagement: vi.fn(),
+    getServiceCommission: vi.fn(),
+    setAccepted: vi.fn(),
+    findTourOperatorIds: vi.fn(),
+    findFlightTourOperatorId: vi.fn(),
+    findAccommodationTourOperatorId: vi.fn(),
+    flightBelongsToOrg: vi.fn(),
+    accommodationBelongsToOrg: vi.fn(),
+    addFlight: vi.fn(),
+    updateFlight: vi.fn(),
+    updateAccommodation: vi.fn(),
   },
+}));
+// The REAL link service runs; only its repository is faked.
+vi.mock("../tour-operator/org-tour-operator.repository", () => ({
+  orgTourOperatorRepository: { findLinkedOperatorIds: vi.fn() },
 }));
 vi.mock("../transaction/transaction.repository", () => ({
   transactionRepository: { findById: vi.fn(), update: vi.fn(), create: vi.fn() },
@@ -50,11 +64,13 @@ import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { quoteImageRepository } from "./quote-image.repository";
 import { taskService } from "../task/task.service";
 import { enquiryTableRepository } from "../enquiry/enquiry.repository";
+import { orgTourOperatorRepository } from "../tour-operator/org-tour-operator.repository";
 
 const TRUSTED = { orgId: null } as const;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(newQuoteRepository.getServiceCommission).mockResolvedValue(0 as never);
   // Default: scope assertions pass.
   vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(true as never);
   vi.mocked(newQuoteRepository.transactionInScope).mockResolvedValue(true as never);
@@ -77,6 +93,16 @@ describe("newQuoteService.getQuoteWithDetails — price math", () => {
 
     expect(result.total_price).toBe("950.00"); // 1000 − 100 + 50
     expect(result.price_per_person).toBe("316.67"); // 950 / 3
+  });
+
+  it("adds the line-item service_commission from the repository", async () => {
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ id: "q1", sales_price: "100", adult: 1, child: 0 } as never);
+    vi.mocked(newQuoteRepository.getServiceCommission).mockResolvedValue(42.5 as never);
+
+    const result = await newQuoteService.getQuoteWithDetails("q1", TRUSTED);
+
+    expect(newQuoteRepository.getServiceCommission).toHaveBeenCalledWith("q1");
+    expect(result.service_commission).toBe(42.5);
   });
 
   it("throws 404 when the quote does not exist", async () => {
@@ -110,6 +136,23 @@ describe("newQuoteService.createQuote", () => {
     expect(vi.mocked(newQuoteRepository.create).mock.calls[0][0]).toMatchObject({
       price_per_person: "300.00", // 600 / 2
     });
+  });
+
+  it("never persists accepted_at / accepted_by supplied on create", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, status: "on_quote" } as never);
+    vi.mocked(newQuoteRepository.create).mockResolvedValue({ id: "q1" } as never);
+
+    await newQuoteService.createQuote(
+      { transaction_id: "t1", isFreeQuote: true, sales_price: "600", adult: 2, accepted_at: new Date(), accepted_by: "u9", quote_sent_at: new Date(), quote_sent_via: "link", quote_token: "tok" } as never,
+      TRUSTED,
+    );
+
+    const written = vi.mocked(newQuoteRepository.create).mock.calls[0][0] as Record<string, unknown>;
+    expect(written).not.toHaveProperty("accepted_at");
+    expect(written).not.toHaveProperty("accepted_by");
+    expect(written).not.toHaveProperty("quote_sent_at");
+    expect(written).not.toHaveProperty("quote_sent_via");
+    expect(written).not.toHaveProperty("quote_token");
   });
 
   it("preserves a non-zero price_per_person supplied by the caller", async () => {
@@ -267,6 +310,52 @@ describe("newQuoteService.updateQuote", () => {
     await newQuoteService.updateQuote("q1", { childAges: [] } as never, TRUSTED);
 
     expect(newQuoteRepository.replaceChildPassengers).toHaveBeenCalledWith("q1", "quote", []);
+  });
+});
+
+describe("newQuoteService.setAccepted", () => {
+  const detail = { id: "q1", service_commission: 0 };
+  beforeEach(() => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", isFreeQuote: false, accepted_at: null } as never);
+    vi.mocked(newQuoteRepository.setAccepted).mockResolvedValue({ id: "q1" } as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ id: "q1", sales_price: "100", adult: 1, child: 0 } as never);
+  });
+
+  it("marks the quote accepted by the user after the scope check and returns the enriched row", async () => {
+    const result = await newQuoteService.setAccepted("q1", true, "u1", TRUSTED);
+
+    expect(newQuoteRepository.quoteInScope).toHaveBeenCalledWith("q1", TRUSTED);
+    expect(newQuoteRepository.setAccepted).toHaveBeenCalledWith("q1", true, "u1");
+    expect(result).toMatchObject({ ...detail, total_price: "100.00" });
+  });
+
+  it("keeps the first stamp when the quote is already accepted", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", isFreeQuote: false, accepted_at: new Date(), accepted_by: "first" } as never);
+    await newQuoteService.setAccepted("q1", true, "second", TRUSTED);
+    expect(newQuoteRepository.setAccepted).not.toHaveBeenCalled();
+  });
+
+  it("clears the mark when accepted is false, even if already accepted", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", isFreeQuote: false, accepted_at: new Date() } as never);
+    await newQuoteService.setAccepted("q1", false, "u1", TRUSTED);
+    expect(newQuoteRepository.setAccepted).toHaveBeenCalledWith("q1", false, "u1");
+  });
+
+  it("refuses free quotes with a 400", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", isFreeQuote: true } as never);
+    await expect(newQuoteService.setAccepted("q1", true, "u1", TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(newQuoteRepository.setAccepted).not.toHaveBeenCalled();
+  });
+
+  it("404s and never writes when the quote is out of scope", async () => {
+    vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(false as never);
+    await expect(newQuoteService.setAccepted("q1", true, "u1", TRUSTED)).rejects.toMatchObject({ statusCode: 404 });
+    expect(newQuoteRepository.setAccepted).not.toHaveBeenCalled();
+  });
+
+  it("404s when the update matched no row (deleted quote)", async () => {
+    vi.mocked(newQuoteRepository.setAccepted).mockResolvedValue(undefined as never);
+    await expect(newQuoteService.setAccepted("q1", true, "u1", TRUSTED)).rejects.toMatchObject({ statusCode: 404 });
   });
 });
 
@@ -519,6 +608,31 @@ describe("newQuoteService.duplicateQuote", () => {
     }
   });
 
+  it("does not carry the sent / accepted state of the source onto the copy", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({
+      id: "src", transaction_id: "t1", sales_price: "500",
+      quote_sent_at: new Date(), quote_sent_via: "link", accepted_at: new Date(), accepted_by: "u1",
+    } as never);
+    vi.mocked(quoteImageRepository.getByQuoteId).mockResolvedValue([] as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({
+      transfers: [], carHires: [], attractionTickets: [], loungePasses: [], airportParkings: [], accommodations: [],
+      passengers: [], tags: [],
+    } as never);
+    const createSpy = vi.spyOn(newQuoteService, "createQuote").mockResolvedValue({ id: "newQ" } as never);
+
+    try {
+      await newQuoteService.duplicateQuote("src", {} as never, TRUSTED);
+
+      const payload = createSpy.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload).toMatchObject({ sales_price: "500" });
+      for (const key of ["quote_sent_at", "quote_sent_via", "accepted_at", "accepted_by"]) {
+        expect(payload).not.toHaveProperty(key);
+      }
+    } finally {
+      createSpy.mockRestore();
+    }
+  });
+
   it("clones the source's images when the caller sends no images field", async () => {
     vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "src", transaction_id: "t1" } as never);
     vi.mocked(quoteImageRepository.getByQuoteId).mockResolvedValue([{ url: "img1" }] as never);
@@ -733,5 +847,115 @@ describe("newQuoteService.getRecentClientEngagement - mine without a user", () =
     const scope = { orgId: "o1", orgRole: "org_admin" } as never;
     await expect(newQuoteService.getRecentClientEngagement(scope, 10, { mine: true })).rejects.toMatchObject({ statusCode: 401 });
     expect(newQuoteRepository.findRecentClientEngagement).not.toHaveBeenCalled();
+  });
+});
+
+describe("newQuoteService - operator must be in the org's list", () => {
+  const ORG = { orgId: "o1", orgRole: "org_admin" } as never;
+  const OP_A = "11111111-1111-4111-8111-111111111111";
+  const OP_B = "22222222-2222-4222-8222-222222222222";
+  const linked = vi.mocked(orgTourOperatorRepository.findLinkedOperatorIds);
+
+  beforeEach(() => {
+    linked.mockReset();
+    linked.mockImplementation(async (_org, ids) => ids.filter((id) => id === OP_A));
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: "o1" } as never);
+    vi.mocked(newQuoteRepository.create).mockResolvedValue({ id: "q1" } as never);
+    vi.mocked(newQuoteRepository.findTourOperatorIds).mockResolvedValue([]);
+  });
+
+  it("createQuote accepts linked operators and checks main and line items together", async () => {
+    await newQuoteService.createQuote({ transaction_id: "t1", main_tour_operator_id: OP_A, transfers: [{ tour_operator_id: OP_A }] } as never, ORG);
+    expect(linked).toHaveBeenCalledWith("o1", [OP_A]);
+  });
+
+  it("createQuote rejects an unlinked line-item operator before writing", async () => {
+    await expect(
+      newQuoteService.createQuote({ transaction_id: "t1", main_tour_operator_id: OP_A, transfers: [{ tour_operator_id: OP_B }] } as never, ORG),
+    ).rejects.toMatchObject({ statusCode: 400, message: "Tour operator is not in your list" });
+    expect(newQuoteRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("a trusted call or a payload without operators is not checked", async () => {
+    await newQuoteService.createQuote({ transaction_id: "t1", main_tour_operator_id: OP_B } as never, TRUSTED);
+    await newQuoteService.createQuote({ transaction_id: "t1" } as never, ORG);
+    expect(linked).not.toHaveBeenCalled();
+  });
+
+  it("updateQuote exempts operators already on the quote but rejects a new unlinked one", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1" } as never);
+    vi.mocked(newQuoteRepository.update).mockResolvedValue({ id: "q1" } as never);
+    vi.mocked(newQuoteRepository.findTourOperatorIds).mockResolvedValue([OP_B]);
+    await newQuoteService.updateQuote("q1", { main_tour_operator_id: OP_B } as never, ORG);
+    expect(linked).not.toHaveBeenCalled();
+    vi.mocked(newQuoteRepository.findTourOperatorIds).mockResolvedValue([]);
+    await expect(newQuoteService.updateQuote("q1", { main_tour_operator_id: OP_B } as never, ORG)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("updateQuote looks nothing up when no operator is sent", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1" } as never);
+    vi.mocked(newQuoteRepository.update).mockResolvedValue({ id: "q1" } as never);
+    await newQuoteService.updateQuote("q1", { sales_price: "100" } as never, ORG);
+    expect(newQuoteRepository.findTourOperatorIds).not.toHaveBeenCalled();
+  });
+
+  it("updateFlight exempts the operator already on the flight line", async () => {
+    vi.mocked(newQuoteRepository.flightBelongsToOrg).mockResolvedValue(true);
+    vi.mocked(newQuoteRepository.findFlightTourOperatorId).mockResolvedValue(OP_B);
+    vi.mocked(newQuoteRepository.updateFlight).mockResolvedValue({ id: "f1" } as never);
+    await newQuoteService.updateFlight("f1", { tour_operator_id: OP_B } as never, ORG);
+    expect(linked).not.toHaveBeenCalled();
+  });
+
+  describe("copy to client (createQuote with sourceQuoteId)", () => {
+    beforeEach(() => {
+      vi.mocked(newQuoteRepository.findTourOperatorIds).mockResolvedValue([OP_B]);
+    });
+
+    it("keeps the source quote's unlinked operator allowed", async () => {
+      await newQuoteService.createQuote({ transaction_id: "t1", main_tour_operator_id: OP_B } as never, ORG, { sourceQuoteId: "src" });
+      expect(newQuoteRepository.findTourOperatorIds).toHaveBeenCalledWith("src");
+      expect(newQuoteRepository.create).toHaveBeenCalled();
+    });
+
+    it("still rejects an unlinked operator that is not on the source", async () => {
+      const OP_C = "33333333-3333-4333-8333-333333333333";
+      await expect(
+        newQuoteService.createQuote({ transaction_id: "t1", main_tour_operator_id: OP_C } as never, ORG, { sourceQuoteId: "src" }),
+      ).rejects.toMatchObject({ statusCode: 400 });
+    });
+
+    it("404s when the source quote is outside the caller's scope", async () => {
+      vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(false as never);
+      await expect(
+        newQuoteService.createQuote({ transaction_id: "t1", main_tour_operator_id: OP_B } as never, ORG, { sourceQuoteId: "other-org" }),
+      ).rejects.toMatchObject({ statusCode: 404 });
+      expect(newQuoteRepository.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("duplicateQuote is exempt for the source's own operators", () => {
+    beforeEach(() => {
+      vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "src", transaction_id: "t1", main_tour_operator_id: OP_B } as never);
+      vi.mocked(quoteImageRepository.getByQuoteId).mockResolvedValue([] as never);
+      vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({
+        transfers: [{ tour_operator_id: OP_B }], carHires: [], attractionTickets: [], loungePasses: [], airportParkings: [], accommodations: [], tags: [], passengers: [],
+      } as never);
+      vi.mocked(newQuoteRepository.findTourOperatorIds).mockResolvedValue([OP_B]);
+    });
+
+    it("succeeds when the source quote's operator is no longer in the agency's list", async () => {
+      const out = await newQuoteService.duplicateQuote("src", {} as never, ORG);
+      expect(out).toMatchObject({ id: "q1" });
+      expect(newQuoteRepository.create).toHaveBeenCalled();
+      expect(linked).not.toHaveBeenCalled();
+    });
+
+    it("still rejects a NEW unlinked operator supplied by the caller", async () => {
+      vi.mocked(newQuoteRepository.findTourOperatorIds).mockResolvedValue([OP_B]);
+      const OP_C = "33333333-3333-4333-8333-333333333333";
+      await expect(newQuoteService.duplicateQuote("src", { main_tour_operator_id: OP_C } as never, ORG)).rejects.toMatchObject({ statusCode: 400 });
+      expect(newQuoteRepository.create).not.toHaveBeenCalled();
+    });
   });
 });
