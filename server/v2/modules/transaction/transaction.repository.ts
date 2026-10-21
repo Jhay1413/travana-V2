@@ -2,11 +2,13 @@ import { db } from "../../config/database";
 import { publicClientColumns } from "../neon-client/neon-client.serializer";
 import { transaction, tickets, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks, favorites } from "@shared/schema";
 import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
+import { tourOperatorFields } from "./tour-operator-fields";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, getTableColumns, type SQL, type Column } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
 import { buildPartitionCond, buildTransactionRecordScopeConds } from "../../utils/scope-conditions";
 import type { NextTask, PipelineCandidateItem, PipelineFilters, PipelineQuickCounts, PipelineSqlSort, PipelineTotals } from "./transaction.types";
+import { fetchServiceCommissionMaps } from "./service-commission.repository";
 import { dealProfitExpr, dealValueExpr, pipelineFilterConds, quickCond, sortExpr } from "./transaction-pipeline.sql";
 
 interface ConnectingLeg extends Partial<InsertQuoteFlight> {}
@@ -51,85 +53,6 @@ async function getPackageTypeMap(): Promise<Map<string, string>> {
   const map = new Map<string, string>(rows.map((pt) => [pt.id, pt.name]));
   packageTypeCache = { at: now, map };
   return map;
-}
-
-// Sum line-item commission per quote / per booking. Mirrors the canonical
-// formula in server/v2/utils/commission-sql.ts (totalQuoteCommissionExpr /
-// totalBookingCommissionExpr) — all 7 line-item tables on each side. The
-// caller adds package_commission separately to get the total.
-//
-// Each side is a single round-trip: UNION ALL across the 7 line-item tables,
-// summed per id in SQL. This replaces the previous 7-queries-per-side fan-out
-// (14 round-trips) and is backed by the per-table quote_id / booking_id indexes.
-async function fetchServiceCommissionMaps(
-  quoteIds: string[],
-  bookingIds: string[],
-): Promise<{ quoteMap: Map<string, number>; bookingMap: Map<string, number> }> {
-  const quoteMap = new Map<string, number>();
-  const bookingMap = new Map<string, number>();
-
-  const tasks: Promise<unknown>[] = [];
-
-  if (quoteIds.length > 0) {
-    const ids = sql.join(quoteIds.map((id) => sql`${id}`), sql`, `);
-    tasks.push(
-      db.execute(sql`
-        SELECT id, SUM(commission) AS commission FROM (
-          SELECT ${quote_flights.quote_id} AS id, ${quote_flights.commission} AS commission FROM ${quote_flights} WHERE ${quote_flights.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_accomodation.quote_id}, ${quote_accomodation.commission} FROM ${quote_accomodation} WHERE ${quote_accomodation.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_transfers.quote_id}, ${quote_transfers.commission} FROM ${quote_transfers} WHERE ${quote_transfers.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_car_hire.quote_id}, ${quote_car_hire.commission} FROM ${quote_car_hire} WHERE ${quote_car_hire.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_attraction_ticket.quote_id}, ${quote_attraction_ticket.commission} FROM ${quote_attraction_ticket} WHERE ${quote_attraction_ticket.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_lounge_pass.quote_id}, ${quote_lounge_pass.commission} FROM ${quote_lounge_pass} WHERE ${quote_lounge_pass.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_airport_parking.quote_id}, ${quote_airport_parking.commission} FROM ${quote_airport_parking} WHERE ${quote_airport_parking.quote_id} IN (${ids})
-        ) t
-        WHERE id IS NOT NULL
-        GROUP BY id
-      `).then((res) => {
-        for (const r of res.rows as Array<{ id: string; commission: string | null }>) {
-          quoteMap.set(r.id, parseFloat(r.commission ?? "0") || 0);
-        }
-      }),
-    );
-  }
-
-  if (bookingIds.length > 0) {
-    const ids = sql.join(bookingIds.map((id) => sql`${id}`), sql`, `);
-    tasks.push(
-      db.execute(sql`
-        SELECT id, SUM(commission) AS commission FROM (
-          SELECT ${booking_flights.booking_id} AS id, ${booking_flights.commission} AS commission FROM ${booking_flights} WHERE ${booking_flights.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_accomodation.booking_id}, ${booking_accomodation.commission} FROM ${booking_accomodation} WHERE ${booking_accomodation.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_transfers.booking_id}, ${booking_transfers.commission} FROM ${booking_transfers} WHERE ${booking_transfers.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_car_hire.booking_id}, ${booking_car_hire.commission} FROM ${booking_car_hire} WHERE ${booking_car_hire.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_attraction_ticket.booking_id}, ${booking_attraction_ticket.commission} FROM ${booking_attraction_ticket} WHERE ${booking_attraction_ticket.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_lounge_pass.booking_id}, ${booking_lounge_pass.commission} FROM ${booking_lounge_pass} WHERE ${booking_lounge_pass.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_airport_parking.booking_id}, ${booking_airport_parking.commission} FROM ${booking_airport_parking} WHERE ${booking_airport_parking.booking_id} IN (${ids})
-        ) t
-        WHERE id IS NOT NULL
-        GROUP BY id
-      `).then((res) => {
-        for (const r of res.rows as Array<{ id: string; commission: string | null }>) {
-          bookingMap.set(r.id, parseFloat(r.commission ?? "0") || 0);
-        }
-      }),
-    );
-  }
-
-  await Promise.all(tasks);
-  return { quoteMap, bookingMap };
 }
 
 function hasFlightData(leg: Partial<InsertQuoteFlight> | Partial<InsertBookingFlight> | null | undefined): boolean {
@@ -409,7 +332,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
       JOIN resorts_table r ON al.resorts_id = r.id
       JOIN destination_table d ON r.destination_id = d.id
       WHERE ba.booking_id = booking_table.id
-      ORDER BY ba.is_primary DESC NULLS LAST
+      ORDER BY ba.is_primary DESC NULLS LAST, ba.id
       LIMIT 1
     )`, main_tour_operator_name: sql<string | null>`(
       SELECT tour_operator_table.name FROM tour_operator_table
@@ -1158,8 +1081,14 @@ export const transactionRepository = {
       ]);
     }
 
+    const operatorIds = [...rawQuotes.map(q => q.main_tour_operator_id), bookingResult?.main_tour_operator_id].filter((v): v is string => !!v);
+    const operators = operatorIds.length > 0
+      ? await db.select({ id: tour_operator.id, name: tour_operator.name, logo_url: tour_operator.logo_url }).from(tour_operator).where(inArray(tour_operator.id, operatorIds))
+      : [];
+
     const quotes = rawQuotes.map(q => ({
       ...q,
+      ...tourOperatorFields(q.main_tour_operator_id, operators),
       accommodations: allAccoms.filter(a => a.accommodation.quote_id === q.id).map(a => ({ ...a.accommodation, accomodation_name: a.accomodation_name, board_basis_name: a.board_basis_name, room_type_name: a.room_type_name, resort_name: a.resort_name, destination_name: a.destination_name, country_name: a.country_name })),
       flights: allFlights.filter(f => f.flight.quote_id === q.id).map(f => ({ ...f.flight, departing_airport_name: f.departing_airport_name })),
     }));
@@ -1176,7 +1105,7 @@ export const transactionRepository = {
       enrichedEnquiry = { ...enquiryResult, destinations, resorts: resorts2, accommodations, boardBases, airports };
     }
 
-    return { ...txn, enquiry: enrichedEnquiry, quotes, booking: bookingResult || null, client: client || null, agent: agent || null };
+    return { ...txn, enquiry: enrichedEnquiry, quotes, booking: bookingResult ? { ...bookingResult, ...tourOperatorFields(bookingResult.main_tour_operator_id, operators) } : null, client: client || null, agent: agent || null };
   },
 
   async findExpiringQuotes(scope?: Scope, agentId?: string) {

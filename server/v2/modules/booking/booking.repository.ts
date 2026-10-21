@@ -6,6 +6,7 @@ import {
   booking_cruise_itinerary, booking_upsell, cruise_extra_item, passengers, deal_images, bookingImages, accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
   transaction, resorts, destination, country, room_type, referral, clientTable,
+  user as userTable,
 } from "@shared/schema";
 import type {
   Booking, InsertBooking, InsertBookingFlight, BookingFlight,
@@ -16,6 +17,8 @@ import type {
 } from "@shared/schema";
 import { eq, asc, desc, sql, and, inArray, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { upsellWithOperatorColumns } from "./booking-upsell.repository";
+import { fetchServiceCommissionMaps } from "../transaction/service-commission.repository";
 import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -58,6 +61,22 @@ export const bookingRepository = {
   async findById(id: string): Promise<Booking | undefined> {
     const [result] = await db.select().from(booking).where(eq(booking.id, id)).limit(1);
     return result;
+  },
+
+  /** Every tour-operator id stored on a booking (main operator plus each line item), de-duplicated. */
+  async findTourOperatorIds(bookingId: string): Promise<string[]> {
+    const result = await db.execute(sql`
+      SELECT ${booking.main_tour_operator_id} AS id FROM ${booking} WHERE ${booking.id} = ${bookingId}
+      UNION SELECT ${booking_flights.tour_operator_id} FROM ${booking_flights} WHERE ${booking_flights.booking_id} = ${bookingId}
+      UNION SELECT ${booking_accomodation.tour_operator_id} FROM ${booking_accomodation} WHERE ${booking_accomodation.booking_id} = ${bookingId}
+      UNION SELECT ${booking_transfers.tour_operator_id} FROM ${booking_transfers} WHERE ${booking_transfers.booking_id} = ${bookingId}
+      UNION SELECT ${booking_car_hire.tour_operator_id} FROM ${booking_car_hire} WHERE ${booking_car_hire.booking_id} = ${bookingId}
+      UNION SELECT ${booking_attraction_ticket.tour_operator_id} FROM ${booking_attraction_ticket} WHERE ${booking_attraction_ticket.booking_id} = ${bookingId}
+      UNION SELECT ${booking_lounge_pass.tour_operator_id} FROM ${booking_lounge_pass} WHERE ${booking_lounge_pass.booking_id} = ${bookingId}
+      UNION SELECT ${booking_airport_parking.tour_operator_id} FROM ${booking_airport_parking} WHERE ${booking_airport_parking.booking_id} = ${bookingId}
+      UNION SELECT ${booking_cruise.tour_operator_id} FROM ${booking_cruise} WHERE ${booking_cruise.booking_id} = ${bookingId}
+    `);
+    return (result.rows as Array<{ id: string | null }>).map((r) => r.id).filter((id): id is string => !!id);
   },
 
   async bookingInScope(id: string, scope: ScopeOrTrusted): Promise<boolean> {
@@ -203,6 +222,12 @@ export const bookingRepository = {
     await db.delete(booking).where(eq(booking.id, id));
   },
 
+  /** Sum of the line-item commissions for one booking (same maps as the transaction list). */
+  async getServiceCommission(id: string): Promise<number> {
+    const { bookingMap } = await fetchServiceCommissionMaps([], [id]);
+    return bookingMap.get(id) ?? 0;
+  },
+
   async findWithDetails(id: string) {
     const [b] = await db
       .select({
@@ -211,11 +236,14 @@ export const bookingRepository = {
         main_tour_operator_name: tour_operator.name,
         lead_source: transaction.lead_source,
         user_id: transaction.user_id,
+        main_tour_operator_logo_url: tour_operator.logo_url,
+        owner_name: userTable.name,
       })
       .from(booking)
       .leftJoin(package_type, eq(booking.holiday_type_id, package_type.id))
       .leftJoin(tour_operator, eq(booking.main_tour_operator_id, tour_operator.id))
       .leftJoin(transaction, eq(booking.transaction_id, transaction.id))
+      .leftJoin(userTable, eq(transaction.user_id, userTable.id))
       .where(eq(booking.id, id))
       .limit(1);
 
@@ -320,8 +348,9 @@ export const bookingRepository = {
         : Promise.resolve([]),
 
       // Active upsells (extra line items added post-creation), newest first.
-      db.select()
+      db.select(upsellWithOperatorColumns)
         .from(booking_upsell)
+        .leftJoin(tour_operator, eq(tour_operator.id, booking_upsell.tour_operator_id))
         .where(and(eq(booking_upsell.booking_id, id), eq(booking_upsell.is_active, true)))
         .orderBy(desc(booking_upsell.added_at)),
     ]);
@@ -349,6 +378,8 @@ export const bookingRepository = {
       ...b.booking,
       holiday_type_name: b.holiday_type_name,
       main_tour_operator_name: b.main_tour_operator_name,
+      main_tour_operator_logo_url: b.main_tour_operator_logo_url,
+      owner_name: b.owner_name,
       lead_source: b.lead_source,
       user_id: b.user_id,
       country_id: accommodations[0]?.country_id || null,

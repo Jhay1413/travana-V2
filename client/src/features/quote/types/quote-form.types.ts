@@ -378,5 +378,7 @@ export interface QuoteCreateDialogProps {
    * the create path can't carry them, since the form never loads them.
    */
   duplicateFromQuoteId?: string;
+  /** Quote a "Copy to client" is made from; sent as `source_quote_id` so its operators stay allowed. */
+  sourceQuoteId?: string;
   presentation?: FormPresentation;
 }

@@ -7,6 +7,7 @@ import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { notificationRepository } from "../repositories/notification.repository";
 import { notSuspendedOrBanned } from "../v2/utils/user-conditions";
 import { pushNotificationService } from "./push-notification.service";
+import { sanitizeRichText } from "../v2/utils/sanitize-rich-text";
 
 const PORTAL_SENDER_PREFIX = "portal-client:";
 
@@ -214,7 +215,7 @@ export async function bridgePortalMessageToChat(
     await db.insert(chatMessages).values({
       conversationId,
       senderId: portalSenderId(clientId),
-      content: messageText,
+      content: sanitizeRichText(messageText),
     });
 
     await db

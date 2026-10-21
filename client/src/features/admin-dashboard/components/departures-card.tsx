@@ -1,24 +1,36 @@
+import { useState } from "react";
+import { requestErrorMessage } from "@/lib/request-error";
 import { Segmented } from "@/components/ui/segmented";
-import { HomeCard } from "@/features/agent-overview/components/home/home-ui";
-import { DEPARTURES, deriveRows, needsActionCount, summaryLine } from "../lib/sample-departures";
-import { useDeparturesState, type DepartureShow } from "../state/use-departures-state";
-import { DepartureRow } from "./departure-row";
-import { CardHead } from "./shared/bits";
-import { SamplePill } from "./shared/pills";
+import { BALANCES_PATH, TICKETS_PATH, addDays, formatTravelDate, todayKey, useDepartures, useDepartureSummary } from "@/features/departures";
+import { HomeCard, HomeLink } from "@/features/agent-overview/components/home/home-ui";
+import { cardSummaryLine, needsAction, summaryFromRows } from "../lib/departure-pill";
+import { useNow } from "../state/use-now";
+import { DepartureCardRow } from "./departure-row";
+import { CardHead, CardNote } from "./shared/bits";
 
-/** SAMPLE content: prototype departures, interactive locally only. No server calls. */
+type Show = "all" | "act";
+
+/** "Next N days" includes day N: the list is asked for [today, today + N + 1). */
+const WINDOW_DAYS = 7;
+
+/** Next 7 days of departures (live): status per trip, with links to the full tickets and balances lists. */
 export function DeparturesCard({ className }: { className?: string }) {
-  const { done, show, setShow, toggle } = useDeparturesState();
-  const rows = deriveRows(done);
-  const shown = show === "act" ? rows.filter((r) => r.hasAction) : rows;
+  const [show, setShow] = useState<Show>("all");
+  const today = todayKey(useNow());
+  const list = useDepartures({ to: addDays(today, WINDOW_DAYS + 1) });
+  const summary = useDepartureSummary(WINDOW_DAYS);
+
+  const rows = list.data ?? [];
+  const actionCount = rows.filter((r) => needsAction(r.checks)).length;
+  const shown = show === "act" ? rows.filter((r) => needsAction(r.checks)) : rows;
+  const counts = summary.data ?? summaryFromRows(rows);
 
   return (
     <HomeCard className={`flex flex-col ${className ?? ""}`} testId="card-departures">
       <CardHead
         id="departures-title"
         title="Departures and balances"
-        pill={<SamplePill />}
-        sub="Next 7 days, to Friday 23 October"
+        sub={`Next 7 days, to ${formatTravelDate(addDays(today, WINDOW_DAYS))}`}
         right={
           <Segmented
             value={show}
@@ -26,20 +38,42 @@ export function DeparturesCard({ className }: { className?: string }) {
             variant="black"
             label="Show departures"
             items={[
-              { value: "all", label: `All ${DEPARTURES.length}`, testId: "segment-departures-all" },
-              { value: "act", label: `Needs action ${needsActionCount(done)}`, testId: "segment-departures-action" },
+              { value: "all", label: `All ${rows.length}`, testId: "segment-departures-all" },
+              { value: "act", label: `Needs action ${actionCount}`, testId: "segment-departures-action" },
             ]}
           />
         }
       />
-      <p className="mb-3 text-[13px] font-medium xl:text-[14px]" role="status" data-testid="text-departures-summary">
-        {summaryLine(done)}
-      </p>
-      <div>
-        {shown.map((row) => (
-          <DepartureRow key={row.dep.id} row={row} onToggle={toggle} />
-        ))}
-      </div>
+      {list.isError ? (
+        <CardNote tone="error" testId="text-departures-error">
+          {requestErrorMessage(list.error, "Couldn't load departures. Please try again in a moment.")}
+        </CardNote>
+      ) : !list.data ? (
+        <CardNote testId="text-departures-loading">Loading departures…</CardNote>
+      ) : (
+        <>
+          <p className="mb-3 text-[13px] font-medium xl:text-[14px]" role="status" data-testid="text-departures-summary">
+            {cardSummaryLine(counts)}
+          </p>
+          <div className="mb-2 flex flex-wrap gap-4">
+            <HomeLink href={TICKETS_PATH} testId="link-departures-tickets">
+              Open the tickets list
+            </HomeLink>
+            <HomeLink href={BALANCES_PATH} testId="link-departures-balances">
+              Open the balances list
+            </HomeLink>
+          </div>
+          {shown.length === 0 ? (
+            <CardNote testId="text-departures-empty">{rows.length === 0 ? "No departures in the next 7 days." : "Nothing needs action."}</CardNote>
+          ) : (
+            <div>
+              {shown.map((row) => (
+                <DepartureCardRow key={row.bookingId} row={row} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </HomeCard>
   );
 }

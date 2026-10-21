@@ -91,7 +91,7 @@ export function CreatePostMenu({ open, onOpenChange, onGenerate }: CreatePostMen
           setQuoteDialogOpen(false);
           // Don't open the generator: the agent generates from the new card when ready.
           queryClient.invalidateQueries({ queryKey: quoteKeys.freeQuotes() });
-          toast({ title: "Social post added", description: "Click Generate post on its card when you're ready." });
+          toast({ title: "Social post added", description: "It shows under Drafts. Click Generate post on its card when you're ready." });
         }}
       />
     </>

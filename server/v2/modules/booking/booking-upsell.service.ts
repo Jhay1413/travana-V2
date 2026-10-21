@@ -1,5 +1,6 @@
 import { bookingUpsellRepository } from "./booking-upsell.repository";
 import { bookingRepository } from "./booking.repository";
+import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { UPSELL_TYPES, type UpsellBody } from "./booking-upsell.validator";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
@@ -37,6 +38,7 @@ export const bookingUpsellService = {
   async create(bookingId: string, body: UpsellBody, scope: Scope) {
     await assertBookingWritable(bookingId, scope);
     assertValidType(body.upsell_type);
+    if (body.tour_operator_id) await tourOperatorLinkService.assertOperatorsLinked(scope, [body.tour_operator_id]);
 
     const data: InsertBookingUpsell = {
       booking_id: bookingId,
@@ -61,6 +63,10 @@ export const bookingUpsellService = {
     await assertBookingWritable(existing.booking_id, scope);
 
     if (body.upsell_type !== undefined) assertValidType(body.upsell_type);
+    // Only a CHANGED operator must be in the org's list; an old upsell may keep a removed one.
+    if (body.tour_operator_id && body.tour_operator_id !== existing.tour_operator_id) {
+      await tourOperatorLinkService.assertOperatorsLinked(scope, [body.tour_operator_id]);
+    }
 
     // Only patch the fields actually provided (keeps `added_at` immutable unless
     // explicitly corrected, so the recognition month doesn't drift on edits).

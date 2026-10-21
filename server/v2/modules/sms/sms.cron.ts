@@ -53,6 +53,7 @@ export async function runDaysBeforeDepartureSweep(): Promise<{
         if (!row.clientId) continue;
         const result = await fireAutoTriggerForClient({
           clientId: row.clientId,
+          bookingId: row.bookingId,
           autoTrigger: "days_before_departure",
           triggerSource: `cron.days_before_departure.${n}`,
           dedupeSince,

@@ -4,8 +4,13 @@ vi.mock("../quote/quote-public.repository", () => ({
   quotePublicRepository: { getOwnerByQuoteId: vi.fn() },
 }));
 
+vi.mock("./quote-share.repository", () => ({
+  quoteShareRepository: { updateSentInfo: vi.fn() },
+}));
+
 import { quoteShareService } from "./quote-share.service";
 import { quotePublicRepository } from "../quote/quote-public.repository";
+import { quoteShareRepository } from "./quote-share.repository";
 import type { Scope } from "../../utils/scope";
 
 const scope = (over: Partial<Scope>): Scope => ({
@@ -53,6 +58,25 @@ describe("quoteShareService.verifyAccess", () => {
     }
   });
 
+  it("lets a social_media_manager READ deals it does not own but not write to them", async () => {
+    const smm = scope({ orgRole: "social_media_manager", orgRoles: ["social_media_manager"] });
+    await expect(quoteShareService.verifyAccess("q1", "u1", smm, "read")).resolves.toBeUndefined();
+    await expect(quoteShareService.verifyAccess("q1", "u1", smm, "write")).rejects.toMatchObject({ statusCode: 403 });
+    await expect(quoteShareService.verifyAccess("q1", "u1", smm)).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it("still 404s a social_media_manager read of another org's quote", async () => {
+    vi.mocked(quotePublicRepository.getOwnerByQuoteId).mockResolvedValue({ userId: "owner", orgId: "other" });
+    const smm = scope({ orgRole: "social_media_manager", orgRoles: ["social_media_manager"] });
+    await expect(quoteShareService.verifyAccess("q1", "u1", smm, "read")).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("keeps non-deal roles such as referral_agent out of reads too", async () => {
+    await expect(
+      quoteShareService.verifyAccess("q1", "u1", scope({ orgRole: "referral_agent", orgRoles: ["referral_agent"] }), "read"),
+    ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
   it("403s a same-org user whose roles do not work deals and who is not the owner", async () => {
     await expect(
       quoteShareService.verifyAccess("q1", "u1", scope({ orgRole: "referral_agent", orgRoles: ["referral_agent"] })),
@@ -64,5 +88,12 @@ describe("quoteShareService.verifyAccess", () => {
     await expect(
       quoteShareService.verifyAccess("q1", "u1", scope({ orgRole: "social_media_manager", orgRoles: ["social_media_manager"] })),
     ).rejects.toMatchObject({ statusCode: 403 });
+  });
+});
+
+describe("quoteShareService.updateSentInfo", () => {
+  it("records the channel through the quote-share repository", async () => {
+    await quoteShareService.updateSentInfo("q1", "sms");
+    expect(quoteShareRepository.updateSentInfo).toHaveBeenCalledWith("q1", "sms");
   });
 });

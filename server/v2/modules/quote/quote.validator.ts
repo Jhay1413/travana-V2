@@ -74,3 +74,11 @@ export const freeQuoteStatusCountsValidator = z.object({
     })
     .passthrough(),
 });
+
+// PATCH /:id/accepted — manual "customer accepted" mark (true) or undo (false).
+export const setAcceptedValidator = z.object({
+  params: z.object({ id: z.string().uuid("Invalid quote id") }),
+  body: z
+    .object({ accepted: z.boolean({ required_error: "accepted is required", invalid_type_error: "accepted must be a boolean" }) })
+    .strict(),
+});

@@ -14,6 +14,7 @@ import {
   Forward,
   Gauge,
   Globe,
+  Handshake,
   HeartHandshake,
   Hotel,
   Inbox,
@@ -93,6 +94,7 @@ const AGENT_NAV: NavConfig = [
       { path: "/chat", label: "Live Chat", icon: MessageCircleMore },
       { path: "/opportunities", label: "Opportunities", icon: Target },
       { path: "/destination-guru", label: "Destination Guru", icon: TreePalm },
+      { path: "/agency/tour-operators", label: "Tour Operators", icon: Handshake },
       { path: "/tools", label: "Tools", icon: Wrench },
     ],
   },
@@ -112,6 +114,8 @@ const BRANCH_MANAGER_NAV: NavConfig = [
       { path: "/destination-guru", label: "Destination Guru", icon: TreePalm },
       { path: "/opportunities", label: "Opportunities", icon: Target },
       { path: "/branch/targets", label: "Targets", icon: Target },
+      { path: "/agency/tour-operators", label: "Tour Operators", icon: Handshake },
+      { path: "/agency/departures", label: "Departures", icon: Plane },
       { path: "/hr", label: "HR", icon: HeartHandshake },
       { path: "/hr-v2", label: "HR V2", icon: HeartHandshake },
       { path: "/tools", label: "Tools", icon: Wrench },
@@ -122,8 +126,9 @@ const BRANCH_MANAGER_NAV: NavConfig = [
 // Platform-wide reference data (global catalog shared across all agencies),
 // grouped under one "Data Management" dropdown. Each link renders the generic
 // lookup CRUD page (/settings/:tableSlug). Shared by platform_admin and
-// org_admin navs so both stay in sync.
-const DATA_MANAGEMENT_SECTION: NavSection = {
+// org_admin navs so both stay in sync, except the tour operator catalogue,
+// which only platform admins curate (org admins use /agency/tour-operators).
+const PLATFORM_DATA_MANAGEMENT_SECTION: NavSection = {
   id: "data-management",
   label: "Data Management",
   icon: Database,
@@ -186,6 +191,16 @@ const DATA_MANAGEMENT_SECTION: NavSection = {
   ],
 };
 
+function withoutPath(entry: NavItem | NavSection, path: string): Array<NavItem | NavSection> {
+  if (isNavItem(entry)) return entry.path === path ? [] : [entry];
+  return [{ ...entry, items: entry.items.flatMap((child) => withoutPath(child, path)) }];
+}
+
+const DATA_MANAGEMENT_SECTION: NavSection = {
+  ...PLATFORM_DATA_MANAGEMENT_SECTION,
+  items: PLATFORM_DATA_MANAGEMENT_SECTION.items.flatMap((entry) => withoutPath(entry, "/settings/tour-operators")),
+};
+
 const ORG_ADMIN_NAV: NavConfig = [
   {
     id: "overview",
@@ -213,6 +228,8 @@ const ORG_ADMIN_NAV: NavConfig = [
     icon: TrendingUp,
     items: [
       { path: "/agency/targets", label: "Targets", icon: Target },
+      { path: "/agency/tour-operators", label: "Tour Operators", icon: Handshake },
+      { path: "/agency/departures", label: "Departures", icon: Plane },
       { path: "/agency/forwards", label: "Forwards", icon: Forward },
       { path: "/agency/leaderboard", label: "Leader Board", icon: Trophy },
     ],
@@ -262,7 +279,7 @@ const PLATFORM_ADMIN_NAV: NavConfig = [
       { path: "/platform-admin/audit-log", label: "Audit Log", icon: Activity },
     ],
   },
-  DATA_MANAGEMENT_SECTION,
+  PLATFORM_DATA_MANAGEMENT_SECTION,
 ];
 
 const REFERRAL_NAV: NavConfig = [

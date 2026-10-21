@@ -24,7 +24,7 @@ export const quoteShareController = {
   getViews: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
-    await quoteShareService.verifyAccess(req.params.id as string, userId, getScope(req));
+    await quoteShareService.verifyAccess(req.params.id as string, userId, getScope(req), 'read');
     const stats = await quoteShareService.getViewStats(req.params.id as string);
     res.json({ success: true, data: stats });
   }),
@@ -32,7 +32,7 @@ export const quoteShareController = {
   getCustomerActions: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
-    await quoteShareService.verifyAccess(req.params.id as string, userId, getScope(req));
+    await quoteShareService.verifyAccess(req.params.id as string, userId, getScope(req), 'read');
     const actions = await quoteShareService.getCustomerActions(req.params.id as string);
     res.json({ success: true, data: actions });
   }),

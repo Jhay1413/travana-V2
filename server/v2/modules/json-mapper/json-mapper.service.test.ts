@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { jsonMapperRepository } from "./json-mapper.repository";
 import { jsonMapperService } from "./json-mapper.service";
 import { geoInferenceAiService } from "./geo-inference.ai.service";
+import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 
 // End-to-end resolution order for the primary accommodation (the Jet2holidays
 // "Cala Nova" import): global exact lookup → resolve the JSON's own
@@ -15,7 +16,7 @@ vi.mock("./json-mapper.repository", () => ({
     findAccommodationByName: vi.fn(),
     getHierarchyFromAccommodation: vi.fn(),
     findBoardBasisByType: vi.fn(),
-    findTourOperatorByName: vi.fn(),
+    findCatalogueOperatorByName: vi.fn(),
     findAirportByCodeOrName: vi.fn(),
     findRoomTypeByName: vi.fn(),
     findLodgeByCode: vi.fn(),
@@ -27,7 +28,7 @@ vi.mock("./json-mapper.repository", () => ({
     createResort: vi.fn(),
     createAccommodation: vi.fn(),
     createBoardBasis: vi.fn(),
-    createTourOperator: vi.fn(),
+    createCatalogueOperator: vi.fn(),
     createRoomType: vi.fn(),
     createAirport: vi.fn(),
     createPark: vi.fn(),
@@ -35,6 +36,9 @@ vi.mock("./json-mapper.repository", () => ({
   },
 }));
 vi.mock("../../settings/cruise/cruise.repository", () => ({ cruiseSettingsRepository: {} }));
+vi.mock("../tour-operator/tour-operator-link.service", () => ({
+  tourOperatorLinkService: { ensureLinkForOrg: vi.fn(), isOperatorLinked: vi.fn(), findLinkedOperatorByName: vi.fn() },
+}));
 // No live LLM: the inference service is mocked, default "no inference".
 vi.mock("./geo-inference.ai.service", () => ({ geoInferenceAiService: { inferHierarchy: vi.fn() } }));
 
@@ -223,5 +227,115 @@ describe("mapJsonToIds — AI hierarchy inference", () => {
 
     expect(infer).toHaveBeenCalledTimes(1);
     expect(repo.createCountry).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("mapJsonToIds - tour operator (global catalogue + org link)", () => {
+  const ensureLink = tourOperatorLinkService.ensureLinkForOrg as unknown as Mock;
+  const isLinked = tourOperatorLinkService.isOperatorLinked as unknown as Mock;
+  const findOwn = tourOperatorLinkService.findLinkedOperatorByName as unknown as Mock;
+
+  beforeEach(() => {
+    repo.findCatalogueOperatorByName.mockReset();
+    repo.createCatalogueOperator.mockReset();
+    ensureLink.mockReset();
+    isLinked.mockReset();
+    findOwn.mockReset();
+    findOwn.mockResolvedValue(null);
+  });
+
+  it("resolves among the agency's OWN operators first: 'Jet2' picks the linked 'Jet2 Holidays', not the catalogue's 'Jet2 City'", async () => {
+    findOwn.mockResolvedValue({ id: "own1", name: "Jet2 Holidays" });
+    repo.findCatalogueOperatorByName.mockResolvedValue({ id: "cat9", name: "Jet2 City" });
+    const result = await jsonMapperService.mapJsonToIds({ tourOperator: "Jet2" }, "org-1", "u1", true);
+    expect(result.tourOperatorId).toBe("own1");
+    expect(repo.findCatalogueOperatorByName).not.toHaveBeenCalled();
+    expect(ensureLink).not.toHaveBeenCalled();
+  });
+
+  it("a writer's new link carries the seed commission for a seed operator, NULL otherwise", async () => {
+    repo.findCatalogueOperatorByName.mockResolvedValue({ id: "op1", name: "Jet2holidays" });
+    ensureLink.mockResolvedValue({ created: true, linkId: "l1" });
+    await jsonMapperService.mapJsonToIds({ tourOperator: "Jet2holidays" }, "org-1", "u1", true);
+    expect(ensureLink).toHaveBeenLastCalledWith("org-1", "op1", "u1", "12.50");
+
+    repo.findCatalogueOperatorByName.mockResolvedValue({ id: "op2", name: "Totally Unknown Tours" });
+    await jsonMapperService.mapJsonToIds({ tourOperator: "Totally Unknown Tours" }, "org-1", "u1", true);
+    expect(ensureLink).toHaveBeenLastCalledWith("org-1", "op2", "u1", null);
+  });
+
+  it("a non-writer never creates a catalogue row or a link: unknown name gives a warning and no id", async () => {
+    repo.findCatalogueOperatorByName.mockResolvedValue(null);
+    const result = await jsonMapperService.mapJsonToIds({ tourOperator: "Brand New Tours" }, "org-1", "u1", false);
+    expect(result.tourOperatorId).toBe("");
+    expect(result.warnings).toContain("\"Brand New Tours\" isn't in your agency's tour operators. Ask an admin to add it on Tour Operators.");
+    expect(repo.createCatalogueOperator).not.toHaveBeenCalled();
+    expect(ensureLink).not.toHaveBeenCalled();
+  });
+
+  it("a non-writer gets the id only when the org already has the link", async () => {
+    repo.findCatalogueOperatorByName.mockResolvedValue({ id: "op1", name: "TUI" });
+    isLinked.mockResolvedValue(true);
+    expect((await jsonMapperService.mapJsonToIds({ tourOperator: "TUI" }, "org-1", "u1", false)).tourOperatorId).toBe("op1");
+
+    isLinked.mockResolvedValue(false);
+    const result = await jsonMapperService.mapJsonToIds({ tourOperator: "TUI" }, "org-1", "u1", false);
+    expect(result.tourOperatorId).toBe("");
+    expect(result.warnings).toContain("\"TUI\" isn't in your agency's tour operators. Ask an admin to add it on Tour Operators.");
+    expect(ensureLink).not.toHaveBeenCalled();
+  });
+
+  it("resolves the name in the catalogue and links it to the org without a warning when the link exists", async () => {
+    repo.findCatalogueOperatorByName.mockResolvedValue({ id: "op1", name: "Jet2holidays" });
+    ensureLink.mockResolvedValue({ created: false, linkId: "l1" });
+
+    const result = await jsonMapperService.mapJsonToIds({ tourOperator: "Jet2holidays" }, "org-1", "u1", true);
+
+    expect(result.tourOperatorId).toBe("op1");
+    expect(repo.createCatalogueOperator).not.toHaveBeenCalled();
+    expect(ensureLink).toHaveBeenCalledWith("org-1", "op1", "u1", "12.50");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("warns when it had to add the operator to the agency's list", async () => {
+    repo.findCatalogueOperatorByName.mockResolvedValue({ id: "op1", name: "Jet2holidays" });
+    ensureLink.mockResolvedValue({ created: true, linkId: "l1" });
+
+    const result = await jsonMapperService.mapJsonToIds({ tourOperator: "jet2" }, "org-1", "u1", true);
+
+    expect(result.warnings).toContain('Added "Jet2holidays" to your tour operators');
+  });
+
+  it("creates the catalogue row when the name is unknown, then links it", async () => {
+    repo.findCatalogueOperatorByName.mockResolvedValue(null);
+    repo.createCatalogueOperator.mockResolvedValue({ id: "op9", name: "Brand New Tours" });
+    ensureLink.mockResolvedValue({ created: true, linkId: "l9" });
+
+    const result = await jsonMapperService.mapJsonToIds({ tourOperator: "Brand New Tours" }, "org-1", "u1", true);
+
+    expect(repo.createCatalogueOperator).toHaveBeenCalledWith("Brand New Tours", "u1");
+    expect(result.tourOperatorId).toBe("op9");
+    expect(result.warnings).toContain('Created new tour operator: "Brand New Tours"');
+    expect(ensureLink).toHaveBeenCalledWith("org-1", "op9", "u1", null);
+  });
+
+  it("makes no link when there is no org", async () => {
+    repo.findCatalogueOperatorByName.mockResolvedValue({ id: "op1", name: "TUI" });
+    const result = await jsonMapperService.mapJsonToIds({ tourOperator: "TUI" }, undefined, undefined, true);
+    expect(result.tourOperatorId).toBe("op1");
+    expect(ensureLink).not.toHaveBeenCalled();
+  });
+
+  it("resolves each distinct name once even when line items repeat it", async () => {
+    repo.findCatalogueOperatorByName.mockResolvedValue({ id: "op1", name: "TUI" });
+    ensureLink.mockResolvedValue({ created: false, linkId: "l1" });
+    await jsonMapperService.mapJsonToIds(
+      { tourOperator: "TUI", transfers: [{ tourOperator: "tui" }, { tourOperator: "TUI " }] },
+      "org-1",
+      "u1",
+      true,
+    );
+    expect(repo.findCatalogueOperatorByName).toHaveBeenCalledTimes(1);
+    expect(ensureLink).toHaveBeenCalledTimes(1);
   });
 });

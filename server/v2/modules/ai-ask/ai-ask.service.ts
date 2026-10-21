@@ -3,6 +3,7 @@ import { clientRepository } from '../client/client.repository';
 import { AppError } from '../../utils/error-handler';
 import { getOpenAI } from '../../utils/ai-model';
 import { usageService } from '../usage/usage.service';
+import { sanitizeRichText } from '../../utils/sanitize-rich-text';
 import type { Note } from '@shared/schema';
 import type { Scope } from '../../utils/scope';
 
@@ -59,7 +60,7 @@ export const aiAskService = {
     if (!client) throw new AppError('Client not found', 404);
 
     const description = `Ask AI: ${question.trim().slice(0, 120)}`;
-    const content = `Q: ${question.trim()}\n\nA: ${answer.trim()}`;
+    const content = sanitizeRichText(`Q: ${question.trim()}\n\nA: ${answer.trim()}`);
     return noteRepository.create({ description, content, client_id: clientId, agent_id: agentId || null });
   },
 };

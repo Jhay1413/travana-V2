@@ -18,11 +18,11 @@ export function derivePostStatus(input: PostStatusInput, now: Date = new Date())
 
 export const STATUS_META: Record<SocialPostStatus, { label: string; plural: string; badgeClass: string }> = {
   not_generated: {
-    label: "Not generated",
-    plural: "Not generated",
+    label: "Not scheduled",
+    plural: "Not scheduled",
     badgeClass: "bg-status-draft-bg text-status-draft-fg",
   },
-  draft: { label: "Draft", plural: "Drafts", badgeClass: "bg-status-draft-bg text-status-draft-fg" },
+  draft: { label: "Not scheduled", plural: "Not scheduled", badgeClass: "bg-status-draft-bg text-status-draft-fg" },
   scheduled: {
     label: "Scheduled",
     plural: "Scheduled",

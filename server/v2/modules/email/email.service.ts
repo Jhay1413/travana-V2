@@ -4,6 +4,7 @@ import { simpleParser } from "mailparser";
 import { emailRepository } from "./email.repository";
 import { encrypt, decrypt } from "../../utils/encryption";
 import { AppError } from "../../utils/error-handler";
+import { sanitizeEmailHtml } from "../../utils/sanitize-email-html";
 import type { EmailAccount, EmailAttachment, EmailMessage, EmailMessageFull, MailboxFolder, SendEmailPayload } from "./email.types";
 
 function buildImapClient(account: EmailAccount): ImapFlow {
@@ -219,7 +220,7 @@ export const emailService = {
           date: envelope.date ?? null,
           messageId: envelope.messageId ?? null,
           flags: Array.from(msg.flags ?? []) as unknown as Set<string>,
-          html: parsed.html || null,
+          html: parsed.html ? sanitizeEmailHtml(parsed.html) : null,
           text: parsed.text || null,
           attachments,
         };

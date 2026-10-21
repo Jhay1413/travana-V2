@@ -1,6 +1,7 @@
 import { db } from '../../config/database';
 import { country, destination, resorts, accomodation_list, board_basis, tour_operator, airport, room_type, lodges, park } from '@shared/schema';
-import { ilike, and, eq, isNull, type SQL } from 'drizzle-orm';
+import { ilike, and, eq, sql, type SQL } from 'drizzle-orm';
+import { AppError } from '../../utils/error-handler';
 
 // ILIKE treats %, _ and \ as pattern syntax; escape them so a name like
 // "100% Beach Resort" is matched literally.
@@ -84,39 +85,26 @@ export const jsonMapperRepository = {
     return exactThenContains((p) => db.select().from(board_basis).where(ilike(board_basis.type, p)).limit(1), typeName);
   },
 
-  // Tour operators are the only lookup here that is ORG-SCOPED (every other
-  // table — board basis, room type, airport, country/destination/resort — is
-  // global). The quote form's dropdown lists ONLY rows whose org_id is the
-  // caller's, so a match from another org, or a global org_id IS NULL seed,
-  // resolves to an id the form cannot render: the field is set but shows blank.
-  // That is exactly what happened — an import resolved "Jet2holidays" to a row
-  // the agency didn't own, so the operator box came back empty.
-  //
-  // Hence: search WITHIN the org only. `findGlobalTourOperatorByName` handles
-  // the seed rows separately, because those must be copied into the org rather
-  // than referenced.
-  async findTourOperatorByName(name: string, orgId?: string | null) {
+  // Tour operators are a platform-wide catalogue (not org-owned), so the lookup
+  // is global: exact name first, then contains. The contains fallback prefers
+  // a contains-match counts only when it is UNIQUE (ambiguous text resolves to nothing).
+  // The caller then makes sure the org has a link to the operator it gets back.
+  async findCatalogueOperatorByName(name: string) {
     if (!name) return null;
-    return exactThenContains(
-      (p) =>
-        db
-          .select()
-          .from(tour_operator)
-          .where(orgId ? and(ilike(tour_operator.name, p), eq(tour_operator.org_id, orgId))! : ilike(tour_operator.name, p))
-          .limit(1),
-      name,
-    );
-  },
-
-  // A platform seed (org_id IS NULL). Matched so its commission percentage can
-  // be carried into the org's own copy — creating a bare row instead would
-  // silently lose the commission the quote form calculates from.
-  async findGlobalTourOperatorByName(name: string) {
-    if (!name) return null;
-    return exactThenContains(
-      (p) => db.select().from(tour_operator).where(and(ilike(tour_operator.name, p), isNull(tour_operator.org_id))!).limit(1),
-      name,
-    );
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const [exact] = await db
+      .select()
+      .from(tour_operator)
+      .where(ilike(tour_operator.name, escapeLike(trimmed)))
+      .limit(1);
+    if (exact) return exact;
+    const contains = await db
+      .select()
+      .from(tour_operator)
+      .where(ilike(tour_operator.name, `%${escapeLike(trimmed)}%`))
+      .limit(2);
+    return contains.length === 1 ? contains[0] : null;
   },
 
   async findAirportByCodeOrName(codeOrName: string) {
@@ -179,15 +167,23 @@ export const jsonMapperRepository = {
     return row;
   },
 
-  // Stamped with the caller's org, so the row the mapper hands back is one the
-  // org-scoped dropdown will actually list. Without org_id these landed as
-  // orphans owned by nobody and invisible everywhere.
-  async createTourOperator(name: string, orgId?: string | null, commissionPercentage?: string | null) {
+  // Creates a catalogue operator (identity only). Another request may create the
+  // same name first (unique index on lower(name)), so a conflict re-selects it.
+  async createCatalogueOperator(name: string, createdBy?: string | null) {
+    const trimmed = name.trim();
     const [row] = await db
       .insert(tour_operator)
-      .values({ name, org_id: orgId ?? null, ...(commissionPercentage != null ? { commission_percentage: commissionPercentage } : {}) })
+      .values({ name: trimmed, created_by: createdBy ?? null })
+      .onConflictDoNothing()
       .returning();
-    return row;
+    if (row) return row;
+    const [existing] = await db
+      .select()
+      .from(tour_operator)
+      .where(sql`lower(${tour_operator.name}) = ${trimmed.toLowerCase()}`)
+      .limit(1);
+    if (!existing) throw new AppError('Could not save the tour operator. Please try again.', 500);
+    return existing;
   },
 
   async createRoomType(name: string) {

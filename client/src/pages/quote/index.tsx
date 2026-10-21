@@ -30,6 +30,7 @@ import { QuoteEngagement } from "@/features/quote/components/QuoteEngagement";
 import { QuoteBookingReferences } from "@/features/quote/components/QuoteBookingReferences";
 import { QuoteCostingsCard } from "@/features/quote/components/QuoteCostingsCard";
 import { QuoteShareDialog } from "@/features/quote/components/QuoteShareDialog";
+import { useMarkQuoteSent } from "@/features/quote/api/use-quote-share-queries";
 import { QuoteConvertDialog } from "@/features/quote/components/QuoteConvertDialog";
 import { QuoteDeleteDialog } from "@/features/quote/components/QuoteDeleteDialog";
 import { QuoteExpiryDialog } from "@/features/quote/components/QuoteExpiryDialog";
@@ -96,6 +97,7 @@ export default function QuotePage() {
     shareToken, shareCopied, shareLoading,
     openShare, copyShareLink,
   } = useQuoteShare(quoteId);
+  const markQuoteSent = useMarkQuoteSent();
   const {
     showDeleteDialog, setShowDeleteDialog,
     deleteReason, setDeleteReason,
@@ -157,7 +159,7 @@ export default function QuotePage() {
 
   const ticketClientId = clientId || (quoteData as any)?.client_id || "";
   const { data: usersData } = useUsers();
-  const ticketCreate = useClientTicketCreate(ticketClientId, currentUser?.id);
+  const ticketCreate = useClientTicketCreate(ticketClientId, currentUser?.id, { transactionId: quoteData?.transaction_id ?? null });
 
   const pageLabel = "Quote";
 
@@ -507,6 +509,7 @@ export default function QuotePage() {
         onCopy={copyShareLink}
         clientId={clientId || undefined}
         quoteId={quoteId}
+        onSent={(via) => markQuoteSent.mutate({ quoteId, sentVia: via })}
       />
 
       <QuoteConvertDialog

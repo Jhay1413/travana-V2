@@ -5,6 +5,7 @@ import AgencyBranchDetailPage from "./branch-detail";
 import AgencyHomeworkersPage from "./homeworkers";
 import AgencyTeamPage from "./team";
 import AgencyTeamInvitePage from "./team-invite";
+import AgencyDeparturesPage from "./departures";
 import AgencyMessagingPage from "./messaging";
 import AgencyBillingPage from "./billing";
 import AgencyUsagePage from "./usage";
@@ -27,6 +28,8 @@ export default function AgencyPage() {
       <Route path="/agency/branches" component={AgencyBranchesPage} />
       <Route path="/agency/branches/:branchId" component={AgencyBranchDetailPage} />
       <Route path="/agency/homeworkers" component={AgencyHomeworkersPage} />
+      <Route path="/agency/departures" component={AgencyDeparturesPage} />
+      <Route path="/agency/departures/balances" component={AgencyDeparturesPage} />
       <Route path="/agency/team/invite" component={AgencyTeamInvitePage} />
       <Route path="/agency/team" component={AgencyTeamPage} />
       <Route path="/agency/messaging" component={AgencyMessagingPage} />

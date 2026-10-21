@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { quoteApi } from "@/api";
 import axiosClient from "@/api/client/axios-client";
+import { QUOTE_ENDPOINTS } from "@/api/endpoints";
 import { quoteKeys, transactionKeys, dashboardKeys } from "@/hooks/queries";
 import type { CreateQuoteData } from "@/features/quote/types";
 
@@ -116,6 +117,20 @@ export function useUpdateQuoteTags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: quoteKeys.all });
       queryClient.invalidateQueries({ queryKey: ["tags"] });
+    },
+  });
+}
+
+/** Manual "customer accepted" mark (true) or undo (false) on a quote. */
+export function useMarkQuoteAccepted() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ quoteId, accepted }: { quoteId: string; accepted: boolean }) => {
+      await axiosClient.patch(QUOTE_ENDPOINTS.accepted(quoteId), { accepted });
+    },
+    onSuccess: (_data, { quoteId }) => {
+      queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
+      queryClient.invalidateQueries({ queryKey: transactionKeys.all });
     },
   });
 }

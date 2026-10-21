@@ -204,7 +204,7 @@ export function ListPane(props: ListPaneProps) {
                 onClick={() => props.onChipChange(c.value)}
                 aria-pressed={active}
                 className={cn(
-                  "rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition",
+                  "rounded-full border px-2.5 py-1 text-[11.5px] font-semibold transition",
                   active
                     ? "border-[#1F2937] bg-[#1F2937] text-white"
                     : "border-social-border bg-card text-social-muted hover:bg-muted/40",

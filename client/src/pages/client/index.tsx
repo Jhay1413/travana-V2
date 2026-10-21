@@ -26,10 +26,7 @@ import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 import { transformNeonClientData } from "@/features/client/components/client-types";
 import { MergeClientDialog } from "@/features/client/components/modals/MergeClientDialog";
 import { UploadFileDialog } from "@/features/client/components/modals/UploadFileDialog";
-import { AllHolidaysPanel } from "@/features/client/components/all-holidays-panel";
-import { HolidayDetailsPanel } from "@/features/client/components/holiday-details-panel";
-import { HolidayDetailView } from "@/features/client/components/holiday-detail-view";
-import { HolidayHeaderActions } from "@/features/client/components/holiday-header-actions";
+import { HolidayDetailPage } from "@/features/client/components/holiday/holiday-detail-page";
 import { useQuoteExpiry } from "@/features/quote/components/hooks";
 import { QuoteExpiryDialog } from "@/features/quote/components/QuoteExpiryDialog";
 import { ClientPageHeader } from "@/features/client/components/page/client-page-header";
@@ -45,6 +42,7 @@ import { ShareClientModal } from "@/features/client/components/page/modals/share
 import { computeClientStats } from "@/features/client/lib/client-stats";
 import { isClientReadOnly } from "@/features/client/lib/client-access";
 import { buildDealLabels, buildTaskHolidays } from "@/features/client/lib/deal-labels";
+import { resolveSelectionTransactionId } from "@/features/client/lib/holiday-transaction";
 import type { ClientCreateKind, HolidaySelection } from "@/features/client/types";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/features/booking/components/booking-create-dialog";
@@ -105,7 +103,9 @@ export default function ClientPage() {
   const editForm = useClientEditForm(clientId, clientData);
   const fileActions = useClientFiles(clientId);
   const taskCreate = useClientTaskCreate();
-  const ticketCreate = useClientTicketCreate(clientId, currentUser?.id);
+  const ticketCreate = useClientTicketCreate(clientId, currentUser?.id, {
+    transactionId: resolveSelectionTransactionId(holidaySelection, transactionsData ?? []),
+  });
   const enquiryActions = useClientEnquiryActions(clientId, currentUser?.id, () => {
     setConvertingFromEnquiryTxnId(null);
     setConvertingEnquiryId(null);
@@ -148,6 +148,11 @@ export default function ClientPage() {
     }
     setHolidaySelection(null);
   }, [clientId, search]);
+
+  // The URL is the single source of truth for the open holiday; the parse effect above turns it into state.
+  function openHoliday(next: HolidaySelection) {
+    navigate(`/clients/${clientId}?holiday=${next.type}:${next.id}`);
+  }
 
   async function handleConvertEnquiryToQuote(enq: EnquiryTable) {
     if (!enq.transaction_id) {
@@ -327,7 +332,7 @@ export default function ClientPage() {
                 onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
                 onUploadFile={() => fileActions.setShowUploadFileModal(true)}
                 onDeleteFile={fileActions.deleteFile}
-                onOpenDeal={setHolidaySelection}
+                onOpenDeal={openHoliday}
                 onOpenTicket={(ticketId) => navigate(`/tickets/${ticketId}`)}
                 onViewAllTasks={() => navigate("/tasks")}
               />
@@ -347,85 +352,35 @@ export default function ClientPage() {
         state={liveDealsState}
         isLoading={isLoadingTransactions}
         readOnly={readOnly}
-        onSelect={setHolidaySelection}
+        onSelect={openHoliday}
         onNewDeal={handleCreate}
       />
     </section>
   );
 
-  const detailLayout = (
-      <section
-        className="text-compact -m-4 grid h-[calc(100vh-3.5rem)] grid-cols-1 gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[250px_1fr_240px] xl:grid-cols-[300px_1fr_300px] 3xl:grid-cols-[380px_1fr_380px]"
-        data-testid="section-client-profile"
-      >
-        <AllHolidaysPanel
-          className="hidden lg:flex"
-          enquiries={enquiries}
-          quotes={quotes}
-          bookings={bookings}
-          selection={holidaySelection}
-          onSelect={setHolidaySelection}
-          onCreate={readOnly ? undefined : handleCreate}
-          isLoadingTransactions={isLoadingTransactions}
-        />
-
-        <div className="flex min-h-0 min-w-0 flex-col">
-          {/* Center header — the client's name, aligned with the side panels'
-              76px headers (All Holidays / Details), per the design. When a
-              holiday is selected, the phone number becomes a pill next to the
-              name and the deal-actions cluster (agent / pin / link / share /
-              actions) takes the right side instead of the muted address line. */}
-          <div className="flex h-[76px] shrink-0 items-center justify-between gap-3 border-b border-black/10 bg-white px-4 3xl:px-6 dark:border-white/10 dark:bg-white/[0.04]">
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-2">
-                <h2 className="truncate text-sm font-semibold 3xl:text-base" data-testid="client-center-header">
-                  {client.name}
-                </h2>
-                {client.phone && (
-                  <span className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
-                    {client.phone}
-                  </span>
-                )}
-              </div>
-            </div>
-            {holidaySelection && (
-              <HolidayHeaderActions
-                selection={holidaySelection}
-                clientId={clientId}
-                clientName={client.name}
-                onDeleted={() => setHolidaySelection(null)}
-                onOpenExpiryDialog={quoteExpiry.openExpiryDialog}
-                readOnly={readOnly}
-              />
-            )}
-          </div>
-          <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3 md:px-6 md:pb-6 md:pt-4">
-        {holidaySelection && (
-          <HolidayDetailView
-            clientId={clientId}
-            clientName={client.name}
-            selection={holidaySelection}
-            onBack={() => {
-              setHolidaySelection(null);
-              // A deal may have been created or converted while it was open.
-              queryClient.invalidateQueries({ queryKey: transactionKeys.list({ clientId }) });
-            }}
-            onOpenExpiryDialog={quoteExpiry.openExpiryDialog}
-            readOnly={readOnly}
-          />
-        )}
-          </div>
-        </div>
-
-        <HolidayDetailsPanel
-          className="hidden lg:flex"
-          selection={holidaySelection}
-          enquiries={enquiries}
-          quotes={quotes}
-          bookings={bookings}
-        />
-      </section>
-  );
+  const detailLayout = holidaySelection ? (
+    <HolidayDetailPage
+      clientId={clientId}
+      clientName={client.name}
+      clientPhone={client.phone}
+      clientBadge={clientData?.badge}
+      selection={holidaySelection}
+      enquiries={enquiries}
+      quotes={quotes}
+      bookings={bookings}
+      readOnly={readOnly}
+      isLoadingTransactions={isLoadingTransactions}
+      onSelect={openHoliday}
+      onCreate={readOnly ? undefined : handleCreate}
+      onOpenExpiryDialog={quoteExpiry.openExpiryDialog}
+      onDeleted={() => {
+        // A deal may have been created, converted or deleted while it was open.
+        queryClient.invalidateQueries({ queryKey: transactionKeys.list({ clientId }) });
+        setHolidaySelection(null);
+        navigate(`/clients/${clientId}`);
+      }}
+    />
+  ) : null;
 
   return (
     <>
@@ -459,7 +414,7 @@ export default function ClientPage() {
             // (the transactions API stops returning `enquiry` once it leaves
             // on_enquiry) — select the new quote instead of leaving the
             // selection pointing at something no longer in the list.
-            setHolidaySelection({ type: "quote", id: newQuoteId });
+            openHoliday({ type: "quote", id: newQuoteId });
           }
         }}
         initialValues={convertingEnquiryInitialValues}

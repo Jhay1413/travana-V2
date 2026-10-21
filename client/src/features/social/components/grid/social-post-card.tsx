@@ -56,6 +56,7 @@ export function SocialPostCard(props: SocialPostCardProps) {
   const viewQuoteHref = `/social-posts/quotes/${quote.id}${boardSearch ? `?from=${encodeURIComponent(boardSearch)}` : ""}`;
   const status = derivePostStatus(quote);
   const StatusIcon = STATUS_ICONS[status];
+  const penLabel = status === "posted" ? "Post again" : status === "not_generated" ? "Generate post" : "Edit post";
   const operator = quote.main_tour_operator_name;
 
   // Optimistic: flip locally, roll back if the request fails.
@@ -122,20 +123,19 @@ export function SocialPostCard(props: SocialPostCardProps) {
                 View quote
               </Link>
             </Button>
-            {status !== "not_generated" && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                className="h-9 w-9 shrink-0 rounded-[10px] border-social-border bg-card text-social-muted"
-                aria-label={status === "posted" ? "Post again" : "Edit post"}
-                title={status === "posted" ? "Post again" : "Edit post"}
-                onClick={() => props.onEdit(quote)}
-                data-testid={`button-edit-post-${quote.id}`}
-              >
-                <Pencil className="h-[18px] w-[18px]" />
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 shrink-0 rounded-[10px] border-social-border bg-card text-social-muted"
+              aria-label={penLabel}
+              title={penLabel}
+              disabled={isGenerating}
+              onClick={() => (status === "not_generated" ? props.onGenerate(quote) : props.onEdit(quote))}
+              data-testid={`button-edit-post-${quote.id}`}
+            >
+              <Pencil className="h-[18px] w-[18px]" />
+            </Button>
             <PostCardMenu
               quoteId={quote.id}
               status={status}

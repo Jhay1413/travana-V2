@@ -4,7 +4,7 @@ import { bookingController } from "./booking.controller";
 import { bookingImageController } from "./booking-image.controller";
 import { bookingUpsellController } from "./booking-upsell.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { addImagesValidator, reorderImagesValidator } from "./booking.validator";
+import { addImagesValidator, reorderImagesValidator, updateBookingValidator, convertQuoteToBookingValidator } from "./booking.validator";
 import { createUpsellValidator, listUpsellsValidator } from "./booking-upsell.validator";
 import { blockReadOnlyClientWrites } from '../../middlewares/auth/block-read-only-roles';
 
@@ -27,9 +27,9 @@ const upload = multer({
 router.get("/", bookingController.listBookings);
 router.get("/:id", bookingController.getBookingById);
 router.get("/transaction/:transactionId", bookingController.getBookingByTransactionId);
-router.post("/convert/:quoteId", bookingController.convertQuoteToBooking);
+router.post("/convert/:quoteId", validate(convertQuoteToBookingValidator), bookingController.convertQuoteToBooking);
 router.post("/", bookingController.createBooking);
-router.patch("/:id", bookingController.updateBooking);
+router.patch("/:id", validate(updateBookingValidator), bookingController.updateBooking);
 router.delete("/:id", bookingController.deleteBooking);
 
 router.post("/:id/flights", bookingController.addFlight);

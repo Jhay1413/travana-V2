@@ -86,7 +86,7 @@ export function LunaPopover({ conversationId, firstName, disabled, onInsert }: L
           type="button"
           variant="outline"
           disabled={disabled}
-          className="h-9 gap-1.5 rounded-lg border-[#DDD6FE] px-3 text-[13px] font-semibold text-[#6D28D9] hover:bg-[#F5F3FF] hover:text-[#6D28D9] dark:border-violet-500/40 dark:text-violet-300 dark:hover:bg-violet-500/10"
+          className="h-9 gap-1.5 rounded-[10px] border-[#DDD6FE] px-3 text-[13px] font-semibold text-[#6D28D9] hover:bg-[#F5F3FF] hover:text-[#6D28D9] dark:border-violet-500/40 dark:text-violet-300 dark:hover:bg-violet-500/10"
           title="Have Luna draft a reply. It lands in the box for you to edit and send."
           data-testid="composer-luna"
         >
@@ -121,12 +121,12 @@ export function LunaPopover({ conversationId, firstName, disabled, onInsert }: L
 
         <div className="mt-3 space-y-2" role="radiogroup" aria-label="Luna suggestions">
           {loading
-            ? [0, 1, 2].slice(0, tone ? 1 : 3).map((i) => <Skeleton key={i} className="h-16 w-full rounded-xl" />)
+            ? [0, 1, 2].slice(0, tone ? 1 : 3).map((i) => <Skeleton key={i} className="h-16 w-full rounded-[10px]" />)
             : suggestions.length === 0
             ? (
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-social-border p-3 text-[13px] text-muted-foreground">
+                <div className="flex items-center justify-between gap-3 rounded-[10px] border border-dashed border-social-border p-3 text-[13px] text-muted-foreground">
                   <span>No suggestions. Try another tone.</span>
-                  <Button type="button" size="sm" variant="outline" onClick={() => load(tone)} className="h-8 rounded-lg">
+                  <Button type="button" size="sm" variant="outline" onClick={() => load(tone)} className="h-8 rounded-[10px]">
                     Retry
                   </Button>
                 </div>
@@ -139,7 +139,7 @@ export function LunaPopover({ conversationId, firstName, disabled, onInsert }: L
                   aria-checked={selected === i}
                   onClick={() => setSelected(i)}
                   className={cn(
-                    "block w-full rounded-xl border p-3 text-left transition",
+                    "block w-full rounded-[10px] border p-3 text-left transition",
                     selected === i
                       ? "border-[#6D28D9] bg-[#F5F3FF] dark:bg-violet-500/10"
                       : "border-social-border hover:bg-muted/50",
@@ -160,7 +160,7 @@ export function LunaPopover({ conversationId, firstName, disabled, onInsert }: L
             size="sm"
             onClick={insert}
             disabled={loading || suggestions.length === 0}
-            className="h-8 shrink-0 rounded-lg bg-[#6D28D9] px-4 text-[13px] text-white hover:bg-[#5B21B6]"
+            className="h-8 shrink-0 rounded-[10px] bg-[#6D28D9] px-4 text-[13px] text-white hover:bg-[#5B21B6]"
           >
             Insert
           </Button>

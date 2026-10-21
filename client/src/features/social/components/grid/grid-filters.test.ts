@@ -1,15 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { buildCountsLine, buildGridQueryArgs, DEFAULT_GRID_FILTERS, parseGridFilters, serialiseGridFilters, whenToQuery } from "./grid-filters";
+import { buildCountsLine, isValidDateRange, buildGridQueryArgs, DEFAULT_GRID_FILTERS, matchesStatusFilter, parseGridFilters, serverSocialStatus, statusChipCount, serialiseGridFilters, whenToQuery } from "./grid-filters";
 
 describe("parseGridFilters", () => {
   it("returns defaults for an empty search", () => {
-    expect(parseGridFilters("")).toEqual({ status: "all", when: "all", tag: "any", q: "" });
+    expect(parseGridFilters("")).toEqual({ status: "all", when: "all", from: "", to: "", tag: "any", q: "" });
   });
 
   it("reads valid params and ignores unknown ones", () => {
     expect(parseGridFilters("?status=scheduled&when=week&tag=portal&q=%20spain%20")).toEqual({
       status: "scheduled",
       when: "week",
+      from: "",
+      to: "",
       tag: "portal",
       q: "spain",
     });
@@ -23,16 +25,16 @@ describe("parseGridFilters", () => {
 
 describe("serialiseGridFilters", () => {
   it("omits defaults", () => {
-    expect(serialiseGridFilters({ status: "all", when: "all", tag: "any", q: "" })).toBe("");
+    expect(serialiseGridFilters({ status: "all", when: "all", from: "", to: "", tag: "any", q: "" })).toBe("");
   });
 
   it("round-trips non-default filters", () => {
-    const filters = { status: "scheduled", when: "month", tag: "featured", q: "rome" } as const;
+    const filters = { status: "scheduled", when: "month", from: "", to: "", tag: "featured", q: "rome" } as const;
     expect(parseGridFilters(serialiseGridFilters(filters))).toEqual(filters);
   });
 
   it("writes 'when' regardless of status", () => {
-    expect(serialiseGridFilters({ status: "draft", when: "today", tag: "any", q: "" })).toBe("status=draft&when=today");
+    expect(serialiseGridFilters({ status: "draft", when: "today", from: "", to: "", tag: "any", q: "" })).toBe("status=draft&when=today");
   });
 });
 
@@ -62,7 +64,7 @@ describe("whenToQuery", () => {
 describe("buildCountsLine", () => {
   it("builds the header line", () => {
     expect(buildCountsLine({ total: 24, not_generated: 5, draft: 4, scheduled: 12, posted: 3 })).toBe(
-      "24 posts · 12 scheduled · 4 drafts · 3 posted",
+      "24 posts · 12 scheduled · 9 drafts · 3 posted",
     );
   });
 
@@ -109,7 +111,8 @@ describe("buildGridQueryArgs", () => {
     expect(args[1]).toBe(false);
     expect(args[4]).toBe("");
     expect(args[9]).toEqual(["a"]);
-    expect(args[11]).toBe("draft");
+    expect(args[11]).toBeUndefined();
+    expect(buildGridQueryArgs({ ...DEFAULT_GRID_FILTERS, status: "posted" }, [], 12, now)[11]).toBe("posted");
     expect(buildGridQueryArgs(DEFAULT_GRID_FILTERS, [], 12, now)[11]).toBeUndefined();
   });
 
@@ -117,5 +120,80 @@ describe("buildGridQueryArgs", () => {
     const args = buildGridQueryArgs({ ...DEFAULT_GRID_FILTERS, tag: "portal", q: "spain" }, [], 12, now);
     expect(args[3]).toBe("spain");
     expect(args[7]).toBe(true);
+  });
+});
+
+describe("drafts chip folds in not-generated posts", () => {
+  const counts = { total: 24, not_generated: 5, draft: 4, scheduled: 12, posted: 3 };
+
+  it("adds not_generated to the Drafts count only", () => {
+    expect(statusChipCount("draft", counts)).toBe(9);
+    expect(statusChipCount("all", counts)).toBe(24);
+    expect(statusChipCount("scheduled", counts)).toBe(12);
+    expect(statusChipCount("posted", counts)).toBe(3);
+  });
+
+  it("matches both draft and not_generated under Drafts", () => {
+    expect(matchesStatusFilter("draft", "draft")).toBe(true);
+    expect(matchesStatusFilter("not_generated", "draft")).toBe(true);
+    expect(matchesStatusFilter("scheduled", "draft")).toBe(false);
+    expect(matchesStatusFilter("posted", "posted")).toBe(true);
+    expect(matchesStatusFilter("draft", "posted")).toBe(false);
+    expect(matchesStatusFilter("not_generated", "all")).toBe(true);
+  });
+
+  it("loads Drafts unfiltered from the server and sends the other statuses as they are", () => {
+    expect(serverSocialStatus("draft")).toBeUndefined();
+    expect(serverSocialStatus("all")).toBeUndefined();
+    expect(serverSocialStatus("scheduled")).toBe("scheduled");
+  });
+
+  it("sends old not_generated links to Drafts", () => {
+    expect(parseGridFilters("?status=not_generated").status).toBe("draft");
+  });
+});
+
+describe("custom date range", () => {
+  const now = new Date(2026, 9, 15, 10, 0, 0);
+  const custom = { ...DEFAULT_GRID_FILTERS, when: "custom", from: "2026-11-01", to: "2026-11-30" } as const;
+
+  it("round-trips through the URL", () => {
+    expect(serialiseGridFilters(custom)).toBe("when=custom&from=2026-11-01&to=2026-11-30");
+    expect(parseGridFilters(serialiseGridFilters(custom))).toEqual(custom);
+  });
+
+  it("drops malformed dates and ignores from/to unless custom", () => {
+    expect(parseGridFilters("?when=custom&from=nope&to=2026-02-31")).toMatchObject({ from: "", to: "" });
+    expect(serialiseGridFilters({ ...custom, when: "week" })).toBe("when=week");
+  });
+
+  it("validates from <= to", () => {
+    expect(isValidDateRange("2026-11-01", "2026-11-01")).toBe(true);
+    expect(isValidDateRange("2026-11-02", "2026-11-01")).toBe(false);
+    expect(isValidDateRange("", "2026-11-01")).toBe(false);
+  });
+
+  it("sends scheduledOnly with local day bounds", () => {
+    const args = buildGridQueryArgs(custom, [], 12, now);
+    expect(args[1]).toBe(true);
+    expect(args[2]).toBe("none");
+    expect(args[4]).toBe(new Date(2026, 10, 1, 0, 0, 0, 0).toISOString());
+    expect(args[5]).toBe(new Date(2026, 10, 30, 23, 59, 59, 999).toISOString());
+  });
+
+  it("ignores an invalid or incomplete range", () => {
+    for (const bad of [{ from: "2026-11-30", to: "2026-11-01" }, { from: "2026-11-01", to: "" }]) {
+      const args = buildGridQueryArgs({ ...custom, ...bad }, [], 12, now);
+      expect(args[1]).toBe(false);
+      expect(args[4]).toBe("");
+      expect(args[5]).toBe("");
+    }
+  });
+
+  it("leaves the status chip counts untouched", () => {
+    const counts = { total: 24, not_generated: 5, draft: 4, scheduled: 12, posted: 3 };
+    expect(statusChipCount("draft", counts)).toBe(9);
+    expect(statusChipCount("all", counts)).toBe(24);
+    expect(buildGridQueryArgs(custom, [], 12, now)[11]).toBeUndefined();
   });
 });

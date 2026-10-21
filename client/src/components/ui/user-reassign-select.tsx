@@ -23,6 +23,8 @@ interface UserReassignSelectProps {
   allowAll?: boolean;
   /** Label shown when allowAll is true and value === "all" */
   allLabel?: string;
+  /** Stacking class for the popover list (default sits above dialogs). */
+  zClassName?: string;
 }
 
 export function UserReassignSelect({
@@ -32,6 +34,7 @@ export function UserReassignSelect({
   "data-testid": dataTestId,
   allowAll = false,
   allLabel = "All Agents",
+  zClassName = "z-[500]",
 }: UserReassignSelectProps) {
   const [open, setOpen] = useState(false);
   // This is the agent/deal-owner picker, so it only lists sales agents.
@@ -82,7 +85,7 @@ export function UserReassignSelect({
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="z-[500] w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent className={cn(zClassName, "w-[--radix-popover-trigger-width] p-0")} align="start">
         <Command>
           <CommandInput placeholder="Search users..." />
           <CommandList>

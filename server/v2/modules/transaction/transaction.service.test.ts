@@ -44,6 +44,8 @@ vi.mock("../quote/quote.repository", () => ({
     replaceLoungePasses: vi.fn(),
     replaceAirportParkings: vi.fn(),
     replaceExtraAccommodations: vi.fn(),
+    quoteInScope: vi.fn(),
+    findTourOperatorIds: vi.fn(),
     upsertCruise: vi.fn(),
   },
 }));
@@ -71,6 +73,9 @@ vi.mock("../referral/referral.service", () => ({ referralService: { createReferr
 vi.mock("../../../services/vipEnrollment.service", () => ({ vipEnrollmentService: { enrollClient: vi.fn() } }));
 vi.mock("../wallet/wallet.service", () => ({ walletService: { applyBookingCredit: vi.fn() } }));
 vi.mock("../neon-client/neon-client.repository", () => ({ neonClientRepository: { findById: vi.fn(), update: vi.fn() } }));
+vi.mock("../tour-operator/tour-operator-link.service", () => ({
+  tourOperatorLinkService: { assertPayloadOperatorsLinked: vi.fn() },
+}));
 
 import { transactionService } from "./transaction.service";
 import { branchMemberRepository } from "../branch-member/branch-member.repository";
@@ -85,6 +90,7 @@ import { taskService } from "../task/task.service";
 import { walletService } from "../wallet/wallet.service";
 import { referralService } from "../referral/referral.service";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
+import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 
 // transaction.service takes a real Scope; the repo is mocked so the value is opaque.
 const SCOPE = { orgId: "org1", orgRole: "agent" } as never;
@@ -416,6 +422,15 @@ describe("transactionService.createTransactionWithEnquiry — add enquiry", () =
     expect(enquiryTableRepository.addPassenger).toHaveBeenCalledWith("enq1", "child", 7);
     expect(noteRepository.create).toHaveBeenCalledOnce();
   });
+
+  it("sanitises enquiry note HTML before saving", async () => {
+    await transactionService.createTransactionWithEnquiry(
+      {} as never,
+      { notes: "<p>ok</p><script>alert(1)</script><img src=x onerror=alert(1)>" } as never,
+      SCOPE,
+    );
+    expect(vi.mocked(noteRepository.create).mock.calls.at(-1)?.[0].content).toBe("<p>ok</p>");
+  });
 });
 
 describe("transactionService.createTransactionWithQuote — add quote", () => {
@@ -459,6 +474,83 @@ describe("transactionService.createTransactionWithQuote — add quote", () => {
     );
 
     expect(newQuoteService.createQuote).not.toHaveBeenCalled();
+  });
+});
+
+describe("transactionService - operator must be in the org's list", () => {
+  const OP_A = "11111111-1111-4111-8111-111111111111";
+  const OP_B = "22222222-2222-4222-8222-222222222222";
+
+  it("createTransactionWithQuote checks the main and line-item operators before writing", async () => {
+    vi.mocked(tourOperatorLinkService.assertPayloadOperatorsLinked).mockRejectedValueOnce(new Error("Tour operator is not in your list"));
+    await expect(
+      transactionService.createTransactionWithQuote(
+        {} as never,
+        { main_tour_operator_id: OP_A, transfers: [{ tour_operator_id: OP_B }] } as never,
+        SCOPE,
+      ),
+    ).rejects.toThrow("Tour operator is not in your list");
+    expect(tourOperatorLinkService.assertPayloadOperatorsLinked).toHaveBeenCalledWith(
+      SCOPE,
+      expect.objectContaining({ main_tour_operator_id: OP_A, transfers: [{ tour_operator_id: OP_B }] }),
+      expect.any(Function),
+    );
+    expect(transactionRepository.createWithQuoteAndChildren).not.toHaveBeenCalled();
+  });
+
+  it("createTransactionWithBooking checks the operators before writing", async () => {
+    vi.mocked(tourOperatorLinkService.assertPayloadOperatorsLinked).mockRejectedValueOnce(new Error("Tour operator is not in your list"));
+    await expect(
+      transactionService.createTransactionWithBooking({} as never, { main_tour_operator_id: OP_A } as never, SCOPE),
+    ).rejects.toThrow("Tour operator is not in your list");
+    expect(tourOperatorLinkService.assertPayloadOperatorsLinked).toHaveBeenCalledWith(
+      SCOPE,
+      expect.objectContaining({ main_tour_operator_id: OP_A }),
+      expect.any(Function),
+    );
+    expect(transactionRepository.createWithBookingAndChildren).not.toHaveBeenCalled();
+  });
+});
+
+describe("transactionService.createTransactionWithQuote - source_quote_id (copy to client)", () => {
+  beforeEach(() => {
+    vi.mocked(transactionRepository.createWithQuoteAndChildren).mockResolvedValue({
+      transaction: { id: "txn1", user_id: "u1" },
+      quote: { id: "q1" },
+    } as never);
+    vi.mocked(newQuoteRepository.findTourOperatorIds).mockResolvedValue(["op-source"]);
+  });
+
+  it("exempts the source quote's operators and strips source_quote_id before the insert", async () => {
+    vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(true as never);
+    await transactionService.createTransactionWithQuote(
+      {} as never,
+      { source_quote_id: "src1", main_tour_operator_id: "op-source", not_for_social: true } as never,
+      SCOPE,
+    );
+    const [, payload, loadExisting] = vi.mocked(tourOperatorLinkService.assertPayloadOperatorsLinked).mock.calls.at(-1)!;
+    expect(payload).not.toHaveProperty("source_quote_id");
+    await expect(loadExisting()).resolves.toEqual(["op-source"]);
+    expect(newQuoteRepository.findTourOperatorIds).toHaveBeenCalledWith("src1");
+    const insert = vi.mocked(transactionRepository.createWithQuoteAndChildren).mock.calls[0][0] as { quoteFields: Record<string, unknown> };
+    expect(insert.quoteFields).not.toHaveProperty("source_quote_id");
+    expect(insert.quoteFields).toMatchObject({ main_tour_operator_id: "op-source" });
+  });
+
+  it("404s and inserts nothing when the source quote is outside the caller's org", async () => {
+    vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(false as never);
+    await expect(
+      transactionService.createTransactionWithQuote({} as never, { source_quote_id: "other-org", main_tour_operator_id: "op-x" } as never, SCOPE),
+    ).rejects.toMatchObject({ statusCode: 404 });
+    expect(transactionRepository.createWithQuoteAndChildren).not.toHaveBeenCalled();
+    expect(tourOperatorLinkService.assertPayloadOperatorsLinked).not.toHaveBeenCalled();
+  });
+
+  it("without a source id nothing is looked up", async () => {
+    await transactionService.createTransactionWithQuote({} as never, { not_for_social: true } as never, SCOPE);
+    const [, , loadExisting] = vi.mocked(tourOperatorLinkService.assertPayloadOperatorsLinked).mock.calls.at(-1)!;
+    await expect(loadExisting()).resolves.toEqual([]);
+    expect(newQuoteRepository.quoteInScope).not.toHaveBeenCalled();
   });
 });
 

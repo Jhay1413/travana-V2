@@ -1,10 +1,11 @@
 import { Link } from "wouter";
-import { ExternalLink, Loader2, Mail, Phone, Plus } from "lucide-react";
+import { Check, ExternalLink, Loader2, Mail, Phone, Plus, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { clientDisplayName } from "@/lib/utils";
 import { useUnlinkContact } from "../../../api/use-contact-link";
 import type { Conversation } from "../../../types";
 import type { NeonClient } from "@/features/client";
+import { badgeTone } from "./badge-tone";
 import { ChannelAvatar, CopyButton, TagPill } from "../shared";
 
 function memberSince(value: string | null | undefined): string | null {
@@ -27,6 +28,7 @@ export function ClientHeader({ conversation, client, onCreateEnquiry, creatingEn
   const name = clientDisplayName(client);
   const since = memberSince(client.createdAt);
   const tags = conversation.tags ?? [];
+  const tone = badgeTone(client.badge);
 
   const unlink = async () => {
     try {
@@ -55,6 +57,16 @@ export function ClientHeader({ conversation, client, onCreateEnquiry, creatingEn
           </Link>
         </h2>
         {since && <p className="text-[12px] text-social-muted">Client since {since}</p>}
+        {tone && (
+          <span
+            className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${tone.className}`}
+            data-testid="client-badge"
+          >
+            {tone.icon === "star" && <Star className="h-3 w-3" />}
+            {tone.icon === "check" && <Check className="h-3 w-3" />}
+            {tone.label}
+          </span>
+        )}
         {tags.length > 0 && (
           <div className="mt-2 flex flex-wrap justify-center gap-1.5">
             {tags.map((t) => (

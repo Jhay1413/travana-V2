@@ -300,6 +300,8 @@ export async function fireAutoTriggerForClient(opts: {
   dedupeSince?: Date;
   /** When sourced from a specific booking, pass it so context picks the right row. */
   bookingTitle?: string;
+  /** The booking that fired this send (the departure sweep); lets paid bookings skip balance reminders. */
+  bookingId?: string;
 }): Promise<{ sent: number; skipped: number; failed: number }> {
   let sent = 0; let skipped = 0; let failed = 0;
   try {
@@ -320,7 +322,13 @@ export async function fireAutoTriggerForClient(opts: {
     const ctx = await buildContextForClient(client);
     const clientName = `${client.firstName ?? ''} ${client.surename ?? ''}`.trim();
 
+    // Looked up lazily, once: only a balance_due template cares whether the booking is fully paid.
+    let fullyPaid: boolean | undefined;
     for (const t of templates) {
+      if (opts.autoTrigger === 'days_before_departure' && opts.bookingId && t.category === 'balance_due') {
+        fullyPaid ??= await smsRepository.isBookingFullyPaid(opts.bookingId);
+        if (fullyPaid) { skipped++; continue; }
+      }
       if (opts.dedupeSince) {
         const already = await smsRepository.hasRecentAutoSend(t.id, client.id, opts.dedupeSince);
         if (already) { skipped++; continue; }

@@ -39,3 +39,8 @@ export function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+/** Safe HTML for previewing a post body: tags are stripped, text is escaped, line breaks become <br>. */
+export function postToPreviewHtml(post: string): string {
+  return escapeHtml(postToPlainText(post)).replace(/\n/g, "<br>");
+}

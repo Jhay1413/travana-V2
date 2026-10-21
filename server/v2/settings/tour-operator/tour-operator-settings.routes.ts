@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { requirePlatformAdmin } from '../../middlewares/auth/require-platform-admin';
+import { validate } from '../../middlewares/validation.middleware';
 import { tourOperatorSettingsController } from './tour-operator-settings.controller';
+import { createValidator, idValidator, listValidator, updateValidator } from './tour-operator-settings.validator';
 
 const router = Router();
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -16,12 +19,15 @@ const upload = multer({
   },
 });
 
-router.get('/', tourOperatorSettingsController.findAll);
-router.get('/:id', tourOperatorSettingsController.findById);
-router.post('/', tourOperatorSettingsController.create);
-router.patch('/:id', tourOperatorSettingsController.update);
-router.delete('/:id', tourOperatorSettingsController.remove);
-router.post('/:id/logo', upload.single('logo'), tourOperatorSettingsController.uploadLogo);
-router.delete('/:id/logo', tourOperatorSettingsController.deleteLogo);
+// The catalogue is shared by every agency: only platform admins may change it.
+router.use(requirePlatformAdmin);
+
+router.get('/', validate(listValidator), tourOperatorSettingsController.findAll);
+router.get('/:id', validate(idValidator), tourOperatorSettingsController.findById);
+router.post('/', validate(createValidator), tourOperatorSettingsController.create);
+router.patch('/:id', validate(updateValidator), tourOperatorSettingsController.update);
+router.delete('/:id', validate(idValidator), tourOperatorSettingsController.remove);
+router.post('/:id/logo', validate(idValidator), upload.single('logo'), tourOperatorSettingsController.uploadLogo);
+router.delete('/:id/logo', validate(idValidator), tourOperatorSettingsController.deleteLogo);
 
 export default router;

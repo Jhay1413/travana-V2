@@ -59,8 +59,14 @@ export function useInboxDrafts(selectedId: string | null) {
 
   // Conversation id -> enquiry created from it this session (drives the thread bar).
   const [createdEnquiries, setCreatedEnquiries] = useState<Record<string, CreatedEnquiryBar>>({});
+  // Conversations whose Luna enquiry banner is hidden this session (dismissed, or enquiry created).
+  const [lunaDismissed, setLunaDismissed] = useState<ReadonlySet<string>>(() => new Set());
+  const dismissLunaBanner = useCallback((conversationId: string) => {
+    setLunaDismissed((prev) => (prev.has(conversationId) ? prev : new Set(prev).add(conversationId)));
+  }, []);
   const markEnquiryCreated = useCallback((conversationId: string, bar: CreatedEnquiryBar) => {
     setCreatedEnquiries((prev) => ({ ...prev, [conversationId]: bar }));
+    setLunaDismissed((prev) => (prev.has(conversationId) ? prev : new Set(prev).add(conversationId)));
   }, []);
   const dismissEnquiryBar = useCallback((conversationId: string) => {
     setCreatedEnquiries((prev) => {
@@ -89,6 +95,6 @@ export function useInboxDrafts(selectedId: string | null) {
 
   return {
     draftTags, handleDraftChange, draftFor, composerRef,
-    createdEnquiries, markEnquiryCreated, dismissEnquiryBar, askClient,
+    createdEnquiries, markEnquiryCreated, dismissEnquiryBar, askClient, lunaDismissed, dismissLunaBanner,
   };
 }

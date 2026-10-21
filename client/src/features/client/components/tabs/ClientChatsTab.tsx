@@ -156,7 +156,7 @@ function ChatComposer({
       </div>
       <div
         className={cn(
-          "flex items-end gap-2 rounded-2xl border px-3 py-1.5",
+          "flex items-end gap-2 rounded-xl border px-3 py-1.5",
           mode === "note" ? "border-amber-400/40 bg-amber-400/5" : "border-black/10 bg-black/[0.02]",
         )}
       >
@@ -184,7 +184,7 @@ function ChatComposer({
           onClick={submit}
           disabled={!text.trim() || sending}
           size="icon"
-          className="mb-1 h-8 w-8 flex-none rounded-xl bg-black text-white hover:bg-black/85 disabled:opacity-40"
+          className="mb-1 h-8 w-8 flex-none rounded-[10px] bg-black text-white hover:bg-black/85 disabled:opacity-40"
           data-testid="client-chat-send"
         >
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

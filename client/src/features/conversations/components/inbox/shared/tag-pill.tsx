@@ -8,7 +8,7 @@ export interface TagPillProps {
 export function TagPill({ tag }: TagPillProps) {
   return (
     <span
-      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[12px] font-semibold"
+      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold"
       style={{ backgroundColor: `${tag.color}22`, color: tag.color }}
       title={tag.name}
     >

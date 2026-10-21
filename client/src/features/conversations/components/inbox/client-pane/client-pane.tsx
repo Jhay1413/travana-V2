@@ -113,7 +113,7 @@ export function ClientPane({ conversation, mode, open, onOpenChange, onCreateEnq
   if (mode === "sheet") {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-[380px] overflow-y-auto p-0 sm:max-w-[380px]">
+        <SheetContent side="right" className="w-[340px] overflow-y-auto p-0 sm:max-w-[340px]">
           <SheetHeader className="border-b border-social-border px-4 py-3">
             <SheetTitle className="text-[14px]">Client details</SheetTitle>
             <SheetDescription className="sr-only">Details, deals, tasks and notes for this client.</SheetDescription>
@@ -124,7 +124,7 @@ export function ClientPane({ conversation, mode, open, onOpenChange, onCreateEnq
     );
   }
   return (
-    <aside className="flex w-[380px] shrink-0 flex-col overflow-hidden rounded-2xl border border-social-border bg-card">
+    <aside className="flex w-[310px] shrink-0 flex-col overflow-hidden rounded-2xl border border-social-border bg-card">
       <div className="min-h-0 flex-1 overflow-y-auto">
       <PaneBody conversation={conversation} onCreateEnquiry={onCreateEnquiry} creatingEnquiry={creatingEnquiry} onCreateTicket={onCreateTicket} />
       </div>

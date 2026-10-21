@@ -1,3 +1,4 @@
+import { isPreviewSearch } from "@/features/quote/lib/preview-search";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -1245,7 +1246,7 @@ export default function PublicQuotePage() {
   const viewLogged = useRef(false);
 
   useEffect(() => {
-    if (shouldRenderPublic && token && !viewLogged.current) {
+    if (shouldRenderPublic && token && !viewLogged.current && !isPreviewSearch(window.location.search)) {
       viewLogged.current = true;
       logView.mutate({ token });
     }

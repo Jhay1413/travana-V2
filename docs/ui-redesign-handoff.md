@@ -470,6 +470,285 @@ targets actuals); LOST bookings stay in profit/lifetime/best month; homeworker
 discounts − service charge, UTC months). Not verified in a browser or against a
 real DB; `agent-profile.repository.integration.test.ts` written, not run.
 
+## Done: feedback round 1 (Pipeline drawer, Inbox, Tickets, Social) — 20 Oct 2026
+
+Prototype re-download of 20 Oct was byte-identical to 15 Oct for Pipeline,
+Tickets, Inbox and Social (checked against the zips in Downloads); the only new
+prototype pages are `/admin/departures(+/balances)`, `/admin/ideas` and
+`/clients/:id/quotes/:quote` (NOT built). The user's visual review was
+verified item-by-item against the prototype (see memory
+`verify-feedback-against-reference`) and applied:
+- Shared: `components/shared/next-task-row.tsx` (prototype task box; used by
+  pipeline cards, deal drawer and inbox client pane) and
+  `components/shared/note-cards.tsx` (inbox-style yellow note cards; used by
+  the inbox client pane and the deal drawer); `CreateTaskDialog` dialog mode
+  gained optional title/description/labels/defaults/hide props and
+  `layer="above-drawer"` (z-600) — `DialogContent` accepts `overlayClassName`.
+- Pipeline drawer: email removed from the customer card; tour operator row
+  with "Open quote"; "Next task" box with View quote link; notes as inbox note
+  cards; "Add task" is a centred pop-up (tomorrow 10:00, title only) that sits
+  above the drawer (previously the 780px task sheet slid in BEHIND it); card
+  and list "+ Add task" now open it.
+- Inbox: Add task pop-up; client pane 310px inline / 340px sheet with the
+  client type pill (`client.badge`) under the name; next-task box as pipeline;
+  list avatars pastel with dark initials, 11px pills, waiting/snoozed plain,
+  600 unread time, no Admin/Sales line; static "Luna spotted a holiday
+  request · Review enquiry" banner on sales chats with a linked client (AI runs
+  only on click; dismissible per conversation); grey `social-page` thread
+  background (bubbles already navy/white); Generate enquiry is an outline
+  button beside Luna AI and Send.
+- Tickets: board is the default view (prefs key `tickets.queue.v2`); "Create
+  ticket" added to the Booking actions menu; client page / quote page pass the
+  selected holiday's transactionId; server errors surfaced; link-a-holiday list
+  grouped Bookings / Quotes / Enquiries with operator tile, title and ref ·
+  date; `?transaction=` + `initialTransactionId` on the tickets dialog.
+- Social: "Not generated" → "Not scheduled" and folded into the Drafts chip
+  (client-side; server status unchanged); pen icon on every card (generates
+  then opens the editor on unwritten posts); `/social-posts/quotes/:id` now
+  shows the full client quote view incl. tabs and the profit panel at all
+  widths (user chose to show profit internally, unlike the prototype's lock).
+- Security found by the review: notes are rendered as HTML (`NoteCard`,
+  `RichTextDisplay`) but the new plain-text forms saved raw text and the
+  server never sanitised. Fixed: client `plainTextToNoteHtml` (escape + `<p>`
+  per line) in the drawer and inbox note forms; server `sanitizeRichText` on
+  transaction notes (create/update, incl. the ai-ask and
+  createTransactionWithEnquiry direct writers); client notes and enquiry
+  replies are rows of the same `notes` table so they are covered. Then closed
+  the rest: chat messages (`chat.service.sendMessage` + the portal bridge —
+  the live one is `server/services/portal-chat-bridge.ts`, a deliberate v1
+  one-liner), inbound email HTML on read (`server/v2/utils/sanitize-email-html.ts`,
+  email-specific allowlist: tables/images https/mailto kept; scripts, styles,
+  forms, handlers, cid/data images stripped — email is fetched live over IMAP,
+  nothing stored), social post text is escaped on the CLIENT before it goes
+  into the Facebook preview and the editor (`preview-text.ts`; the body itself
+  is plain text published to Facebook, so no server HTML sanitising), and notes
+  + chat are sanitised ON READ too so rows written before 20 Oct are covered
+  without a DB backfill. Still raw: the unmounted v1 `server/services/
+  ai-ask.service.ts` / `server/repositories/note.repository.ts`.
+
+## Done: Departures & Balances (`/agency/departures`, `/agency/departures/balances`) — 20 Oct 2026
+
+Prototype A1 "Departures and balances" (`#/admin/departures[/balances]`): a flat
+table of upcoming bookings with tick boxes — Tickets tab: Check in, Tickets in
+house, Passport info, Tickets pick up, Completed (unlocks when the four are
+ticked; unticking reopens); Balances tab: Fully paid. Every tick stamps who /
+when / what. No money amounts anywhere (the prototype has none).
+Server: NEW table `booking_departure_checks` in `shared/schema.ts` (one row
+per booking, created on first tick: six booleans + last_change_by/_name/_at/
+_what; **needs `npm run db:generate` + migrate — no hand-written migration**);
+NEW module `server/v2/modules/departures/` at `/api/v2/departures`
+(`GET /?from&to` rows of active, not-LOST bookings with travel_date ≥ today
+London; `PATCH /:bookingId/checks {key, value}` with the unlock/reset rules and
+stamp; `GET /summary?days`), roles platform_admin/org_admin/branch_manager
+(branch-scoped), fail closed without an org. The SMS `balance_due`
+days-before-departure sweep now skips bookings ticked Fully paid.
+Client: `client/src/features/departures/` (lib filters/search/counts/day
+labels/unlock rule/stamp text with tests; api hooks with optimistic ticks;
+components: page head + tabs, Tickets table/cards, Balances table/cards);
+`pages/agency/departures.tsx`; routes registered before `/agency/*`
+(MANAGER_ROLES); nav "Departures" for org admins (Sales) and branch managers.
+The admin dashboard's Departures card now uses REAL data (next 7 days; pills
+"All set" / "Passport info missing" / "Balance not paid" / "Checks outstanding";
+links to both lists) — the sample departures module is deleted. Luna's
+morning briefing stays hardcoded sample.
+Decisions: new table rather than sample pages; admins + branch managers,
+upcoming bookings only; dashboard card switched to real data (£ amounts gone —
+no payment data exists); SMS reminder skips fully-paid; "next N days" includes
+day N (prototype `daysAway <= N`). Not verified in a browser or against a real
+DB. The SMS skip tolerates the table not being migrated yet (treated as not
+paid); the departures endpoints 500 until the migration runs.
+Pre-existing SMS bugs found by the review (backlog, untouched): the
+days-before-departure sweep fires every active days-before template for a
+booking matched at ANY offset (no `triggerDaysBefore` filter); the message
+context describes the client's latest booking, not the swept one; the cron
+uses UTC dates rather than London.
+
+## Done: Client quote / booking / enquiry detail (`/clients/:id?holiday=quote:|booking:|enquiry:<id>`) — 21 Oct 2026
+
+Prototype "Quote page (agent view)" (`/clients/:id/quotes/:quote`, booking
+sister route) rebuilt IN PLACE on the existing `?holiday=` deep link (no new
+route; every producer — pipeline, inbox, agent overview, deal-links, convert —
+still works). Rail selection now pushes the URL (`openHoliday` in
+`pages/client/index.tsx`), so refresh/back work and the URL is the single
+source of truth. Layout: 290 | 1fr | 320 grid (≤1480 two columns, ≤1180 one,
+≤860 stacked, ≤620 mosaic 2-col) built from
+`client/src/features/client/components/holiday/`: top-bar (+ quote/booking-
+enquiry top actions, breadcrumb, use-quote-preview), holidays-rail (+
+holiday-link, rail-create-menu), hero (+ hero-mosaic, use-holiday-photos),
+facts-card / enquiry-facts, refs-card (+ refs-form), convert-dialog,
+money-card, stage-box, activity-card (+ activity-actions), compare-card,
+trip-card (+ trip-stop, enquiry-trip-card), views-card, holiday-page-shell
+(frame + portal slots so the rail persists across selections),
+quote-detail / booking-detail / enquiry-detail, holiday-detail-page;
+`components/shared/photo-viewer.tsx` (z-600, keyboard). Pure libs with tests:
+`features/client/lib/{holiday-rail,booking-refs,hero-mosaic,holiday-facts,
+holiday-format,money-format,trip-timeline(+trip-extras/trip-types),
+compare-rows,activity-tabs}.ts`, `features/quote/lib/{quote-money,quote-stage,
+quote-views,preview-search}.ts`, `lib/photo-nav.ts`. Tokens `qp-*` (chips,
+money bar, profit row, note card, current tint, refs card, trip stop tones,
+step done, live dot, now ring, viewer overlay) in `index.css` light + dark.
+Move-only extractions from the 2261-line `holiday-detail-view.tsx` (now ~810,
+renders identically for `pages/social-quote`): `quote/booking/enquiry-actions-
+menu.tsx` (new optional controlled props, `hideItems`, `showSetPrimary`,
+`copySuccessToast`, ticket dialog closes on create), `assigned-agent-button`,
+`holiday-notes-tab`, `holiday-tasks-tab`, `holiday-composer` (`variant="note"`),
+pure `holiday-fields.ts` + `holiday-field-icons.ts`, `holiday-header-classes`,
+hooks `use-controllable-open`, `use-set-as-main-quote`. `HolidayTasksTab` /
+`HolidayTicketsTab` gained `hideCreateButton`.
+Server: `quote.accepted_at` / `accepted_by` (FK user, set null — **needs
+`npm run db:generate` + migrate; quote reads 500 until then**); `PATCH
+/api/v2/quotes/:id/accepted {accepted}` (uuid param, strict body, scope 404,
+free quotes 400, idempotent first stamp, read-only roles blocked, returns the
+enriched quote); quote + booking detail GET add `service_commission` (same SQL
+as the transaction list, moved to `transaction/service-commission.repository.ts`),
+`main_tour_operator_logo_url`, `accepted_by_name` / `owner_name`; `createQuote`
+strips accepted_*/sent_*/token, `duplicateQuote` strips sent_*/accepted_*;
+quote-share `PATCH /:id/sent` validated (`sentVia` link|sms|email|whatsapp) and
+now CALLED by the Share dialog (copy = link, SMS = sms) — the admin dashboard's
+"sent" counts start moving; quote-share reads (views, customer actions) open to
+social_media_manager within scope, writes still owner-only; booking refs
+trimmed + required non-empty on PATCH and on convert (validators); the booking
+edit drawer omits empty refs instead of sending null.
+Decisions: profit = package + line-item commission (pipeline parity), margin =
+profit ÷ total, 1 dp; NO balance due date (no payment data); upsells shown on
+bookings as separate lines outside profit; stage Accepted = customer action OR
+manual "Mark accepted" (+ Undo, manual only); all three branches share the
+shell, booking gets the refs card ("Booked {date_created} by {deal owner}");
+client `badge` pill shown; Preview opens `/view-quote/:token?preview=1` and the
+public page skips the view log for it; read-only: Share/Duplicate/Convert/menu/
+"+"/Mark accepted/Edit/refs/composer/tickets hidden, Pin + Guru stay; Compare
+has no "Send side by side"; Luna read / client card not built (prototype did
+not render them either). Not verified in a browser.
+**21 Oct, later:** the social "View quote" page (`/social-posts/quotes/:id`)
+was rebuilt on the same components — `features/social/components/quote-page/`
+(page, two-column shell without the holidays rail, social top bar with
+Supplier page / Guru / Pin / Edit / Update expiry / Copy to client / Delete,
+copy flow, delete dialog) + `features/social/lib/quote-copy-values.ts`;
+`pages/social-quote/index.tsx` is a thin wrapper. The legacy
+`holiday-detail-view.tsx`, `holiday-details-panel.tsx`, `circle-action.tsx`,
+`all-holidays-panel.tsx`, `holiday-header-actions.tsx` and the social copy of
+`QuoteSummaryTimeline` are DELETED (no importers). The no-op "Export" button
+is gone. `features/social/components/social-quote/{StatusPill,hooks,utils}`
+are probably dead now (left for a later sweep).
+
+## Done: Tour operators — global catalogue + per-org config, page `/agency/tour-operators` — 21 Oct 2026
+
+Prototype "Admin: tour operators" (`#/admin/tour-operators`, Sales nav next
+to Targets): one flat list (name, phone, weblink, username, password,
+commission %, balance due weeks, updated), search, sort, inline add/edit/
+delete, copy buttons, CSV import with "Check the import" preview, export,
+template. Data model changed per the user: `tour_operator_table` is now a
+PLATFORM-WIDE catalogue (name NOT NULL, unique on lower(name), code, website,
+phone, logo_url, created_by, timestamps — NO org_id / commission any more) and
+a NEW `org_tour_operator` link table holds the per-org config
+(commission_percentage, balance_due_weeks default 14, username,
+encrypted_password via `utils/encryption.ts`, is_active, created_by,
+updated_by, unique (org, operator)). Quote/booking/line-item FKs keep
+pointing at catalogue ids.
+**Migration is a three-step user action (see "Pending migration")**: the
+one-off `scripts/migrate-tour-operators-to-catalogue.sql` (dry-run block,
+guard, dedupe by lower(trim(name)) — canonical = has logo, then global seed,
+then lowest id —, links with each org's commission, 20 FK repoints, inactive
+links for referenced-but-unowned operators, delete duplicates, post-checks,
+one transaction) runs FIRST against the old schema, then `npm run
+db:generate` (answer "create column" to every rename prompt; delete the
+generated CREATE TABLE/FK/index statements for `org_tour_operator` because the
+script already created them), then migrate. Old code must not run after the
+script; new code 500s until migrate.
+Server: `server/v2/modules/tour-operator/` rewritten (routes with
+`noResponseLog` + role guards, validator, controller, access, mapper,
+service, import plan/service, csv, catalogue + org-link repositories, link
+service, collect-operator-ids): `GET /` bare array of safe options (id =
+catalogue id, linkId, name, logo_url, code, commission_percentage string,
+balance_due_weeks, is_active) for the quote/booking forms; `GET /manage`
+`{rows, canWrite, canSeePasswords}`; `GET /catalogue?q`; `POST /` (link an
+existing catalogue row or create one by name + link; 409 "already in your
+list"); `PATCH /:linkId` (diff; "" clears; commission null allowed);
+`DELETE /:linkId` (link only); `GET /:linkId/password` (audited in
+`platform_admin_audit_log`, fails closed if the audit write fails);
+`POST /import/preview` + `/import` (one transaction; blank commission on a
+NEW row = NULL "not set", not 0; catalogue fields fill blanks only);
+`GET /export` CSV (formula guard, passwords blank for non-admins). Readers:
+platform_admin/org_admin/branch_manager/agent/homeworker; writers: the first
+three; social_media_manager 403 on the whole router; fail closed without an
+org (platform admins must impersonate). `server/index.ts` response logger
+honours `res.locals.skipResponseLog`. Operator-in-org check ("Tour operator is
+not in your list", 400) on every quote/booking/upsell/transaction create and
+add-line path, updates check only changed ids, convert + duplicate exempt
+(`tourOperatorLinkService.assertPayloadOperatorsLinked`). json-mapper resolves
+names among the org's linked operators first, then the catalogue (a
+"contains" match only when unique), creates rows/links for writer roles only
+(seed % carried when the name is a seed operator; others get a warning); SMM
+may read `GET /tour-operators` (options only) and still import. `POST
+/quotes` and the nested quote on `POST /transactions` accept
+`source_quote_id` so Copy-to-client / duplicate of a quote with an unlinked
+operator still works. Upsell rows carry `tour_operator_name`. Forms show a
+hint when the rate is not set or the list is empty; org-admin bookmarks to
+`/settings/tour-operators` redirect to `/agency/tour-operators`. Onboarding links the SEED
+operators (`shared/tour-operator-seed.ts`) with their seed % for a new org —
+never 0% (0 counts as a set rate and would zero auto-filled commission).
+admin-import: catalogue columns only, delete/clear refused. Settings catalogue
+`/api/v2/settings/tour-operators` platform_admin only (name/code/website/
+phone/logo; delete refused while referenced). Seeds retargeted
+(`seed-org-tour-operators.ts` upserts the catalogue, `-- link <org|all>`;
+`seed-tour-operator-commission.ts` fills NULL link rates; `seed-org.ts` step
+9 removed; `backfill-after-fresh-migration.sql` §1 now a comment;
+`backfill-commission.sql` joins through the link table — its header formula
+still disagrees with the client formula, untouched). New utils
+`escape-like.ts`, `pg-errors.ts` (23505 → 409).
+Client: `features/tour-operators/` (page, libs with tests: csv template,
+header aliases, parse-import (CSV/TSV only — no xlsx dependency; 2 MB / 500
+rows), import preview, sort/filter, summary, form validation (diff-based
+PATCH; commission required on add, blank allowed on edit), format, access;
+components ≤300 lines; copy-password via the reveal endpoint for agents,
+masked); `pages/agency/tour-operators.tsx` thin wrapper; `TourOperatorSheet`
+deleted; nav "Tour Operators" (Handshake) for org admins (Sales), branch
+managers and agents/homeworkers (read-only); routes `/agency/tour-operators`
+(STAFF_ROLES, before `/agency/*`) and `/settings/tour-operators`
+(PLATFORM_ROLES, before `/settings/:tableSlug`; Data Management section split
+so org admins no longer see it); `features/tour-operator/` (singular) types
+rewritten, mutations hook deleted, `lib/operator-options.ts` keeps the
+selected inactive/unlisted operator in quote/booking/upsell selects;
+settings-lookup catalogue config without commission.
+Decisions: global catalogue + link table; merge existing copies by name;
+passwords visible to admins + branch managers, copy-only for agents, none for
+SMM; shared catalogue editable by org admins (phone/website global, no
+per-org override); balance-due weeks stored but not yet used by SMS/quote
+page. Known: legacy `tour_operators` table still holds plaintext passwords
+(unused); non-canonical copies' logos are dropped by the script; the
+"contains" name fallback in json-mapper can link a near-match operator (a
+warning is shown). Not verified in a browser or against a real DB.
+
+## Done: feedback round 2 + app-wide tweaks — 21 Oct 2026
+
+- Scrollbars hidden app-wide (`index.css` base layer: every element incl.
+  html/body; Radix ScrollArea no longer renders its thumb). Scrolling unchanged.
+- Quote/holiday page: `text-compact` tier applied like the other redesigned
+  pages; the page scrolls with the window (no inner fixed-height scroller, which
+  left dead space below the content); rail/right column stick under the header;
+  Quote views card = plain list (stat tiles removed, per the prototype).
+- Social: status label "Draft" → "Not scheduled" (pill + chip; user decision,
+  the prototype pill says "Draft"); "When" filter gains "Custom range…" with
+  From/To (URL `from`/`to`; sends scheduledOnly + rangeStart/rangeEnd on the
+  scheduled date; not in the prototype, user request).
+- Inbox: thread background back to card (user preference over the grey thread
+  of the prototype); composer auto-height includes the border (no phantom
+  scroller); composer controls + Luna banner on the 12px radius family.
+- Quote page radius family: cards/dialogs 16px (`rounded-2xl`), every inner
+  control 10px (`rounded-[10px]`), circles `rounded-full` — applied across
+  `holiday/**`, the moved notes/tasks/composer/tickets tabs, photo viewer and
+  the social quote page. Rail tabs: content-sized items, plain counts
+  (`Segmented countVariant="plain"`).
+- Inbox composer = the quote page's Inbox tab box: light grey reply box
+  (`border-black/10 bg-black/[0.02]`, 12px), amber note box, black Send,
+  black active mode toggle (inbox `Segmented` wrapper now passes `variant`);
+  attach / Generate enquiry / Luna menu / drafted strip all 10px. Bubbles in
+  BOTH variants: agent `bg-sky-100`, client white with border.
+- Ticket page: right column 310px at the inbox breakpoint (1500px) incl. the
+  tabbed fallback; operator logo next to the holiday title now shows: the
+  `GET /transactions/:id/details` response lacked `main_tour_operator_name` /
+  `_logo_url` on quotes and booking (added via `transaction/tour-operator-fields.ts`).
+
 ## Done: dev-only email link fix — 17 Oct 2026
 
 Outside production every emailed link (verification, team / homeworker / HR /
@@ -487,6 +766,19 @@ origin unknown — a line-based edit or sync at 23:18 on 16 Oct).
 
 16 Oct additions need `npm run db:generate` then migrate: `org_target_table`,
 the four new `agent_target_table` columns, `client_files.uploaded_by`.
+20 Oct addition: `booking_departure_checks` (Departures & Balances).
+21 Oct addition: `quote.accepted_at`, `quote.accepted_by` (quote page) —
+quote detail / pipeline reads 500 until migrated.
+21 Oct addition (tour operators — THREE steps, in this order, app stopped):
+(1) `npm run db:migrate-tour-operators -- --dry-run` (read-only report; psql is
+not needed — `scripts/run-tour-operator-migration.ts` runs the SQL file through
+the app's pg pool), review it, then `npm run db:migrate-tour-operators`
+against the OLD schema (one transaction, rolls back on any error); (2) `npm run
+db:migrate` — `migrations/0061_confused_puma.sql` is already generated and was
+made idempotent for `org_tour_operator` (IF NOT EXISTS / duplicate_object), so
+it runs after the script without edits; (3) start the new code. Running
+db:migrate before the script fails on `uq_tour_operator_name_lower` (duplicate
+names such as "hays itour") and rolls back harmlessly.
 
 
 `npm run db:generate` produced `migrations/0058_dark_hawkeye.sql` (+

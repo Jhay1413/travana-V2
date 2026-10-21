@@ -1,8 +1,16 @@
 import { toOnlySocialsBody } from "@shared/social-post-body";
 
-/** HTML to load into the contentEditable editor: exactly what will be published. */
+/**
+ * HTML to load into the contentEditable editor: exactly what will be published.
+ * Only <br> survives as markup; any other "<" / ">" in the post is escaped so
+ * stored text can never inject elements into the editor. "&" is left alone so
+ * entities the editor already produced round-trip unchanged.
+ */
 export function postToEditorHtml(post: string): string {
-  return toOnlySocialsBody(post);
+  return toOnlySocialsBody(post)
+    .split(/(<br>)/)
+    .map((part) => (part === "<br>" ? part : part.replace(/</g, "&lt;").replace(/>/g, "&gt;")))
+    .join("");
 }
 
 /**

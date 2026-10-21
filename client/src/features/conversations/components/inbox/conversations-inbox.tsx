@@ -123,6 +123,8 @@ export function ConversationsInbox() {
         onOpenTestAi={() => state.setTestAiOpen(true)}
         createdEnquiry={selected ? state.createdEnquiries[selected.id] : undefined}
         onDismissCreatedEnquiry={() => selected && state.dismissEnquiryBar(selected.id)}
+        lunaDismissed={!!selected && state.lunaDismissed.has(selected.id)}
+        onDismissLuna={() => selected && state.dismissLunaBanner(selected.id)}
         composer={
           selected && (
             // Keyed by conversation: switching threads unmounts the composer, so

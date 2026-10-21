@@ -40,7 +40,8 @@
     "db:backfill-quote-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-quote-embeddings.ts",
     "db:backfill-kb-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-kb-embeddings.ts",
     "db:backfill-deal-embeddings": "tsx --env-file-if-exists=.env scripts/backfill-deal-embeddings.ts",
-    "db:backfill-guru-coordinates": "tsx --env-file-if-exists=.env scripts/backfill-destination-guru-coordinates.ts"
+    "db:backfill-guru-coordinates": "tsx --env-file-if-exists=.env scripts/backfill-destination-guru-coordinates.ts",
+    "db:migrate-tour-operators": "tsx --env-file-if-exists=.env scripts/run-tour-operator-migration.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1019.0",

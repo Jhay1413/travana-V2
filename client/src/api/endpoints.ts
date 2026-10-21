@@ -16,6 +16,23 @@ export const ORGANIZATION_OVERVIEW_ENDPOINTS = {
   profitSources: `${API_V2}/organization-overview/profit-sources`,
 } as const;
 
+export const DEPARTURES_ENDPOINTS = {
+  list: `${API_V2}/departures`,
+  summary: `${API_V2}/departures/summary`,
+  checks: (bookingId: string) => `${API_V2}/departures/${encodeURIComponent(bookingId)}/checks`,
+} as const;
+
+export const TOUR_OPERATOR_ENDPOINTS = {
+  list: `${API_V2}/tour-operators`,
+  manage: `${API_V2}/tour-operators/manage`,
+  catalogue: `${API_V2}/tour-operators/catalogue`,
+  export: `${API_V2}/tour-operators/export`,
+  importPreview: `${API_V2}/tour-operators/import/preview`,
+  import: `${API_V2}/tour-operators/import`,
+  link: (id: string) => `${API_V2}/tour-operators/${encodeURIComponent(id)}`,
+  password: (id: string) => `${API_V2}/tour-operators/${encodeURIComponent(id)}/password`,
+} as const;
+
 export const BRANCH_ENDPOINTS = {
   base: `${API_V2}/branches`,
   byId: (id: string) => `${API_V2}/branches/${id}`,
@@ -67,4 +84,16 @@ export const AGENT_PROFILE_ENDPOINTS = {
   biggestDeals: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/biggest-deals`,
   training: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/training`,
   payouts: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/payouts`,
+} as const;
+
+export const QUOTE_ENDPOINTS = {
+  accepted: (quoteId: string) => `${API_V2}/quotes/${quoteId}/accepted`,
+} as const;
+
+export const QUOTE_SHARE_ENDPOINTS = {
+  generateToken: (quoteId: string) => `${API_V2}/quote-share/${quoteId}/generate-token`,
+  views: (quoteId: string) => `${API_V2}/quote-share/${quoteId}/views`,
+  clientViews: (clientId: string) => `${API_V2}/quote-share/client/${clientId}/views`,
+  customerActions: (quoteId: string) => `${API_V2}/quote-share/${quoteId}/customer-actions`,
+  sent: (quoteId: string) => `${API_V2}/quote-share/${quoteId}/sent`,
 } as const;

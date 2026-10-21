@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import type { Conversation, ConversationMessage } from "../../../types";
 import type { SnoozePresetId } from "../lib";
+import { LunaEnquiryBanner } from "./luna-enquiry-banner";
+import { shouldShowLunaBanner } from "./luna-banner";
 import { CreatedEnquiryBar } from "./created-enquiry-bar";
 import { MessageList } from "./message-list";
 import { ThreadHeader } from "./thread-header";
@@ -37,6 +39,9 @@ export interface ThreadPaneProps {
   /** Enquiry created from this chat this session; shows the green bar above the composer. */
   createdEnquiry?: { title: string; href: string };
   onDismissCreatedEnquiry?(): void;
+  /** Luna banner hidden for this conversation this session. */
+  lunaDismissed?: boolean;
+  onDismissLuna?(): void;
   /** The owner mounts <Composer/> so drafts and attachments stay owner-controlled. */
   composer: ReactNode;
 }
@@ -68,6 +73,8 @@ export function ThreadPane({
   onOpenTestAi,
   createdEnquiry,
   onDismissCreatedEnquiry,
+  lunaDismissed = false,
+  onDismissLuna,
   composer,
 }: ThreadPaneProps) {
   if (!conversation) {
@@ -107,6 +114,12 @@ export function ThreadPane({
         onAssign={onAssign}
       />
       <MessageList conversation={conversation} messages={messages} isLoading={isLoadingMessages} typing={typing} />
+      {shouldShowLunaBanner({
+        conversationType: conversation.conversationType,
+        clientLinked: !!clientId,
+        enquiryCreated: !!createdEnquiry,
+        dismissed: lunaDismissed,
+      }) && <LunaEnquiryBanner onReview={onCreateEnquiry} onDismiss={() => onDismissLuna?.()} />}
       {createdEnquiry && <CreatedEnquiryBar href={createdEnquiry.href} onDismiss={() => onDismissCreatedEnquiry?.()} />}
       {composer}
     </div>

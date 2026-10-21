@@ -69,7 +69,7 @@ export function PostCardStatusBar({ status, postSchedule, isGenerating, onSchedu
   }
   return (
     <div className={DASHED}>
-      <span>No post yet</span>
+      <span>Not scheduled</span>
       <button
         type="button"
         disabled={isGenerating}

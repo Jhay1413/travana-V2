@@ -30,6 +30,8 @@ export interface SegmentedProps<T extends string> {
   label?: string;
   className?: string;
   itemClassName?: string;
+  /** "plain" renders counts as muted text (tight rails); default is the small pill. */
+  countVariant?: "pill" | "plain";
 }
 
 export function Segmented<T extends string>({
@@ -41,6 +43,7 @@ export function Segmented<T extends string>({
   label,
   className,
   itemClassName,
+  countVariant = "pill",
 }: SegmentedProps<T>) {
   return (
     <ToggleGroup
@@ -64,7 +67,12 @@ export function Segmented<T extends string>({
           {item.icon}
           {item.label}
           {item.count !== undefined && (
-            <span className="rounded-full bg-black/5 px-1.5 text-[11px] font-semibold tabular-nums dark:bg-white/10">
+            <span
+              className={cn(
+                "text-[11px] font-semibold tabular-nums",
+                countVariant === "pill" ? "rounded-full bg-black/5 px-1.5 dark:bg-white/10" : "text-social-muted data-[state=on]:text-inherit",
+              )}
+            >
               {item.count}
             </span>
           )}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRoles } from "@/hooks/use-role";
 import { DEFAULT_PREFS, sanitizePrefs, type QueuePrefs } from "../lib/queue-prefs";
 
-const STORAGE_KEY = "tickets.queue.v1";
+const STORAGE_KEY = "tickets.queue.v2";
 
 // Roles that may switch the list scope to "all" (the server enforces it too).
 const ADMIN_TICKET_ROLES = ["org_admin", "branch_manager", "platform_admin"] as const;

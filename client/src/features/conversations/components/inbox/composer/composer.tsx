@@ -138,7 +138,11 @@ export function Composer({
     if (!el) return;
     const base = text ? TEXTAREA_FILLED_HEIGHT_PX : TEXTAREA_EMPTY_HEIGHT_PX;
     el.style.height = "auto";
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, base), TEXTAREA_MAX_HEIGHT_PX)}px`;
+    // scrollHeight excludes the border (box-sizing: border-box), so add it back or a scrollbar appears.
+    const border = el.offsetHeight - el.clientHeight;
+    const wanted = Math.max(el.scrollHeight + border, base);
+    el.style.height = `${Math.min(wanted, TEXTAREA_MAX_HEIGHT_PX)}px`;
+    el.style.overflowY = wanted > TEXTAREA_MAX_HEIGHT_PX ? "auto" : "hidden";
   }, [text, mode]);
 
   // Insert at the caret rather than appending, and hand focus back so typing
@@ -218,11 +222,12 @@ export function Composer({
           { value: "note", label: "Internal note" },
         ]}
         height={38}
+        variant="black"
         className="w-[236px]"
       />
 
       {mode === "reply" && lunaDrafted && text && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#F5F3FF] px-3 py-1.5 text-[12px] text-[#6D28D9] dark:bg-violet-500/10 dark:text-violet-300">
+        <div className="mt-3 flex items-center gap-2 rounded-[10px] bg-[#F5F3FF] px-3 py-1.5 text-[12px] text-[#6D28D9] dark:bg-violet-500/10 dark:text-violet-300">
           <Sparkles className="h-3.5 w-3.5 shrink-0" />
           <span className="font-medium">Drafted by Luna. Check it before you send.</span>
           <span className="ml-auto flex items-center gap-1">
@@ -275,10 +280,11 @@ export function Composer({
         spellCheck
         lang="en-GB"
         className={cn(
-          "mt-3 block w-full resize-none rounded-xl border px-3.5 py-2.5 text-[14px] leading-[1.55] outline-none transition focus-visible:ring-2 focus-visible:ring-social-orange/40",
+          // Same box as the quote page's Inbox tab (ClientChatsTab): light grey reply box, amber note box.
+          "mt-3 block w-full resize-none rounded-xl border px-3.5 py-2.5 text-[14px] leading-[1.55] outline-none transition focus-visible:ring-2 focus-visible:ring-black/10",
           mode === "note"
-            ? "border-dashed border-[#FCD34D] bg-[#FFFBEB] dark:bg-amber-950/30"
-            : "border-social-border bg-card",
+            ? "border-amber-400/40 bg-amber-400/5"
+            : "border-black/10 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.03]",
         )}
         data-testid="conversation-composer-input"
       />
@@ -312,7 +318,7 @@ export function Composer({
             disabled={!canAttach}
             title={canAttach ? "Attach a file" : "Attachments aren't supported on internal notes"}
             aria-label="Attach a file"
-            className="grid h-9 w-9 place-items-center rounded-lg text-black/55 transition hover:bg-black/5 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white"
+            className="grid h-9 w-9 place-items-center rounded-[10px] border border-social-border text-black/55 transition hover:bg-black/5 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 dark:text-white/55 dark:hover:bg-white/10 dark:hover:text-white"
             data-testid="conversation-composer-attach"
           >
             <Paperclip className="h-4.5 w-4.5" />
@@ -332,7 +338,7 @@ export function Composer({
             onClick={() => void submit()}
             disabled={(mode === "reply" && uploading) || isSending}
             title={mode === "reply" && uploading ? "Waiting for the upload to finish…" : "Ctrl+Enter to send"}
-            className="h-9 gap-2 rounded-lg bg-social-orange px-4 text-[13px] font-semibold text-slate-900 hover:bg-social-orange/90"
+            className="h-9 gap-2 rounded-[10px] bg-black px-4 text-[13px] font-semibold text-white hover:bg-black/85 dark:bg-white dark:text-black dark:hover:bg-white/90"
             data-testid="conversation-send"
           >
             {isSending || (mode === "reply" && uploading) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

@@ -26,16 +26,19 @@ interface CreateTicketDialogProps {
   onOpenChange: (open: boolean) => void;
   onCreated?: (ticket: Ticket) => void;
   initialClientId?: string;
+  /** Holiday to pre-select once the client is loaded (only applies with initialClientId). */
+  initialTransactionId?: string;
   initialStatus?: TicketStatusValue;
 }
 
-export function CreateTicketDialog({ open, onOpenChange, onCreated, initialClientId, initialStatus }: CreateTicketDialogProps) {
+export function CreateTicketDialog({ open, onOpenChange, onCreated, initialClientId, initialTransactionId, initialStatus }: CreateTicketDialogProps) {
   const now = useNow();
   const { data: users } = useUsers();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { form, patch, setType, pickClient, attachments, submit, isBusy } = useNewTicketForm({
     open,
     initialClientId,
+    initialTransactionId,
     initialStatus,
     onClose: () => onOpenChange(false),
     onCreated,

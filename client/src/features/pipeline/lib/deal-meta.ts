@@ -1,5 +1,5 @@
 import type { Transaction } from "@/features/quote/types";
-import { isSameLondonDay } from "@/lib/london-day";
+import { isDueToday } from "@/lib/task-due-format";
 import { formatCurrency, getDestinationName, getEnquiryBudget, type PipelineStage } from "./pipeline-helpers";
 
 function shortDate(iso: string | null | undefined): string | null {
@@ -33,9 +33,12 @@ export function buildDealMeta(t: Transaction, stage: PipelineStage): string {
   return parts.length > 0 ? parts.join(" · ") : "Dates not set";
 }
 
-/** Whether an ISO due date falls on the same Europe/London calendar day as `now`. */
-export function isDueToday(due: string | null | undefined, now: Date = new Date()): boolean {
-  if (!due) return false;
-  const d = new Date(due);
-  return !Number.isNaN(d.getTime()) && isSameLondonDay(d, now);
+/** Maps a deal's `next_task` onto NextTaskRow's title/dueDate props (null/null = no task scheduled). */
+export function nextTaskRowProps(
+  task: { title: string | null; due_date: string | null } | null | undefined,
+): { title: string | null; dueDate: string | null } {
+  if (!task) return { title: null, dueDate: null };
+  return { title: task.title ?? "", dueDate: task.due_date };
 }
+
+export { isDueToday };

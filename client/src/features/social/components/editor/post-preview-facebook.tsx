@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { MessageCircle, Share2, ThumbsUp } from "lucide-react";
-import { postToEditorHtml } from "@/lib/post-editor-html";
-import { escapeHtml, postToPlainText, truncateText } from "./preview-text";
+import { escapeHtml, postToPlainText, postToPreviewHtml, truncateText } from "./preview-text";
 
 const FACEBOOK_TEXT_LIMIT = 170;
 
@@ -36,7 +35,7 @@ export function PostPreviewFacebook({
     const { text, truncated: cut } = truncateText(postToPlainText(previewHtml), FACEBOOK_TEXT_LIMIT);
     return {
       truncated: cut,
-      bodyHtml: cut ? escapeHtml(text).replace(/\n/g, "<br>") : postToEditorHtml(previewHtml),
+      bodyHtml: cut ? escapeHtml(text).replace(/\n/g, "<br>") : postToPreviewHtml(previewHtml),
     };
   }, [previewHtml]);
   const firstImage = images[0];
