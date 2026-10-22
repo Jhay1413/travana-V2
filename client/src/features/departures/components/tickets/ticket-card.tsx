@@ -48,7 +48,7 @@ export function TicketCard({ row, days, onCheck }: TicketRowProps) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <b className="font-semibold">{row.clientName}</b>
-          <div className="text-[12px] text-social-muted">{[row.destination, row.operatorName].filter(Boolean).join(" · ")}</div>
+          <div className="text-[12px] text-social-muted">{[row.haysRef, row.destination, row.operatorName].filter(Boolean).join(" · ")}</div>
         </div>
         <WhenCell travelDate={row.travelDate} days={days} done={done} />
       </div>

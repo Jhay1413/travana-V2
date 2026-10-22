@@ -25,6 +25,9 @@ export function TicketRow({ row, days, onCheck }: TicketRowProps) {
       data-testid={`row-ticket-${row.bookingId}`}
     >
       <td className={TD}>
+        <span className="font-semibold tabular-nums tracking-[0.01em] text-social-navy">{row.haysRef || "—"}</span>
+      </td>
+      <td className={TD}>
         <b className="block font-semibold">{row.clientName}</b>
         <LastChange change={row.lastChange} />
       </td>

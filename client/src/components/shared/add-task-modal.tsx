@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCreateTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
-import { FOLLOW_UP_DUE_TIME, isOpening, londonDueDate, tomorrowLondonKey } from "@/features/tasks/lib/task-defaults";
+import { FOLLOW_UP_DUE_TIME, fillEmptyAssignee, isOpening, londonDueDate, tomorrowLondonKey } from "@/features/tasks/lib/task-defaults";
 
 interface AddTaskModalProps {
   open: boolean;
@@ -19,7 +20,8 @@ interface AddTaskModalProps {
   defaultDueTime?: string;
   entityType?: string;
   entityId?: string;
-  assignedToId: string | undefined;
+  /** Pre-selected assignee (the current user or the deal owner); the agent can be changed in the form. */
+  defaultAssignedToId: string | undefined;
   successToast?: string;
   onCreated?: () => void;
   testIdPrefix?: string;
@@ -29,7 +31,7 @@ const LABEL_CLASS = "text-[11px] font-semibold uppercase tracking-[.06em] text-s
 const FIELD_CLASS =
   "h-11 rounded-[10px] border-social-border bg-background px-3.5 text-[14px] shadow-none focus-visible:border-social-orange focus-visible:ring-[3px] focus-visible:ring-social-orange/20";
 
-/** Add-task pop-up matching the prototype: what / date / time, assigned to the caller-supplied user. */
+/** Add-task pop-up matching the prototype: what / assignee / date / time, pre-assigned to the caller-supplied user. */
 export function AddTaskModal({
   open,
   onOpenChange,
@@ -40,7 +42,7 @@ export function AddTaskModal({
   defaultDueTime,
   entityType,
   entityId,
-  assignedToId,
+  defaultAssignedToId,
   successToast = "Task added",
   onCreated,
   testIdPrefix = "add-task",
@@ -50,6 +52,7 @@ export function AddTaskModal({
   const [text, setText] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState(FOLLOW_UP_DUE_TIME);
+  const [assignedToId, setAssignedToId] = useState("");
   const [showError, setShowError] = useState(false);
 
   // Reset the form on the closed -> open flip only.
@@ -62,7 +65,13 @@ export function AddTaskModal({
     setShowError(false);
     setDueDate(defaultDueDate || tomorrowLondonKey());
     setDueTime(defaultDueTime || FOLLOW_UP_DUE_TIME);
+    setAssignedToId(defaultAssignedToId ?? "");
   }, [open]);
+
+  // A default assignee that arrives after opening fills an empty slot but never overwrites a choice.
+  useEffect(() => {
+    if (open) setAssignedToId((cur) => fillEmptyAssignee(cur, defaultAssignedToId));
+  }, [open, defaultAssignedToId]);
 
   const assigneeMissing = !assignedToId;
   const saving = createMutation.isPending;
@@ -136,6 +145,18 @@ export function AddTaskModal({
               </p>
             )}
           </div>
+          <div className="col-span-2 space-y-1.5">
+            <label htmlFor={`${testIdPrefix}-assignee`} className={LABEL_CLASS}>
+              Assign to
+            </label>
+            <UserReassignSelect
+              value={assignedToId}
+              onValueChange={setAssignedToId}
+              zClassName="z-[650]"
+              className="h-11 rounded-[10px] bg-background px-3.5 text-[14px] font-medium"
+              data-testid={`${testIdPrefix}-assignee`}
+            />
+          </div>
           <div className="space-y-1.5">
             <label htmlFor={`${testIdPrefix}-date`} className={LABEL_CLASS}>
               Date
@@ -165,7 +186,7 @@ export function AddTaskModal({
 
           {assigneeMissing && (
             <p className="col-span-2 text-xs text-red-600" data-testid={`${testIdPrefix}-no-assignee`}>
-              Couldn't work out who to assign this to. Reload and try again.
+              Choose who this task is for.
             </p>
           )}
 

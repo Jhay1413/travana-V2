@@ -24,7 +24,7 @@ export function OperatorsToolbar({ query, onQuery, onTemplate }: OperatorsToolba
           className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-social-muted"
         />
       </label>
-      <Button type="button" variant="ghost" className={`${OUTLINE_ACTION} border-transparent bg-transparent`} onClick={onTemplate} data-testid="button-download-template">
+      <Button type="button" variant="ghost" className={OUTLINE_ACTION} onClick={onTemplate} data-testid="button-download-template">
         Download CSV template
       </Button>
     </div>

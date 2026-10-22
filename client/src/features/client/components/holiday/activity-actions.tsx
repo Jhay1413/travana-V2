@@ -23,7 +23,7 @@ export function NewTaskAction({ entityType, entityId }: { entityType: "enquiry" 
         onOpenChange={setOpen}
         entityType={entityType === "booking" ? "quote" : entityType}
         entityId={entityId}
-        assignedToId={currentUser?.id}
+        defaultAssignedToId={currentUser?.id}
         testIdPrefix="holiday-add-task"
       />
     </>

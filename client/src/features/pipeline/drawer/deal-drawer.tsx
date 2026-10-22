@@ -123,7 +123,7 @@ export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove,
         subtitle={`${getTransactionTitle(t)} · ${clientName}`}
         entityType={taskEntity.id ? taskEntity.type : undefined}
         entityId={taskEntity.id}
-        assignedToId={t.user_id || currentUser?.id}
+        defaultAssignedToId={t.user_id || currentUser?.id}
         successToast="Task added"
         open={addTaskOpen}
         onOpenChange={setAddTaskOpen}

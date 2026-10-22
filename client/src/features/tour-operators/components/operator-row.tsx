@@ -12,7 +12,7 @@ import { RowActions } from "./row-actions";
 export function WebLink({ url }: { url: string | null }) {
   if (!url) return <Dash />;
   return (
-    <a href={hrefFor(url)} target="_blank" rel="noreferrer noopener" title={url} className="inline-block max-w-[130px] truncate align-bottom text-social-navy hover:underline">
+    <a href={hrefFor(url)} target="_blank" rel="noreferrer noopener" title={url} className="inline-block max-w-[130px] truncate align-bottom text-blue-600 hover:underline dark:text-blue-400">
       {displayWeb(url)}
     </a>
   );
