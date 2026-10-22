@@ -55,7 +55,7 @@ export function TasksSection({ clientId, firstName }: TasksSectionProps) {
         onOpenChange={taskCreate.setShowTaskDialog}
         entityType="client"
         entityId={clientId}
-        assignedToId={currentUser?.id}
+        defaultAssignedToId={currentUser?.id}
         testIdPrefix="inbox-add-task"
       />
     </Section>

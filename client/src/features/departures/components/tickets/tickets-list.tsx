@@ -51,7 +51,7 @@ export function TicketsList({
             { value: "all", label: `All ${counts.total}`, testId: "segment-tickets-all" },
           ]}
         />
-        <SearchBox value={query} onChange={setQuery} placeholder="Search client or destination" testId="input-tickets-search" />
+        <SearchBox value={query} onChange={setQuery} placeholder="Search Hays number, client or destination" testId="input-tickets-search" />
         <FilterSelect value={operator} onChange={setOperator} allLabel="All tour operators" options={operators} label="Tour operator" testId="select-tickets-operator" />
       </Toolbar>
 
@@ -65,10 +65,11 @@ export function TicketsList({
         </ul>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[940px] border-collapse">
+          <table className="w-full min-w-[1040px] border-collapse">
             <caption className="sr-only">Tickets checklist for each departure, sorted by travel date</caption>
             <thead>
               <tr>
+                <th scope="col" className={TH}>HAY Ref no.</th>
                 <th scope="col" className={TH}>Client name</th>
                 <th scope="col" className={TH}>Travel date</th>
                 <th scope="col" className={TH}>Tour operator</th>

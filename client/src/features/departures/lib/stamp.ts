@@ -4,9 +4,9 @@ import { formatChangeTime } from "./day-labels";
 export type StepKey = Exclude<DepartureCheckKey, "completed" | "fullyPaid">;
 
 export const CHECK_STEPS: ReadonlyArray<{ key: StepKey; label: string }> = [
-  { key: "checkIn", label: "Check in" },
-  { key: "ticketsInHouse", label: "Tickets in house" },
   { key: "passportInfo", label: "Passport info" },
+  { key: "ticketsInHouse", label: "Tickets in house" },
+  { key: "checkIn", label: "Check in" },
   { key: "ticketsPickUp", label: "Tickets pick up" },
 ];
 

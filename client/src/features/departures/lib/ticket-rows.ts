@@ -32,7 +32,7 @@ export function filterTickets(rows: DepartureRow[], f: TicketFilters): Departure
   return rows
     .filter((r) => (f.show === "all" ? true : f.show === "done" ? r.checks.completed : !r.checks.completed))
     .filter((r) => f.operator === ALL_OPTION || r.operatorName === f.operator)
-    .filter((r) => matchesQuery(f.query, r.clientName, r.destination, r.operatorName))
+    .filter((r) => matchesQuery(f.query, r.haysRef, r.clientName, r.destination, r.operatorName))
     .sort(byTravelThenName);
 }
 

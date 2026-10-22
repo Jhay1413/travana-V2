@@ -7,7 +7,7 @@ const ROWS = [
   makeRow({ bookingId: "a", clientName: "Zed", travelDate: "2026-10-22", operatorName: "TUI", destination: "Rhodes", checks: { passportInfo: true } }),
   makeRow({ bookingId: "b", clientName: "Amy", travelDate: "2026-10-22", operatorName: "Jet2holidays", destination: "Malaga" }),
   makeRow({ bookingId: "c", clientName: "Bob", travelDate: "2026-10-30", operatorName: "TUI", destination: "Dubai", checks: { completed: true, passportInfo: true } }),
-  makeRow({ bookingId: "d", clientName: "Cat", travelDate: "2026-10-21", operatorName: null, destination: null }),
+  makeRow({ bookingId: "d", clientName: "Cat", travelDate: "2026-10-21", operatorName: null, destination: null, haysRef: "HAY200777" }),
 ];
 const ALL = { show: "all", query: "", operator: ALL_OPTION } as const;
 
@@ -22,7 +22,8 @@ describe("filterTickets", () => {
   it("filters by operator", () => {
     expect(filterTickets(ROWS, { ...ALL, operator: "TUI" }).map((r) => r.bookingId)).toEqual(["a", "c"]);
   });
-  it("searches client, destination and operator, ignoring case", () => {
+  it("searches Hays number, client, destination and operator, ignoring case", () => {
+    expect(filterTickets(ROWS, { ...ALL, query: "200777" }).map((r) => r.bookingId)).toEqual(["d"]);
     expect(filterTickets(ROWS, { ...ALL, query: " rhodes " }).map((r) => r.bookingId)).toEqual(["a"]);
     expect(filterTickets(ROWS, { ...ALL, query: "jet2" }).map((r) => r.bookingId)).toEqual(["b"]);
     expect(filterTickets(ROWS, { ...ALL, query: "amy" }).map((r) => r.bookingId)).toEqual(["b"]);
