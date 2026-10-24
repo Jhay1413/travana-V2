@@ -1,4 +1,4 @@
-import type { DealPriority, Transaction } from "@shared/schema";
+import type { DealPriority, TaskPriority, Transaction } from "@shared/schema";
 
 export type { DealPriority };
 
@@ -9,6 +9,8 @@ export interface NextTask {
   title: string | null;
   due_date: string | null;
   user_id: string | null;
+  /** Task priority (low | medium | high | urgent) — distinct from the deal priority. */
+  priority: TaskPriority;
 }
 
 /** Narrowed shape of a row returned by transaction.repository.ts's

@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +16,7 @@ import {
   useRescheduleOnOnlySocials,
 } from "@/features/social/api/use-social-post-mutations";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Clock, Copy, Send, Sparkles } from "lucide-react";
+import { Clock, Send, Sparkles } from "lucide-react";
 import { editorHtmlToPost, postToEditorHtml } from "@/lib/post-editor-html";
 import { browserTimezoneLabel, combineLocal, splitLocal } from "@/features/social/lib/schedule-time";
 import { PostContentForm } from "./post-content-form";
@@ -62,17 +61,15 @@ export function SocialPostEditorDialog({
   const rescheduleOnOnlySocials = useRescheduleOnOnlySocials();
   const postRef = useRef<HTMLDivElement>(null);
   const previewFrame = useRef(0);
-  const [subtitle, setSubtitle] = useState("");
   const [scheduleOn, setScheduleOn] = useState(true);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState(DEFAULT_TIME);
-  const [copied, setCopied] = useState(false);
   const [viewLink, setViewLink] = useState(initialViewLink);
   const [priceBadge, setPriceBadge] = useState(initialPriceBadge);
   const [previewHtml, setPreviewHtml] = useState("");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // What was loaded, for the unsaved-changes guard.
-  const baseline = useRef<Pick<EditorSnapshot, "subtitle" | "post" | "schedule"> | null>(null);
+  const baseline = useRef<Pick<EditorSnapshot, "post" | "schedule"> | null>(null);
   const baselineImages = useRef<string | null>(null);
 
   const isScheduled = !!travelDeal?.onlySocialsId;
@@ -85,7 +82,6 @@ export function SocialPostEditorDialog({
 
   useEffect(() => {
     if (!travelDeal || isGenerating) return;
-    setSubtitle(travelDeal.subtitle || "");
     if (postRef.current) {
       postRef.current.innerHTML = postToEditorHtml(travelDeal.post || "");
     }
@@ -95,7 +91,6 @@ export function SocialPostEditorDialog({
     const post = currentPost();
     setPreviewHtml(post);
     baseline.current = {
-      subtitle: travelDeal.subtitle || "",
       post,
       schedule: date ? `${date}T${time || DEFAULT_TIME}` : "",
     };
@@ -137,7 +132,7 @@ export function SocialPostEditorDialog({
     if (!travelDeal || !baseline.current) return false;
     return isDirtySnapshot(
       { ...baseline.current, images: baselineImages.current },
-      { subtitle, post: currentPost(), schedule: scheduleValue(), images: signature },
+      { post: currentPost(), schedule: scheduleValue(), images: signature },
     );
   };
 
@@ -152,7 +147,7 @@ export function SocialPostEditorDialog({
   const handleSaveDraft = async () => {
     if (!travelDeal) return;
     try {
-      await savePost.mutateAsync({ id: travelDeal.id, data: { post: currentPost(), subtitle } });
+      await savePost.mutateAsync({ id: travelDeal.id, data: { post: currentPost() } });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to save post";
       toast({ title: "Save failed", description: msg, variant: "destructive" });
@@ -189,7 +184,6 @@ export function SocialPostEditorDialog({
         id: travelDeal.id,
         data: {
           post: currentHtml,
-          subtitle,
         },
       });
     } catch (err) {
@@ -247,17 +241,6 @@ export function SocialPostEditorDialog({
     }
   };
 
-  const handleCopy = () => {
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = currentPost().replace(/<br>\n?/g, "\n");
-    const plainText = tempDiv.textContent || "";
-    navigator.clipboard.writeText(plainText).then(() => {
-      setCopied(true);
-      toast({ title: "Copied to clipboard" });
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
   const familyMatch = /for a Family of (3|4)/.exec(previewHtml || travelDeal?.post || "");
   const priceLabel = travelDeal?.price
     ? familyMatch
@@ -291,19 +274,6 @@ export function SocialPostEditorDialog({
                   Scheduled
                 </div>
               )}
-              {!isGenerating && travelDeal && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleCopy}
-                  aria-label="Copy post text"
-                  className="h-8 w-8"
-                  data-testid="button-copy-post"
-                >
-                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
-              )}
             </div>
           </div>
 
@@ -317,7 +287,7 @@ export function SocialPostEditorDialog({
               </div>
               <div className="text-center">
                 <p className="text-sm font-semibold text-slate-800">Generating your post...</p>
-                <p className="mt-1 text-xs text-slate-400">AI is writing subtitle & resort summary</p>
+                <p className="mt-1 text-xs text-slate-400">Luna is writing your post</p>
               </div>
             </div>
           ) : travelDeal ? (
@@ -336,8 +306,6 @@ export function SocialPostEditorDialog({
                 </div>
                 <div className="flex flex-1 flex-col gap-4 p-6 md:overflow-y-auto">
                   <PostContentForm
-                    subtitle={subtitle}
-                    onSubtitleChange={setSubtitle}
                     postRef={postRef}
                     onEditorInput={handleEditorInput}
                     previewHtml={previewHtml}

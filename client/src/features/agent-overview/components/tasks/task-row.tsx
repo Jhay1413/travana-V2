@@ -2,6 +2,7 @@ import { Check, Ellipsis } from "lucide-react";
 import type { TaskWithClient } from "@/features/tasks/api/task.api";
 import { formatDueDateTime } from "@/features/pipeline";
 import { cn } from "@/lib/utils";
+import { TaskPriorityPill } from "@/features/tasks";
 import { PersonAvatar, RowButton } from "../home/home-ui";
 import { currency } from "../helpers";
 
@@ -87,6 +88,7 @@ export function TaskRow({
         <div className="mt-0.5 truncate text-[11px] text-social-muted xl:text-[12px]">{taskMeta(task)}</div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        <TaskPriorityPill priority={task.priority} testId={`pill-dashboard-task-priority-${task.id}`} />
         <PersonAvatar name={task.clientName || task.title} size={34} />
         <button
           type="button"

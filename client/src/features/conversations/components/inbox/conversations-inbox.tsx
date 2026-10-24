@@ -3,7 +3,6 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useToast } from "@/hooks/use-toast";
 import { clientDisplayName } from "@/lib/utils";
 import { useContactLink } from "../../api/use-contact-link";
-import { ChannelsDialog } from "../channels-dialog";
 import { contactLinkMatch } from "../client-link-section";
 import { useConversationsRealtimeState, type TypingPresence } from "../conversations-realtime-provider";
 import { GenerateEnquiryButton } from "../generate-enquiry-button";
@@ -91,7 +90,6 @@ export function ConversationsInbox() {
             realtimeConnected={realtimeConnected}
             openCount={state.openCount}
             canManageChannels={state.canManageChannels}
-            onOpenChannels={() => state.setChannelsOpen(true)}
           />
         }
         onNewMessage={() => state.setNewMessageOpen(true)}
@@ -176,7 +174,6 @@ export function ConversationsInbox() {
       )}
       {ticket.dialog}
       <NewMessageDialog open={state.newMessageOpen} onOpenChange={state.setNewMessageOpen} />
-      {state.canManageChannels && <ChannelsDialog open={state.channelsOpen} onOpenChange={state.setChannelsOpen} />}
       {state.canTestAi && selected && (
         <TestAiModal conversationId={selected.id} open={state.testAiOpen} onOpenChange={state.setTestAiOpen} />
       )}

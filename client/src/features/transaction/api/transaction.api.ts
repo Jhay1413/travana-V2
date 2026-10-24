@@ -11,7 +11,7 @@ export type PipelineSort =
   | "profit_desc"
   | "name_asc"
   | "quiet_first";
-export type PipelineQuick = "due_today" | "no_task" | "quiet_7";
+export type PipelineQuick = "no_task" | "quiet_7";
 export type DealPriority = "low" | "medium" | "high";
 
 export interface PipelineQueryFilters {
@@ -32,7 +32,6 @@ export interface PipelineColumnPage {
 
 export interface PipelineCounts {
   all: number;
-  due_today: number;
   no_task: number;
   quiet_7: number;
 }

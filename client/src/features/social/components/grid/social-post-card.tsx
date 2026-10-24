@@ -7,7 +7,8 @@ import type { EnrichedQuote } from "@/features/quote/types";
 import { derivePostStatus, STATUS_META, type SocialPostStatus } from "@/features/social/lib/post-status";
 import { getFirstImage, getSubtitle } from "@/features/social/lib/quote-card-fields";
 import { cn } from "@/lib/utils";
-import { cardPriceLabel, getCardFields } from "./card-fields";
+import { useSocialChannel } from "@/features/social/api/use-social-settings-queries";
+import { cardPriceLabel, getCardFields, postPlatforms } from "./card-fields";
 import { PostCardMenu } from "./post-card-menu";
 import { PostCardStatusBar } from "./post-card-status-bar";
 
@@ -57,6 +58,7 @@ export function SocialPostCard(props: SocialPostCardProps) {
   const status = derivePostStatus(quote);
   const StatusIcon = STATUS_ICONS[status];
   const penLabel = status === "posted" ? "Post again" : status === "not_generated" ? "Generate post" : "Edit post";
+  const { data: channel } = useSocialChannel();
   const operator = quote.main_tour_operator_name;
 
   // Optimistic: flip locally, roll back if the request fails.
@@ -115,6 +117,8 @@ export function SocialPostCard(props: SocialPostCardProps) {
             isGenerating={isGenerating}
             onSchedule={() => props.onSchedule(quote)}
             onGenerate={() => props.onGenerate(quote)}
+            platforms={postPlatforms(quote, channel)}
+            onOpen={() => props.onEdit(quote)}
           />
           <div className="flex items-center gap-2">
             <Button asChild variant="outline" className="inline-flex h-[38px] flex-1 items-center justify-center gap-2 rounded-[10px] border-social-border bg-card text-[13px] font-semibold" data-testid={`button-view-quote-${quote.id}`}>

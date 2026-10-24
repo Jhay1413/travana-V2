@@ -194,3 +194,28 @@ export function toUiConversation(item: SsConversation): Conversation {
       : [],
   };
 }
+
+// Phone numbers: only dial characters, 7-15 digits (E.164 max). Opaque ids
+// (UUIDs, hex, long numeric platform ids) fail one of the two checks.
+const PHONE_SHAPE = /^\+?[\d\s().-]+$/;
+const PHONE_MIN_DIGITS = 7;
+const PHONE_MAX_DIGITS = 15;
+
+/** True when the string looks like a real phone number rather than an opaque id. */
+export function looksLikePhone(value: string | null | undefined): boolean {
+  const v = (value ?? "").trim();
+  if (!PHONE_SHAPE.test(v)) return false;
+  const digits = v.replace(/\D/g, "").length;
+  return digits >= PHONE_MIN_DIGITS && digits <= PHONE_MAX_DIGITS;
+}
+
+/**
+ * The handle to show for a contact, or null when it is just SendSeven's opaque
+ * contact id (any channel whose contact has no phone or email on file). Decided
+ * by shape, not channel: a WhatsApp contact without a phone also carries an id.
+ */
+export function displayHandle(contact: { channel: ConversationChannel; handle: string | null | undefined }): string | null {
+  const handle = (contact.handle ?? "").trim();
+  if (!handle) return null;
+  return handle.includes("@") || looksLikePhone(handle) ? handle : null;
+}

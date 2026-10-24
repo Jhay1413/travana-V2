@@ -26,6 +26,10 @@ import { useCreateTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import type { FormPresentation } from "@/features/quote/types";
 import { fillEmptyAssignee, isOpening, resolveTaskFormDefaults } from "@/features/tasks/lib/task-defaults";
+import { CUSTOM_TASK_TYPE, titleForTaskType, type TaskTypeValue } from "@/features/tasks/lib/task-types";
+import { DEFAULT_TASK_PRIORITY, type TaskPriority } from "@/features/tasks/lib/task-priority";
+import { TaskTypeSelect } from "../shared/task-type-select";
+import { TaskPrioritySelect } from "../shared/task-priority-select";
 
 interface CreateTaskDialogProps {
   open: boolean;
@@ -43,8 +47,6 @@ interface CreateTaskDialogProps {
   description?: string;
   /** Submit button label (default "Create Task"). */
   submitLabel?: string;
-  /** Label of the title field (default "Task"). */
-  taskLabel?: string;
   /** Pre-filled due date, YYYY-MM-DD (default today). */
   defaultDueDate?: string;
   /** Pre-filled due time, HH:mm (default 09:00). */
@@ -85,7 +87,6 @@ export function CreateTaskDialog({
   title: heading = "New Task",
   description: subheading = "Create a task and allocate it to an agent.",
   submitLabel = "Create Task",
-  taskLabel = "Task",
   defaultDueDate,
   defaultDueTime,
   hideDescription = false,
@@ -95,7 +96,9 @@ export function CreateTaskDialog({
 }: CreateTaskDialogProps) {
   const { toast } = useToast();
   const createMutation = useCreateTask(entityType ?? "", entityId ?? "");
+  const [taskType, setTaskType] = useState<TaskTypeValue | "">("");
   const [title, setTitle] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>(DEFAULT_TASK_PRIORITY);
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("09:00");
@@ -107,7 +110,9 @@ export function CreateTaskDialog({
     const opening = isOpening(prevOpen.current, open);
     prevOpen.current = open;
     if (!opening) return;
+    setTaskType("");
     setTitle("");
+    setPriority(DEFAULT_TASK_PRIORITY);
     setDescription("");
     const initial = resolveTaskFormDefaults({ defaultDueDate, defaultDueTime, defaultAssignedToId }, toDateInput(new Date()));
     setDueDate(initial.dueDate);
@@ -127,14 +132,16 @@ export function CreateTaskDialog({
     </p>
   ) : null;
 
-  const canSubmit = !!title.trim() && !!dueDate && !!assignedToId;
+  const taskTitle = taskType ? titleForTaskType(taskType, title) : "";
+  const canSubmit = !!taskType && !!taskTitle && !!dueDate && !!assignedToId;
 
   const handleSave = () => {
     if (!canSubmit) return;
     const combined = new Date(`${dueDate}T${dueTime || "09:00"}`);
     createMutation.mutate(
       {
-        title: title.trim(),
+        title: taskTitle,
+        priority,
         description: description.trim() ? description.trim() : null,
         dueDate: combined,
         userId: assignedToId,
@@ -163,13 +170,33 @@ export function CreateTaskDialog({
         data-testid="create-task-drawer"
       >
         <div className="px-7 pb-6 pt-6 grid gap-4">
-          <DrawerField label={taskLabel} className="max-w-[420px]">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="What needs to be done?"
-              className={drawerInputClass}
-              data-testid="input-create-task-title"
+          <DrawerField label="Task" className="max-w-[420px]">
+            <TaskTypeSelect
+              value={taskType}
+              onChange={setTaskType}
+              className={drawerControlClass}
+              aria-label="Task type"
+              data-testid="create-task-type"
+            />
+          </DrawerField>
+          {taskType === CUSTOM_TASK_TYPE && (
+            <DrawerField label="Describe the task" className="max-w-[420px]">
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="What needs to be done?"
+                className={drawerInputClass}
+                data-testid="input-create-task-title"
+              />
+            </DrawerField>
+          )}
+          <DrawerField label="Priority" className="max-w-[420px]">
+            <TaskPrioritySelect
+              value={priority}
+              onChange={setPriority}
+              className={drawerControlClass}
+              aria-label="Priority"
+              data-testid="create-task-priority"
             />
           </DrawerField>
           {!hideDescription && <DrawerField label="Description" className="max-w-[560px]">
@@ -242,13 +269,37 @@ export function CreateTaskDialog({
 
         <div className="mt-3 grid gap-3">
           <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-black/60">{taskLabel}</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter a task…"
+            <Label className="text-xs font-medium text-black/60">Task</Label>
+            <TaskTypeSelect
+              value={taskType}
+              onChange={setTaskType}
               className="h-9 rounded-xl border-black/10 bg-white/70"
-              data-testid="input-create-task-title"
+              aria-label="Task type"
+              data-testid="create-task-type"
+            />
+          </div>
+
+          {taskType === CUSTOM_TASK_TYPE && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Describe the task</Label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Enter a task…"
+                className="h-9 rounded-xl border-black/10 bg-white/70"
+                data-testid="input-create-task-title"
+              />
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-black/60">Priority</Label>
+            <TaskPrioritySelect
+              value={priority}
+              onChange={setPriority}
+              className="h-9 rounded-xl border-black/10 bg-white/70"
+              aria-label="Priority"
+              data-testid="create-task-priority"
             />
           </div>
 

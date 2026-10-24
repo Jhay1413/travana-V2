@@ -137,6 +137,18 @@ describe("taskService.create", () => {
     );
     expect(result.description).toBe("Call the supplier to confirm the cabin upgrade");
   });
+  it("forwards priority to the repository on create", async () => {
+    vi.mocked(taskRepository.create).mockResolvedValue({ id: "task1", userId: "u1", priority: "urgent" } as never);
+    await taskService.create({ userId: "u1", title: "Call", priority: "urgent" } as never, SCOPE);
+    expect(taskRepository.create).toHaveBeenCalledWith(expect.objectContaining({ priority: "urgent" }), SCOPE);
+  });
+
+  it("leaves priority undefined on create when omitted so the DB default applies", async () => {
+    vi.mocked(taskRepository.create).mockResolvedValue({ id: "task1", userId: "u1", priority: "medium" } as never);
+    await taskService.create({ userId: "u1", title: "Call" } as never, SCOPE);
+    const values = vi.mocked(taskRepository.create).mock.calls[0][0] as { priority?: string };
+    expect(values.priority).toBeUndefined();
+  });
 });
 
 describe("taskService.update", () => {
@@ -224,6 +236,11 @@ describe("taskService.update", () => {
       SCOPE,
     );
     expect(result.description).toBe("Updated details for the client");
+  });
+  it("forwards priority to the repository on update", async () => {
+    vi.mocked(taskRepository.update).mockResolvedValue({ id: "task1", userId: "u1", priority: "high" } as never);
+    await taskService.update("task1", { priority: "high" } as never, SCOPE);
+    expect(taskRepository.update).toHaveBeenCalledWith("task1", expect.objectContaining({ priority: "high" }), SCOPE);
   });
 });
 

@@ -1,7 +1,7 @@
 import { db } from "../../config/database";
 import { publicClientColumns } from "../neon-client/neon-client.serializer";
 import { transaction, tickets, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks, favorites } from "@shared/schema";
-import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
+import type { Transaction, TaskPriority, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
 import { tourOperatorFields } from "./tour-operator-fields";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, getTableColumns, type SQL, type Column } from "drizzle-orm";
 import { randomUUID } from "crypto";
@@ -405,10 +405,10 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
   const [notesRows, taskRows] = await Promise.all([
     db.select({ transaction_id: notes.transaction_id, createdAt: notes.createdAt }).from(notes).where(inArray(notes.transaction_id, txnIds)),
     activityEntityIds.length > 0
-      ? db.select({ id: tasks.id, entityId: tasks.entityId, title: tasks.title, dueDate: tasks.dueDate, completed: tasks.completed, completedAt: tasks.completedAt, createdAt: tasks.createdAt, userId: tasks.userId })
+      ? db.select({ id: tasks.id, entityId: tasks.entityId, title: tasks.title, dueDate: tasks.dueDate, completed: tasks.completed, completedAt: tasks.completedAt, createdAt: tasks.createdAt, userId: tasks.userId, priority: tasks.priority })
           .from(tasks)
           .where(and(inArray(tasks.entityId, activityEntityIds), inArray(tasks.entityType, ['enquiry', 'quote', 'booking'])))
-      : Promise.resolve([] as { id: string; entityId: string | null; title: string | null; dueDate: Date | null; completed: boolean | null; completedAt: Date | null; createdAt: Date | null; userId: string | null }[]),
+      : Promise.resolve([] as { id: string; entityId: string | null; title: string | null; dueDate: Date | null; completed: boolean | null; completedAt: Date | null; createdAt: Date | null; userId: string | null; priority: TaskPriority }[]),
   ]);
 
   const notesMaxByTxn = new Map<string, number>();
@@ -498,7 +498,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
 
     const nt = nextTaskByTxn.get(txn.id);
     const next_task: NextTask | null = nt
-      ? { id: nt.id, title: nt.title ?? null, due_date: nt.dueDate ? new Date(nt.dueDate).toISOString() : null, user_id: nt.userId ?? null }
+      ? { id: nt.id, title: nt.title ?? null, due_date: nt.dueDate ? new Date(nt.dueDate).toISOString() : null, user_id: nt.userId ?? null, priority: nt.priority }
       : null;
 
     return {

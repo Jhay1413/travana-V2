@@ -153,13 +153,14 @@ function InboxMessageBubble({ message }: { message: ConversationMessage }) {
 
   if (message.isNote) {
     return (
-      <div className="flex justify-center">
-        <div className="w-[88%] rounded-[14px] border-[1.5px] border-dashed border-[#FCD34D] bg-[#FFFBEB] px-3.5 py-2.5 text-[14px] leading-[1.55] text-slate-800 dark:bg-amber-950/30 dark:text-amber-100">
-          <div className="mb-1 text-[12px] font-semibold text-amber-800 dark:text-amber-200">
-            🔒 Internal note · {message.authorName ?? "Team"} · {clockTime(message.sentAt)}
+      <div className="flex justify-end">
+        <div className="max-w-[78%]">
+          <div className="rounded-2xl rounded-br-[4px] border border-[#FCD34D] bg-[#FFFBEB] px-3.5 py-2.5 text-[14px] leading-[1.55] text-slate-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-100">
+            <p className="whitespace-pre-wrap">{message.body}</p>
           </div>
-          <p className="whitespace-pre-wrap">{message.body}</p>
-          <div className="mt-1 text-right text-[11px] text-muted-foreground">Only your team can see this</div>
+          <div className="mt-1 text-right text-[11px] text-amber-800 dark:text-amber-200">
+            Internal note · {message.authorName ?? "Team"} · {clockTime(message.sentAt)}
+          </div>
         </div>
       </div>
     );
@@ -192,7 +193,7 @@ function InboxMessageBubble({ message }: { message: ConversationMessage }) {
             "px-3.5 py-2.5 text-[14px] leading-[1.55]",
             outbound
               ? "rounded-2xl rounded-br-[4px] bg-sky-100 text-black/85 dark:bg-sky-500/15 dark:text-white/90"
-              : "rounded-2xl rounded-bl-[4px] border border-social-border bg-white text-slate-900 dark:bg-card dark:text-foreground",
+              : "rounded-2xl rounded-bl-[4px] bg-[#EEF2F7] text-slate-900 dark:border dark:border-social-border dark:bg-card dark:text-foreground",
           )}
         >
           {message.body && <p className="whitespace-pre-wrap">{message.body}</p>}

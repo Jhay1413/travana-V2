@@ -1,10 +1,11 @@
 import { Link } from "wouter";
-import { Check, ExternalLink, Loader2, Mail, Phone, Plus, Star } from "lucide-react";
+import { Check, ExternalLink, Loader2, Mail, MessageCircle, Plus, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { clientDisplayName } from "@/lib/utils";
 import { useUnlinkContact } from "../../../api/use-contact-link";
 import type { Conversation } from "../../../types";
 import type { NeonClient } from "@/features/client";
+import { whatsAppLink } from "../../../lib/whatsapp-link";
 import { badgeTone } from "./badge-tone";
 import { ChannelAvatar, CopyButton, TagPill } from "../shared";
 
@@ -29,6 +30,7 @@ export function ClientHeader({ conversation, client, onCreateEnquiry, creatingEn
   const since = memberSince(client.createdAt);
   const tags = conversation.tags ?? [];
   const tone = badgeTone(client.badge);
+  const waLink = whatsAppLink(client.phoneNumber);
 
   const unlink = async () => {
     try {
@@ -75,25 +77,37 @@ export function ClientHeader({ conversation, client, onCreateEnquiry, creatingEn
           </div>
         )}
       </div>
-      {(client.phoneNumber || client.email) && (
+      {client.email && (
         <div className="px-5 pb-4">
-          {client.phoneNumber && (
-            <div className="flex items-center gap-2.5 py-1.5 text-[13px]">
-              <Phone className="h-4 w-4 shrink-0 text-social-muted" />
-              <span className="min-w-0 flex-1 truncate">{client.phoneNumber}</span>
-              <CopyButton value={client.phoneNumber} label="Copy phone" />
-            </div>
-          )}
-          {client.email && (
-            <div className="flex items-center gap-2.5 py-1.5 text-[13px]">
-              <Mail className="h-4 w-4 shrink-0 text-social-muted" />
-              <span className="min-w-0 flex-1 truncate">{client.email}</span>
-              <CopyButton value={client.email} label="Copy email" />
-            </div>
-          )}
+          <div className="flex items-center gap-2.5 py-1.5 text-[13px]">
+            <Mail className="h-4 w-4 shrink-0 text-social-muted" />
+            <span className="min-w-0 flex-1 truncate">{client.email}</span>
+            <CopyButton value={client.email} label="Copy email" />
+          </div>
         </div>
       )}
       <div className="flex flex-col gap-2 px-5 pb-4">
+        {client.phoneNumber && (
+          <div className="flex items-center gap-1.5">
+            {waLink ? (
+              <a
+                href={waLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-[10px] border border-social-border bg-card px-3 text-[14px] font-semibold"
+                data-testid="client-whatsapp"
+              >
+                <MessageCircle className="h-4 w-4 shrink-0 text-[#10B981]" />
+                <span className="truncate">{client.phoneNumber}</span>
+              </a>
+            ) : (
+              <span className="inline-flex h-11 min-w-0 flex-1 items-center justify-center rounded-[10px] border border-social-border bg-card px-3 text-[14px] font-semibold">
+                <span className="truncate">{client.phoneNumber}</span>
+              </span>
+            )}
+            <CopyButton value={client.phoneNumber} label="Copy phone number" />
+          </div>
+        )}
         <button
           type="button"
           onClick={onCreateEnquiry}
@@ -105,7 +119,7 @@ export function ClientHeader({ conversation, client, onCreateEnquiry, creatingEn
         </button>
         <Link
           href={`/clients/${client.id}`}
-          className="inline-flex h-[38px] w-full items-center justify-center gap-1.5 rounded-[10px] border border-social-border bg-card text-[13px] font-semibold"
+          className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[10px] border border-social-border bg-card text-[14px] font-semibold"
         >
           Open client page
           <ExternalLink className="h-3.5 w-3.5 text-social-muted" />

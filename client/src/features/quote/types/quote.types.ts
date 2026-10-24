@@ -127,7 +127,7 @@ export interface Transaction {
   /** ISO timestamp of the deal's most recent activity, used for the "No activity for N days" card line. */
   last_activity_at?: string;
   /** The deal's next open task, if any — drives the card's task line. */
-  next_task?: { id: string; title: string | null; due_date: string | null; user_id: string | null } | null;
+  next_task?: { id: string; title: string | null; due_date: string | null; user_id: string | null; priority?: "low" | "medium" | "high" | "urgent" } | null;
   /** Pipeline endpoints only: whether the viewing user pinned this deal (server-side, drives column order). */
   pinned?: boolean;
   /** ISO time the viewing user pinned this deal; null when not pinned. */

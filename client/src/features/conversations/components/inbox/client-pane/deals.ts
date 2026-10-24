@@ -125,30 +125,30 @@ export function selectExpiredDeals(transactions: Transaction[] | undefined): Exp
     .slice(0, 5);
 }
 
-export interface ClientMoneyStats {
+export interface ClientDealCounts {
+  enquiries: number;
+  quotes: number;
   bookings: number;
-  profit: number;
-  spend: number;
+}
+
+// Mirrors computeClientStats in client/lib/client-stats.ts (the client page's
+// Enquiries / Quotes / Bookings tiles): every enquiry counts; quotes are
+// primary only (no copies) and drop once their transaction became a booking
+// (lost bookings included); bookings exclude LOST.
+export function clientDealCounts(transactions: Transaction[] | undefined): ClientDealCounts {
+  const counts: ClientDealCounts = { enquiries: 0, quotes: 0, bookings: 0 };
+  for (const t of transactions ?? []) {
+    const booking = t.booking as EnrichedBooking | null | undefined;
+    if (t.enquiry) counts.enquiries += 1;
+    if (booking && !isLostBooking(booking)) counts.bookings += 1;
+    if (!booking) counts.quotes += ((t.quotes ?? []) as LiveQuoteRecord[]).filter((q) => !q.isQuoteCopy).length;
+  }
+  return counts;
 }
 
 function num(value: string | number | null | undefined): number {
   const n = typeof value === "number" ? value : parseFloat(value ?? "");
   return Number.isFinite(n) ? n : 0;
-}
-
-// Profit = sum of booking package_commission (same formula as the client page's
-// "Total Profit"); spend = sum of the customer total (falls back to sales_price).
-export function clientMoneyStats(transactions: Transaction[] | undefined): ClientMoneyStats {
-  const stats: ClientMoneyStats = { bookings: 0, profit: 0, spend: 0 };
-  for (const t of transactions ?? []) {
-    const b = t.booking as EnrichedBooking | null | undefined;
-    // LOST bookings never count towards bookings, profit or spend.
-    if (!b || isLostBooking(b)) continue;
-    stats.bookings += 1;
-    stats.profit += num(b.package_commission);
-    stats.spend += num(b.total_price ?? b.sales_price);
-  }
-  return stats;
 }
 
 export type DealKind = "booking" | "quote" | "enquiry";

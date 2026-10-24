@@ -14,8 +14,6 @@ export interface QuoteDialogState {
 export interface DealRef {
   tx: Transaction;
   stage: PipelineStage;
-  /** Open the drawer with the Add task pop-up already showing. */
-  addTask?: boolean;
 }
 
 /** Open/closed state of every dialog and the drawer on the pipeline page. */

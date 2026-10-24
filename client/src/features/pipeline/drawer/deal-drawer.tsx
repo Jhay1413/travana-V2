@@ -37,16 +37,14 @@ interface DealDrawerProps {
   onMove: (to: PipelineStage) => void;
   onMarkLost: () => void;
   onAddQuote: () => void;
-  /** Open with the Add task pop-up already showing (from a card / row "+ Add task"). */
-  initialAddTask?: boolean;
   /** Called after a task is created so the board can refresh its next-task line. */
   onTaskCreated?: () => void;
 }
 
 /** Right-hand quick view of a deal: summary, customer, money, operator, tasks and notes. */
-export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove, onMarkLost, onAddQuote, initialAddTask = false, onTaskCreated }: DealDrawerProps) {
+export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove, onMarkLost, onAddQuote, onTaskCreated }: DealDrawerProps) {
   const [, setLocation] = useLocation();
-  const [addTaskOpen, setAddTaskOpen] = useState(initialAddTask && !!getTaskEntity(t, stage).id);
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
   const { data: currentUser } = useCurrentUser();
   const navUrl = getTransactionNavUrl(t, stage);
   const naturalStage = stage === "Future" ? getStageForTransaction(t) : stage;
@@ -91,7 +89,7 @@ export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove,
           <Label>Customer</Label>
           <DrawerCustomerCard transaction={t} clientName={clientName} />
 
-          <Label>Money</Label>
+          <Label>Financials</Label>
           <DrawerMoney transaction={t} onAddQuote={onAddQuote} />
 
           {(t.quotes?.length || t.booking || operator.name || operator.logoUrl) && (
@@ -105,6 +103,7 @@ export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove,
           <NextTaskRow
             size="drawer"
             {...nextTaskRowProps(t.next_task)}
+            priority={t.next_task?.priority}
             onOpenQuote={openFull}
             quoteLabel={naturalStage === "Enquiry" ? "View deal" : "View quote"}
             onAddTask={taskEntity.id ? () => setAddTaskOpen(true) : undefined}

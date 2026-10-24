@@ -66,7 +66,6 @@ export function useInboxState() {
     setSelectedIdRaw(id);
   }, []);
   const [overlay, setOverlay] = useState<Overlay>({});
-  const [channelsOpen, setChannelsOpen] = useState(false);
   const [testAiOpen, setTestAiOpen] = useState(false);
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [clientPaneOpen, setClientPaneOpen] = useState(false);
@@ -383,7 +382,7 @@ export function useInboxState() {
     overlay, setOverlay, clearOptimistic, clearSnoozeOverride, settleSnoozeOverride,
     seenAt, markSeen, forcedUnread, markUnread,
     ...drafts,
-    channelsOpen, setChannelsOpen, testAiOpen, setTestAiOpen,
+    testAiOpen, setTestAiOpen,
     newMessageOpen, setNewMessageOpen, clientPaneOpen, setClientPaneOpen,
     canManageChannels, canTestAi, openCount, snoozedCount, badges,
     currentUser: currentUser ? { id: currentUser.id, name: myName || currentUser.name } : null,

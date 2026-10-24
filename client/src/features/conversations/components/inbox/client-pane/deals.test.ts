@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "@/features/quote/types";
 import {
-  clientMoneyStats,
+  clientDealCounts,
   dealMetaLine,
   quoteDateLine,
   selectExpiredDeals,
@@ -80,32 +80,21 @@ describe("quoteDateLine", () => {
   });
 });
 
-describe("clientMoneyStats", () => {
-  it("sums commission as profit and total_price (else sales_price) as spend", () => {
-    const stats = clientMoneyStats([
-      txn({ booking: { package_commission: "100.50", total_price: "1000", sales_price: "900" } }),
-      txn({ booking: { package_commission: "50", sales_price: "500" } }),
-      txn({}),
-    ]);
-    expect(stats).toEqual({ bookings: 2, profit: 150.5, spend: 1500 });
+describe("clientDealCounts", () => {
+  it("returns zeros for an unlinked client (no transactions)", () => {
+    expect(clientDealCounts(undefined)).toEqual({ enquiries: 0, quotes: 0, bookings: 0 });
+    expect(clientDealCounts([])).toEqual({ enquiries: 0, quotes: 0, bookings: 0 });
   });
 
-  it("excludes LOST bookings from bookings, profit and spend", () => {
-    const stats = clientMoneyStats([
-      txn({ booking: { package_commission: "100", sales_price: "1000", booking_status: "BOOKED" } }),
-      txn({ booking: { package_commission: "75", sales_price: "800", booking_status: "LOST" } }),
-      txn({ booking: { package_commission: "25", sales_price: "200", booking_status: "lost" } }),
+  it("counts enquiries, primary quotes and non-lost bookings", () => {
+    const counts = clientDealCounts([
+      txn({ enquiry: { id: "e1" } }),
+      txn({ enquiry: { id: "e2" }, quotes: [{ id: "q1" }, { id: "q1-copy", isQuoteCopy: true }, { id: "q2" }] }),
+      txn({ enquiry: { id: "e3" }, quotes: [{ id: "q3" }], booking: { booking_status: "BOOKED" } }),
+      txn({ quotes: [{ id: "q4" }], booking: { booking_status: "lost" } }),
     ]);
-    expect(stats).toEqual({ bookings: 1, profit: 100, spend: 1000 });
-  });
-
-  it("treats missing or invalid numbers as 0", () => {
-    expect(clientMoneyStats([txn({ booking: { package_commission: null, sales_price: "abc" } })])).toEqual({
-      bookings: 1,
-      profit: 0,
-      spend: 0,
-    });
-    expect(clientMoneyStats(undefined)).toEqual({ bookings: 0, profit: 0, spend: 0 });
+    // quotes: q1 + q2 only (copy skipped; q3/q4 superseded by a booking, lost included)
+    expect(counts).toEqual({ enquiries: 3, quotes: 2, bookings: 1 });
   });
 });
 

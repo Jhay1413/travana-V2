@@ -1,4 +1,4 @@
-import { Instagram, Mail, MessageCircle, MessageSquare, Phone, type LucideIcon } from "lucide-react";
+import { Facebook, Instagram, Mail, MessageCircle, MessageSquare, Phone, type LucideIcon } from "lucide-react";
 import type { ConversationChannel } from "../../../types";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +79,31 @@ export function ChannelAvatar({ name, avatarUrl, channel, size = 44, badge = tru
           <Icon className="h-[10px] w-[10px]" />
         </span>
       )}
+    </div>
+  );
+}
+
+const CIRCLE_ICON: Record<ConversationChannel, LucideIcon> = {
+  whatsapp: MessageCircle,
+  messenger: Facebook,
+  instagram: Instagram,
+  email: Mail,
+  sms: MessageSquare,
+};
+
+/** Conversation-list avatar: the circle is the channel's platform icon (no photo, no initials). */
+export function ChannelCircle({ channel, size = 40 }: { channel: ConversationChannel; size?: number }) {
+  const meta = CHANNEL_META[channel];
+  const Icon = CIRCLE_ICON[channel];
+  return (
+    <div
+      role="img"
+      aria-label={meta.label}
+      title={meta.label}
+      className="grid shrink-0 place-items-center rounded-full text-white"
+      style={{ width: size, height: size, backgroundColor: meta.color }}
+    >
+      <Icon className="h-5 w-5" />
     </div>
   );
 }

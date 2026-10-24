@@ -7,8 +7,9 @@ import { EditTaskDialog } from "@/features/tasks/components/tasks/EditTaskDialog
 import type { TaskWithClient } from "@/features/tasks/api/task.api";
 import { dealDeepLinkHref } from "@/lib/deal-links";
 import { londonDayKey } from "@/lib/london-day";
+import { visibleRows } from "@/lib/visible-rows";
 import { taskDueRange, type TaskRangeFilter } from "../lib/task-ranges";
-import { EmptyLine, HomeLink } from "./home/home-ui";
+import { EmptyLine } from "./home/home-ui";
 import { TaskFilters } from "./tasks/task-filters";
 import { TaskRow } from "./tasks/task-row";
 
@@ -44,6 +45,7 @@ export function TasksTab({ userId }: { userId: string }) {
   // Ids ticked off in this panel. Applied optimistically so the row reads as done
   // straight away; the incomplete-only list then drops it once it refetches.
   const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set());
+  const [expanded, setExpanded] = useState(false);
   const [filter, setFilter] = useState<TaskRangeFilter>("today");
   const [customDate, setCustomDate] = useState<string>(() => londonDayKey(new Date()));
 
@@ -104,22 +106,29 @@ export function TasksTab({ userId }: { userId: string }) {
     else setEditingTask(task);
   };
 
-  const shown = tasks.slice(0, MAX_ROWS);
+  const shown = visibleRows(tasks, expanded, MAX_ROWS);
 
   return (
     <div className="flex flex-col" data-testid="panel-dashboard-tasks">
       <TaskFilters
         filter={filter}
-        onFilter={setFilter}
+        onFilter={(f) => {
+          setFilter(f);
+          setExpanded(false);
+        }}
         overdueCount={overdueTasks.length}
         customDate={customDate}
-        onCustomDate={(v) => v && setCustomDate(v)}
+        onCustomDate={(v) => {
+          if (!v) return;
+          setCustomDate(v);
+          setExpanded(false);
+        }}
       />
 
       {tasks.length === 0 ? (
         <EmptyLine testId="empty-dashboard-tasks">{emptyMessage(filter, customDate)}</EmptyLine>
       ) : (
-        <div>
+        <div className={expanded ? "max-h-[60vh] overflow-y-auto" : undefined} data-testid="list-dashboard-tasks">
           {shown.map((task) => (
             <TaskRow
               key={task.id}
@@ -131,15 +140,22 @@ export function TasksTab({ userId }: { userId: string }) {
               onComplete={() => completeTask(task.id)}
             />
           ))}
-          {tasks.length > MAX_ROWS && <EmptyLine testId="text-tasks-more">+ {tasks.length - MAX_ROWS} more</EmptyLine>}
+          {!expanded && tasks.length > MAX_ROWS && <EmptyLine testId="text-tasks-more">+ {tasks.length - MAX_ROWS} more</EmptyLine>}
         </div>
       )}
 
-      <div className="mt-3.5">
-        <HomeLink href="/tasks" testId="link-view-all-tasks">
-          View all tasks
-        </HomeLink>
-      </div>
+      {tasks.length > MAX_ROWS && (
+        <div className="mt-3.5">
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-[12px] font-semibold text-social-orange-text hover:underline xl:text-[13px]"
+            data-testid="link-view-all-tasks"
+          >
+            {expanded ? "Show less" : `View all tasks (${tasks.length})`}
+          </button>
+        </div>
+      )}
 
       <EditTaskDialog
         presentation="drawer"

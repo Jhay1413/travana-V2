@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { Check, Ellipsis, Filter, Mailbox, RadioTower } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,7 +28,6 @@ export interface InboxSwitcherProps {
   realtimeConnected: boolean;
   openCount: number;
   canManageChannels: boolean;
-  onOpenChannels: () => void;
 }
 
 /** The inbox filter (All Messages + custom inboxes) and the More menu. */
@@ -39,8 +39,8 @@ export function InboxSwitcher({
   realtimeConnected,
   openCount,
   canManageChannels,
-  onOpenChannels,
 }: InboxSwitcherProps) {
+  const [, setLocation] = useLocation();
   return (
     <>
       <DropdownMenu>
@@ -107,7 +107,7 @@ export function InboxSwitcher({
           {canManageChannels && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onOpenChannels} className="gap-2 rounded-lg text-sm" data-testid="conversation-channels-button">
+              <DropdownMenuItem onClick={() => setLocation("/agency/integrations")} className="gap-2 rounded-lg text-sm" data-testid="conversation-channels-button">
                 <RadioTower className="h-4 w-4" /> Channels
               </DropdownMenuItem>
             </>

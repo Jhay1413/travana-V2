@@ -10,6 +10,7 @@ import {
   isLodgeQuote,
   pricePerPersonLabel,
 } from "@/features/social/lib/quote-card-fields";
+import type { SocialChannelInfo } from "@/features/social/api/social-settings.api";
 import { time12 } from "@/features/social/lib/schedule-time";
 import type { SocialPostStatus } from "@/features/social/lib/post-status";
 
@@ -76,4 +77,16 @@ export function deleteCopy(status: SocialPostStatus, postSchedule: string | null
   }
   if (status === "not_generated") return "This removes the social quote for good.";
   return "The draft is removed for good.";
+}
+
+export type PostPlatform = "facebook" | "instagram";
+
+/**
+ * Platforms a post goes out to. Posts carry no per-post platform and the settings
+ * hold no platform flags, so the only per-org source is the connected channel.
+ * The editor publishes "one post for both channels" (Facebook + Instagram previews),
+ * so a connected channel means both; nothing connected means no dots.
+ */
+export function postPlatforms(_post: unknown, channel: SocialChannelInfo | null | undefined): PostPlatform[] {
+  return channel && channel.workspaceConfigured && channel.apiKeyConfigured ? ["facebook", "instagram"] : [];
 }

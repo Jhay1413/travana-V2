@@ -14,6 +14,11 @@ export interface SsChannel {
   is_verified?: boolean;
   is_coexistence?: boolean;
   created_at?: string;
+  /** "AVAILABLE" means setup was never completed. */
+  activation_status?: string | null;
+  /** Non-null means setup is incomplete. */
+  setup_pending_reason?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface SsChannelTypeInfo {

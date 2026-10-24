@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState, type RefObject } from "react";
-import { PenLine, Sparkles, Type } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { PenLine, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -18,8 +17,6 @@ import { insertTextAtCaret } from "@/lib/contenteditable";
 import { postToPlainText } from "./preview-text";
 
 interface PostContentFormProps {
-  subtitle: string;
-  onSubtitleChange: (value: string) => void;
   /** The contentEditable node; owned by the dialog so it can read/seed its HTML. */
   postRef: RefObject<HTMLDivElement | null>;
   /** Called on every editor input (the dialog throttles the preview refresh). */
@@ -29,35 +26,14 @@ interface PostContentFormProps {
   onRegenerate?: () => Promise<void>;
 }
 
-// Splice an emoji into a controlled <Input> at its caret/selection, then put
-// the caret just after it once React has re-rendered the new value.
-const insertEmojiInInput = (
-  input: HTMLInputElement | null,
-  current: string,
-  setValue: (value: string) => void,
-  emoji: string,
-) => {
-  const start = input?.selectionStart ?? current.length;
-  const end = input?.selectionEnd ?? current.length;
-  setValue(current.slice(0, start) + emoji + current.slice(end));
-  const caret = start + emoji.length;
-  requestAnimationFrame(() => {
-    input?.focus();
-    input?.setSelectionRange(caret, caret);
-  });
-};
-
-/** Subtitle input, the "Write with Luna" action and the contentEditable post editor. */
+/** The "Write with Luna" action and the contentEditable post editor. */
 export function PostContentForm({
-  subtitle,
-  onSubtitleChange,
   postRef,
   onEditorInput,
   previewHtml,
   onRegenerate,
 }: PostContentFormProps) {
   const savedPostRange = useRef<Range | null>(null);
-  const subtitleInputRef = useRef<HTMLInputElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
@@ -114,26 +90,6 @@ export function PostContentForm({
 
   return (
     <>
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-          <Type className="h-3.5 w-3.5" />
-          Subtitle
-          <EmojiInsertButton
-            className="ml-auto"
-            onPick={(emoji) => insertEmojiInInput(subtitleInputRef.current, subtitle, onSubtitleChange, emoji)}
-            data-testid="button-emoji-subtitle"
-          />
-        </div>
-        <Input
-          ref={subtitleInputRef}
-          value={subtitle}
-          onChange={(e) => onSubtitleChange(e.target.value)}
-          placeholder="Catchy tagline for your post..."
-          className="rounded-xl bg-white"
-          data-testid="input-subtitle"
-        />
-      </div>
-
       <div className="space-y-1.5">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
           <PenLine className="h-3.5 w-3.5" />

@@ -338,7 +338,7 @@ export function Composer({
             onClick={() => void submit()}
             disabled={(mode === "reply" && uploading) || isSending}
             title={mode === "reply" && uploading ? "Waiting for the upload to finish…" : "Ctrl+Enter to send"}
-            className="h-9 gap-2 rounded-[10px] bg-black px-4 text-[13px] font-semibold text-white hover:bg-black/85 dark:bg-white dark:text-black dark:hover:bg-white/90"
+            className="h-9 gap-2 rounded-[10px] bg-social-orange px-4 text-[13px] font-semibold text-[#1F2937] hover:bg-social-orange-text"
             data-testid="conversation-send"
           >
             {isSending || (mode === "reply" && uploading) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
+import { useCurrentUser } from "@/hooks/queries";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import type { Transaction } from "@/features/quote/types";
@@ -6,6 +8,7 @@ import type { CardActions } from "@/features/pipeline/card/deal-card";
 import {
   ALL_STAGES,
   getStageForTransaction,
+  getTransactionTitle,
   isValidDrop,
   type PipelineStage,
 } from "@/features/pipeline/lib/pipeline-helpers";
@@ -46,6 +49,11 @@ export function PipelineBoard({
   const { collapsed, toggleCollapse } = useCollapsedStages();
   const dialogs = usePipelineDialogs();
   const { setSelectedDeal, setFutureDialog, setLostConfirm, setNewDealOpen } = dialogs;
+  // The deal the tile/row "Add task" modal is for. Kept after close (only `addTaskOpen` flips)
+  // so the modal stays mounted and its save callbacks (toast + refresh) still run.
+  const [addTaskDeal, setAddTaskDeal] = useState<{ tx: Transaction; stage: PipelineStage } | null>(null);
+  const [addTaskOpen, setAddTaskOpen] = useState(false);
+  const { data: currentUser } = useCurrentUser();
   const [dragState, setDragState] = useState<{ active: boolean; fromStage: PipelineStage | null }>({ active: false, fromStage: null });
 
   const { columns, keyForStage, isLoading, counts } = usePipelineColumns({
@@ -73,11 +81,13 @@ export function PipelineBoard({
   const getName = useCallback((id: string | null) => (id ? clientNames.get(id) || "Unknown Client" : "Unknown Client"), [clientNames]);
 
   const openDrawer = useCallback((tx: Transaction, stage: PipelineStage) => setSelectedDeal({ tx, stage }), [setSelectedDeal]);
-  // Only pre-open the Add task pop-up when the deal has a record to attach the task to.
-  const openDrawerWithTask = useCallback(
-    (tx: Transaction, stage: PipelineStage) => setSelectedDeal({ tx, stage, addTask: !!getTaskEntity(tx, stage).id }),
-    [setSelectedDeal],
-  );
+  // Tile/row "Add task" opens just the modal. A deal with nothing to attach a task to falls back to the drawer.
+  const openAddTask = useCallback((tx: Transaction, stage: PipelineStage) => {
+    if (getTaskEntity(tx, stage).id) {
+      setAddTaskDeal({ tx, stage });
+      setAddTaskOpen(true);
+    } else openDrawer(tx, stage);
+  }, [openDrawer]);
   const addQuote = useCallback(
     (tx: Transaction, stage: PipelineStage) => {
       if (getStageForTransaction(tx) === "Enquiry" && stage !== "Lost") moves.applyStageTransition(tx, "Enquiry", "Quoted");
@@ -95,9 +105,9 @@ export function PipelineBoard({
       onMarkLost: (t) => setLostConfirm({ tx: t, stage }),
       onRestore: (t) => parking.handleSetLost(t, stage, false),
       onAddQuote: (t) => addQuote(t, stage),
-      onAddTask: (t) => openDrawerWithTask(t, stage),
+      onAddTask: (t) => openAddTask(t, stage),
     }),
-    [addQuote, openDrawer, openDrawerWithTask, parking, setFutureDialog, setLostConfirm],
+    [addQuote, openDrawer, openAddTask, parking, setFutureDialog, setLostConfirm],
   );
 
   const handleDragStart = useCallback((_t: Transaction, s: PipelineStage) => setDragState({ active: true, fromStage: s }), []);
@@ -200,7 +210,7 @@ export function PipelineBoard({
                 selectedId={selectedId}
                 getClientName={getName}
                 onRowClick={openDrawer}
-                onAddTask={openDrawerWithTask}
+                onAddTask={openAddTask}
               />
             )}
           </>
@@ -209,12 +219,33 @@ export function PipelineBoard({
 
       <PipelineDialogsHost dialogs={dialogs} parking={parking} allowNewDeal={!embedded} />
 
+      {addTaskDeal && (() => {
+        const entity = getTaskEntity(addTaskDeal.tx, addTaskDeal.stage);
+        return (
+          <AddTaskModal
+            title="Add task"
+            subtitle={`${getTransactionTitle(addTaskDeal.tx)} · ${getName(addTaskDeal.tx.client_id)}`}
+            entityType={entity.id ? entity.type : undefined}
+            entityId={entity.id}
+            defaultAssignedToId={addTaskDeal.tx.user_id || currentUser?.id}
+            successToast="Task added"
+            open={addTaskOpen}
+            onOpenChange={setAddTaskOpen}
+            onCreated={() => {
+              cache.invalidateStage(addTaskDeal.stage);
+              cache.invalidateCounts();
+            }}
+            testIdPrefix="tile-add-task"
+          />
+        );
+      })()}
+
       {selected && (
         <DealDrawer
           key={selected.tx.id}
-          initialAddTask={dialogs.selectedDeal?.addTask}
           onTaskCreated={() => {
             cache.invalidateStage(selected.stage);
+            cache.invalidateCounts();
           }}
           transaction={selected.tx}
           stage={selected.stage}

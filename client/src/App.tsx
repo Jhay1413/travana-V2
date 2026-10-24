@@ -56,7 +56,6 @@ const ToolsPage = lazy(() => import("@/pages/tools"));
 const ImageUpscalePage = lazy(() => import("@/pages/image-upscale"));
 const BookingPage = lazy(() => import("@/pages/booking-standalone"));
 const BookingsPage = lazy(() => import("@/pages/bookings"));
-const TasksPage = lazy(() => import("@/pages/tasks"));
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const PipelinePage = lazy(() => import("@/pages/pipeline"));
 const ChatPage = lazy(() => import("@/pages/chat"));
@@ -202,6 +201,7 @@ function AuthenticatedRouter() {
 
         <RoleRoute path="/agency/departures/balances" allow={MANAGER_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency/departures" allow={MANAGER_ROLES} component={AgencyPage} />
+        <RoleRoute path="/agency/integrations" allow={MANAGER_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency/team/invite" allow={MANAGER_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency/team" allow={MANAGER_ROLES} component={AgencyPage} />
         {/* Staff read the list; writes are enforced by the server. Above '/agency/*'. */}
@@ -227,7 +227,6 @@ function AuthenticatedRouter() {
         <RoleRoute path="/branch/targets" allow={MANAGER_ROLES} component={BranchTargetsPage} />
 
         <RoleRoute path="/bookings" allow={MANAGER_ROLES} component={BookingsPage} />
-        <RoleRoute path="/tasks" allow={STAFF_ROLES} component={TasksPage} />
         <RoleRoute path="/reports" allow={MANAGER_ROLES} component={ReportsPage} />
 
         <RoleRoute path="/clients" allow={CLIENT_VIEW_ROLES} component={ClientsListPage} />

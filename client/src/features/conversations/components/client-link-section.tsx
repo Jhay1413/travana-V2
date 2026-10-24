@@ -8,6 +8,7 @@ import { useContactLink, useLinkContact, useUnlinkContact } from "../api/use-con
 import { LinkClientDialog, type ClientPrefill } from "./link-client-dialog";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import type { Conversation } from "../types";
+import { looksLikePhone } from "../map";
 
 // What we try to auto-match a contact to a client with. Shared with ContactPanel
 // so both read the same cached contact-link query (keyed by contact).
@@ -24,7 +25,7 @@ export function contactLinkMatch(conversation: Conversation): { phone?: string; 
 
   if (handle.includes("@")) return { email: handle, name };
   // Enough digits to be a real number; an Instagram/Messenger id isn't.
-  if (handle.replace(/\D/g, "").length >= 7) return { phone: handle, name };
+  if (looksLikePhone(handle)) return { phone: handle, name };
   return { name };
 }
 
@@ -52,7 +53,6 @@ export function ClientLinkSection({ conversation }: { conversation: Conversation
   const [dialogMode, setDialogMode] = useState<"search" | "create">("search");
 
   const contactId = conversation.contact.id;
-  const isEmail = conversation.channel === "email";
   const handle = conversation.contact.handle;
   const match = useMemo(() => contactLinkMatch(conversation), [conversation]);
 
@@ -65,10 +65,10 @@ export function ClientLinkSection({ conversation }: { conversation: Conversation
     return {
       firstName: parts[0] ?? conversation.contact.firstName ?? "",
       surename: parts.slice(1).join(" ") || conversation.contact.lastName || "",
-      phoneNumber: isEmail ? "" : handle,
-      email: isEmail ? handle : "",
+      phoneNumber: looksLikePhone(handle) ? handle : "",
+      email: handle.includes("@") ? handle : "",
     };
-  }, [conversation.contact, isEmail, handle]);
+  }, [conversation.contact, handle]);
 
   const openDialog = (mode: "search" | "create") => {
     setDialogMode(mode);

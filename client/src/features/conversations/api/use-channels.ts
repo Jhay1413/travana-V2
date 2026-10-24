@@ -35,6 +35,6 @@ export function useDeleteChannel() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (channelId: string) => channelsApi.remove(channelId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: channelsKeys.list() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: channelsKeys.all }),
   });
 }

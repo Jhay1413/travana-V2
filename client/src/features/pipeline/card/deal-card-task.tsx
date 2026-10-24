@@ -7,6 +7,7 @@ export function DealCardTask({ transaction: t, onAddTask }: { transaction: Trans
   return (
     <NextTaskRow
       {...nextTaskRowProps(t.next_task)}
+      priority={t.next_task?.priority}
       onAddTask={onAddTask}
       testId={`next-task-${t.id}`}
     />

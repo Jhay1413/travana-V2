@@ -62,10 +62,10 @@ export function PostPreviewPanel({
         onValueChange={(v) => v && setChannel(v as PreviewChannel)}
         className="w-full rounded-lg bg-slate-200/70 p-1"
       >
-        <ToggleGroupItem value="facebook" className="flex-1 gap-1.5 data-[state=on]:bg-white data-[state=on]:shadow-sm" data-testid="toggle-channel-facebook">
+        <ToggleGroupItem value="facebook" className="flex-1 gap-1.5 text-slate-500 data-[state=on]:bg-white data-[state=on]:text-slate-900 data-[state=on]:shadow-sm" data-testid="toggle-channel-facebook">
           <ThumbsUp className="h-3.5 w-3.5" />Facebook
         </ToggleGroupItem>
-        <ToggleGroupItem value="instagram" className="flex-1 gap-1.5 data-[state=on]:bg-white data-[state=on]:shadow-sm" data-testid="toggle-channel-instagram">
+        <ToggleGroupItem value="instagram" className="flex-1 gap-1.5 text-slate-500 data-[state=on]:bg-white data-[state=on]:text-slate-900 data-[state=on]:shadow-sm" data-testid="toggle-channel-instagram">
           <Camera className="h-3.5 w-3.5" />Instagram
         </ToggleGroupItem>
       </ToggleGroup>

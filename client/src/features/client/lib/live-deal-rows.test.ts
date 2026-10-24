@@ -72,6 +72,36 @@ describe("row builders", () => {
   });
 });
 
+describe("booking profit", () => {
+  const booking = (parts: Record<string, unknown>) => [{ id: "b", ...parts } as unknown as HolidayBooking];
+
+  it("adds package and service commission and divides by the net price", () => {
+    const [r] = buildBookingRows(booking({ sales_price: "1000", package_commission: "70", service_commission: 30 }));
+    expect(r.profit).toBe(100);
+    expect(r.marginPercent).toBe(10);
+  });
+
+  it("uses package commission alone when service commission is absent", () => {
+    const [r] = buildBookingRows(booking({ sales_price: "800", package_commission: "100" }));
+    expect(r.profit).toBe(100);
+    expect(r.marginPercent).toBe(12.5);
+  });
+
+  it("is null when neither commission is present", () => {
+    const [r] = buildBookingRows(booking({ sales_price: "800" }));
+    expect(r.profit).toBeNull();
+    expect(r.marginPercent).toBeNull();
+  });
+
+  it("has a null percentage when the price is 0, and rounds to 1 decimal", () => {
+    const [zero] = buildBookingRows(booking({ sales_price: "0", package_commission: "50" }));
+    expect(zero.profit).toBe(50);
+    expect(zero.marginPercent).toBeNull();
+    const [r] = buildBookingRows(booking({ sales_price: "1950", package_commission: "200", service_commission: 40 }));
+    expect(r.marginPercent?.toFixed(1)).toBe("12.3");
+  });
+});
+
 describe("sortDealRows", () => {
   const rows = [
     row({ id: "a", price: 100, createdAt: "2026-01-01" }),

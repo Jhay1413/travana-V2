@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EnrichedQuote } from "@/features/quote/types";
-import { cardPriceLabel, deleteCopy, getCardFields, whenLabel } from "./card-fields";
+import { cardPriceLabel, deleteCopy, getCardFields, postPlatforms, whenLabel } from "./card-fields";
 
 function quote(overrides: Record<string, unknown>): EnrichedQuote {
   return { num_of_nights: 7, ...overrides } as unknown as EnrichedQuote;
@@ -54,5 +54,16 @@ describe("deleteCopy", () => {
     expect(deleteCopy("scheduled", new Date(2026, 9, 21, 9, 0).toISOString())).toBe(
       "It is set for Wed 21 Oct at 9:00 AM and will not go out.",
     );
+  });
+});
+
+describe("postPlatforms", () => {
+  const channel = { provider: "onlysocials", accountId: 1, workspaceConfigured: true, apiKeyConfigured: true, label: "x" } as const;
+  it("returns facebook and instagram when the channel is connected (one post for both)", () => {
+    expect(postPlatforms({}, channel)).toEqual(["facebook", "instagram"]);
+  });
+  it("returns nothing when not configured or unknown", () => {
+    expect(postPlatforms({}, { ...channel, apiKeyConfigured: false })).toEqual([]);
+    expect(postPlatforms({}, undefined)).toEqual([]);
   });
 });

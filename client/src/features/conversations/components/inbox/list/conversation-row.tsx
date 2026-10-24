@@ -2,7 +2,7 @@ import type { KeyboardEvent } from "react";
 import { cn } from "@/lib/utils";
 import type { Conversation } from "../../../types";
 import { formatRowTime, rowStatus, type SnoozePresetId } from "../lib";
-import { ChannelAvatar, StatusPill, TagPill, toneFor } from "../shared";
+import { ChannelCircle, StatusPill, TagPill, toneFor } from "../shared";
 
 import { RowHoverActions } from "./row-hover-actions";
 
@@ -56,7 +56,7 @@ export function ConversationRow({ conversation: c, selected, isDoneTab, staff, c
       )}
       data-testid={`conversation-row-${c.id}`}
     >
-      <ChannelAvatar name={c.contact.displayName} avatarUrl={c.contact.avatarUrl} channel={c.channel} size={40} />
+      <ChannelCircle channel={c.channel} size={40} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <span className={cn("truncate text-[14px]", c.unread ? "font-semibold" : "font-medium")}>

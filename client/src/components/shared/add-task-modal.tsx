@@ -7,12 +7,17 @@ import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { useCreateTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { FOLLOW_UP_DUE_TIME, fillEmptyAssignee, isOpening, londonDueDate, tomorrowLondonKey } from "@/features/tasks/lib/task-defaults";
+import { CUSTOM_TASK_TYPE, titleForTaskType, type TaskTypeValue } from "@/features/tasks/lib/task-types";
+import { DEFAULT_TASK_PRIORITY, type TaskPriority } from "@/features/tasks/lib/task-priority";
+import { TaskTypeSelect } from "@/features/tasks/components/shared/task-type-select";
+import { TaskPrioritySelect } from "@/features/tasks/components/shared/task-priority-select";
 
 interface AddTaskModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title?: string;
   subtitle?: string;
+  /** Placeholder for the Custom text field. */
   placeholder?: string;
   /** Pre-filled due date, YYYY-MM-DD (London). Defaults to tomorrow. */
   defaultDueDate?: string;
@@ -49,7 +54,9 @@ export function AddTaskModal({
 }: AddTaskModalProps) {
   const { toast } = useToast();
   const createMutation = useCreateTask(entityType ?? "", entityId ?? "");
+  const [taskType, setTaskType] = useState<TaskTypeValue | "">("");
   const [text, setText] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>(DEFAULT_TASK_PRIORITY);
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState(FOLLOW_UP_DUE_TIME);
   const [assignedToId, setAssignedToId] = useState("");
@@ -61,7 +68,9 @@ export function AddTaskModal({
     const opening = isOpening(prevOpen.current, open);
     prevOpen.current = open;
     if (!opening) return;
+    setTaskType("");
     setText("");
+    setPriority(DEFAULT_TASK_PRIORITY);
     setShowError(false);
     setDueDate(defaultDueDate || tomorrowLondonKey());
     setDueTime(defaultDueTime || FOLLOW_UP_DUE_TIME);
@@ -75,17 +84,20 @@ export function AddTaskModal({
 
   const assigneeMissing = !assignedToId;
   const saving = createMutation.isPending;
+  const taskMissing = !taskType || (taskType === CUSTOM_TASK_TYPE && !text.trim());
 
   const handleSave = () => {
     if (saving || !assignedToId) return;
     const due = londonDueDate(dueDate, dueTime || FOLLOW_UP_DUE_TIME);
-    if (!text.trim() || !due) {
+    const taskTitle = taskType ? titleForTaskType(taskType, text) : "";
+    if (!taskType || !taskTitle || !due) {
       setShowError(true);
       return;
     }
     createMutation.mutate(
       {
-        title: text.trim(),
+        title: taskTitle,
+        priority,
         description: null,
         dueDate: due,
         userId: assignedToId,
@@ -124,28 +136,51 @@ export function AddTaskModal({
           }}
         >
           <div className="col-span-2 space-y-1.5">
-            <label htmlFor={`${testIdPrefix}-title`} className={LABEL_CLASS}>
+            <label htmlFor={`${testIdPrefix}-type`} className={LABEL_CLASS}>
               What needs doing?
             </label>
-            <Input
-              id={`${testIdPrefix}-title`}
-              autoFocus
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value);
+            <TaskTypeSelect
+              id={`${testIdPrefix}-type`}
+              value={taskType}
+              onChange={(v) => {
+                setTaskType(v);
                 setShowError(false);
               }}
-              placeholder={placeholder}
-              className={FIELD_CLASS}
-              data-testid={`${testIdPrefix}-title`}
+              zClassName="z-[650]"
+              className="h-11 rounded-[10px] border-social-border bg-background px-3.5 text-[14px] shadow-none"
+              data-testid={`${testIdPrefix}-type`}
             />
-            {showError && !text.trim() && (
-              <p className="text-xs text-red-600" data-testid={`${testIdPrefix}-error`}>
-                Enter what needs doing.
+            {!taskType && (
+              <p className="text-xs text-red-600" data-testid={`${testIdPrefix}-type-error`}>
+                Choose what needs doing.
               </p>
             )}
           </div>
-          <div className="col-span-2 space-y-1.5">
+          {taskType === CUSTOM_TASK_TYPE && (
+            <div className="col-span-2 space-y-1.5">
+              <label htmlFor={`${testIdPrefix}-custom-title`} className={LABEL_CLASS}>
+                Describe the task
+              </label>
+              <Input
+                id={`${testIdPrefix}-custom-title`}
+                autoFocus
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  setShowError(false);
+                }}
+                placeholder={placeholder}
+                className={FIELD_CLASS}
+                data-testid={`${testIdPrefix}-custom-title`}
+              />
+              {showError && !text.trim() && (
+                <p className="text-xs text-red-600" data-testid={`${testIdPrefix}-error`}>
+                  Enter what needs doing.
+                </p>
+              )}
+            </div>
+          )}
+          <div className="space-y-1.5">
             <label htmlFor={`${testIdPrefix}-assignee`} className={LABEL_CLASS}>
               Assign to
             </label>
@@ -155,6 +190,19 @@ export function AddTaskModal({
               zClassName="z-[650]"
               className="h-11 rounded-[10px] bg-background px-3.5 text-[14px] font-medium"
               data-testid={`${testIdPrefix}-assignee`}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor={`${testIdPrefix}-priority`} className={LABEL_CLASS}>
+              Priority
+            </label>
+            <TaskPrioritySelect
+              id={`${testIdPrefix}-priority`}
+              value={priority}
+              onChange={setPriority}
+              zClassName="z-[650]"
+              className="h-11 rounded-[10px] border-social-border bg-background px-3.5 text-[14px] shadow-none"
+              data-testid={`${testIdPrefix}-priority`}
             />
           </div>
           <div className="space-y-1.5">
@@ -203,7 +251,7 @@ export function AddTaskModal({
             <Button
               type="submit"
               className="h-11 rounded-[10px] bg-social-orange px-5 text-[14px] font-semibold text-slate-900 hover:bg-social-orange/90"
-              disabled={saving || assigneeMissing}
+              disabled={saving || assigneeMissing || taskMissing}
               data-testid={`${testIdPrefix}-submit`}
             >
               {saving ? <Spinner className="h-3.5 w-3.5" /> : "Add task"}

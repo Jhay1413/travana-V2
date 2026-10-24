@@ -3,6 +3,7 @@ import { Check, Ellipsis, Pencil, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { PersonAvatar } from "@/components/shared/person-avatar";
 import { cn } from "@/lib/utils";
+import { visibleRows } from "@/lib/visible-rows";
 import { useDeleteTask, useToggleTask } from "@/hooks/mutations";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
 import type { User as ApiUser } from "@/features/user/types";
@@ -12,22 +13,24 @@ import type { TaskHolidayInfo } from "@/features/client/lib/deal-labels";
 
 const TASKS_PREVIEW_LIMIT = 5;
 
-
 interface TasksTabProps {
   clientId: string;
   tasks: TaskNew[];
   users: ApiUser[];
   holidays: Map<string, TaskHolidayInfo>;
   readOnly: boolean;
-  onViewAll: () => void;
 }
 
-export function TasksTab({ clientId, tasks, users, holidays, readOnly, onViewAll }: TasksTabProps) {
+export function TasksTab({ clientId, tasks, users, holidays, readOnly }: TasksTabProps) {
   const toggleMutation = useToggleTask("client", clientId);
   const deleteMutation = useDeleteTask("client", clientId);
   const [editingTask, setEditingTask] = useState<EditableTask | null>(null);
   const userNameById = useMemo(() => new Map(users.map((u) => [u.id, u.name || u.email || ""])), [users]);
-  const rows = useMemo(() => sortTasks(tasks).slice(0, TASKS_PREVIEW_LIMIT), [tasks]);
+  const [expandedRaw, setExpanded] = useState(false);
+  const sorted = useMemo(() => sortTasks(tasks), [tasks]);
+  // Expanded only means something while the list is longer than the preview.
+  const expanded = expandedRaw && sorted.length > TASKS_PREVIEW_LIMIT;
+  const rows = visibleRows(sorted, expanded, TASKS_PREVIEW_LIMIT);
 
   if (rows.length === 0) {
     return <p className="border-t border-social-border py-6 text-sm text-social-muted">No tasks yet.</p>;
@@ -35,7 +38,7 @@ export function TasksTab({ clientId, tasks, users, holidays, readOnly, onViewAll
 
   return (
     <>
-      <div data-testid="client-index-tasks">
+      <div className={expanded ? "max-h-[60vh] overflow-y-auto" : undefined} data-testid="client-index-tasks">
         {rows.map((task) => {
           const due = task.dueDate ? new Date(task.dueDate) : null;
           const validDue = due && !Number.isNaN(due.getTime()) ? due : null;
@@ -105,14 +108,16 @@ export function TasksTab({ clientId, tasks, users, holidays, readOnly, onViewAll
           );
         })}
       </div>
-      <button
-        type="button"
-        onClick={onViewAll}
-        className="mt-1 text-[13px] font-semibold text-social-orange-text transition hover:underline"
-        data-testid="client-index-view-all-tasks"
-      >
-        View all tasks
-      </button>
+      {sorted.length > TASKS_PREVIEW_LIMIT && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-[13px] font-semibold text-social-orange-text transition hover:underline"
+          data-testid="client-index-view-all-tasks"
+        >
+          {expanded ? "Show less" : `View all tasks (${sorted.length})`}
+        </button>
+      )}
       <EditTaskDialog
         presentation="drawer"
         open={!!editingTask}

@@ -1,6 +1,6 @@
 import { useCurrentUser } from "@/hooks/queries";
 import { useClientTaskCreate } from "@/features/client";
-import { useTasks } from "@/features/tasks";
+import { TaskPriorityPill, useTasks } from "@/features/tasks";
 import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { NextTaskRow } from "@/components/shared/next-task-row";
 import { Section, SECTION_ACTION_CLASS } from "./section";
@@ -35,13 +35,17 @@ export function TasksSection({ clientId, firstName }: TasksSectionProps) {
         <NextTaskRow
           title={next ? next.title || "Untitled task" : null}
           dueDate={next ? dueDateIso(next.dueDate) : null}
+          priority={next?.priority}
           size="card"
           onAddTask={openDialog}
           testId="client-next-task"
         />
         {rest.map((t) => (
           <div key={t.id}>
-            <div className="truncate text-[13px] font-medium">{t.title || "Untitled task"}</div>
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 truncate text-[13px] font-medium">{t.title || "Untitled task"}</div>
+              <TaskPriorityPill priority={t.priority} />
+            </div>
             <div className="text-[12px] text-social-muted">{taskDueLabel(t, now)}</div>
           </div>
         ))}

@@ -24,6 +24,10 @@ import {
 import { cn } from "@/lib/utils";
 import type { FormPresentation } from "@/features/quote/types";
 import { useUpdateTask } from "@/hooks/mutations";
+import { CUSTOM_TASK_TYPE, taskTypeForTitle, titleForTaskType, type TaskTypeValue } from "@/features/tasks/lib/task-types";
+import { DEFAULT_TASK_PRIORITY, type TaskPriority } from "@/features/tasks/lib/task-priority";
+import { TaskTypeSelect } from "../shared/task-type-select";
+import { TaskPrioritySelect } from "../shared/task-priority-select";
 import { useToast } from "@/hooks/use-toast";
 
 export interface EditableTask {
@@ -33,6 +37,7 @@ export interface EditableTask {
   dueDate: Date | string | null;
   userId: string | null;
   completed?: boolean | null;
+  priority?: TaskPriority | null;
 }
 
 interface EditTaskDialogProps {
@@ -69,7 +74,9 @@ function toTimeInput(date: Date): string {
 export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId, presentation = "dialog" }: EditTaskDialogProps) {
   const { toast } = useToast();
   const updateMutation = useUpdateTask(entityType, entityId);
+  const [taskType, setTaskType] = useState<TaskTypeValue>("custom");
   const [title, setTitle] = useState("");
+  const [priority, setPriority] = useState<TaskPriority>(DEFAULT_TASK_PRIORITY);
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("09:00");
@@ -79,7 +86,9 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId,
   // Hydrate the form whenever a new task is opened for editing.
   useEffect(() => {
     if (!task) return;
+    setTaskType(taskTypeForTitle(task.title));
     setTitle(task.title ?? "");
+    setPriority(task.priority ?? DEFAULT_TASK_PRIORITY);
     setDescription(task.description ?? "");
     setAssignedToId(task.userId ?? "");
     setCompleted(!!task.completed);
@@ -95,14 +104,17 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId,
     setDueTime("09:00");
   }, [task]);
 
+  const taskTitle = titleForTaskType(taskType, title);
+
   const handleSave = () => {
-    if (!task || !title.trim() || !dueDate) return;
+    if (!task || !taskTitle || !dueDate) return;
     const combined = new Date(`${dueDate}T${dueTime || "09:00"}`);
     updateMutation.mutate(
       {
         id: task.id,
         data: {
-          title: title.trim(),
+          title: taskTitle,
+          priority,
           description: description.trim() ? description.trim() : null,
           dueDate: combined,
           completed,
@@ -119,7 +131,7 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId,
     );
   };
 
-  const canSubmit = !!title.trim() && !!dueDate;
+  const canSubmit = !!taskTitle && !!dueDate;
 
   if (presentation === "drawer") {
     return (
@@ -132,12 +144,32 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId,
       >
         <div className="px-7 pb-6 pt-6 grid gap-4" data-testid="dialog-edit-task">
           <DrawerField label="Task" className="max-w-[420px]">
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter a task…"
-              className={drawerInputClass}
-              data-testid="input-edit-task-title"
+            <TaskTypeSelect
+              value={taskType}
+              onChange={setTaskType}
+              className={drawerControlClass}
+              aria-label="Task type"
+              data-testid="edit-task-type"
+            />
+          </DrawerField>
+          {taskType === CUSTOM_TASK_TYPE && (
+            <DrawerField label="Describe the task" className="max-w-[420px]">
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Enter a task…"
+                className={drawerInputClass}
+                data-testid="input-edit-task-title"
+              />
+            </DrawerField>
+          )}
+          <DrawerField label="Priority" className="max-w-[420px]">
+            <TaskPrioritySelect
+              value={priority}
+              onChange={setPriority}
+              className={drawerControlClass}
+              aria-label="Priority"
+              data-testid="edit-task-priority"
             />
           </DrawerField>
           <DrawerField label="Description" className="max-w-[560px]">
@@ -236,12 +268,36 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId,
         <div className="mt-3 grid gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-black/60">Task</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Enter a task…"
+            <TaskTypeSelect
+              value={taskType}
+              onChange={setTaskType}
               className="h-9 rounded-xl border-black/10 bg-white/70"
-              data-testid="input-edit-task-title"
+              aria-label="Task type"
+              data-testid="edit-task-type"
+            />
+          </div>
+
+          {taskType === CUSTOM_TASK_TYPE && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-black/60">Describe the task</Label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Enter a task…"
+                className="h-9 rounded-xl border-black/10 bg-white/70"
+                data-testid="input-edit-task-title"
+              />
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-black/60">Priority</Label>
+            <TaskPrioritySelect
+              value={priority}
+              onChange={setPriority}
+              className="h-9 rounded-xl border-black/10 bg-white/70"
+              aria-label="Priority"
+              data-testid="edit-task-priority"
             />
           </div>
 
@@ -321,7 +377,7 @@ export function EditTaskDialog({ open, onOpenChange, task, entityType, entityId,
             className="h-9 w-full rounded-xl bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
             data-testid="button-confirm-edit-task"
             onClick={handleSave}
-            disabled={!title.trim() || !dueDate || updateMutation.isPending}
+            disabled={!taskTitle || !dueDate || updateMutation.isPending}
           >
             {updateMutation.isPending ? <Spinner className="h-3.5 w-3.5" /> : "Save Changes"}
           </Button>

@@ -14,6 +14,7 @@ import { AiStatusControl } from "../../ai-status-control";
 import { ChannelAvatar, ChannelPill, CopyButton } from "../shared";
 import { SNOOZE_PRESETS, snoozeLabel, snoozeUntil, type SnoozePresetId } from "../lib";
 import type { Conversation } from "../../../types";
+import { displayHandle } from "../../../map";
 import { ConversationHeaderName } from "./header-name";
 
 export interface ThreadHeaderProps {
@@ -56,7 +57,7 @@ export function ThreadHeader({
   const { contact, channel } = conversation;
   const snoozedNow = conversation.snoozed && !isDone;
   // Instagram / Messenger handles are opaque ids, never useful to show.
-  const contactLine = channel === "email" || channel === "sms" || channel === "whatsapp" ? contact.handle : "";
+  const contactLine = displayHandle({ channel, handle: contact.handle }) ?? "";
   const now = new Date();
 
   const copyLink = async () => {

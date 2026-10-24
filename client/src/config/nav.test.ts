@@ -72,8 +72,14 @@ describe("homeworker nav", () => {
 
   it("keeps the rest of the agent nav", () => {
     expect(paths("homeworker")).toContain("/pipeline");
-    expect(paths("homeworker")).toContain("/tasks");
   });
+
+  it.each(["agent", "homeworker", "branch_manager", "org_admin", "platform_admin", "referral_agent", "social_media_manager"] as const)(
+    "has no /tasks entry for %s (the My Tasks page was removed)",
+    (role) => {
+      expect(paths(role)).not.toContain("/tasks");
+    },
+  );
 
   it("leaves the agent nav untouched", () => {
     expect(paths("agent")).toContain("/social-posts");

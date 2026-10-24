@@ -19,7 +19,30 @@ type QuoteRow = Quote & {
 type BookingRow = HolidayBooking & {
   main_tour_operator_name?: string | null;
   main_tour_operator_logo_url?: string | null;
+  // Sum of line-item commissions, attached by the transactions API.
+  service_commission?: number | string | null;
 };
+
+function amount(raw: number | string | null | undefined): number | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  const n = typeof raw === "number" ? raw : parseFloat(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Booking profit = package_commission + service_commission (null only when both are absent).
+export function bookingProfit(packageCommission: number | string | null | undefined, serviceCommission: number | string | null | undefined): number | null {
+  const pkg = amount(packageCommission);
+  const svc = amount(serviceCommission);
+  if (pkg === null && svc === null) return null;
+  return (pkg ?? 0) + (svc ?? 0);
+}
+
+// Mirrors quoteMarginPercent in features/quote/lib/quote-money.ts (not exported from the
+// quote index): profit as a percentage of the total the customer pays; null when total <= 0.
+export function profitMarginPercent(profit: number, total: number): number | null {
+  if (!(total > 0)) return null;
+  return (profit / total) * 100;
+}
 
 
 // Customer-facing net total = sales_price − discounts + service_charge — same
@@ -75,6 +98,10 @@ export interface HolidayRowData {
   isCopy: boolean;
   /** Copies duplicated from this row, nested underneath it. Empty for enquiries/bookings/copies. */
   copies: HolidayRowData[];
+  /** Bookings only: package + service commission; null when neither is known. */
+  profit?: number | null;
+  /** Bookings only: profit / price x 100; null when profit is unknown or price is 0. */
+  marginPercent?: number | null;
 }
 
 function buildQuoteRow(qr: QuoteRow): HolidayRowData {
@@ -152,11 +179,15 @@ export function buildEnquiryRows(enquiries: EnquiryTable[]): HolidayRowData[] {
 export function buildBookingRows(bookings: HolidayBooking[], options: { markLostBookings?: boolean } = {}): HolidayRowData[] {
   return bookings.map((b) => {
     const br = b as BookingRow;
+    const price = netPrice(b.sales_price, b.discounts, b.service_charge);
+    const profit = bookingProfit(b.package_commission, br.service_commission);
     return {
       id: b.id,
       type: "booking" as const,
       title: b.title || "Untitled booking",
-      price: netPrice(b.sales_price, b.discounts, b.service_charge),
+      price,
+      profit,
+      marginPercent: profit === null ? null : profitMarginPercent(profit, price),
       operatorName: br.main_tour_operator_name ?? null,
       operatorLogoUrl: br.main_tour_operator_logo_url ?? null,
       // Bookings carry no destination join in the transactions payload.

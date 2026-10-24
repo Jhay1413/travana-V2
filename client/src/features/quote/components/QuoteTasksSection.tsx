@@ -5,8 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useTasks, useCurrentUser } from "@/hooks/queries";
 import { useToggleTask, useDeleteTask } from "@/hooks/mutations";
-import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
-import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
+import { CreateTaskDialog, EditTaskDialog, TaskPriorityPill, type EditableTask } from "@/features/tasks";
 import { cn } from "@/lib/utils";
 
 function formatTaskDue(date: Date | string) {
@@ -93,6 +92,7 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
                     <span className="flex-1 text-xs font-medium text-black/75" data-testid={`text-task-label-${task.id}`}>
                       {task.title}
                     </span>
+                    <TaskPriorityPill priority={task.priority} testId={`pill-task-priority-${task.id}`} />
                     <span className={`shrink-0 text-[10px] font-semibold ${isOverdue ? "text-rose-500" : "text-black/40"}`} data-testid={`text-task-due-${task.id}`}>
                       {task.dueDate ? formatTaskDue(task.dueDate) : ""}
                     </span>

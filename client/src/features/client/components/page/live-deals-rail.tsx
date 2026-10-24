@@ -71,6 +71,17 @@ function DealRow({
             </span>
             {row.price > 0 && <span className="shrink-0 text-sm font-semibold">{money.format(row.price)}</span>}
           </span>
+          {row.type === "booking" && row.profit != null && (
+            <span className="block text-right text-[12px] text-social-muted" data-testid="booking-row-profit">
+              Profit {money.format(row.profit)}
+              {row.marginPercent != null && (
+                <>
+                  {" · "}
+                  <span className={cn(row.marginPercent >= 0 && "font-semibold text-emerald-700")}>{row.marginPercent.toFixed(1)}%</span>
+                </>
+              )}
+            </span>
+          )}
           {row.destinationName && <span className="block truncate text-xs text-social-muted">{row.destinationName}</span>}
           {row.dateLine && <span className="mt-px block truncate text-xs text-social-muted">{row.dateLine}</span>}
         </span>

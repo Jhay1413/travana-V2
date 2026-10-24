@@ -2,6 +2,8 @@ import { CalendarDays, ExternalLink, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDueDateTime, isDueToday } from "@/lib/task-due-format";
 import { AMBER_LINK } from "@/components/shared/link-styles";
+import { TaskPriorityPill } from "@/features/tasks/components/shared/task-priority-pill";
+import type { TaskPriority } from "@/features/tasks/lib/task-priority";
 
 export interface NextTaskRowProps {
   title: string | null;
@@ -13,10 +15,12 @@ export interface NextTaskRowProps {
   /** Label for the link (default "View quote"). */
   quoteLabel?: string;
   testId?: string;
+  /** Task priority; shown as a small pill unless it is medium (the default). */
+  priority?: TaskPriority | null;
 }
 
 /** "Next task" box: the task with a "Today" pill, or a dashed "No task scheduled" prompt. */
-export function NextTaskRow({ title, dueDate, size = "card", onAddTask, onOpenQuote, quoteLabel = "View quote", testId }: NextTaskRowProps) {
+export function NextTaskRow({ title, dueDate, size = "card", onAddTask, onOpenQuote, quoteLabel = "View quote", testId, priority }: NextTaskRowProps) {
   const drawer = size === "drawer";
   const hasTask = title !== null || dueDate !== null;
 
@@ -36,6 +40,7 @@ export function NextTaskRow({ title, dueDate, size = "card", onAddTask, onOpenQu
           </div>
           <div className="whitespace-nowrap text-[12px] text-social-muted">{formatDueDateTime(dueDate)}</div>
         </div>
+        <TaskPriorityPill priority={priority} testId={testId ? `${testId}-priority` : undefined} />
         {isDueToday(dueDate) && (
           <span className="whitespace-nowrap rounded-full bg-ticket-amber-bg px-2 py-px text-[11px] font-semibold text-ticket-amber-fg">Today</span>
         )}

@@ -3,9 +3,9 @@ export { NewMessageDialog } from "./components/inbox/new-message";
 export { InboxWorkspace } from "./components/inbox-workspace";
 export { CommentsPanel } from "./components/comments-panel";
 export { SendSevenIntegrationCard } from "./components/sendseven-integration-card";
-export { ChannelsDialog } from "./components/channels-dialog";
 export { CHANNELS, CHANNEL_ORDER } from "./channels";
 export { channelsApi } from "./api/channels.api";
+export type { SsChannel, SsChannelTypes, ConnectTokenInput, ConnectTokenResult } from "./api/channels.api";
 export {
   channelsKeys,
   useChannels,

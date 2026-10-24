@@ -5,11 +5,12 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { useTransactions } from "@/hooks/queries";
 import { useContactLink } from "../../../api/use-contact-link";
 import type { Conversation } from "../../../types";
+import { displayHandle } from "../../../map";
 import { ChannelAvatar } from "../shared";
 import { ClientLinkSection, contactLinkMatch } from "../../client-link-section";
 import { ClientHeader } from "./client-header";
 import { DealsSection } from "./deals-section";
-import { clientMoneyStats, selectExpiredDeals, selectLiveDeals } from "./deals";
+import { clientDealCounts, selectExpiredDeals, selectLiveDeals } from "./deals";
 import { NotesSection } from "./notes-section";
 import { StatTiles } from "./stat-tiles";
 import { TasksSection } from "./tasks-section";
@@ -46,13 +47,14 @@ function PaneBody({
   const clientId = client?.id ?? "";
   const { data: transactions, isLoading } = useTransactions({ clientId }, { enabled: !!client?.id });
 
-  const stats = useMemo(() => clientMoneyStats(transactions), [transactions]);
+  const counts = useMemo(() => clientDealCounts(transactions), [transactions]);
   const liveDeals = useMemo(() => (client ? selectLiveDeals(transactions, new Date()) : []), [client, transactions]);
   const expiredDeals = useMemo(() => (client ? selectExpiredDeals(transactions) : []), [client, transactions]);
 
   if (!client) {
     // Not linked yet: suggestions + link / create-client actions.
     const contact = conversation.contact;
+    const shownHandle = displayHandle({ channel: conversation.channel, handle: contact.handle });
     return (
       <div className="text-[14px]">
         <div className="px-5 pb-4 pt-5 text-center">
@@ -66,7 +68,7 @@ function PaneBody({
             />
           </div>
           <h2 className="mt-2.5 text-[18px] font-semibold">{contact.displayName}</h2>
-          {contact.handle && <p className="text-[12px] text-social-muted">{contact.handle}</p>}
+          {shownHandle && <p className="text-[12px] text-social-muted">{shownHandle}</p>}
           <p className="mt-1 text-[12px] text-social-muted">Not linked to a client yet</p>
         </div>
         <div className="px-5 pb-4">
@@ -81,7 +83,7 @@ function PaneBody({
   return (
     <div className="text-[14px]">
       <ClientHeader conversation={conversation} client={client} onCreateEnquiry={onCreateEnquiry} creatingEnquiry={creatingEnquiry} />
-      <StatTiles stats={stats} isLoading={isLoading} />
+      <StatTiles counts={counts} isLoading={isLoading} />
       <DealsSection
         clientId={client.id}
         firstName={firstName}

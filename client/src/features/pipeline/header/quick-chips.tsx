@@ -3,7 +3,6 @@ import { FilterChip } from "@/features/pipeline/shared/filter-chip";
 
 const CHIPS: Array<{ key: PipelineQuick | null; label: string; count: keyof PipelineCounts }> = [
   { key: null, label: "All deals", count: "all" },
-  { key: "due_today", label: "Due today", count: "due_today" },
   { key: "no_task", label: "No task scheduled", count: "no_task" },
   { key: "quiet_7", label: "Quiet 7+ days", count: "quiet_7" },
 ];

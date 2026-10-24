@@ -1,5 +1,4 @@
 export interface EditorSnapshot {
-  subtitle: string;
   post: string;
   schedule: string;
   /** Image selection fingerprint; null until images have finished loading. */
@@ -13,7 +12,6 @@ export interface EditorSnapshot {
 export function isDirtySnapshot(prev: EditorSnapshot | null, next: EditorSnapshot): boolean {
   if (!prev) return false;
   return (
-    next.subtitle !== prev.subtitle ||
     next.post !== prev.post ||
     next.schedule !== prev.schedule ||
     (prev.images !== null && next.images !== prev.images)

@@ -6,8 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils";
 import { useTasks, useUsers, useCurrentUser } from "@/hooks/queries";
 import { useToggleTask, useDeleteTask } from "@/hooks/mutations";
-import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
-import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
+import { CreateTaskDialog, EditTaskDialog, TaskPriorityPill, type EditableTask } from "@/features/tasks";
 
 // ─── Tasks tab ──────────────────────────────────────────────────────────────
 // Mock-styled task rows: toggle circle, orange due time – bold title, "Created"
@@ -130,6 +129,7 @@ export function HolidayTasksTab({ entityId, entityType, readOnly = false, hideCr
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <TaskPriorityPill priority={task.priority} testId={`holiday-task-priority-${task.id}`} />
                 {chip && (
                   <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", chip.className)} data-testid={`holiday-task-due-${task.id}`}>
                     {chip.label}

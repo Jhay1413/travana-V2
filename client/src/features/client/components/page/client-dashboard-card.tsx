@@ -37,7 +37,6 @@ interface ClientDashboardCardProps {
   onDeleteFile: (id: string) => void;
   onOpenDeal: (selection: HolidaySelection) => void;
   onOpenTicket: (ticketId: string) => void;
-  onViewAllTasks: () => void;
 }
 
 /** "{name} Dashboard": Tasks, Notes, Chats, Tickets, Files, Views (with count) and VIP. */
@@ -58,7 +57,6 @@ export function ClientDashboardCard({
   onDeleteFile,
   onOpenDeal,
   onOpenTicket,
-  onViewAllTasks,
 }: ClientDashboardCardProps) {
   const [tab, setTab] = useState<ClientTabKey>(() => resolveClientTab(window.location.search));
   const { hasRole } = useRoles();
@@ -109,7 +107,7 @@ export function ClientDashboardCard({
 
       <div className="mt-2" data-testid={`client-index-tab-panel-${activeTab}`}>
         {activeTab === "tasks" && (
-          <TasksTab clientId={clientId} tasks={tasks} users={users} holidays={taskHolidays} readOnly={readOnly} onViewAll={onViewAllTasks} />
+          <TasksTab clientId={clientId} tasks={tasks} users={users} holidays={taskHolidays} readOnly={readOnly} />
         )}
         {activeTab === "notes" && (
           <ClientNotesList clientId={clientId} users={users} dealsByTransactionId={dealLabels} onOpenDeal={onOpenDeal} readOnly={readOnly} />

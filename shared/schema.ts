@@ -17,6 +17,9 @@ export const withdrawal_method_enum = pgEnum('withdrawal_method_enum', ['bank_tr
 export const referral_payout_status_enum = pgEnum('referral_payout_status_enum', ['requested', 'approved', 'rejected']);
 export const referral_withdrawal_status_enum = pgEnum('referral_withdrawal_status_enum', ['pending', 'processed', 'rejected']);
 export const deal_priority_enum = pgEnum('deal_priority', ['low', 'medium', 'high']);
+export const taskPriorityEnum = pgEnum('task_priority', ['low', 'medium', 'high', 'urgent']);
+export type TaskPriority = (typeof taskPriorityEnum.enumValues)[number];
+export const TASK_PRIORITIES = taskPriorityEnum.enumValues;
 
 // ─── Training / LMS ───────────────────────────────────────────────────────────
 export const course_status_enum = pgEnum('course_status_enum', ['draft', 'published', 'archived']);
@@ -1895,6 +1898,7 @@ export const tasks = pgTable("tasks", {
   completed: boolean("completed"),
   completedAt: timestamp("completed_at"),
   notified: boolean("notified"),
+  priority: taskPriorityEnum("priority").notNull().default("medium"),
   createdAt: timestamp("created_at").defaultNow(),
   orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),

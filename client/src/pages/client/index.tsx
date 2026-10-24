@@ -334,7 +334,6 @@ export default function ClientPage() {
                 onDeleteFile={fileActions.deleteFile}
                 onOpenDeal={openHoliday}
                 onOpenTicket={(ticketId) => navigate(`/tickets/${ticketId}`)}
-                onViewAllTasks={() => navigate("/tasks")}
               />
             </div>
             <div className="flex min-w-0 flex-col gap-5">
