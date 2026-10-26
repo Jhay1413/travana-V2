@@ -124,3 +124,28 @@ export function useGenerateQuoteToken() {
     },
   });
 }
+
+export type QuoteWhatsappFallbackReason =
+  | "not_allowed"
+  | "not_configured"
+  | "no_contact"
+  | "no_channel"
+  | "window_closed";
+
+export type SendQuoteWhatsappResult =
+  | { status: "sent"; conversationId: string }
+  | { status: "fallback"; reason: QuoteWhatsappFallbackReason; text: string; quoteUrl: string };
+
+/**
+ * Sends the quote link to the client's WhatsApp through the agency's SendSeven
+ * inbox. When that isn't possible the server answers with a "fallback" (plus the
+ * message text) so the caller can offer a wa.me link instead.
+ */
+export function useSendQuoteWhatsapp() {
+  return useMutation({
+    mutationFn: async ({ quoteId, clientId }: { quoteId: string; clientId: string }) => {
+      const res = await axiosClient.post<SendQuoteWhatsappResult>(QUOTE_SHARE_ENDPOINTS.sendWhatsapp(quoteId), { clientId });
+      return res.data;
+    },
+  });
+}

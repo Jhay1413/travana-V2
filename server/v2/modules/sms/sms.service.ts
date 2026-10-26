@@ -188,6 +188,39 @@ function buildQuoteUrl(token: string): string {
   return `${getPublicBaseUrl()}/portal/quote/${token}`;
 }
 
+/** Brand name merged into quote-share messages (SMS and WhatsApp). */
+export const QUOTE_SHARE_COMPANY_NAME = "Tina's Travel";
+
+/**
+ * Body of the Share dialog's primary "Send" message. ASCII only - the SMS
+ * provider rejects non-GSM characters (e.g. em dash). Reused for WhatsApp so
+ * both channels say the same thing. Keep in sync with the client `bodyOverride`
+ * in client/src/features/quote/components/QuoteShareDialog.tsx.
+ */
+export const PUBLIC_QUOTE_MESSAGE_BODY =
+  'Hi {{first_name}}, your quote is ready - tap to view it: {{quote_url}} - {{company_name}}';
+
+export function buildPublicQuoteUrl(token: string): string {
+  // Public quote view — no login/PIN required; anyone with the link can view
+  // the quote. Used when the sender explicitly shares the public link instead
+  // of the portal one, so we never seed a PIN or magic-login token for it.
+  return `${getPublicBaseUrl()}/view-quote/${token}`;
+}
+
+/** Renders the public-link quote message for one client + quote token. */
+export function buildPublicQuoteMessage(opts: {
+  firstName: string | null | undefined;
+  token: string;
+}): { text: string; quoteUrl: string } {
+  const quoteUrl = buildPublicQuoteUrl(opts.token);
+  const text = mergeTemplate(PUBLIC_QUOTE_MESSAGE_BODY, {
+    first_name: opts.firstName ?? '',
+    quote_url: quoteUrl,
+    company_name: QUOTE_SHARE_COMPANY_NAME,
+  });
+  return { text, quoteUrl };
+}
+
 /**
  * Resolve which quote's share token to use for a client's SMS context.
  *

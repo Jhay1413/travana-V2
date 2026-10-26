@@ -11,7 +11,9 @@ vi.mock("./sms.repository", () => ({
   },
 }));
 
-import { resolveQuoteToken } from "./sms.service";
+vi.mock("../../utils/public-url", () => ({ getPublicBaseUrl: () => "https://app.test" }));
+
+import { resolveQuoteToken, buildPublicQuoteUrl, buildPublicQuoteMessage } from "./sms.service";
 import { smsRepository } from "./sms.repository";
 
 beforeEach(() => {
@@ -59,5 +61,22 @@ describe("resolveQuoteToken", () => {
     vi.mocked(smsRepository.findLatestTokenedQuoteForClient).mockResolvedValue(undefined as never);
 
     await expect(resolveQuoteToken("client-1")).resolves.toBeUndefined();
+  });
+});
+
+describe("public quote message helpers", () => {
+  it("builds the public /view-quote link", () => {
+    expect(buildPublicQuoteUrl("tok")).toBe("https://app.test/view-quote/tok");
+  });
+
+  it("renders the same body the Share dialog's Send button texts", () => {
+    expect(buildPublicQuoteMessage({ firstName: "Ann", token: "tok" })).toEqual({
+      text: "Hi Ann, your quote is ready - tap to view it: https://app.test/view-quote/tok - Tina's Travel",
+      quoteUrl: "https://app.test/view-quote/tok",
+    });
+  });
+
+  it("tolerates a missing first name", () => {
+    expect(buildPublicQuoteMessage({ firstName: null, token: "t" }).text).toMatch(/^Hi , your quote/);
   });
 });

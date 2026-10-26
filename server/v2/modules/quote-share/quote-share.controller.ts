@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { quoteShareService } from './quote-share.service';
+import { quoteWhatsappService } from './quote-whatsapp.service';
 import { asyncHandler } from '../../utils/async-handler';
 import { getUserId } from '../../utils/get-user-id';
 import { getScope } from '../../utils/scope';
@@ -35,6 +36,14 @@ export const quoteShareController = {
     await quoteShareService.verifyAccess(req.params.id as string, userId, getScope(req), 'read');
     const actions = await quoteShareService.getCustomerActions(req.params.id as string);
     res.json({ success: true, data: actions });
+  }),
+
+  sendWhatsapp: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    const { clientId } = req.body;
+    const result = await quoteWhatsappService.send(req.params.id as string, clientId, userId, getScope(req));
+    return successResponse(res, result, result.status === 'sent' ? 'Quote sent via WhatsApp' : 'WhatsApp fallback');
   }),
 
   updateSent: asyncHandler(async (req: Request, res: Response) => {

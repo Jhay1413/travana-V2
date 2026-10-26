@@ -509,6 +509,7 @@ export default function QuotePage() {
         onCopy={copyShareLink}
         clientId={clientId || undefined}
         quoteId={quoteId}
+        clientPhone={clientData?.phone}
         onSent={(via) => markQuoteSent.mutate({ quoteId, sentVia: via })}
       />
 

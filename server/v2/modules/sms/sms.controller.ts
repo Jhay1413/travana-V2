@@ -12,6 +12,8 @@ import {
   consumeSmsCredit,
   attachChargeToMessage,
   resolveQuoteToken,
+  buildPublicQuoteUrl,
+  QUOTE_SHARE_COMPANY_NAME,
 } from './sms.service';
 import {
   platformAdminCreditsRepository,
@@ -129,13 +131,6 @@ function buildQuoteUrl(token: string): string {
   return `${getPublicBaseUrl()}/portal/quote/${token}`;
 }
 
-function buildPublicQuoteUrl(token: string): string {
-  // Public quote view — no login/PIN required; anyone with the link can view
-  // the quote. Used when the sender explicitly shares the public link instead
-  // of the portal one, so we never seed a PIN or magic-login token for it.
-  return `${getPublicBaseUrl()}/view-quote/${token}`;
-}
-
 /**
  * Magic-login quote link: a short single-use code rides in the URL so tapping it
  * logs the client straight into the portal and lands on their quote — no typing
@@ -159,7 +154,7 @@ async function buildContextForClient(
 ) {
   const ctx: any = {
     first_name: client.firstName, last_name: client.surename, portal_link: buildPortalLink(),
-    company_name: "Tina's Travel", destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '', quote_url: '',
+    company_name: QUOTE_SHARE_COMPANY_NAME, destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '', quote_url: '',
     portal_email: '', portal_pin: '', portal_credentials: '',
   };
 

@@ -20,6 +20,7 @@ export interface QuoteTopActionsProps {
   quoteId: string;
   clientId: string;
   clientName: string;
+  clientPhone?: string | null;
   quoteData: EnrichedQuote;
   readOnly: boolean;
   editOpen: boolean;
@@ -34,6 +35,7 @@ export function QuoteTopActions({
   quoteId,
   clientId,
   clientName,
+  clientPhone,
   quoteData,
   readOnly,
   editOpen,
@@ -118,6 +120,7 @@ export function QuoteTopActions({
             onCopy={share.copyShareLink}
             clientId={clientId || undefined}
             quoteId={quoteId}
+            clientPhone={clientPhone}
             onSent={(via) => markSent.mutate({ quoteId, sentVia: via })}
           />
         </>

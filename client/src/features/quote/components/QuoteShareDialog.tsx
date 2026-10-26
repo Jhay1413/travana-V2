@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Check, Copy, Loader2, MessageSquare } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Copy, Loader2, MessageCircle, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,8 +9,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { env } from "@/config/env";
+import { whatsAppLink } from "@/features/conversations";
 import { useSendSms } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
+import {
+  useSendQuoteWhatsapp,
+  type QuoteWhatsappFallbackReason,
+} from "../api/use-quote-share-queries";
+
+const WHATSAPP_FALLBACK_COPY: Record<QuoteWhatsappFallbackReason, string> = {
+  not_allowed: "WhatsApp can't be sent from this app for your account, so send it from your phone instead.",
+  not_configured: "WhatsApp isn't connected for your agency, so send it from your phone instead.",
+  no_contact: "This client isn't linked to a WhatsApp contact yet, so send it from your phone instead.",
+  no_channel: "No active WhatsApp number is connected for your agency, so send it from your phone instead.",
+  window_closed: "The client hasn't messaged in the last 24 hours, so WhatsApp needs to be sent from your phone.",
+};
+
+interface WhatsappFallback {
+  reason: QuoteWhatsappFallbackReason;
+  text: string;
+}
 
 interface QuoteShareDialogProps {
   open: boolean;
@@ -24,9 +42,12 @@ interface QuoteShareDialogProps {
    *  the server texts *this* quote's link rather than falling back to the
    *  client's most-recently-tokened quote (which may be a different one). */
   quoteId?: string;
-  /** Called after the link was copied ("link") or an SMS actually went out ("sms"),
-   *  so the caller can record the quote as sent. */
-  onSent?: (via: "link" | "sms") => void;
+  /** The client's phone number, used to open WhatsApp on the agent's own device
+   *  when the quote can't be sent through the agency inbox. */
+  clientPhone?: string | null;
+  /** Called after the link was copied ("link"), an SMS went out ("sms"), or a
+   *  WhatsApp was sent / opened ("whatsapp"), so the caller can record the quote as sent. */
+  onSent?: (via: "link" | "sms" | "whatsapp") => void;
 }
 
 export function QuoteShareDialog({
@@ -38,14 +59,30 @@ export function QuoteShareDialog({
   onCopy,
   clientId,
   quoteId,
+  clientPhone,
   onSent,
 }: QuoteShareDialogProps) {
   const { toast } = useToast();
   const sendSms = useSendSms();
+  const sendWhatsapp = useSendQuoteWhatsapp();
+  const [whatsappFallback, setWhatsappFallback] = useState<WhatsappFallback | null>(null);
   // Both buttons drive the same mutation, so track which one fired to show the
   // spinner only on the button the user actually pressed.
   const [sendingAction, setSendingAction] = useState<"public" | "sms" | null>(null);
+  // Don't carry a fallback (or a stale mutation state) into the next time the dialog opens.
+  const resetWhatsapp = sendWhatsapp.reset;
+  useEffect(() => {
+    if (!open) {
+      setWhatsappFallback(null);
+      resetWhatsapp();
+    }
+  }, [open, resetWhatsapp]);
   const canSend = !!clientId && !!shareToken && !sendSms.isPending;
+  const canSendWhatsapp = !!clientId && !!quoteId && !!shareToken && !sendWhatsapp.isPending;
+  const fallbackHref = (() => {
+    const base = whatsAppLink(clientPhone);
+    return base && whatsappFallback ? `${base}?text=${encodeURIComponent(whatsappFallback.text)}` : null;
+  })();
 
   const smsResultToast = (data: { sent: number; skipped: number; results: any[] }, sentTitle: string) => {
     if (data.sent > 0) {
@@ -94,6 +131,7 @@ export function QuoteShareDialog({
     sendSms.mutate(
       {
         // ASCII only - the SMS provider rejects non-GSM characters (e.g. em dash).
+        // Keep in sync with PUBLIC_QUOTE_MESSAGE_BODY in server/v2/modules/sms/sms.service.ts (WhatsApp uses it).
         bodyOverride:
           "Hi {{first_name}}, your quote is ready - tap to view it: {{quote_url}} - {{company_name}}",
         publicQuoteLink: true,
@@ -125,6 +163,25 @@ export function QuoteShareDialog({
         onSuccess: (data) => smsResultToast(data, "Quote link sent via SMS"),
         onError: smsErrorToast,
         onSettled: () => setSendingAction(null),
+      },
+    );
+  };
+
+  const handleSendWhatsapp = () => {
+    if (!clientId || !quoteId) return;
+    setWhatsappFallback(null);
+    sendWhatsapp.mutate(
+      { quoteId, clientId },
+      {
+        onSuccess: (data) => {
+          if (data.status === "sent") {
+            toast({ title: "Quote link sent via WhatsApp" });
+            onSent?.("whatsapp");
+          } else {
+            setWhatsappFallback({ reason: data.reason, text: data.text });
+          }
+        },
+        onError: smsErrorToast,
       },
     );
   };
@@ -193,6 +250,61 @@ export function QuoteShareDialog({
                     )}
                     {sendingAction === "sms" ? "Sending…" : "Send via SMS"}
                   </Button>
+                </div>
+              )}
+              {clientId && (
+                <div className="space-y-2 rounded-xl border border-black/10 bg-black/[0.02] px-3 py-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 text-xs text-black/65">
+                      Send this link to the client on WhatsApp from your agency inbox.
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 shrink-0 rounded-xl px-3"
+                      onClick={handleSendWhatsapp}
+                      disabled={!canSendWhatsapp}
+                      data-testid="button-send-quote-whatsapp"
+                    >
+                      {sendWhatsapp.isPending ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <MessageCircle className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      {sendWhatsapp.isPending ? "Sending…" : "Send via WhatsApp"}
+                    </Button>
+                  </div>
+                  {whatsappFallback && (
+                    <div
+                      className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                      data-testid="whatsapp-fallback"
+                    >
+                      <p>{WHATSAPP_FALLBACK_COPY[whatsappFallback.reason]}</p>
+                      {fallbackHref ? (
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          className="h-8 rounded-xl px-3"
+                          data-testid="link-open-in-whatsapp"
+                        >
+                          <a
+                            href={fallbackHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => onSent?.("whatsapp")}
+                            onAuxClick={() => onSent?.("whatsapp")}
+                          >
+                            Open in WhatsApp
+                          </a>
+                        </Button>
+                      ) : (
+                        <p className="text-amber-800/80" data-testid="text-whatsapp-no-phone">
+                          This client has no valid phone number on file, so WhatsApp can't be opened.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </>

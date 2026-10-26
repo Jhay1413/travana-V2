@@ -163,3 +163,5 @@ export type {
   ConversationTag,
   MessageDirection,
 } from "./types";
+
+export { whatsAppLink } from "./lib/whatsapp-link";

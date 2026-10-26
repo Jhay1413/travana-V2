@@ -96,4 +96,5 @@ export const QUOTE_SHARE_ENDPOINTS = {
   clientViews: (clientId: string) => `${API_V2}/quote-share/client/${clientId}/views`,
   customerActions: (quoteId: string) => `${API_V2}/quote-share/${quoteId}/customer-actions`,
   sent: (quoteId: string) => `${API_V2}/quote-share/${quoteId}/sent`,
+  sendWhatsapp: (quoteId: string) => `${API_V2}/quote-share/${quoteId}/send-whatsapp`,
 } as const;

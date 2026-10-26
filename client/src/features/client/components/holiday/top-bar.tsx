@@ -92,6 +92,7 @@ export function TopBar({
               key={selection.id}
               quoteId={selection.id}
               quoteData={quoteData}
+              clientPhone={clientPhone}
               onConvert={onConvert}
               onOpenExpiryDialog={onOpenExpiryDialog}
               {...common}
