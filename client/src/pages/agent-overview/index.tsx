@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useRole, useRoles } from "@/hooks/use-role";
 import { MyHomeworkerBranchCard } from "@/features/homeworkers";
 import { useCurrentUser } from "@/hooks/queries";
-import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { ProfitStatBoxes } from "@/features/agent-overview/components/profit-stat-boxes";
 import { AgentDashboardCard } from "@/features/agent-overview/components/home/agent-dashboard-card";
 import { EngagementSection } from "@/features/agent-overview/components/engagement-section";
@@ -72,11 +72,13 @@ export default function AgentOverviewPage() {
         />
       </div>
 
-      <CreateTaskDialog
-        presentation="drawer"
+      <AddTaskModal
+        title="New task"
         open={creatingTask}
         onOpenChange={setCreatingTask}
-        defaultAssignedToId={userId}
+        defaultAssignedToId={userId || undefined}
+        successToast="Task created"
+        testIdPrefix="dashboard-new-task"
       />
     </div>
   );
