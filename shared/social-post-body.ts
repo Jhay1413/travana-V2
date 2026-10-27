@@ -5,10 +5,17 @@
  * "\n" is the template's own convention and counts once), then lines are
  * re-joined with "<br>\n" so empty lines become blank lines.
  *
+ * <span> tags (and their escaped "&lt;span ...&gt;" forms, left in stored
+ * posts by the editor) are removed, keeping the inner text. Other escaped text
+ * such as "a &lt; b" is left alone.
+ *
  * Pure and idempotent. Shared so the editor can show exactly what is published.
  */
 export function toOnlySocialsBody(post: string): string {
-  const unified = post.replace(/\r\n?/g, "\n").replace(/<br\s*\/?>\n?/gi, "\n");
+  const unified = post
+    .replace(/<\/?span\b[^>]*>/gi, "")
+    .replace(/&lt;\/?span\b(?:(?!&gt;).)*&gt;/gi, "")
+    .replace(/\r\n?/g, "\n").replace(/<br\s*\/?>\n?/gi, "\n");
 
   const lines: string[] = [];
   let pendingBlank = false;

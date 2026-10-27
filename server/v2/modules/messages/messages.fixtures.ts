@@ -74,6 +74,7 @@ export function sampleSendMessage(body: Record<string, unknown>): SsMessage {
     is_internal: false,
     created_at: now,
     sent_at: now,
+    ...(body.meta ? { meta: body.meta } : {}),
   };
   const thread = store.get(convId) ?? [];
   thread.push(message);

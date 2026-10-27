@@ -14,6 +14,16 @@ describe("post editor round-trip", () => {
   it("converts contentEditable divs, keeping blank lines", () => {
     expect(editorHtmlToPost("A<div>B</div><div><br></div><div>C</div>")).toBe("A<br>\nB<br>\n<br>\nC");
   });
+
+  it("strips editor-inserted spans but keeps their text and <br>", () => {
+    const html = 'Price £99 <span style="color: rgb(18, 18, 22);">pp</span><div>B</div>';
+    expect(editorHtmlToPost(html)).toBe("Price £99 pp<br>\nB");
+  });
+
+  it("repairs already-stored escaped spans on load", () => {
+    const stored = 'Price &lt;span style="color: rgb(18, 18, 22);"&gt;pp&lt;/span&gt;<br>\nB';
+    expect(postToEditorHtml(stored)).toBe("Price pp<br>\nB");
+  });
 });
 
 describe("postToEditorHtml escaping", () => {

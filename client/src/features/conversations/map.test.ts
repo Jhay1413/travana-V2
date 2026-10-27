@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { displayHandle, looksLikePhone } from "./map";
+import type { SsConversation } from "./api/conversations.api";
+import { displayHandle, looksLikePhone, toUiConversation } from "./map";
 
 describe("displayHandle", () => {
   it("shows a whatsapp phone", () => {
@@ -40,5 +41,32 @@ describe("looksLikePhone", () => {
     expect(looksLikePhone("abc-1234567")).toBe(false);
     expect(looksLikePhone("1234567890123456")).toBe(false);
     expect(looksLikePhone(null)).toBe(false);
+  });
+});
+
+describe("toUiConversation needs-reply seed", () => {
+  const item = (over: Partial<SsConversation> = {}): SsConversation => ({
+    id: "c1",
+    tenant_id: "t",
+    channel_id: "ch",
+    status: "open",
+    created_at: "2026-03-10T10:00:00Z",
+    needs_reply: true,
+    last_message: { text: "hi", direction: "inbound", created_at: "2026-03-10T10:00:00Z" },
+    ...over,
+  });
+  it("carries the raw provider flag alongside unread", () => {
+    const c = toUiConversation(item());
+    expect(c.needsReply).toBe(true);
+    expect(c.unread).toBe(true);
+    expect(toUiConversation(item({ needs_reply: false })).needsReply).toBe(false);
+  });
+  it("does not flag a normal last message as a note", () => {
+    expect(toUiConversation(item()).messages[0].isNote).toBeUndefined();
+  });
+  it("flags internal and system previews as notes", () => {
+    const base = { text: "n", direction: "outbound", created_at: "2026-03-10T10:00:00Z" };
+    expect(toUiConversation(item({ last_message: { ...base, is_internal: true } })).messages[0].isNote).toBe(true);
+    expect(toUiConversation(item({ last_message: { ...base, message_type: "system" } })).messages[0].isNote).toBe(true);
   });
 });

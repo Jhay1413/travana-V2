@@ -11,23 +11,44 @@ const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
 /**
- * Direction of the last message. `Conversation` has no dedicated field, so we use
- * the explicit `lastDirection` override first, else the last non-note entry of
- * `conv.messages` (the list mapper seeds it from `last_message.direction`).
- * With no information we assume inbound, because `unread` mirrors `needs_reply`.
+ * Direction of the last customer-visible message, or null when unknown. Uses the
+ * explicit `lastDirection` override first, else the last non-note entry of
+ * `conv.messages` (the list mapper seeds it from `last_message`, flagging
+ * internal notes). Null means no message to judge by (none, or only notes).
  */
-export function lastDirectionOf(conv: Conversation, lastDirection?: LastDirection): LastDirection {
+export function lastDirectionOf(conv: Conversation, lastDirection?: LastDirection): LastDirection | null {
   if (lastDirection) return lastDirection;
   for (let i = conv.messages.length - 1; i >= 0; i--) {
     if (!conv.messages[i].isNote) return conv.messages[i].direction;
   }
-  return "inbound";
+  return null;
 }
 
-/** Milliseconds a client has been waiting on us; null unless unread and last message inbound. */
+/**
+ * True when the client is waiting on us: the last customer-visible message is
+ * inbound, regardless of read/seen state. With no message to judge by we trust
+ * the provider's raw `needsReply` flag (never the locally-cleared `unread`).
+ */
+export function needsReplyOf(conv: Conversation, lastDirection?: LastDirection): boolean {
+  const dir = lastDirectionOf(conv, lastDirection);
+  return dir === null ? conv.needsReply : dir === "inbound";
+}
+
+/**
+ * Milliseconds a client has been waiting on us; null unless the last
+ * customer-visible message is inbound. Measured from that message's sentAt when
+ * known, else from lastActivityAt.
+ */
 export function waitMs(conv: Conversation, now: Date, lastDirection?: LastDirection): number | null {
-  if (!conv.unread || lastDirectionOf(conv, lastDirection) !== "inbound") return null;
-  const at = Date.parse(conv.lastActivityAt);
+  if (!needsReplyOf(conv, lastDirection)) return null;
+  let at = Number.NaN;
+  for (let i = conv.messages.length - 1; i >= 0; i--) {
+    const m = conv.messages[i];
+    if (m.isNote) continue;
+    if (m.direction === "inbound") at = Date.parse(m.sentAt);
+    break;
+  }
+  if (Number.isNaN(at)) at = Date.parse(conv.lastActivityAt);
   if (Number.isNaN(at)) return null;
   return Math.max(0, now.getTime() - at);
 }
@@ -69,9 +90,9 @@ export function rowStatus(
   // Snoozed with no (parseable) return time, e.g. the optimistic local override.
   if (conv.snoozed) return { kind: "snoozed", label: "Snoozed" };
   // A lapsed snooze the provider still reports: nothing new has arrived, so the
-  // most useful label is that the snooze has ended (an unread row keeps its
-  // needs-reply label below).
-  if (conv.snoozedUntil && !conv.unread) {
+  // most useful label is that the snooze has ended (a row still awaiting our
+  // reply keeps its needs-reply label below).
+  if (conv.snoozedUntil && !needsReplyOf(conv, lastDirection)) {
     const until = Date.parse(conv.snoozedUntil);
     if (!Number.isNaN(until) && until <= now.getTime()) return { kind: "snoozed", label: "Snooze ended" };
   }

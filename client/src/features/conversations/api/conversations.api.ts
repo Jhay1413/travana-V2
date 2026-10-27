@@ -30,6 +30,8 @@ export interface SsLastMessagePreview {
   text?: string | null;
   message_type?: string;
   direction?: string;
+  /** True for internal notes (not sent to the contact). */
+  is_internal?: boolean;
   created_at?: string | null;
 }
 

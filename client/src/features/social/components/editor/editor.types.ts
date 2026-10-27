@@ -1,7 +1,5 @@
 import type { TravelDeal } from "@/features/social/api/social-post.api";
 
-export type PreviewChannel = "facebook" | "instagram";
-
 /** Natural size of a tile image, captured when it loads. */
 export interface TileSize {
   sourceWidth?: number;

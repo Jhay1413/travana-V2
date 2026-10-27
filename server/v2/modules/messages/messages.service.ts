@@ -6,6 +6,31 @@ import { messagesRepository } from "./messages.repository";
 import { usageService } from "../usage/usage.service";
 import type { ListMessagesParams, SsMessage } from "./messages.types";
 
+// Stamp WHO sent a message on its free-form meta so the thread can show the
+// agent's name/avatar (AI replies carry source "travana-ai" from the reply
+// worker; staff replies and internal notes get "travana-agent" here).
+// SendSeven stores and echoes meta back on reads. Best-effort: a lookup failure
+// returns the body unchanged.
+async function stampSender(body: Record<string, unknown>, senderUserId?: string | null): Promise<Record<string, unknown>> {
+  if (!senderUserId) return body;
+  try {
+    const sender = await userRepository.findById(senderUserId);
+    if (!sender) return body;
+    const name = [sender.firstName, sender.lastName].filter(Boolean).join(" ").trim() || sender.name;
+    return {
+      ...body,
+      meta: {
+        ...((body.meta as Record<string, unknown> | undefined) ?? {}),
+        source: "travana-agent",
+        agent: { id: sender.id, name, avatar: sender.image ?? null },
+      },
+    };
+  } catch (err) {
+    console.warn("[messages] could not stamp sender on outbound message:", err);
+    return body;
+  }
+}
+
 // Thin orchestration over the repository. SendSeven owns message state; we proxy.
 
 export const messagesService = {
@@ -21,28 +46,7 @@ export const messagesService = {
   // SendSeven's own UI. Best-effort: a state-write failure must never fail
   // (or appear to fail) the send the user is waiting on.
   async send(orgId: string, body: Record<string, unknown>, senderUserId?: string | null): Promise<SsMessage> {
-    // Stamp WHO sent this on the message's free-form meta so the thread can
-    // show the replying agent's avatar (AI replies carry source "travana-ai"
-    // from the reply worker; staff replies get "travana-agent" here). SendSeven
-    // stores and echoes meta back on reads, so nothing else needs to persist it.
-    if (senderUserId) {
-      try {
-        const sender = await userRepository.findById(senderUserId);
-        if (sender) {
-          const name = [sender.firstName, sender.lastName].filter(Boolean).join(" ").trim() || sender.name;
-          body = {
-            ...body,
-            meta: {
-              ...((body.meta as Record<string, unknown> | undefined) ?? {}),
-              source: "travana-agent",
-              agent: { id: sender.id, name, avatar: sender.image ?? null },
-            },
-          };
-        }
-      } catch (err) {
-        console.warn("[messages] could not stamp sender on outbound message:", err);
-      }
-    }
+    body = await stampSender(body, senderUserId);
     const sent = await messagesRepository.send(body);
     if (orgId) {
       void usageService.recordSendsevenSend({ orgId, source: "manual" });
@@ -74,7 +78,8 @@ export const messagesService = {
   // Internal notes never reach the customer, but the other agents' open thread
   // should still show them live — reuse message.sent since the client reacts to
   // it by refetching exactly what a note changes (thread + list preview).
-  async createInternalNote(orgId: string, body: Record<string, unknown>): Promise<SsMessage> {
+  async createInternalNote(orgId: string, body: Record<string, unknown>, senderUserId?: string | null): Promise<SsMessage> {
+    body = await stampSender(body, senderUserId);
     const created = await messagesRepository.createInternalNote(body);
     const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : created.conversation_id;
     if (orgId && conversationId) {

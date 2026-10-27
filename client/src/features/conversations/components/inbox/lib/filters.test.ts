@@ -14,6 +14,7 @@ function c(over: Partial<Conversation> = {}): Conversation {
     preview: "",
     lastActivityAt: ago(1),
     unread: true,
+    needsReply: true,
     snoozed: false,
     messages: [{ id: "m", direction: "inbound", body: "", sentAt: ago(1) }],
     ...over,
@@ -33,7 +34,7 @@ describe("filters", () => {
     expect(matchesFilters(c(), { ...EMPTY_FILTERS, tags: ["t1"] }, now)).toBe(false);
   });
   it("matches status", () => {
-    const overdue = c({ lastActivityAt: ago(30) });
+    const overdue = c({ lastActivityAt: ago(30), messages: [{ id: "m", direction: "inbound", body: "", sentAt: ago(30) }] });
     expect(matchesFilters(overdue, { ...EMPTY_FILTERS, status: ["overdue"] }, now)).toBe(true);
     expect(matchesFilters(overdue, { ...EMPTY_FILTERS, status: ["needs_reply"] }, now)).toBe(true);
     expect(matchesFilters(c(), { ...EMPTY_FILTERS, status: ["overdue"] }, now)).toBe(false);

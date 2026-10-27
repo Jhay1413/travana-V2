@@ -13,6 +13,7 @@ function conv(over: Partial<Conversation> & { id: string }): Conversation {
     preview: "",
     lastActivityAt: "2026-03-10T10:00:00Z",
     unread: false,
+    needsReply: false,
     snoozed: false,
     snoozedUntil: null,
     messages: [],
@@ -91,11 +92,28 @@ describe("deriveRows", () => {
   it("keeps the selected row under a status filter it no longer matches", () => {
     const list = [
       conv({ id: "a", unread: false }),
-      conv({ id: "b", unread: true, lastActivityAt: "2026-03-10T11:50:00Z", messages: [{ id: "m", direction: "inbound", body: "", sentAt: "2026-03-10T11:50:00Z" }] }),
+      conv({ id: "b", unread: true, needsReply: true, lastActivityAt: "2026-03-10T11:50:00Z", messages: [{ id: "m", direction: "inbound", body: "", sentAt: "2026-03-10T11:50:00Z" }] }),
     ];
     const filters = { ...EMPTY_FILTERS, status: ["needs_reply" as const] };
     expect(deriveRows(list, { ...base, filters }).map((r) => r.id)).toEqual(["b"]);
     expect(deriveRows(list, { ...base, filters, selectedId: "a" }).map((r) => r.id).sort()).toEqual(["a", "b"]);
+  });
+
+  it("keeps a seen (read) but unanswered row under the Needs reply filter", () => {
+    const seen = conv({
+      id: "seen",
+      unread: false,
+      needsReply: true,
+      lastActivityAt: "2026-03-10T11:50:00Z",
+      messages: [{ id: "m", direction: "inbound", body: "", sentAt: "2026-03-10T11:50:00Z" }],
+    });
+    const answered = conv({
+      id: "answered",
+      unread: false,
+      messages: [{ id: "m", direction: "outbound", body: "", sentAt: "2026-03-10T11:50:00Z" }],
+    });
+    const filters = { ...EMPTY_FILTERS, status: ["needs_reply" as const] };
+    expect(deriveRows([seen, answered], { ...base, filters }).map((r) => r.id)).toEqual(["seen"]);
   });
 
   it("still applies the tab to the selected row", () => {

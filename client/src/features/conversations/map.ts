@@ -129,6 +129,13 @@ function isSnoozeActive(snoozedUntil: string | null | undefined): boolean {
   return !Number.isNaN(until) && until > Date.now();
 }
 
+// An internal note (or system entry) is not customer-visible, so it must not
+// count as the "last message" when deciding who owes a reply.
+function isInternalPreview(last: SsLastMessagePreview): boolean {
+  const type = (last.message_type ?? "").toLowerCase();
+  return last.is_internal === true || type === "system" || type === "note";
+}
+
 // Turns a SendSeven conversation into the UI model. Because only the list
 // endpoint drives the inbox, the thread is seeded with the single
 // `last_message`; the full history arrives via the messages API later.
@@ -159,6 +166,7 @@ export function toUiConversation(item: SsConversation): Conversation {
     status: toUiStatus(item.status),
     assignee,
     unread: !!item.needs_reply,
+    needsReply: !!item.needs_reply,
     // Snooze is derived from `snoozed_until`, not from `status` — the provider
     // keeps a snoozed conversation's status as "open". The provider also never
     // clears an expired `snoozed_until`, so a snooze only counts while it is
@@ -189,6 +197,7 @@ export function toUiConversation(item: SsConversation): Conversation {
             direction: item.last_message.direction === "outbound" ? "outbound" : "inbound",
             body: lastMessagePreview(item.last_message),
             sentAt: item.last_message.created_at ?? lastActivityAt,
+            ...(isInternalPreview(item.last_message) ? { isNote: true } : {}),
           },
         ]
       : [],

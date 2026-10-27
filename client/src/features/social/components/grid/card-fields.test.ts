@@ -59,8 +59,8 @@ describe("deleteCopy", () => {
 
 describe("postPlatforms", () => {
   const channel = { provider: "onlysocials", accountId: 1, workspaceConfigured: true, apiKeyConfigured: true, label: "x" } as const;
-  it("returns facebook and instagram when the channel is connected (one post for both)", () => {
-    expect(postPlatforms({}, channel)).toEqual(["facebook", "instagram"]);
+  it("returns facebook when the channel is connected", () => {
+    expect(postPlatforms({}, channel)).toEqual(["facebook"]);
   });
   it("returns nothing when not configured or unknown", () => {
     expect(postPlatforms({}, { ...channel, apiKeyConfigured: false })).toEqual([]);
