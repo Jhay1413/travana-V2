@@ -442,6 +442,13 @@
       "when": 1792831496855,
       "tag": "0062_mean_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1793080529689,
+      "tag": "0063_closed_black_queen",
+      "breakpoints": true
     }
   ]
 }

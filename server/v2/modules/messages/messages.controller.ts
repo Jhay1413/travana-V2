@@ -32,8 +32,9 @@ function requireParam(req: Request, name: string): string {
 export const messagesController = {
   // GET /api/v1/messages
   list: asyncHandler(async (req: Request, res: Response) => {
+    const { orgId } = getScope(req);
     const q = req.query as Record<string, string | undefined>;
-    const result = await messagesService.list({
+    const result = await messagesService.list(orgId, {
       conversationId: q.conversationId ?? q.conversation_id,
       page: num(q.page),
       pageSize: num(q.pageSize ?? q.page_size),
@@ -61,7 +62,8 @@ export const messagesController = {
 
   // GET /api/v1/messages/:message_id
   getById: asyncHandler(async (req: Request, res: Response) => {
-    return successResponse(res, await messagesService.getById(requireParam(req, "message_id")), "Message retrieved");
+    const { orgId } = getScope(req);
+    return successResponse(res, await messagesService.getById(orgId, requireParam(req, "message_id")), "Message retrieved");
   }),
 
   // POST /api/v1/messages/:message_id/react

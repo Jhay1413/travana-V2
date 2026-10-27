@@ -3160,3 +3160,21 @@ export const bookingDepartureChecks = pgTable("booking_departure_checks", {
 
 export type BookingDepartureChecks = typeof bookingDepartureChecks.$inferSelect;
 export type InsertBookingDepartureChecks = typeof bookingDepartureChecks.$inferInsert;
+
+// Inbox internal notes: SendSeven replaces note meta and stamps the API key owner, so we record the
+// real author ourselves, keyed by the SendSeven message id. No row = author unknown (client shows "Team").
+export const inboxNoteAuthors = pgTable("inbox_note_authors", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  sendsevenMessageId: text("sendseven_message_id").notNull(),
+  sendsevenNoteId: text("sendseven_note_id"),
+  conversationId: text("conversation_id").notNull(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_inbox_note_authors_message").on(table.sendsevenMessageId),
+  index("idx_inbox_note_authors_org").on(table.orgId),
+]);
+
+export type InboxNoteAuthor = typeof inboxNoteAuthors.$inferSelect;
+export type InsertInboxNoteAuthor = typeof inboxNoteAuthors.$inferInsert;
