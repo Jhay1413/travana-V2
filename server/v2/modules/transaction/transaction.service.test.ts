@@ -115,6 +115,50 @@ describe("transactionService.getTransactionById", () => {
 });
 
 describe("transactionService.updateTransaction", () => {
+  it("rejects a status downgrade with 400", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_booking" } as never);
+    vi.mocked(newQuoteRepository.findByTransactionId).mockResolvedValue([{ id: "q1" }] as never);
+    vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue({ id: "b1" } as never);
+
+    await expect(transactionService.updateTransaction("t1", { status: "on_enquiry" }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+    expect(transactionRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects on_quote when the deal has no quote", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_enquiry" } as never);
+    vi.mocked(newQuoteRepository.findByTransactionId).mockResolvedValue([] as never);
+    vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue(undefined as never);
+
+    await expect(transactionService.updateTransaction("t1", { status: "on_quote" }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("rejects on_quote when the only quote is a copy", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_enquiry" } as never);
+    vi.mocked(newQuoteRepository.findByTransactionId).mockResolvedValue([{ id: "q1", isQuoteCopy: true, isFreeQuote: false }] as never);
+    vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue(undefined as never);
+
+    await expect(transactionService.updateTransaction("t1", { status: "on_quote" }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+    expect(transactionRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects on_booking when the only booking is lost", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_quote" } as never);
+    vi.mocked(newQuoteRepository.findByTransactionId).mockResolvedValue([] as never);
+    vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue({ id: "b1", booking_status: "LOST" } as never);
+
+    await expect(transactionService.updateTransaction("t1", { status: "on_booking" }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+    expect(transactionRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("allows a forward move backed by a quote", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_enquiry" } as never);
+    vi.mocked(newQuoteRepository.findByTransactionId).mockResolvedValue([{ id: "q1" }] as never);
+    vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue(undefined as never);
+    vi.mocked(transactionRepository.update).mockResolvedValue({ id: "t1", status: "on_quote" } as never);
+
+    await expect(transactionService.updateTransaction("t1", { status: "on_quote" }, SCOPE)).resolves.toMatchObject({ status: "on_quote" });
+  });
+
   it("throws 404 when the transaction does not exist", async () => {
     vi.mocked(transactionRepository.findById).mockResolvedValue(undefined as never);
 
@@ -198,8 +242,8 @@ describe("transactionService.updateTransaction deal reassignment across the part
   });
 
   it("strips org_id and (for non-admins) branch_id from the patch", async () => {
-    await transactionService.updateTransaction("t1", { status: "on_quote", org_id: "evil", branch_id: "evil-b" } as never, AGENT);
-    expect(vi.mocked(transactionRepository.update).mock.calls[0][1]).toEqual({ status: "on_quote" });
+    await transactionService.updateTransaction("t1", { org_id: "evil", branch_id: "evil-b" } as never, AGENT);
+    expect(vi.mocked(transactionRepository.update).mock.calls[0][1]).toEqual({});
   });
 
   it("lets an admin set branch_id only inside their org", async () => {

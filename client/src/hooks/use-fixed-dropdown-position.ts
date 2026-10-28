@@ -1,4 +1,5 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
+import { establishesFixedContainingBlock } from "./fixed-containing-block";
 
 /** Computed placement for a dropdown rendered with `position: fixed`, in the coordinate space `position: fixed` resolves against. */
 export interface FixedDropdownPosition {
@@ -29,8 +30,6 @@ interface ContainingBlockBox {
 
 type StyleWithWebkitBackdrop = CSSStyleDeclaration & { webkitBackdropFilter?: string };
 
-const isSet = (value: string | undefined): boolean => !!value && value !== "none";
-
 /**
  * `position: fixed` is only viewport-relative when no ancestor establishes a containing
  * block for fixed descendants. `transform`, `perspective`, `filter`, `backdrop-filter`
@@ -51,14 +50,7 @@ function findFixedContainingBlock(trigger: HTMLElement): ContainingBlockBox | nu
     const el: HTMLElement = current;
     current = el.parentElement;
     const style = getComputedStyle(el) as StyleWithWebkitBackdrop;
-    const establishes =
-      isSet(style.transform) ||
-      isSet(style.perspective) ||
-      isSet(style.filter) ||
-      isSet(style.backdropFilter) ||
-      isSet(style.webkitBackdropFilter) ||
-      /paint|layout|strict|content/.test(style.contain) ||
-      /transform|perspective|filter/.test(style.willChange);
+    const establishes = establishesFixedContainingBlock(style);
     if (!establishes) continue;
 
     // getBoundingClientRect() is the border box; the containing block is the padding box.

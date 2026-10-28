@@ -15,6 +15,12 @@ export const noteAttachmentController = {
     return successResponse(res, attachments, "Attachments retrieved successfully");
   }),
 
+  listByClientId: asyncHandler(async (req: Request, res: Response) => {
+    const includeDeals = req.query.includeDeals === "1" || req.query.includeDeals === "true";
+    const attachments = await noteAttachmentService.listByClientId(req.params.clientId as string, includeDeals, getScope(req));
+    return successResponse(res, attachments, "Attachments retrieved successfully");
+  }),
+
   uploadAttachments: asyncHandler(async (req: Request, res: Response) => {
     const files = Array.isArray(req.files) ? req.files : [];
     const attachments = await noteAttachmentService.uploadMany(

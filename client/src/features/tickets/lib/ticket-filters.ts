@@ -51,3 +51,8 @@ export function countMyActiveTickets(tickets: unknown, userId: string | undefine
   if (!Array.isArray(tickets) || !userId) return 0;
   return (tickets as TicketLike[]).filter((t) => isMyTicket(t, userId) && isActiveTicket(t)).length;
 }
+
+/** Resolving a ticket takes it off the active queue, so the page returns to the list afterwards. */
+export function leavesPageAfterStatus(status: string): boolean {
+  return status.trim().toLowerCase() === "resolved";
+}

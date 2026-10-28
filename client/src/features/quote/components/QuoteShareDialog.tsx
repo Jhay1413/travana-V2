@@ -23,11 +23,13 @@ const WHATSAPP_FALLBACK_COPY: Record<QuoteWhatsappFallbackReason, string> = {
   no_contact: "This client isn't linked to a WhatsApp contact yet, so send it from your phone instead.",
   no_channel: "No active WhatsApp number is connected for your agency, so send it from your phone instead.",
   window_closed: "The client hasn't messaged in the last 24 hours, so WhatsApp needs to be sent from your phone.",
+  template_failed: "The WhatsApp template couldn't be sent",
 };
 
 interface WhatsappFallback {
   reason: QuoteWhatsappFallbackReason;
   text: string;
+  detail?: string;
 }
 
 interface SendError {
@@ -97,10 +99,10 @@ export function QuoteShareDialog({
       {
         onSuccess: (data) => {
           if (data.status === "sent") {
-            toast({ title: "Quote link sent via WhatsApp" });
+            toast({ title: data.viaTemplate ? "Sent to the client as a WhatsApp template message" : "Quote link sent via WhatsApp" });
             onSent?.("whatsapp");
           } else {
-            setWhatsappFallback({ reason: data.reason, text: data.text });
+            setWhatsappFallback({ reason: data.reason, text: data.text, detail: data.detail });
           }
         },
         onError: sendErrorToast,
@@ -175,7 +177,21 @@ export function QuoteShareDialog({
                   className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
                   data-testid="whatsapp-fallback"
                 >
-                  <p>{WHATSAPP_FALLBACK_COPY[whatsappFallback.reason]}</p>
+                  {whatsappFallback.reason === "template_failed" ? (
+                    <p>
+                      {WHATSAPP_FALLBACK_COPY.template_failed}
+                      {whatsappFallback.detail && (
+                        <>
+                          <br />
+                          {whatsappFallback.detail}
+                        </>
+                      )}
+                      <br />
+                      You can still send it from your phone.
+                    </p>
+                  ) : (
+                    <p>{WHATSAPP_FALLBACK_COPY[whatsappFallback.reason]}</p>
+                  )}
                   {fallbackHref ? (
                     <Button
                       asChild

@@ -574,7 +574,7 @@ source of truth. Layout: 290 | 1fr | 320 grid (≤1480 two columns, ≤1180 one,
 ≤860 stacked, ≤620 mosaic 2-col) built from
 `client/src/features/client/components/holiday/`: top-bar (+ quote/booking-
 enquiry top actions, breadcrumb, use-quote-preview), holidays-rail (+
-holiday-link, rail-create-menu), hero (+ hero-mosaic, use-holiday-photos),
+holiday-link, components/shared/create-menu/), hero (+ hero-mosaic, use-holiday-photos),
 facts-card / enquiry-facts, refs-card (+ refs-form), convert-dialog,
 money-card, stage-box, activity-card (+ activity-actions), compare-card,
 trip-card (+ trip-stop, enquiry-trip-card), views-card, holiday-page-shell
@@ -630,6 +630,18 @@ copy flow, delete dialog) + `features/social/lib/quote-copy-values.ts`;
 `QuoteSummaryTimeline` are DELETED (no importers). The no-op "Export" button
 is gone. `features/social/components/social-quote/{StatusPill,hooks,utils}`
 are probably dead now (left for a later sweep).
+
+**Done: reference update 27 Oct — hero ref chips, wide details, Trip/Costings tabs.**
+Booking references moved from a centre card into the booking hero
+(`holiday/ref-chips.tsx` chips + copy, `holiday/refs-dialog.tsx` 520px edit
+dialog; `refs-card.tsx` and `RefsForm` deleted, `RefsFields` kept for the
+convert dialog). "Holiday details" is now full width with a 5-column `wide`
+grid (4/3/2/1 below 1700/1280/860/620px) on quote, booking, enquiry and the
+social quote page; `HolidayTwoUp` removed. The right column starts with
+`holiday/trip-costings-card.tsx` (tabs "The Trip" / "Costings", same underline
+look as the activity card) built from `TripBody` and `MoneyBody`; the old
+`TripCard`/`MoneyCard` wrappers are gone. The enquiry keeps its own trip card
+(no money). Not verified in a browser.
 
 ## Done: Tour operators — global catalogue + per-org config, page `/agency/tour-operators` — 21 Oct 2026
 
@@ -748,6 +760,97 @@ warning is shown). Not verified in a browser or against a real DB.
   tabbed fallback; operator logo next to the holiday title now shows: the
   `GET /transactions/:id/details` response lacked `main_tour_operator_name` /
   `_logo_url` on quotes and booking (added via `transaction/tour-operator-fields.ts`).
+
+## Done: feedback round 3 (pasted list, 28 Oct) — 28 Oct 2026
+
+Parked by the user: client-page Add Task assignee (item 1; the dev tree already
+has an "Assign to" picker — the report matched the prod branch) and the
+dashboard New task client search / deal link (item 2). Everything else below.
+
+- Pipeline: Enquiry → In play (and Quoted) opens the pre-filled quote form; when
+  dropped on In play the quote is created with `quote_status: in_play` in one
+  request (`QuoteDialogState.targetStage`); cancel = no mutation. The generic
+  `PATCH /transactions/:id {status}` fallback is gone (it set on_quote with no
+  quote and the card vanished from every column). Blocked in `isValidDrop` +
+  `moveDealTo`: Quoted/In play/Booked → Enquiry, Booked → open stages,
+  Enquiry → Booked. Server: `transaction-status-transition.ts` rejects status
+  downgrades and on_quote/on_booking without a backing (non-copy, non-free)
+  quote / non-LOST booking (400). "New deal" is a dropdown Enquiry / Quote /
+  Booking (desktop + mobile; `components/shared/create-menu/`):
+  client picker, then EnquiryWizard / QuoteCreateDialog drawer /
+  BookingCreateDialog drawer. Not in the prototype (user request).
+- Social: every draft "Schedule" entry (card button, card menu, calendar tray,
+  drag-to-day with the date pre-filled via `openEditor(quote, { scheduleDate })`)
+  opens the Social Post Editor; "Change time…" on a scheduled post keeps the
+  quick dialog. Images: ONE ordered list (`editor/image-order.ts`,
+  `post-order-strip.tsx`): selecting appends, drag a tile onto another to
+  insert, earlier/later arrows, numbered badges. The order is sent as
+  `imageOrder` (JSON array of `existing:<mediaId>` | `url:<i>` | `file:<i>`)
+  on schedule and reschedule; `server/v2/modules/social-post/media-order.ts`
+  validates it before any upload and orders the OnlySocials media list
+  (legacy existing → files → urls when absent). No schema change.
+- Inbox: the list-header "…" menu (live-status row + "Channels" → Integrations)
+  removed to match the reference. New deep link `/conversations?client=<id>`
+  (`buildClientInboxHref`): most recent open conversation, else most recent of
+  any status (tab switches; fetched by id if not on the loaded page — replaces
+  the old 2-page `DEEP_LINK_MAX_FETCHES` limit, `state/use-inbox-deep-link.ts`);
+  linked client with none → New message pre-filled; unlinked client → plain
+  inbox. Used by the ticket client panel "Message", client Chats tab "Open
+  inbox", client rail "Open chat", pipeline drawer "Chat". Unverified: whether
+  the live SendSeven list defaults to open-only when no status is sent (the
+  fixtures return all statuses; the client type has no "all").
+- Tickets: New-ticket client search / date picker inside a centred Dialog were
+  offset because Tailwind v4 `translate-x-[-50%]` sets the CSS `translate`
+  property, which `use-fixed-dropdown-position` did not treat as a containing
+  block (`hooks/fixed-containing-block.ts`). Select lists now clamp to the
+  available height: the `[--radix-…]` classes in components/ui were the
+  invalid v3 form under v4 and were silently ignored (8 files swept; the
+  calendar/chart `[--cell-size]`/`[--color-*]` ones left alone — visual
+  risk). Due-time select: avoidCollisions + 8px padding. Replies: 85% width,
+  larger indent, 13px; like / reply / edit / delete (+confirm) icon-only in the
+  note header, right-aligned, on hover/focus (`thread/note-header-actions.tsx`).
+  "Mark resolved" (desktop, mobile, Status select) navigates to /tickets.
+  Thread layout (user, 28 Oct): the description is full width; EVERY note
+  after it (Add note or Reply) renders nested inside one rail beneath it, and
+  replies to those notes nest one level deeper. Render-only
+  (`thread/ticket-conversation.tsx`); no parent marker is stored.
+  Emoji picker = the inbox portalled `EmojiPopover` (now exported from
+  features/conversations).
+- Client page tasks: `GET /api/v2/tasks/for-client/:clientId` returns tasks on
+  the client AND on its enquiries / quotes / bookings (deal ids scoped with
+  `buildTransactionRecordScopeConds`; 403 "Select an organisation first" with
+  no org; 404 out of scope). Rows attached to a deal navigate to
+  `?holiday=<kind>:<id>` — kind resolved from the client's holiday map, so
+  booking tasks stored as entityType "quote" open the booking
+  (`lib/deal-labels.ts taskLinkFor`). Client-only tasks have no link. Toggle /
+  delete mutations now also invalidate `taskKeys.all`.
+- Standard "+" create menu (user, 28 Oct): ONE shared dropdown
+  `components/shared/create-menu/` (New client | Enquiry, Quote, Booking |
+  Task, Ticket; round blue `Plus` trigger = the old holiday-rail style, or the
+  header outline variant) replaces the header create menu's navigate-to-
+  `?create=` round trip, the client page "Add deal" SquarePlus, the Live deals
+  rail SquarePen "New deal", the holiday rail menu and the pipeline "New deal"
+  button (desktop + mobile; hidden when embedded). With `onCreate` the caller
+  owns its dialogs (client page / holiday rail); otherwise built-in flows:
+  enquiry/quote/booking = client-pick step then the drawers, task =
+  AddTaskModal (client entity when a client is known), ticket = tickets
+  CreateTicketDialog, New client = ClientFormDrawer then `/clients/:id`.
+  Header passes `afterCreate="navigate"` (goes to the new record via
+  `?holiday=kind:id`); everywhere else stays. Flows stay mounted while a save
+  is pending (closing mid-save no longer drops booking/quote images). Hidden
+  for read-only roles (SMM), same rule now on the clients page "Add Client".
+  Deleted: rail-create-menu, client page new-deal-menu, pipeline
+  new-deal-menu/new-deal-dialog/new-deal-kind, `?create=` consumer.
+- Task modal everywhere (user, 28 Oct): `EditTaskDialog` is modal-only, built
+  from the same shell/fields as `AddTaskModal` (`components/shared/task-modal/`,
+  helpers in `features/tasks/components/tasks/edit-task-form.ts`); the drawer
+  presentation is gone from all six call sites. Edit date is now the native
+  date input. Pre-existing: Add writes due times in London time, Edit in local
+  time — not changed.
+- Known leftovers: Select lists app-wide now clamp to the viewport (smoke-test a
+  low-on-page select); `use-schedule-dialog-state` still carries the "schedule"
+  mode (reachable only via calendar reschedule); a Future deal whose natural
+  stage is Booked can still be marked Lost (pre-existing).
 
 ## Done: dev-only email link fix — 17 Oct 2026
 

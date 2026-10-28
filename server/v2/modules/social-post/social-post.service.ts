@@ -26,6 +26,7 @@ import type {
   OrganizationBranding,
 } from "./social-post.types";
 import type { Scope } from "../../utils/scope";
+import { assertOrderTokens, buildMediaSlots, type MediaSlot } from "./media-order";
 
 type ScopeOrTrusted = Scope | { orgId: null };
 
@@ -102,10 +103,6 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-type MediaTask =
-  | { kind: "file"; file: Express.Multer.File }
-  | { kind: "url"; url: string };
-
 /**
  * OnlySocials fetches media URLs itself (`uploadMediaFromUrl` does a
  * server-side `axios.get(imageUrl)`), so it needs a fully-qualified, publicly
@@ -139,65 +136,44 @@ function boundScene7ImageUrl(url: string): string {
 
 /**
  * Upload new files and quote-image URLs to OnlySocials and return the full
- * ordered list of media ids (existing + uploaded). Files and URLs are uploaded
- * together through a single bounded-concurrency queue, so total time scales with
+ * ordered list of media ids, following the order of `slots`. Files and URLs are
+ * uploaded through a single bounded-concurrency queue, so total time scales with
  * the slowest few uploads rather than the image count. File upload errors fail
  * the operation; URL fetch/upload errors are skipped, but reported back via
  * `failedUrls` so callers can tell the user which images were dropped.
  */
-async function resolveMediaIds(
-  existingImageIds: number[],
-  newFiles: Express.Multer.File[],
-  imageUrls: string[],
-): Promise<{ ids: number[]; failedUrls: string[] }> {
-  const tasks: MediaTask[] = [
-    ...newFiles.map((file): MediaTask => ({ kind: "file", file })),
-    ...imageUrls.map((url): MediaTask => ({ kind: "url", url })),
-  ];
-
+async function resolveMediaIds(slots: MediaSlot[]): Promise<{ ids: number[]; failedUrls: string[] }> {
+  const uploads = slots.filter((slot) => slot.kind !== "existing").length;
   console.log(
-    `[SocialPost][timing] resolveMediaIds start: existing=${existingImageIds.length} files=${newFiles.length} urls=${imageUrls.length} concurrency=${MEDIA_UPLOAD_CONCURRENCY}`,
+    `[SocialPost][timing] resolveMediaIds start: slots=${slots.length} uploads=${uploads} concurrency=${MEDIA_UPLOAD_CONCURRENCY}`,
   );
-
-  if (tasks.length === 0) {
-    console.log("[SocialPost][timing] resolveMediaIds: nothing to upload (existing-only)");
-    return { ids: [...existingImageIds], failedUrls: [] };
-  }
 
   const startedAt = Date.now();
   const failedUrls: string[] = [];
-  const uploaded = await mapWithConcurrency(tasks, MEDIA_UPLOAD_CONCURRENCY, async (task, index) => {
-    const label = task.kind === "file" ? `file#${index} (${task.file.originalname})` : `url#${index} (${task.url})`;
+  const resolved = await mapWithConcurrency(slots, MEDIA_UPLOAD_CONCURRENCY, async (slot, index) => {
+    if (slot.kind === "existing") return slot.id;
+    const label = slot.kind === "file" ? `file#${index} (${slot.file.originalname})` : `url#${index} (${slot.url})`;
     const taskStart = Date.now();
-    if (task.kind === "file") {
-      const result = await uploadOnlySocialsMedia(task.file);
+    if (slot.kind === "file") {
+      const result = await uploadOnlySocialsMedia(slot.file);
       console.log(`[SocialPost][timing]   uploaded ${label} in ${Date.now() - taskStart}ms`);
       return Number(result.id);
     }
     try {
-      const uploadableUrl = await resolveUploadableUrl(task.url);
+      const uploadableUrl = await resolveUploadableUrl(slot.url);
       const result = await uploadMediaFromUrl(uploadableUrl);
       console.log(`[SocialPost][timing]   uploaded ${label} in ${Date.now() - taskStart}ms`);
       return Number(result.id);
     } catch (err) {
-      console.error(
-        `[SocialPost][timing]   FAILED ${label} after ${Date.now() - taskStart}ms:`,
-        err,
-      );
-      failedUrls.push(task.url);
+      console.error(`[SocialPost][timing]   FAILED ${label} after ${Date.now() - taskStart}ms:`, err);
+      failedUrls.push(slot.url);
       return null;
     }
   });
 
-  const ok = uploaded.filter((id): id is number => id !== null).length;
-  console.log(
-    `[SocialPost][timing] resolveMediaIds done: ${ok}/${tasks.length} uploaded in ${Date.now() - startedAt}ms total`,
-  );
-
-  return {
-    ids: [...existingImageIds, ...uploaded.filter((id): id is number => id !== null)],
-    failedUrls,
-  };
+  const ids = resolved.filter((id): id is number => id !== null);
+  console.log(`[SocialPost][timing] resolveMediaIds done: ${ids.length}/${slots.length} in ${Date.now() - startedAt}ms total`);
+  return { ids, failedUrls };
 }
 
 async function assertQuoteInScope(quoteId: string, scope: ScopeOrTrusted) {
@@ -588,12 +564,14 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     existingImageIds: number[],
     newFiles: Express.Multer.File[],
     imageUrls: string[] = [],
-    scope: ScopeOrTrusted = { orgId: null }
+    scope: ScopeOrTrusted = { orgId: null },
+    imageOrder?: string[],
   ): Promise<SchedulePostResult> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] schedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
+    if (imageOrder) assertOrderTokens(imageOrder, { existingIds: existingImageIds, fileCount: newFiles.length, urlCount: imageUrls.length });
 
     // Never blocks or fails the schedule: unusable images fall back to the original.
     const tUpscale = Date.now();
@@ -606,7 +584,9 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] auto-upscale phase: ${Date.now() - tUpscale}ms`);
 
     const tMedia = Date.now();
-    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, prepared.files, prepared.imageUrls);
+    const { ids: allImageIds, failedUrls } = await resolveMediaIds(
+      buildMediaSlots({ existingImageIds, inputFiles: newFiles, inputUrls: imageUrls, prepared, order: imageOrder }),
+    );
     console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids, ${failedUrls.length} failed)`);
 
     // OnlySocials stores the date/time verbatim (no timezone), so give it the
@@ -638,13 +618,15 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     newFiles: Express.Multer.File[],
     postContent: string,
     imageUrls: string[] = [],
-    scope: ScopeOrTrusted = { orgId: null }
+    scope: ScopeOrTrusted = { orgId: null },
+    imageOrder?: string[],
   ): Promise<SchedulePostResult> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] reschedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
+    if (imageOrder) assertOrderTokens(imageOrder, { existingIds: existingImageIds, fileCount: newFiles.length, urlCount: imageUrls.length });
 
     // Never blocks or fails the schedule: unusable images fall back to the original.
     const tUpscale = Date.now();
@@ -657,7 +639,9 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] auto-upscale phase: ${Date.now() - tUpscale}ms`);
 
     const tMedia = Date.now();
-    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, prepared.files, prepared.imageUrls);
+    const { ids: allImageIds, failedUrls } = await resolveMediaIds(
+      buildMediaSlots({ existingImageIds, inputFiles: newFiles, inputUrls: imageUrls, prepared, order: imageOrder }),
+    );
     console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids, ${failedUrls.length} failed)`);
 
     // OnlySocials gets the local wall-clock value; the DB keeps the UTC instant.

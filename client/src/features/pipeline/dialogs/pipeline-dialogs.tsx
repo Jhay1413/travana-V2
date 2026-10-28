@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import { transactionKeys } from "@/hooks/queries";
 import { useUpdateEnquiry } from "@/hooks/mutations";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
@@ -8,22 +7,18 @@ import type { PipelineParking } from "@/features/pipeline/state/use-pipeline-par
 import { ConvertToBookingDialog } from "./convert-to-booking-dialog";
 import { MarkLostDialog } from "./mark-lost-dialog";
 import { MoveToFutureDialog } from "./move-to-future-dialog";
-import { NewDealDialog } from "./new-deal-dialog";
 
 /** Every dialog the pipeline page can open, driven by `usePipelineDialogs`. */
 export function PipelineDialogsHost({
   dialogs,
   parking,
-  allowNewDeal,
 }: {
   dialogs: PipelineDialogs;
   parking: PipelineParking;
-  allowNewDeal: boolean;
 }) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
   const updateEnquiry = useUpdateEnquiry();
-  const { quoteDialog, setQuoteDialog, bookingQuoteId, setBookingQuoteId, futureDialog, setFutureDialog, lostConfirm, setLostConfirm, newDealOpen, setNewDealOpen } = dialogs;
+  const { quoteDialog, setQuoteDialog, bookingQuoteId, setBookingQuoteId, futureDialog, setFutureDialog, lostConfirm, setLostConfirm } = dialogs;
 
   return (
     <>
@@ -33,7 +28,7 @@ export function PipelineDialogsHost({
           transactionId={quoteDialog.transactionId}
           clientId={quoteDialog.clientId}
           userId={quoteDialog.userId}
-          initialValues={quoteDialog.initialValues}
+          initialValues={quoteDialog.targetStage === "In Play" ? { ...quoteDialog.initialValues, status: "in_play" } : quoteDialog.initialValues}
           open
           onOpenChange={(o) => { if (!o) setQuoteDialog(null); }}
           onSuccess={() => {
@@ -42,7 +37,6 @@ export function PipelineDialogsHost({
             }
             setQuoteDialog(null);
             void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
-            toast({ title: "Quote created" });
           }}
         />
       )}
@@ -68,7 +62,6 @@ export function PipelineDialogsHost({
         }}
       />
 
-      {allowNewDeal && <NewDealDialog open={newDealOpen} onOpenChange={setNewDealOpen} />}
     </>
   );
 }

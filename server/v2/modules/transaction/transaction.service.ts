@@ -11,6 +11,7 @@ import { walletService } from "../wallet/wallet.service";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
+import { checkStatusTransition } from "./transaction-status-transition";
 import { branchService } from "../branch/branch.service";
 import { branchMemberRepository } from "../branch-member/branch-member.repository";
 import { branchRepository } from "../branch/branch.repository";
@@ -650,6 +651,19 @@ export const transactionService = {
   async updateTransaction(id: string, data: Partial<InsertTransaction>, scope: Scope) {
     const oldTxn = await transactionRepository.findById(id, scope);
     if (!oldTxn) throw new AppError("Transaction not found", 404);
+
+    if (data.status !== undefined && data.status !== oldTxn.status) {
+      const [quotes, booking] = await Promise.all([
+        newQuoteRepository.findByTransactionId(id, { orgId: null }),
+        bookingRepository.findByTransactionId(id),
+      ]);
+      const verdict = checkStatusTransition(oldTxn.status, data.status, {
+        // Only what the Quoted / In play columns count: not copies, free quotes or lost bookings.
+        hasQuote: quotes.some((q) => !q.isQuoteCopy && !q.isFreeQuote),
+        hasBooking: !!booking && booking.booking_status !== "LOST",
+      });
+      if (!verdict.ok) throw new AppError(verdict.message, 400);
+    }
 
     // Tenancy fields are not request-controlled: org_id never; branch_id only for
     // admins, and only to a branch of their own org.

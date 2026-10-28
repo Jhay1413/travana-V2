@@ -5,7 +5,6 @@
 export { taskApi } from "./api/task.api";
 export * from "./api/use-task-queries";
 export * from "./api/use-task-mutations";
-export { CreateTaskDialog } from "./components/tasks/CreateTaskDialog";
 export { TaskTypeSelect } from "./components/shared/task-type-select";
 export { TaskPrioritySelect } from "./components/shared/task-priority-select";
 export { TaskPriorityPill } from "./components/shared/task-priority-pill";

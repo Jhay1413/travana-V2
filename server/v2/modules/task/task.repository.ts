@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { tasks, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
-import { eq, and, desc, gte, lte, inArray, type SQL } from "drizzle-orm";
+import { eq, and, or, desc, gte, lte, inArray, sql, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
 import { buildPartitionCond, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
@@ -38,6 +38,47 @@ function buildTaskScopeConds(scope?: Scope, opts?: { entityScoped?: boolean }): 
     if (partition) conds.push(partition);
   }
   return conds;
+}
+
+/**
+ * Is the task's entity one the caller can open? Same record-level rules as
+ * `entityInScope` (deal visibility via the transaction, client visibility via the
+ * client row), expressed as SQL so it can sit inside a task WHERE. Deal ids are
+ * matched on entity_id alone because booking tasks may be stored as entity_type
+ * "quote" with the booking id (see findByClient).
+ */
+function buildEntityVisibleCond(scope: Scope): SQL {
+  const txnWhere = sql.join(buildTransactionRecordScopeConds(scope), sql` AND `);
+  const dealIds = (source: typeof quote | typeof booking | typeof enquiry_table) =>
+    sql`SELECT ${source.id}::text FROM ${source} INNER JOIN ${transaction} ON ${source.transaction_id} = ${transaction.id} WHERE ${txnWhere}`;
+  const clientConds: SQL[] = [eq(clientTable.orgId, scope.orgId)];
+  const clientPartition = buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy);
+  if (clientPartition) clientConds.push(clientPartition);
+  const clientWhere = sql.join(clientConds, sql` AND `);
+  return sql`(
+    ${tasks.entityId} IN (${dealIds(quote)})
+    OR ${tasks.entityId} IN (${dealIds(booking)})
+    OR ${tasks.entityId} IN (${dealIds(enquiry_table)})
+    OR ${tasks.entityId} IN (SELECT ${transaction.id}::text FROM ${transaction} WHERE ${txnWhere})
+    OR (${tasks.entityType} = 'client' AND ${tasks.entityId} IN (SELECT ${clientTable.id}::text FROM ${clientTable} WHERE ${clientWhere}))
+  )`;
+}
+
+/**
+ * Conditions under which the caller may edit / complete / delete / reassign a task:
+ * anyone who can SEE the task can change it.
+ *  - admins, branch managers, platform admin: exactly the normal task scope
+ *    (they are not restricted to their own tasks).
+ *  - agent / homeworker: the task is theirs (normal task scope: org + own + partition)
+ *    OR its entity is visible to them (org + entity-visible, as the entity-scoped
+ *    list shows). Tasks with no entity stay own-task only.
+ */
+export function taskWritableConds(scope?: Scope): SQL[] {
+  const own = buildTaskScopeConds(scope);
+  if (!scope || (scope.orgRole !== "agent" && scope.orgRole !== "homeworker")) return own;
+  const viaEntity = [...buildTaskScopeConds(scope, { entityScoped: true }), buildEntityVisibleCond(scope)];
+  const either = or(and(...own), and(...viaEntity));
+  return either ? [either] : own;
 }
 
 const entityRouteMap: Record<string, string> = {
@@ -496,6 +537,31 @@ export const taskRepository = {
       .orderBy(desc(tasks.createdAt));
   },
 
+  /**
+   * Tasks on the client itself plus tasks on any of its enquiries, quotes and
+   * bookings (booking tasks may be stored as entity_type "quote" with the
+   * booking id, so the deal ids are matched on entity_id alone). The service
+   * has already verified the caller can open the client.
+   */
+  async findByClient(clientId: string, scope?: Scope): Promise<TaskNew[]> {
+    const idsFor = async (source: typeof quote | typeof booking | typeof enquiry_table): Promise<string[]> => {
+      const rows = await db
+        .select({ id: source.id })
+        .from(source)
+        .innerJoin(transaction, eq(source.transaction_id, transaction.id))
+        .where(and(eq(transaction.client_id, clientId), ...buildTransactionRecordScopeConds(scope ?? { orgId: null })));
+      return rows.map((r) => r.id);
+    };
+    const dealIds = (await Promise.all([idsFor(quote), idsFor(booking), idsFor(enquiry_table)])).flat();
+    const clientMatch = and(eq(tasks.entityType, "client"), eq(tasks.entityId, clientId));
+    const target = dealIds.length > 0 ? or(clientMatch, inArray(tasks.entityId, dealIds)) : clientMatch;
+    return await db
+      .select()
+      .from(tasks)
+      .where(and(target, ...buildTaskScopeConds(scope, { entityScoped: true })))
+      .orderBy(desc(tasks.createdAt));
+  },
+
   async findByUserId(userId: string, scope?: Scope): Promise<TaskNew[]> {
     const conds: SQL[] = [eq(tasks.userId, userId), ...buildTaskScopeConds(scope)];
     return await db
@@ -511,7 +577,8 @@ export const taskRepository = {
    * from a resave that merely echoes back the same `userId`.
    */
   async findById(id: string, scope?: Scope): Promise<TaskNew | undefined> {
-    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    // Write-scope: this feeds the update path, so it must see exactly the tasks update can touch.
+    const conds: SQL[] = [eq(tasks.id, id), ...taskWritableConds(scope)];
     const [result] = await db.select().from(tasks).where(and(...conds)).limit(1);
     return result;
   },
@@ -526,7 +593,7 @@ export const taskRepository = {
   },
 
   async update(id: string, data: Partial<InsertTaskNew>, scope?: Scope): Promise<TaskNew | undefined> {
-    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const conds: SQL[] = [eq(tasks.id, id), ...taskWritableConds(scope)];
     const [existing] = await db.select().from(tasks).where(and(...conds)).limit(1);
     if (!existing) return undefined;
     const [result] = await db
@@ -538,7 +605,7 @@ export const taskRepository = {
   },
 
   async toggleComplete(id: string, scope?: Scope): Promise<TaskNew | undefined> {
-    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const conds: SQL[] = [eq(tasks.id, id), ...taskWritableConds(scope)];
     const [existing] = await db.select().from(tasks).where(and(...conds)).limit(1);
     if (!existing) return undefined;
     const [result] = await db
@@ -553,7 +620,7 @@ export const taskRepository = {
   },
 
   async remove(id: string, scope?: Scope): Promise<boolean> {
-    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const conds: SQL[] = [eq(tasks.id, id), ...taskWritableConds(scope)];
     const result = await db.delete(tasks).where(and(...conds)).returning({ id: tasks.id });
     return result.length > 0;
   },

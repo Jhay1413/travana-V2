@@ -1,8 +1,3 @@
-/** What the "Add deal" / "New deal" menus and the page's ?create= param can open. */
-export type ClientDealKind = "enquiry" | "quote" | "booking";
-
-export type ClientCreateKind = ClientDealKind | "task" | "ticket";
-
 /** Which kind of deal (transaction) a note belongs to. */
 export type DealKind = "enquiry" | "quote" | "booking";
 

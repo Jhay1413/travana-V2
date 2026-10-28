@@ -2,21 +2,22 @@ import { useMemo } from "react";
 import { formatUKDate, type QuoteDisplay } from "@/features/quote/components/quote-types";
 import { buildTripExtras, buildTripStops } from "@/features/client/lib/trip-timeline";
 import { TripStop } from "@/features/client/components/holiday/trip-stop";
-import { HOLIDAY_BTN_GHOST, HOLIDAY_CARD } from "@/features/client/components/holiday/holiday-styles";
+import { HOLIDAY_BTN_GHOST } from "@/features/client/components/holiday/holiday-styles";
 
-export interface TripCardProps {
+export interface TripBodyProps {
   display: QuoteDisplay;
   /** Opens the edit drawer. When omitted (read-only) the empty state has no Edit button. */
   onEdit?: () => void;
 }
 
-/** "The trip, start to finish": the itinerary as a vertical timeline, then any add-ons. */
-export function TripCard({ display, onEdit }: TripCardProps) {
+/** Body of the "The Trip" tab: start-to-finish line, then the itinerary as a vertical timeline and any add-ons. */
+export function TripBody({ display, onEdit }: TripBodyProps) {
   const stops = useMemo(() => buildTripStops(display), [display]);
   const extras = useMemo(() => buildTripExtras(display), [display]);
   const all = [...stops, ...extras];
 
   const subtitle = [
+    "Start to finish",
     display.travelDate && display.returnDate ? `${formatUKDate(display.travelDate)} to ${formatUKDate(display.returnDate)}` : "",
     display.nights > 0 ? `${display.nights} nights` : "",
   ]
@@ -24,13 +25,8 @@ export function TripCard({ display, onEdit }: TripCardProps) {
     .join(" · ");
 
   return (
-    <section className={HOLIDAY_CARD} aria-labelledby="holiday-trip-h" data-testid="holiday-trip-card">
-      <div className="mb-3.5">
-        <h2 id="holiday-trip-h" className="text-base font-semibold leading-snug">
-          The trip, start to finish
-        </h2>
-        {subtitle && <p className="mt-0.5 text-[13px] text-qp-muted">{subtitle}</p>}
-      </div>
+    <div data-testid="holiday-trip-card">
+      <p className="mb-3.5 text-[13px] text-qp-muted">{subtitle}</p>
       {all.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-5 text-center text-[13px] text-qp-muted" data-testid="trip-empty">
           <p>No itinerary lines yet.</p>
@@ -47,6 +43,6 @@ export function TripCard({ display, onEdit }: TripCardProps) {
           ))}
         </ol>
       )}
-    </section>
+    </div>
   );
 }

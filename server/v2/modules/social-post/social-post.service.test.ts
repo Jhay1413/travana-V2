@@ -342,6 +342,69 @@ describe("socialPostService auto-upscale at schedule time", () => {
     expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith("os-1", "2026-01-01T10:00:00", "new text", [10, 11, 12]);
     expect(result.autoUpscale).toEqual(summary);
   });
+
+  it("schedulePost sends the media ids in the requested imageOrder", async () => {
+    const original = { originalname: "orig.jpg" } as Express.Multer.File;
+    mocks.prepareImagesForPost.mockResolvedValue({
+      imageUrls: ["https://a/1.jpg", "https://a/2.jpg"],
+      files: [original],
+      upscaled: [],
+      skipped: [],
+    });
+    mocks.uploadMediaFromUrl.mockReset().mockResolvedValueOnce({ id: "11" }).mockResolvedValueOnce({ id: "12" });
+
+    await socialPostService.schedulePost(
+      "deal-1", "2026-01-01T10:00:00Z", "2026-01-01T10:00:00", [5], [original], ["https://a/1.jpg", "https://a/2.jpg"],
+      { orgId: null }, ["url:1", "file:0", "existing:5", "url:0"],
+    );
+
+    // url:1 uploads first (id 11), then the file (10), the existing id 5, then url:0 (12).
+    expect(mocks.scheduleOnlySocialsPost).toHaveBeenCalledWith("2026-01-01T10:00:00", "hello", [11, 10, 5, 12]);
+    expect(mocks.uploadMediaFromUrl).toHaveBeenNthCalledWith(1, "https://a/2.jpg");
+  });
+
+  it("reschedulePost applies the imageOrder to existing media too", async () => {
+    mocks.prepareImagesForPost.mockResolvedValue({ imageUrls: [], files: [], upscaled: [], skipped: [] });
+
+    await socialPostService.reschedulePost(
+      "deal-1", "2026-01-01T10:00:00Z", "2026-01-01T10:00:00", [3, 4, 5], [], "text", [],
+      { orgId: null }, ["existing:5", "existing:3", "existing:4"],
+    );
+
+    expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith("os-1", "2026-01-01T10:00:00", "text", [5, 3, 4]);
+  });
+
+  it("rejects an imageOrder that refers to an unknown existing image", async () => {
+    mocks.prepareImagesForPost.mockResolvedValue({ imageUrls: [], files: [], upscaled: [], skipped: [] });
+
+    await expect(
+      socialPostService.reschedulePost(
+        "deal-1", "2026-01-01T10:00:00Z", "2026-01-01T10:00:00", [3], [], "text", [], { orgId: null }, ["existing:9"],
+      ),
+    ).rejects.toThrow("unknown image");
+    expect(mocks.rescheduleOnlySocialsPost).not.toHaveBeenCalled();
+  });
+
+  it("schedulePost rejects an invalid imageOrder before any upscale or upload work", async () => {
+    await expect(
+      socialPostService.schedulePost(
+        "deal-1", "2026-01-01T10:00:00Z", "2026-01-01T10:00:00", [], [], [], { orgId: null }, ["file:3"],
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(mocks.prepareImagesForPost).not.toHaveBeenCalled();
+    expect(mocks.uploadOnlySocialsMedia).not.toHaveBeenCalled();
+    expect(mocks.uploadMediaFromUrl).not.toHaveBeenCalled();
+  });
+
+  it("reschedulePost rejects an invalid imageOrder before any upscale or upload work", async () => {
+    await expect(
+      socialPostService.reschedulePost(
+        "deal-1", "2026-01-01T10:00:00Z", "2026-01-01T10:00:00", [3], [], "text", [], { orgId: null }, ["existing:9"],
+      ),
+    ).rejects.toMatchObject({ statusCode: 400 });
+    expect(mocks.prepareImagesForPost).not.toHaveBeenCalled();
+    expect(mocks.uploadMediaFromUrl).not.toHaveBeenCalled();
+  });
 });
 
 describe("buildOrgSocialContact phone fallback", () => {

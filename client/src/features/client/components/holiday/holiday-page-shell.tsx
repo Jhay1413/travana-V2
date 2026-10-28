@@ -67,11 +67,6 @@ export function HolidayPageShell({ topBar, main, side }: HolidayPageShellProps) 
   );
 }
 
-/** Two-up row used for "Holiday details | Price and profit"; stacks below 860px. */
-export function HolidayTwoUp({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-5 max-[860px]:grid-cols-1">{children}</div>;
-}
-
 /** Inline loading / error body for the centre column while a holiday loads. */
 export function HolidayMessage({ children }: { children: ReactNode }) {
   return (

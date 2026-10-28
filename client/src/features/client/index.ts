@@ -15,3 +15,6 @@ export * from "./api/use-client-search";
 export { CreateTicketDialog } from "./components/modals/CreateTicketDialog";
 export { useClientTaskCreate, useClientTicketCreate } from "./components/hooks";
 export { isLostBooking } from "./lib/client-stats";
+export { ClientFormDrawer } from "./components/modals/ClientFormDrawer";
+export { useClientCreateForm } from "./components/hooks";
+export { isClientReadOnly } from "./lib/client-access";

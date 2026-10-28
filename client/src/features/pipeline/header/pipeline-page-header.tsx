@@ -1,9 +1,8 @@
-import { Plus, Search } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
 import type { DealPriority, PipelineSort } from "@/features/transaction";
 import { formatCurrency } from "@/features/pipeline/lib/pipeline-helpers";
 import type { OpenTotals } from "@/features/pipeline/lib/pipeline-money";
-import { PRIMARY_ACTION } from "@/features/pipeline/shared/button-styles";
+import { CreateMenu } from "@/components/shared/create-menu";
 import { PipelineFiltersPopover } from "./pipeline-filters-popover";
 import { PipelineSortSelect } from "./pipeline-sort-select";
 
@@ -19,11 +18,10 @@ interface PipelinePageHeaderProps {
   onClearFilters: () => void;
   sort: PipelineSort;
   onSortChange: (value: PipelineSort) => void;
-  onNewDeal: () => void;
 }
 
 /** Title + "n open deals · £ value · £ expected profit" on the left; search,
- *  filters, sort and "New deal" on the right. No box — it sits on the page. */
+ *  filters, sort and the "+" create menu on the right. No box — it sits on the page. */
 export function PipelinePageHeader({
   embedded,
   totals,
@@ -36,7 +34,6 @@ export function PipelinePageHeader({
   onClearFilters,
   sort,
   onSortChange,
-  onNewDeal,
 }: PipelinePageHeaderProps) {
   return (
     <div className="flex flex-none flex-wrap items-center gap-3">
@@ -75,12 +72,7 @@ export function PipelinePageHeader({
         onClear={onClearFilters}
       />
       <PipelineSortSelect value={sort} onChange={onSortChange} />
-      {!embedded && (
-        <Button type="button" className={PRIMARY_ACTION} onClick={onNewDeal} data-testid="button-new-deal">
-          <Plus className="h-4 w-4" />
-          New deal
-        </Button>
-      )}
+      {!embedded && <CreateMenu trigger="blue" testId="button-new-deal" />}
     </div>
   );
 }

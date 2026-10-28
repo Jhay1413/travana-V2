@@ -20,7 +20,7 @@ import {
 } from "@/features/client/lib/live-deal-rows";
 import { defaultRailTab, quoteRailMeta, railCounts, railPills, type RailTab } from "@/features/client/lib/holiday-rail";
 import { HolidayLink } from "@/features/client/components/holiday/holiday-link";
-import { RailCreateMenu, type RailCreateKind } from "@/features/client/components/holiday/rail-create-menu";
+import { CreateMenu, type CreateKind } from "@/components/shared/create-menu";
 import { HOLIDAY_CARD } from "@/features/client/components/holiday/holiday-styles";
 
 /**
@@ -42,7 +42,7 @@ export interface HolidaysRailProps {
   bookings: HolidayBooking[];
   selection: HolidaySelection | null;
   onSelect: (selection: HolidaySelection) => void;
-  onCreate?: (kind: RailCreateKind) => void;
+  onCreate?: (kind: CreateKind) => void;
   isLoading?: boolean;
   clientId: string;
   className?: string;
@@ -138,7 +138,7 @@ export function HolidaysRail({ enquiries, quotes, bookings, selection, onSelect,
     <aside className={cn(HOLIDAY_CARD, "flex flex-col gap-3.5", className)} aria-label="All holidays" data-testid="holidays-rail">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-[17px] font-semibold">All holidays</h2>
-        {onCreate && <RailCreateMenu onCreate={onCreate} />}
+        {onCreate && <CreateMenu trigger="blue" onCreate={onCreate} testId="holidays-rail-new" />}
       </div>
       <Segmented
         value={tab}

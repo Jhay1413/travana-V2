@@ -10,7 +10,7 @@ import type { TicketAttachment } from "@/features/attachment";
 import type { User as ApiUser } from "@/features/user/types";
 import { ATTACHMENT_ADMIN_ROLES, canDeleteAttachment } from "../../lib/attachment-access";
 import { ticketErrorMessage } from "../../lib/error-message";
-import { buildThread, groupByDay, type ThreadNote } from "../../lib/thread-model";
+import { buildThread, groupByDay, type ThreadItem, type ThreadNote } from "../../lib/thread-model";
 import type { Ticket } from "../../types";
 import { ReplyComposer } from "../composer/reply-composer";
 import { ReplyThreadToggle } from "../reply-thread-toggle";
@@ -31,7 +31,9 @@ export function TicketConversation({ ticket, users, compact = false }: { ticket:
 
   const hasTicketFiles = (attachments ?? []).some((a) => a.replyId === null);
   const thread = useMemo(() => buildThread(ticket, replies, users, hasTicketFiles), [ticket, replies, users, hasTicketFiles]);
-  const grouped = useMemo(() => groupByDay(thread, noteDayLabel), [thread]);
+  // The description (no reply row) is shown full width; everything after it sits on a rail beneath it.
+  const description = thread[0]?.note.reply === null ? thread[0] : null;
+  const restGroups = useMemo(() => groupByDay(description ? thread.slice(1) : thread, noteDayLabel), [thread, description]);
   const noteCount = (replies?.length ?? 0) + (ticket.description || hasTicketFiles ? 1 : 0);
 
   // Opens at the newest note and follows it down when another lands.
@@ -64,6 +66,47 @@ export function TicketConversation({ ticket, users, compact = false }: { ticket:
       : undefined;
   const deletingAttachmentId = deleteAttachment.isPending ? (deleteAttachment.variables ?? null) : null;
 
+  const renderItem = ({ note, children }: ThreadItem, nested: boolean) => (
+    <div key={note.id} className="space-y-3">
+      <ThreadNoteCard
+        note={note}
+        nested={nested}
+        isMe={isMine(note.authorId)}
+        actions={actionsFor(note, note.id)}
+        attachments={attachmentsFor(note)}
+        onDeleteAttachment={onDeleteAttachmentFor(note)}
+        deletingAttachmentId={deletingAttachmentId}
+        footer={
+          children.length > 0 ? (
+            <ReplyThreadToggle
+              count={children.length}
+              collapsed={collapsed.has(note.id)}
+              onToggle={() => toggleReplies(note.id)}
+              data-testid={`ticket-note-replies-toggle-${note.id}`}
+            />
+          ) : undefined
+        }
+      />
+      {/* Replies hang off one rail under the note they answer and can be folded away. */}
+      {children.length > 0 && !collapsed.has(note.id) && (
+        <div className="ml-8 space-y-3 border-l-2 border-social-border pl-4 sm:ml-16" data-testid={`ticket-note-replies-${note.id}`}>
+          {children.map((child) => (
+            <ThreadNoteCard
+              key={child.id}
+              note={child}
+              nested
+              isMe={isMine(child.authorId)}
+              actions={actionsFor(child, note.id)}
+              attachments={attachmentsFor(child)}
+              onDeleteAttachment={onDeleteAttachmentFor(child)}
+              deletingAttachmentId={deletingAttachmentId}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       <div
@@ -81,50 +124,41 @@ export function TicketConversation({ ticket, users, compact = false }: { ticket:
         ) : thread.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-social-muted">No activity on this ticket yet</div>
         ) : (
-          grouped.map((group, gi) => (
-            <div key={gi} className="space-y-4">
-              <NoteDayDivider label={group.day} />
-              {group.items.map(({ note, children }) => (
-                <div key={note.id} className="space-y-3">
+          <>
+            {description ? (
+              <>
+                <div className="space-y-4">
+                  <NoteDayDivider label={noteDayLabel(description.note.createdAt)} />
                   <ThreadNoteCard
-                    note={note}
-                    isMe={isMine(note.authorId)}
-                    actions={actionsFor(note, note.id)}
-                    attachments={attachmentsFor(note)}
-                    onDeleteAttachment={onDeleteAttachmentFor(note)}
+                    note={description.note}
+                    isMe={isMine(description.note.authorId)}
+                    actions={actionsFor(description.note, description.note.id)}
+                    attachments={attachmentsFor(description.note)}
+                    onDeleteAttachment={onDeleteAttachmentFor(description.note)}
                     deletingAttachmentId={deletingAttachmentId}
-                    footer={
-                      children.length > 0 ? (
-                        <ReplyThreadToggle
-                          count={children.length}
-                          collapsed={collapsed.has(note.id)}
-                          onToggle={() => toggleReplies(note.id)}
-                          data-testid={`ticket-note-replies-toggle-${note.id}`}
-                        />
-                      ) : undefined
-                    }
                   />
-                  {/* Replies hang off one rail under the note they answer and can be folded away. */}
-                  {children.length > 0 && !collapsed.has(note.id) && (
-                    <div className="ml-4 space-y-3 border-l-2 border-social-border pl-4 sm:ml-11" data-testid={`ticket-note-replies-${note.id}`}>
-                      {children.map((child) => (
-                        <ThreadNoteCard
-                          key={child.id}
-                          note={child}
-                          nested
-                          isMe={isMine(child.authorId)}
-                          actions={actionsFor(child, note.id)}
-                          attachments={attachmentsFor(child)}
-                          onDeleteAttachment={onDeleteAttachmentFor(child)}
-                          deletingAttachmentId={deletingAttachmentId}
-                        />
-                      ))}
-                    </div>
-                  )}
                 </div>
-              ))}
-            </div>
-          ))
+                {/* Every note after the description hangs off one rail beneath it. */}
+                {restGroups.length > 0 && (
+                  <div className="ml-8 space-y-4 border-l-2 border-social-border pl-4 sm:ml-16" data-testid="ticket-description-notes">
+                    {restGroups.map((group, gi) => (
+                      <div key={gi} className="space-y-4">
+                        {(gi > 0 || group.day !== noteDayLabel(description.note.createdAt)) && <NoteDayDivider label={group.day} />}
+                        {group.items.map((item) => renderItem(item, true))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              restGroups.map((group, gi) => (
+                <div key={gi} className="space-y-4">
+                  <NoteDayDivider label={group.day} />
+                  {group.items.map((item) => renderItem(item, false))}
+                </div>
+              ))
+            )}
+          </>
         )}
       </div>
       <ReplyComposer key={ticket.id} ticketId={ticket.id} replyingTo={replyingTo} onCancelReplyTo={() => setReplyingTo(null)} onSent={() => setReplyingTo(null)} />

@@ -66,11 +66,25 @@ describe("isValidDrop", () => {
     expect(isValidDrop("Lost", "Booked")).toBe(false);
   });
 
-  it("allows every other combination", () => {
+  it("allows forward moves and In Play <-> Quoted", () => {
     expect(isValidDrop("Enquiry", "Quoted")).toBe(true);
+    expect(isValidDrop("Enquiry", "In Play")).toBe(true);
     expect(isValidDrop("Quoted", "In Play")).toBe(true);
+    expect(isValidDrop("In Play", "Quoted")).toBe(true);
+    expect(isValidDrop("Quoted", "Booked")).toBe(true);
     expect(isValidDrop("In Play", "Booked")).toBe(true);
     expect(isValidDrop("Future", "Booked")).toBe(true);
-    expect(isValidDrop("Booked", "In Play")).toBe(true);
+  });
+
+  it("blocks Enquiry -> Booked", () => {
+    expect(isValidDrop("Enquiry", "Booked")).toBe(false);
+  });
+
+  it("blocks backward moves", () => {
+    expect(isValidDrop("Quoted", "Enquiry")).toBe(false);
+    expect(isValidDrop("In Play", "Enquiry")).toBe(false);
+    expect(isValidDrop("Booked", "Enquiry")).toBe(false);
+    expect(isValidDrop("Booked", "Quoted")).toBe(false);
+    expect(isValidDrop("Booked", "In Play")).toBe(false);
   });
 });

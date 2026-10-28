@@ -9,3 +9,4 @@ export * from "./api/use-booking-upsell-queries";
 export * from "./api/use-booking-mutations";
 export * from "./api/use-booking-image-mutations";
 export * from "./api/use-booking-upsell-mutations";
+export { BookingCreateDialog } from "./components/booking-create-dialog";

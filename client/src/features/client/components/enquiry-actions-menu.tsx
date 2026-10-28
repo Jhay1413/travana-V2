@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { buildQuotePayload } from "@/features/quote/components/quote-create-dialog";
 import { QuoteRHFForm } from "@/features/quote/components/quote-rhf-form";
 import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
-import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
@@ -311,13 +311,12 @@ export function EnquiryActionsMenu({
         />
       </FormDrawer>
 
-      <CreateTaskDialog
-        presentation="drawer"
+      <AddTaskModal
         open={showAddTaskDialog}
         onOpenChange={setShowAddTaskDialog}
         entityType="enquiry"
         entityId={enquiryId}
-        defaultAssignedToId={enquiry.user_id}
+        defaultAssignedToId={enquiry.user_id ?? undefined}
       />
 
       <CreateTicketDialog

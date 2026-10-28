@@ -35,13 +35,6 @@ export function useScheduleDialogState() {
     [toast, fetchTravelDeal],
   );
 
-  const onScheduleDraft = useCallback(
-    (quote: EnrichedQuote, dateYmd: string) => {
-      void openSchedule(quote, "schedule", dateYmd);
-    },
-    [openSchedule],
-  );
-
   const onChangeTime = useCallback(
     (quote: EnrichedQuote) => {
       void openSchedule(quote, quote.onlySocialsId ? "change-time" : "schedule");
@@ -49,5 +42,5 @@ export function useScheduleDialogState() {
     [openSchedule],
   );
 
-  return { target, open, onOpenChange: setOpen, openSchedule, onScheduleDraft, onChangeTime };
+  return { target, open, onOpenChange: setOpen, openSchedule, onChangeTime };
 }

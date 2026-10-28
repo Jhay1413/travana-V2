@@ -95,8 +95,11 @@ export function SocialPostsGrid({ createOpen, onCreateOpenChange, onCountsChange
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, quotes.length]);
 
-  const openSchedule = (quote: EnrichedQuote) =>
-    schedule.openSchedule(quote, derivePostStatus(quote) === "scheduled" ? "change-time" : "schedule");
+  // A draft is scheduled from the full editor; only "Change time…" on a scheduled post uses the quick dialog.
+  const openSchedule = (quote: EnrichedQuote) => {
+    if (derivePostStatus(quote) === "scheduled") void schedule.openSchedule(quote, "change-time");
+    else void editor.openEditor(quote);
+  };
 
   const clearFilters = () => {
     setFilters(DEFAULT_GRID_FILTERS);

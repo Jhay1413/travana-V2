@@ -25,8 +25,8 @@ export default function SocialPostsCalendarPage() {
       <SocialPageHeader view="calendar" countsLine={countsLine} onCreate={() => setCreateOpen(true)} />
       <SocialCalendar
         onOpenPost={(quote) => void openEditor(quote)}
-        onScheduleDraft={schedule.onScheduleDraft}
-        onChangeTime={schedule.onChangeTime}
+        onScheduleDraft={(quote, dateYmd) => void openEditor(quote, { scheduleDate: dateYmd })}
+        onChangeTime={(quote) => (quote.onlySocialsId ? schedule.onChangeTime(quote) : void openEditor(quote))}
       />
       <SocialPostEditorDialog {...editorProps} />
       <CreatePostMenu open={createOpen} onOpenChange={setCreateOpen} onGenerate={generate} />

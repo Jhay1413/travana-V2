@@ -2265,6 +2265,25 @@ export type OrgSocialSettings = typeof orgSocialSettings.$inferSelect;
 export type InsertOrgSocialSettings = typeof orgSocialSettings.$inferInsert;
 export const insertOrgSocialSettingsSchema = createInsertSchema(orgSocialSettings).omit({ orgId: true, updatedBy: true, createdAt: true, updatedAt: true });
 
+// Per-org WhatsApp template used to send quotes when the 24h window is closed.
+// Keys of quoteTemplateVariables are the template's placeholder numbers ("1", "2", ...).
+export type QuoteTemplateVariableSource = "client_first_name" | "agent_name" | "agency_name" | "quote_link" | "custom";
+export type QuoteTemplateVariable = { source: QuoteTemplateVariableSource; text?: string };
+
+export const orgWhatsappSettings = pgTable("org_whatsapp_settings", {
+  orgId: uuid("org_id").primaryKey().references(() => organization.id, { onDelete: "cascade" }),
+  quoteTemplateName: text("quote_template_name"),
+  quoteTemplateLanguage: text("quote_template_language"),
+  quoteTemplateChannelId: text("quote_template_channel_id"),
+  quoteTemplateVariables: jsonb("quote_template_variables").$type<Record<string, QuoteTemplateVariable>>().notNull().default({}),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export type OrgWhatsappSettings = typeof orgWhatsappSettings.$inferSelect;
+export type InsertOrgWhatsappSettings = typeof orgWhatsappSettings.$inferInsert;
+
 // Company knowledge the AI is grounded on (one row per entry). RAG-ready.
 export const orgKnowledgeBase = pgTable("org_knowledge_base", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),

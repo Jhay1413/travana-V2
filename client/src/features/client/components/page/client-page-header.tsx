@@ -1,4 +1,4 @@
-import { Bot, BotOff, ChevronDown, Ellipsis, Merge, Phone, Pin, Share2, SquarePen, SquarePlus, Ticket } from "lucide-react";
+import { Bot, BotOff, ChevronDown, Ellipsis, Merge, Phone, Pin, Share2, SquarePen } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,9 +8,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import type { NeonClient } from "@/features/client/types/neon-client";
-import type { ClientDealKind } from "@/features/client/types";
+import { CreateMenu, type CreateKind } from "@/components/shared/create-menu";
 import { composeAddress } from "@/features/client/lib/compose-address";
-import { NewDealMenu } from "./new-deal-menu";
 import { RoundButton } from "./round-button";
 
 export const BADGE_OPTIONS = ["New Client", "Repeat Client", "VIP Client", "Family Member", "Time Waster", "Banned"] as const;
@@ -28,16 +27,15 @@ interface ClientPageHeaderProps {
   onShare: () => void;
   onTogglePin: () => void;
   onChangeBadge: (badge: string | null) => void;
-  onNewDeal: (kind: ClientDealKind) => void;
-  onAddTask: () => void;
-  onNewTicket: () => void;
+  clientId: string;
+  onCreate: (kind: CreateKind) => void;
   onMerge: () => void;
   onToggleAiReply: (enabled: boolean) => void;
 }
 
 /**
  * Header: name, click-to-copy phone pill, client tier (the existing client
- * `badge`) and address on the left; Share / Pin / Add deal round buttons and
+ * `badge`) and address on the left; Share / Pin / the "+" create menu and
  * the overflow menu on the right. Read-only roles lose every write control.
  */
 export function ClientPageHeader({
@@ -51,9 +49,7 @@ export function ClientPageHeader({
   onShare,
   onTogglePin,
   onChangeBadge,
-  onNewDeal,
-  onAddTask,
-  onNewTicket,
+  onCreate,
   onMerge,
   onToggleAiReply,
 }: ClientPageHeaderProps) {
@@ -160,17 +156,7 @@ export function ClientPageHeader({
         >
           <Pin className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </RoundButton>
-        {!readOnly && (
-          <NewDealMenu
-            testIdPrefix="client-index-create"
-            onCreate={onNewDeal}
-            trigger={
-              <RoundButton label="Add deal" data-testid="client-index-create">
-                <SquarePlus className="h-[18px] w-[18px]" strokeWidth={1.8} />
-              </RoundButton>
-            }
-          />
-        )}
+        {!readOnly && <CreateMenu trigger="blue" onCreate={onCreate} testId="client-index-create" />}
         {!readOnly && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -187,12 +173,6 @@ export function ClientPageHeader({
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onClick={onEdit} data-testid="client-index-menu-edit">
                 Edit details
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onAddTask} data-testid="client-index-create-task">
-                Add task
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onNewTicket} className="gap-2" data-testid="client-index-create-ticket">
-                <Ticket className="h-4 w-4" /> Create ticket
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onToggleAiReply(!aiReplyEnabled)} className="gap-2" data-testid="client-index-ai-reply">

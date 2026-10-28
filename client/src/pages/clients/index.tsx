@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { useNeonClients } from "@/hooks/queries";
 import { ClientFormDrawer } from "@/features/client/components/modals/ClientFormDrawer";
 import { useClientCreateForm } from "@/features/client/components/hooks";
+import { isClientReadOnly } from "@/features/client";
 
 type Stage = "Enquiry" | "Quote" | "Booked";
 type ClientTier = "Platinum" | "Gold" | "Standard";
@@ -84,7 +85,7 @@ const stageColors = {
 
 export default function ClientsPage() {
   const [, navigate] = useLocation();
-  const { role } = useRole();
+  const { role, orgRole } = useRole();
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [q, setQ] = useState("");
   const [searchDebounced, setSearchDebounced] = useState("");
@@ -262,15 +263,17 @@ export default function ClientsPage() {
               <Upload className="h-4 w-4" />
               Import CSV
             </Button>
-            <Button
-              size="sm"
-              className="gap-2 rounded-full bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
-              data-testid="button-add-client"
-              onClick={createForm.openCreateDialog}
-            >
-              <Plus className="h-4 w-4" />
-              Add Client
+            {!isClientReadOnly(orgRole) && (
+              <Button
+                size="sm"
+                className="gap-2 rounded-full bg-[#3b82f6] text-white hover:bg-[#3b82f6]/90"
+                data-testid="button-add-client"
+                onClick={createForm.openCreateDialog}
+              >
+                <Plus className="h-4 w-4" />
+                Add Client
             </Button>
+            )}
           </div>
         </div>
 

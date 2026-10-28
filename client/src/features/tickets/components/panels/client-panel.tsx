@@ -3,7 +3,7 @@ import { ExternalLink, Mail, MessageSquare, Phone } from "lucide-react";
 import { PersonAvatar } from "@/components/shared/person-avatar";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/hooks/queries";
-import { useClientContactLink } from "@/features/conversations";
+import { buildClientInboxHref, useClientContactLink } from "@/features/conversations";
 import { OUTLINE_ACTION } from "@/features/pipeline/shared/button-styles";
 import { clientDisplayName } from "@/lib/utils";
 import { cleanClientName } from "../../lib/ticket-display";
@@ -67,7 +67,7 @@ export function ClientPanel({ ticket, className }: { ticket: Ticket; className?:
               )}
               {contactLink?.contactId && (
                 <Button asChild variant="outline" className={ACTION}>
-                  <Link href="/conversations" data-testid="ticket-client-message">
+                  <Link href={buildClientInboxHref(clientId)} data-testid="ticket-client-message">
                     <MessageSquare className="h-[15px] w-[15px]" strokeWidth={2} />
                     Message
                   </Link>

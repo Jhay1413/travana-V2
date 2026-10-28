@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Paperclip, Reply as ReplyIcon, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { EmojiInsertButton } from "@/components/shared/emoji-insert-button";
+import { EmojiPopover } from "@/features/conversations";
 import { useCurrentUser } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
 import { useCreateReply } from "@/features/reply";
@@ -124,7 +124,7 @@ export function ReplyComposer({
         <PendingFileChips files={files} onRemove={removeFile} testIdPrefix="ticket-reply-pending" className="mt-1" />
         <div className="mt-2 flex items-center justify-between gap-3">
           <div className="flex items-center gap-1 text-social-muted">
-            <EmojiInsertButton onPick={insertEmoji} side="top" className="[&_button]:h-8 [&_button]:w-8" data-testid="ticket-reply-emoji" />
+            <EmojiPopover onPick={insertEmoji} />
             <input ref={fileInputRef} type="file" multiple accept={ATTACHMENT_ACCEPT} className="hidden" data-testid="ticket-reply-attach-input"
               onChange={(e) => {
                 if (e.target.files) addFiles(e.target.files);

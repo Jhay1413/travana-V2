@@ -24,6 +24,7 @@ import {
   type SortPreference,
 } from "../lib";
 import { useInboxDrafts } from "./use-inbox-drafts";
+import { useInboxDeepLink } from "./use-inbox-deep-link";
 import { deriveRows, isDone, mergeById, tabToQuery, type InboxListTab } from "./derive-rows";
 
 // Client-side overlay for the interactions the messages/send endpoints don't
@@ -44,8 +45,6 @@ function readStoredSort(): SortPreference {
   }
 }
 
-/** Fetches that must come back without the deep-linked id before the keeper may override it. */
-const DEEP_LINK_MAX_FETCHES = 2;
 
 export function useInboxState() {
   const [tab, setTab] = useState<InboxListTab>("open");
@@ -79,38 +78,31 @@ export function useInboxState() {
 
   const [location, navigate] = useLocation();
 
-  // Deep-link support: /conversations?conversation=<id> opens straight to that
-  // thread (the Dashboard's Latest Inbox links here per row, see
-  // conversations-tab.tsx). Keyed on wouter's `useSearch` (not
-  // window.location.search) and applied once per id rather than once per
-  // mount, mirroring the ?holiday= convention in pages/client/index.tsx: a
-  // second link to a different conversation while already on this page is
-  // only a search-string change, which wouter doesn't remount for, so relying
-  // on a mount-only read would miss it.
+  // Deep links: /conversations?conversation=<id> and ?client=<clientId> (see
+  // use-inbox-deep-link.ts). Keyed on wouter's `useSearch`, applied once per
+  // value, mirroring the ?holiday= convention in pages/client/index.tsx.
   const urlSearch = useSearch();
-  const appliedDeepLinkId = useRef<string | null>(null);
-  // Set while a deep-linked id has not yet shown up in a fetched page; the
-  // selection keeper must not replace it until it does (or fetches run out).
-  const pendingDeepLinkId = useRef<string | null>(null);
-  const pendingFetches = useRef(0);
-  const pendingUpdatedAt = useRef(-1);
-  useEffect(() => {
-    const id = new URLSearchParams(urlSearch).get("conversation");
-    if (id && id !== appliedDeepLinkId.current) {
-      appliedDeepLinkId.current = id;
-      pendingDeepLinkId.current = id;
-      pendingFetches.current = 0;
-      pendingUpdatedAt.current = -1;
-      // The target may be hidden by whatever list state the user left behind.
-      setTab("open");
-      setChip("all");
-      setSearch("");
-      setDebouncedSearch("");
-      setFilters(EMPTY_FILTERS);
-      setPage(1);
-      setSelectedId(id);
-    }
-  }, [urlSearch, setSelectedId]);
+  const [newMessageClientId, setNewMessageClientId] = useState<string | null>(null);
+  const resetListView = useCallback(() => {
+    setChip("all");
+    setSearch("");
+    setDebouncedSearch("");
+    setFilters(EMPTY_FILTERS);
+    setPage(1);
+  }, []);
+  const openNewMessage = useCallback((clientId: string | null) => {
+    setNewMessageClientId(clientId);
+    setNewMessageOpen(true);
+  }, []);
+  const clearClientParam = useCallback(() => {
+    const params = new URLSearchParams(urlSearch);
+    if (!params.has("client")) return;
+    params.delete("client");
+    const rest = params.toString();
+    navigate(rest ? `${location}?${rest}` : location, { replace: true });
+  }, [urlSearch, location, navigate]);
+  const deepLink = useInboxDeepLink({ urlSearch, setTab, setSelectedId, resetListView, openNewMessage, clearClientParam, tab });
+  const { holdSelection } = deepLink;
 
   // ?new=1 opens the new-message dialog once, then is stripped from the URL.
   useEffect(() => {
@@ -123,7 +115,6 @@ export function useInboxState() {
   }, [urlSearch, location, navigate]);
 
   const { orgRole } = useRole();
-  const canManageChannels = orgRole === "org_admin" || orgRole === "branch_manager" || orgRole === "platform_admin";
   // Same roles as the AI test-flow gate (server-enforced too).
   const canTestAi = orgRole === "org_admin" || orgRole === "platform_admin";
 
@@ -183,8 +174,6 @@ export function useInboxState() {
   const isLoading = mainQuery.isLoading || (onDoneTab && doneSnoozedQuery.isLoading);
   const isFetching = mainQuery.isFetching || (onDoneTab && doneSnoozedQuery.isFetching);
   const isError = mainQuery.isError || (onDoneTab && doneSnoozedQuery.isError);
-  const isPlaceholderData = mainQuery.isPlaceholderData;
-  const dataUpdatedAt = mainQuery.dataUpdatedAt + (onDoneTab ? doneSnoozedQuery.dataUpdatedAt : 0);
   const refetchMain = mainQuery.refetch;
   const refetchDone = doneSnoozedQuery.refetch;
   const refetch = useCallback(
@@ -238,28 +227,13 @@ export function useInboxState() {
   scopeKeyRef.current = JSON.stringify([tab, inboxId, debouncedSearch, page, chip, filters, pageSize]);
 
   const activeInbox = inboxId ? (inboxList.find((i) => i.id === inboxId) ?? null) : null;
-
   // Keep a valid selection: if the current pick fell out of the list, select the
-  // first. Skipped while the first page is still loading: `rows` is
-  // briefly empty then, and this would otherwise immediately clear a selection
-  // just set from a `?conversation=` deep link before the list has had a
-  // chance to load and include it.
+  // first. Skipped while the first page is still loading (`rows` is briefly
+  // empty then) and while a deep-linked conversation is being fetched or held
+  // (it may sit beyond the loaded page, see use-inbox-deep-link.ts).
   useEffect(() => {
+    if (holdSelection(selectedId, scopeKeyRef.current, rows.some((c) => c.id === selectedId))) return;
     if (isLoading) return;
-    const pending = pendingDeepLinkId.current;
-    if (pending) {
-      if (selectedId !== pending || isPlaceholderData) return;
-      if (conversations.some((c) => c.id === pending)) {
-        pendingDeepLinkId.current = null;
-        return;
-      }
-      if (dataUpdatedAt !== pendingUpdatedAt.current) {
-        pendingUpdatedAt.current = dataUpdatedAt;
-        pendingFetches.current += 1;
-      }
-      if (pendingFetches.current < DEEP_LINK_MAX_FETCHES) return;
-      pendingDeepLinkId.current = null;
-    }
     if (rows.length === 0) {
       if (selectedId !== null) setSelectedId(null);
       return;
@@ -277,16 +251,18 @@ export function useInboxState() {
     // scope itself changed.
     const stillOnPage = conversations.some((c) => c.id === selectedId);
     if (stillOnPage || selectionScopeRef.current !== scopeKeyRef.current) setSelectedId(rows[0].id);
-  }, [rows, conversations, selectedId, isLoading, isPlaceholderData, dataUpdatedAt, setSelectedId]);
+  }, [rows, conversations, selectedId, isLoading, holdSelection, setSelectedId]);
 
   // Last known object for the selection, so the thread stays on screen if the
   // server drops the row from the current page (see the keeper above).
   const selectedCache = useRef<Conversation | null>(null);
   const selected = useMemo(() => {
-    const found = conversations.find((c) => c.id === selectedId) ?? null;
+    const found =
+      conversations.find((c) => c.id === selectedId) ??
+      (deepLink.resolved && deepLink.resolved.id === selectedId ? deepLink.resolved : null);
     if (found) selectedCache.current = found;
     return found ?? (selectedId && selectedCache.current?.id === selectedId ? selectedCache.current : null);
-  }, [conversations, selectedId]);
+  }, [conversations, selectedId, deepLink.resolved]);
 
   // Selecting a conversation again retires its local "Mark as unread".
   useEffect(() => {
@@ -383,8 +359,8 @@ export function useInboxState() {
     seenAt, markSeen, forcedUnread, markUnread,
     ...drafts,
     testAiOpen, setTestAiOpen,
-    newMessageOpen, setNewMessageOpen, clientPaneOpen, setClientPaneOpen,
-    canManageChannels, canTestAi, openCount, snoozedCount, badges,
+    newMessageOpen, setNewMessageOpen, newMessageClientId, setNewMessageClientId, clientPaneOpen, setClientPaneOpen,
+    canTestAi, openCount, snoozedCount, badges,
     currentUser: currentUser ? { id: currentUser.id, name: myName || currentUser.name } : null,
     staff, chipCounts, channelCounts: channelCountsByType, unassignedCount, tagOptions,
   };

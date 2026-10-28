@@ -4,14 +4,14 @@ import { cn } from "@/lib/utils";
 import { formatFileSize } from "@/lib/note-attachments";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { useNoteAttachments } from "../api/use-note-attachment-queries";
-import { useDeleteNoteAttachment } from "../api/use-note-attachment-mutations";
+import { useDeleteClientNoteAttachment, useDeleteNoteAttachment } from "../api/use-note-attachment-mutations";
 import { noteAttachmentApi } from "../api/note-attachment.api";
 import type { NoteAttachment } from "../types";
 
 // Mirrors features/tickets/components/ticket-attachment-list.tsx: images render
 // as clickable thumbnails opening a lightbox, everything else as a file chip.
 
-function NoteAttachmentList({
+export function NoteAttachmentList({
   attachments,
   onDelete,
   deletingId,
@@ -108,6 +108,19 @@ export function NoteAttachments({ transactionId, noteId }: { transactionId: stri
   const deleteMutation = useDeleteNoteAttachment(transactionId);
   const attachments = useMemo(() => (data ?? []).filter((a) => a.noteId === noteId), [data, noteId]);
 
+  if (attachments.length === 0) return null;
+  return (
+    <NoteAttachmentList
+      attachments={attachments}
+      onDelete={(id) => deleteMutation.mutate(id)}
+      deletingId={deleteMutation.isPending ? (deleteMutation.variables ?? null) : null}
+    />
+  );
+}
+
+/** Saved attachments of one client-page note, taken from the client-level list (no per-note query). */
+export function ClientNoteAttachments({ clientId, attachments }: { clientId: string; attachments: NoteAttachment[] }) {
+  const deleteMutation = useDeleteClientNoteAttachment(clientId);
   if (attachments.length === 0) return null;
   return (
     <NoteAttachmentList

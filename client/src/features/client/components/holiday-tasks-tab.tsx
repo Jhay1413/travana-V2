@@ -6,7 +6,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils";
 import { useTasks, useUsers, useCurrentUser } from "@/hooks/queries";
 import { useToggleTask, useDeleteTask } from "@/hooks/mutations";
-import { CreateTaskDialog, EditTaskDialog, TaskPriorityPill, type EditableTask } from "@/features/tasks";
+import { EditTaskDialog, TaskPriorityPill, type EditableTask } from "@/features/tasks";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 
 // ─── Tasks tab ──────────────────────────────────────────────────────────────
 // Mock-styled task rows: toggle circle, orange due time – bold title, "Created"
@@ -70,8 +71,7 @@ export function HolidayTasksTab({ entityId, entityType, readOnly = false, hideCr
           <Plus className="mr-1 h-3.5 w-3.5" />
           New Task
         </Button>)}
-        {!readOnly && <CreateTaskDialog
-          presentation="drawer"
+        {!readOnly && <AddTaskModal
           open={showAddTask}
           onOpenChange={setShowAddTask}
           entityType={taskEntityType}
@@ -173,7 +173,6 @@ export function HolidayTasksTab({ entityId, entityType, readOnly = false, hideCr
         })}
       </div>
       <EditTaskDialog
-        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}

@@ -18,7 +18,7 @@ import { QuoteEditDialog } from "@/features/quote/components/quote-edit-dialog";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { QuoteConvertDialog } from "@/features/quote/components/QuoteConvertDialog";
 import { QuoteDeleteDialog } from "@/features/quote/components/QuoteDeleteDialog";
-import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import { useClientTicketCreate, useControllableOpen, useSetAsMainQuote } from "@/features/client/components/hooks";
 import { HEADER_ELLIPSIS_BUTTON_CLASS } from "@/features/client/components/holiday-header-classes";
@@ -351,13 +351,12 @@ export function QuoteActionsMenu({
         </AlertDialogContent>
       </AlertDialog>
 
-      <CreateTaskDialog
-        presentation="drawer"
+      <AddTaskModal
         open={showAddTaskDialog}
         onOpenChange={setShowAddTaskDialog}
         entityType="quote"
         entityId={quoteId}
-        defaultAssignedToId={quoteData?.user_id}
+        defaultAssignedToId={quoteData?.user_id ?? undefined}
       />
 
       <CreateTicketDialog

@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
-import { noteAttachments, notes, type NoteAttachment, type InsertNoteAttachment } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { noteAttachments, notes, transaction, type NoteAttachment, type InsertNoteAttachment } from "@shared/schema";
+import { eq, desc, asc, or, sql } from "drizzle-orm";
 
 export const noteAttachmentRepository = {
   async findById(id: string): Promise<NoteAttachment | undefined> {
@@ -25,6 +25,20 @@ export const noteAttachmentRepository = {
       .innerJoin(notes, eq(noteAttachments.noteId, notes.id))
       .where(eq(notes.transaction_id, transactionId))
       .orderBy(desc(noteAttachments.createdAt));
+    return rows.map((r) => r.attachment);
+  },
+
+  // Attachments on a client's own notes, plus (optionally) notes on any of the
+  // client's deals. Oldest first.
+  async findByClientId(clientId: string, includeDeals: boolean): Promise<NoteAttachment[]> {
+    const onClient = eq(notes.client_id, clientId);
+    const onDeals = sql`${notes.transaction_id} IN (SELECT ${transaction.id} FROM ${transaction} WHERE ${transaction.client_id} = ${clientId})`;
+    const rows = await db
+      .select({ attachment: noteAttachments })
+      .from(noteAttachments)
+      .innerJoin(notes, eq(noteAttachments.noteId, notes.id))
+      .where(includeDeals ? or(onClient, onDeals) : onClient)
+      .orderBy(asc(noteAttachments.createdAt));
     return rows.map((r) => r.attachment);
   },
 

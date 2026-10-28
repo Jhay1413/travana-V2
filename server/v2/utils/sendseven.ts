@@ -164,10 +164,19 @@ export async function sendSevenRequest<T>(
   if (!res.ok) {
     let message = `SendSeven service returned ${res.status}`;
     try {
-      const err = (await res.json()) as { detail?: unknown; message?: unknown };
-      const detail = err?.detail ?? err?.message;
+      const err = (await res.json()) as { detail?: unknown; message?: unknown; error?: unknown };
+      const detail = err?.detail ?? err?.message ?? err?.error;
       if (typeof detail === "string") {
         message = detail;
+      } else if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+        // Structured errors, e.g. the template send's
+        // { detail: { error_code: "missing_template_parameters", message: "…" } }.
+        const d = detail as { message?: unknown; error?: unknown; detail?: unknown; error_code?: unknown };
+        const text = [d.message, d.error, d.detail].find((v): v is string => typeof v === "string");
+        const code = typeof d.error_code === "string" || typeof d.error_code === "number" ? String(d.error_code) : null;
+        if (text && code) message = `${text} (${code})`;
+        else if (text) message = text;
+        else if (code) message = `SendSeven service returned ${res.status} (${code})`;
       } else if (Array.isArray(detail)) {
         // FastAPI validation errors: [{ loc: [...], msg, type }]
         const parts = detail

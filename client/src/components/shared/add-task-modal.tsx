@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
-import { UserReassignSelect } from "@/components/ui/user-reassign-select";
+import { TaskModalShell } from "@/components/shared/task-modal/task-modal-shell";
+import {
+  TaskAssigneeField,
+  TaskCustomTitleField,
+  TaskDateField,
+  TaskPriorityField,
+  TaskTimeField,
+  TaskTypeField,
+} from "@/components/shared/task-modal/task-form-fields";
 import { useCreateTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { FOLLOW_UP_DUE_TIME, fillEmptyAssignee, isOpening, londonDueDate, tomorrowLondonKey } from "@/features/tasks/lib/task-defaults";
 import { CUSTOM_TASK_TYPE, titleForTaskType, type TaskTypeValue } from "@/features/tasks/lib/task-types";
 import { DEFAULT_TASK_PRIORITY, type TaskPriority } from "@/features/tasks/lib/task-priority";
-import { TaskTypeSelect } from "@/features/tasks/components/shared/task-type-select";
-import { TaskPrioritySelect } from "@/features/tasks/components/shared/task-priority-select";
 
 interface AddTaskModalProps {
   open: boolean;
@@ -31,10 +33,6 @@ interface AddTaskModalProps {
   onCreated?: () => void;
   testIdPrefix?: string;
 }
-
-const LABEL_CLASS = "text-[11px] font-semibold uppercase tracking-[.06em] text-social-muted";
-const FIELD_CLASS =
-  "h-11 rounded-[10px] border-social-border bg-background px-3.5 text-[14px] shadow-none focus-visible:border-social-orange focus-visible:ring-[3px] focus-visible:ring-social-orange/20";
 
 /** Add-task pop-up matching the prototype: what / assignee / date / time, pre-assigned to the caller-supplied user. */
 export function AddTaskModal({
@@ -116,149 +114,54 @@ export function AddTaskModal({
     );
   };
 
+  const p = testIdPrefix;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        overlayClassName="z-[600] bg-[rgba(31,41,55,.5)]"
-        className="z-[600] block w-[520px] max-w-[calc(100vw-32px)] rounded-[20px] border-social-border bg-background p-7 shadow-2xl sm:rounded-[20px]"
-        data-testid={`${testIdPrefix}-modal`}
-      >
-        <div className="pr-8">
-          <DialogTitle className="text-[20px] font-semibold leading-tight tracking-normal">{title}</DialogTitle>
-          <DialogDescription className="mt-1 text-[13px] text-social-muted">{subtitle}</DialogDescription>
-        </div>
+    <TaskModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      subtitle={subtitle}
+      onSubmit={handleSave}
+      submitLabel="Add task"
+      saving={saving}
+      submitDisabled={assigneeMissing || taskMissing}
+      contentTestId={`${p}-modal`}
+      cancelTestId={`${p}-cancel`}
+      submitTestId={`${p}-submit`}
+    >
+      <TaskTypeField
+        id={`${p}-type`}
+        testId={`${p}-type`}
+        value={taskType}
+        onChange={(v) => {
+          setTaskType(v);
+          setShowError(false);
+        }}
+        errorTestId={`${p}-type-error`}
+      />
+      <TaskCustomTitleField
+        id={`${p}-custom-title`}
+        testId={`${p}-custom-title`}
+        taskType={taskType}
+        value={text}
+        onChange={(v) => {
+          setText(v);
+          setShowError(false);
+        }}
+        placeholder={placeholder}
+        autoFocus
+        error={{ show: showError, testId: `${p}-error` }}
+      />
+      <TaskAssigneeField id={`${p}-assignee`} testId={`${p}-assignee`} value={assignedToId} onChange={setAssignedToId} />
+      <TaskPriorityField id={`${p}-priority`} testId={`${p}-priority`} value={priority} onChange={setPriority} />
+      <TaskDateField id={`${p}-date`} testId={`${p}-date`} value={dueDate} onChange={setDueDate} />
+      <TaskTimeField id={`${p}-time`} testId={`${p}-time`} value={dueTime} onChange={setDueTime} />
 
-        <form
-          className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSave();
-          }}
-        >
-          <div className="col-span-2 space-y-1.5">
-            <label htmlFor={`${testIdPrefix}-type`} className={LABEL_CLASS}>
-              What needs doing?
-            </label>
-            <TaskTypeSelect
-              id={`${testIdPrefix}-type`}
-              value={taskType}
-              onChange={(v) => {
-                setTaskType(v);
-                setShowError(false);
-              }}
-              zClassName="z-[650]"
-              className="h-11 rounded-[10px] border-social-border bg-background px-3.5 text-[14px] shadow-none"
-              data-testid={`${testIdPrefix}-type`}
-            />
-            {!taskType && (
-              <p className="text-xs text-red-600" data-testid={`${testIdPrefix}-type-error`}>
-                Choose what needs doing.
-              </p>
-            )}
-          </div>
-          {taskType === CUSTOM_TASK_TYPE && (
-            <div className="col-span-2 space-y-1.5">
-              <label htmlFor={`${testIdPrefix}-custom-title`} className={LABEL_CLASS}>
-                Describe the task
-              </label>
-              <Input
-                id={`${testIdPrefix}-custom-title`}
-                autoFocus
-                value={text}
-                onChange={(e) => {
-                  setText(e.target.value);
-                  setShowError(false);
-                }}
-                placeholder={placeholder}
-                className={FIELD_CLASS}
-                data-testid={`${testIdPrefix}-custom-title`}
-              />
-              {showError && !text.trim() && (
-                <p className="text-xs text-red-600" data-testid={`${testIdPrefix}-error`}>
-                  Enter what needs doing.
-                </p>
-              )}
-            </div>
-          )}
-          <div className="space-y-1.5">
-            <label htmlFor={`${testIdPrefix}-assignee`} className={LABEL_CLASS}>
-              Assign to
-            </label>
-            <UserReassignSelect
-              value={assignedToId}
-              onValueChange={setAssignedToId}
-              zClassName="z-[650]"
-              className="h-11 rounded-[10px] bg-background px-3.5 text-[14px] font-medium"
-              data-testid={`${testIdPrefix}-assignee`}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor={`${testIdPrefix}-priority`} className={LABEL_CLASS}>
-              Priority
-            </label>
-            <TaskPrioritySelect
-              id={`${testIdPrefix}-priority`}
-              value={priority}
-              onChange={setPriority}
-              zClassName="z-[650]"
-              className="h-11 rounded-[10px] border-social-border bg-background px-3.5 text-[14px] shadow-none"
-              data-testid={`${testIdPrefix}-priority`}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor={`${testIdPrefix}-date`} className={LABEL_CLASS}>
-              Date
-            </label>
-            <Input
-              id={`${testIdPrefix}-date`}
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className={FIELD_CLASS}
-              data-testid={`${testIdPrefix}-date`}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor={`${testIdPrefix}-time`} className={LABEL_CLASS}>
-              Time
-            </label>
-            <Input
-              id={`${testIdPrefix}-time`}
-              type="time"
-              value={dueTime}
-              onChange={(e) => setDueTime(e.target.value)}
-              className={FIELD_CLASS}
-              data-testid={`${testIdPrefix}-time`}
-            />
-          </div>
-
-          {assigneeMissing && (
-            <p className="col-span-2 text-xs text-red-600" data-testid={`${testIdPrefix}-no-assignee`}>
-              Choose who this task is for.
-            </p>
-          )}
-
-          <div className="col-span-2 mt-2 flex justify-end gap-2.5">
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11 rounded-[10px] px-5 text-[14px] font-semibold"
-              onClick={() => onOpenChange(false)}
-              data-testid={`${testIdPrefix}-cancel`}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="h-11 rounded-[10px] bg-social-orange px-5 text-[14px] font-semibold text-slate-900 hover:bg-social-orange/90"
-              disabled={saving || assigneeMissing || taskMissing}
-              data-testid={`${testIdPrefix}-submit`}
-            >
-              {saving ? <Spinner className="h-3.5 w-3.5" /> : "Add task"}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+      {assigneeMissing && (
+        <p className="col-span-2 text-xs text-red-600" data-testid={`${p}-no-assignee`}>
+          Choose who this task is for.
+        </p>
+      )}
+    </TaskModalShell>
   );
 }

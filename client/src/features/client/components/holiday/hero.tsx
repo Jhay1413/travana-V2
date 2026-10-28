@@ -10,6 +10,7 @@ import type { EnrichedBooking, EnrichedQuote } from "@/features/quote/types";
 import { formatQuotePassengers } from "@/features/client/components/holiday-fields";
 import { gbp2 } from "@/features/client/lib/holiday-format";
 import type { MosaicImage } from "@/features/client/lib/hero-mosaic";
+import { RefChips } from "@/features/client/components/holiday/ref-chips";
 import { HeroMosaic } from "@/features/client/components/holiday/hero-mosaic";
 import { HOLIDAY_BTN } from "@/features/client/components/holiday/holiday-styles";
 
@@ -112,6 +113,7 @@ export function Hero({ display, raw, mode, photos, stars, readOnly = false, onOp
             )}
             {quote && <ViewsPill quoteId={quote.id} />}
           </div>
+          {!isQuote && <RefChips booking={raw as EnrichedBooking} readOnly={readOnly} />}
         </div>
         <div className="flex flex-col items-end gap-1 text-right max-[620px]:items-start max-[620px]:text-left">
           <span className="text-[32px] font-semibold leading-none tabular-nums text-social-navy">{gbp2(total)}</span>

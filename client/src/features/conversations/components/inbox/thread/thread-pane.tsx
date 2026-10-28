@@ -18,8 +18,6 @@ export interface ThreadPaneProps {
   staff: { id: string; name: string }[];
   staffLoading?: boolean;
   canTestAi: boolean;
-  /** Reserved: not consumed by the pane yet, kept so the owner call site stays stable. */
-  canManageChannels: boolean;
   onAssign(userId: string | null): void;
   onSnooze(presetId: SnoozePresetId): void;
   onUnsnooze(): void;

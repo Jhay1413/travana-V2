@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { taskController } from "./task.controller";
 import { validate } from '../../middlewares/validation.middleware';
-import { createTaskSchema, updateTaskSchema } from './task.validator';
+import { createTaskSchema, updateTaskSchema, listForClientSchema } from './task.validator';
 import { blockReadOnlyClientWrites } from '../../middlewares/auth/block-read-only-roles';
 
 const router = Router();
@@ -11,6 +11,7 @@ router.use(blockReadOnlyClientWrites);
 router.get("/all", taskController.listAll);
 router.get("/all-extended", taskController.listAllExtended);
 router.get("/", taskController.listByEntity);
+router.get("/for-client/:clientId", validate(listForClientSchema), taskController.listByClient);
 router.get("/user", taskController.listByUser);
 router.post("/", validate(createTaskSchema), taskController.create);
 router.put("/:id/toggle", taskController.toggleComplete);

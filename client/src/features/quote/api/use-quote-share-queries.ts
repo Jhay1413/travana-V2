@@ -130,11 +130,12 @@ export type QuoteWhatsappFallbackReason =
   | "not_configured"
   | "no_contact"
   | "no_channel"
-  | "window_closed";
+  | "window_closed"
+  | "template_failed";
 
 export type SendQuoteWhatsappResult =
-  | { status: "sent"; conversationId: string }
-  | { status: "fallback"; reason: QuoteWhatsappFallbackReason; text: string; quoteUrl: string };
+  | { status: "sent"; conversationId: string; viaTemplate?: boolean }
+  | { status: "fallback"; reason: QuoteWhatsappFallbackReason; text: string; quoteUrl: string; detail?: string };
 
 /**
  * Sends the quote link to the client's WhatsApp through the agency's SendSeven

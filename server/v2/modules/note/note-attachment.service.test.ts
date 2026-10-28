@@ -14,6 +14,7 @@ vi.mock("./note-attachment.repository", () => ({
     findById: vi.fn(),
     findByNoteId: vi.fn(),
     findByTransactionId: vi.fn(),
+    findByClientId: vi.fn(),
     create: vi.fn(),
     remove: vi.fn(),
   },
@@ -24,6 +25,7 @@ vi.mock("./note.repository", () => ({
     findById: vi.fn(),
     findByIdWithOrg: vi.fn(),
     transactionBelongsToOrg: vi.fn(),
+    clientBelongsToOrg: vi.fn(),
   },
 }));
 
@@ -170,5 +172,28 @@ describe("noteAttachmentService download and delete", () => {
 
     expect(s3Client.send).toHaveBeenCalledTimes(1);
     expect(noteAttachmentRepository.remove).toHaveBeenCalledWith("att1");
+  });
+});
+
+describe("noteAttachmentService.listByClientId", () => {
+  it("404s for a client outside the caller's org without querying", async () => {
+    vi.mocked(noteRepository.clientBelongsToOrg).mockResolvedValue(false);
+    await expect(noteAttachmentService.listByClientId("c1", true, ORG_SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(noteRepository.clientBelongsToOrg).toHaveBeenCalledWith("c1", "org1", ORG_SCOPE);
+    expect(noteAttachmentRepository.findByClientId).not.toHaveBeenCalled();
+  });
+
+  it("lists attachments for an in-scope client", async () => {
+    vi.mocked(noteRepository.clientBelongsToOrg).mockResolvedValue(true);
+    vi.mocked(noteAttachmentRepository.findByClientId).mockResolvedValue([ATTACHMENT] as never);
+    const out = await noteAttachmentService.listByClientId("c1", false, ORG_SCOPE);
+    expect(out).toEqual([ATTACHMENT]);
+    expect(noteAttachmentRepository.findByClientId).toHaveBeenCalledWith("c1", false);
+  });
+
+  it("skips the org check for trusted callers", async () => {
+    vi.mocked(noteAttachmentRepository.findByClientId).mockResolvedValue([]);
+    await noteAttachmentService.listByClientId("c1", true, TRUSTED_SCOPE);
+    expect(noteRepository.clientBelongsToOrg).not.toHaveBeenCalled();
   });
 });

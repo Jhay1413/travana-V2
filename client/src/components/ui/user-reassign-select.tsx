@@ -85,7 +85,7 @@ export function UserReassignSelect({
           </span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className={cn(zClassName, "w-[--radix-popover-trigger-width] p-0")} align="start">
+      <PopoverContent className={cn(zClassName, "w-(--radix-popover-trigger-width) p-0")} align="start">
         <Command>
           <CommandInput placeholder="Search users..." />
           <CommandList>

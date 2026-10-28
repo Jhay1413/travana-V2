@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { ChevronRight, LifeBuoy, ListChecks, Pencil, Plus } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { EditTaskDialog } from "@/features/tasks/components/tasks/EditTaskDialog";
-import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { Separator } from "@/components/ui/separator";
 import { useAllTasksExtended, useUserTasks } from "@/hooks/queries";
 import { useTickets, useTicketsByUser } from "@/features/tickets/api/use-ticket-queries";
@@ -493,7 +493,6 @@ export function WhatsOnTab({
       </div>
 
       <EditTaskDialog
-        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}
@@ -501,11 +500,12 @@ export function WhatsOnTab({
         entityId={editingTask?.entityId ?? ""}
       />
 
-      <CreateTaskDialog
-        presentation="drawer"
+      <AddTaskModal
         open={creatingTask}
         onOpenChange={setCreatingTask}
         defaultAssignedToId={allUsers ? undefined : userId}
+        title="New task"
+        successToast="Task created"
       />
     </div>
   );

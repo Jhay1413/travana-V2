@@ -11,6 +11,11 @@ import { buildGenerateParams, getFirstImage } from "@/features/social/lib/quote-
 import { timezoneLabel } from "../schedule/timezone-label";
 import type { SocialPostEditorDialogProps } from "../editor";
 
+export interface OpenEditorOptions {
+  /** "YYYY-MM-DD" to pre-fill the schedule date (calendar drop). */
+  scheduleDate?: string;
+}
+
 /**
  * Owns the editor dialog's state for the grid: which quote is open, its deal, and the
  * generate flow. Spread `editorProps` onto a single `SocialPostEditorDialog`.
@@ -27,12 +32,15 @@ export function usePostEditorState() {
   const [previewQuote, setPreviewQuote] = useState<EnrichedQuote | null>(null);
   const [previewDeal, setPreviewDeal] = useState<TravelDeal | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  // Date a post was dropped on (calendar); pre-fills the editor's schedule date.
+  const [scheduleDate, setScheduleDate] = useState<string | undefined>(undefined);
 
   const close = useCallback(() => {
     requestRef.current += 1;
     setPreviewQuote(null);
     setPreviewDeal(null);
     setIsGenerating(false);
+    setScheduleDate(undefined);
   }, []);
 
   const runGenerate = useCallback(
@@ -72,10 +80,11 @@ export function usePostEditorState() {
     [runGenerate],
   );
 
-  /** Opens the editor on a quote's existing post. */
+  /** Opens the editor on a quote's existing post; `options.scheduleDate` ("YYYY-MM-DD") pre-fills the schedule date. */
   const openEditor = useCallback(
-    async (quote: EnrichedQuote): Promise<void> => {
+    async (quote: EnrichedQuote, options?: OpenEditorOptions): Promise<void> => {
       const token = ++requestRef.current;
+      setScheduleDate(options?.scheduleDate);
       setPreviewQuote(quote);
       setPreviewDeal(null);
       setIsGenerating(false);
@@ -114,9 +123,10 @@ export function usePostEditorState() {
       timezoneLabel: timezoneLabel(resolved.timezone),
       initialViewLink: resolved.defaultViewLink,
       initialPriceBadge: resolved.defaultPriceBadge,
+      initialScheduleDate: scheduleDate,
       onRegenerate,
     }),
-    [previewQuote, previewDeal, isGenerating, resolved, close, onRegenerate],
+    [previewQuote, previewDeal, isGenerating, scheduleDate, resolved, close, onRegenerate],
   );
 
   return {

@@ -26,7 +26,10 @@ export function TicketMobileHeader({ ticket, users, now, menu }: { ticket: Ticke
     updateTicket.mutate(
       { id: ticket.id, data: { status: active ? "Resolved" : "Open" } },
       {
-        onSuccess: () => toast({ title: active ? "Ticket marked as resolved" : "Ticket reopened" }),
+        onSuccess: () => {
+          toast({ title: active ? "Ticket marked as resolved" : "Ticket reopened" });
+          if (active) navigate("/tickets");
+        },
         onError: (err) => toast({ title: ticketErrorMessage(err, "Failed to update status"), variant: "destructive" }),
       },
     );

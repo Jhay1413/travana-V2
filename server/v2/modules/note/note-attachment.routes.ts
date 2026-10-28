@@ -6,6 +6,7 @@ import { AppError } from "../../utils/error-handler";
 import {
   listByNoteValidator,
   listByTransactionValidator,
+  listByClientValidator,
   uploadToNoteValidator,
   attachmentIdValidator,
 } from "./note-attachment.validator";
@@ -39,6 +40,7 @@ router.use(blockReadOnlyClientWrites);
 
 router.get("/note/:noteId", validate(listByNoteValidator), noteAttachmentController.listByNoteId);
 router.get("/transaction/:transactionId", validate(listByTransactionValidator), noteAttachmentController.listByTransactionId);
+router.get("/client/:clientId", validate(listByClientValidator), noteAttachmentController.listByClientId);
 router.post("/note/:noteId", validate(uploadToNoteValidator), upload.array("files", NOTE_ATTACHMENT_MAX_FILES), noteAttachmentController.uploadAttachments);
 router.get("/:id/download", validate(attachmentIdValidator), noteAttachmentController.downloadAttachment);
 router.delete("/:id", validate(attachmentIdValidator), noteAttachmentController.deleteAttachment);

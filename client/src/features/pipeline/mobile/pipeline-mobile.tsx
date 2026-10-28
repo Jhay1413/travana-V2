@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
@@ -8,7 +8,8 @@ import { DealCard, type CardActions } from "@/features/pipeline/card/deal-card";
 import { formatCurrency, STAGE_LABEL, type PipelineStage } from "@/features/pipeline/lib/pipeline-helpers";
 import type { ColumnData } from "@/features/pipeline/state/use-pipeline-columns";
 import type { PipelineScope } from "@/features/pipeline/state/use-pipeline-filters";
-import { AMBER_LINK, PRIMARY_ACTION } from "@/features/pipeline/shared/button-styles";
+import { AMBER_LINK } from "@/features/pipeline/shared/button-styles";
+import { CreateMenu } from "@/components/shared/create-menu";
 import { FilterChip } from "@/features/pipeline/shared/filter-chip";
 
 const MOBILE_STAGES: PipelineStage[] = ["Enquiry", "Quoted", "In Play", "Booked", "Future", "Lost"];
@@ -21,7 +22,6 @@ interface PipelineMobileProps {
   onSearchChange: (value: string) => void;
   scope: PipelineScope;
   onScopeChange: (value: PipelineScope) => void;
-  onNewDeal: () => void;
   /** Number of active quick / priority / operator filters. */
   activeFilters: number;
   onClearFilters: () => void;
@@ -29,6 +29,8 @@ interface PipelineMobileProps {
   selectedId: string | null;
   onDragStart: (t: Transaction, stage: PipelineStage) => void;
   actionsFor: (stage: PipelineStage) => CardActions;
+  /** Inside another page (agent profile): no create menu. */
+  embedded?: boolean;
 }
 
 /** ≤900px: one stage at a time, no drag-and-drop, no list view. */
@@ -40,13 +42,13 @@ export function PipelineMobile({
   onSearchChange,
   scope,
   onScopeChange,
-  onNewDeal,
   activeFilters,
   onClearFilters,
   getClientName,
   selectedId,
   onDragStart,
   actionsFor,
+  embedded = false,
 }: PipelineMobileProps) {
   const [stage, setStage] = useState<PipelineStage>("Quoted");
   const visibleStages = MOBILE_STAGES.filter((s) => stages.includes(s));
@@ -56,9 +58,7 @@ export function PipelineMobile({
     <div className="flex min-h-0 flex-1 flex-col gap-3" data-testid="pipeline-mobile">
       <div className="flex items-center gap-2.5">
         <h1 className="flex-1 text-[22px] font-semibold" data-testid="pipeline-title">Pipeline</h1>
-        <Button type="button" className={`${PRIMARY_ACTION} h-[38px]`} onClick={onNewDeal}>
-          <Plus className="h-4 w-4" />New deal
-        </Button>
+        {!embedded && <CreateMenu trigger="blue" testId="button-new-deal" />}
       </div>
       <label className="flex h-10 w-full items-center gap-2 rounded-[10px] border border-social-border bg-card px-3 text-[13px]">
         <Search className="h-4 w-4 shrink-0 text-[#8A94A6]" />

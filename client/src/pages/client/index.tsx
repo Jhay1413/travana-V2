@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute, useSearch } from "wouter";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import {
   useTicketsByClient,
   useUsers,
   useCurrentUser,
-  useTasks,
+  useClientTasks,
   transactionKeys,
 } from "@/hooks/queries";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
@@ -43,10 +43,11 @@ import { computeClientStats } from "@/features/client/lib/client-stats";
 import { isClientReadOnly } from "@/features/client/lib/client-access";
 import { buildDealLabels, buildTaskHolidays } from "@/features/client/lib/deal-labels";
 import { resolveSelectionTransactionId } from "@/features/client/lib/holiday-transaction";
-import type { ClientCreateKind, HolidaySelection } from "@/features/client/types";
+import type { HolidaySelection } from "@/features/client/types";
+import type { CreateKind } from "@/components/shared/create-menu";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/features/booking/components/booking-create-dialog";
-import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import {
   useClientEditForm,
@@ -92,7 +93,7 @@ export default function ClientPage() {
   // re-entered inside the 30s default stale window.
   const { data: transactionsData, isLoading: isLoadingTransactions } = useTransactions({ clientId }, { staleTime: 0, refetchOnMount: "always" });
   const { data: ticketsData } = useTicketsByClient(clientId);
-  const { data: tasksData } = useTasks("client", clientId);
+  const { data: tasksData } = useClientTasks(clientId);
   const { data: usersData } = useUsers();
   const { data: currentUser } = useCurrentUser();
 
@@ -110,23 +111,6 @@ export default function ClientPage() {
     setConvertingFromEnquiryTxnId(null);
     setConvertingEnquiryId(null);
   });
-
-  // ?create=enquiry|quote|booking|task|ticket opens that dialog once. It waits
-  // for the current user (so the role is known) and never fires for a
-  // read-only role.
-  const createHandled = useRef(false);
-  useEffect(() => {
-    if (createHandled.current || !currentUser) return;
-    createHandled.current = true;
-    if (readOnly) return;
-    const create = new URLSearchParams(window.location.search).get("create");
-    if (create === "enquiry") enquiryActions.setShowEnquiryWizard(true);
-    else if (create === "quote") setShowQuoteCreateDialog(true);
-    else if (create === "booking") setShowBookingCreateDialog(true);
-    else if (create === "task") taskCreate.setShowTaskDialog(true);
-    else if (create === "ticket") ticketCreate.setShowTicketDialog(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, readOnly]);
 
   // Deep-link support: /clients/:id?holiday=quote:<id> (or booking:/enquiry:)
   // opens the client page with that holiday selected in the center detail view —
@@ -266,7 +250,7 @@ export default function ClientPage() {
     );
   }
 
-  const handleCreate = (kind: ClientCreateKind) => {
+  const handleCreate = (kind: CreateKind) => {
     if (kind === "enquiry") enquiryActions.setShowEnquiryWizard(true);
     else if (kind === "quote") setShowQuoteCreateDialog(true);
     else if (kind === "booking") setShowBookingCreateDialog(true);
@@ -307,9 +291,8 @@ export default function ClientPage() {
           onShare={() => setShowShareModal(true)}
           onTogglePin={handleToggleClientPin}
           onChangeBadge={handleChangeClientBadge}
-          onNewDeal={handleCreate}
-          onAddTask={() => taskCreate.setShowTaskDialog(true)}
-          onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
+          clientId={clientId}
+          onCreate={handleCreate}
           onMerge={() => setShowMergeDialog(true)}
           onToggleAiReply={handleToggleAiReply}
         />
@@ -352,7 +335,8 @@ export default function ClientPage() {
         isLoading={isLoadingTransactions}
         readOnly={readOnly}
         onSelect={openHoliday}
-        onNewDeal={handleCreate}
+        clientId={clientId}
+        onCreate={handleCreate}
       />
     </section>
   );
@@ -428,7 +412,7 @@ export default function ClientPage() {
         }}
       />
 
-      <CreateTaskDialog
+      <AddTaskModal
         open={taskCreate.showTaskDialog}
         onOpenChange={taskCreate.setShowTaskDialog}
         entityType="client"

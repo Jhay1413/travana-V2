@@ -24,11 +24,14 @@ export function TicketPageHeader({ ticket, nav, menu }: { ticket: Ticket; nav: P
   const { isPinned, togglePin } = useTicketPin(ticket.id, { label: ticket.subject, subtitle: client ?? ticket.type });
   const active = isActiveTicket(ticket);
 
-  const setStatus = (status: string, done: string) =>
+  const setStatus = (status: string, done: string, onDone?: () => void) =>
     updateTicket.mutate(
       { id: ticket.id, data: { status } },
       {
-        onSuccess: () => toast({ title: done }),
+        onSuccess: () => {
+          toast({ title: done });
+          onDone?.();
+        },
         onError: (err) => toast({ title: ticketErrorMessage(err, "Failed to update status"), variant: "destructive" }),
       },
     );
@@ -69,7 +72,7 @@ export function TicketPageHeader({ ticket, nav, menu }: { ticket: Ticket; nav: P
         <Button
           type="button"
           className="h-[38px] gap-2 rounded-[10px] bg-status-scheduled-fg px-[18px] text-[13px] font-semibold text-white hover:bg-status-scheduled-fg/90"
-          onClick={() => setStatus("Resolved", "Ticket marked as resolved")}
+          onClick={() => setStatus("Resolved", "Ticket marked as resolved", () => navigate("/tickets"))}
           disabled={updateTicket.isPending}
           data-testid="ticket-resolve"
         >

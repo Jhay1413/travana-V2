@@ -1,20 +1,10 @@
 import { useRef, useState } from "react";
-import { Reorder } from "framer-motion";
-import {
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  GripVertical,
-  ImagePlus,
-  Info,
-  TreePine,
-  X,
-} from "lucide-react";
+import { Building2, GripHorizontal, ImagePlus, Info, TreePine } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { POST_IMAGE_SIZE } from "@/features/image-upscale";
 import { SocialImageTile } from "../social-image-tile";
-import { isFormattableFile } from "./use-post-images";
-import type { ImageItem, LocalImage, UrlImage } from "./editor.types";
+import { PostOrderStrip } from "./post-order-strip";
+import type { ImageItem, UrlImage } from "./editor.types";
 
 const sourceIcons: Record<string, typeof Building2> = {
   accommodation: Building2,
@@ -33,35 +23,39 @@ const sourceLabels: Record<string, string> = {
 
 interface PostImagesGridProps {
   urlImages: UrlImage[];
-  pendingFiles: LocalImage[];
+  pendingFileCount: number;
+  /** Every image in the post, in posting order. */
   imageOrder: ImageItem[];
-  setImageOrder: (items: ImageItem[]) => void;
   loadingUrlImages: boolean;
   selectedUrlCount: number;
   onToggleUrl: (url: string) => void;
-  onMoveUrl: (url: string, direction: -1 | 1) => void;
+  onMove: (sortKey: string, direction: -1 | 1) => void;
+  onInsert: (fromKey: string, toKey: string) => void;
   onSetAllUrls: (selected: boolean) => void;
   onFiles: (files: FileList | File[]) => void;
   onRemove: (sortKey: string) => void;
   onUrlSize: (url: string, w: number, h: number) => void;
   onLocalSize: (localId: string, w: number, h: number) => void;
+  /** Sort key of a quote image, to look up its badge in `imageOrder`. */
+  urlSortKey: (url: string) => string;
 }
 
-/** Quote image tiles (toggle in/out, order badge), upload drop zone and reorderable attachments. */
+/** Quote image picker, upload drop zone and the one ordered list of everything in the post. */
 export function PostImagesGrid({
   urlImages,
-  pendingFiles,
+  pendingFileCount,
   imageOrder,
-  setImageOrder,
   loadingUrlImages,
   selectedUrlCount,
   onToggleUrl,
-  onMoveUrl,
+  onMove,
+  onInsert,
   onSetAllUrls,
   onFiles,
   onRemove,
   onUrlSize,
   onLocalSize,
+  urlSortKey,
 }: PostImagesGridProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -81,9 +75,6 @@ export function PostImagesGrid({
     }
   };
 
-  const nonUrlItems = imageOrder.filter((i) => i.type !== "url");
-  const selectedUrls = urlImages.filter((i) => i.selected);
-
   return (
     <div className="space-y-4">
       {urlImages.length > 0 && (
@@ -99,7 +90,7 @@ export function PostImagesGrid({
             </span>
           </div>
           <div className="space-y-0.5">
-            <p className="text-[11px] text-slate-500">Click an image to include it in the post.</p>
+            <p className="text-[11px] text-slate-500">Click an image to include it, then drag to change the order.</p>
             <p className="flex items-center gap-1 text-[10px] text-slate-400">
               <Info className="h-3 w-3 shrink-0" />
               Images are formatted to {POST_IMAGE_SIZE}×{POST_IMAGE_SIZE} (centre-cropped) when you schedule. Small images are upscaled first. Your quote&apos;s original photos are not changed.
@@ -107,9 +98,9 @@ export function PostImagesGrid({
           </div>
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
             {urlImages.map((img, i) => {
-              const selectedPos = selectedUrls.findIndex((s) => s.url === img.url);
+              const position = imageOrder.findIndex((o) => o.sortKey === urlSortKey(img.url)) + 1;
               return (
-                <div key={`url-img-${i}`} className="group/tile relative">
+                <div key={`url-img-${i}`} className="relative">
                   <SocialImageTile
                     src={img.url}
                     alt={img.name}
@@ -123,35 +114,13 @@ export function PostImagesGrid({
                     onSourceSize={(w, h) => onUrlSize(img.url, w, h)}
                     testId={`url-image-${i}`}
                   />
-                  {img.selected && (
-                    <>
-                      <span
-                        className="pointer-events-none absolute -left-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] font-bold text-slate-900 shadow"
-                        data-testid={`badge-order-url-image-${i}`}
-                      >
-                        {imageOrder.findIndex((o) => o.type === "url" && o.data.url === img.url) + 1}
-                      </span>
-                      <div className="absolute bottom-6 left-1/2 z-10 flex -translate-x-1/2 gap-1 opacity-0 transition-opacity group-hover/tile:opacity-100">
-                        <button
-                          type="button"
-                          aria-label="Move earlier"
-                          disabled={selectedPos === 0}
-                          onClick={() => onMoveUrl(img.url, -1)}
-                          className="flex h-5 w-5 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow disabled:opacity-40"
-                        >
-                          <ChevronLeft className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Move later"
-                          disabled={selectedPos === selectedUrls.length - 1}
-                          onClick={() => onMoveUrl(img.url, 1)}
-                          className="flex h-5 w-5 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow disabled:opacity-40"
-                        >
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </>
+                  {img.selected && position > 0 && (
+                    <span
+                      className="pointer-events-none absolute -left-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[11px] font-bold text-slate-900 shadow"
+                      data-testid={`badge-order-url-image-${i}`}
+                    >
+                      {position}
+                    </span>
                   )}
                 </div>
               );
@@ -189,13 +158,10 @@ export function PostImagesGrid({
       <div className="space-y-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
           <ImagePlus className="h-3.5 w-3.5" />
-          Additional images
-          {nonUrlItems.length > 0 && (
-            <span className="ml-auto text-[11px] font-normal text-slate-400">drag to reorder</span>
-          )}
-          {pendingFiles.length > 0 && (
+          Upload images
+          {pendingFileCount > 0 && (
             <span className="ml-1 text-[11px] font-normal text-amber-600">
-              ({pendingFiles.length} new - will upload on save)
+              ({pendingFileCount} new - will upload on save)
             </span>
           )}
         </div>
@@ -222,58 +188,21 @@ export function PostImagesGrid({
             <p className="text-[11px] text-slate-400">Click or drop images here</p>
           </div>
         </div>
-
-        {nonUrlItems.length > 0 && (
-          <Reorder.Group
-            axis="x"
-            values={nonUrlItems}
-            onReorder={(newOrder) => {
-              const urlItems = imageOrder.filter((i) => i.type === "url");
-              setImageOrder([...urlItems, ...newOrder]);
-            }}
-            className="flex flex-wrap gap-2"
-          >
-            {nonUrlItems.map((item) => (
-              <Reorder.Item key={item.sortKey} value={item} className="group relative cursor-grab active:cursor-grabbing">
-                {item.type === "local" && item.data.file.type.startsWith("image/") ? (
-                  <SocialImageTile
-                    className="w-48"
-                    src={item.data.previewUrl}
-                    alt={item.data.file.name}
-                    label={item.data.file.name}
-                    SourceIcon={ImagePlus}
-                    selected
-                    sourceWidth={item.data.sourceWidth}
-                    sourceHeight={item.data.sourceHeight}
-                    onSourceSize={(w, h) => onLocalSize(item.data.localId, w, h)}
-                    upscaleSkipped={!isFormattableFile(item.data.file)}
-                    testId={`local-${item.data.localId}`}
-                  />
-                ) : (
-                  <div className={`h-16 w-16 overflow-hidden rounded-lg border bg-slate-100 shadow-sm ${item.type === "local" ? "border-amber-400" : "border-slate-200"}`}>
-                    <img
-                      src={item.type === "existing" ? (item.data.thumb_url || item.data.url) : item.type === "local" ? item.data.previewUrl : ""}
-                      alt={item.type === "existing" ? item.data.name : item.type === "local" ? item.data.file.name : ""}
-                      className="pointer-events-none h-full w-full object-cover"
-                    />
-                  </div>
-                )}
-                <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100">
-                  <GripVertical className="h-3 w-3 text-white drop-shadow" />
-                </div>
-                <button
-                  type="button"
-                  aria-label="Remove image"
-                  onClick={(e) => { e.stopPropagation(); onRemove(item.sortKey); }}
-                  className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </Reorder.Item>
-            ))}
-          </Reorder.Group>
-        )}
       </div>
+
+      {imageOrder.length > 0 && (
+        <div className="space-y-2" data-testid="section-post-order">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+            <GripHorizontal className="h-3.5 w-3.5" />
+            In the post
+            <span className="ml-auto text-[11px] font-normal text-slate-400">{imageOrder.length} in order</span>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            Drag an image onto another to change the order, or use the arrows. Number 1 posts first.
+          </p>
+          <PostOrderStrip imageOrder={imageOrder} onMove={onMove} onInsert={onInsert} onRemove={onRemove} onLocalSize={onLocalSize} />
+        </div>
+      )}
     </div>
   );
 }

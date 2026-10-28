@@ -1,5 +1,4 @@
-import { useLocation } from "wouter";
-import { Check, Ellipsis, Filter, Mailbox, RadioTower } from "lucide-react";
+import { Check, Filter, Mailbox } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,22 +24,15 @@ export interface InboxSwitcherProps {
   inboxes: SsInbox[];
   activeInbox: SsInbox | null;
   onInboxChange: (id: string | null) => void;
-  realtimeConnected: boolean;
-  openCount: number;
-  canManageChannels: boolean;
 }
 
-/** The inbox filter (All Messages + custom inboxes) and the More menu. */
+/** The inbox filter (All Messages + custom inboxes). */
 export function InboxSwitcher({
   inboxId,
   inboxes,
   activeInbox,
   onInboxChange,
-  realtimeConnected,
-  openCount,
-  canManageChannels,
 }: InboxSwitcherProps) {
-  const [, setLocation] = useLocation();
   return (
     <>
       <DropdownMenu>
@@ -82,36 +74,6 @@ export function InboxSwitcher({
               {inboxId === ib.id && <Check className="h-3.5 w-3.5 flex-shrink-0" />}
             </DropdownMenuItem>
           ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            className="grid h-8 w-8 place-items-center rounded-md text-[#7c98b0] transition hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
-            title="More"
-            data-testid="conversation-list-more"
-          >
-            <Ellipsis className="h-4 w-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="rounded-xl">
-          <DropdownMenuItem disabled className="gap-2 rounded-lg text-xs">
-            <span
-              className={cn("h-2 w-2 rounded-full", realtimeConnected ? "bg-emerald-500" : "bg-black/20 dark:bg-white/20")}
-              data-testid="conversation-realtime-indicator"
-            />
-            {realtimeConnected ? "Live updates on" : "Reconnecting…"}
-            {openCount > 0 && <span className="ml-auto font-semibold">{openCount} open</span>}
-          </DropdownMenuItem>
-          {canManageChannels && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setLocation("/agency/integrations")} className="gap-2 rounded-lg text-sm" data-testid="conversation-channels-button">
-                <RadioTower className="h-4 w-4" /> Channels
-              </DropdownMenuItem>
-            </>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </>

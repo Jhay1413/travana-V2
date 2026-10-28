@@ -6,6 +6,7 @@ import { AppError } from "../../utils/error-handler";
 import { insertTasksSchema } from "@shared/schema";
 import { getUserId } from "../../utils/get-user-id";
 import { getScope } from "../../utils/scope";
+import { forClientParamsSchema } from "./task.validator";
 
 export const taskController = {
   listAll: asyncHandler(async (req: Request, res: Response) => {
@@ -26,6 +27,12 @@ export const taskController = {
       throw new AppError("entityType and entityId query parameters are required", 400);
     }
     const tasks = await taskService.listByEntity(entityType, entityId, getScope(req));
+    return successResponse(res, tasks);
+  }),
+
+  listByClient: asyncHandler(async (req: Request, res: Response) => {
+    const { clientId } = forClientParamsSchema.parse(req.params);
+    const tasks = await taskService.listByClient(clientId, getScope(req));
     return successResponse(res, tasks);
   }),
 

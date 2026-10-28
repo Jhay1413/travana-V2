@@ -158,7 +158,6 @@ export function TasksTab({ userId }: { userId: string }) {
       )}
 
       <EditTaskDialog
-        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(o) => !o && setEditingTask(null)}
         task={editingTask}

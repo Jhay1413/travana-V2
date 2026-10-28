@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Reply, Trash2 } from "lucide-react";
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { NoteEditor } from "@/components/shared/note-editor";
@@ -13,7 +13,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useClientNotes } from "@/hooks/queries";
-import { useCreateClientNote, useUpdateClientNote, useDeleteClientNote } from "@/hooks/mutations";
+import { useUpdateClientNote, useDeleteClientNote } from "@/hooks/mutations";
+import {
+  ClientNoteAttachments,
+  groupAttachmentsByNote,
+  useClientNoteAttachments,
+  useCreateClientNoteWithAttachments,
+  type NoteAttachment,
+} from "@/features/note";
+import { visibleRows } from "@/lib/visible-rows";
 import { useToast } from "@/hooks/use-toast";
 import { formatNoteDate, parseTimestamp } from "@/lib/note-time";
 import type { TransactionNote } from "@/features/quote/types";
@@ -21,6 +29,8 @@ import type { User as ApiUser } from "@/features/user/types";
 import type { DealKind, DealLabelInfo, DealLabelLookup, HolidaySelection } from "@/features/client/types";
 
 export type { DealKind, DealLabelInfo, DealLabelLookup };
+
+const NOTES_PREVIEW_LIMIT = 5;
 
 const DEAL_KIND_LABEL: Record<DealKind, string> = {
   enquiry: "Enquiry",
@@ -77,6 +87,7 @@ function ClientNoteRow({
   authorName,
   dealInfo,
   onOpenDeal,
+  attachments,
   readOnly = false,
 }: {
   clientId: string;
@@ -85,6 +96,8 @@ function ClientNoteRow({
   /** Resolved deal label when the note has a transaction_id; null falls back to a generic "Deal" pill. */
   dealInfo: DealLabelInfo | null;
   onOpenDeal?: (selection: HolidaySelection) => void;
+  /** Saved files on this note. */
+  attachments: NoteAttachment[];
   /** Hides edit + delete (social_media_manager is read-only). */
   readOnly?: boolean;
 }) {
@@ -183,6 +196,7 @@ function ClientNoteRow({
           <RichTextDisplay content={note.content || ""} />
         </div>
       )}
+      <ClientNoteAttachments clientId={clientId} attachments={attachments} />
 
       <AlertDialog open={confirmDelete} onOpenChange={(open) => !deleteMutation.isPending && setConfirmDelete(open)}>
         <AlertDialogContent>
@@ -234,7 +248,11 @@ export function ClientNotesList({
 }) {
   const { data: notes, isLoading, isError, refetch } = useClientNotes(clientId, { includeDeals: true });
   const { toast } = useToast();
-  const createMutation = useCreateClientNote(clientId);
+  const createMutation = useCreateClientNoteWithAttachments(clientId);
+  const { data: attachmentRows } = useClientNoteAttachments(clientId, true);
+  const attachmentsByNote = useMemo(() => groupAttachmentsByNote(attachmentRows ?? []), [attachmentRows]);
+  const [expandedRaw, setExpanded] = useState(false);
+  useEffect(() => setExpanded(false), [clientId]);
 
   const userNameById = useMemo(() => new Map(users.map((u) => [u.id, u.name || u.email || ""])), [users]);
 
@@ -246,10 +264,18 @@ export function ClientNotesList({
     [notes],
   );
 
-  const handleCreate = async (html: string) => {
+  // Expanded only means something while the list is longer than the preview.
+  const expanded = expandedRaw && rows.length > NOTES_PREVIEW_LIMIT;
+  const shownRows = visibleRows(rows, expanded, NOTES_PREVIEW_LIMIT);
+
+  const handleCreate = async (html: string, files?: File[]) => {
     try {
-      await createMutation.mutateAsync({ content: html });
-      toast({ title: "Note added" });
+      const { uploadFailed } = await createMutation.mutateAsync({ data: { content: html }, files });
+      toast(
+        uploadFailed
+          ? { title: "Note added, but its attachments failed to upload", variant: "destructive" }
+          : { title: "Note added" },
+      );
     } catch (err) {
       // Re-throw so NoteEditor keeps the typed content instead of clearing it
       // (it only clears on a resolved promise) — the toast is the only thing
@@ -280,8 +306,10 @@ export function ClientNotesList({
           No notes yet. Add a general note about this customer below, or write one from any of their deals.
         </p>
       ) : (
-        <div className="divide-y divide-black/[0.05] dark:divide-white/[0.05]">
-          {rows.map((note) => {
+        <div
+          className={`divide-y divide-black/[0.05] dark:divide-white/[0.05]${expanded ? " max-h-[60vh] overflow-y-auto" : ""}`}
+        >
+          {shownRows.map((note) => {
             const authorName =
               note.author_name ||
               (note.user_id && userNameById.get(note.user_id)) ||
@@ -296,6 +324,7 @@ export function ClientNotesList({
                 authorName={authorName}
                 dealInfo={dealInfo}
                 onOpenDeal={onOpenDeal}
+                attachments={attachmentsByNote.get(note.id) ?? []}
                 readOnly={readOnly}
               />
             );
@@ -303,10 +332,22 @@ export function ClientNotesList({
         </div>
       )}
 
+      {!isError && !isLoading && rows.length > NOTES_PREVIEW_LIMIT && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-[13px] font-semibold text-social-orange-text transition hover:underline"
+          data-testid="client-index-view-all-notes"
+        >
+          {expanded ? "Show less" : `View all notes (${rows.length})`}
+        </button>
+      )}
+
       {!readOnly && (
         <div className="mt-3" data-testid="client-index-note-composer">
           <NoteEditor
             placeholder="Add a note about this customer…"
+            allowAttachments
             onSubmit={handleCreate}
             isLoading={createMutation.isPending}
           />

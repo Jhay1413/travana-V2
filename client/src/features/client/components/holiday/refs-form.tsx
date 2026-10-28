@@ -1,10 +1,9 @@
-import { useState, type FormEvent } from "react";
-import { validateRefs, type BookingRefsErrors, type BookingRefsInput } from "@/features/client/lib/booking-refs";
-import { HOLIDAY_BTN, HOLIDAY_BTN_NAVY, HOLIDAY_INPUT } from "@/features/client/components/holiday/holiday-styles";
+import type { BookingRefsErrors, BookingRefsInput } from "@/features/client/lib/booking-refs";
+import { HOLIDAY_INPUT } from "@/features/client/components/holiday/holiday-styles";
 
 /**
  * The two reference inputs (HAYS Ref, Supplier Ref) with inline errors.
- * Shared by RefsForm (booking card) and ConvertDialog.
+ * Shared by RefsDialog (booking hero) and ConvertDialog.
  *
  * Props:
  * - idPrefix: makes input ids unique when two forms can be on screen.
@@ -68,53 +67,5 @@ export function RefsFields({ idPrefix, values, onChange, errors, operatorName, a
         )}
       </div>
     </>
-  );
-}
-
-/**
- * Edit form inside the booking references card.
- *
- * Props:
- * - initial: starting values (the booking's current refs).
- * - operatorName: for the Supplier Ref label.
- * - pending: disables Save while the update is in flight.
- * - onCancel: leave edit mode without saving.
- * - onSave: called with the trimmed, validated values only.
- */
-export interface RefsFormProps {
-  initial: BookingRefsInput;
-  operatorName?: string | null;
-  pending?: boolean;
-  onCancel: () => void;
-  onSave: (value: BookingRefsInput) => void;
-}
-
-export function RefsForm({ initial, operatorName, pending, onCancel, onSave }: RefsFormProps) {
-  const [values, setValues] = useState<BookingRefsInput>(initial);
-  const [errors, setErrors] = useState<BookingRefsErrors>({});
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    const result = validateRefs(values);
-    if (!result.ok) {
-      setErrors(result.errors);
-      return;
-    }
-    setErrors({});
-    onSave(result.value);
-  }
-
-  return (
-    <form onSubmit={submit} noValidate className="grid grid-cols-2 gap-3.5 max-[620px]:grid-cols-1" data-testid="holiday-refs-form">
-      <RefsFields idPrefix="refs" values={values} onChange={setValues} errors={errors} operatorName={operatorName} autoFocusFirst />
-      <div className="col-span-full flex justify-end gap-2">
-        <button type="button" className={HOLIDAY_BTN} onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="submit" className={HOLIDAY_BTN_NAVY} disabled={pending}>
-          Save references
-        </button>
-      </div>
-    </form>
   );
 }

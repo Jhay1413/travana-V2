@@ -8,19 +8,26 @@ import { conversationsService } from "../conversations/conversations.service";
 import { messagesService } from "../messages/messages.service";
 import type { SsMessage } from "../messages/messages.types";
 import { neonClientService } from "../neon-client/neon-client.service";
-import { buildPublicQuoteMessage, resolveQuoteToken } from "../sms/sms.service";
+import { organizationRepository } from "../organization/organization.repository";
+import { userRepository } from "../user/user.repository";
+import { buildPublicQuoteMessage, normalisePhone, resolveQuoteToken } from "../sms/sms.service";
 import { quoteShareService } from "./quote-share.service";
+import { quoteWhatsappRepository } from "./quote-whatsapp.repository";
+import { quoteWhatsappSettingsService } from "./quote-whatsapp-settings.service";
 import type {
   CheckExistingResponse,
   OpenOrCreateResponse,
+  QuoteTemplateSettings,
   QuoteWhatsappFallbackReason,
   SendQuoteWhatsappResult,
+  SendTemplateRequest,
   WhatsappWindowInfo,
 } from "./quote-share.types";
 
 // Sends a quote's public link to the client's WhatsApp through the agency's own
-// SendSeven workspace. It never sends a template: when WhatsApp's 24h customer
-// service window is closed (or SendSeven can't be used) it answers with a
+// SendSeven workspace. In-window it sends free text. When WhatsApp's 24h customer
+// service window is closed it sends the org's configured template instead (if
+// any); when that isn't possible (or SendSeven can't be used) it answers with a
 // `fallback` so the agent can send from their own phone via a wa.me link.
 
 // SendSeven's window_status payload is untyped upstream (Record<string, unknown>).
@@ -65,8 +72,127 @@ function pruneRecentSends(now: number): void {
   });
 }
 
-function pickWhatsappChannel(channels: SsChannel[]): SsChannel | undefined {
-  return channels.find((c) => c.channel_type === "whatsapp" && c.is_active === true && c.is_verified === true);
+// Throws 429 when this quote was already sent to this client within the window.
+function assertNotRecentlySent(guardKey: string, now: number): void {
+  pruneRecentSends(now);
+  const last = recentSends.get(guardKey);
+  if (last !== undefined && now - last < DUPLICATE_WINDOW_MS) {
+    throw new AppError("This quote was just sent to this client on WhatsApp. Wait a minute before sending it again.", 429);
+  }
+}
+
+interface TemplateSendContext {
+  orgId: string;
+  userId: string;
+  quoteId: string;
+  clientId: string;
+  clientFirstName: string | null | undefined;
+  clientPhone: string | null | undefined;
+  quoteUrl: string;
+  contactId: string;
+  channelId: string;
+  conversationId: string | null;
+  settings: QuoteTemplateSettings;
+  fallback: (reason: QuoteWhatsappFallbackReason, detail?: string) => SendQuoteWhatsappResult;
+}
+
+function nonEmpty(value: string | null | undefined, alt: string): string {
+  const v = (value ?? "").trim();
+  return v || alt;
+}
+
+// Meta rejects empty template parameters, so every resolved value is non-empty.
+async function resolveVariableValues(
+  variables: QuoteTemplateSettings["variables"],
+  ctx: TemplateSendContext,
+): Promise<Record<string, string>> {
+  const values: Record<string, string> = {};
+  let agentName: string | undefined;
+  let agencyName: string | undefined;
+  for (const [key, variable] of Object.entries(variables)) {
+    switch (variable.source) {
+      case "client_first_name":
+        values[key] = nonEmpty(ctx.clientFirstName, "there");
+        break;
+      case "agent_name": {
+        if (agentName === undefined) {
+          const u = await userRepository.findById(ctx.userId);
+          agentName = nonEmpty(u?.name, nonEmpty(u?.email?.split("@")[0], "your travel agent"));
+        }
+        values[key] = agentName;
+        break;
+      }
+      case "agency_name": {
+        if (agencyName === undefined) {
+          const org = await organizationRepository.findById(ctx.orgId);
+          agencyName = nonEmpty(org?.name, "our team");
+        }
+        values[key] = agencyName;
+        break;
+      }
+      case "quote_link":
+        values[key] = ctx.quoteUrl;
+        break;
+      case "custom":
+        values[key] = nonEmpty(variable.text, "-");
+        break;
+    }
+  }
+  return values;
+}
+
+// Closed-window path: send the org's approved template through SendSeven.
+// Who the template goes to. An open conversation already carries the client's
+// WhatsApp identity, so it is the recipient on its own: passing contact_id as
+// well makes SendSeven resolve the contact's own WhatsApp method, which a
+// contact created from an inbound chat may not have ("Contact has no WhatsApp
+// ID or phone number"). Without a conversation, send to the contact and add the
+// client's phone as its WhatsApp id so SendSeven can create that method.
+function templateRecipient(ctx: TemplateSendContext): Pick<SendTemplateRequest, "contact_id" | "conversation_id" | "whatsapp_id"> {
+  if (ctx.conversationId) return { conversation_id: ctx.conversationId };
+  const phone = normalisePhone(ctx.clientPhone);
+  return { contact_id: ctx.contactId, conversation_id: null, ...(phone ? { whatsapp_id: phone.replace(/^\+/, "") } : {}) };
+}
+
+async function sendViaTemplate(ctx: TemplateSendContext): Promise<SendQuoteWhatsappResult> {
+  const { settings } = ctx;
+  if (!settings.templateName) return ctx.fallback("window_closed");
+
+  const guardKey = `${ctx.orgId}:${ctx.quoteId}:${ctx.clientId}`;
+  const now = Date.now();
+  assertNotRecentlySent(guardKey, now);
+
+  // Resolved outside the try: a DB failure here is a real 500, not a template fallback.
+  const variableValues = await resolveVariableValues(settings.variables, ctx);
+  try {
+    const res = await quoteWhatsappRepository.sendTemplate(settings.templateName, {
+      ...templateRecipient(ctx),
+      channel_id: ctx.channelId,
+      language: settings.templateLanguage ?? undefined,
+      variable_values: variableValues,
+    });
+    if (res.success === true) {
+      recentSends.set(guardKey, now);
+      return { status: "sent", conversationId: res.conversation_id, viaTemplate: true };
+    }
+    const reason = res.error_details ?? res.error ?? "unknown error";
+    console.warn(`[quote-whatsapp] template "${settings.templateName}" rejected: ${reason}`, res);
+    return ctx.fallback("template_failed", reason);
+  } catch (err) {
+    if (err instanceof AppError) {
+      console.warn(`[quote-whatsapp] template "${settings.templateName}" send failed (${err.statusCode}): ${err.message}`);
+      return ctx.fallback("template_failed", err.message);
+    }
+    console.error("[quote-whatsapp] template send failed", err);
+    return ctx.fallback("template_failed", "unknown error");
+  }
+}
+
+// The org's saved template channel wins when it is still usable; otherwise the
+// first active, verified WhatsApp channel. Every SendSeven call in one send uses it.
+function pickWhatsappChannel(channels: SsChannel[], preferredId: string | null): SsChannel | undefined {
+  const eligible = channels.filter((c) => c.channel_type === "whatsapp" && c.is_active === true && c.is_verified === true);
+  return (preferredId ? eligible.find((c) => c.id === preferredId) : undefined) ?? eligible[0];
 }
 
 export const quoteWhatsappService = {
@@ -79,11 +205,12 @@ export const quoteWhatsappService = {
     const quote = (await resolveQuoteToken(clientId, quoteId)) as { id: string; token: string };
 
     const { text, quoteUrl } = buildPublicQuoteMessage({ firstName: client.firstName, token: quote.token });
-    const fallback = (reason: QuoteWhatsappFallbackReason): SendQuoteWhatsappResult => ({
+    const fallback = (reason: QuoteWhatsappFallbackReason, detail?: string): SendQuoteWhatsappResult => ({
       status: "fallback",
       reason,
       text,
       quoteUrl,
+      ...(detail !== undefined ? { detail } : {}),
     });
 
     // Homeworkers are barred from SendSeven everywhere; never touch it for them.
@@ -95,31 +222,44 @@ export const quoteWhatsappService = {
     const link = await contactLinkService.getByClient(clientId, scope);
     if (!link.contactId) return fallback("no_contact");
 
-    const channel = pickWhatsappChannel(await channelsService.listChannels(true));
+    const settings = await quoteWhatsappSettingsService.get(orgId);
+    const channel = pickWhatsappChannel(await channelsService.listChannels(true), settings.channelId);
     if (!channel) return fallback("no_channel");
 
     const lookup = { contact_id: link.contactId, channel_id: channel.id };
     const existing = (await conversationsService.checkExisting(lookup)) as CheckExistingResponse;
+    const templateCtx = (conversationId: string | null): TemplateSendContext => ({
+      orgId,
+      userId,
+      quoteId,
+      clientId,
+      clientFirstName: client.firstName,
+      clientPhone: client.phoneNumber,
+      quoteUrl,
+      contactId: link.contactId as string,
+      channelId: channel.id,
+      conversationId,
+      settings,
+      fallback,
+    });
     // Decide from the existing conversation first, so we never reopen a closed
     // conversation just to fall back.
-    if (isWindowClosed(existing)) return fallback("window_closed");
+    if (isWindowClosed(existing)) {
+      return await sendViaTemplate(templateCtx(existing.existing_open_conversation_id ?? null));
+    }
 
     let conversationId: string;
     if (existing.has_existing_open && existing.existing_open_conversation_id) {
       conversationId = existing.existing_open_conversation_id;
     } else {
       const opened = (await conversationsService.openOrCreate({ ...lookup, reopen_existing: true })) as OpenOrCreateResponse;
-      if (isWindowClosed(opened)) return fallback("window_closed");
+      if (isWindowClosed(opened)) return await sendViaTemplate(templateCtx(opened.conversation_id ?? null));
       conversationId = opened.conversation_id;
     }
 
     const guardKey = `${orgId}:${quoteId}:${clientId}`;
     const now = Date.now();
-    pruneRecentSends(now);
-    const last = recentSends.get(guardKey);
-    if (last !== undefined && now - last < DUPLICATE_WINDOW_MS) {
-      throw new AppError("This quote was just sent to this client on WhatsApp. Wait a minute before sending it again.", 429);
-    }
+    assertNotRecentlySent(guardKey, now);
 
     let sent: SsMessage;
     try {
@@ -129,12 +269,12 @@ export const quoteWhatsappService = {
         userId,
       );
     } catch (err) {
-      if (isWindowRejection(err)) return fallback("window_closed");
+      if (isWindowRejection(err)) return await sendViaTemplate(templateCtx(conversationId));
       throw err;
     }
     if (sent?.status === "failed" || sent?.error_message) {
       const reason = sent.error_message ?? "";
-      if (isWindowMessage(reason)) return fallback("window_closed");
+      if (isWindowMessage(reason)) return await sendViaTemplate(templateCtx(conversationId));
       throw new AppError(reason || "WhatsApp message failed to send", 502);
     }
     recentSends.set(guardKey, now);

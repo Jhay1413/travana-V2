@@ -42,17 +42,6 @@ export const STAGE_LABEL: Record<PipelineStage, string> = {
   Lost: "Lost Deals",
 };
 
-// "In Play" is derived from the primary quote's quote_status, not from
-// transaction.status — see getStageForTransaction. Only Enquiry and Booked
-// stages map onto a transaction status directly; drops onto Future/Lost use
-// their dedicated endpoints instead of this map.
-export const STAGE_TO_STATUS: Partial<Record<PipelineStage, string>> = {
-  Enquiry: "on_enquiry",
-  Quoted: "on_quote",
-  "In Play": "on_quote",
-  Booked: "on_booking",
-};
-
 export const PRIORITY_OPTIONS: Array<"low" | "medium" | "high"> = ["low", "medium", "high"];
 
 /** Priority label plus its dot colour (design tokens, so dark mode follows). */
@@ -171,6 +160,11 @@ export function isValidDrop(from: PipelineStage, to: PipelineStage): boolean {
   if (from === to) return false;
   if (from === "Booked" && to === "Lost") return false;
   if (from === "Lost" && to !== "Enquiry" && to !== "Quoted" && to !== "In Play" && to !== "Future") return false;
+  // Deals only move forward: no way back to Enquiry, and a booking stays booked.
+  if (to === "Enquiry" && (from === "Quoted" || from === "In Play" || from === "Booked")) return false;
+  if (from === "Booked" && (to === "Quoted" || to === "In Play")) return false;
+  // A booking needs a quote first.
+  if (from === "Enquiry" && to === "Booked") return false;
   return true;
 }
 

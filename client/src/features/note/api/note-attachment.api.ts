@@ -7,6 +7,13 @@ export const noteAttachmentApi = {
     return data;
   },
 
+  listByClient: async (clientId: string, includeDeals: boolean): Promise<NoteAttachment[]> => {
+    const { data } = await axiosClient.get<NoteAttachment[]>(`/api/v2/note-attachments/client/${clientId}`, {
+      params: includeDeals ? { includeDeals: "1" } : undefined,
+    });
+    return data;
+  },
+
   upload: async (noteId: string, files: File[]): Promise<NoteAttachment[]> => {
     const formData = new FormData();
     for (const file of files) formData.append("files", file);

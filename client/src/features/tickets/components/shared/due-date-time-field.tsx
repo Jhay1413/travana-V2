@@ -62,7 +62,11 @@ export function DueDateTimeField({
           <Clock className="h-3.5 w-3.5 shrink-0 text-social-muted" />
           <SelectValue />
         </SelectTrigger>
-        <SelectContent className="z-[600] max-h-64">
+        <SelectContent
+          className="z-[600] max-h-[min(16rem,var(--radix-select-content-available-height))]"
+          avoidCollisions
+          collisionPadding={8}
+        >
           {endOfDay && (
             <SelectItem value={END_OF_DAY} className="text-[13px]">
               End of day

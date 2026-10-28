@@ -12,12 +12,11 @@ import { CompareCard } from "@/features/client/components/holiday/compare-card";
 import { ConvertDialog } from "@/features/client/components/holiday/convert-dialog";
 import { FactsCard } from "@/features/client/components/holiday/facts-card";
 import { Hero } from "@/features/client/components/holiday/hero";
-import { HolidayMessage, HolidayPageShell, HolidayTwoUp } from "@/features/client/components/holiday/holiday-page-shell";
+import { HolidayMessage, HolidayPageShell } from "@/features/client/components/holiday/holiday-page-shell";
 import { firstNameOf, type HolidayDetailBaseProps } from "@/features/client/components/holiday/holiday-detail.types";
-import { MoneyCard } from "@/features/client/components/holiday/money-card";
 import { StageBox } from "@/features/client/components/holiday/stage-box";
 import { TopBar } from "@/features/client/components/holiday/top-bar";
-import { TripCard } from "@/features/client/components/holiday/trip-card";
+import { TripCostingsCard } from "@/features/client/components/holiday/trip-costings-card";
 import { useHolidayPhotos } from "@/features/client/components/holiday/use-holiday-photos";
 import { ViewsCard } from "@/features/client/components/holiday/views-card";
 
@@ -96,15 +95,12 @@ export function QuoteDetail(props: HolidayDetailBaseProps) {
               onOpenPhoto={setViewerIndex}
               onExtendExpiry={() => onOpenExpiryDialog(raw.date_expiry)}
             />
-            <HolidayTwoUp>
-              <FactsCard
-                fields={factRows(buildQuoteLikeFields(display))}
-                readOnly={readOnly}
-                onEdit={openEdit}
-                supplierUrl={raw.quote_ref}
-              />
-              <MoneyCard raw={raw} mode="quote" />
-            </HolidayTwoUp>
+            <FactsCard
+              fields={factRows(buildQuoteLikeFields(display))}
+              readOnly={readOnly}
+              onEdit={openEdit}
+              supplierUrl={raw.quote_ref}
+            />
             {hasCruise && display.cruise && <CruiseItinerary itinerary={display.cruise.itinerary} />}
             <ActivityCard
               transactionId={raw.transaction_id}
@@ -138,7 +134,7 @@ export function QuoteDetail(props: HolidayDetailBaseProps) {
         }
         side={
           <>
-            <TripCard display={display} onEdit={readOnly ? undefined : openEdit} />
+            <TripCostingsCard display={display} raw={raw} mode="quote" onEdit={readOnly ? undefined : openEdit} />
             <ViewsCard quoteId={id} sentAt={raw.quote_sent_at} />
           </>
         }

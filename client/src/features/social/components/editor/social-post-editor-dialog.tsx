@@ -25,8 +25,9 @@ import { PostImagesGrid } from "./post-images-grid";
 import { PostPreviewPanel } from "./post-preview-panel";
 import { PostEditorFooter } from "./post-editor-footer";
 import { isDirtySnapshot, type EditorSnapshot } from "./dirty-check";
-import { usePostImages } from "./use-post-images";
-import type { ExistingImage, LocalImage, SocialPostEditorDialogProps, UrlImage } from "./editor.types";
+import { usePostImages, urlSortKey } from "./use-post-images";
+import { buildOrderedUpload } from "./image-order";
+import type { SocialPostEditorDialogProps } from "./editor.types";
 
 const DEFAULT_TIME = "09:00";
 const imagesLabel = (n: number) => `${n} image${n === 1 ? "" : "s"}`;
@@ -51,6 +52,7 @@ export function SocialPostEditorDialog({
   timezoneLabel,
   initialViewLink = true,
   initialPriceBadge = true,
+  initialScheduleDate,
   pageName,
   onRegenerate,
   onSavedDraft,
@@ -86,14 +88,17 @@ export function SocialPostEditorDialog({
       postRef.current.innerHTML = postToEditorHtml(travelDeal.post || "");
     }
     const { date, time } = splitLocal(scheduleToLocal(travelDeal.postSchedule));
-    setScheduleDate(date);
+    // An already-scheduled post keeps its own date; otherwise use the date the post was dropped on.
+    const prefill = date || initialScheduleDate || "";
+    setScheduleDate(prefill);
     setScheduleTime(time || DEFAULT_TIME);
     const post = currentPost();
     setPreviewHtml(post);
     baseline.current = {
       post,
-      schedule: date ? `${date}T${time || DEFAULT_TIME}` : "",
+      schedule: prefill ? `${prefill}T${time || DEFAULT_TIME}` : "",
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [travelDeal, isGenerating]);
 
   useEffect(() => {
@@ -172,12 +177,9 @@ export function SocialPostEditorDialog({
     //  - postScheduleUtc: the absolute UTC instant, stored in the DB so the
     //    dashboard's date filters and timezone-correct display work.
     const { local: postScheduleLocal, utcIso: postScheduleUtc } = combineLocal(scheduleDate, scheduleTime);
-    const existingIds = imageOrder
-      .filter((i) => i.type === "existing")
-      .map((i) => (i.data as ExistingImage).id);
-    const newFiles = imageOrder.filter((i) => i.type === "local").map((i) => (i.data as LocalImage).file);
+    // One ordered list goes to the server: the three multipart lists plus tokens that interleave them.
     // The server formats every selected image to 1080×1080 while scheduling.
-    const selectedUrls = imageOrder.filter((i) => i.type === "url").map((i) => (i.data as UrlImage).url);
+    const upload = buildOrderedUpload(imageOrder);
 
     try {
       await savePost.mutateAsync({
@@ -196,9 +198,10 @@ export function SocialPostEditorDialog({
       const formData = new FormData();
       formData.append("postSchedule", postScheduleUtc);
       formData.append("postScheduleLocal", postScheduleLocal);
-      formData.append("existingImageIds", JSON.stringify(existingIds));
-      formData.append("imageUrls", JSON.stringify(selectedUrls));
-      newFiles.forEach((file) => formData.append("files", file));
+      formData.append("existingImageIds", JSON.stringify(upload.existingIds));
+      formData.append("imageUrls", JSON.stringify(upload.urls));
+      formData.append("imageOrder", JSON.stringify(upload.tokens));
+      upload.files.forEach((file) => formData.append("files", file));
 
       let result;
       if (isScheduled) {
@@ -319,13 +322,14 @@ export function SocialPostEditorDialog({
                   />
                   <PostImagesGrid
                     urlImages={images.urlImages}
-                    pendingFiles={images.pendingFiles}
+                    pendingFileCount={images.pendingFiles.length}
                     imageOrder={imageOrder}
-                    setImageOrder={images.setImageOrder}
                     loadingUrlImages={images.loadingUrlImages}
                     selectedUrlCount={images.selectedUrlCount}
                     onToggleUrl={images.toggleUrlImage}
-                    onMoveUrl={images.moveUrlImage}
+                    onMove={images.moveImage}
+                    onInsert={images.insertImage}
+                    urlSortKey={urlSortKey}
                     onSetAllUrls={images.setAllUrlImages}
                     onFiles={images.handleFiles}
                     onRemove={images.removeImage}

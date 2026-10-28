@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
+import { useLocation } from "wouter";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useUsers } from "@/hooks/queries";
 import type { User as ApiUser } from "@/features/user/types";
 import { useUpdateTicket } from "../../api/use-ticket-mutations";
 import { ticketErrorMessage } from "../../lib/error-message";
+import { leavesPageAfterStatus } from "../../lib/ticket-filters";
 import { statusMeta } from "../../lib/ticket-display";
 import { TICKET_PRIORITIES, TICKET_STATUSES, type Ticket } from "../../types";
 import { DueDateTimeField } from "../shared/due-date-time-field";
@@ -29,12 +31,16 @@ export function TicketFieldSelects({ ticket, users: usersProp }: { ticket: Ticke
   const { data: fetchedUsers } = useUsers();
   const users = usersProp ?? fetchedUsers ?? [];
   const updateTicket = useUpdateTicket();
+  const [, navigate] = useLocation();
 
   const patch = (data: Partial<Ticket>, success: string, failure: string) =>
     updateTicket.mutate(
       { id: ticket.id, data },
       {
-        onSuccess: () => toast({ title: success }),
+        onSuccess: () => {
+          toast({ title: success });
+          if (data.status && leavesPageAfterStatus(data.status)) navigate("/tickets");
+        },
         onError: (err) => toast({ title: ticketErrorMessage(err, failure), variant: "destructive" }),
       },
     );

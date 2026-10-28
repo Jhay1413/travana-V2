@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { EnquiryTable, Quote } from "@/features/quote/types";
-import type { ClientCreateKind, HolidayBooking, HolidaySelection } from "@/features/client/types";
+import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
+import type { CreateKind } from "@/components/shared/create-menu";
 import { BookingDetail } from "@/features/client/components/holiday/booking-detail";
 import { EnquiryDetail } from "@/features/client/components/holiday/enquiry-detail";
 import { HolidaysRail } from "@/features/client/components/holiday/holidays-rail";
@@ -35,7 +36,7 @@ export interface HolidayDetailPageProps {
   readOnly: boolean;
   isLoadingTransactions?: boolean;
   onSelect: (selection: HolidaySelection) => void;
-  onCreate?: (kind: ClientCreateKind) => void;
+  onCreate?: (kind: CreateKind) => void;
   onOpenExpiryDialog: (dateExpiry: string | Date | null | undefined) => void;
   onDeleted: () => void;
 }

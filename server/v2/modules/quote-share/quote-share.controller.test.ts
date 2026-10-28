@@ -4,6 +4,9 @@ import type { Request, Response } from "express";
 vi.mock("./quote-share.service", () => ({ quoteShareService: {} }));
 vi.mock("./quote-whatsapp.service", () => ({ quoteWhatsappService: { send: vi.fn() } }));
 
+vi.mock("./quote-whatsapp-settings.service", () => ({ quoteWhatsappSettingsService: { get: vi.fn(), save: vi.fn() } }));
+
+import { quoteWhatsappSettingsService } from "./quote-whatsapp-settings.service";
 import { quoteShareController } from "./quote-share.controller";
 import { quoteWhatsappService } from "./quote-whatsapp.service";
 import { sendWhatsappValidator } from "./quote-share.validator";
@@ -69,5 +72,41 @@ describe("sendWhatsappValidator", () => {
     expect(sendWhatsappValidator.safeParse({ params: { id: "x" }, body: { clientId: C } }).success).toBe(false);
     expect(sendWhatsappValidator.safeParse({ params: { id: Q }, body: {} }).success).toBe(false);
     expect(sendWhatsappValidator.safeParse({ params: { id: Q }, body: { clientId: C, orgId: "x" } }).success).toBe(false);
+  });
+});
+
+describe("/quote-share/whatsapp-template-settings", () => {
+  const settings = { templateName: "quote_ready", templateLanguage: "en_GB", channelId: null, variables: { "1": { source: "quote_link" as const } } };
+
+  it("GET returns the org's settings for a manager", async () => {
+    vi.mocked(quoteWhatsappSettingsService.get).mockResolvedValue(settings);
+    const res = mockRes();
+    await quoteShareController.getWhatsappTemplateSettings(req({ orgRole: "org_admin", orgRoles: ["org_admin"] }), res as unknown as Response, vi.fn());
+    await vi.waitFor(() => expect(res.json).toHaveBeenCalled());
+    expect(quoteWhatsappSettingsService.get).toHaveBeenCalledWith("o1");
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: settings }));
+  });
+
+  it("PUT saves for the scoped org and the caller", async () => {
+    vi.mocked(quoteWhatsappSettingsService.save).mockResolvedValue(settings);
+    const res = mockRes();
+    await quoteShareController.saveWhatsappTemplateSettings(
+      req({ body: settings, orgRole: "branch_manager", orgRoles: ["branch_manager"] }),
+      res as unknown as Response,
+      vi.fn(),
+    );
+    await vi.waitFor(() => expect(res.json).toHaveBeenCalled());
+    expect(quoteWhatsappSettingsService.save).toHaveBeenCalledWith("o1", settings, "u1");
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: settings }));
+  });
+
+  it("400s a manager with no organisation in scope", async () => {
+    const next = vi.fn();
+    await quoteShareController.getWhatsappTemplateSettings(
+      req({ orgId: undefined, orgRole: "platform_admin", orgRoles: ["platform_admin"] }),
+      mockRes() as unknown as Response,
+      next,
+    );
+    await vi.waitFor(() => expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 })));
   });
 });

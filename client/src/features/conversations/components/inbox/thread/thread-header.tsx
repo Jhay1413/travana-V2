@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useToast } from "@/hooks/use-toast";
 import { AiStatusControl } from "../../ai-status-control";
 import { ChannelAvatar, ChannelPill, CopyButton } from "../shared";
-import { SNOOZE_PRESETS, snoozeLabel, snoozeUntil, type SnoozePresetId } from "../lib";
+import { buildConversationInboxHref, SNOOZE_PRESETS, snoozeLabel, snoozeUntil, type SnoozePresetId } from "../lib";
 import type { Conversation } from "../../../types";
 import { displayHandle } from "../../../map";
 import { ConversationHeaderName } from "./header-name";
@@ -62,7 +62,7 @@ export function ThreadHeader({
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/conversations?conversation=${encodeURIComponent(conversation.id)}`);
+      await navigator.clipboard.writeText(`${window.location.origin}${buildConversationInboxHref(conversation.id)}`);
       toast({ title: "Link copied" });
     } catch {
       toast({ title: "Could not copy", variant: "destructive" });

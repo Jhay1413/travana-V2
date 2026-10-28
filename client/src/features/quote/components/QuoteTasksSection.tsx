@@ -5,7 +5,8 @@ import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { useTasks, useCurrentUser } from "@/hooks/queries";
 import { useToggleTask, useDeleteTask } from "@/hooks/mutations";
-import { CreateTaskDialog, EditTaskDialog, TaskPriorityPill, type EditableTask } from "@/features/tasks";
+import { EditTaskDialog, TaskPriorityPill, type EditableTask } from "@/features/tasks";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { cn } from "@/lib/utils";
 
 function formatTaskDue(date: Date | string) {
@@ -156,8 +157,7 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
         )}
       </Card>
 
-      <CreateTaskDialog
-        presentation="drawer"
+      <AddTaskModal
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         entityType={taskEntityType}
@@ -166,7 +166,6 @@ export function QuoteTasksSection({ quoteId, entityType = "quote", assignedUserI
       />
 
       <EditTaskDialog
-        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}

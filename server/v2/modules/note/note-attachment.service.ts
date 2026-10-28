@@ -43,6 +43,13 @@ async function assertTransactionInScope(transactionId: string, scope: ScopeOrTru
   if (!ok) throw new AppError("Attachments not found", 404);
 }
 
+async function assertClientInScope(clientId: string, scope: ScopeOrTrusted): Promise<void> {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId, scope);
+  if (!ok) throw new AppError("Attachments not found", 404);
+}
+
 async function loadScopedAttachment(id: string, scope: ScopeOrTrusted): Promise<NoteAttachment> {
   const attachment = await noteAttachmentRepository.findById(id);
   if (!attachment) throw new AppError("Attachment not found", 404);
@@ -93,6 +100,11 @@ export const noteAttachmentService = {
   async listByTransactionId(transactionId: string, scope: ScopeOrTrusted): Promise<NoteAttachment[]> {
     await assertTransactionInScope(transactionId, scope);
     return noteAttachmentRepository.findByTransactionId(transactionId);
+  },
+
+  async listByClientId(clientId: string, includeDeals: boolean, scope: ScopeOrTrusted): Promise<NoteAttachment[]> {
+    await assertClientInScope(clientId, scope);
+    return noteAttachmentRepository.findByClientId(clientId, includeDeals);
   },
 
   // Uploads each file's bytes to S3, then records its row (filename = the S3 key).

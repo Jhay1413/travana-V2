@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
+import { buildClientInboxHref } from "@/features/conversations";
 import { useLocation } from "wouter";
-import { Check, ChevronDown, ChevronRight, Ellipsis, ListFilter, MessageSquare, Search, SquarePen } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Ellipsis, ListFilter, MessageSquare, Search } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
@@ -9,7 +10,7 @@ import { OperatorTile } from "@/features/pipeline";
 import { useDealPin } from "@/hooks/use-deal-pin";
 import { cn } from "@/lib/utils";
 import type { EnquiryTable, Quote } from "@/features/quote/types";
-import type { ClientDealKind, HolidayBooking, HolidaySelection } from "@/features/client/types";
+import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
 import {
   DEAL_SORT_LABELS,
   PRICE_BAND_LABELS,
@@ -23,7 +24,7 @@ import {
   type HolidayRowData,
   type PriceBand,
 } from "@/features/client/lib/live-deal-rows";
-import { NewDealMenu } from "./new-deal-menu";
+import { CreateMenu, type CreateKind } from "@/components/shared/create-menu";
 import { RoundButton } from "./round-button";
 import type { LiveDealsState, LiveDealsTab } from "./use-live-deals-state";
 
@@ -162,13 +163,15 @@ interface LiveDealsRailProps {
   isLoading: boolean;
   readOnly: boolean;
   onSelect: (selection: HolidaySelection) => void;
-  onNewDeal: (kind: ClientDealKind) => void;
+  clientId: string;
+  onCreate: (kind: CreateKind) => void;
   className?: string;
 }
 
 /** Live deals: 340px beside the page from xl, stacked below it. */
-export function LiveDealsRail({ enquiries, quotes, bookings, state, isLoading, readOnly, onSelect, onNewDeal, className }: LiveDealsRailProps) {
+export function LiveDealsRail({ enquiries, quotes, bookings, state, isLoading, readOnly, onSelect, clientId, onCreate, className }: LiveDealsRailProps) {
   const [, navigate] = useLocation();
+  const chatHref = clientId ? buildClientInboxHref(clientId) : "/conversations";
   const { tab, setTab, sort, setSort, band, setBand, search, setSearch, searching, setSearching, expiredOpen, setExpiredOpen, lostOpen, setLostOpen, tabSettled } = state;
 
   const bookedTransactionIds = useMemo(() => new Set(bookings.map((b) => b.transaction_id)), [bookings]);
@@ -225,17 +228,7 @@ export function LiveDealsRail({ enquiries, quotes, bookings, state, isLoading, r
             >
               <Search className="h-4 w-4" strokeWidth={1.8} />
             </RoundButton>
-            {!readOnly && (
-              <NewDealMenu
-                testIdPrefix="all-holidays-new"
-                onCreate={onNewDeal}
-                trigger={
-                  <RoundButton label="New deal" size={36} data-testid="all-holidays-new">
-                    <SquarePen className="h-4 w-4" strokeWidth={1.8} />
-                  </RoundButton>
-                }
-              />
-            )}
+            {!readOnly && <CreateMenu trigger="blue" size={36} onCreate={onCreate} testId="all-holidays-new" />}
           </div>
         </div>
 
@@ -302,7 +295,6 @@ export function LiveDealsRail({ enquiries, quotes, bookings, state, isLoading, r
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuItem onClick={() => navigate("/pipeline")}>Open Pipeline</DropdownMenuItem>
-                {!readOnly && <DropdownMenuItem onClick={() => onNewDeal("enquiry")}>New deal</DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -338,9 +330,9 @@ export function LiveDealsRail({ enquiries, quotes, bookings, state, isLoading, r
         )}
       </div>
 
-      {/* The inbox has no per-client filter, so this opens the inbox itself. */}
+      {/* Opens this client's conversation in the inbox. */}
       <div className="pointer-events-none sticky bottom-5 mb-5 flex justify-end px-[22px]">
-        <RoundButton label="Open chat" size={40} className="pointer-events-auto h-12 w-12 shadow-lg" onClick={() => navigate("/conversations")} data-testid="client-rail-chat">
+        <RoundButton label="Open chat" size={40} className="pointer-events-auto h-12 w-12 shadow-lg" onClick={() => navigate(chatHref)} data-testid="client-rail-chat">
           <MessageSquare className="h-5 w-5" strokeWidth={1.8} />
         </RoundButton>
       </div>

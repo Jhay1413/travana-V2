@@ -28,7 +28,7 @@ export function ConversationsInbox() {
   const { toast } = useToast();
   const actions = useThreadActions(state);
   const { selected, now } = state;
-  const { connected: realtimeConnected, typingByConversation } = useConversationsRealtimeState();
+  const { typingByConversation } = useConversationsRealtimeState();
   const wide = useMediaQuery("(min-width: 1500px)");
   // Lets the thread header / client pane start the composer's Generate Enquiry flow.
   const enquiryTrigger = useRef<(() => void) | null>(null);
@@ -87,9 +87,6 @@ export function ConversationsInbox() {
             inboxes={state.inboxList}
             activeInbox={state.activeInbox}
             onInboxChange={state.setInboxId}
-            realtimeConnected={realtimeConnected}
-            openCount={state.openCount}
-            canManageChannels={state.canManageChannels}
           />
         }
         onNewMessage={() => state.setNewMessageOpen(true)}
@@ -104,7 +101,6 @@ export function ConversationsInbox() {
         currentUser={state.currentUser}
         staff={state.staff}
         canTestAi={state.canTestAi}
-        canManageChannels={state.canManageChannels}
         onAssign={(userId) => selected && actions.assign(selected.id, userId)}
         onSnooze={(preset) => selected && actions.snoozeFor(selected.id, preset)}
         onUnsnooze={() => selected && actions.unsnooze(selected.id)}
@@ -173,7 +169,14 @@ export function ConversationsInbox() {
         />
       )}
       {ticket.dialog}
-      <NewMessageDialog open={state.newMessageOpen} onOpenChange={state.setNewMessageOpen} />
+      <NewMessageDialog
+        open={state.newMessageOpen}
+        onOpenChange={(open) => {
+          state.setNewMessageOpen(open);
+          if (!open) state.setNewMessageClientId(null);
+        }}
+        initialClientId={state.newMessageClientId ?? undefined}
+      />
       {state.canTestAi && selected && (
         <TestAiModal conversationId={selected.id} open={state.testAiOpen} onOpenChange={state.setTestAiOpen} />
       )}

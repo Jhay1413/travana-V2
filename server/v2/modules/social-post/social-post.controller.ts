@@ -3,6 +3,7 @@ import { socialPostService } from "./social-post.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
+import { parseImageOrderField } from "./media-order";
 
 export const socialPostController = {
   generatePost: asyncHandler(async (req: Request, res: Response) => {
@@ -35,7 +36,7 @@ export const socialPostController = {
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const { deal, failedImageUrls, autoUpscale } = await socialPostService.schedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, imageUrls, getScope(req));
+    const { deal, failedImageUrls, autoUpscale } = await socialPostService.schedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, imageUrls, getScope(req), parseImageOrderField(req.body.imageOrder));
     const message = failedImageUrls.length
       ? `Post scheduled, but ${failedImageUrls.length} image(s) failed to upload`
       : "Post scheduled successfully";
@@ -56,7 +57,7 @@ export const socialPostController = {
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const { deal, failedImageUrls, autoUpscale } = await socialPostService.reschedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, postContent, imageUrls, getScope(req));
+    const { deal, failedImageUrls, autoUpscale } = await socialPostService.reschedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, postContent, imageUrls, getScope(req), parseImageOrderField(req.body.imageOrder));
     const message = failedImageUrls.length
       ? `Post rescheduled, but ${failedImageUrls.length} image(s) failed to upload`
       : "Post rescheduled successfully";

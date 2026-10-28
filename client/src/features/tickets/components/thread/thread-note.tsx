@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Heart, Pencil, Reply as ReplyIcon, Trash2 } from "lucide-react";
 import { PersonAvatar } from "@/components/shared/person-avatar";
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { formatFullDateTime } from "@/lib/note-time";
@@ -8,6 +7,7 @@ import type { TicketAttachment } from "@/features/attachment";
 import type { ThreadNote } from "../../lib/thread-model";
 import { TicketAttachmentList } from "../ticket-attachment-list";
 import { NoteEditForm } from "./note-edit-form";
+import { NoteHeaderActions } from "./note-header-actions";
 
 export interface NoteActions {
   /** Replies can be deleted from the thread; the ticket itself is deleted from its menu. */
@@ -25,8 +25,6 @@ export interface NoteActions {
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
 }
-
-const ACTION = "flex items-center gap-1 text-[12px] font-medium text-social-muted transition hover:text-foreground";
 
 /** One team note: avatar, author and time, the body, attachments and the like / reply / edit / delete row. */
 export function ThreadNoteCard({
@@ -55,7 +53,7 @@ export function ThreadNoteCard({
   const isEdited = !!note.updatedAt && Date.parse(note.updatedAt) > Date.parse(note.createdAt) + 1000;
 
   return (
-    <div className={cn("flex gap-3", nested && "text-[13px]")}>
+    <div className={cn("group/note flex gap-3", nested && "max-w-[85%] text-[13px]")}>
       {note.authorImage ? (
         <img src={note.authorImage} alt="" className={cn("shrink-0 rounded-full object-cover", nested ? "h-7 w-7" : "h-8 w-8")} />
       ) : (
@@ -63,68 +61,26 @@ export function ThreadNoteCard({
       )}
       <div className="min-w-0 flex-1">
         <div
-          className={cn("rounded-2xl border border-social-border px-4 py-3", isMe ? "bg-pipeline-task-bg" : "bg-card")}
+          className={cn("rounded-2xl border border-social-border", nested ? "px-3 py-2" : "px-4 py-3", isMe ? "bg-pipeline-task-bg" : "bg-card")}
           data-testid={`ticket-note-${note.id}`}
         >
-          <div className="mb-1 flex flex-wrap items-baseline gap-x-2 text-[12px]">
+          <div className="mb-1 flex flex-wrap items-center gap-x-2 text-[12px]">
             <span className="text-[13px] font-semibold">{note.authorName}</span>
             <span className="text-social-muted">
               {formatFullDateTime(note.createdAt)}
               {isEdited ? " (edited)" : ""}
             </span>
+            {actions && <NoteHeaderActions note={note} isMe={isMe} actions={actions} />}
           </div>
           {actions?.isEditing ? (
             <NoteEditForm initial={note.content} onSave={actions.onSaveEdit} onCancel={actions.onCancelEdit} isSaving={actions.isSavingEdit} />
           ) : (
-            <div className="whitespace-pre-wrap break-words text-[14px] leading-relaxed">
+            <div className={cn("whitespace-pre-wrap break-words leading-relaxed", nested ? "text-[13px]" : "text-[14px]")}>
               <RichTextDisplay content={note.content} />
             </div>
           )}
           {!actions?.isEditing && attachments && attachments.length > 0 && (
             <TicketAttachmentList attachments={attachments} onDelete={onDeleteAttachment} deletingId={deletingAttachmentId} compact />
-          )}
-          {actions && !actions.isEditing && (
-            <div className="mt-2 flex items-center gap-3.5">
-              {actions.isConfirmingDelete ? (
-                <span className="flex items-center gap-1.5 text-[12px]">
-                  Delete this reply?
-                  <button type="button" onClick={actions.onConfirmDelete} className="font-semibold text-status-failed-fg hover:underline" data-testid={`ticket-note-delete-confirm-${note.id}`}>
-                    Yes
-                  </button>
-                  <button type="button" onClick={actions.onCancelDelete} className="font-semibold hover:underline">
-                    No
-                  </button>
-                </span>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={actions.onLike}
-                    disabled={actions.isLiking}
-                    className={cn(ACTION, "hover:text-status-failed-fg disabled:opacity-60", note.likedByMe && "text-status-failed-fg")}
-                    data-testid={`ticket-note-like-${note.id}`}
-                  >
-                    <Heart className={cn("h-3.5 w-3.5", note.likedByMe && "fill-current")} />
-                    {note.likeCount > 0 ? note.likeCount : null}
-                  </button>
-                  <button type="button" onClick={actions.onReply} className={ACTION} data-testid={`ticket-note-reply-${note.id}`}>
-                    <ReplyIcon className="h-3.5 w-3.5" /> Reply
-                  </button>
-                  {isMe && (
-                    <>
-                      <button type="button" onClick={actions.onEdit} className={ACTION} data-testid={`ticket-note-edit-${note.id}`}>
-                        <Pencil className="h-3.5 w-3.5" /> Edit
-                      </button>
-                      {actions.canDelete && (
-                        <button type="button" onClick={actions.onDelete} className={cn(ACTION, "hover:text-status-failed-fg")} data-testid={`ticket-note-delete-${note.id}`}>
-                          <Trash2 className="h-3.5 w-3.5" /> Delete
-                        </button>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-            </div>
           )}
         </div>
         {footer}

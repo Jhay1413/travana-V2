@@ -2,15 +2,20 @@ import { useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, transactionKeys } from "@/hooks/queries";
-import { useUpdateTransaction, useUpdateQuote } from "@/hooks/mutations";
+import { useUpdateQuote } from "@/hooks/mutations";
 import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
 import { enquiryApi } from "@/api";
 import { enquiryKeys } from "@/features/enquiry/api/use-enquiry-queries";
 import type { Transaction } from "@/features/quote/types";
-import { STAGE_TO_STATUS, getStageForTransaction, type PipelineStage } from "@/features/pipeline/lib/pipeline-helpers";
+import { getStageForTransaction, isValidDrop, type PipelineStage } from "@/features/pipeline/lib/pipeline-helpers";
 import type { PipelineCache } from "./use-pipeline-cache";
 import type { PipelineDialogs } from "./use-pipeline-dialogs";
 import type { PipelineParking } from "./use-pipeline-parking";
+
+function backwardOrBlockedTitle(from: PipelineStage, to: PipelineStage): string {
+  if (from === "Enquiry" && to === "Booked") return "Create a quote before booking";
+  return "Deals can't move back to an earlier stage";
+}
 
 /** Every stage transition the board supports (drag-and-drop and the drawer's
  *  "Move to…"). The rules are unchanged from the original board. */
@@ -18,17 +23,16 @@ export function usePipelineMoves(cache: PipelineCache, parking: PipelineParking,
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: currentUser } = useCurrentUser();
-  const { mutate: mutateTransaction } = useUpdateTransaction();
   const { mutate: mutateQuote } = useUpdateQuote();
   const { setQuoteDialog, setBookingQuoteId, setFutureDialog, setLostConfirm } = dialogs;
 
   // Handles every move that isn't Future/Lost — i.e. the original board's
   // stage transitions (enquiry -> quote dialog, quote/in-play -> booking
-  // dialog, quoted <-> in-play, and the generic status fallback).
+  // dialog, quoted <-> in-play).
   const applyStageTransition = useCallback(
     (tx: Transaction, from: PipelineStage, to: PipelineStage) => {
-      if (from === "Enquiry" && to === "Quoted") {
-        const baseDialog = { transactionId: tx.id, clientId: tx.client_id || "", userId: tx.user_id || currentUser?.id || "" };
+      if (from === "Enquiry" && (to === "Quoted" || to === "In Play")) {
+        const baseDialog = { transactionId: tx.id, clientId: tx.client_id || "", userId: tx.user_id || currentUser?.id || "", targetStage: to };
         if (tx.enquiry?.id) {
           const enquiryId = tx.enquiry.id;
           void (async () => {
@@ -97,22 +101,12 @@ export function usePipelineMoves(cache: PipelineCache, parking: PipelineParking,
         return;
       }
 
-      const status = STAGE_TO_STATUS[to];
-      if (!status) return;
-      mutateTransaction(
-        { id: tx.id, data: { status } },
-        {
-          onSuccess: () => {
-            toast({ title: `Moved to ${to}` });
-            void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
-          },
-          onError: () => {
-            toast({ title: "Error moving transaction", variant: "destructive" });
-          },
-        },
-      );
+      // Every supported transition is handled above. Never fall back to a bare
+      // status PATCH: on_quote / on_booking without a quote / booking makes a
+      // deal vanish from every column.
+      toast({ title: "That move isn't supported", variant: "destructive" });
     },
-    [cache, currentUser, queryClient, setBookingQuoteId, setQuoteDialog, toast, mutateQuote, mutateTransaction],
+    [cache, currentUser, queryClient, setBookingQuoteId, setQuoteDialog, toast, mutateQuote],
   );
 
   /** Moves a deal between any two columns, honouring the transition rules. */
@@ -128,6 +122,11 @@ export function usePipelineMoves(cache: PipelineCache, parking: PipelineParking,
       // A lost deal can't move directly onto Booked (or any stage besides
       // Enquiry/Quoted/In Play/Future) — the server has no transition for
       // that. Restore it first, then chain into the requested column.
+      if (from !== "Lost" && from !== "Future" && !isValidDrop(from, to)) {
+        toast({ title: backwardOrBlockedTitle(from, to), variant: "destructive" });
+        return;
+      }
+
       if (from === "Lost") {
         if (to === "Future") {
           const prev = cache.removeFromColumn("Lost", tx);
@@ -187,6 +186,10 @@ export function usePipelineMoves(cache: PipelineCache, parking: PipelineParking,
 
       if (from === "Future") {
         const naturalStage = getStageForTransaction(tx);
+        if (to !== naturalStage && !isValidDrop(naturalStage, to)) {
+          toast({ title: backwardOrBlockedTitle(naturalStage, to), variant: "destructive" });
+          return;
+        }
         cache.removeFromColumn("Future", tx);
         parking.mutateFuture(
           { id: tx.id, futureDealDate: null },

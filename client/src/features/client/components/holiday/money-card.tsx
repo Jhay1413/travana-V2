@@ -6,7 +6,6 @@ import { computeQuoteMoney, moneyBarSegments, type MoneyBarSegment } from "@/fea
 import { useBookingUpsells } from "@/features/booking/api/use-booking-upsell-queries";
 import { sumUpsells } from "@/features/booking/types";
 import { gbp2, minusGbp2, plusGbp2 } from "@/features/client/lib/money-format";
-import { HOLIDAY_CARD } from "@/features/client/components/holiday/holiday-styles";
 
 const SEGMENT_CLASS: Record<MoneyBarSegment["key"], string> = {
   package: "bg-qp-money-pkg",
@@ -47,7 +46,7 @@ function UpsellsBlock({ bookingId }: { bookingId: string }) {
 }
 
 /**
- * "Price and profit" card (team only). The figures match the pipeline card:
+ * Body of the "Costings" tab (team only). The figures match the pipeline card:
  * total = sales - discounts + service charge, profit = package + line-item
  * commission. There is deliberately no balance due row.
  *
@@ -55,23 +54,18 @@ function UpsellsBlock({ bookingId }: { bookingId: string }) {
  * - raw: the loaded quote or booking detail (money fields + service_commission).
  * - mode: "booking" adds the Upsells block underneath.
  */
-export function MoneyCard({ raw, mode }: { raw: EnrichedQuote | EnrichedBooking; mode: "quote" | "booking" }) {
+export function MoneyBody({ raw, mode }: { raw: EnrichedQuote | EnrichedBooking; mode: "quote" | "booking" }) {
   const money = computeQuoteMoney(raw);
   const segments = moneyBarSegments(money);
   const label = `Total package cost ${gbp2(money.total)}: package price ${gbp2(money.packagePrice)}, commission ${gbp2(money.profit)}, discount ${gbp2(money.discount)}, service charge ${gbp2(money.serviceCharge)}`;
 
   return (
-    <section className={HOLIDAY_CARD} aria-labelledby="holiday-money-h" data-testid="holiday-money-card">
-      <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="holiday-money-h" className="text-base font-semibold leading-snug">
-            Price and profit
-          </h2>
-          <span className="inline-flex items-center gap-1.5 text-xs text-qp-muted">
-            <Lock className="size-[13px]" aria-hidden />
-            Only your team sees this
-          </span>
-        </div>
+    <div data-testid="holiday-money-card">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-1.5 text-xs text-qp-muted">
+          <Lock className="size-[13px]" aria-hidden />
+          Only your team sees this
+        </span>
         {money.marginPercent !== null && <StatusPill tone="good">{money.marginPercent.toFixed(1)}% margin</StatusPill>}
       </div>
 
@@ -100,6 +94,6 @@ export function MoneyCard({ raw, mode }: { raw: EnrichedQuote | EnrichedBooking;
       </div>
 
       {mode === "booking" && <UpsellsBlock bookingId={raw.id} />}
-    </section>
+    </div>
   );
 }

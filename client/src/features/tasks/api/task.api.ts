@@ -27,6 +27,11 @@ export const taskApi = {
     return data;
   },
 
+  getForClient: async (clientId: string): Promise<TaskNew[]> => {
+    const { data } = await axiosClient.get<TaskNew[]>(`/api/v2/tasks/for-client/${encodeURIComponent(clientId)}`);
+    return data;
+  },
+
   getByUser: async (
     userId: string,
     filters?: { dueFrom?: string; dueTo?: string; incomplete?: boolean },

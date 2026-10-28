@@ -18,9 +18,8 @@ import { factRows } from "@/features/client/lib/holiday-facts";
 import { ActivityCard } from "@/features/client/components/holiday/activity-card";
 import { FactsCard } from "@/features/client/components/holiday/facts-card";
 import { Hero } from "@/features/client/components/holiday/hero";
-import { HolidayMessage, HolidayTwoUp } from "@/features/client/components/holiday/holiday-page-shell";
-import { MoneyCard } from "@/features/client/components/holiday/money-card";
-import { TripCard } from "@/features/client/components/holiday/trip-card";
+import { HolidayMessage } from "@/features/client/components/holiday/holiday-page-shell";
+import { TripCostingsCard } from "@/features/client/components/holiday/trip-costings-card";
 import { useHolidayPhotos } from "@/features/client/components/holiday/use-holiday-photos";
 import { ViewsCard } from "@/features/client/components/holiday/views-card";
 import { SocialQuoteCopyFlow } from "./social-quote-copy-flow";
@@ -116,10 +115,7 @@ export function SocialQuotePageView({ quoteId }: { quoteId: string }) {
         main={
           <>
             <Hero display={display} raw={raw} mode="quote" photos={photos} onOpenPhoto={setViewerIndex} onExtendExpiry={openExpiry} />
-            <HolidayTwoUp>
-              <FactsCard fields={factRows(buildQuoteLikeFields(display))} readOnly={false} onEdit={() => setEditOpen(true)} supplierUrl={raw.quote_ref} />
-              <MoneyCard raw={raw} mode="quote" />
-            </HolidayTwoUp>
+            <FactsCard fields={factRows(buildQuoteLikeFields(display))} readOnly={false} onEdit={() => setEditOpen(true)} supplierUrl={raw.quote_ref} />
             {hasCruise && display.cruise && <CruiseItinerary itinerary={display.cruise.itinerary} />}
             {raw.transaction_id ? (
               <ActivityCard transactionId={raw.transaction_id} entityId={quoteId} entityType="quote" clientId="" clientName="" readOnly={false} />
@@ -130,7 +126,7 @@ export function SocialQuotePageView({ quoteId }: { quoteId: string }) {
         }
         side={
           <>
-            <TripCard display={display} onEdit={() => setEditOpen(true)} />
+            <TripCostingsCard display={display} raw={raw} mode="quote" onEdit={() => setEditOpen(true)} />
             <ViewsCard quoteId={quoteId} sentAt={raw.quote_sent_at} />
           </>
         }

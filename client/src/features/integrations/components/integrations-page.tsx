@@ -7,6 +7,7 @@ import { useRoles } from "@/hooks/use-role";
 import { useToast } from "@/hooks/use-toast";
 import { useChannelHealth, useChannelWorkspaceStatus } from "../api/use-channels-extra";
 import { connectableTypes } from "../lib/channel-status";
+import { connectedWhatsappChannels } from "../lib/whatsapp-channels";
 import { useRefreshOnReturn } from "../state/use-refresh-on-return";
 import { useConnectFlow } from "../state/use-connect-flow";
 import { ConnectCard } from "./connect-card";
@@ -14,6 +15,7 @@ import { ConnectedCard } from "./connected-card";
 import { DelegateDialog } from "./delegate-dialog";
 import { HealthBanner } from "./health-banner";
 import { IntegrationsHead } from "./integrations-head";
+import { WhatsappTemplatesCard } from "./whatsapp-templates-card";
 
 const WRITE_ROLES: OrgRole[] = ["org_admin", "branch_manager", "platform_admin"];
 
@@ -34,6 +36,7 @@ export function IntegrationsPage() {
 
   const [delegateType, setDelegateType] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const waChannels = useMemo(() => connectedWhatsappChannels(channels.data, health.data), [channels.data, health.data]);
   const connectTypes = useMemo(() => connectableTypes(types.data), [types.data]);
 
   const disconnect = async (channel: SsChannel) => {
@@ -73,6 +76,7 @@ export function IntegrationsPage() {
             removingId={removingId}
             onDisconnect={(c) => void disconnect(c)}
           />
+          {waChannels.length > 0 && <WhatsappTemplatesCard channels={waChannels} canWrite={canWrite} />}
           {canWrite && (
             <ConnectCard
               types={connectTypes}

@@ -1,4 +1,5 @@
 import type { DealLabelLookup } from "@/features/client/types";
+import { dealDeepLinkHref } from "@/lib/deal-links";
 
 interface LabelEnquiry {
   id: string;
@@ -14,7 +15,10 @@ interface LabelQuote extends LabelEnquiry {
 
 interface LabelBooking extends LabelEnquiry {}
 
+export type TaskHolidayKind = "enquiry" | "quote" | "booking";
+
 export interface TaskHolidayInfo {
+  kind: TaskHolidayKind;
   title: string | null;
   travelDate: string | null;
 }
@@ -26,10 +30,28 @@ export function buildTaskHolidays(
   bookings: LabelEnquiry[],
 ): Map<string, TaskHolidayInfo> {
   const map = new Map<string, TaskHolidayInfo>();
-  for (const list of [enquiries, quotes, bookings]) {
-    for (const d of list) map.set(d.id, { title: d.title ?? null, travelDate: d.travel_date ?? null });
+  const groups: Array<[TaskHolidayKind, LabelEnquiry[]]> = [["enquiry", enquiries], ["quote", quotes], ["booking", bookings]];
+  for (const [kind, list] of groups) {
+    for (const d of list) map.set(d.id, { kind, title: d.title ?? null, travelDate: d.travel_date ?? null });
   }
   return map;
+}
+
+/**
+ * Where a task row on the client page should navigate: the holiday the task is
+ * attached to. The kind comes from LOOKING THE ID UP in the client's holidays
+ * (booking tasks are stored as entityType "quote" with the booking id), never
+ * from the stored entityType. Client-only tasks and unknown ids get no link.
+ */
+export function taskLinkFor(
+  task: { entityId?: string | null },
+  holidays: Map<string, TaskHolidayInfo>,
+  clientId: string,
+): string | null {
+  if (!task.entityId || !clientId) return null;
+  const holiday = holidays.get(task.entityId);
+  if (!holiday) return null;
+  return dealDeepLinkHref(holiday.kind, task.entityId, clientId);
 }
 
 /**

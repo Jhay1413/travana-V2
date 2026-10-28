@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, Ellipsis, Pencil, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { PersonAvatar } from "@/components/shared/person-avatar";
+import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { visibleRows } from "@/lib/visible-rows";
 import { useDeleteTask, useToggleTask } from "@/hooks/mutations";
@@ -9,7 +10,7 @@ import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/t
 import type { User as ApiUser } from "@/features/user/types";
 import type { TaskNew } from "@shared/schema";
 import { longDate, sortTasks, taskDueChip } from "@/features/client/lib/task-rows";
-import type { TaskHolidayInfo } from "@/features/client/lib/deal-labels";
+import { taskLinkFor, type TaskHolidayInfo } from "@/features/client/lib/deal-labels";
 
 const TASKS_PREVIEW_LIMIT = 5;
 
@@ -22,6 +23,7 @@ interface TasksTabProps {
 }
 
 export function TasksTab({ clientId, tasks, users, holidays, readOnly }: TasksTabProps) {
+  const [, navigate] = useLocation();
   const toggleMutation = useToggleTask("client", clientId);
   const deleteMutation = useDeleteTask("client", clientId);
   const [editingTask, setEditingTask] = useState<EditableTask | null>(null);
@@ -51,12 +53,32 @@ export function TasksTab({ clientId, tasks, users, holidays, readOnly }: TasksTa
           const meta = [created ? `Created ${created}` : null, holiday?.title || null, travel ? `Travel ${travel}` : null]
             .filter(Boolean)
             .join(" – ");
+          const href = taskLinkFor(task, holidays, clientId);
           return (
-            <div key={task.id} className="flex items-center gap-3.5 border-t border-social-border py-4" data-testid={`client-index-task-${task.id}`}>
+            <div
+              key={task.id}
+              className={cn("flex items-center gap-3.5 border-t border-social-border py-4", href && "cursor-pointer transition hover:bg-muted/40")}
+              onClick={href ? () => navigate(href) : undefined}
+              {...(href && {
+                role: "link",
+                tabIndex: 0,
+                onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    navigate(href);
+                  }
+                },
+              })}
+              data-testid={`client-index-task-${task.id}`}
+            >
               <button
                 type="button"
                 disabled={readOnly}
-                onClick={() => toggleMutation.mutate(task.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleMutation.mutate(task.id);
+                }}
                 title={task.completed ? "Mark as pending" : "Mark as done"}
                 aria-label={task.completed ? "Mark as pending" : "Mark as done"}
                 className={cn(
@@ -88,13 +110,14 @@ export function TasksTab({ clientId, tasks, users, holidays, readOnly }: TasksTa
                     <button
                       type="button"
                       aria-label="Task actions"
+                      onClick={(e) => e.stopPropagation()}
                       className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-social-muted transition hover:bg-muted hover:text-foreground"
                       data-testid={`client-index-task-menu-${task.id}`}
                     >
                       <Ellipsis className="h-4 w-4" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenuItem onClick={() => setEditingTask(task)} className="gap-2">
                       <Pencil className="h-3.5 w-3.5" /> Edit
                     </DropdownMenuItem>
@@ -119,7 +142,6 @@ export function TasksTab({ clientId, tasks, users, holidays, readOnly }: TasksTa
         </button>
       )}
       <EditTaskDialog
-        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}

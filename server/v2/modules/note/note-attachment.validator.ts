@@ -10,6 +10,11 @@ export const listByTransactionValidator = z.object({
   params: z.object({ transactionId: z.string().uuid() }),
 });
 
+export const listByClientValidator = z.object({
+  params: z.object({ clientId: z.string().min(1) }),
+  query: z.object({ includeDeals: z.enum(["1", "0", "true", "false"]).optional() }),
+});
+
 export const uploadToNoteValidator = z.object({
   params: z.object({ noteId: z.string().uuid() }),
 });

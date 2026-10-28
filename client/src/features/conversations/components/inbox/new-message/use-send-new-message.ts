@@ -8,6 +8,7 @@ import {
   useOpenOrCreateConversation,
 } from "../../../api/use-conversations-mutations";
 import { useSendMessage } from "../../../api/use-messages";
+import { buildConversationInboxHref } from "../lib/inbox-links";
 import { bodyToHtml } from "./new-message-validation";
 
 export interface SendNewMessageInput {
@@ -81,7 +82,7 @@ export function useSendNewMessage(onDone: () => void) {
 
       toast({ title: `Sent to ${firstName}` });
       onDone();
-      navigate(`/conversations?conversation=${conversationId}`);
+      navigate(buildConversationInboxHref(conversationId));
       return true;
     } catch (err) {
       fail(errorMessage(err, "Something went wrong sending the message."));

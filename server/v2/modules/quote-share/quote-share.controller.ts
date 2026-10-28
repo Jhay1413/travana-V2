@@ -1,12 +1,33 @@
 import { Request, Response } from 'express';
 import { quoteShareService } from './quote-share.service';
 import { quoteWhatsappService } from './quote-whatsapp.service';
+import { quoteWhatsappSettingsService } from './quote-whatsapp-settings.service';
+import type { QuoteTemplateSettings } from './quote-share.types';
+import { AppError } from '../../utils/error-handler';
 import { asyncHandler } from '../../utils/async-handler';
 import { getUserId } from '../../utils/get-user-id';
 import { getScope } from '../../utils/scope';
 import { successResponse } from '../../utils/response';
 
+function requireOrgId(req: Request): string {
+  const orgId = getScope(req).orgId;
+  if (!orgId) throw new AppError('No organisation in scope', 400);
+  return orgId;
+}
+
 export const quoteShareController = {
+  getWhatsappTemplateSettings: asyncHandler(async (req: Request, res: Response) => {
+    const orgId = requireOrgId(req);
+    const data = await quoteWhatsappSettingsService.get(orgId);
+    return successResponse(res, data, 'WhatsApp template settings retrieved');
+  }),
+
+  saveWhatsappTemplateSettings: asyncHandler(async (req: Request, res: Response) => {
+    const orgId = requireOrgId(req);
+    const data = await quoteWhatsappSettingsService.save(orgId, req.body as QuoteTemplateSettings, getUserId(req));
+    return successResponse(res, data, 'WhatsApp template settings saved');
+  }),
+
   getClientViews: asyncHandler(async (req: Request, res: Response) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });

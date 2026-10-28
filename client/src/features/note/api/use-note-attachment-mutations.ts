@@ -15,6 +15,17 @@ export function useDeleteNoteAttachment(transactionId: string) {
   });
 }
 
+/** Deletes one attachment and refreshes everything cached under the client's notes. */
+export function useDeleteClientNoteAttachment(clientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => noteAttachmentApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: noteKeys.byClient(clientId) });
+    },
+  });
+}
+
 export interface CreateNoteWithAttachmentsResult {
   note: TransactionNote;
   /** True when the note was saved but its files could not be uploaded. */
@@ -46,6 +57,32 @@ export function useCreateNoteWithAttachments(transactionId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: noteKeys.byTransaction(transactionId) });
       queryClient.invalidateQueries({ queryKey: noteAttachmentKeys.byTransaction(transactionId) });
+    },
+  });
+}
+
+/**
+ * Client-level variant of `useCreateNoteWithAttachments`: creates a general
+ * client note, then uploads the picked files. Same `uploadFailed` semantics.
+ */
+export function useCreateClientNoteWithAttachments(clientId: string) {
+  const queryClient = useQueryClient();
+  return useMutation<CreateNoteWithAttachmentsResult, Error, { data: Omit<CreateNoteData, "client_id">; files?: File[] }>({
+    mutationFn: async ({ data, files }) => {
+      const note = await noteApi.create({ ...data, client_id: clientId });
+      let uploadFailed = false;
+      if (files && files.length > 0) {
+        try {
+          await noteAttachmentApi.upload(note.id, files);
+        } catch {
+          uploadFailed = true;
+        }
+      }
+      return { note, uploadFailed };
+    },
+    onSuccess: () => {
+      // byClient is the prefix of both the notes and the client attachments keys.
+      queryClient.invalidateQueries({ queryKey: noteKeys.byClient(clientId) });
     },
   });
 }

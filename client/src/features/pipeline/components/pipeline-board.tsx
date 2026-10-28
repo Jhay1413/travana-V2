@@ -48,7 +48,7 @@ export function PipelineBoard({
   const f = usePipelineFilters(agentId);
   const { collapsed, toggleCollapse } = useCollapsedStages();
   const dialogs = usePipelineDialogs();
-  const { setSelectedDeal, setFutureDialog, setLostConfirm, setNewDealOpen } = dialogs;
+  const { setSelectedDeal, setFutureDialog, setLostConfirm } = dialogs;
   // The deal the tile/row "Add task" modal is for. Kept after close (only `addTaskOpen` flips)
   // so the modal stays mounted and its save callbacks (toast + refresh) still run.
   const [addTaskDeal, setAddTaskDeal] = useState<{ tx: Transaction; stage: PipelineStage } | null>(null);
@@ -142,7 +142,6 @@ export function PipelineBoard({
             onSearchChange={f.setSearchInput}
             scope={f.scope}
             onScopeChange={f.setScope}
-            onNewDeal={() => setNewDealOpen(true)}
             activeFilters={activeFilterCount(f.priority, f.operators) + (f.quick ? 1 : 0)}
             onClearFilters={() => {
               f.clearFilters();
@@ -152,6 +151,7 @@ export function PipelineBoard({
             selectedId={selectedId}
             onDragStart={handleDragStart}
             actionsFor={actionsFor}
+            embedded={embedded}
           />
         ) : (
           <>
@@ -167,7 +167,6 @@ export function PipelineBoard({
               onClearFilters={f.clearFilters}
               sort={f.sort}
               onSortChange={f.setSort}
-              onNewDeal={() => setNewDealOpen(true)}
             />
             <PipelineToolbar
               embedded={embedded}
@@ -217,7 +216,7 @@ export function PipelineBoard({
         )}
       </div>
 
-      <PipelineDialogsHost dialogs={dialogs} parking={parking} allowNewDeal={!embedded} />
+      <PipelineDialogsHost dialogs={dialogs} parking={parking} />
 
       {addTaskDeal && (() => {
         const entity = getTaskEntity(addTaskDeal.tx, addTaskDeal.stage);

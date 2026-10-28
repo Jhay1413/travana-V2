@@ -9,6 +9,8 @@ export interface QuoteDialogState {
   userId: string;
   initialValues?: Partial<QuoteFormValues>;
   enquiryId?: string;
+  /** Column the card was dropped on; after a successful save the deal lands here. */
+  targetStage?: "Quoted" | "In Play";
 }
 
 export interface DealRef {
@@ -23,7 +25,6 @@ export function usePipelineDialogs() {
   const [futureDialog, setFutureDialog] = useState<{ tx: Transaction; fromStage: PipelineStage } | null>(null);
   const [lostConfirm, setLostConfirm] = useState<DealRef | null>(null);
   const [selectedDeal, setSelectedDeal] = useState<DealRef | null>(null);
-  const [newDealOpen, setNewDealOpen] = useState(false);
 
   return {
     quoteDialog,
@@ -36,8 +37,6 @@ export function usePipelineDialogs() {
     setLostConfirm,
     selectedDeal,
     setSelectedDeal,
-    newDealOpen,
-    setNewDealOpen,
   };
 }
 

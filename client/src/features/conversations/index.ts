@@ -165,3 +165,5 @@ export type {
 } from "./types";
 
 export { whatsAppLink } from "./lib/whatsapp-link";
+export { buildClientInboxHref, buildConversationInboxHref } from "./components/inbox/lib/inbox-links";
+export { EmojiPopover } from "./components/inbox/composer/emoji-popover";

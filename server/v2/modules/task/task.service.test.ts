@@ -5,6 +5,7 @@ vi.mock("./task.repository", () => ({
     findAll: vi.fn(),
     findAllWithClientTasks: vi.fn(),
     findByEntity: vi.fn(),
+    findByClient: vi.fn(),
     findByUserId: vi.fn(),
     findById: vi.fn(),
     create: vi.fn(),
@@ -30,6 +31,9 @@ vi.mock("../branch-member/branch-member.repository", () => ({
   branchMemberRepository: { findActiveContextByUserIdInOrg: vi.fn() },
 }));
 
+vi.mock("../user/user.repository", () => ({ userRepository: { findAll: vi.fn() } }));
+
+import { userRepository } from "../user/user.repository";
 import { taskService } from "./task.service";
 import { branchRepository } from "../branch/branch.repository";
 import { branchMemberRepository } from "../branch-member/branch-member.repository";
@@ -49,6 +53,7 @@ const SCOPE: Scope = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(userRepository.findAll).mockResolvedValue([{ id: "u2" }, { id: "u3" }] as never);
   vi.mocked(taskRepository.findEntityBranchId).mockResolvedValue(null);
   vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue(undefined as never);
 });
@@ -244,6 +249,39 @@ describe("taskService.update", () => {
   });
 });
 
+describe("taskService.update assignee roster", () => {
+  it("rejects an assignee outside the caller's roster with 400 and does not update", async () => {
+    vi.mocked(taskRepository.findById).mockResolvedValue({ id: "task1", userId: "u2" } as never);
+    await expect(taskService.update("task1", { userId: "outsider" } as never, SCOPE)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "That person is not on your team",
+    });
+    expect(userRepository.findAll).toHaveBeenCalledWith(SCOPE, { salesAgentsOnly: true });
+    expect(taskRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("allows self-assignment without a roster lookup, and stays silent", async () => {
+    vi.mocked(taskRepository.findById).mockResolvedValue({ id: "task1", userId: "u2" } as never);
+    vi.mocked(taskRepository.update).mockResolvedValue({ id: "task1", userId: "u1", entityType: "client", entityId: "c1" } as never);
+    await taskService.update("task1", { userId: "u1" } as never, SCOPE);
+    expect(userRepository.findAll).not.toHaveBeenCalled();
+    expect(notificationRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("does not re-check an unchanged assignee", async () => {
+    vi.mocked(taskRepository.findById).mockResolvedValue({ id: "task1", userId: "legacy" } as never);
+    vi.mocked(taskRepository.update).mockResolvedValue({ id: "task1", userId: "legacy" } as never);
+    await taskService.update("task1", { userId: "legacy" } as never, SCOPE);
+    expect(userRepository.findAll).not.toHaveBeenCalled();
+  });
+
+  it("an agent can update a colleague's task: the repository receives the caller scope", async () => {
+    vi.mocked(taskRepository.update).mockResolvedValue({ id: "task1", userId: "u2", title: "x" } as never);
+    await taskService.update("task1", { title: "x" } as never, SCOPE);
+    expect(taskRepository.update).toHaveBeenCalledWith("task1", expect.objectContaining({ title: "x" }), SCOPE);
+  });
+});
+
 describe("task branch derivation (S4)", () => {
   const ADMIN: Scope = { ...SCOPE, orgRole: "org_admin", orgRoles: ["org_admin"], branchId: "shop1" };
   const createdWith = () => vi.mocked(taskRepository.create).mock.calls[0][0] as Record<string, unknown>;
@@ -333,5 +371,27 @@ describe("taskService.listByEntity verifies the entity first (Q1)", () => {
     vi.mocked(taskRepository.entityInScope).mockResolvedValue(true);
     vi.mocked(taskRepository.findByEntity).mockResolvedValue([{ id: "t1" }] as never);
     await expect(taskService.listByEntity("quote", "q1", SCOPE)).resolves.toEqual([{ id: "t1" }]);
+  });
+});
+
+describe("taskService.listByClient", () => {
+  it("403s without any lookup when the caller has no organisation selected", async () => {
+    await expect(taskService.listByClient("c1", { ...SCOPE, orgId: null } as never)).rejects.toMatchObject({ statusCode: 403 });
+    expect(taskRepository.entityInScope).not.toHaveBeenCalled();
+    expect(taskRepository.findByClient).not.toHaveBeenCalled();
+  });
+
+  it("404s without listing when the client is outside the caller's scope", async () => {
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(false);
+    await expect(taskService.listByClient("c1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("client", "c1", SCOPE);
+    expect(taskRepository.findByClient).not.toHaveBeenCalled();
+  });
+
+  it("lists the client's and its deals' tasks once access is verified", async () => {
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(true);
+    vi.mocked(taskRepository.findByClient).mockResolvedValue([{ id: "t1" }] as never);
+    await expect(taskService.listByClient("c1", SCOPE)).resolves.toEqual([{ id: "t1" }]);
+    expect(taskRepository.findByClient).toHaveBeenCalledWith("c1", SCOPE);
   });
 });

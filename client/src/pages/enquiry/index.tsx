@@ -36,7 +36,7 @@ import { useUpdateNote, useDeleteNote } from "@/features/note/api/use-note-mutat
 import { useCreateNoteWithAttachments, NoteAttachments } from "@/features/note";
 import { useCreateQuote, useUpdateEnquiry, useDeleteEnquiry, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
-import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
 import { useCurrentUser } from "@/hooks/queries";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -432,8 +432,7 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
         </div>
       </Card>
 
-      <CreateTaskDialog
-        presentation="drawer"
+      <AddTaskModal
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         entityType="enquiry"
@@ -442,7 +441,6 @@ function EnquiryTasksSection({ enquiryId, assignedUserId }: { enquiryId: string;
       />
 
       <EditTaskDialog
-        presentation="drawer"
         open={!!editingTask}
         onOpenChange={(open) => !open && setEditingTask(null)}
         task={editingTask}

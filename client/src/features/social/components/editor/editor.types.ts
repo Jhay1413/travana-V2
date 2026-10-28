@@ -46,6 +46,8 @@ export interface SocialPostEditorDialogProps {
   initialViewLink?: boolean;
   /** Initial state of the price badge switch. Defaults to true. */
   initialPriceBadge?: boolean;
+  /** Pre-fills the schedule date ("YYYY-MM-DD") for a post that is not scheduled yet, e.g. a calendar drop. */
+  initialScheduleDate?: string;
   /** Facebook page name shown in the preview. */
   pageName?: string;
   /** Regenerates the post text ("Write with Luna"); the button is hidden when omitted. */

@@ -5,6 +5,7 @@ import { tasks } from "@shared/schema";
 import type { Scope } from "../../utils/scope";
 import { stripOwnershipFields } from "../../utils/ownership-fields";
 import { branchRepository } from "../branch/branch.repository";
+import { userRepository } from "../user/user.repository";
 import { branchMemberRepository } from "../branch-member/branch-member.repository";
 
 type TaskNew = typeof tasks.$inferSelect;
@@ -85,6 +86,16 @@ export const taskService = {
     return await taskRepository.findByEntity(entityType, entityId, scope);
   },
 
+  async listByClient(clientId: string, scope?: Scope): Promise<TaskNew[]> {
+    // Fail closed: no org (e.g. platform admin not impersonating) means no cross-org list.
+    if (scope && !scope.orgId) throw new AppError("Select an organisation first", 403);
+    // Same gate as the client's own detail page; fail closed when out of scope.
+    if (scope && !(await taskRepository.entityInScope("client", clientId, scope))) {
+      throw new AppError("Not found", 404);
+    }
+    return await taskRepository.findByClient(clientId, scope);
+  },
+
   async listByUser(
     userId: string,
     scope?: Scope,
@@ -122,6 +133,16 @@ export const taskService = {
     // comparison an unrelated field edit (or a resave that echoes the same
     // assignee back) would re-notify.
     const previous = data.userId !== undefined ? await taskRepository.findById(id, scope) : undefined;
+
+    // The new assignee must be on the caller's roster (same rule as the sales-agent
+    // picker). Self-assignment and unassigning are always allowed; an unchanged
+    // assignee is not re-checked so resaving an older task never fails.
+    if (scope && data.userId && previous && data.userId !== previous.userId && data.userId !== scope.userId) {
+      const roster = await userRepository.findAll(scope, { salesAgentsOnly: true });
+      if (!roster.some((u) => u.id === data.userId)) {
+        throw new AppError("That person is not on your team", 400);
+      }
+    }
 
     // A reassignment re-homes the task so the new assignee's side of the
     // shop/homeworker partition can see it (an admin-supplied branchId wins).

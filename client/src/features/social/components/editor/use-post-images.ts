@@ -5,6 +5,7 @@ import { socialPostApi } from "@/features/social/api/social-post.api";
 import type { TravelDeal } from "@/features/social/api/social-post.api";
 import { POST_IMAGE_SIZE } from "@/features/image-upscale";
 import type { ExistingImage, ImageItem, LocalImage, TileSize, UrlImage } from "./editor.types";
+import { appendKey, applyOrder, dedupeByUrl, insertKeyAt, moveKey, reconcileOrder } from "./image-order";
 
 /** Mirrors the server: animated gifs are never formatted. */
 export const isFormattableFile = (file: File) => file.type.startsWith("image/") && file.type !== "image/gif";
@@ -25,6 +26,8 @@ interface UsePostImagesArgs {
   isScheduled: boolean;
 }
 
+export const urlSortKey = (url: string) => `url-${url}`;
+
 /** State and actions for every image attached to the post (existing, quote URLs, uploads). */
 export function usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isScheduled }: UsePostImagesArgs) {
   const { toast } = useToast();
@@ -32,7 +35,8 @@ export function usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isSche
   const [pendingFiles, setPendingFiles] = useState<LocalImage[]>([]);
   const [urlImages, setUrlImages] = useState<UrlImage[]>([]);
   const [loadingUrlImages, setLoadingUrlImages] = useState(false);
-  const [imageOrder, setImageOrder] = useState<ImageItem[]>([]);
+  // Remembered post order (sort keys). The visible list is derived from it, so it survives selection changes.
+  const [orderKeys, setOrderKeys] = useState<string[]>([]);
   // Set in the same batch as the state they describe, so a "loaded" snapshot is consistent.
   const [urlImagesLoaded, setUrlImagesLoaded] = useState(false);
   const [mediaApplied, setMediaApplied] = useState(false);
@@ -49,7 +53,7 @@ export function usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isSche
       setLoadingUrlImages(true);
       socialPostApi.getQuoteImages(quoteId)
         .then((images) => {
-          const mapped: UrlImage[] = images.map((img) => ({
+          const mapped: UrlImage[] = dedupeByUrl(images).map((img) => ({
             url: img.url,
             name: img.name,
             source: img.source,
@@ -96,7 +100,7 @@ export function usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isSche
         return [];
       });
       setUrlImages([]);
-      setImageOrder([]);
+      setOrderKeys([]);
       setUrlImagesLoaded(false);
       setMediaApplied(false);
     }
@@ -112,46 +116,39 @@ export function usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isSche
     }
   }, [open, mediaData]);
 
+  // Default layout (existing, selected quote images, uploads); the remembered order is applied on top.
+  const defaultItems = useMemo<ImageItem[]>(
+    () => [
+      ...existingImages.map((img): ImageItem => ({ type: "existing", data: img, sortKey: `ex-${img.id}` })),
+      ...urlImages
+        .filter((img) => img.selected)
+        .map((img): ImageItem => ({ type: "url", data: img, sortKey: urlSortKey(img.url) })),
+      ...pendingFiles.map((img): ImageItem => ({ type: "local", data: img, sortKey: `loc-${img.localId}` })),
+    ],
+    [existingImages, pendingFiles, urlImages],
+  );
+  const imageOrder = useMemo(() => applyOrder(defaultItems, orderKeys), [defaultItems, orderKeys]);
+
+  // Selecting appends, deselecting/removing drops: only the order of what is still present is kept.
   useEffect(() => {
-    const items: ImageItem[] = [
-      ...existingImages.map((img): ImageItem => ({
-        type: "existing",
-        data: img,
-        sortKey: `ex-${img.id}`,
-      })),
-      ...urlImages.filter(img => img.selected).map((img, i): ImageItem => ({
-        type: "url",
-        data: img,
-        sortKey: `url-${i}-${img.url.slice(-20)}`,
-      })),
-      ...pendingFiles.map((img): ImageItem => ({
-        type: "local",
-        data: img,
-        sortKey: `loc-${img.localId}`,
-      })),
-    ];
-    setImageOrder(items);
-  }, [existingImages, pendingFiles, urlImages]);
+    const present = defaultItems.map((i) => i.sortKey);
+    setOrderKeys((prev) => {
+      const next = reconcileOrder(prev, present);
+      return next.length === prev.length && next.every((k, i) => k === prev[i]) ? prev : next;
+    });
+  }, [defaultItems]);
 
   const toggleUrlImage = (url: string) => {
-    setUrlImages(prev => prev.map(img =>
-      img.url === url ? { ...img, selected: !img.selected } : img
-    ));
+    setUrlImages((prev) => prev.map((img) => (img.url === url ? { ...img, selected: !img.selected } : img)));
   };
 
-  /** Moves a selected quote image one step earlier (-1) or later (1) among the selected ones. */
-  const moveUrlImage = (url: string, direction: -1 | 1) => {
-    setUrlImages((prev) => {
-      const selectedIdx = prev.map((img, i) => (img.selected ? i : -1)).filter((i) => i >= 0);
-      const pos = selectedIdx.findIndex((i) => prev[i].url === url);
-      const swapWith = selectedIdx[pos + direction];
-      if (pos < 0 || swapWith === undefined) return prev;
-      const next = [...prev];
-      const from = selectedIdx[pos];
-      [next[from], next[swapWith]] = [next[swapWith], next[from]];
-      return next;
-    });
-  };
+  /** Moves an image one step earlier (-1) or later (1) in the post order. */
+  const moveImage = (sortKey: string, direction: -1 | 1) =>
+    setOrderKeys(moveKey(imageOrder.map((i) => i.sortKey), sortKey, direction));
+
+  /** Drops `fromKey` onto `toKey`, inserting it at that position. */
+  const insertImage = (fromKey: string, toKey: string) =>
+    setOrderKeys(insertKeyAt(imageOrder.map((i) => i.sortKey), fromKey, toKey));
 
   const setAllUrlImages = (selected: boolean) =>
     setUrlImages((prev) => prev.map((img) => ({ ...img, selected })));
@@ -170,6 +167,7 @@ export function usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isSche
       previewUrl: URL.createObjectURL(file),
     }));
     setPendingFiles((prev) => [...prev, ...newLocal]);
+    setOrderKeys((prev) => newLocal.reduce((keys, l) => appendKey(keys, `loc-${l.localId}`), prev));
   };
 
   const removeImage = (sortKey: string) => {
@@ -205,12 +203,7 @@ export function usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isSche
     pendingFiles.filter((img) => isFormattableFile(img.file) && needsFormatting(img)).length;
 
   /** Stable fingerprint of the selection and order, built from source state (no effect lag). */
-  const signature = [
-    existingImages.map((i) => `e${i.id}`),
-    urlImages.filter((i) => i.selected).map((i) => `u${i.url}`),
-    pendingFiles.map((i) => `l${i.localId}`),
-  ].flat().join("|");
-  // Each group above is in display order, so reordering changes the signature.
+  const signature = imageOrder.map((i) => i.sortKey).join("|");
 
   const imagesLoaded = (!quoteId || urlImagesLoaded) && (!isScheduled || mediaApplied);
 
@@ -218,7 +211,6 @@ export function usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isSche
     urlImages,
     pendingFiles,
     imageOrder,
-    setImageOrder,
     loadingUrlImages,
     previewImages,
     selectedUrlCount,
@@ -226,7 +218,8 @@ export function usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isSche
     signature,
     imagesLoaded,
     toggleUrlImage,
-    moveUrlImage,
+    moveImage,
+    insertImage,
     setAllUrlImages,
     handleFiles,
     removeImage,

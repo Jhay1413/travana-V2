@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { MessageCircle, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InitialsAvatar } from "@/features/agent-overview/components/dashboard-ui";
+import { buildClientInboxHref } from "@/features/conversations";
 import { useNeonClient } from "@/hooks/queries";
 import type { Transaction } from "@/features/quote/types";
 import { getClientPhone } from "@/features/pipeline/lib/pipeline-helpers";
@@ -36,7 +37,7 @@ export function DrawerCustomerCard({ transaction: t, clientName }: { transaction
           <a href={`tel:${phone}`}><Phone className="h-4 w-4" />Call</a>
         </Button>
       )}
-      <Button type="button" variant="outline" className={btn} onClick={() => setLocation("/conversations")}>
+      <Button type="button" variant="outline" className={btn} onClick={() => setLocation(t.client_id ? buildClientInboxHref(t.client_id) : "/conversations")}>
         <MessageCircle className="h-4 w-4" />Chat
       </Button>
     </div>
