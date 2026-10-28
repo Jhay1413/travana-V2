@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { FileText, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type { SsChannel } from "@/features/conversations";
 import {
   AlertDialog,
@@ -12,47 +12,79 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusPill } from "@/components/shared/status-pill";
 import { OUTLINE_ACTION, PRIMARY_ACTION } from "@/features/pipeline/shared/button-styles";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-import { useDeleteTemplate, useQuoteTemplateSettings, useSyncTemplates, useWhatsappTemplates } from "../api/use-whatsapp-templates";
+import { useDeleteTemplate, useSyncTemplates } from "../api/use-whatsapp-templates";
 import { isSavedQuoteTemplate } from "../lib/quote-template";
-import { templateStatus, truncateBody } from "../lib/template-status";
+import { templateStatus } from "../lib/template-status";
 import { apiErrorMessage } from "../lib/whatsapp-channels";
-import type { WaTemplate } from "../types";
-import { CARD } from "./classes";
-import { QuoteTemplateSection } from "./quote-template-section";
+import type { QuoteTemplateSettings, WaTemplate } from "../types";
+import { CARD, CARD_OUTLINE, CARD_PRIMARY, ICON_ACTION } from "./classes";
 import { RequestTemplateDialog } from "./request-template-dialog";
 
 interface WhatsappTemplatesCardProps {
-  /** Connected WhatsApp channels; the card is only rendered when there is at least one. */
-  channels: SsChannel[];
+  channel: SsChannel;
+  templates: WaTemplate[];
+  loading: boolean;
+  error: boolean;
   canWrite: boolean;
+  quoteSettings: QuoteTemplateSettings | undefined;
 }
 
-const channelName = (c: SsChannel) => c.name || c.phone_number_formatted || c.identifier || c.id;
+function lastSynced(templates: WaTemplate[]): string | null {
+  const latest = templates.map((t) => t.last_synced_at).filter((v): v is string => !!v).sort().at(-1);
+  if (!latest) return null;
+  return new Date(latest).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
 
-/** Approved WhatsApp templates for the org's number, plus the template used for quote links. */
-export function WhatsappTemplatesCard({ channels, canWrite }: WhatsappTemplatesCardProps) {
+function TemplateRow({ template, isQuote, canWrite, onDelete }: { template: WaTemplate; isQuote: boolean; canWrite: boolean; onDelete: () => void }) {
+  const status = templateStatus(template.status);
+  return (
+    <li className="flex min-w-0 items-start gap-3 py-3 first:pt-0 last:pb-0" data-testid={`template-row-${template.id}`}>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="truncate text-[13px] font-semibold xl:text-[14px]">{template.name}</span>
+          <span className="text-[11px] text-social-muted">
+            {template.language} · {template.category.toLowerCase()}
+          </span>
+          {isQuote && (
+            <span className="rounded-md bg-status-posted-bg px-1.5 py-[1px] text-[11px] font-semibold text-status-posted-fg" data-testid="template-quote-tag">
+              Quote link
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-social-muted xl:text-[13px]" title={template.body_text}>
+          {template.body_text}
+        </p>
+      </div>
+      <StatusPill tone={status.tone} className="mt-0.5">
+        {status.label}
+      </StatusPill>
+      {canWrite && (
+        <button type="button" className={cn(ICON_ACTION, "-my-1.5 -mr-2")} aria-label={`Delete ${template.name}`} title="Delete" onClick={onDelete} data-testid={`button-delete-template-${template.id}`}>
+          <Trash2 className="h-4 w-4" aria-hidden />
+        </button>
+      )}
+    </li>
+  );
+}
+
+/** The templates Meta knows for this number: sync them, request a new one, delete one. */
+export function WhatsappTemplatesCard({ channel, templates, loading, error, canWrite, quoteSettings }: WhatsappTemplatesCardProps) {
   const { toast } = useToast();
-  const [pickedId, setPickedId] = useState<string | null>(null);
-  const channelId = channels.find((c) => c.id === pickedId)?.id ?? channels[0]?.id ?? null;
-  const list = useWhatsappTemplates(channelId);
-  const quoteSettings = useQuoteTemplateSettings(canWrite);
   const sync = useSyncTemplates();
   const remove = useDeleteTemplate();
   const [requestOpen, setRequestOpen] = useState(false);
   const [confirm, setConfirm] = useState<WaTemplate | null>(null);
-
-  if (!channelId) return null;
-  const templates = list.data?.templates ?? [];
+  const synced = lastSynced(templates);
 
   const runSync = async () => {
     try {
-      const r = await sync.mutateAsync(channelId);
+      const r = await sync.mutateAsync(channel.id);
       toast({
-        title: `Synced: ${r.added} added, ${r.updated} updated, ${r.removed} removed`,
+        title: r.added + r.updated + r.removed === 0 ? "Templates are up to date" : `Synced: ${r.added} added, ${r.updated} updated, ${r.removed} removed`,
         description: r.errors.length > 0 ? r.errors[0] : undefined,
       });
     } catch (err) {
@@ -69,107 +101,72 @@ export function WhatsappTemplatesCard({ channels, canWrite }: WhatsappTemplatesC
     }
   };
 
+  const syncButton = (
+    <Button type="button" variant="outline" className={cn(OUTLINE_ACTION, CARD_OUTLINE)} disabled={sync.isPending} onClick={() => void runSync()} data-testid="button-sync-templates">
+      {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}
+      Sync from Meta
+    </Button>
+  );
+
   return (
-    <section className={CARD} aria-labelledby="int-templates-h" data-testid="integrations-templates-card">
+    <section className={cn(CARD, "gap-3")} aria-labelledby="int-templates-h" data-testid="integrations-templates-card">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] font-semibold xl:text-base" id="int-templates-h">
-            WhatsApp templates
-          </h2>
-          <p className="text-[12px] text-social-muted xl:text-[13px]">
-            Approved templates let you message a client after the 24-hour window closes. Meta reviews new templates in 24–48 hours.
+          <h3 className="text-[14px] font-semibold xl:text-[15px]" id="int-templates-h">
+            Templates
+          </h3>
+          <p className="mt-0.5 text-[12px] text-social-muted xl:text-[13px]">
+            {synced ? `Last synced ${synced}. ` : ""}Meta reviews a new template in 24–48 hours.
           </p>
         </div>
         {canWrite && (
           <div className="flex shrink-0 items-center gap-2">
-            <Button type="button" variant="outline" className={OUTLINE_ACTION} disabled={sync.isPending} onClick={() => void runSync()} data-testid="button-sync-templates">
-              {sync.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}
-              Sync
-            </Button>
-            <Button type="button" className={PRIMARY_ACTION} onClick={() => setRequestOpen(true)} data-testid="button-request-template">
-              Request a template
+            {syncButton}
+            <Button type="button" className={cn(PRIMARY_ACTION, CARD_PRIMARY)} onClick={() => setRequestOpen(true)} data-testid="button-request-template">
+              <Plus className="h-4 w-4" aria-hidden />
+              Request
             </Button>
           </div>
         )}
       </div>
 
-      {channels.length > 1 && (
-        <Select value={channelId} onValueChange={setPickedId}>
-          <SelectTrigger className="h-9 max-w-xs text-[13px]" aria-label="WhatsApp number" data-testid="select-template-channel">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {channels.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {channelName(c)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-
-      {list.isLoading ? (
-        <div className="flex items-center gap-2 py-6 text-[13px] text-social-muted">
+      {loading ? (
+        <div className="flex items-center gap-2 py-8 text-[13px] text-social-muted">
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading templates…
         </div>
-      ) : list.isError ? (
-        <p className="py-4 text-[13px] text-social-muted" data-testid="templates-error">
+      ) : error ? (
+        <p className="py-6 text-[13px] text-social-muted" data-testid="templates-error">
           Couldn't load templates. Refresh to try again.
         </p>
       ) : templates.length === 0 ? (
-        <div className="py-8 text-center text-[13px] text-social-muted" data-testid="templates-empty">
-          No templates yet. Sync to pull templates you already created in Meta, or request a new one.
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-social-border px-4 py-8 text-center" data-testid="templates-empty">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-social-page text-social-muted" aria-hidden>
+            <FileText className="h-5 w-5" />
+          </span>
+          <b className="text-[14px] font-semibold">No templates here yet</b>
+          <p className="max-w-sm text-[12px] text-social-muted xl:text-[13px]">
+            {canWrite ? "Pull in the templates already approved on this number, or request a new one." : "Nothing has been synced from Meta for this number."}
+          </p>
+          {canWrite && <div className="mt-1">{syncButton}</div>}
         </div>
       ) : (
         <ul className="flex flex-col divide-y divide-social-border">
-          {templates.map((t) => {
-            const status = templateStatus(t.status);
-            return (
-              <li key={t.id} className="flex min-w-0 items-center gap-3 py-3" data-testid={`template-row-${t.id}`}>
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="truncate font-mono text-[13px] font-semibold">{t.name}</span>
-                    <span className="text-[12px] text-social-muted xl:text-[13px]">
-                      {t.language} · {t.category.toLowerCase()}
-                    </span>
-                  </div>
-                  <div className="truncate text-[12px] text-social-muted xl:text-[13px]" title={t.body_text}>
-                    {truncateBody(t.body_text)}
-                  </div>
-                </div>
-                <StatusPill tone={status.tone}>{status.label}</StatusPill>
-                {canWrite && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className={OUTLINE_ACTION}
-                    aria-label={`Delete ${t.name}`}
-                    onClick={() => setConfirm(t)}
-                    data-testid={`button-delete-template-${t.id}`}
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                  </Button>
-                )}
-              </li>
-            );
-          })}
+          {templates.map((t) => (
+            <TemplateRow key={t.id} template={t} isQuote={isSavedQuoteTemplate(t, quoteSettings, channel.id)} canWrite={canWrite} onDelete={() => setConfirm(t)} />
+          ))}
         </ul>
       )}
 
-      {canWrite && !list.isLoading && !list.isError && templates.some((t) => t.status === "APPROVED") && (
-        <QuoteTemplateSection channelId={channelId} templates={templates} canWrite={canWrite} channels={channels} />
-      )}
-
-      <RequestTemplateDialog open={requestOpen} channelId={channelId} onClose={() => setRequestOpen(false)} />
+      <RequestTemplateDialog open={requestOpen} channelId={channel.id} onClose={() => setRequestOpen(false)} />
       <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && setConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {confirm?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This removes the template from Meta as well. If it is the quote link template, quote links will go back to being sent from the agent's phone.
-              {confirm && isSavedQuoteTemplate(confirm, quoteSettings.data) && (
-                <span className="mt-2 block" data-testid="delete-quote-template-warning">
-                  This is the template used for quote links. After deleting it, quote links outside the 24-hour window will fall back to sending from your phone until you choose another.
+              This removes the template from Meta as well; you would need to request and get it approved again.
+              {confirm && isSavedQuoteTemplate(confirm, quoteSettings, channel.id) && (
+                <span className="mt-2 block font-medium text-foreground" data-testid="delete-quote-template-warning">
+                  It is the quote link template. Until you choose another, quote links outside the 24-hour window will be sent from the agent's phone.
                 </span>
               )}
             </AlertDialogDescription>

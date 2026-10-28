@@ -11,6 +11,11 @@ describe("isSavedQuoteTemplate", () => {
     expect(isSavedQuoteTemplate({ name: "quote_link", language: "en_US" }, saved)).toBe(false);
     expect(isSavedQuoteTemplate({ name: "other", language: "en_GB" }, saved)).toBe(false);
   });
+  it("only matches on the saved channel when a channel is given", () => {
+    expect(isSavedQuoteTemplate({ name: "quote_link", language: "en_GB" }, saved, "c1")).toBe(true);
+    expect(isSavedQuoteTemplate({ name: "quote_link", language: "en_GB" }, saved, "c2")).toBe(false);
+    expect(isSavedQuoteTemplate({ name: "quote_link", language: "en_GB" }, { ...saved, channelId: null }, "c2")).toBe(true);
+  });
   it("is false with no saved template", () => {
     expect(isSavedQuoteTemplate({ name: "a", language: "en" }, empty)).toBe(false);
     expect(isSavedQuoteTemplate({ name: "a", language: "en" }, undefined)).toBe(false);

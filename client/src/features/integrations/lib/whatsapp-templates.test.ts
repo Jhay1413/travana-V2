@@ -6,6 +6,7 @@ import {
   extractPlaceholders,
   mappingsComplete,
   placeholderGaps,
+  previewSegments,
   renderPreview,
   resolveMappings,
 } from "./template-placeholders";
@@ -65,6 +66,18 @@ describe("placeholders", () => {
     expect(
       renderPreview("Hi {{1}}, {{2}} via {{3}}", { "1": { source: "client_first_name" }, "2": { source: "custom", text: "Your quote" }, "3": { source: "quote_link" } }),
     ).toBe("Hi Sam, Your quote via https://…/q/abc");
+  });
+  it("splits the body into text and highlighted values, keeping unmapped placeholders as text", () => {
+    expect(previewSegments("Hi {{1}}, see {{2}} ({{3}})", { "1": { source: "client_first_name" }, "2": { source: "custom", text: "" } })).toEqual([
+      { text: "Hi ", kind: "text" },
+      { text: "Sam", kind: "value" },
+      { text: ", see ", kind: "text" },
+      { text: "…", kind: "value" },
+      { text: " (", kind: "text" },
+      { text: "{{3}}", kind: "text" },
+      { text: ")", kind: "text" },
+    ]);
+    expect(previewSegments("Plain text", {})).toEqual([{ text: "Plain text", kind: "text" }]);
   });
 });
 

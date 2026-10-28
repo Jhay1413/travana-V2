@@ -7,6 +7,9 @@ export function connectedWhatsappChannels(channels: SsChannel[] | undefined, hea
   return (channels ?? []).filter((c) => c.channel_type.toLowerCase() === "whatsapp" && channelStatus(c, health).kind === "connected");
 }
 
+/** How a WhatsApp number is named in the UI: its label, else its formatted number, else its id. */
+export const channelName = (c: SsChannel): string => c.name || c.phone_number_formatted || c.identifier || c.id;
+
 interface ApiErrorLike {
   message?: string;
   response?: { data?: { message?: string; error?: string } };

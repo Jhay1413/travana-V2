@@ -27,7 +27,7 @@ export function IntegrationsHead() {
           Integrations
         </h1>
         <p className="mt-1 text-[13px] text-social-muted xl:text-[14px]">
-          Connect the WhatsApp, Facebook Messenger and Instagram accounts your inbox should receive messages from.
+          Connect the accounts your inbox receives messages from, and set up the WhatsApp templates used once a client has gone quiet.
         </p>
       </div>
     </div>

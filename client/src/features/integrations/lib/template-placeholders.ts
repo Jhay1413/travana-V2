@@ -81,3 +81,26 @@ export function renderPreview(body: string, mappings: Record<string, QuoteVariab
     return SOURCE_EXAMPLE[m.source];
   });
 }
+
+export interface PreviewSegment {
+  text: string;
+  /** "value" segments replaced a placeholder and are highlighted in the preview. */
+  kind: "text" | "value";
+}
+
+/** The body split into literal text and substituted placeholder values, for a highlighted preview. */
+export function previewSegments(body: string, mappings: Record<string, QuoteVariableMapping>): PreviewSegment[] {
+  const out: PreviewSegment[] = [];
+  let last = 0;
+  for (const m of body.matchAll(PLACEHOLDER)) {
+    const start = m.index ?? 0;
+    if (start > last) out.push({ text: body.slice(last, start), kind: "text" });
+    const mapping = mappings[m[1]];
+    if (!mapping) out.push({ text: m[0], kind: "text" });
+    else if (mapping.source === "custom") out.push({ text: (mapping.text ?? "").trim() || "…", kind: "value" });
+    else out.push({ text: SOURCE_EXAMPLE[mapping.source], kind: "value" });
+    last = start + m[0].length;
+  }
+  if (last < body.length) out.push({ text: body.slice(last), kind: "text" });
+  return out;
+}
