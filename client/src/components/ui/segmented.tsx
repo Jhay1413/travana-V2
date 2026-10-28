@@ -30,8 +30,11 @@ export interface SegmentedProps<T extends string> {
   label?: string;
   className?: string;
   itemClassName?: string;
-  /** "plain" renders counts as muted text (tight rails); default is the small pill. */
-  countVariant?: "pill" | "plain";
+  /**
+   * How counts render: "pill" (default) a small translucent pill; "plain" muted text;
+   * "amber" a white pill that turns amber on the active segment (the holidays rail).
+   */
+  countVariant?: "pill" | "plain" | "amber";
 }
 
 export function Segmented<T extends string>({
@@ -62,7 +65,7 @@ export function Segmented<T extends string>({
           key={item.value}
           value={item.value}
           data-testid={item.testId}
-          className={cn(SEGMENT_ITEM, variant === "black" && BLACK_ITEM, itemClassName)}
+          className={cn("group", SEGMENT_ITEM, variant === "black" && BLACK_ITEM, itemClassName)}
         >
           {item.icon}
           {item.label}
@@ -70,7 +73,10 @@ export function Segmented<T extends string>({
             <span
               className={cn(
                 "text-[11px] font-semibold tabular-nums",
-                countVariant === "pill" ? "rounded-full bg-black/5 px-1.5 dark:bg-white/10" : "text-social-muted data-[state=on]:text-inherit",
+                countVariant === "pill" && "rounded-full bg-black/5 px-1.5 dark:bg-white/10",
+                countVariant === "plain" && "text-social-muted group-data-[state=on]:text-inherit",
+                countVariant === "amber" &&
+                  "rounded-full bg-card px-1.5 text-social-muted group-data-[state=on]:bg-stage-inplay-bg group-data-[state=on]:text-stage-inplay-fg",
               )}
             >
               {item.count}

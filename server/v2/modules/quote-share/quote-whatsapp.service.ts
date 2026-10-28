@@ -27,8 +27,11 @@ import type {
 // Sends a quote's public link to the client's WhatsApp through the agency's own
 // SendSeven workspace. In-window it sends free text. When WhatsApp's 24h customer
 // service window is closed it sends the org's configured template instead (if
-// any); when that isn't possible (or SendSeven can't be used) it answers with a
-// `fallback` so the agent can send from their own phone via a wa.me link.
+// any). A client with no linked SendSeven contact has never messaged the business
+// number, so their window is closed by definition: the template goes straight to
+// their phone number. When none of that is possible (or SendSeven can't be used)
+// it answers with a `fallback` so the agent can send from their own phone via a
+// wa.me link.
 
 // SendSeven's window_status payload is untyped upstream (Record<string, unknown>).
 // Treat the window as closed when it says so under any of the plausible keys, or
@@ -89,7 +92,8 @@ interface TemplateSendContext {
   clientFirstName: string | null | undefined;
   clientPhone: string | null | undefined;
   quoteUrl: string;
-  contactId: string;
+  /** Linked SendSeven contact; null when the client is unlinked and the send goes by phone number. */
+  contactId: string | null;
   channelId: string;
   conversationId: string | null;
   settings: QuoteTemplateSettings;
@@ -147,11 +151,15 @@ async function resolveVariableValues(
 // well makes SendSeven resolve the contact's own WhatsApp method, which a
 // contact created from an inbound chat may not have ("Contact has no WhatsApp
 // ID or phone number"). Without a conversation, send to the contact and add the
-// client's phone as its WhatsApp id so SendSeven can create that method.
+// client's phone as its WhatsApp id so SendSeven can create that method. With no
+// contact at all, the phone number alone is the recipient and SendSeven creates
+// the contact and conversation itself.
 function templateRecipient(ctx: TemplateSendContext): Pick<SendTemplateRequest, "contact_id" | "conversation_id" | "whatsapp_id"> {
   if (ctx.conversationId) return { conversation_id: ctx.conversationId };
   const phone = normalisePhone(ctx.clientPhone);
-  return { contact_id: ctx.contactId, conversation_id: null, ...(phone ? { whatsapp_id: phone.replace(/^\+/, "") } : {}) };
+  const whatsapp = phone ? { whatsapp_id: phone.replace(/^\+/, "") } : {};
+  if (!ctx.contactId) return whatsapp;
+  return { contact_id: ctx.contactId, conversation_id: null, ...whatsapp };
 }
 
 async function sendViaTemplate(ctx: TemplateSendContext): Promise<SendQuoteWhatsappResult> {
@@ -220,14 +228,10 @@ export const quoteWhatsappService = {
     if (!orgId || !isSendSevenConfigured()) return fallback("not_configured");
 
     const link = await contactLinkService.getByClient(clientId, scope);
-    if (!link.contactId) return fallback("no_contact");
-
     const settings = await quoteWhatsappSettingsService.get(orgId);
     const channel = pickWhatsappChannel(await channelsService.listChannels(true), settings.channelId);
     if (!channel) return fallback("no_channel");
 
-    const lookup = { contact_id: link.contactId, channel_id: channel.id };
-    const existing = (await conversationsService.checkExisting(lookup)) as CheckExistingResponse;
     const templateCtx = (conversationId: string | null): TemplateSendContext => ({
       orgId,
       userId,
@@ -236,12 +240,23 @@ export const quoteWhatsappService = {
       clientFirstName: client.firstName,
       clientPhone: client.phoneNumber,
       quoteUrl,
-      contactId: link.contactId as string,
+      contactId: link.contactId,
       channelId: channel.id,
       conversationId,
       settings,
       fallback,
     });
+
+    // Unlinked client: no conversation to check or reopen. With a template and a
+    // phone number the template is sent by number; otherwise the agent is told to
+    // link the client (the fallback copy says so).
+    if (!link.contactId) {
+      if (!settings.templateName || !normalisePhone(client.phoneNumber)) return fallback("no_contact");
+      return await sendViaTemplate(templateCtx(null));
+    }
+
+    const lookup = { contact_id: link.contactId, channel_id: channel.id };
+    const existing = (await conversationsService.checkExisting(lookup)) as CheckExistingResponse;
     // Decide from the existing conversation first, so we never reopen a closed
     // conversation just to fall back.
     if (isWindowClosed(existing)) {

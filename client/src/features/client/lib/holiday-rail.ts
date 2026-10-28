@@ -49,7 +49,8 @@ export interface RailPillState {
 
 /**
  * Pills under a rail row, in display order: Copy, Pinned, Viewed N×, Expires in Nd.
- * Views and expiry only apply to live quotes (not expired, lost, bookings or enquiries).
+ * Views and expiry only apply to live quotes (not expired, lost, bookings or enquiries),
+ * and the expiry pill only appears inside the near-expiry window, as in the reference design.
  */
 export function railPills(row: HolidayRowData, state: RailPillState): RailPill[] {
   const pills: RailPill[] = [];
@@ -57,9 +58,8 @@ export function railPills(row: HolidayRowData, state: RailPillState): RailPill[]
   if (state.pinned) pills.push({ tone: "plain", label: "Pinned" });
   const live = row.type === "quote" && !row.expired && !row.lost;
   if (live && (state.viewCount ?? 0) > 0) pills.push({ tone: "good", label: `Viewed ${state.viewCount}×` });
-  if (live && state.expiresInDays != null && state.expiresInDays >= 0) {
-    const label = state.expiresInDays === 0 ? "Expires today" : `Expires in ${state.expiresInDays}d`;
-    pills.push({ tone: state.expiresInDays <= NEAR_EXPIRY_WINDOW_DAYS ? "warn" : "plain", label });
+  if (live && state.expiresInDays != null && state.expiresInDays >= 0 && state.expiresInDays <= NEAR_EXPIRY_WINDOW_DAYS) {
+    pills.push({ tone: "warn", label: state.expiresInDays === 0 ? "Expires today" : `Expires in ${state.expiresInDays}d` });
   }
   return pills;
 }

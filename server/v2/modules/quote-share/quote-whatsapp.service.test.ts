@@ -138,6 +138,29 @@ describe("quoteWhatsappService.send - closed window template", () => {
     expect(body).not.toHaveProperty("whatsapp_id");
   });
 
+  it("with no linked contact sends the template to the client's phone number alone", async () => {
+    vi.mocked(contactLinkService.getByClient).mockResolvedValue({ clientId: "c1", contactId: null, linkedAt: null });
+    vi.mocked(neonClientService.getNeonClientById).mockResolvedValue({ id: "c1", firstName: "Ann", phoneNumber: "07700 900123" } as never);
+    vi.mocked(quoteWhatsappSettingsService.get).mockResolvedValue({
+      templateName: "quote_ready", templateLanguage: "en_GB", channelId: null, variables: { "1": { source: "client_first_name" } },
+    });
+    await expect(send()).resolves.toEqual({ status: "sent", conversationId: "conv9", viaTemplate: true });
+    expect(quoteWhatsappRepository.sendTemplate).toHaveBeenCalledWith("quote_ready", {
+      whatsapp_id: "447700900123", channel_id: "ch1", language: "en_GB", variable_values: { "1": "Ann" },
+    });
+    // Nothing to look up or reopen without a contact.
+    expect(conversationsService.checkExisting).not.toHaveBeenCalled();
+    expect(conversationsService.openOrCreate).not.toHaveBeenCalled();
+    expect(messagesService.send).not.toHaveBeenCalled();
+  });
+
+  it("with no linked contact and no client phone falls back no_contact without sending", async () => {
+    vi.mocked(contactLinkService.getByClient).mockResolvedValue({ clientId: "c1", contactId: null, linkedAt: null });
+    vi.mocked(neonClientService.getNeonClientById).mockResolvedValue({ id: "c1", firstName: "Ann", phoneNumber: "" } as never);
+    await expect(send()).resolves.toEqual({ status: "fallback", reason: "no_contact", ...MSG });
+    expect(quoteWhatsappRepository.sendTemplate).not.toHaveBeenCalled();
+  });
+
   it("prefers the saved channel when it is eligible, using it for every SendSeven call", async () => {
     const ch2 = { id: "ch2", channel_type: "whatsapp", is_active: true, is_verified: true };
     vi.mocked(channelsService.listChannels).mockResolvedValue([WA, ch2] as never);
@@ -297,9 +320,12 @@ describe("quoteWhatsappService.send", () => {
     expect(messagesService.send).not.toHaveBeenCalled();
   });
 
-  it("falls back no_contact when the client has no linked contact", async () => {
+  it("falls back no_contact when the client has no linked contact and no template is configured", async () => {
     vi.mocked(contactLinkService.getByClient).mockResolvedValue({ clientId: "c1", contactId: null, linkedAt: null });
+    vi.mocked(neonClientService.getNeonClientById).mockResolvedValue({ id: "c1", firstName: "Ann", phoneNumber: "07700 900123" } as never);
     await expect(send()).resolves.toEqual({ status: "fallback", reason: "no_contact", ...MSG });
+    expect(quoteWhatsappRepository.sendTemplate).not.toHaveBeenCalled();
+    expect(conversationsService.checkExisting).not.toHaveBeenCalled();
   });
 
   it("falls back no_channel when there is no active, verified WhatsApp channel", async () => {

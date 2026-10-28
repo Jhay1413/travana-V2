@@ -67,9 +67,9 @@ describe("railPills", () => {
     expect(pills.map((p) => p.label)).toEqual(["Copy", "Pinned", "Viewed 3×", "Expires in 5d"]);
     expect(pills[3]?.tone).toBe("warn");
   });
-  it("does not warn when expiry is more than 7 days away", () => {
-    const pills = railPills(row({}), { pinned: false, expiresInDays: 12 });
-    expect(pills).toEqual([{ tone: "plain", label: "Expires in 12d" }]);
+  it("shows no expiry pill when expiry is more than 7 days away", () => {
+    expect(railPills(row({}), { pinned: false, expiresInDays: 12 })).toEqual([]);
+    expect(railPills(row({}), { pinned: false, expiresInDays: 7 })).toEqual([{ tone: "warn", label: "Expires in 7d" }]);
   });
   it("hides views and expiry on expired, lost, booking and enquiry rows", () => {
     const state = { pinned: false, viewCount: 2, expiresInDays: 3 };

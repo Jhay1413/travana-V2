@@ -74,7 +74,7 @@ function buildDateLine(code: string | null, travelDate: string | null | undefine
   const departureDate = formatShortDate(travelDate);
   const returnDate = computeReturnDate(travelDate, nights);
   const dateRange = [departureDate, returnDate].filter(Boolean).join(" → ");
-  const line = [code, dateRange || null].filter(Boolean).join(" - ");
+  const line = [code, dateRange || null].filter(Boolean).join(" · ");
   return line || null;
 }
 

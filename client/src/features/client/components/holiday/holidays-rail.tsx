@@ -19,13 +19,14 @@ import {
   type HolidayRowData,
 } from "@/features/client/lib/live-deal-rows";
 import { defaultRailTab, quoteRailMeta, railCounts, railPills, type RailTab } from "@/features/client/lib/holiday-rail";
+import { EnquiryRow } from "@/features/client/components/holiday/enquiry-row";
 import { HolidayLink } from "@/features/client/components/holiday/holiday-link";
 import { CreateMenu, type CreateKind } from "@/components/shared/create-menu";
 import { HOLIDAY_CARD } from "@/features/client/components/holiday/holiday-styles";
 
 /**
  * Left rail "All holidays": Enquiry | Quotes | Bookings tabs with counts, a search box,
- * HolidayLink rows, and collapsible Expired / Lost groups on the Quotes tab.
+ * HolidayLink rows (plain EnquiryRow rows on the Enquiry tab), and collapsible Expired / Lost groups.
  *
  * Props:
  * - enquiries / quotes / bookings: the client's transactions, exactly as pages/client passes them to AllHolidaysPanel.
@@ -109,8 +110,17 @@ export function HolidaysRail({ enquiries, quotes, bookings, selection, onSelect,
   function renderRow(row: HolidayRowData, nested = false) {
     const current = isSelected(row, selection);
     const pinned = pinnedKeys.has(`${row.type}:${row.id}`);
+    const select = () => {
+      if (!current) onSelect({ type: row.type, id: row.id });
+    };
+    if (row.type === "enquiry") {
+      return (
+        <li key={row.id}>
+          <EnquiryRow row={row} current={current} onSelect={select} />
+        </li>
+      );
+    }
     const pills = railPills(row, { pinned, viewCount: viewCounts.get(row.id), expiresInDays: expiry.get(row.id)?.expiresInDays ?? null });
-    if (row.type === "enquiry") pills.push({ tone: "info", label: "Enquiry" });
     if (row.type === "booking") pills.push({ tone: "good", label: "Booked" });
     return (
       <li key={row.id}>
@@ -120,9 +130,7 @@ export function HolidaysRail({ enquiries, quotes, bookings, selection, onSelect,
           pills={pills}
           refText={row.type === "booking" ? hays.get(row.id) : null}
           current={current}
-          onSelect={() => {
-            if (!current) onSelect({ type: row.type, id: row.id });
-          }}
+          onSelect={select}
         />
         {row.copies.length > 0 && <ul className="mt-2 flex flex-col gap-2">{row.copies.map((copy) => renderRow(copy, true))}</ul>}
       </li>
@@ -149,7 +157,7 @@ export function HolidaysRail({ enquiries, quotes, bookings, selection, onSelect,
         label="Holiday type"
         className="w-full gap-0.5 overflow-x-auto"
         itemClassName="min-w-fit flex-1 gap-1 px-2.5 text-[12px] max-[1480px]:px-2 max-[1480px]:text-[11.5px]"
-        countVariant="plain"
+        countVariant="amber"
         items={[
           { value: "enquiry", label: "Enquiry", count: counts.enquiry, testId: "holidays-rail-tab-enquiry" },
           { value: "quotes", label: "Quotes", count: counts.quotes, testId: "holidays-rail-tab-quotes" },
