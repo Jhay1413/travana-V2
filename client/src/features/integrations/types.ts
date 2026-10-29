@@ -98,16 +98,25 @@ export interface CreateWaTemplateResult {
   status: string | null;
 }
 
-export type QuoteVariableSource = "client_first_name" | "agent_name" | "agency_name" | "quote_link" | "custom";
+export type TemplateVariableSource = "client_first_name" | "agent_name" | "agency_name" | "quote_link" | "message" | "custom";
 
-export interface QuoteVariableMapping {
-  source: QuoteVariableSource;
+export interface TemplateVariableMapping {
+  source: TemplateVariableSource;
   text?: string;
 }
 
-export interface QuoteTemplateSettings {
+export interface TemplateSettings {
   templateName: string | null;
   templateLanguage: string | null;
   channelId: string | null;
-  variables: Record<string, QuoteVariableMapping>;
+  variables: Record<string, TemplateVariableMapping>;
 }
+
+/** Which of the two org-level templates a card or mapping is for. */
+export type TemplateKind = "quote" | "update";
+
+export type QuoteVariableSource = TemplateVariableSource;
+export type QuoteVariableMapping = TemplateVariableMapping;
+export type QuoteTemplateSettings = TemplateSettings;
+/** The "General update" template agents use once a client's 24-hour window has closed. */
+export type UpdateTemplateSettings = TemplateSettings;

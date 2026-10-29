@@ -2,6 +2,8 @@ import { isSendSevenConfigured, sendSevenRequest } from "../../utils/sendseven";
 import type {
   SsCreateTemplateBody,
   SsCreateTemplateResponse,
+  SendTemplateRequest,
+  SendTemplateResponse,
   SsSyncResult,
   SsTemplateList,
   TemplateListQuery,
@@ -24,6 +26,10 @@ export const whatsappTemplatesRepository = {
 
   create(body: SsCreateTemplateBody): Promise<SsCreateTemplateResponse> {
     return sendSevenRequest("POST", "/whatsapp-templates", { body });
+  },
+
+  send(nameOrId: string, body: SendTemplateRequest): Promise<SendTemplateResponse> {
+    return sendSevenRequest("POST", `/whatsapp-templates/${encodeURIComponent(nameOrId)}/send`, { body });
   },
 
   remove(id: string): Promise<unknown> {

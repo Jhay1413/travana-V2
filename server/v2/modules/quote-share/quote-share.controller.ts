@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { quoteShareService } from './quote-share.service';
 import { quoteWhatsappService } from './quote-whatsapp.service';
-import { quoteWhatsappSettingsService } from './quote-whatsapp-settings.service';
+import { whatsappSettingsService } from '../whatsapp-templates/whatsapp-settings.service';
 import type { QuoteTemplateSettings } from './quote-share.types';
 import { AppError } from '../../utils/error-handler';
 import { asyncHandler } from '../../utils/async-handler';
@@ -18,13 +18,13 @@ function requireOrgId(req: Request): string {
 export const quoteShareController = {
   getWhatsappTemplateSettings: asyncHandler(async (req: Request, res: Response) => {
     const orgId = requireOrgId(req);
-    const data = await quoteWhatsappSettingsService.get(orgId);
+    const data = await whatsappSettingsService.getQuote(orgId);
     return successResponse(res, data, 'WhatsApp template settings retrieved');
   }),
 
   saveWhatsappTemplateSettings: asyncHandler(async (req: Request, res: Response) => {
     const orgId = requireOrgId(req);
-    const data = await quoteWhatsappSettingsService.save(orgId, req.body as QuoteTemplateSettings, getUserId(req));
+    const data = await whatsappSettingsService.saveQuote(orgId, req.body as QuoteTemplateSettings, getUserId(req));
     return successResponse(res, data, 'WhatsApp template settings saved');
   }),
 

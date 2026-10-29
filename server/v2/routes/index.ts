@@ -35,6 +35,7 @@ import conversationIntegrationRoutes from '../modules/conversation-integration/c
 import { sendSevenContext } from '../modules/conversation-integration/conversation-integration.middleware';
 import channelsRoutes from '../modules/channels/channels.routes';
 import whatsappTemplatesRoutes from '../modules/whatsapp-templates/whatsapp-templates.routes';
+import whatsappUpdatesRoutes from '../modules/whatsapp-updates/whatsapp-updates.routes';
 import commentsRoutes from '../modules/comments/comments.routes';
 import contactLinkRoutes from '../modules/contact-link/contact-link.routes';
 import sendsevenWebhookRoutes from '../modules/sendseven-webhook/sendseven-webhook.routes';
@@ -130,6 +131,7 @@ router.use('/conversations',      ...auth, noHomeworker, sendSevenContext, conve
 router.use('/messages',           ...auth, noHomeworker, sendSevenContext, messagesRoutes);
 router.use('/channels',           ...auth, noHomeworker, sendSevenContext, channelsRoutes);
 router.use('/whatsapp-templates', ...auth, noHomeworker, sendSevenContext, whatsappTemplatesRoutes);
+router.use('/whatsapp-updates',   ...auth, noHomeworker, sendSevenContext, whatsappUpdatesRoutes);
 router.use('/comments',           ...auth, noHomeworker, sendSevenContext, commentsRoutes);
 router.use('/contact-links',      ...auth, contactLinkRoutes);
 router.use('/bot-config',         ...auth, botConfigRoutes);

@@ -5,7 +5,7 @@ import { AppError } from "../../utils/error-handler";
 import { realtimeService } from "../../realtime/realtime.service";
 import { conversationsRepository } from "./conversations.repository";
 import { conversationsAssignmentRepository, type ConversationType, type LocalConversationState } from "./conversations-assignment.repository";
-import type { ListConversationsParams, SsBadgeCounts, SsConversation, SsConversationList } from "./conversations.types";
+import type { ListConversationsParams, SsBadgeCounts, SsConversation, SsConversationList, WhatsappWindow } from "./conversations.types";
 
 // Fans a state change out to every agent in the org over SSE so their inbox
 // lists move in realtime (snooze/close/assign/etc. done by one agent update the
@@ -84,6 +84,20 @@ export const conversationsService = {
       list.items = (list.items ?? []).filter((c) => matchesAssignedTo(c, assignedTo, currentUserId));
     }
     return list;
+  },
+
+  // WhatsApp 24h customer-service window for a conversation. Throws on upstream
+  // failure; callers that can live without it treat that as "unknown".
+  async getWhatsappWindow(id: string): Promise<WhatsappWindow> {
+    const w = await conversationsRepository.getWhatsappWindow(id);
+    return {
+      inWindow: w.in_window,
+      requiresTemplate: w.requires_template,
+      remainingSeconds: w.remaining_seconds ?? null,
+      lastCustomerMessageAt: w.last_customer_message_at ?? null,
+      windowEndAt: w.window_end_at ?? null,
+      windowType: w.window_type ?? null,
+    };
   },
 
   async getById(orgId: string, id: string) {

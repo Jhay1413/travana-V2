@@ -2,26 +2,32 @@ import { AppError } from "../../utils/error-handler";
 import { holdsHomeworkerRole, type Scope } from "../../utils/scope";
 import { isSendSevenConfigured } from "../../utils/sendseven";
 import { channelsService } from "../channels/channels.service";
-import type { SsChannel } from "../channels/channels.types";
 import { contactLinkService } from "../contact-link/contact-link.service";
 import { conversationsService } from "../conversations/conversations.service";
 import { messagesService } from "../messages/messages.service";
 import type { SsMessage } from "../messages/messages.types";
 import { neonClientService } from "../neon-client/neon-client.service";
-import { organizationRepository } from "../organization/organization.repository";
-import { userRepository } from "../user/user.repository";
 import { buildPublicQuoteMessage, normalisePhone, resolveQuoteToken } from "../sms/sms.service";
 import { quoteShareService } from "./quote-share.service";
-import { quoteWhatsappRepository } from "./quote-whatsapp.repository";
-import { quoteWhatsappSettingsService } from "./quote-whatsapp-settings.service";
+import { createRecentSendGuard } from "../../utils/recent-send-guard";
+import {
+  isWindowClosed,
+  isWindowMessage,
+  isWindowRejection,
+  linkClientToConversationContact,
+  pickWhatsappChannel,
+  resolveVariableValues,
+  sendTemplate,
+  templateRecipient,
+} from "../whatsapp-templates/whatsapp-delivery.service";
+import { whatsappSettingsService } from "../whatsapp-templates/whatsapp-settings.service";
+import type { SendTemplateResponse } from "../whatsapp-templates/whatsapp-templates.types";
 import type {
   CheckExistingResponse,
   OpenOrCreateResponse,
   QuoteTemplateSettings,
   QuoteWhatsappFallbackReason,
   SendQuoteWhatsappResult,
-  SendTemplateRequest,
-  WhatsappWindowInfo,
 } from "./quote-share.types";
 
 // Sends a quote's public link to the client's WhatsApp through the agency's own
@@ -33,60 +39,15 @@ import type {
 // it answers with a `fallback` so the agent can send from their own phone via a
 // wa.me link.
 
-// SendSeven's window_status payload is untyped upstream (Record<string, unknown>).
-// Treat the window as closed when it says so under any of the plausible keys, or
-// when the response flags that a template is required.
-function isWindowClosed(res: WhatsappWindowInfo | null | undefined): boolean {
-  if (!res) return false;
-  if (res.requires_template === true) return true;
-  const s = res.window_status;
-  if (!s || typeof s !== "object") return false;
-  if (s.requires_template === true) return true;
-  for (const key of ["is_open", "window_open", "is_window_open", "can_send_freeform", "can_send_text"]) {
-    if (s[key] === false) return true;
-  }
-  return s.is_closed === true || s.window_closed === true || s.expired === true;
-}
-
-// Window/template-rule phrasing only; a bare mention of "template" is not enough.
-const WINDOW_ERROR_PATTERN =
-  /24[s-]?(?:h|hr|hour)|messaging window|customer service window|service window|window (?:has )?(?:closed|expired)|outside (?:of )?the .*window|session (?:has )?(?:closed|expired)|template (?:message )?(?:is )?(?:required|needed)|requires? (?:a )?template|re-?engage/i;
-
-function isWindowMessage(message: string): boolean {
-  return WINDOW_ERROR_PATTERN.test(message);
-}
-
-// A rejected freeform send that is about the window/template rule (not a
-// transport or auth failure) is the closed-window case in disguise.
-function isWindowRejection(err: unknown): boolean {
-  return (
-    err instanceof AppError && err.statusCode >= 400 && err.statusCode < 500 && isWindowMessage(err.message)
-  );
-}
-
 // Short-lived duplicate guard (mirrors the SMS send's 60s idempotency window).
 // Only real SendSeven sends are recorded, never fallbacks or failures.
-const DUPLICATE_WINDOW_MS = 60_000;
-const recentSends = new Map<string, number>();
-
-function pruneRecentSends(now: number): void {
-  recentSends.forEach((ts, k) => {
-    if (now - ts > DUPLICATE_WINDOW_MS) recentSends.delete(k);
-  });
-}
-
-// Throws 429 when this quote was already sent to this client within the window.
-function assertNotRecentlySent(guardKey: string, now: number): void {
-  pruneRecentSends(now);
-  const last = recentSends.get(guardKey);
-  if (last !== undefined && now - last < DUPLICATE_WINDOW_MS) {
-    throw new AppError("This quote was just sent to this client on WhatsApp. Wait a minute before sending it again.", 429);
-  }
-}
+const sendGuard = createRecentSendGuard(60_000);
+const DUPLICATE_MESSAGE = "This quote was just sent to this client on WhatsApp. Wait a minute before sending it again.";
 
 interface TemplateSendContext {
   orgId: string;
   userId: string;
+  scope: Scope;
   quoteId: string;
   clientId: string;
   clientFirstName: string | null | undefined;
@@ -100,92 +61,30 @@ interface TemplateSendContext {
   fallback: (reason: QuoteWhatsappFallbackReason, detail?: string) => SendQuoteWhatsappResult;
 }
 
-function nonEmpty(value: string | null | undefined, alt: string): string {
-  const v = (value ?? "").trim();
-  return v || alt;
-}
-
-// Meta rejects empty template parameters, so every resolved value is non-empty.
-async function resolveVariableValues(
-  variables: QuoteTemplateSettings["variables"],
-  ctx: TemplateSendContext,
-): Promise<Record<string, string>> {
-  const values: Record<string, string> = {};
-  let agentName: string | undefined;
-  let agencyName: string | undefined;
-  for (const [key, variable] of Object.entries(variables)) {
-    switch (variable.source) {
-      case "client_first_name":
-        values[key] = nonEmpty(ctx.clientFirstName, "there");
-        break;
-      case "agent_name": {
-        if (agentName === undefined) {
-          const u = await userRepository.findById(ctx.userId);
-          agentName = nonEmpty(u?.name, nonEmpty(u?.email?.split("@")[0], "your travel agent"));
-        }
-        values[key] = agentName;
-        break;
-      }
-      case "agency_name": {
-        if (agencyName === undefined) {
-          const org = await organizationRepository.findById(ctx.orgId);
-          agencyName = nonEmpty(org?.name, "our team");
-        }
-        values[key] = agencyName;
-        break;
-      }
-      case "quote_link":
-        values[key] = ctx.quoteUrl;
-        break;
-      case "custom":
-        values[key] = nonEmpty(variable.text, "-");
-        break;
-    }
-  }
-  return values;
-}
-
 // Closed-window path: send the org's approved template through SendSeven.
-// Who the template goes to. An open conversation already carries the client's
-// WhatsApp identity, so it is the recipient on its own: passing contact_id as
-// well makes SendSeven resolve the contact's own WhatsApp method, which a
-// contact created from an inbound chat may not have ("Contact has no WhatsApp
-// ID or phone number"). Without a conversation, send to the contact and add the
-// client's phone as its WhatsApp id so SendSeven can create that method. With no
-// contact at all, the phone number alone is the recipient and SendSeven creates
-// the contact and conversation itself.
-function templateRecipient(ctx: TemplateSendContext): Pick<SendTemplateRequest, "contact_id" | "conversation_id" | "whatsapp_id"> {
-  if (ctx.conversationId) return { conversation_id: ctx.conversationId };
-  const phone = normalisePhone(ctx.clientPhone);
-  const whatsapp = phone ? { whatsapp_id: phone.replace(/^\+/, "") } : {};
-  if (!ctx.contactId) return whatsapp;
-  return { contact_id: ctx.contactId, conversation_id: null, ...whatsapp };
-}
-
 async function sendViaTemplate(ctx: TemplateSendContext): Promise<SendQuoteWhatsappResult> {
   const { settings } = ctx;
   if (!settings.templateName) return ctx.fallback("window_closed");
 
   const guardKey = `${ctx.orgId}:${ctx.quoteId}:${ctx.clientId}`;
-  const now = Date.now();
-  assertNotRecentlySent(guardKey, now);
+  sendGuard.assert(guardKey, DUPLICATE_MESSAGE);
 
   // Resolved outside the try: a DB failure here is a real 500, not a template fallback.
-  const variableValues = await resolveVariableValues(settings.variables, ctx);
+  const variableValues = await resolveVariableValues(settings.variables, {
+    orgId: ctx.orgId,
+    userId: ctx.userId,
+    clientFirstName: ctx.clientFirstName,
+    quoteUrl: ctx.quoteUrl,
+  });
+  let res: SendTemplateResponse;
   try {
-    const res = await quoteWhatsappRepository.sendTemplate(settings.templateName, {
-      ...templateRecipient(ctx),
-      channel_id: ctx.channelId,
-      language: settings.templateLanguage ?? undefined,
-      variable_values: variableValues,
+    res = await sendTemplate({
+      templateName: settings.templateName,
+      language: settings.templateLanguage,
+      channelId: ctx.channelId,
+      recipient: templateRecipient({ conversationId: ctx.conversationId, contactId: ctx.contactId, phone: ctx.clientPhone }),
+      variableValues,
     });
-    if (res.success === true) {
-      recentSends.set(guardKey, now);
-      return { status: "sent", conversationId: res.conversation_id, viaTemplate: true };
-    }
-    const reason = res.error_details ?? res.error ?? "unknown error";
-    console.warn(`[quote-whatsapp] template "${settings.templateName}" rejected: ${reason}`, res);
-    return ctx.fallback("template_failed", reason);
   } catch (err) {
     if (err instanceof AppError) {
       console.warn(`[quote-whatsapp] template "${settings.templateName}" send failed (${err.statusCode}): ${err.message}`);
@@ -194,13 +93,17 @@ async function sendViaTemplate(ctx: TemplateSendContext): Promise<SendQuoteWhats
     console.error("[quote-whatsapp] template send failed", err);
     return ctx.fallback("template_failed", "unknown error");
   }
-}
-
-// The org's saved template channel wins when it is still usable; otherwise the
-// first active, verified WhatsApp channel. Every SendSeven call in one send uses it.
-function pickWhatsappChannel(channels: SsChannel[], preferredId: string | null): SsChannel | undefined {
-  const eligible = channels.filter((c) => c.channel_type === "whatsapp" && c.is_active === true && c.is_verified === true);
-  return (preferredId ? eligible.find((c) => c.id === preferredId) : undefined) ?? eligible[0];
+  if (res.success === true) {
+    sendGuard.record(guardKey);
+    // The template path used to skip the staff-send side effects (usage, auto-assign, realtime, AI pause).
+    await messagesService.afterStaffSend(ctx.orgId, res.conversation_id, ctx.userId);
+    // Sent by phone number alone: SendSeven made a contact we have not linked yet.
+    if (!ctx.contactId) await linkClientToConversationContact(res.conversation_id, ctx.clientId, ctx.scope);
+    return { status: "sent", conversationId: res.conversation_id, viaTemplate: true };
+  }
+  const reason = res.error_details ?? res.error ?? "unknown error";
+  console.warn(`[quote-whatsapp] template "${settings.templateName}" rejected: ${reason}`, res);
+  return ctx.fallback("template_failed", reason);
 }
 
 export const quoteWhatsappService = {
@@ -228,13 +131,14 @@ export const quoteWhatsappService = {
     if (!orgId || !isSendSevenConfigured()) return fallback("not_configured");
 
     const link = await contactLinkService.getByClient(clientId, scope);
-    const settings = await quoteWhatsappSettingsService.get(orgId);
+    const settings = await whatsappSettingsService.getQuote(orgId);
     const channel = pickWhatsappChannel(await channelsService.listChannels(true), settings.channelId);
     if (!channel) return fallback("no_channel");
 
     const templateCtx = (conversationId: string | null): TemplateSendContext => ({
       orgId,
       userId,
+      scope,
       quoteId,
       clientId,
       clientFirstName: client.firstName,
@@ -273,8 +177,7 @@ export const quoteWhatsappService = {
     }
 
     const guardKey = `${orgId}:${quoteId}:${clientId}`;
-    const now = Date.now();
-    assertNotRecentlySent(guardKey, now);
+    sendGuard.assert(guardKey, DUPLICATE_MESSAGE);
 
     let sent: SsMessage;
     try {
@@ -292,7 +195,7 @@ export const quoteWhatsappService = {
       if (isWindowMessage(reason)) return await sendViaTemplate(templateCtx(conversationId));
       throw new AppError(reason || "WhatsApp message failed to send", 502);
     }
-    recentSends.set(guardKey, now);
+    sendGuard.record(guardKey);
     return { status: "sent", conversationId };
   },
 };

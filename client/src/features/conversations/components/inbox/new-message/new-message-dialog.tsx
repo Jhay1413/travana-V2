@@ -8,19 +8,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { useNeonClient, type NeonClient } from "@/features/client";
 import { useChannels } from "../../../api/use-channels";
 import { useClientContactLink } from "../../../api/use-contact-link";
+import { useUpdateTemplate } from "../../../api/use-whatsapp-updates";
 import type { SsChannel } from "../../../api/channels.api";
 import { ClientPicker } from "./client-picker";
 import { SendByCards } from "./send-by-cards";
 import { useSendNewMessage } from "./use-send-new-message";
 import { validateNewMessage, type NewMessageErrors } from "./new-message-validation";
+import { whatsappSendBlocked, whatsappSendState, type WhatsappSendStateInput } from "./whatsapp-send-state";
 
 export interface NewMessageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialClientId?: string;
 }
-
-const NO_CONTACT = "This client has no messaging contact yet. Link or message them from a channel first.";
 
 export function NewMessageDialog({ open, onOpenChange, initialClientId }: NewMessageDialogProps) {
   const [picked, setPicked] = useState<NeonClient | null>(null);
@@ -36,7 +36,17 @@ export function NewMessageDialog({ open, onOpenChange, initialClientId }: NewMes
   const clientId = client?.id ?? null;
   const link = useClientContactLink(clientId, open);
   const contactId = link.data?.contactId ?? null;
-  const noContact = !!clientId && link.isSuccess && !contactId;
+  const updateTemplate = useUpdateTemplate(open);
+  const sendStateInput: WhatsappSendStateInput = {
+    channelType: channel?.channel_type ?? null,
+    linkLoaded: !!clientId && link.isSuccess,
+    hasContact: !!contactId,
+    phone: client?.phoneNumber ?? "",
+    templateConfigured: updateTemplate.data?.configured,
+    firstName: client?.firstName?.trim() || "This client",
+  };
+  const sendState = whatsappSendState(sendStateInput);
+  const sendBlocked = whatsappSendBlocked(sendState, sendStateInput);
 
   const { send, isSending } = useSendNewMessage(() => onOpenChange(false));
 
@@ -69,8 +79,9 @@ export function NewMessageDialog({ open, onOpenChange, initialClientId }: NewMes
       body,
     });
     setErrors(found);
-    if (Object.keys(found).length > 0 || !client || !contactId || !channel) return;
+    if (Object.keys(found).length > 0 || !client || !channel || sendBlocked) return;
     await send({
+      clientId: client.id,
       contactId,
       channelId: channel.id,
       channelType: channel.channel_type,
@@ -99,7 +110,8 @@ export function NewMessageDialog({ open, onOpenChange, initialClientId }: NewMes
               }}
               error={errors.clientId}
             />
-            {noContact && <p className="text-xs text-destructive">{NO_CONTACT}</p>}
+            {sendState.kind === "error" && <p className="text-xs text-destructive">{sendState.message}</p>}
+            {sendState.kind === "info" && <p className="text-xs text-social-muted">{sendState.message}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -145,7 +157,7 @@ export function NewMessageDialog({ open, onOpenChange, initialClientId }: NewMes
             <Button
               type="button"
               onClick={handleSend}
-              disabled={isSending || noContact || link.isLoading}
+              disabled={isSending || sendBlocked || link.isLoading}
               className="bg-social-orange text-social-orange-text hover:bg-social-orange/90"
             >
               {isSending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

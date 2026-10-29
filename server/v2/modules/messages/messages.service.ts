@@ -109,10 +109,19 @@ export const messagesService = {
   async send(orgId: string, body: Record<string, unknown>, senderUserId?: string | null): Promise<SsMessage> {
     body = await stampSender(body, senderUserId);
     const sent = await messagesRepository.send(body);
+    const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : sent.conversation_id;
+    await messagesService.afterStaffSend(orgId, conversationId, senderUserId);
+    return sent;
+  },
+
+  // Everything that follows a staff-authored send, whether it went out as free
+  // text or as a template: records usage, auto-assigns an unassigned
+  // conversation to the sender, tells other agents live, and pauses the AI.
+  // Never throws: the message is already out.
+  async afterStaffSend(orgId: string, conversationId: string | null | undefined, senderUserId?: string | null): Promise<void> {
     if (orgId) {
       void usageService.recordSendsevenSend({ orgId, source: "manual" });
     }
-    const conversationId = typeof body.conversation_id === "string" ? body.conversation_id : sent.conversation_id;
     if (orgId && conversationId && senderUserId) {
       // Auto-claim: replying to an unassigned conversation assigns it to the
       // replier. Fire-and-forget — the method itself never throws.
@@ -133,7 +142,6 @@ export const messagesService = {
         console.warn(`[messages] failed to pause AI for conv ${conversationId} after staff reply:`, err);
       }
     }
-    return sent;
   },
 
   // Internal notes never reach the customer, but the other agents' open thread

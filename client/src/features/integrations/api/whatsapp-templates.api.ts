@@ -3,12 +3,14 @@ import type {
   CreateWaTemplateInput,
   CreateWaTemplateResult,
   QuoteTemplateSettings,
+  UpdateTemplateSettings,
   WaTemplateList,
   WaTemplateSyncResult,
 } from "../types";
 
 const BASE = "/api/v2/whatsapp-templates";
 const SETTINGS = "/api/v2/quote-share/whatsapp-template-settings";
+const UPDATE_SETTINGS = "/api/v2/whatsapp-updates/settings";
 
 export const whatsappTemplatesApi = {
   list: async (channelId: string): Promise<WaTemplateList> => {
@@ -33,6 +35,14 @@ export const whatsappTemplatesApi = {
   },
   saveSettings: async (input: QuoteTemplateSettings): Promise<QuoteTemplateSettings> => {
     const { data } = await axiosClient.put<QuoteTemplateSettings>(SETTINGS, input);
+    return data;
+  },
+  getUpdateSettings: async (): Promise<UpdateTemplateSettings> => {
+    const { data } = await axiosClient.get<UpdateTemplateSettings>(UPDATE_SETTINGS);
+    return data;
+  },
+  saveUpdateSettings: async (input: UpdateTemplateSettings): Promise<UpdateTemplateSettings> => {
+    const { data } = await axiosClient.put<UpdateTemplateSettings>(UPDATE_SETTINGS, input);
     return data;
   },
 };

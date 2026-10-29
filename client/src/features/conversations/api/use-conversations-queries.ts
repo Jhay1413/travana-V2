@@ -15,6 +15,8 @@ export const conversationsKeys = {
   transcript: (id: string, jobId: string) => [...conversationsKeys.all, "transcript", id, jobId] as const,
   trendingTags: (limit?: number) => [...conversationsKeys.all, "trending-tags", limit ?? null] as const,
   aiState: (id: string) => [...conversationsKeys.all, "ai-state", id] as const,
+  updateTemplate: () => [...conversationsKeys.all, "update-template"] as const,
+  whatsappWindow: (id: string) => [...conversationsKeys.detail(id), "whatsapp-window"] as const,
 };
 
 export function useConversations(query: ListConversationsQuery = {}, options?: { enabled?: boolean }) {

@@ -8,11 +8,14 @@ import {
   useOpenOrCreateConversation,
 } from "../../../api/use-conversations-mutations";
 import { useSendMessage } from "../../../api/use-messages";
+import { useSendWhatsappToClient } from "../../../api/use-whatsapp-updates";
 import { buildConversationInboxHref } from "../lib/inbox-links";
 import { bodyToHtml } from "./new-message-validation";
 
 export interface SendNewMessageInput {
-  contactId: string;
+  clientId: string;
+  /** Null for a client with no messaging contact yet (WhatsApp only). */
+  contactId: string | null;
   channelId: string;
   channelType: string;
   subject: string;
@@ -27,16 +30,37 @@ export function useSendNewMessage(onDone: () => void) {
   const checkExisting = useCheckExistingConversation();
   const openOrCreate = useOpenOrCreateConversation();
   const initiate = useInitiateConversation();
+  const sendWhatsapp = useSendWhatsappToClient();
   const [isSending, setIsSending] = useState(false);
 
   const fail = (description: string) => toast({ title: "Couldn't send", description, variant: "destructive" });
 
   const send = async (input: SendNewMessageInput): Promise<boolean> => {
-    const { contactId, channelId, channelType, subject, body, firstName } = input;
+    const { clientId, contactId, channelId, channelType, subject, body, firstName } = input;
     const content = body.trim();
     const isEmail = channelType === "email";
     setIsSending(true);
     try {
+      // WhatsApp goes through the server, which knows about the 24-hour window,
+      // the General update template and linking a client to a new contact.
+      if (channelType === "whatsapp") {
+        const result = await sendWhatsapp.mutateAsync({ clientId, channelId, text: content });
+        if (result.viaTemplate) {
+          toast({
+            title: `Sent to ${firstName} as your General update template`,
+            description: "Their WhatsApp window had closed.",
+          });
+        } else {
+          toast({ title: `Sent to ${firstName}` });
+        }
+        onDone();
+        navigate(buildConversationInboxHref(result.conversationId));
+        return true;
+      }
+      if (!contactId) {
+        fail("This client has no messaging contact yet. Link or message them from a channel first.");
+        return false;
+      }
       const existing = await checkExisting.mutateAsync({ contact_id: contactId, channel_id: channelId });
       let conversationId: string;
 

@@ -20,6 +20,10 @@ import { messagesService } from "./messages.service";
 import { messagesRepository } from "./messages.repository";
 import { inboxNoteAuthorRepository } from "./inbox-note-author.repository";
 import { userRepository } from "../user/user.repository";
+import { usageService } from "../usage/usage.service";
+import { conversationsService } from "../conversations/conversations.service";
+import { realtimeService } from "../../realtime/realtime.service";
+import { sendsevenWebhookService } from "../sendseven-webhook/sendseven-webhook.service";
 
 const sender = { id: "u1", firstName: "Ann", lastName: "Lee", name: "ann", image: "a.png" };
 const agentMeta = { source: "travana-agent", agent: { id: "u1", name: "Ann Lee", avatar: "a.png" } };
@@ -133,5 +137,48 @@ describe("messagesService.send", () => {
       text: "yo",
       meta: { x: 1, ...agentMeta },
     });
+  });
+});
+
+describe("messagesService.send side effects", () => {
+  it("still records usage, auto-assigns, publishes realtime and pauses the AI", async () => {
+    await messagesService.send("o1", { conversation_id: "c1", text: "yo" }, "u1");
+    expect(usageService.recordSendsevenSend).toHaveBeenCalledWith({ orgId: "o1", source: "manual" });
+    expect(conversationsService.autoAssignReplier).toHaveBeenCalledWith("o1", "c1", "u1");
+    expect(realtimeService.publish).toHaveBeenCalledWith("o1", { type: "message.sent", conversationId: "c1" });
+    expect(sendsevenWebhookService.pauseAiForStaffReply).toHaveBeenCalledWith("o1", "c1");
+  });
+
+  it("takes the conversation id from the response when the body has none", async () => {
+    await messagesService.send("o1", { text: "yo" }, "u1");
+    expect(sendsevenWebhookService.pauseAiForStaffReply).toHaveBeenCalledWith("o1", "c1");
+  });
+});
+
+describe("messagesService.afterStaffSend", () => {
+  it("runs the four side effects for a template send", async () => {
+    await messagesService.afterStaffSend("o1", "c9", "u1");
+    expect(usageService.recordSendsevenSend).toHaveBeenCalledWith({ orgId: "o1", source: "manual" });
+    expect(conversationsService.autoAssignReplier).toHaveBeenCalledWith("o1", "c9", "u1");
+    expect(realtimeService.publish).toHaveBeenCalledWith("o1", { type: "message.sent", conversationId: "c9" });
+    expect(sendsevenWebhookService.pauseAiForStaffReply).toHaveBeenCalledWith("o1", "c9");
+  });
+
+  it("skips auto-assign without a sender and the conversation effects without a conversation", async () => {
+    await messagesService.afterStaffSend("o1", "c9", null);
+    expect(conversationsService.autoAssignReplier).not.toHaveBeenCalled();
+    vi.clearAllMocks();
+    await messagesService.afterStaffSend("o1", undefined, "u1");
+    expect(usageService.recordSendsevenSend).toHaveBeenCalled();
+    expect(realtimeService.publish).not.toHaveBeenCalled();
+    expect(sendsevenWebhookService.pauseAiForStaffReply).not.toHaveBeenCalled();
+  });
+
+  it("never throws when realtime or the AI pause fail", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.mocked(realtimeService.publish).mockImplementation(() => { throw new Error("sse down"); });
+    vi.mocked(sendsevenWebhookService.pauseAiForStaffReply).mockRejectedValue(new Error("db"));
+    await expect(messagesService.afterStaffSend("o1", "c9", "u1")).resolves.toBeUndefined();
+    warn.mockRestore();
   });
 });

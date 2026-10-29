@@ -2,10 +2,11 @@ import { useState } from "react";
 import type { SsChannel } from "@/features/conversations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { useQuoteTemplateSettings, useWhatsappTemplates } from "../api/use-whatsapp-templates";
+import { useQuoteTemplateSettings, useUpdateTemplateSettings, useWhatsappTemplates } from "../api/use-whatsapp-templates";
 import { channelName } from "../lib/whatsapp-channels";
 import { FIELD, SECTION_SUB, SECTION_TITLE } from "./classes";
 import { QuoteTemplateCard } from "./quote-template-card";
+import { UpdateTemplateCard } from "./update-template-card";
 import { WhatsappTemplatesCard } from "./whatsapp-templates-card";
 
 interface WhatsappSectionProps {
@@ -20,6 +21,7 @@ export function WhatsappSection({ channels, canWrite }: WhatsappSectionProps) {
   const channel = channels.find((c) => c.id === pickedId) ?? channels[0];
   const list = useWhatsappTemplates(channel?.id ?? null);
   const quoteSettings = useQuoteTemplateSettings(canWrite);
+  const updateSettings = useUpdateTemplateSettings(canWrite);
   if (!channel) return null;
   const templates = list.data?.templates ?? [];
 
@@ -58,18 +60,31 @@ export function WhatsappSection({ channels, canWrite }: WhatsappSectionProps) {
           error={list.isError}
           canWrite={canWrite}
           quoteSettings={quoteSettings.data}
+          updateSettings={updateSettings.data}
         />
         {canWrite && (
-          <QuoteTemplateCard
-            key={channel.id}
-            channelId={channel.id}
-            templates={templates}
-            templatesLoading={list.isLoading}
-            templatesError={list.isError}
-            settings={quoteSettings.data}
-            settingsLoading={quoteSettings.isLoading}
-            channels={channels}
-          />
+          <div className="flex min-w-0 flex-col gap-4">
+            <QuoteTemplateCard
+              key={`quote-${channel.id}`}
+              channelId={channel.id}
+              templates={templates}
+              templatesLoading={list.isLoading}
+              templatesError={list.isError}
+              settings={quoteSettings.data}
+              settingsLoading={quoteSettings.isLoading}
+              channels={channels}
+            />
+            <UpdateTemplateCard
+              key={`update-${channel.id}`}
+              channelId={channel.id}
+              templates={templates}
+              templatesLoading={list.isLoading}
+              templatesError={list.isError}
+              settings={updateSettings.data}
+              settingsLoading={updateSettings.isLoading}
+              channels={channels}
+            />
+          </div>
         )}
       </div>
     </section>

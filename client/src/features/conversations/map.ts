@@ -32,6 +32,9 @@ function mediaPreview(messageType: string | null | undefined): string {
       return "Sticker";
     case "location":
       return "📍 Location";
+    // Template sends may arrive without text; show something rather than blank.
+    case "template":
+      return "Template message";
     default:
       return "";
   }

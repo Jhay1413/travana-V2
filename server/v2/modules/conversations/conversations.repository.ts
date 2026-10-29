@@ -12,6 +12,7 @@ import type {
   SsBadgeCounts,
   SsConversation,
   SsConversationList,
+  SsWhatsappWindowStatus,
 } from "./conversations.types";
 
 // Repository layer: the ONLY place that talks to the SendSeven conversations
@@ -53,6 +54,11 @@ function notFound(id: string): never {
 }
 
 export const conversationsRepository = {
+  // The WhatsApp 24h window lives under /whatsapp, not /conversations.
+  getWhatsappWindow(id: string): Promise<SsWhatsappWindowStatus> {
+    return sendSevenRequest<SsWhatsappWindowStatus>("GET", `/whatsapp/conversations/${encodeURIComponent(id)}/whatsapp-window`);
+  },
+
   // ── Reads ──
   list(params: ListConversationsParams): Promise<SsConversationList> {
     if (useSampleData()) {

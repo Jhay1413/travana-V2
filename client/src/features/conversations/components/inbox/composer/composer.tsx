@@ -5,13 +5,16 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAiSuggestReply } from "../../../api/use-conversations-mutations";
 import type { AiReplyTone } from "../../../api/conversations.api";
+import type { WhatsappWindow } from "../../../api/whatsapp-updates.api";
 import type { Conversation } from "../../../types";
+import { UPDATE_MAX_CHARS, type ComposerMode } from "../lib";
 import { CHANNEL_META, Segmented } from "../shared";
 import { AttachmentChips } from "./attachment-chips";
 import { EmojiPopover } from "./emoji-popover";
 import { LunaPopover } from "./luna-popover";
 import { useAttachments, type PendingAttachment } from "./use-attachments";
 import { useTypingPing } from "./use-typing-ping";
+import { WindowNote } from "./window-note";
 
 const TEXTAREA_EMPTY_HEIGHT_PX = 62;
 const TEXTAREA_FILLED_HEIGHT_PX = 104;
@@ -36,6 +39,12 @@ export interface ComposerProps {
   onDraftChange(d: ComposerDraft): void;
   onSend(text: string, attachments: PendingAttachment[]): Promise<void> | void;
   onAddNote(text: string): Promise<void> | void;
+  /** Sends the text through the General update template (WhatsApp, window closed). */
+  onSendUpdate(text: string): Promise<void> | void;
+  /** How the reply box behaves; defaults to a normal reply. */
+  replyMode?: ComposerMode;
+  /** The WhatsApp window, for the countdown and the closed-window note. */
+  whatsappWindow?: WhatsappWindow;
   isSending: boolean;
   firstName: string;
   generateEnquiry: ReactNode;
@@ -49,6 +58,9 @@ export function Composer({
   onDraftChange,
   onSend,
   onAddNote,
+  onSendUpdate,
+  replyMode = "free",
+  whatsappWindow,
   isSending,
   firstName,
   generateEnquiry,
@@ -107,7 +119,9 @@ export function Composer({
   const text = mode === "note" ? local.note : local.reply;
   // Internal notes are text-only in SendSeven's API - there's no attachments
   // field on the internal-notes endpoint - so the picker is disabled in note mode.
-  const canAttach = mode === "reply";
+  const updateMode = mode === "reply" && replyMode === "update";
+  const blockedMode = mode === "reply" && replyMode === "blocked";
+  const canAttach = mode === "reply" && !updateMode && !blockedMode;
   const channelLabel = CHANNEL_META[conversation.channel].label;
 
   const setText = (value: string) => {
@@ -180,15 +194,24 @@ export function Composer({
   const submit = async () => {
     const trimmed = text.trim();
     // Never send mid-upload — the ids aren't in yet.
-    if ((mode === "reply" && uploading) || isSending) return;
+    if ((mode === "reply" && uploading) || isSending || blockedMode) return;
     // An attachment on its own is a valid reply; text is otherwise required.
-    if (!trimmed && !(mode === "reply" && ready.length > 0)) {
+    if (!trimmed && !(canAttach && ready.length > 0)) {
       toast({ title: "Write something first." });
+      return;
+    }
+    if (updateMode && attachments.length > 0) {
+      toast({ title: "Attachments cannot be sent in an update", description: "Remove them to send." });
+      return;
+    }
+    if (updateMode && trimmed.length > UPDATE_MAX_CHARS) {
+      toast({ title: `Updates can be up to ${UPDATE_MAX_CHARS} characters.` });
       return;
     }
     sendTypingStop();
     try {
       if (mode === "note") await onAddNote(trimmed);
+      else if (updateMode) await onSendUpdate(trimmed);
       else await onSend(trimmed, ready);
     } catch {
       // The owner reports the failure; keep the text so nothing is lost.
@@ -225,6 +248,8 @@ export function Composer({
         variant="black"
         className="w-[236px]"
       />
+
+      {mode === "reply" && <WindowNote mode={replyMode} window={whatsappWindow} firstName={firstName} />}
 
       {mode === "reply" && lunaDrafted && text && (
         <div className="mt-3 flex items-center gap-2 rounded-[10px] bg-[#F5F3FF] px-3 py-1.5 text-[12px] text-[#6D28D9] dark:bg-violet-500/10 dark:text-violet-300">
@@ -269,10 +294,15 @@ export function Composer({
             requestAnimationFrame(() => el.setSelectionRange(start + 1, start + 1));
           }
         }}
+        disabled={blockedMode}
         placeholder={
           mode === "note"
             ? "Write an internal note. Only your team can see it."
-            : `Reply to ${firstName} on ${channelLabel}…`
+            : updateMode
+              ? `Write the update for ${firstName}…`
+              : blockedMode
+                ? "Replies are paused until a General update template is set."
+                : `Reply to ${firstName} on ${channelLabel}…`
         }
         // Native browser spellcheck, stated explicitly so it can't be lost, with
         // the dictionary pinned to en-GB — on a US-locale machine the browser
@@ -285,13 +315,29 @@ export function Composer({
           mode === "note"
             ? "border-amber-400/40 bg-amber-400/5"
             : "border-black/10 bg-black/[0.02] dark:border-white/10 dark:bg-white/[0.03]",
+          blockedMode && "cursor-not-allowed opacity-60",
         )}
         data-testid="conversation-composer-input"
       />
-      <div className="mt-1 text-right text-[11px] text-muted-foreground">Ctrl+Enter to send</div>
+      <div className="mt-1 flex justify-end gap-3 text-right text-[11px] text-muted-foreground">
+        {updateMode && (
+          <span
+            className={cn(text.trim().length > UPDATE_MAX_CHARS && "font-semibold text-destructive")}
+            data-testid="composer-update-counter"
+          >
+            {text.trim().length}/{UPDATE_MAX_CHARS}
+          </span>
+        )}
+        <span>Ctrl+Enter to send</span>
+      </div>
 
       {attachments.length > 0 && (
         <div className="mt-2">
+          {updateMode && (
+            <p className="mb-1 text-[12px] font-medium text-destructive" data-testid="composer-update-attachments-note">
+              Attachments can't be sent in an update. Remove them to send.
+            </p>
+          )}
           <AttachmentChips attachments={attachments} onRemove={removeAttachment} />
         </div>
       )}
@@ -330,19 +376,19 @@ export function Composer({
           <LunaPopover
             conversationId={conversation.id}
             firstName={firstName}
-            disabled={isSending}
+            disabled={isSending || blockedMode}
             onInsert={insertFromLuna}
           />
           <Button
             type="button"
             onClick={() => void submit()}
-            disabled={(mode === "reply" && uploading) || isSending}
+            disabled={(mode === "reply" && uploading) || isSending || blockedMode || (updateMode && (text.trim().length > UPDATE_MAX_CHARS || attachments.length > 0))}
             title={mode === "reply" && uploading ? "Waiting for the upload to finish…" : "Ctrl+Enter to send"}
             className="h-9 gap-2 rounded-[10px] bg-social-orange px-4 text-[13px] font-semibold text-[#1F2937] hover:bg-social-orange-text"
             data-testid="conversation-send"
           >
             {isSending || (mode === "reply" && uploading) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {mode === "note" ? "Add note" : "Send"}
+            {mode === "note" ? "Add note" : updateMode ? "Send update" : "Send"}
           </Button>
         </div>
       </div>

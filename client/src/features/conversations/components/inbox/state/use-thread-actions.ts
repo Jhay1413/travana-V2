@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { toUiMessage } from "../../../map";
 import { messageTypeForContentType } from "../../../api/messages.api";
@@ -10,10 +11,13 @@ import {
   useUnsnoozeConversation,
   useUpdateConversation,
 } from "../../../api/use-conversations-mutations";
+import { conversationsKeys } from "../../../api/use-conversations-queries";
 import { useCreateInternalNote, useMessages, useSendMessage } from "../../../api/use-messages";
+import { useSendWhatsappUpdate } from "../../../api/use-whatsapp-updates";
 import type { ConversationMessage } from "../../../types";
 import type { PendingAttachment } from "../composer";
-import { snoozeUntil, type SnoozePresetId } from "../lib";
+import { firstNameFor } from "../enquiry";
+import { describeUpdateError, isUpdateTemplateMissing, snoozeUntil, type SnoozePresetId } from "../lib";
 import type { InboxState } from "./use-inbox-state";
 
 export interface ComposerAttachments {
@@ -32,6 +36,7 @@ const YEAR_HOURS = 24 * 365;
 export function useThreadActions(state: InboxState) {
   const { selected, selectedId, overlay, setOverlay, clearOptimistic, settleSnoozeOverride, markSeen, conversations } = state;
   const { toast } = useToast();
+  const qc = useQueryClient();
   const snoozeMutation = useSnoozeConversation();
   const unsnoozeMutation = useUnsnoozeConversation();
   const reopenMutation = useReopenConversation();
@@ -61,6 +66,7 @@ export function useThreadActions(state: InboxState) {
   const { data: messagesData, isLoading: messagesLoading } = useMessages(selectedId);
   const sendMessage = useSendMessage(selectedId ?? undefined);
   const createNote = useCreateInternalNote(selectedId ?? undefined);
+  const sendWhatsappUpdate = useSendWhatsappUpdate();
 
   const optimistic = useMemo(
     () => (selectedId ? (overlay[selectedId]?.extraMessages ?? []) : []),
@@ -93,7 +99,7 @@ export function useThreadActions(state: InboxState) {
   const handleSend = async (
     convId: string,
     body: string,
-    mode: "reply" | "note",
+    mode: "reply" | "note" | "update",
     attachments?: ComposerAttachments,
   ): Promise<void> => {
     const hasFiles = (attachments?.ids.length ?? 0) > 0;
@@ -113,7 +119,12 @@ export function useThreadActions(state: InboxState) {
     // Then persist via the real SendSeven message endpoint; on success the
     // messages query refetches and we drop the optimistic copy to avoid dupes.
     try {
-      if (mode === "note") {
+      if (mode === "update") {
+        const result = await sendWhatsappUpdate.mutateAsync({ conversationId: convId, text: body });
+        if (!result.viaTemplate) {
+          toast({ title: "The window had reopened, so it went as a normal message" });
+        }
+      } else if (mode === "note") {
         await createNote.mutateAsync({ conversation_id: convId, text: body });
       } else {
         await sendMessage.mutateAsync({
@@ -131,7 +142,20 @@ export function useThreadActions(state: InboxState) {
       clearOptimistic(convId);
     } catch (err) {
       dropOptimistic(convId, optimisticMsg.id);
-      sendFailed(err);
+      if (mode === "update") {
+        const conv = conversations.find((c) => c.id === convId);
+        const info = describeUpdateError(err, conv ? firstNameFor(null, conv.contact) : "them");
+        toast({ title: info.title, description: info.description, variant: "destructive" });
+      } else {
+        sendFailed(err);
+      }
+      // A rejected WhatsApp send usually means our idea of the 24-hour window
+      // was stale, so refetch it and let the composer switch modes.
+      const failedConv = conversations.find((c) => c.id === convId);
+      if (mode !== "note" && (failedConv?.channel === "whatsapp" || isUpdateTemplateMissing(err))) {
+        void qc.invalidateQueries({ queryKey: conversationsKeys.whatsappWindow(convId) });
+        if (isUpdateTemplateMissing(err)) void qc.invalidateQueries({ queryKey: conversationsKeys.updateTemplate() });
+      }
       // The composer keeps the text when onSend throws.
       throw err;
     }
@@ -146,6 +170,9 @@ export function useThreadActions(state: InboxState) {
       contentTypes: attachments.map((a) => a.contentType ?? a.file.type),
     });
   };
+
+  // Composer.onSendUpdate(text): WhatsApp, window closed, via the General update template.
+  const sendUpdate = (text: string) => (selected ? handleSend(selected.id, text, "update") : Promise.resolve());
 
   const sendNote = (text: string) => (selected ? handleSend(selected.id, text, "note") : Promise.resolve());
 
@@ -233,8 +260,9 @@ export function useThreadActions(state: InboxState) {
   return {
     threadMessages,
     messagesLoading,
-    isSending: sendMessage.isPending || createNote.isPending,
+    isSending: sendMessage.isPending || createNote.isPending || sendWhatsappUpdate.isPending,
     sendReply,
+    sendUpdate,
     sendNote,
     snoozeFor,
     unsnooze,

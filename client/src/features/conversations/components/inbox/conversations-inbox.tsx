@@ -3,6 +3,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useToast } from "@/hooks/use-toast";
 import { clientDisplayName } from "@/lib/utils";
 import { useContactLink } from "../../api/use-contact-link";
+import { useUpdateTemplate, useWhatsappWindow } from "../../api/use-whatsapp-updates";
 import { contactLinkMatch } from "../client-link-section";
 import { useConversationsRealtimeState, type TypingPresence } from "../conversations-realtime-provider";
 import { GenerateEnquiryButton } from "../generate-enquiry-button";
@@ -11,6 +12,7 @@ import { ClientPane, useClientTicketDialog } from "./client-pane";
 import { Composer } from "./composer";
 import { InboxSwitcher, ListPane } from "./list";
 import { NewMessageDialog } from "./new-message";
+import { composerMode } from "./lib";
 import { isDone, useInboxState, useThreadActions } from "./state";
 import { enquiryHref, firstNameFor } from "./enquiry";
 import { ThreadPane } from "./thread";
@@ -38,6 +40,15 @@ export function ConversationsInbox() {
   const { data: link } = useContactLink(selected?.contact.id ?? null, selected ? contactLinkMatch(selected) : undefined);
   const client = link?.linkedClient ?? null;
   const ticket = useClientTicketDialog(client?.id, client ? clientDisplayName(client) : "");
+
+  const isWhatsapp = selected?.channel === "whatsapp";
+  const whatsappWindow = useWhatsappWindow(selected?.id ?? null, isWhatsapp);
+  const updateTemplate = useUpdateTemplate();
+  const replyMode = composerMode({
+    isWhatsapp,
+    window: whatsappWindow.data,
+    templateConfigured: updateTemplate.data?.configured,
+  });
 
   const pagination = state.pagination;
   const unread = state.badges?.total_unanswered ?? 0;
@@ -134,6 +145,9 @@ export function ConversationsInbox() {
               onDraftChange={(d) => state.handleDraftChange(selected.id, d)}
               onSend={actions.sendReply}
               onAddNote={actions.sendNote}
+              onSendUpdate={actions.sendUpdate}
+              replyMode={replyMode}
+              whatsappWindow={whatsappWindow.data}
               isSending={actions.isSending}
               firstName={firstNameFor(client, selected.contact)}
               generateEnquiry={

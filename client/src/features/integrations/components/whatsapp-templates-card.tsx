@@ -17,10 +17,10 @@ import { OUTLINE_ACTION, PRIMARY_ACTION } from "@/features/pipeline/shared/butto
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useDeleteTemplate, useSyncTemplates } from "../api/use-whatsapp-templates";
-import { isSavedQuoteTemplate } from "../lib/quote-template";
+import { isSavedTemplate } from "../lib/quote-template";
 import { templateStatus } from "../lib/template-status";
 import { apiErrorMessage } from "../lib/whatsapp-channels";
-import type { QuoteTemplateSettings, WaTemplate } from "../types";
+import type { TemplateSettings, WaTemplate } from "../types";
 import { CARD, CARD_OUTLINE, CARD_PRIMARY, ICON_ACTION } from "./classes";
 import { RequestTemplateDialog } from "./request-template-dialog";
 
@@ -30,7 +30,8 @@ interface WhatsappTemplatesCardProps {
   loading: boolean;
   error: boolean;
   canWrite: boolean;
-  quoteSettings: QuoteTemplateSettings | undefined;
+  quoteSettings: TemplateSettings | undefined;
+  updateSettings: TemplateSettings | undefined;
 }
 
 function lastSynced(templates: WaTemplate[]): string | null {
@@ -39,7 +40,7 @@ function lastSynced(templates: WaTemplate[]): string | null {
   return new Date(latest).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
-function TemplateRow({ template, isQuote, canWrite, onDelete }: { template: WaTemplate; isQuote: boolean; canWrite: boolean; onDelete: () => void }) {
+function TemplateRow({ template, isQuote, isUpdate, canWrite, onDelete }: { template: WaTemplate; isQuote: boolean; isUpdate: boolean; canWrite: boolean; onDelete: () => void }) {
   const status = templateStatus(template.status);
   return (
     <li className="flex min-w-0 items-start gap-3 py-3 first:pt-0 last:pb-0" data-testid={`template-row-${template.id}`}>
@@ -52,6 +53,11 @@ function TemplateRow({ template, isQuote, canWrite, onDelete }: { template: WaTe
           {isQuote && (
             <span className="rounded-md bg-status-posted-bg px-1.5 py-[1px] text-[11px] font-semibold text-status-posted-fg" data-testid="template-quote-tag">
               Quote link
+            </span>
+          )}
+          {isUpdate && (
+            <span className="rounded-md bg-status-posted-bg px-1.5 py-[1px] text-[11px] font-semibold text-status-posted-fg" data-testid="template-update-tag">
+              Updates
             </span>
           )}
         </div>
@@ -72,7 +78,7 @@ function TemplateRow({ template, isQuote, canWrite, onDelete }: { template: WaTe
 }
 
 /** The templates Meta knows for this number: sync them, request a new one, delete one. */
-export function WhatsappTemplatesCard({ channel, templates, loading, error, canWrite, quoteSettings }: WhatsappTemplatesCardProps) {
+export function WhatsappTemplatesCard({ channel, templates, loading, error, canWrite, quoteSettings, updateSettings }: WhatsappTemplatesCardProps) {
   const { toast } = useToast();
   const sync = useSyncTemplates();
   const remove = useDeleteTemplate();
@@ -152,7 +158,7 @@ export function WhatsappTemplatesCard({ channel, templates, loading, error, canW
       ) : (
         <ul className="flex flex-col divide-y divide-social-border">
           {templates.map((t) => (
-            <TemplateRow key={t.id} template={t} isQuote={isSavedQuoteTemplate(t, quoteSettings, channel.id)} canWrite={canWrite} onDelete={() => setConfirm(t)} />
+            <TemplateRow key={t.id} template={t} isQuote={isSavedTemplate(t, quoteSettings, channel.id)} isUpdate={isSavedTemplate(t, updateSettings, channel.id)} canWrite={canWrite} onDelete={() => setConfirm(t)} />
           ))}
         </ul>
       )}
@@ -164,9 +170,14 @@ export function WhatsappTemplatesCard({ channel, templates, loading, error, canW
             <AlertDialogTitle>Delete {confirm?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
               This removes the template from Meta as well; you would need to request and get it approved again.
-              {confirm && isSavedQuoteTemplate(confirm, quoteSettings, channel.id) && (
+              {confirm && isSavedTemplate(confirm, quoteSettings, channel.id) && (
                 <span className="mt-2 block font-medium text-foreground" data-testid="delete-quote-template-warning">
                   It is the quote link template. Until you choose another, quote links outside the 24-hour window will be sent from the agent's phone.
+                </span>
+              )}
+              {confirm && isSavedTemplate(confirm, updateSettings, channel.id) && (
+                <span className="mt-2 block font-medium text-foreground" data-testid="delete-update-template-warning">
+                  It is the General update template. Until you choose another, agents can't message clients whose 24-hour window has closed.
                 </span>
               )}
             </AlertDialogDescription>

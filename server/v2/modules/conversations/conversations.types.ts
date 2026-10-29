@@ -76,3 +76,23 @@ export interface ListConversationsParams {
   search?: string;
   inboxId?: string;
 }
+
+// GET /whatsapp/conversations/{id}/whatsapp-window (WhatsAppWindowStatusResponse).
+export interface SsWhatsappWindowStatus {
+  in_window: boolean;
+  requires_template: boolean;
+  remaining_seconds?: number | null;
+  last_customer_message_at?: string | null;
+  window_end_at?: string | null;
+  window_type?: string | null;
+}
+
+// The same, camelCased at our boundary.
+export interface WhatsappWindow {
+  inWindow: boolean;
+  requiresTemplate: boolean;
+  remainingSeconds: number | null;
+  lastCustomerMessageAt: string | null;
+  windowEndAt: string | null;
+  windowType: string | null;
+}

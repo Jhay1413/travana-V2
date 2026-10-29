@@ -1,4 +1,4 @@
-import type { QuoteVariableMapping, QuoteVariableSource } from "../types";
+import type { TemplateKind, TemplateVariableMapping, TemplateVariableSource } from "../types";
 
 const PLACEHOLDER = /\{\{\s*(\d+)\s*\}\}/g;
 
@@ -41,15 +41,26 @@ export function bodyProblem(body: string): string | null {
   return null;
 }
 
-const SOURCE_EXAMPLE: Record<Exclude<QuoteVariableSource, "custom">, string> = {
+const SOURCE_EXAMPLE: Record<Exclude<TemplateVariableSource, "custom">, string> = {
   client_first_name: "Sam",
   agent_name: "Alex",
   agency_name: "Travana Travel",
   quote_link: "https://…/q/abc",
+  message: "Your transfer is now at 10:30.",
 };
 
-/** Default mapping: {{1}} client name, last of 2+ the quote link, everything else fixed text. */
-export function defaultMapping(index: number, total: number): QuoteVariableMapping {
+/**
+ * Default mapping. Quote: {{1}} client name, last of 2+ the quote link, the rest fixed text.
+ * Update: {{1}} client name, last of 2+ the agent's message, the rest fixed text; a lone
+ * placeholder holds the message, since an update template can't work without one.
+ */
+export function defaultMapping(index: number, total: number, kind: TemplateKind = "quote"): TemplateVariableMapping {
+  if (kind === "update") {
+    if (total === 1) return { source: "message" };
+    if (index === 0) return { source: "client_first_name" };
+    if (index === total - 1) return { source: "message" };
+    return { source: "custom", text: "" };
+  }
   if (index === 0) return { source: "client_first_name" };
   if (total >= 2 && index === total - 1) return { source: "quote_link" };
   return { source: "custom", text: "" };
@@ -58,22 +69,23 @@ export function defaultMapping(index: number, total: number): QuoteVariableMappi
 /** Existing mapping for each placeholder, defaulting the unmapped ones. */
 export function resolveMappings(
   placeholders: string[],
-  saved: Record<string, QuoteVariableMapping> | undefined,
-): Record<string, QuoteVariableMapping> {
-  const out: Record<string, QuoteVariableMapping> = {};
+  saved: Record<string, TemplateVariableMapping> | undefined,
+  kind: TemplateKind = "quote",
+): Record<string, TemplateVariableMapping> {
+  const out: Record<string, TemplateVariableMapping> = {};
   placeholders.forEach((p, i) => {
-    out[p] = saved?.[p] ?? defaultMapping(i, placeholders.length);
+    out[p] = saved?.[p] ?? defaultMapping(i, placeholders.length, kind);
   });
   return out;
 }
 
 /** Every fixed-text row must have text. */
-export function mappingsComplete(mappings: Record<string, QuoteVariableMapping>): boolean {
+export function mappingsComplete(mappings: Record<string, TemplateVariableMapping>): boolean {
   return Object.values(mappings).every((m) => m.source !== "custom" || (m.text ?? "").trim().length > 0);
 }
 
 /** Body with each placeholder swapped for example text (or the fixed text). */
-export function renderPreview(body: string, mappings: Record<string, QuoteVariableMapping>): string {
+export function renderPreview(body: string, mappings: Record<string, TemplateVariableMapping>): string {
   return body.replace(PLACEHOLDER, (whole, n: string) => {
     const m = mappings[n];
     if (!m) return whole;
@@ -89,7 +101,7 @@ export interface PreviewSegment {
 }
 
 /** The body split into literal text and substituted placeholder values, for a highlighted preview. */
-export function previewSegments(body: string, mappings: Record<string, QuoteVariableMapping>): PreviewSegment[] {
+export function previewSegments(body: string, mappings: Record<string, TemplateVariableMapping>): PreviewSegment[] {
   const out: PreviewSegment[] = [];
   let last = 0;
   for (const m of body.matchAll(PLACEHOLDER)) {
@@ -103,4 +115,12 @@ export function previewSegments(body: string, mappings: Record<string, QuoteVari
   }
   if (last < body.length) out.push({ text: body.slice(last), kind: "text" });
   return out;
+}
+
+/** Why an update template can't be saved yet: exactly one placeholder must carry the agent's message. */
+export function messagePlaceholderProblem(mappings: Record<string, TemplateVariableMapping>): string | null {
+  const count = Object.values(mappings).filter((m) => m.source === "message").length;
+  if (count === 0) return "Pick one placeholder to hold the agent's message.";
+  if (count > 1) return "Only one placeholder can hold the agent's message.";
+  return null;
 }
