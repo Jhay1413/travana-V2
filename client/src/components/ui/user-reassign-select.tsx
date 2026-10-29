@@ -43,8 +43,9 @@ export function UserReassignSelect({
   const isAll = allowAll && value === "all";
   const selectedUser = isAll ? null : users?.find((user) => user.id === value);
 
+  // modal: keeps the list clickable when this picker sits inside a Dialog.
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
         <button
           type="button"

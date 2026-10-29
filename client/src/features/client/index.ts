@@ -18,3 +18,4 @@ export { isLostBooking } from "./lib/client-stats";
 export { ClientFormDrawer } from "./components/modals/ClientFormDrawer";
 export { useClientCreateForm } from "./components/hooks";
 export { isClientReadOnly } from "./lib/client-access";
+export { liveDealOptions, taskEntityForDeal, linkedTaskEntity, dealKey, DEAL_GROUP_LABELS, DEAL_GROUP_ORDER, type TaskDealOption, type TaskDealType } from "./lib/task-link";

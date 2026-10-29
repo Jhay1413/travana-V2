@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, Film, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Film, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ImageItem } from "./editor.types";
+import type { ImageItem, UrlImage } from "./editor.types";
 
 interface PostOrderStripProps {
   imageOrder: ImageItem[];
@@ -9,6 +9,10 @@ interface PostOrderStripProps {
   onInsert: (fromKey: string, toKey: string) => void;
   onRemove: (sortKey: string) => void;
   onLocalSize: (localId: string, w: number, h: number) => void;
+  onUrlSize: (url: string, w: number, h: number) => void;
+  /** Quote images not in the post: shown dimmed after the selected ones; click to append. */
+  unselected: UrlImage[];
+  onAdd: (url: string) => void;
 }
 
 function previewSrc(item: ImageItem): string {
@@ -21,11 +25,42 @@ function itemName(item: ImageItem): string {
   return item.type === "local" ? item.data.file.name : item.data.name;
 }
 
+/** Thumbnail that reports its natural size (also for cached images whose `load` already fired). */
+function MeasuredImg({ src, alt, onSize }: { src: string; alt: string; onSize: (w: number, h: number) => void }) {
+  const ref = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    const img = ref.current;
+    if (img?.complete && img.naturalWidth > 0) onSize(img.naturalWidth, img.naturalHeight);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src]);
+  return (
+    <img
+      ref={ref}
+      src={src}
+      alt={alt}
+      draggable={false}
+      onLoad={(e) => {
+        if (e.currentTarget.naturalWidth > 0) onSize(e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
+      }}
+      className="pointer-events-none h-full w-full rounded-lg object-cover"
+    />
+  );
+}
+
 const ARROW =
   "flex h-5 w-5 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow disabled:opacity-40";
 
-/** Every image in the post as one list: numbered, draggable onto another to reorder, with earlier/later arrows. */
-export function PostOrderStrip({ imageOrder, onMove, onInsert, onRemove, onLocalSize }: PostOrderStripProps) {
+/** Every image as small tiles: the posted ones numbered and draggable (with arrows), then the dimmed quote images to add. */
+export function PostOrderStrip({
+  imageOrder,
+  onMove,
+  onInsert,
+  onRemove,
+  onLocalSize,
+  onUrlSize,
+  unselected,
+  onAdd,
+}: PostOrderStripProps) {
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [overKey, setOverKey] = useState<string | null>(null);
 
@@ -78,16 +113,13 @@ export function PostOrderStrip({ imageOrder, onMove, onInsert, onRemove, onLocal
                 <Film className="h-6 w-6" />
               </div>
             ) : (
-              <img
+              <MeasuredImg
                 src={previewSrc(item)}
                 alt={name}
-                draggable={false}
-                onLoad={(e) => {
-                  if (item.type === "local" && e.currentTarget.naturalWidth > 0) {
-                    onLocalSize(item.data.localId, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight);
-                  }
+                onSize={(w, h) => {
+                  if (item.type === "local") onLocalSize(item.data.localId, w, h);
+                  else if (item.type === "url") onUrlSize(item.data.url, w, h);
                 }}
-                className="pointer-events-none h-full w-full rounded-lg object-cover"
               />
             )}
             <span
@@ -98,7 +130,7 @@ export function PostOrderStrip({ imageOrder, onMove, onInsert, onRemove, onLocal
             </span>
             <button
               type="button"
-              aria-label={`Remove image ${position}`}
+              aria-label={item.type === "url" ? `Remove image ${position} from the post` : `Remove image ${position}`}
               onClick={() => onRemove(item.sortKey)}
               className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white opacity-0 shadow-sm transition-opacity focus-visible:opacity-100 group-hover/tile:opacity-100"
             >
@@ -127,6 +159,22 @@ export function PostOrderStrip({ imageOrder, onMove, onInsert, onRemove, onLocal
           </li>
         );
       })}
+      {unselected.map((img, i) => (
+        <li key={img.url} className="h-24 w-24" data-testid={`unselected-image-${i}`}>
+          <button
+            type="button"
+            aria-label={`Add ${img.name || "image"} to the post`}
+            onClick={() => onAdd(img.url)}
+            className="group/add relative h-full w-full overflow-hidden rounded-lg border border-slate-200 bg-slate-100 opacity-50 transition-opacity hover:opacity-90 focus-visible:opacity-90"
+            data-testid={`button-add-url-image-${i}`}
+          >
+            <MeasuredImg src={img.url} alt={img.name} onSize={(w, h) => onUrlSize(img.url, w, h)} />
+            <span className="absolute left-1/2 top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 opacity-0 shadow transition-opacity group-hover/add:opacity-100 group-focus-visible/add:opacity-100">
+              <Plus className="h-4 w-4" />
+            </span>
+          </button>
+        </li>
+      ))}
     </ul>
   );
 }

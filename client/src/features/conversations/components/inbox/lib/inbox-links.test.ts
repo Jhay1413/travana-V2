@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildClientInboxHref,
   buildConversationInboxHref,
+  deepLinkPending,
   parseInboxDeepLink,
   pickConversationToOpen,
   tabForConversation,
@@ -74,5 +75,33 @@ describe("pickConversationToOpen", () => {
       NOW,
     );
     expect(pick).toEqual({ id: "b", tab: "snoozed" });
+  });
+});
+
+describe("deepLinkPending", () => {
+  const base = { urlSearch: "", appliedConversation: null, appliedClient: null, targetId: null, clientTarget: null };
+
+  it("is idle for a plain inbox URL", () => {
+    expect(deepLinkPending(base)).toEqual({ client: false, conversationId: null });
+  });
+
+  it("is pending on first render for ?client= before the effect applies it", () => {
+    expect(deepLinkPending({ ...base, urlSearch: "?client=c1" }).client).toBe(true);
+  });
+
+  it("is pending on first render for ?conversation=", () => {
+    expect(deepLinkPending({ ...base, urlSearch: "?conversation=v1" }).conversationId).toBe("v1");
+  });
+
+  it("stays pending while the client target resolves, then settles", () => {
+    const applied = { ...base, urlSearch: "?client=c1", appliedClient: "c1" };
+    expect(deepLinkPending({ ...applied, clientTarget: "c1" }).client).toBe(true);
+    expect(deepLinkPending(applied).client).toBe(false);
+  });
+
+  it("keeps the conversation pending while it is fetched by id", () => {
+    const applied = { ...base, urlSearch: "?conversation=v1", appliedConversation: "v1" };
+    expect(deepLinkPending({ ...applied, targetId: "v1" }).conversationId).toBe("v1");
+    expect(deepLinkPending(applied).conversationId).toBeNull();
   });
 });

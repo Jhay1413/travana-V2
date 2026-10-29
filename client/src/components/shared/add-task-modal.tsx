@@ -8,6 +8,8 @@ import {
   TaskTimeField,
   TaskTypeField,
 } from "@/components/shared/task-modal/task-form-fields";
+import { TaskLinkFields } from "@/components/shared/task-modal/task-link-fields";
+import { linkedTaskEntity, type NeonClient, type TaskDealOption } from "@/features/client";
 import { useCreateTask } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { FOLLOW_UP_DUE_TIME, fillEmptyAssignee, isOpening, londonDueDate, tomorrowLondonKey } from "@/features/tasks/lib/task-defaults";
@@ -25,6 +27,7 @@ interface AddTaskModalProps {
   defaultDueDate?: string;
   /** Pre-filled due time, HH:mm. Defaults to 10:00. */
   defaultDueTime?: string;
+  /** The entity the task belongs to. When omitted, the form offers an optional client and deal to link instead. */
   entityType?: string;
   entityId?: string;
   /** Pre-selected assignee (the current user or the deal owner); the agent can be changed in the form. */
@@ -34,7 +37,10 @@ interface AddTaskModalProps {
   testIdPrefix?: string;
 }
 
-/** Add-task pop-up matching the prototype: what / assignee / date / time, pre-assigned to the caller-supplied user. */
+/**
+ * Add-task pop-up matching the prototype: what / assignee / date / time, pre-assigned to the caller-supplied user.
+ * Without a caller-supplied entity it also offers an optional client and one of that client's live deals to attach to.
+ */
 export function AddTaskModal({
   open,
   onOpenChange,
@@ -59,6 +65,9 @@ export function AddTaskModal({
   const [dueTime, setDueTime] = useState(FOLLOW_UP_DUE_TIME);
   const [assignedToId, setAssignedToId] = useState("");
   const [showError, setShowError] = useState(false);
+  const [linkClient, setLinkClient] = useState<NeonClient | null>(null);
+  const [linkDeal, setLinkDeal] = useState<TaskDealOption | null>(null);
+  const hasEntity = !!entityType && !!entityId;
 
   // Reset the form on the closed -> open flip only.
   const prevOpen = useRef(false);
@@ -73,6 +82,8 @@ export function AddTaskModal({
     setDueDate(defaultDueDate || tomorrowLondonKey());
     setDueTime(defaultDueTime || FOLLOW_UP_DUE_TIME);
     setAssignedToId(defaultAssignedToId ?? "");
+    setLinkClient(null);
+    setLinkDeal(null);
   }, [open]);
 
   // A default assignee that arrives after opening fills an empty slot but never overwrites a choice.
@@ -101,7 +112,7 @@ export function AddTaskModal({
         userId: assignedToId,
         completed: false,
         notified: false,
-        ...(entityType && entityId ? { entityType, entityId } : {}),
+        ...linkedTaskEntity({ entityType, entityId, deal: linkDeal, clientId: linkClient?.id ?? null }),
       },
       {
         onSuccess: () => {
@@ -152,6 +163,7 @@ export function AddTaskModal({
         autoFocus
         error={{ show: showError, testId: `${p}-error` }}
       />
+      {!hasEntity && <TaskLinkFields client={linkClient} onClientChange={setLinkClient} deal={linkDeal} onDealChange={setLinkDeal} testIdPrefix={p} />}
       <TaskAssigneeField id={`${p}-assignee`} testId={`${p}-assignee`} value={assignedToId} onChange={setAssignedToId} />
       <TaskPriorityField id={`${p}-priority`} testId={`${p}-priority`} value={priority} onChange={setPriority} />
       <TaskDateField id={`${p}-date`} testId={`${p}-date`} value={dueDate} onChange={setDueDate} />

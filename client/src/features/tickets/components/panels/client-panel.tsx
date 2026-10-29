@@ -3,7 +3,7 @@ import { ExternalLink, Mail, MessageSquare, Phone } from "lucide-react";
 import { PersonAvatar } from "@/components/shared/person-avatar";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/hooks/queries";
-import { buildClientInboxHref, useClientContactLink } from "@/features/conversations";
+import { buildClientInboxHref } from "@/features/conversations";
 import { OUTLINE_ACTION } from "@/features/pipeline/shared/button-styles";
 import { clientDisplayName } from "@/lib/utils";
 import { cleanClientName } from "../../lib/ticket-display";
@@ -29,7 +29,6 @@ function ContactRow({ icon, text, strong }: { icon: React.ReactNode; text: strin
 export function ClientPanel({ ticket, className }: { ticket: Ticket; className?: string }) {
   const clientId = ticket.clientId || null;
   const { data: client, isLoading } = useClient(clientId ?? "");
-  const { data: contactLink } = useClientContactLink(clientId);
   if (!clientId) return <InternalTicketPanel className={className} />;
 
   const raw = client as unknown as RawClientRow | undefined;
@@ -65,14 +64,12 @@ export function ClientPanel({ ticket, className }: { ticket: Ticket; className?:
                   </a>
                 </Button>
               )}
-              {contactLink?.contactId && (
-                <Button asChild variant="outline" className={ACTION}>
-                  <Link href={buildClientInboxHref(clientId)} data-testid="ticket-client-message">
-                    <MessageSquare className="h-[15px] w-[15px]" strokeWidth={2} />
-                    Message
-                  </Link>
-                </Button>
-              )}
+              <Button asChild variant="outline" className={ACTION}>
+                <Link href={buildClientInboxHref(clientId)} data-testid="ticket-client-message">
+                  <MessageSquare className="h-[15px] w-[15px]" strokeWidth={2} />
+                  Message
+                </Link>
+              </Button>
               {email && (
                 <Button asChild variant="outline" className={ACTION}>
                   <a href={`mailto:${email}`} data-testid="ticket-client-email">

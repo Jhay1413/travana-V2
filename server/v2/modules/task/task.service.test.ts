@@ -56,6 +56,55 @@ beforeEach(() => {
   vi.mocked(userRepository.findAll).mockResolvedValue([{ id: "u2" }, { id: "u3" }] as never);
   vi.mocked(taskRepository.findEntityBranchId).mockResolvedValue(null);
   vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue(undefined as never);
+  vi.mocked(taskRepository.entityInScope).mockResolvedValue(true);
+});
+
+describe("taskService.create entity scope", () => {
+  beforeEach(() => {
+    vi.mocked(taskRepository.create).mockResolvedValue({ id: "t1", userId: "u1" } as never);
+  });
+
+  it("rejects a task on an entity the caller cannot open, before creating anything", async () => {
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(false);
+    await expect(taskService.create({ entityType: "enquiry", entityId: "e9", userId: "u1", title: "T" } as never, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(taskRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a booking id under the quote entity type, as the booking page stores them", async () => {
+    vi.mocked(taskRepository.entityInScope).mockImplementation(async (type, id) => type === "booking" && id === "b1");
+    await taskService.create({ entityType: "quote", entityId: "b1", userId: "u1", title: "T" } as never, SCOPE);
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("quote", "b1", SCOPE);
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("booking", "b1", SCOPE);
+    expect(taskRepository.create).toHaveBeenCalled();
+  });
+
+  it("takes the branch from the booking when a booking id is stored under the quote type", async () => {
+    vi.mocked(taskRepository.entityInScope).mockImplementation(async (type, id) => type === "booking" && id === "b1");
+    vi.mocked(taskRepository.findEntityBranchId).mockResolvedValue("booking-branch");
+    await taskService.create({ entityType: "quote", entityId: "b1", userId: "u1", title: "T" } as never, SCOPE);
+    expect(taskRepository.findEntityBranchId).toHaveBeenCalledWith("booking", "b1");
+    expect(vi.mocked(taskRepository.create).mock.calls[0][0]).toMatchObject({ entityType: "quote", entityId: "b1", branchId: "booking-branch" });
+  });
+
+  it("still creates for the system (webhook) scope with no user when the entity is in the org", async () => {
+    const system: Scope = { ...SCOPE, orgRole: "org_admin", orgRoles: ["org_admin"], branchId: null, userId: null };
+    await taskService.create({ entityType: "enquiry", entityId: "e1", userId: "u1", title: "T" } as never, system);
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("enquiry", "e1", system);
+    expect(taskRepository.create).toHaveBeenCalled();
+  });
+
+  it("lists a booking's tasks when asked under the quote type with the booking id", async () => {
+    vi.mocked(taskRepository.entityInScope).mockImplementation(async (type, id) => type === "booking" && id === "b1");
+    vi.mocked(taskRepository.findByEntity).mockResolvedValue([{ id: "t1" }] as never);
+    await expect(taskService.listByEntity("quote", "b1", SCOPE)).resolves.toEqual([{ id: "t1" }]);
+    expect(taskRepository.findByEntity).toHaveBeenCalledWith("quote", "b1", SCOPE);
+  });
+
+  it("does not check scope for a task with no entity", async () => {
+    await taskService.create({ userId: "u1", title: "T" } as never, SCOPE);
+    expect(taskRepository.entityInScope).not.toHaveBeenCalled();
+    expect(taskRepository.create).toHaveBeenCalled();
+  });
 });
 
 describe("taskService.create", () => {

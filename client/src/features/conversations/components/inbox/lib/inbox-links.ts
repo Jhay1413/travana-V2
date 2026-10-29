@@ -64,3 +64,37 @@ export function pickConversationToOpen(
   const chosen = open ?? newestFirst[0];
   return { id: chosen.id, tab: tabForConversation(chosen, now) };
 }
+
+export interface DeepLinkPendingInput {
+  urlSearch: string;
+  /** Last conversation / client id the hook acted on (null before the first effect). */
+  appliedConversation: string | null;
+  appliedClient: string | null;
+  /** Conversation id still being fetched by id. */
+  targetId: string | null;
+  /** Client id still resolving to a conversation. */
+  clientTarget: string | null;
+}
+
+export interface DeepLinkPending {
+  /** A client target is unapplied or still resolving: no conversation should be shown. */
+  client: boolean;
+  /** The conversation id the inbox is about to open, if any. */
+  conversationId: string | null;
+}
+
+/**
+ * What the URL asks for that the inbox has not finished opening. Computed from
+ * the URL itself, so it is true on the very first render, before any effect has
+ * had the chance to apply the deep link (which is what stops the latest
+ * conversation flashing first).
+ */
+export function deepLinkPending(input: DeepLinkPendingInput): DeepLinkPending {
+  const { conversationId, clientId } = parseInboxDeepLink(input.urlSearch);
+  const unappliedConversation = conversationId && conversationId !== input.appliedConversation ? conversationId : null;
+  const unappliedClient = clientId && clientId !== input.appliedClient ? clientId : null;
+  return {
+    client: !!(unappliedClient || input.clientTarget),
+    conversationId: input.targetId ?? unappliedConversation,
+  };
+}

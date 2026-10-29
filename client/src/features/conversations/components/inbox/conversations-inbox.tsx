@@ -94,6 +94,7 @@ export function ConversationsInbox() {
       />
 
       <ThreadPane
+        loading={state.threadLoading}
         conversation={selected}
         messages={actions.threadMessages}
         isLoadingMessages={actions.messagesLoading}

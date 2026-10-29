@@ -69,6 +69,18 @@ async function resolveTaskBranch(
 
 const branchExistsInOrg = async (branchId: string, orgId: string) => !!(await branchRepository.findById(branchId, orgId));
 
+/**
+ * Can the caller open this task entity? Booking tasks are stored as entity_type
+ * "quote" with the booking id (the booking page's convention), so a "quote" id
+ * that names a booking resolves as that booking. Returns the real entity type,
+ * or null when the entity is out of scope / unknown.
+ */
+async function resolveEntityInScope(entityType: string, entityId: string, scope: Scope): Promise<string | null> {
+  if (await taskRepository.entityInScope(entityType, entityId, scope)) return entityType;
+  if (entityType === "quote" && (await taskRepository.entityInScope("booking", entityId, scope))) return "booking";
+  return null;
+}
+
 export const taskService = {
   async listAll(userId?: string, scope?: Scope): Promise<TaskWithClient[]> {
     return await taskRepository.findAll(userId, scope);
@@ -80,7 +92,7 @@ export const taskService = {
 
   async listByEntity(entityType: string, entityId: string, scope?: Scope): Promise<TaskNew[]> {
     // Verify the caller can open the entity (partitioned) before listing its tasks.
-    if (scope && !(await taskRepository.entityInScope(entityType, entityId, scope))) {
+    if (scope && !(await resolveEntityInScope(entityType, entityId, scope))) {
       throw new AppError("Not found", 404);
     }
     return await taskRepository.findByEntity(entityType, entityId, scope);
@@ -107,9 +119,19 @@ export const taskService = {
   async create(data: InsertTaskNew, scope?: Scope): Promise<TaskNew> {
     let values: InsertTaskNew = data;
     if (scope) {
+      // A task may only be attached to an entity the caller can open (fail
+      // closed, same 404 as listing that entity's tasks). Booking tasks are
+      // stored as entity_type "quote" with the booking id (the booking page's
+      // convention), so a "quote" id is also accepted when it names a booking.
+      let realEntityType = data.entityType ?? null;
+      if (data.entityType && data.entityId) {
+        realEntityType = await resolveEntityInScope(data.entityType, data.entityId, scope);
+        if (!realEntityType) throw new AppError("Not found", 404);
+      }
       // orgId always from scope; a body branchId is only honoured for admins (inside their org).
       const safe = await stripOwnershipFields(data, scope, branchExistsInOrg);
-      const branchId = safe.branchId ?? (await resolveTaskBranch(safe, scope, true));
+      // The branch comes from the real entity (a booking stored under "quote" is looked up as a booking).
+      const branchId = safe.branchId ?? (await resolveTaskBranch({ ...safe, entityType: realEntityType }, scope, true));
       values = { ...safe, ...(branchId ? { branchId } : {}) } as InsertTaskNew;
     }
     const result = await taskRepository.create(values, scope);

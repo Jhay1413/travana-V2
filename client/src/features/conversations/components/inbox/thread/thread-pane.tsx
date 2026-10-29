@@ -9,6 +9,8 @@ import { ThreadHeader } from "./thread-header";
 import { ThreadToolbar } from "./thread-toolbar";
 
 export interface ThreadPaneProps {
+  /** A deep link is still opening: neutral loading state instead of "Pick a conversation". */
+  loading?: boolean;
   /** Merged with the optimistic overlay by the owner. */
   conversation: Conversation | null;
   messages: ConversationMessage[];
@@ -47,6 +49,7 @@ export interface ThreadPaneProps {
 const SHELL = "flex min-w-0 flex-1 flex-col rounded-2xl border border-social-border bg-card";
 
 export function ThreadPane({
+  loading = false,
   conversation,
   messages,
   isLoadingMessages,
@@ -75,6 +78,14 @@ export function ThreadPane({
   onDismissLuna,
   composer,
 }: ThreadPaneProps) {
+  if (!conversation && loading) {
+    return (
+      <div className={`${SHELL} items-center justify-center text-center`} data-testid="thread-loading">
+        <div className="text-[13px] text-muted-foreground">Opening conversation…</div>
+      </div>
+    );
+  }
+
   if (!conversation) {
     return (
       <div className={`${SHELL} items-center justify-center text-center`} data-testid="thread-empty">

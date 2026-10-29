@@ -329,7 +329,6 @@ export function SocialPostEditorDialog({
                     onToggleUrl={images.toggleUrlImage}
                     onMove={images.moveImage}
                     onInsert={images.insertImage}
-                    urlSortKey={urlSortKey}
                     onSetAllUrls={images.setAllUrlImages}
                     onFiles={images.handleFiles}
                     onRemove={images.removeImage}

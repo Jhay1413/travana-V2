@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { noteAttachments, notes, transaction, type NoteAttachment, type InsertNoteAttachment } from "@shared/schema";
+import { noteAttachments, notes, transaction, transaction, type NoteAttachment, type InsertNoteAttachment } from "@shared/schema";
 import { eq, desc, asc, or, sql } from "drizzle-orm";
 
 export const noteAttachmentRepository = {

@@ -94,14 +94,7 @@ export function useInboxState() {
     setNewMessageClientId(clientId);
     setNewMessageOpen(true);
   }, []);
-  const clearClientParam = useCallback(() => {
-    const params = new URLSearchParams(urlSearch);
-    if (!params.has("client")) return;
-    params.delete("client");
-    const rest = params.toString();
-    navigate(rest ? `${location}?${rest}` : location, { replace: true });
-  }, [urlSearch, location, navigate]);
-  const deepLink = useInboxDeepLink({ urlSearch, setTab, setSelectedId, resetListView, openNewMessage, clearClientParam, tab });
+  const deepLink = useInboxDeepLink({ urlSearch, setTab, setSelectedId, resetListView, openNewMessage, tab });
   const { holdSelection } = deepLink;
 
   // ?new=1 opens the new-message dialog once, then is stripped from the URL.
@@ -256,13 +249,19 @@ export function useInboxState() {
   // Last known object for the selection, so the thread stays on screen if the
   // server drops the row from the current page (see the keeper above).
   const selectedCache = useRef<Conversation | null>(null);
-  const selected = useMemo(() => {
+  const selectedRaw = useMemo(() => {
     const found =
       conversations.find((c) => c.id === selectedId) ??
       (deepLink.resolved && deepLink.resolved.id === selectedId ? deepLink.resolved : null);
     if (found) selectedCache.current = found;
     return found ?? (selectedId && selectedCache.current?.id === selectedId ? selectedCache.current : null);
   }, [conversations, selectedId, deepLink.resolved]);
+  // While a deep link is still opening, show a loading thread instead of
+  // whatever happens to be selected (the previous or the latest conversation).
+  // A conversation target that is already selected may show straight away.
+  const { pending } = deepLink;
+  const threadLoading = pending.client || (pending.conversationId !== null && selectedRaw?.id !== pending.conversationId);
+  const selected = threadLoading ? null : selectedRaw;
 
   // Selecting a conversation again retires its local "Mark as unread".
   useEffect(() => {
@@ -354,7 +353,7 @@ export function useInboxState() {
     tab, setTab, search, setSearch, chip, setChip, filters, setFilters, sort, setSort,
     page, setPage, pagination, isLoading, isFetching, isError, refetch,
     inboxId, setInboxId, inboxList, activeInbox,
-    selectedId, setSelectedId, selected, rows, conversations, now,
+    selectedId, setSelectedId, selected, threadLoading, rows, conversations, now,
     overlay, setOverlay, clearOptimistic, clearSnoozeOverride, settleSnoozeOverride,
     seenAt, markSeen, forcedUnread, markUnread,
     ...drafts,

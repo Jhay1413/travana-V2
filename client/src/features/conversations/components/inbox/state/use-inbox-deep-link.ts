@@ -3,7 +3,7 @@ import { toUiConversation } from "../../../map";
 import { useClientContactLink } from "../../../api/use-contact-link";
 import { useConversation, useConversations } from "../../../api/use-conversations-queries";
 import type { Conversation } from "../../../types";
-import { parseInboxDeepLink, pickConversationToOpen, tabForConversation } from "../lib";
+import { deepLinkPending, parseInboxDeepLink, pickConversationToOpen, tabForConversation } from "../lib";
 import type { InboxListTab } from "./derive-rows";
 
 export interface InboxDeepLinkOptions {
@@ -13,8 +13,6 @@ export interface InboxDeepLinkOptions {
   /** Clears search, chips, filters and paging so the target is not hidden. */
   resetListView: () => void;
   openNewMessage: (clientId: string | null) => void;
-  /** Drops `?client=` from the URL (used when there is nothing to open). */
-  clearClientParam: () => void;
   /** The tab currently shown; a late by-id resolve must not override a user's change. */
   tab: InboxListTab;
 }
@@ -27,10 +25,13 @@ export interface InboxDeepLinkOptions {
  * in. A client target goes clientId -> contact link -> that contact's
  * conversations -> the most recent open one (else the most recent of any
  * status); a linked client with none opens the new-message dialog pre-filled.
- * A client with no contact link just lands on the plain inbox.
+ * A client with no contact link opens the same dialog, so staff can still
+ * start the conversation. While a target is pending, `holdSelection` blocks the
+ * keeper and `pending` tells the owner to show a loading thread, so the latest
+ * conversation never flashes first.
  */
 export function useInboxDeepLink(opts: InboxDeepLinkOptions) {
-  const { urlSearch, setTab, setSelectedId, resetListView, openNewMessage, clearClientParam, tab } = opts;
+  const { urlSearch, setTab, setSelectedId, resetListView, openNewMessage, tab } = opts;
   const [targetId, setTargetId] = useState<string | null>(null);
   const [clientTarget, setClientTarget] = useState<string | null>(null);
   // The deep-linked conversation as fetched by id; stands in for the selection
@@ -92,7 +93,7 @@ export function useInboxDeepLink(opts: InboxDeepLinkOptions) {
     }
     if (link.isSuccess && !contactId) {
       setClientTarget(null);
-      clearClientParam();
+      openNewMessage(clientTarget);
       return;
     }
     if (!contactId) return;
@@ -106,22 +107,30 @@ export function useInboxDeepLink(opts: InboxDeepLinkOptions) {
     const pick = pickConversationToOpen(data.items.map(toUiConversation), new Date());
     if (pick) startConversation(pick.id);
     else openNewMessage(clientTarget);
-  }, [clientTarget, link.isError, link.isSuccess, contactId, contactConversations.data, contactConversations.isError, contactConversations.isPlaceholderData, openNewMessage, clearClientParam, startConversation]);
+  }, [clientTarget, link.isError, link.isSuccess, contactId, contactConversations.data, contactConversations.isError, contactConversations.isPlaceholderData, openNewMessage, startConversation]);
 
   /**
    * True while the selection must not be replaced by the keeper: the target is
    * still being fetched, or it was fetched by id, is not on the current page,
    * and the list scope has not changed since.
    */
+  const pending = deepLinkPending({
+    urlSearch,
+    appliedConversation: appliedConversation.current,
+    appliedClient: appliedClient.current,
+    targetId,
+    clientTarget,
+  });
+  const isPending = pending.client || pending.conversationId !== null;
   const holdSelection = useCallback(
     (selectedId: string | null, scopeKey: string, inRows: boolean): boolean => {
-      if (targetId) return true;
+      if (isPending) return true;
       if (!resolved || resolved.id !== selectedId || inRows) return false;
       if (keepScope.current === null) keepScope.current = scopeKey;
       return keepScope.current === scopeKey;
     },
-    [targetId, resolved],
+    [isPending, resolved],
   );
 
-  return { resolved, holdSelection };
+  return { resolved, holdSelection, pending };
 }
