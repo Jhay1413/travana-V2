@@ -32,7 +32,7 @@ import { QuoteExpiryDialog } from "@/features/quote/components/QuoteExpiryDialog
 import { ClientPageHeader } from "@/features/client/components/page/client-page-header";
 import { ClientStatBoxes } from "@/features/client/components/page/client-stat-boxes";
 import { ClientDashboardCard } from "@/features/client/components/page/client-dashboard-card";
-import { PortalAccessCard, ReferralNetworkCard, ReferredByCard } from "@/features/client/components/page/side-cards";
+import { ClientDetailsCard } from "@/features/client/components/page/client-details-card";
 import { LiveDealsRail } from "@/features/client/components/page/live-deals-rail";
 import { useLiveDealsState } from "@/features/client/components/page/use-live-deals-state";
 import { EditClientModal } from "@/features/client/components/page/modals/edit-client-modal";
@@ -295,9 +295,10 @@ export default function ClientPage() {
           onCreate={handleCreate}
           onMerge={() => setShowMergeDialog(true)}
           onToggleAiReply={handleToggleAiReply}
+          onChangeReferrer={() => setShowReferrerModal(true)}
         />
         <div className="p-4 md:p-6" data-testid="client-index-view">
-          <div className="grid gap-5 2xl:grid-cols-[1.45fr_1fr]">
+          <div className="grid items-start gap-5 rounded-3xl border border-social-border bg-[#F1F4F8] p-4 md:p-6 min-[1400px]:grid-cols-[1.4fr_1fr] dark:bg-muted/40">
             <div className="flex min-w-0 flex-col gap-5">
               <ClientStatBoxes stats={stats} />
               <ClientDashboardCard
@@ -320,9 +321,13 @@ export default function ClientPage() {
               />
             </div>
             <div className="flex min-w-0 flex-col gap-5">
-              <ReferredByCard referrerId={clientData?.referredByClientId} readOnly={readOnly} onChange={() => setShowReferrerModal(true)} />
-              <PortalAccessCard clientId={clientId} readOnly={readOnly} onChangePin={() => setShowPinModal(true)} />
-              <ReferralNetworkCard clientId={clientId} />
+              <ClientDetailsCard
+                clientId={clientId}
+                clientData={clientData}
+                readOnly={readOnly}
+                onEditClient={editForm.openEditDialog}
+                onChangePin={() => setShowPinModal(true)}
+              />
             </div>
           </div>
         </div>

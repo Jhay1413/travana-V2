@@ -16,3 +16,9 @@ describe("resolveClientTab", () => {
     expect(resolveClientTab("tab=vip-club")).toBe("club-vip");
   });
 });
+
+describe("CLIENT_TABS labels", () => {
+  it("calls the VIP tab Club VIP", () => {
+    expect(CLIENT_TABS.find((t) => t.value === "club-vip")?.label).toBe("Club VIP");
+  });
+});

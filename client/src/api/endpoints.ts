@@ -67,6 +67,9 @@ export const TARGETS_ENDPOINTS = {
 
 export const NEON_CLIENT_ENDPOINTS = {
   portalPin: (clientId: string) => `${API_V2}/neon-clients/${clientId}/portal-pin`,
+  passengers: (clientId: string) => `${API_V2}/neon-clients/${clientId}/passengers`,
+  passengerLead: (clientId: string) => `${API_V2}/neon-clients/${clientId}/passengers/lead`,
+  passenger: (clientId: string, passengerId: string) => `${API_V2}/neon-clients/${clientId}/passengers/${passengerId}`,
 } as const;
 
 export const CLIENT_FILE_ENDPOINTS = {

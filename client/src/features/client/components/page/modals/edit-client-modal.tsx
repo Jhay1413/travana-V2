@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ClientEditForm } from "@/features/client/components/hooks/use-client-edit-form";
 
-const TITLES = ["Mr.", "Mrs", "Ms", "Miss"] as const;
+import { PASSENGER_TITLES as TITLES } from "@/features/client/lib/client-passengers";
 
 interface FieldDef {
   key: keyof ClientEditForm;

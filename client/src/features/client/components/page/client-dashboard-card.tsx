@@ -100,6 +100,7 @@ export function ClientDashboardCard({
           items={items}
           height={42}
           label="Client dashboard sections"
+          countVariant="amber-solid"
           className="w-full min-w-[440px]"
           itemClassName="flex-1 px-2"
         />

@@ -33,8 +33,9 @@ export interface SegmentedProps<T extends string> {
   /**
    * How counts render: "pill" (default) a small translucent pill; "plain" muted text;
    * "amber" a white pill that turns amber on the active segment (the holidays rail).
+   * "amber-solid" an always-amber pill (client dashboard Views).
    */
-  countVariant?: "pill" | "plain" | "amber";
+  countVariant?: "pill" | "plain" | "amber" | "amber-solid";
 }
 
 export function Segmented<T extends string>({
@@ -75,6 +76,7 @@ export function Segmented<T extends string>({
                 "text-[11px] font-semibold tabular-nums",
                 countVariant === "pill" && "rounded-full bg-black/5 px-1.5 dark:bg-white/10",
                 countVariant === "plain" && "text-social-muted group-data-[state=on]:text-inherit",
+                countVariant === "amber-solid" && "rounded-full bg-[#FEF3C7] px-1.5 text-[#92400E]",
                 countVariant === "amber" &&
                   "rounded-full bg-card px-1.5 text-social-muted group-data-[state=on]:bg-stage-inplay-bg group-data-[state=on]:text-stage-inplay-fg",
               )}

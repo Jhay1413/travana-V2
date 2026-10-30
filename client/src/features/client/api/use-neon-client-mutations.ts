@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { neonClientApi } from "@/api";
 import { neonClientKeys } from "@/hooks/queries";
 import type { NeonClient, NeonClientImportRow } from "@/features/client/types/neon-client";
+import { clientPassengerKeys } from "./use-client-passengers";
 
 export function useCreateNeonClient() {
   const queryClient = useQueryClient();
@@ -21,6 +22,8 @@ export function useUpdateNeonClient() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: neonClientKeys.detail(variables.id) });
       queryClient.invalidateQueries({ queryKey: neonClientKeys.all });
+      // The lead passenger's name and date of birth come from the client record.
+      queryClient.invalidateQueries({ queryKey: clientPassengerKeys.list(variables.id) });
     },
   });
 }

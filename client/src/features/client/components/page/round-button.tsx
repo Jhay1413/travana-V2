@@ -1,12 +1,14 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-type Tone = "navy" | "orange" | "plain";
+type Tone = "navy" | "orange" | "plain" | "sky" | "indigo";
 
 const TONES: Record<Tone, string> = {
   navy: "bg-social-navy text-white hover:bg-social-navy-ink",
   orange: "bg-social-orange text-slate-900 hover:bg-social-orange-text hover:text-white",
   plain: "border border-social-border bg-card text-foreground hover:bg-muted",
+  sky: "bg-[#0EA5E9] text-white hover:bg-[#0284C7]",
+  indigo: "bg-[#4F46E5] text-white hover:bg-[#4338CA]",
 };
 
 interface RoundButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

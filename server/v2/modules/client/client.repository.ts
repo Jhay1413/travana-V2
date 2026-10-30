@@ -2,6 +2,7 @@ import { db } from "../../config/database";
 import {
   clientTable,
   clientMergeLog,
+  clientPassenger,
   transaction,
   notes,
   task,
@@ -195,6 +196,36 @@ export const clientRepository = {
         await tx.update(clientTags).set({ clientId: targetId })
           .where(eq(clientTags.clientId, sourceId)).returning({ id: clientTags.id }),
       );
+
+      // --- Saved passengers: non-lead rows move across; the source's lead row moves as the
+      // lead if the target has none, otherwise it becomes a normal passenger built from the
+      // source client's own details (so the one-lead-per-client unique index never conflicts).
+      counts.passengers = moveCount(
+        await tx.update(clientPassenger).set({ clientId: targetId })
+          .where(and(eq(clientPassenger.clientId, sourceId), eq(clientPassenger.isLead, false)))
+          .returning({ id: clientPassenger.id }),
+      );
+      const [sourceLead] = await tx.select({ id: clientPassenger.id }).from(clientPassenger)
+        .where(and(eq(clientPassenger.clientId, sourceId), eq(clientPassenger.isLead, true))).limit(1);
+      if (sourceLead) {
+        const [targetLead] = await tx.select({ id: clientPassenger.id }).from(clientPassenger)
+          .where(and(eq(clientPassenger.clientId, targetId), eq(clientPassenger.isLead, true))).limit(1);
+        if (!targetLead) {
+          await tx.update(clientPassenger).set({ clientId: targetId, updatedAt: new Date() })
+            .where(eq(clientPassenger.id, sourceLead.id));
+        } else {
+          await tx.update(clientPassenger).set({
+            clientId: targetId,
+            isLead: false,
+            title: source.title ?? null,
+            firstName: source.firstName,
+            surname: source.surename,
+            dateOfBirth: source.DOB ?? null,
+            updatedAt: new Date(),
+          }).where(eq(clientPassenger.id, sourceLead.id));
+        }
+        counts.passengers += 1;
+      }
 
       // --- Back-fill blank target profile fields from the source (target wins) ---
       const backfill: Partial<InsertClient> = {};

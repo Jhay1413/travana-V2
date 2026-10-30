@@ -11,14 +11,14 @@ function StatBox({ label, value, caption: sub, testId }: { label: string; value:
   return (
     <div className="relative min-w-0 rounded-[14px] border border-social-border px-5 py-[18px]" data-testid={testId}>
       <span
-        className="absolute -right-2 -top-2 grid h-[26px] w-[26px] place-items-center rounded-full bg-status-scheduled-fg text-white ring-2 ring-card"
+        className="absolute -right-2 -top-2 grid h-[26px] w-[26px] place-items-center rounded-full bg-[#10B981] text-white ring-2 ring-card"
         aria-hidden
       >
         <CirclePoundSterling className="h-3.5 w-3.5" strokeWidth={1.8} />
       </span>
       <div className="text-[13px] font-semibold">{label}</div>
-      <div className="mt-1 whitespace-nowrap text-[28px] font-semibold leading-tight">{value}</div>
-      <div className="mt-0.5 min-h-4 truncate text-xs text-social-muted" title={sub || undefined}>
+      <div className="mt-1 whitespace-nowrap text-[34px] font-semibold leading-tight">{value}</div>
+      <div className="mt-0.5 min-h-4 text-xs text-social-muted">
         {sub}
       </div>
     </div>

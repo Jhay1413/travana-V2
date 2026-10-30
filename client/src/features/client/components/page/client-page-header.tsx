@@ -1,4 +1,4 @@
-import { Bot, BotOff, ChevronDown, Ellipsis, Merge, Phone, Pin, Share2, SquarePen } from "lucide-react";
+import { Bot, BotOff, ChevronDown, Ellipsis, Merge, Phone, Pin, Plus, Share2, ShieldUser, SquarePen } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,11 +10,48 @@ import { useToast } from "@/hooks/use-toast";
 import type { NeonClient } from "@/features/client/types/neon-client";
 import { CreateMenu, type CreateKind } from "@/components/shared/create-menu";
 import { composeAddress } from "@/features/client/lib/compose-address";
+import { useNeonClient } from "@/hooks/queries";
 import { RoundButton } from "./round-button";
 
 export const BADGE_OPTIONS = ["New Client", "Repeat Client", "VIP Client", "Family Member", "Time Waster", "Banned"] as const;
 
 const PILL = "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1 text-[13px] font-semibold";
+
+/** "Referred by {name}" under the client name; dashed "+ Add" when nobody referred them. */
+function ReferredByPill({ referrerId, readOnly, onChange }: { referrerId: string | null; readOnly: boolean; onChange: () => void }) {
+  const { data: referrer, isLoading } = useNeonClient(referrerId ?? "");
+  const name = referrer ? `${referrer.firstName} ${referrer.surename}`.trim() : "";
+  const base = "mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-dashed border-ticket-dashed px-3 py-1 text-[12px] text-social-muted";
+
+  if (!referrerId) {
+    return (
+      <button type="button" onClick={onChange} className={`${base} transition hover:text-foreground`} data-testid="button-set-referrer">
+        <ShieldUser className="h-3.5 w-3.5 shrink-0 text-sky-500" strokeWidth={1.8} />
+        Referred by
+        <span className="inline-flex items-center gap-0.5 font-semibold text-social-orange-text">
+          <Plus className="h-3 w-3" /> Add
+        </span>
+      </button>
+    );
+  }
+
+  const label = name || (isLoading ? "…" : "Unknown");
+  return (
+    <div className={base} data-testid="client-index-referrer">
+      <ShieldUser className="h-3.5 w-3.5 shrink-0 text-sky-500" strokeWidth={1.8} />
+      <span className="shrink-0">Referred by</span>
+      {readOnly ? (
+        <span className="truncate font-semibold text-foreground" data-testid="referrer-field">
+          {label}
+        </span>
+      ) : (
+        <button type="button" onClick={onChange} className="truncate font-semibold text-foreground underline-offset-2 hover:underline" title="Change referrer" data-testid="button-change-referrer">
+          {label}
+        </button>
+      )}
+    </div>
+  );
+}
 
 interface ClientPageHeaderProps {
   name: string;
@@ -31,6 +68,7 @@ interface ClientPageHeaderProps {
   onCreate: (kind: CreateKind) => void;
   onMerge: () => void;
   onToggleAiReply: (enabled: boolean) => void;
+  onChangeReferrer: () => void;
 }
 
 /**
@@ -52,11 +90,13 @@ export function ClientPageHeader({
   onCreate,
   onMerge,
   onToggleAiReply,
+  onChangeReferrer,
 }: ClientPageHeaderProps) {
   const { toast } = useToast();
   const address = composeAddress(clientData);
   const badge = clientData?.badge || null;
   const tierLabel = badge ?? "No tier";
+  const referrerId = clientData?.referredByClientId ?? null;
 
   const copyPhone = async () => {
     try {
@@ -90,7 +130,7 @@ export function ClientPageHeader({
             </button>
           )}
           {readOnly ? (
-            <span className={`${PILL} bg-status-posted-bg text-status-posted-fg`} data-testid="client-index-badge">
+            <span className={`${PILL} bg-[#E0F2FE] text-[#075985]`} data-testid="client-index-badge">
               {tierLabel}
             </span>
           ) : (
@@ -98,7 +138,7 @@ export function ClientPageHeader({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className={`${PILL} gap-1 bg-status-posted-bg text-status-posted-fg transition hover:opacity-80`}
+                  className={`${PILL} gap-1 bg-[#E0F2FE] text-[#075985] transition hover:opacity-80`}
                   data-testid="client-index-badge"
                 >
                   {tierLabel}
@@ -124,6 +164,9 @@ export function ClientPageHeader({
             </DropdownMenu>
           )}
         </div>
+        {(!readOnly || referrerId) && (
+          <ReferredByPill referrerId={referrerId} readOnly={readOnly} onChange={onChangeReferrer} />
+        )}
         <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[13px] text-social-muted">
           <span className="truncate" data-testid="client-center-header-contact">
             {address || "No address on file"}
@@ -144,7 +187,7 @@ export function ClientPageHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5">
-        <RoundButton label="Share client" onClick={onShare} data-testid="client-index-share">
+        <RoundButton label="Share client" tone="sky" onClick={onShare} data-testid="client-index-share">
           <Share2 className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </RoundButton>
         <RoundButton
@@ -156,7 +199,17 @@ export function ClientPageHeader({
         >
           <Pin className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </RoundButton>
-        {!readOnly && <CreateMenu trigger="blue" onCreate={onCreate} testId="client-index-create" />}
+        {!readOnly && (
+          <CreateMenu
+            trigger={
+              <RoundButton label="Create" tone="sky" data-testid="client-index-create">
+                <Plus className="h-[18px] w-[18px]" strokeWidth={2} />
+              </RoundButton>
+            }
+            onCreate={onCreate}
+            testId="client-index-create"
+          />
+        )}
         {!readOnly && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

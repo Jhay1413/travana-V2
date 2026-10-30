@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { buildClientInboxHref } from "@/features/conversations";
 import { useLocation } from "wouter";
-import { Check, ChevronDown, ChevronRight, Ellipsis, ListFilter, MessageSquare, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Ellipsis, ListFilter, Search, Send } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Segmented } from "@/components/ui/segmented";
@@ -143,7 +143,7 @@ function Collapsible({ label, count, open, onToggle, testId, children }: { label
       >
         <span>
           {label}
-          <span className="ml-2 text-xs font-medium text-social-muted">{count}</span>
+          {count > 0 && <span className="ml-2 text-xs font-medium text-social-muted">{count}</span>}
         </span>
         {open ? <ChevronDown className="h-4 w-4 text-social-muted" /> : <ChevronRight className="h-4 w-4 text-social-muted" />}
       </button>
@@ -332,8 +332,8 @@ export function LiveDealsRail({ enquiries, quotes, bookings, state, isLoading, r
 
       {/* Opens this client's conversation in the inbox. */}
       <div className="pointer-events-none sticky bottom-5 mb-5 flex justify-end px-[22px]">
-        <RoundButton label="Open chat" size={40} className="pointer-events-auto h-12 w-12 shadow-lg" onClick={() => navigate(chatHref)} data-testid="client-rail-chat">
-          <MessageSquare className="h-5 w-5" strokeWidth={1.8} />
+        <RoundButton label="Open chat" tone="indigo" size={40} className="pointer-events-auto h-12 w-12 shadow-lg" onClick={() => navigate(chatHref)} data-testid="client-rail-chat">
+          <Send className="h-5 w-5" strokeWidth={1.8} />
         </RoundButton>
       </div>
     </aside>

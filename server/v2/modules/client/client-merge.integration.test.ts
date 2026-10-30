@@ -4,7 +4,7 @@ import { clientRepository } from "./client.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
 import { db } from "../../config/database";
 import {
-  clientTable, clientMergeLog, transaction, notes, task, tickets, clientFiles,
+  clientTable, clientMergeLog, clientPassenger, transaction, notes, task, tickets, clientFiles,
   smsMessagesTable, wallet_transaction, referral, tags, clientTags,
 } from "@shared/schema";
 import { truncateAll, makeOrg, makeBranch, makeUser, makeClient, makeTransaction, makeQuote } from "../../test/factories";
@@ -117,6 +117,45 @@ describe("clientRepository.mergeAtomic — reassignment", () => {
     expect(logs).toHaveLength(1);
     expect(logs[0].targetClientId).toBe(target.id);
     expect(logs[0].counts).toBeTruthy();
+  });
+});
+
+describe("clientRepository.mergeAtomic — saved passengers", () => {
+  const rows = (clientId: string) => db.select().from(clientPassenger).where(eq(clientPassenger.clientId, clientId));
+
+  it("moves non-lead passengers and the source lead when the target has no lead", async () => {
+    await db.insert(clientPassenger).values([
+      { clientId: source.id, isLead: true, passportNumber: "L1", passportExpiry: "2031-01-01" },
+      { clientId: source.id, isLead: false, firstName: "Kid", surname: "One" },
+    ]);
+
+    await clientRepository.mergeAtomic(source as never, target as never, agent.id);
+
+    expect(await rows(source.id)).toHaveLength(0);
+    const after = await rows(target.id);
+    expect(after).toHaveLength(2);
+    const lead = after.find((r) => r.isLead);
+    expect(lead?.passportNumber).toBe("L1");
+  });
+
+  it("turns the source lead into a normal passenger when the target already has a lead", async () => {
+    const [src] = await db.select().from(clientTable).where(eq(clientTable.id, source.id));
+    await db.insert(clientPassenger).values([
+      { clientId: target.id, isLead: true, passportNumber: "T1" },
+      { clientId: source.id, isLead: true, passportNumber: "S1", passportExpiry: "2032-02-02" },
+    ]);
+
+    await clientRepository.mergeAtomic(source as never, target as never, agent.id);
+
+    expect(await rows(source.id)).toHaveLength(0);
+    const after = await rows(target.id);
+    expect(after.filter((r) => r.isLead)).toHaveLength(1);
+    expect(after.find((r) => r.isLead)?.passportNumber).toBe("T1");
+    const converted = after.find((r) => !r.isLead);
+    expect(converted).toMatchObject({
+      passportNumber: "S1", passportExpiry: "2032-02-02",
+      firstName: src.firstName, surname: src.surename, title: src.title, dateOfBirth: src.DOB,
+    });
   });
 });
 

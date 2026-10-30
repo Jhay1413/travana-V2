@@ -263,6 +263,28 @@ export const insertClientMergeLogSchema = createInsertSchema(clientMergeLog).omi
 export type InsertClientMergeLog = z.infer<typeof insertClientMergeLogSchema>;
 export type ClientMergeLog = typeof clientMergeLog.$inferSelect;
 
+// Saved passengers on a client. The client is the lead passenger: the lead row (is_lead) only stores
+// passport details — name/title/DOB come from client_table. first_name/surname may be '' on that row.
+export const clientPassenger = pgTable("client_passenger", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+  isLead: boolean("is_lead").notNull().default(false),
+  title: varchar("title"),
+  firstName: varchar("first_name").notNull().default(""),
+  surname: varchar("surname").notNull().default(""),
+  dateOfBirth: date("date_of_birth", { mode: "string" }),
+  passportNumber: varchar("passport_number", { length: 20 }),
+  passportExpiry: date("passport_expiry", { mode: "string" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("idx_client_passenger_client").on(t.clientId),
+  uniqueIndex("uq_client_passenger_one_lead").on(t.clientId).where(sql`${t.isLead} = true`),
+]);
+
+export type ClientPassengerRow = typeof clientPassenger.$inferSelect;
+export type InsertClientPassengerRow = typeof clientPassenger.$inferInsert;
+
 export const accomodation_type = pgTable('accomodation_type', {
   id: uuid('id')
     .default(sql`gen_random_uuid()`)

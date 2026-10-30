@@ -96,7 +96,7 @@ export function TasksTab({ clientId, tasks, users, holidays, readOnly }: TasksTa
                   {time && <span aria-hidden>·</span>}
                   <span className="truncate">{task.title}</span>
                 </div>
-                {meta && <div className="mt-0.5 truncate text-xs text-social-muted">{meta}</div>}
+                {meta && <div className={cn("mt-0.5 truncate text-xs text-social-muted", task.completed && "line-through")}>{meta}</div>}
               </div>
               {chip && (
                 <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold", chip.className)} data-testid={`client-index-task-due-${task.id}`}>

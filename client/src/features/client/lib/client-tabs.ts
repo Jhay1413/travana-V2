@@ -7,7 +7,7 @@ export const CLIENT_TABS: ReadonlyArray<{ value: ClientTabKey; label: string }> 
   { value: "tickets", label: "Tickets" },
   { value: "files", label: "Files" },
   { value: "views", label: "Views" },
-  { value: "club-vip", label: "VIP" },
+  { value: "club-vip", label: "Club VIP" },
 ];
 
 // Older links used ?tab=overview / ?tab=vip-club - keep them landing somewhere sensible.

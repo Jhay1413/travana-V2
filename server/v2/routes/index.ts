@@ -57,6 +57,7 @@ import referralWithdrawalRoutes from '../modules/referral/referral-withdrawal.ro
 import walletRoutes from '../modules/wallet/wallet.routes';
 import smsRoutes from '../modules/sms/sms.routes';
 import neonClientRoutes from '../modules/neon-client/neon-client.routes';
+import clientPassengerRoutes from '../modules/client-passenger/client-passenger.routes';
 import aiAskRoutes from '../modules/ai-ask/ai-ask.routes';
 import aiEnquiryRoutes from '../modules/ai-enquiry/ai-enquiry.routes';
 import destinationGuruRoutes from '../modules/destination-guru/destination-guru.routes';
@@ -151,6 +152,7 @@ router.use('/referral-payouts',   ...auth, referralPayoutRoutes);
 router.use('/referral-withdrawals', ...auth, referralWithdrawalRoutes);
 router.use('/wallet',             ...auth, walletRoutes);
 router.use('/sms',                ...auth, smsRoutes);
+router.use('/neon-clients/:clientId/passengers', ...auth, clientPassengerRoutes);
 router.use('/neon-clients',       ...auth, neonClientRoutes);
 router.use('/ai',                 ...auth, aiAskRoutes);
 router.use('/ai-enquiry',         ...auth, aiEnquiryRoutes);
