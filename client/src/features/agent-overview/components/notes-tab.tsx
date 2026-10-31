@@ -1,16 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
-import { londonDayKey } from "@/lib/london-day";
 import { cn } from "@/lib/utils";
+import { londonDayKey } from "@/lib/london-day";
+import { applyGoalAction, loadGoals, pruneGoalKeys, safeGoalStorage, saveGoals, type DailyGoal, type GoalAction } from "../lib/daily-goals";
+import { useLondonDay } from "../lib/use-london-day";
 import { currency } from "./helpers";
 import { EmptyLine } from "./home/home-ui";
-
-type DailyGoal = {
-  id: string;
-  text: string;
-  completed: boolean;
-  createdAt: string;
-};
 
 function Bar({ pct, testId }: { pct: number; testId?: string }) {
   return (
@@ -39,21 +34,37 @@ function MonthlyProfitRow({ monthProfit, target }: { monthProfit: number; target
   );
 }
 
-export function NotesTab({ monthProfit = 0, target = 0 }: { monthProfit?: number; target?: number }) {
-  const todayKey = londonDayKey(new Date());
-  const [dailyGoals, setDailyGoals] = useState<DailyGoal[]>(() => {
-    try {
-      const stored = localStorage.getItem(`daily-goals-${todayKey}`);
-      return stored ? (JSON.parse(stored) as DailyGoal[]) : [];
-    } catch {
-      return [];
-    }
-  });
+interface GoalsState {
+  userId: string;
+  day: string;
+  goals: DailyGoal[];
+}
+
+export function NotesTab({ userId, monthProfit = 0, target = 0 }: { userId: string; monthProfit?: number; target?: number }) {
+  const today = useLondonDay();
+  const [state, setState] = useState<GoalsState>(() => ({ userId, day: today, goals: loadGoals(safeGoalStorage(), userId, today) }));
+  // The goals belong to one user and one London day: when the user changes or UK midnight passes
+  // while the page stays open, reload instead of carrying the old list into the new key. A write
+  // may already have moved the state to a newer day than the polled one, which is not a rollover.
+  let current = state;
+  if (state.userId !== userId || today > state.day) {
+    current = { userId, day: today, goals: loadGoals(safeGoalStorage(), userId, today) };
+    setState(current);
+  }
+  const dailyGoals = current.goals;
   const [newGoalText, setNewGoalText] = useState("");
 
-  const saveDailyGoals = (goals: DailyGoal[]) => {
-    setDailyGoals(goals);
-    localStorage.setItem(`daily-goals-${todayKey}`, JSON.stringify(goals));
+  useEffect(() => {
+    pruneGoalKeys(safeGoalStorage(), userId, today);
+  }, [userId, today]);
+
+  // Every write re-checks the London day: the polled day can be up to 30s behind midnight.
+  const applyGoal = (action: GoalAction) => {
+    const storage = safeGoalStorage();
+    const write = applyGoalAction(storage, current.userId, current.day, current.goals, londonDayKey(new Date()), action);
+    if (!write) return;
+    setState({ userId: current.userId, day: write.day, goals: write.goals });
+    saveGoals(storage, current.userId, write.day, write.goals);
   };
   const addDailyGoal = () => {
     if (!newGoalText.trim()) return;
@@ -63,12 +74,11 @@ export function NotesTab({ monthProfit = 0, target = 0 }: { monthProfit?: number
       completed: false,
       createdAt: new Date().toISOString(),
     };
-    saveDailyGoals([...dailyGoals, goal]);
+    applyGoal({ type: "add", goal });
     setNewGoalText("");
   };
-  const toggleGoalComplete = (id: string) =>
-    saveDailyGoals(dailyGoals.map((g) => (g.id === id ? { ...g, completed: !g.completed } : g)));
-  const removeGoal = (id: string) => saveDailyGoals(dailyGoals.filter((g) => g.id !== id));
+  const toggleGoalComplete = (id: string) => applyGoal({ type: "toggle", id });
+  const removeGoal = (id: string) => applyGoal({ type: "remove", id });
 
   const completedGoals = dailyGoals.filter((g) => g.completed).length;
   const goalProgress = dailyGoals.length > 0 ? Math.round((completedGoals / dailyGoals.length) * 100) : 0;

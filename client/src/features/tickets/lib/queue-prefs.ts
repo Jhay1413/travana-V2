@@ -12,12 +12,12 @@ export interface QueuePrefs {
   search: string;
 }
 
-export const DEFAULT_PREFS: QueuePrefs = { scope: "mine", view: "board", chip: "open", sort: "due", filters: EMPTY_FILTERS, search: "" };
+export const DEFAULT_PREFS: QueuePrefs = { scope: "mine", view: "board", chip: "open", sort: "newest", filters: EMPTY_FILTERS, search: "" };
 
 const SCOPES: readonly QueueScope[] = ["mine", "raised", "all"];
 const VIEWS: readonly QueueView[] = ["list", "board"];
 const CHIPS: readonly QueueChip[] = ["open", "attention", "unassigned", "closed"];
-const SORTS: readonly QueueSort[] = ["due", "priority", "updated", "client"];
+const SORTS: readonly QueueSort[] = ["newest", "due", "priority", "updated", "client"];
 
 function pick<T extends string>(allowed: readonly T[], value: unknown, fallback: T): T {
   return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;

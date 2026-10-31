@@ -46,7 +46,9 @@ describe("client passenger controller", () => {
   it("POST answers 201", async () => {
     vi.mocked(clientPassengerService.create).mockResolvedValue(PASSENGER);
     const res = mockRes();
-    await clientPassengerController.create(req({ firstName: "A", surname: "B" }), res as unknown as Response, vi.fn());
+    await clientPassengerController.create(
+      req({ title: "Mr", firstName: "A", surname: "B", dateOfBirth: "2000-01-31", passportNumber: "123456789", passportExpiry: "2030-05-01" }),
+      res as unknown as Response, vi.fn());
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: PASSENGER }));
   });

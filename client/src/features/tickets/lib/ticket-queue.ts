@@ -9,7 +9,7 @@ import type { Ticket, TicketListScope } from "../types";
 
 export type QueueScope = TicketListScope;
 export type QueueChip = "open" | "attention" | "unassigned" | "closed";
-export type QueueSort = "due" | "priority" | "updated" | "client";
+export type QueueSort = "newest" | "due" | "priority" | "updated" | "client";
 
 export interface QueueFilters {
   priorities: string[];
@@ -120,9 +120,21 @@ function activityKey(t: Ticket): number {
   return Number.isNaN(at) ? 0 : at;
 }
 
+/** Newest first: active tickets by when they were raised; Resolved / Closed by when they were resolved (else last activity). */
+function newestKey(t: Ticket): number {
+  if (isActiveTicket(t)) {
+    const at = Date.parse(t.createdAt);
+    return Number.isNaN(at) ? 0 : at;
+  }
+  const resolved = t.resolvedAt ? Date.parse(t.resolvedAt) : NaN;
+  return Number.isNaN(resolved) ? activityKey(t) : resolved;
+}
+
 export function sortRows(rows: Ticket[], sort: QueueSort): Ticket[] {
   const out = [...rows];
   switch (sort) {
+    case "newest":
+      return out.sort((a, b) => newestKey(b) - newestKey(a));
     case "due":
       // Infinity - Infinity is NaN, so compare explicitly to keep no-due rows last and stable.
       return out.sort((a, b) => {

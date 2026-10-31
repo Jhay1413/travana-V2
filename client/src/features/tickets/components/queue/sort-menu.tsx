@@ -3,6 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import type { QueueSort } from "../../lib/ticket-queue";
 
 export const SORT_OPTIONS: Array<{ value: QueueSort; label: string }> = [
+  { value: "newest", label: "Newest first" },
   { value: "due", label: "Due soonest" },
   { value: "priority", label: "Priority, highest first" },
   { value: "updated", label: "Recently updated" },

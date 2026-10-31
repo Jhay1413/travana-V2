@@ -810,10 +810,12 @@ dashboard New task client search / deal link (item 2). Everything else below.
   larger indent, 13px; like / reply / edit / delete (+confirm) icon-only in the
   note header, right-aligned, on hover/focus (`thread/note-header-actions.tsx`).
   "Mark resolved" (desktop, mobile, Status select) navigates to /tickets.
-  Thread layout (user, 28 Oct): the description is full width; EVERY note
-  after it (Add note or Reply) renders nested inside one rail beneath it, and
-  replies to those notes nest one level deeper. Render-only
-  (`thread/ticket-conversation.tsx`); no parent marker is stored.
+  Thread layout (user, 28 Oct; REVERSED 31 Oct 2026): the 28 Oct "everything
+  after the description sits on one rail" layout is gone. Notes typed in the
+  box render as normal full-width messages at the same level as the
+  description (no `ticket-description-notes` rail); only real replies (made
+  with the Reply action, parentReplyId set) nest under their parent on the
+  rail with the toggle. Render-only (`thread/ticket-conversation.tsx`).
   Emoji picker = the inbox portalled `EmojiPopover` (now exported from
   features/conversations).
 - Client page tasks: `GET /api/v2/tasks/for-client/:clientId` returns tasks on

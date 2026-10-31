@@ -29,4 +29,10 @@ describe("DEFAULT_PREFS", () => {
     expect(DEFAULT_PREFS.view).toBe("board");
     expect(sanitizePrefs({}, true).view).toBe("board");
   });
+  it("sorts newest first by default and accepts it from storage", () => {
+    expect(DEFAULT_PREFS.sort).toBe("newest");
+    expect(sanitizePrefs({}, true).sort).toBe("newest");
+    expect(sanitizePrefs({ sort: "newest" }, true).sort).toBe("newest");
+    expect(sanitizePrefs({ sort: "due" }, true).sort).toBe("due");
+  });
 });

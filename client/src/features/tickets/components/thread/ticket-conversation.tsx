@@ -18,7 +18,7 @@ import { NoteDayDivider, noteDayLabel } from "./day-groups";
 import { ThreadNoteCard } from "./thread-note";
 import { useNoteActions } from "./use-note-actions";
 
-/** The centre of the ticket page: the description and replies as day-grouped team notes, then the composer. */
+/** The centre of the ticket page: the description and notes as day-grouped full-width messages (replies nest), then the composer. */
 export function TicketConversation({ ticket, users, compact = false }: { ticket: Ticket; users: ApiUser[]; compact?: boolean }) {
   const { toast } = useToast();
   const { data: currentUser } = useCurrentUser();
@@ -31,9 +31,8 @@ export function TicketConversation({ ticket, users, compact = false }: { ticket:
 
   const hasTicketFiles = (attachments ?? []).some((a) => a.replyId === null);
   const thread = useMemo(() => buildThread(ticket, replies, users, hasTicketFiles), [ticket, replies, users, hasTicketFiles]);
-  // The description (no reply row) is shown full width; everything after it sits on a rail beneath it.
-  const description = thread[0]?.note.reply === null ? thread[0] : null;
-  const restGroups = useMemo(() => groupByDay(description ? thread.slice(1) : thread, noteDayLabel), [thread, description]);
+  // The description and every top-level note are full-width messages under day dividers; only real replies nest.
+  const groups = useMemo(() => groupByDay(thread, noteDayLabel), [thread]);
   const noteCount = (replies?.length ?? 0) + (ticket.description || hasTicketFiles ? 1 : 0);
 
   // Opens at the newest note and follows it down when another lands.
@@ -124,41 +123,13 @@ export function TicketConversation({ ticket, users, compact = false }: { ticket:
         ) : thread.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-social-muted">No activity on this ticket yet</div>
         ) : (
-          <>
-            {description ? (
-              <>
-                <div className="space-y-4">
-                  <NoteDayDivider label={noteDayLabel(description.note.createdAt)} />
-                  <ThreadNoteCard
-                    note={description.note}
-                    isMe={isMine(description.note.authorId)}
-                    actions={actionsFor(description.note, description.note.id)}
-                    attachments={attachmentsFor(description.note)}
-                    onDeleteAttachment={onDeleteAttachmentFor(description.note)}
-                    deletingAttachmentId={deletingAttachmentId}
-                  />
-                </div>
-                {/* Every note after the description hangs off one rail beneath it. */}
-                {restGroups.length > 0 && (
-                  <div className="ml-8 space-y-4 border-l-2 border-social-border pl-4 sm:ml-16" data-testid="ticket-description-notes">
-                    {restGroups.map((group, gi) => (
-                      <div key={gi} className="space-y-4">
-                        {(gi > 0 || group.day !== noteDayLabel(description.note.createdAt)) && <NoteDayDivider label={group.day} />}
-                        {group.items.map((item) => renderItem(item, true))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              restGroups.map((group, gi) => (
-                <div key={gi} className="space-y-4">
-                  <NoteDayDivider label={group.day} />
-                  {group.items.map((item) => renderItem(item, false))}
-                </div>
-              ))
-            )}
-          </>
+          // The description is the first top-level item, so its day divider is the first group's: no duplicate.
+          groups.map((group, gi) => (
+            <div key={gi} className="space-y-4">
+              <NoteDayDivider label={group.day} />
+              {group.items.map((item) => renderItem(item, false))}
+            </div>
+          ))
         )}
       </div>
       <ReplyComposer key={ticket.id} ticketId={ticket.id} replyingTo={replyingTo} onCancelReplyTo={() => setReplyingTo(null)} onSent={() => setReplyingTo(null)} />

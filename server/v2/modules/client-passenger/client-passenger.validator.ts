@@ -33,9 +33,19 @@ export const setLeadPassportValidator = z.object({
   }),
 });
 
+// Adding a passenger requires all six fields. Updates stay partial so old records with gaps remain editable.
+const createPassengerBody = z.object({
+  title: z.string().trim().min(1, 'Title is required').max(50),
+  firstName: z.string().trim().min(1, 'First name is required').max(100),
+  surname: z.string().trim().min(1, 'Surname is required').max(100),
+  dateOfBirth: ymd,
+  passportNumber: z.string().trim().min(1, 'Passport number is required').max(20),
+  passportExpiry: ymd,
+});
+
 export const createPassengerValidator = z.object({
   params: clientParams,
-  body: passengerBody,
+  body: createPassengerBody,
 });
 
 export const updatePassengerValidator = z.object({

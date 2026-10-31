@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HAYS_REF_MESSAGE, isValidHaysRef } from "@shared/booking-refs";
 
 export const addImagesValidator = z.object({
   body: z.object({
@@ -34,11 +35,16 @@ export const updateBookingValidator = z.object({
     .passthrough(),
 });
 
-// POST /convert/:quoteId — both references are required.
+// POST /convert/:quoteId — both references are required and the HAYS Ref must be HAY- plus
+// 7 or 8 digits (any case / spacing accepted; the service saves the canonical form).
 export const convertQuoteToBookingValidator = z.object({
   params: z.object({ quoteId: z.string().min(1) }),
   body: z.object({
-    haysRef: z.string({ required_error: "HAYS ref is required" }).trim().min(1, "HAYS ref is required"),
+    haysRef: z
+      .string({ required_error: "HAYS ref is required" })
+      .trim()
+      .min(1, "HAYS ref is required")
+      .refine(isValidHaysRef, HAYS_REF_MESSAGE),
     supplierRef: z.string({ required_error: "Supplier ref is required" }).trim().min(1, "Supplier ref is required"),
   }),
 });

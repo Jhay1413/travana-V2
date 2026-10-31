@@ -31,10 +31,13 @@ export function addMonthsYmd(ymd: string, months: number): string {
   return `${year}-${pad(month)}-${pad(Math.min(d, lastDay))}`;
 }
 
-/** True iff the passport expires before six calendar months after the next departure. */
-export function computePassportWarning(passportExpiry: string | null, nextDeparture: string | null): boolean {
-  if (!passportExpiry || !nextDeparture) return false;
-  return passportExpiry < addMonthsYmd(nextDeparture, 6);
+/**
+ * True iff the passport has six calendar months or less left (expired and exactly-6-months included),
+ * measured from the next departure, or from today when there is none.
+ */
+export function computePassportWarning(passportExpiry: string | null, nextDeparture: string | null, today: string = ukTodayYmd()): boolean {
+  if (!passportExpiry) return false;
+  return passportExpiry <= addMonthsYmd(nextDeparture ?? today, 6);
 }
 
 /** Trim; empty or whitespace-only becomes null. */

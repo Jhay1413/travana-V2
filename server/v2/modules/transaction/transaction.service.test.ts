@@ -77,6 +77,7 @@ vi.mock("../tour-operator/tour-operator-link.service", () => ({
   tourOperatorLinkService: { assertPayloadOperatorsLinked: vi.fn() },
 }));
 
+import { HAYS_REF_MESSAGE } from "@shared/booking-refs";
 import { transactionService } from "./transaction.service";
 import { branchMemberRepository } from "../branch-member/branch-member.repository";
 import { branchRepository } from "../branch/branch.repository";
@@ -618,6 +619,25 @@ describe("transactionService.createTransactionWithBooking — add booking", () =
     expect(transactionRepository.createWithBookingAndChildren).toHaveBeenCalledOnce();
     expect(bookingRepository.addTransfer).toHaveBeenCalledOnce();
     expect(result).toMatchObject({ booking: { id: "b1" } });
+  });
+
+  it("rejects a malformed HAYS Ref with 400 before any write", async () => {
+    await expect(
+      transactionService.createTransactionWithBooking({} as never, { hays_ref: "ABC123" } as never, SCOPE),
+    ).rejects.toMatchObject({ statusCode: 400, message: HAYS_REF_MESSAGE });
+    expect(transactionRepository.createWithBookingAndChildren).not.toHaveBeenCalled();
+  });
+
+  it("saves a valid HAYS Ref in canonical form", async () => {
+    await transactionService.createTransactionWithBooking({} as never, { hays_ref: " hay 1234567 " } as never, SCOPE);
+    const arg = vi.mocked(transactionRepository.createWithBookingAndChildren).mock.calls[0][0] as unknown as { bookingFields: { hays_ref: string } };
+    expect(arg.bookingFields.hays_ref).toBe("HAY-1234567");
+  });
+
+  it("allows a blank HAYS Ref", async () => {
+    await transactionService.createTransactionWithBooking({} as never, { hays_ref: "" } as never, SCOPE);
+    const arg = vi.mocked(transactionRepository.createWithBookingAndChildren).mock.calls[0][0] as unknown as { bookingFields: { hays_ref: string } };
+    expect(arg.bookingFields.hays_ref).toBe("");
   });
 
   it("applies wallet credit when the booking carries a positive wallet_credit", async () => {

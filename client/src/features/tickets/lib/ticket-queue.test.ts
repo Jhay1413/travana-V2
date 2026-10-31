@@ -147,6 +147,38 @@ describe("sortRows", () => {
     const none = ticket({ id: "none", clientName: null });
     expect(sortRows([none, z, a], "client").map((t) => t.id)).toEqual(["a", "z", "none"]);
   });
+  it("newest: active tickets by createdAt descending", () => {
+    const a = ticket({ id: "a", createdAt: "2026-10-01T00:00:00Z" });
+    const b = ticket({ id: "b", createdAt: "2026-10-03T00:00:00Z", status: "In Progress" });
+    const c = ticket({ id: "c", createdAt: "2026-10-02T00:00:00Z" });
+    expect(sortRows([a, b, c], "newest").map((t) => t.id)).toEqual(["b", "c", "a"]);
+  });
+  it("newest: resolved and closed order by resolvedAt descending", () => {
+    const r1 = ticket({ id: "r1", status: "Resolved", createdAt: "2026-10-09T00:00:00Z", resolvedAt: "2026-10-10T00:00:00Z" });
+    const r2 = ticket({ id: "r2", status: "Closed", createdAt: "2026-10-01T00:00:00Z", resolvedAt: "2026-10-12T00:00:00Z" });
+    expect(sortRows([r1, r2], "newest").map((t) => t.id)).toEqual(["r2", "r1"]);
+  });
+  it("newest: a closed ticket with no resolvedAt falls back to its activity", () => {
+    const withDate = ticket({ id: "with", status: "Resolved", resolvedAt: "2026-10-10T00:00:00Z" });
+    const noDate = ticket({ id: "none", status: "Closed", resolvedAt: null, lastActivityAt: "2026-10-11T00:00:00Z" });
+    expect(sortRows([withDate, noDate], "newest").map((t) => t.id)).toEqual(["none", "with"]);
+  });
+  it("newest: keeps pinned tickets first in the derived queue", () => {
+    const old = ticket({ id: "old", createdAt: "2026-10-01T00:00:00Z" });
+    const fresh = ticket({ id: "fresh", createdAt: "2026-10-05T00:00:00Z" });
+    const result = deriveQueue({
+      rows: [old, fresh],
+      scope: "all",
+      userId: ME,
+      chip: "open",
+      search: "",
+      filters: EMPTY_FILTERS,
+      sort: "newest",
+      pinned: new Map([["old", 1]]),
+      now: NOW,
+    });
+    expect(result.orderIds).toEqual(["old", "fresh"]);
+  });
   it("does not mutate its input", () => {
     const input = [later, overdue];
     sortRows(input, "due");

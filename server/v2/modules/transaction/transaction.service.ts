@@ -11,6 +11,7 @@ import { walletService } from "../wallet/wallet.service";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
+import { normaliseNewHaysRef } from "../../utils/hays-ref";
 import { checkStatusTransition } from "./transaction-status-transition";
 import { branchService } from "../branch/branch.service";
 import { branchMemberRepository } from "../branch-member/branch-member.repository";
@@ -478,7 +479,10 @@ export const transactionService = {
     return result;
   },
 
-  async createTransactionWithBooking(transactionData: InsertTransaction, bookingData: BookingRelationPayload, scope: Scope) {
+  async createTransactionWithBooking(transactionData: InsertTransaction, rawBookingData: BookingRelationPayload, scope: Scope) {
+    // A non-empty HAYS Ref must be in the HAY- format (saved canonical); blank stays allowed.
+    const haysRef = normaliseNewHaysRef(rawBookingData.hays_ref);
+    const bookingData = haysRef ? { ...rawBookingData, hays_ref: haysRef } : rawBookingData;
     // Operators must be in the caller's list BEFORE anything is written.
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, bookingData, async () => []);
     const {

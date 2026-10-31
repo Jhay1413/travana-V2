@@ -35,7 +35,7 @@ export function RefsFields({ idPrefix, values, onChange, errors, operatorName, a
           id={`${idPrefix}-hays`}
           value={values.haysRef}
           onChange={(e) => onChange({ ...values, haysRef: e.target.value })}
-          placeholder={placeholders ? "e.g. HAY105391" : undefined}
+          placeholder={placeholders ? "e.g. HAY-1234567" : undefined}
           aria-invalid={Boolean(errors.haysRef)}
           aria-describedby={errors.haysRef ? `${idPrefix}-hays-err` : undefined}
           autoFocus={autoFocusFirst}

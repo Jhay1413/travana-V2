@@ -208,6 +208,29 @@ describe("bookingService.createBooking — guard rules", () => {
   });
 });
 
+describe("bookingService.createBooking — HAYS ref", () => {
+  beforeEach(() => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, client_id: null } as never);
+    vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue(undefined as never);
+    vi.mocked(bookingRepository.create).mockResolvedValue({ id: "b1" } as never);
+  });
+
+  it("normalises a non-empty HAYS ref", async () => {
+    await bookingService.createBooking({ transaction_id: "t1", hays_ref: "hay12345678" } as never, TRUSTED);
+    expect(vi.mocked(bookingRepository.create).mock.calls[0][0]).toMatchObject({ hays_ref: "HAY-12345678" });
+  });
+
+  it("rejects a malformed HAYS ref with 400", async () => {
+    await expect(bookingService.createBooking({ transaction_id: "t1", hays_ref: "HAY12" } as never, TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(bookingRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("allows an empty HAYS ref", async () => {
+    await bookingService.createBooking({ transaction_id: "t1", hays_ref: "" } as never, TRUSTED);
+    expect(bookingRepository.create).toHaveBeenCalledOnce();
+  });
+});
+
 describe("bookingService.convertQuoteToBooking", () => {
   // Minimal valid setup: quote + transaction exist, no existing booking, no
   // relations and no client. Individual tests override what they care about.
@@ -231,7 +254,7 @@ describe("bookingService.convertQuoteToBooking", () => {
   it("throws 404 when the quote does not exist", async () => {
     vi.mocked(newQuoteRepository.findById).mockResolvedValue(undefined as never);
 
-    await expect(bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED)).rejects.toMatchObject({
+    await expect(bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED)).rejects.toMatchObject({
       statusCode: 404,
     });
     expect(bookingRepository.create).not.toHaveBeenCalled();
@@ -242,7 +265,7 @@ describe("bookingService.convertQuoteToBooking", () => {
     vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, client_id: null } as never);
     vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue({ id: "existing" } as never);
 
-    await expect(bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED)).rejects.toMatchObject({
+    await expect(bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED)).rejects.toMatchObject({
       statusCode: 400,
     });
     expect(bookingRepository.create).not.toHaveBeenCalled();
@@ -251,12 +274,12 @@ describe("bookingService.convertQuoteToBooking", () => {
   it("creates the booking, marks the quote WON and the transaction on_booking", async () => {
     happyPath();
 
-    const result = await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    const result = await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(bookingRepository.create).toHaveBeenCalledOnce();
     // refs from args + price_per_person derived from the quote (900 / 3 = 300.00)
     expect(vi.mocked(bookingRepository.create).mock.calls[0][0]).toMatchObject({
-      hays_ref: "H1",
+      hays_ref: "HAY-1234567",
       supplier_ref: "S1",
       booking_status: "BOOKED",
       price_per_person: "300.00",
@@ -267,6 +290,17 @@ describe("bookingService.convertQuoteToBooking", () => {
     expect(result).toMatchObject({ id: "b1", client_id: null });
   });
 
+  it("normalises the HAYS ref before saving", async () => {
+    happyPath();
+    await bookingService.convertQuoteToBooking("q1", " hay1234567 ", "S1", TRUSTED);
+    expect(vi.mocked(bookingRepository.create).mock.calls[0][0]).toMatchObject({ hays_ref: "HAY-1234567" });
+  });
+
+  it("rejects a malformed HAYS ref with 400 before touching the quote", async () => {
+    await expect(bookingService.convertQuoteToBooking("q1", "HAY105391", "S1", TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(bookingRepository.create).not.toHaveBeenCalled();
+  });
+
   it("copies quote relations (e.g. flights) onto the new booking", async () => {
     happyPath();
     vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({
@@ -275,7 +309,7 @@ describe("bookingService.convertQuoteToBooking", () => {
       passengers: [],
     } as never);
 
-    await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(bookingRepository.addFlight).toHaveBeenCalledOnce();
     expect(vi.mocked(bookingRepository.addFlight).mock.calls[0][0]).toMatchObject({
@@ -290,7 +324,7 @@ describe("bookingService.convertQuoteToBooking", () => {
     vi.mocked(bookingRepository.countByClientId).mockResolvedValue(3 as never);
     vi.mocked(neonClientRepository.findById).mockResolvedValue({ id: "c1", referredByClientId: null } as never);
 
-    await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(neonClientRepository.update).toHaveBeenCalledWith("c1", { badge: "VIP Client" });
   });
@@ -301,7 +335,7 @@ describe("bookingService.convertQuoteToBooking", () => {
     vi.mocked(bookingRepository.countByClientId).mockResolvedValue(2 as never);
     vi.mocked(neonClientRepository.findById).mockResolvedValue({ id: "c1", referredByClientId: null } as never);
 
-    await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(neonClientRepository.update).not.toHaveBeenCalled();
   });
@@ -319,7 +353,7 @@ describe("bookingService.convertQuoteToBooking", () => {
       phoneNumber: "123",
     } as never);
 
-    await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(referralService.ensureReferralForBooking).toHaveBeenCalledOnce();
     const arg = vi.mocked(referralService.ensureReferralForBooking).mock.calls[0][0] as any;
@@ -333,9 +367,22 @@ describe("bookingService.updateBooking — references", () => {
     vi.mocked(bookingRepository.update).mockResolvedValue({ id: "b1" } as never);
   });
 
-  it("trims hays_ref and supplier_ref before saving", async () => {
-    await bookingService.updateBooking("b1", { hays_ref: "  HAY105391 ", supplier_ref: " TUI 1 " } as never, TRUSTED);
-    expect(vi.mocked(bookingRepository.update).mock.calls[0][1]).toMatchObject({ hays_ref: "HAY105391", supplier_ref: "TUI 1" });
+  it("trims the references and normalises a new HAYS ref before saving", async () => {
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1", hays_ref: "HAY105391" } as never);
+    await bookingService.updateBooking("b1", { hays_ref: "  hay1234567 ", supplier_ref: " TUI 1 " } as never, TRUSTED);
+    expect(vi.mocked(bookingRepository.update).mock.calls[0][1]).toMatchObject({ hays_ref: "HAY-1234567", supplier_ref: "TUI 1" });
+  });
+
+  it("lets an unchanged legacy-format HAYS ref through (the edit form resends it)", async () => {
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1", hays_ref: "HAY105391" } as never);
+    await bookingService.updateBooking("b1", { hays_ref: " HAY105391 ", supplier_ref: "TUI 1" } as never, TRUSTED);
+    expect(vi.mocked(bookingRepository.update).mock.calls[0][1]).toMatchObject({ hays_ref: "HAY105391" });
+  });
+
+  it("rejects a changed HAYS ref that is not in the HAY- format with 400", async () => {
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1", hays_ref: "HAY105391" } as never);
+    await expect(bookingService.updateBooking("b1", { hays_ref: "HAY105392" } as never, TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(bookingRepository.update).not.toHaveBeenCalled();
   });
 
   it("rejects an empty or whitespace reference with 400 and never writes", async () => {
@@ -518,7 +565,7 @@ describe("bookingService - operator must be in the org's list", () => {
 
   it("convertQuoteToBooking is exempt (it copies the quote's operators)", async () => {
     vi.mocked(newQuoteRepository.findById).mockResolvedValue(undefined as never);
-    await bookingService.convertQuoteToBooking("q1", "H1", "S1", ORG).catch(() => undefined);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", ORG).catch(() => undefined);
     expect(linked).not.toHaveBeenCalled();
   });
 });

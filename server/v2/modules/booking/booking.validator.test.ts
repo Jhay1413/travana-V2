@@ -16,6 +16,10 @@ describe("addImagesValidator", () => {
 });
 
 describe("updateBookingValidator", () => {
+  it("does not reject legacy HAYS formats (the service checks changes)", () => {
+    expect(updateBookingValidator.safeParse({ body: { hays_ref: "HAY105391" } }).success).toBe(true);
+  });
+
   it("accepts a refs-only body", () => {
     expect(updateBookingValidator.safeParse({ body: { hays_ref: "HAY105391", supplier_ref: "TUI 78451236" } }).success).toBe(true);
   });
@@ -50,12 +54,12 @@ describe("convertQuoteToBookingValidator", () => {
   const params = { quoteId: "q1" };
 
   it("accepts both references", () => {
-    expect(convertQuoteToBookingValidator.safeParse({ params, body: { haysRef: "HAY1", supplierRef: "TUI 2" } }).success).toBe(true);
+    expect(convertQuoteToBookingValidator.safeParse({ params, body: { haysRef: "HAY-1234567", supplierRef: "TUI 2" } }).success).toBe(true);
   });
 
   it("rejects missing, empty and whitespace-only references", () => {
-    expect(convertQuoteToBookingValidator.safeParse({ params, body: { haysRef: "HAY1" } }).success).toBe(false);
+    expect(convertQuoteToBookingValidator.safeParse({ params, body: { haysRef: "HAY-1234567" } }).success).toBe(false);
     expect(convertQuoteToBookingValidator.safeParse({ params, body: { haysRef: "", supplierRef: "x" } }).success).toBe(false);
-    expect(convertQuoteToBookingValidator.safeParse({ params, body: { haysRef: "x", supplierRef: "   " } }).success).toBe(false);
+    expect(convertQuoteToBookingValidator.safeParse({ params, body: { haysRef: "HAY-1234567", supplierRef: "   " } }).success).toBe(false);
   });
 });

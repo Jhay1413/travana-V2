@@ -9,6 +9,7 @@ import { composeAddress } from "@/features/client/lib/compose-address";
 import {
   RIGHT_CARD_TABS,
   formatPassengerDate,
+  passportExpiryFlagLabel,
   orDash,
   passengerCountLabel,
   passengerFullName,
@@ -29,7 +30,7 @@ function InfoRow({ label, children, testId }: { label: string; children: ReactNo
   );
 }
 
-function PassengerCard({ passenger, index, readOnly, onEdit }: { passenger: ClientPassenger; index: number; readOnly: boolean; onEdit: () => void }) {
+function PassengerCard({ passenger, index, readOnly, nextDeparture, onEdit }: { passenger: ClientPassenger; index: number; readOnly: boolean; nextDeparture: string | null; onEdit: () => void }) {
   return (
     <div className="rounded-xl border border-social-border bg-card p-4" data-testid={`passenger-card-${passenger.id ?? "lead"}`}>
       <div className="flex items-start justify-between gap-3">
@@ -60,7 +61,7 @@ function PassengerCard({ passenger, index, readOnly, onEdit }: { passenger: Clie
             {formatPassengerDate(passenger.passportExpiry)}
             {passenger.passportWarning && (
               <span className="rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[11px] font-semibold text-[#92400E]" data-testid="passenger-passport-warning">
-                Under 6 months at travel
+                {passportExpiryFlagLabel(nextDeparture)}
               </span>
             )}
           </span>
@@ -117,7 +118,7 @@ function ClientDetailsPanel({
       ) : (
         <div className="grid gap-3">
           {passengers.map((p, i) => (
-            <PassengerCard key={p.id ?? "lead"} passenger={p} index={i} readOnly={readOnly} onEdit={() => setModal({ open: true, passenger: p })} />
+            <PassengerCard key={p.id ?? "lead"} passenger={p} index={i} readOnly={readOnly} nextDeparture={data?.nextDeparture ?? null} onEdit={() => setModal({ open: true, passenger: p })} />
           ))}
           {!readOnly && (
             <button
@@ -135,7 +136,7 @@ function ClientDetailsPanel({
         </div>
       )}
 
-      <PassengerModal clientId={clientId} open={modal.open} onOpenChange={(open) => setModal((m) => ({ ...m, open }))} passenger={modal.passenger} />
+      <PassengerModal clientId={clientId} open={modal.open} onOpenChange={(open) => setModal((m) => ({ ...m, open }))} passenger={modal.passenger} nextDeparture={data?.nextDeparture ?? null} />
     </div>
   );
 }

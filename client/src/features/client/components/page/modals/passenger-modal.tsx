@@ -22,12 +22,17 @@ import {
   PASSENGER_TITLES,
   draftFromPassenger,
   draftToInput,
+  passportExpiryFlagLabel,
+  isPassengerDraftComplete,
   isPassengerDraftValid,
   passengerFullName,
+  passportExpiryFlag,
+  passportNumberWarning,
   type PassengerDraft,
 } from "@/features/client/lib/client-passengers";
 
 const NO_TITLE = "__none__";
+const WARNING_CLASS = "w-fit rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[11px] font-semibold text-[#92400E]";
 
 interface PassengerModalProps {
   clientId: string;
@@ -35,13 +40,15 @@ interface PassengerModalProps {
   onOpenChange: (open: boolean) => void;
   /** null = adding a new passenger. */
   passenger: ClientPassenger | null;
+  /** Earliest future travel date (YYYY-MM-DD); passport expiry is flagged against it, or today when null. */
+  nextDeparture?: string | null;
 }
 
 /**
  * Add / edit a passenger. For the lead only the passport fields are editable -
  * name and date of birth come from the client's own details.
  */
-export function PassengerModal({ clientId, open, onOpenChange, passenger }: PassengerModalProps) {
+export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDeparture = null }: PassengerModalProps) {
   const { toast } = useToast();
   const { saveLead, create, update, remove } = useClientPassengerMutations(clientId);
   const [draft, setDraft] = useState<PassengerDraft>(() => draftFromPassenger(passenger));
@@ -49,7 +56,10 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger }: Pass
   const isLead = !!passenger?.isLead;
   const isEdit = !!passenger && !isLead;
   const pending = saveLead.isPending || create.isPending || update.isPending || remove.isPending;
-  const canSave = isLead || isPassengerDraftValid(draft);
+  // Adding needs all six fields; editing (and the lead passport) is never blocked by gaps.
+  const canSave = isLead || (passenger ? isPassengerDraftValid(draft) : isPassengerDraftComplete(draft));
+  const numberWarning = passportNumberWarning(draft.passportNumber);
+  const expiryFlagged = !!draft.passportExpiry && passportExpiryFlag(draft.passportExpiry, nextDeparture);
 
   useEffect(() => {
     if (open) {
@@ -128,7 +138,7 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger }: Pass
                         <SelectValue placeholder="Select title" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={NO_TITLE}>No title</SelectItem>
+                        {isEdit && <SelectItem value={NO_TITLE}>No title</SelectItem>}
                         {PASSENGER_TITLES.map((t) => (
                           <SelectItem key={t} value={t}>
                             {t}
@@ -161,6 +171,11 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger }: Pass
                   onChange={(e) => set({ passportNumber: e.target.value })}
                   data-testid="input-passenger-passport-number"
                 />
+                {numberWarning && (
+                  <p className="text-[12px] text-[#92400E]" data-testid="passenger-passport-number-warning">
+                    {numberWarning}
+                  </p>
+                )}
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="passenger-passport-expiry">Passport expiry</Label>
@@ -171,6 +186,11 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger }: Pass
                   onChange={(e) => set({ passportExpiry: e.target.value })}
                   data-testid="input-passenger-passport-expiry"
                 />
+                {expiryFlagged && (
+                  <span className={WARNING_CLASS} data-testid="passenger-passport-expiry-flag">
+                    {passportExpiryFlagLabel(nextDeparture)}
+                  </span>
+                )}
               </div>
             </div>
             <DialogFooter className="gap-2 sm:justify-between">

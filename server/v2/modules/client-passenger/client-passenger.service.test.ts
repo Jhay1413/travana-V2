@@ -63,24 +63,29 @@ describe("date helpers", () => {
 });
 
 describe("computePassportWarning", () => {
-  it("is false without expiry or without departure", () => {
-    expect(computePassportWarning(null, "2026-11-01")).toBe(false);
-    expect(computePassportWarning("2026-11-01", null)).toBe(false);
-    expect(computePassportWarning(null, null)).toBe(false);
+  it("is false without an expiry", () => {
+    expect(computePassportWarning(null, "2026-11-01", "2026-10-31")).toBe(false);
+    expect(computePassportWarning(null, null, "2026-10-31")).toBe(false);
   });
   it("is true when expiry is before departure + 6 months", () => {
-    expect(computePassportWarning("2027-04-14", "2026-10-15")).toBe(true);
+    expect(computePassportWarning("2027-04-14", "2026-10-15", "2026-10-01")).toBe(true);
   });
-  it("is false on exactly 6 months and after", () => {
-    expect(computePassportWarning("2027-04-15", "2026-10-15")).toBe(false);
-    expect(computePassportWarning("2030-01-01", "2026-10-15")).toBe(false);
+  it("is true on exactly 6 months, false after", () => {
+    expect(computePassportWarning("2027-04-15", "2026-10-15", "2026-10-01")).toBe(true);
+    expect(computePassportWarning("2027-04-16", "2026-10-15", "2026-10-01")).toBe(false);
+    expect(computePassportWarning("2030-01-01", "2026-10-15", "2026-10-01")).toBe(false);
   });
-  it("handles month-end: 31 Aug departure needs expiry on/after 28 Feb", () => {
-    expect(computePassportWarning("2027-02-27", "2026-08-31")).toBe(true);
-    expect(computePassportWarning("2027-02-28", "2026-08-31")).toBe(false);
+  it("handles month-end: 31 Aug departure flags up to and including 28 Feb", () => {
+    expect(computePassportWarning("2027-02-28", "2026-08-31", "2026-08-01")).toBe(true);
+    expect(computePassportWarning("2027-03-01", "2026-08-31", "2026-08-01")).toBe(false);
+  });
+  it("measures against today when there is no departure", () => {
+    expect(computePassportWarning("2027-04-30", null, "2026-10-31")).toBe(true);
+    expect(computePassportWarning("2027-05-01", null, "2026-10-31")).toBe(false);
   });
   it("already-expired passport warns", () => {
-    expect(computePassportWarning("2020-01-01", "2026-08-31")).toBe(true);
+    expect(computePassportWarning("2020-01-01", "2026-08-31", "2026-08-01")).toBe(true);
+    expect(computePassportWarning("2020-01-01", null, "2026-08-01")).toBe(true);
   });
 });
 

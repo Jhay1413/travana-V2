@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRole, useRoles } from "@/hooks/use-role";
 import { MyHomeworkerBranchCard } from "@/features/homeworkers";
 import { useCurrentUser } from "@/hooks/queries";
+import { CreateTicketDialog } from "@/features/tickets";
 import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { ProfitStatBoxes } from "@/features/agent-overview/components/profit-stat-boxes";
 import { AgentDashboardCard } from "@/features/agent-overview/components/home/agent-dashboard-card";
@@ -18,6 +19,7 @@ const TILE_GRID = "grid-cols-2 md:grid-cols-3 2xl:grid-cols-5";
 
 export default function AgentOverviewPage() {
   const [creatingTask, setCreatingTask] = useState(false);
+  const [creatingTicket, setCreatingTicket] = useState(false);
 
   const { data: currentUser } = useCurrentUser();
   const { hasRole } = useRoles();
@@ -55,6 +57,7 @@ export default function AgentOverviewPage() {
               monthProfit={profitStats.monthProfit}
               monthTarget={profitStats.agentSalesTarget}
               onNewTask={() => setCreatingTask(true)}
+              onNewTicket={() => setCreatingTicket(true)}
             />
             <EngagementSection />
           </div>
@@ -80,6 +83,7 @@ export default function AgentOverviewPage() {
         successToast="Task created"
         testIdPrefix="dashboard-new-task"
       />
+      <CreateTicketDialog open={creatingTicket} onOpenChange={setCreatingTicket} />
     </div>
   );
 }

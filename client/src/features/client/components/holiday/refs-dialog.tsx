@@ -33,7 +33,8 @@ export function RefsDialog({ open, onOpenChange, booking, bookedLine }: RefsDial
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const result = validateRefs(values);
+    // Older bookings use other HAYS formats: only enforce the format when the value changed.
+    const result = validateRefs(values, booking.hays_ref ?? "");
     if (!result.ok) {
       setErrors(result.errors);
       return;

@@ -1,4 +1,5 @@
-import { format, isValid, parse } from "date-fns";
+import { addMonths, format, isValid, parse } from "date-fns";
+import { londonDayKey } from "@/lib/london-day";
 import type { ClientPassenger } from "@/features/client/api/client-passenger.api";
 
 export type RightCardTab = "details" | "portal" | "referrals";
@@ -48,7 +49,7 @@ export function passengerCountLabel(count: number): string {
 
 export function passportFootnote(nextDeparture: string | null): string {
   const d = nextDeparture ? parseYmd(nextDeparture.slice(0, 10)) : null;
-  if (!d) return "Passport expiry is checked against the next departure. No upcoming bookings yet.";
+  if (!d) return "No upcoming bookings yet, so passport expiry is checked against today. Many countries need 6 months left.";
   return `Passport expiry is checked against the next departure, ${format(d, "EEE d MMM yyyy")}. Many countries need 6 months left.`;
 }
 
@@ -82,8 +83,44 @@ export function draftFromPassenger(p: ClientPassenger | null): PassengerDraft {
   };
 }
 
+/** Edit rule: names only. Editing is never blocked by gaps in old records. */
 export function isPassengerDraftValid(draft: PassengerDraft): boolean {
   return !!draft.firstName.trim() && !!draft.surname.trim();
+}
+
+/** Add rule: all six fields are mandatory. */
+export function isPassengerDraftComplete(draft: PassengerDraft): boolean {
+  return [draft.title, draft.firstName, draft.surname, draft.dateOfBirth, draft.passportNumber, draft.passportExpiry].every(
+    (v) => !!v.trim(),
+  );
+}
+
+export const PASSPORT_NUMBER_WARNING = "UK passports have 9 numbers. Check this one if it's a UK passport.";
+
+/** Soft warning (never blocks saving): null when empty or exactly 9 digits. */
+export function passportNumberWarning(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  return /^\d{9}$/.test(v) ? null : PASSPORT_NUMBER_WARNING;
+}
+
+/** Badge wording: measured at travel when there is a next departure, otherwise from today. */
+export function passportExpiryFlagLabel(nextDeparture: string | null): string {
+  return nextDeparture ? "6 months or less at travel" : "6 months or less left";
+}
+
+/**
+ * True when the passport has 6 months or less left (expired and exactly-6-months included),
+ * measured from the next departure, or from `today` (a London YYYY-MM-DD day, as the server's ukTodayYmd) when there is none. Mirrors the server rule.
+ */
+export function passportExpiryFlag(expiry: string, nextDeparture: string | null, today: string = londonDayKey(new Date())): boolean {
+  const exp = expiry ? parseYmd(expiry.slice(0, 10)) : null;
+  if (!exp) return false;
+  const dep = nextDeparture ? parseYmd(nextDeparture.slice(0, 10)) : null;
+  const base = dep ?? parseYmd(today);
+  if (!base) return false;
+  const limit = addMonths(base, 6);
+  return format(exp, "yyyy-MM-dd") <= format(limit, "yyyy-MM-dd");
 }
 
 /** Empty strings become null so the server clears the field. */

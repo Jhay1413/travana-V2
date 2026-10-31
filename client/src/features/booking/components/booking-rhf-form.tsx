@@ -75,6 +75,7 @@ import { AddAccommodationModal } from "@/features/lookups/components/lookups/add
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
 import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
 import { orderBoardBasisRows } from "@/features/lookups";
+import { HAYS_REF_MESSAGE, normaliseHaysRef } from "@shared/booking-refs";
 
 const emptyFlightLeg: FlightLegValue = {
   departAirportId: "",
@@ -698,12 +699,28 @@ export function BookingRHFForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(
-        (values) => onSubmit(values, {
-          files: pendingFiles(imageItems),
-          urls: resolvedUrls(imageItems),
-          deletedImageIds,
-          items: imageItems,
-        }),
+        (values) => {
+          // HAYS Ref format: a non-empty value is checked on create, and on edit only when it
+          // differs from the stored one (older bookings keep their legacy format).
+          const haysRef = (values.haysRef ?? "").trim();
+          let submitted = values;
+          if (haysRef && haysRef !== (defaultValues?.haysRef ?? "").trim()) {
+            const normalised = normaliseHaysRef(haysRef);
+            if (!normalised) {
+              form.setError("haysRef", { type: "validate", message: HAYS_REF_MESSAGE });
+              toast({ title: "Can't save yet", description: HAYS_REF_MESSAGE, variant: "destructive" });
+              scrollToFirstFormError();
+              return;
+            }
+            submitted = { ...values, haysRef: normalised };
+          }
+          return onSubmit(submitted, {
+            files: pendingFiles(imageItems),
+            urls: resolvedUrls(imageItems),
+            deletedImageIds,
+            items: imageItems,
+          });
+        },
         // Without this, a failed validation makes the Save button appear to do
         // nothing — the inline message can be scrolled out of view in this
         // long dialog.
@@ -748,7 +765,7 @@ export function BookingRHFForm({
                         {...field}
                         value={field.value ?? ""}
                         className={drawerInputClass}
-                        placeholder="Enter Hays reference..."
+                        placeholder="e.g. HAY-1234567"
                       />
                     </FormControl>
                     <FormMessage />
@@ -874,7 +891,7 @@ export function BookingRHFForm({
                       {...field}
                       value={field.value ?? ""}
                       className="h-9 rounded-xl border-black/10 bg-white/70"
-                      placeholder="Enter Hays reference..."
+                      placeholder="e.g. HAY-1234567"
                     />
                   </FormControl>
                   <FormMessage />

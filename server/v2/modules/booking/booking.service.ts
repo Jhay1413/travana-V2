@@ -12,6 +12,7 @@ import { fireAutoTriggerForClient } from "../sms/sms.service";
 import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
+import { normaliseNewHaysRef, requireHaysRef } from "../../utils/hays-ref";
 import type {
   InsertBooking,
   InsertBookingFlight,
@@ -111,15 +112,26 @@ type UpdateBookingPayload = Partial<InsertBooking> & BookingRelationData;
 /**
  * hays_ref / supplier_ref are NOT NULL columns, so when the key is present the value
  * must be a non-empty string: it is trimmed, and null / empty / whitespace is a 400.
+ *
+ * The HAYS Ref must be HAY- plus 7 or 8 digits (normalised to upper case). Older bookings
+ * hold other formats and the edit form resends the stored value on every save, so the
+ * format is only enforced when the value differs from `storedHaysRef`.
  */
-function normaliseBookingRefs(data: UpdateBookingPayload): Partial<Pick<InsertBooking, "hays_ref" | "supplier_ref">> {
+function normaliseBookingRefs(
+  data: UpdateBookingPayload,
+  storedHaysRef?: string | null,
+): Partial<Pick<InsertBooking, "hays_ref" | "supplier_ref">> {
   const out: Partial<Pick<InsertBooking, "hays_ref" | "supplier_ref">> = {};
   for (const key of ["hays_ref", "supplier_ref"] as const) {
     if (!(key in data)) continue;
     const raw: unknown = data[key];
     const trimmed = typeof raw === "string" ? raw.trim() : "";
     if (!trimmed) throw new AppError("Reference cannot be empty", 400);
-    out[key] = trimmed;
+    if (key === "hays_ref" && trimmed !== (storedHaysRef ?? "").trim()) {
+      out[key] = requireHaysRef(trimmed);
+    } else {
+      out[key] = trimmed;
+    }
   }
   return out;
 }
@@ -168,7 +180,9 @@ export const bookingService = {
     };
   },
 
-  async convertQuoteToBooking(quoteId: string, haysRef: string, supplierRef: string, scope: ScopeOrTrusted) {
+  async convertQuoteToBooking(quoteId: string, rawHaysRef: string, supplierRef: string, scope: ScopeOrTrusted) {
+    // validate() does not write parsed values back, so normalise here before saving.
+    const haysRef = requireHaysRef(rawHaysRef);
     const q = await newQuoteRepository.findById(quoteId);
     if (!q) throw new AppError("Quote not found", 404);
 
@@ -410,7 +424,10 @@ export const bookingService = {
     return { ...b, client_id: txn.client_id ?? null };
   },
 
-  async createBooking(data: InsertBooking & { childAges?: any[] }, scope: ScopeOrTrusted) {
+  async createBooking(rawData: InsertBooking & { childAges?: any[] }, scope: ScopeOrTrusted) {
+    // A non-empty HAYS Ref must be in the HAY- format; it is saved in canonical form.
+    const haysRef = normaliseNewHaysRef(rawData.hays_ref);
+    const data = haysRef ? { ...rawData, hays_ref: haysRef } : rawData;
     await assertTransactionInScope(data.transaction_id, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
 
@@ -466,7 +483,9 @@ export const bookingService = {
   async updateBooking(id: string, rawData: UpdateBookingPayload, scope: ScopeOrTrusted) {
     await assertBookingInScope(id, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, rawData, () => bookingRepository.findTourOperatorIds(id));
-    const data: UpdateBookingPayload = { ...rawData, ...normaliseBookingRefs(rawData) };
+    // The stored HAYS Ref is only needed to skip the format check for an unchanged legacy value.
+    const stored = "hays_ref" in rawData ? await bookingRepository.findById(id) : undefined;
+    const data: UpdateBookingPayload = { ...rawData, ...normaliseBookingRefs(rawData, stored?.hays_ref) };
 
     const {
       outboundFlight, inboundFlight, primaryAccommodation,

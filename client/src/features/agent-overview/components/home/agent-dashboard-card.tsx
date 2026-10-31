@@ -5,6 +5,7 @@ import { TicketsTab } from "../tickets-tab";
 import { ConversationsTab } from "../conversations-tab";
 import { MyCoursesTab } from "../my-courses-tab";
 import { NotesTab } from "../notes-tab";
+import { dashboardAddButton } from "../../lib/dashboard-add-button";
 import { HomeCard, UnderlineTabs } from "./home-ui";
 
 type DashboardTab = "tasks" | "tickets" | "conversations" | "my-courses" | "notes";
@@ -26,14 +27,17 @@ export function AgentDashboardCard({
   monthProfit,
   monthTarget,
   onNewTask,
+  onNewTicket,
 }: {
   userId: string;
   isHomeworker: boolean;
   monthProfit: number;
   monthTarget: number;
   onNewTask: () => void;
+  onNewTicket: () => void;
 }) {
   const [tab, setTab] = useState<DashboardTab>("tasks");
+  const addButton = dashboardAddButton(tab);
   const tabs = omitHomeworkerDeniedTabs(DASHBOARD_TABS, isHomeworker, ["conversations"]);
 
   return (
@@ -44,12 +48,12 @@ export function AgentDashboardCard({
       right={
         <button
           type="button"
-          onClick={onNewTask}
+          onClick={addButton.kind === "ticket" ? onNewTicket : onNewTask}
           className="h-8 shrink-0 rounded-lg bg-social-orange px-3.5 text-[12px] font-semibold text-slate-900 transition hover:bg-social-orange/90 xl:text-[13px]"
-          aria-label="New task"
+          aria-label={addButton.ariaLabel}
           data-testid="button-dashboard-add"
         >
-          + New Task
+          {addButton.label}
         </button>
       }
     >
@@ -58,7 +62,7 @@ export function AgentDashboardCard({
       {tab === "tickets" && <TicketsTab userId={userId} />}
       {tab === "conversations" && !isHomeworker && <ConversationsTab />}
       {tab === "my-courses" && <MyCoursesTab />}
-      {tab === "notes" && <NotesTab monthProfit={monthProfit} target={monthTarget} />}
+      {tab === "notes" && <NotesTab userId={userId} monthProfit={monthProfit} target={monthTarget} />}
     </HomeCard>
   );
 }
