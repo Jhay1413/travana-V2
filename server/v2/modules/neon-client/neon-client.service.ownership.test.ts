@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./neon-client.repository", () => ({
-  neonClientRepository: { create: vi.fn(), update: vi.fn() },
+  neonClientRepository: { create: vi.fn(), update: vi.fn(), findById: vi.fn() },
 }));
 vi.mock("../client/client.repository", () => ({ clientRepository: {} }));
 vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
@@ -17,7 +17,10 @@ const AGENT: Scope = {
 };
 const ADMIN: Scope = { ...AGENT, orgRole: "org_admin", orgRoles: ["org_admin"] };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(neonClientRepository.findById).mockResolvedValue({ id: "c1", status: "active" } as never);
+});
 
 describe("neonClientService ownership fields", () => {
   it("update strips orgId/branchId/createdBy for non-admins", async () => {

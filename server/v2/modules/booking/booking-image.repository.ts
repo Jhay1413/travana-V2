@@ -88,23 +88,21 @@ export const bookingImageRepository = {
   },
 
   /**
-   * Delete a specific image.
-   *
-   * A booking's `images` array is a merge of bookingImages, deal_images,
-   * accommodation_images and lodge_images (see booking.repository `getById`),
-   * each labelled with the row's own id. The incoming imageId therefore
-   * belongs to whichever source table that row came from, so we try the
-   * delete against every source. The accommodation_images / lodge_images
-   * delete is a global removal because those tables are master records
-   * shared across all consumers.
+   * Delete a specific image THIS booking owns. A booking's images array is a merge of bookingImages,
+   * deal_images, accommodation_images and lodge_images, but only the first two belong to the booking.
+   * The accommodation_images / lodge_images rows are shared master records and are NEVER deleted from here.
    */
   async deleteImage(bookingId: string, imageId: string) {
     await Promise.all([
       db.delete(bookingImages).where(and(eq(bookingImages.id, imageId), eq(bookingImages.bookingId, bookingId))),
       db.delete(deal_images).where(and(eq(deal_images.id, imageId), eq(deal_images.owner_id, bookingId))),
-      db.delete(accommodation_images).where(eq(accommodation_images.id, imageId)),
-      db.delete(lodge_images).where(eq(lodge_images.id, imageId)),
     ]);
+  },
+
+  /** True when any booking_images row still points at this exact URL (other tables: quoteImageRepository.isUrlReferenced). */
+  async isUrlReferencedByBooking(url: string): Promise<boolean> {
+    const [row] = await db.select({ id: bookingImages.id }).from(bookingImages).where(eq(bookingImages.url, url)).limit(1);
+    return !!row;
   },
 
   async setPrimaryImage(bookingId: string, imageId: string) {

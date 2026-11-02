@@ -3,6 +3,7 @@ import { quoteImageService } from "./quote-image.service";
 import { asyncHandler } from "../../utils/async-handler";
 import { successResponse } from "../../utils/response";
 import type { PresignQuoteImagesBody } from "./quote.validator";
+import { getScope } from "../../utils/scope";
 
 export const quoteImageController = {
   /**
@@ -23,7 +24,7 @@ export const quoteImageController = {
     const quoteId = req.params.quoteId as string;
     const { images } = req.body;
 
-    const addedImages = await quoteImageService.addImages(quoteId, images);
+    const addedImages = await quoteImageService.addImages(quoteId, images, getScope(req));
 
     return successResponse(
       res,
@@ -40,7 +41,7 @@ export const quoteImageController = {
   getImages: asyncHandler(async (req: Request, res: Response) => {
     const quoteId = req.params.quoteId as string;
 
-    const images = await quoteImageService.getQuoteImages(quoteId);
+    const images = await quoteImageService.getQuoteImages(quoteId, getScope(req));
 
     return successResponse(res, images, "Images retrieved successfully");
   }),
@@ -53,7 +54,7 @@ export const quoteImageController = {
     const quoteId = req.params.quoteId as string;
     const imageId = req.params.imageId as string;
 
-    await quoteImageService.deleteImage(quoteId, imageId);
+    await quoteImageService.deleteImage(quoteId, imageId, getScope(req));
 
     return successResponse(res, null, "Image deleted successfully");
   }),
@@ -66,7 +67,7 @@ export const quoteImageController = {
     const quoteId = req.params.quoteId as string;
     const imageId = req.params.imageId as string;
 
-    const image = await quoteImageService.setPrimaryImage(quoteId, imageId);
+    const image = await quoteImageService.setPrimaryImage(quoteId, imageId, getScope(req));
 
     return successResponse(res, image, "Primary image updated successfully");
   }),
@@ -79,7 +80,7 @@ export const quoteImageController = {
     const quoteId = req.params.quoteId as string;
     const { imageIds, imageUrls } = req.body as { imageIds?: string[]; imageUrls?: string[] };
 
-    const images = await quoteImageService.reorderImages(quoteId, { imageIds, imageUrls });
+    const images = await quoteImageService.reorderImages(quoteId, { imageIds, imageUrls }, getScope(req));
 
     return successResponse(res, images, "Image order updated successfully");
   }),
@@ -108,7 +109,7 @@ export const quoteImageController = {
       }
     }
 
-    const addedImages = await quoteImageService.uploadFiles(quoteId, files);
+    const addedImages = await quoteImageService.uploadFiles(quoteId, files, getScope(req));
     return successResponse(res, addedImages, `${addedImages.length} image(s) uploaded successfully`, 201);
   }),
 };

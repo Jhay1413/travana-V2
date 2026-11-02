@@ -1,12 +1,12 @@
 import { db } from "../../config/database";
 import { publicClientColumns } from "../neon-client/neon-client.serializer";
-import { transaction, tickets, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks, favorites } from "@shared/schema";
-import type { Transaction, TaskPriority, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
+import { transaction, tickets, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, enquiry_passenger, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks, favorites } from "@shared/schema";
+import type { Transaction, TaskPriority, InsertTransaction, InsertEnquiryTable, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
 import { tourOperatorFields } from "./tour-operator-fields";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, getTableColumns, type SQL, type Column } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
-import { buildPartitionCond, buildTransactionRecordScopeConds } from "../../utils/scope-conditions";
+import { buildTransactionRecordScopeConds, buildTransactionScopeConds } from "../../utils/scope-conditions";
 import type { NextTask, PipelineCandidateItem, PipelineFilters, PipelineQuickCounts, PipelineSqlSort, PipelineTotals } from "./transaction.types";
 import { fetchServiceCommissionMaps } from "./service-commission.repository";
 import { dealProfitExpr, dealValueExpr, pipelineFilterConds, quickCond, sortExpr } from "./transaction-pipeline.sql";
@@ -23,6 +23,20 @@ interface CreateTransactionWithQuoteInput {
   inboundConnectingLegs?: ConnectingLeg[];
   primaryAccommodation?: (Partial<InsertQuoteAccomodation> & { accomodation_id?: string | null }) | null;
   images?: string[];
+  scope: Scope;
+}
+
+export interface CreateTransactionWithEnquiryInput {
+  transactionData: InsertTransaction;
+  enquiryFields: Omit<InsertEnquiryTable, "transaction_id">;
+  destinations?: string[];
+  resorts?: string[];
+  accommodations?: string[];
+  boardBases?: string[];
+  departureAirports?: string[];
+  passengers?: Array<{ type: string; age: number }>;
+  /** Already sanitised note bodies. */
+  notes?: Array<{ content: string; agent_id: string | null }>;
   scope: Scope;
 }
 
@@ -55,6 +69,26 @@ async function getPackageTypeMap(): Promise<Map<string, string>> {
   return map;
 }
 
+// Columns a request body may never set when a deal is created: ids and parents, deletion and acceptance stamps,
+// share tokens, the free-quote flag and portal switches. Everything else that is a real column is kept.
+const PROTECTED_ENQUIRY_COLUMNS: ReadonlySet<string> = new Set(["id", "transaction_id", "deleted_by", "deleted_at", "deletion_code", "date_created", "is_active"]);
+const PROTECTED_QUOTE_COLUMNS: ReadonlySet<string> = new Set([
+  "id", "transaction_id", "deal_id", "deleted_by", "deleted_by_v2", "deleted_at", "deletion_code", "isFreeQuote", "quote_token",
+  "quote_sent_at", "quote_sent_via", "accepted_at", "accepted_by", "date_created", "parent_quote_id", "portal_added_at", "show_on_portal", "is_featured",
+]);
+const PROTECTED_BOOKING_COLUMNS: ReadonlySet<string> = new Set(["id", "transaction_id", "quote_id", "deleted_by", "deleted_by_user", "deleted_at", "deletion_code", "date_created"]);
+
+/** The values of `table`'s own columns, minus the protected ones (a whitelist built from the table definition). */
+export function pickCreateColumns(table: Parameters<typeof getTableColumns>[0], values: object, protectedKeys: ReadonlySet<string>): Record<string, unknown> {
+  const columns = Object.keys(getTableColumns(table));
+  const source = values as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of columns) {
+    if (!protectedKeys.has(key) && source[key] !== undefined) out[key] = source[key];
+  }
+  return out;
+}
+
 function hasFlightData(leg: Partial<InsertQuoteFlight> | Partial<InsertBookingFlight> | null | undefined): boolean {
   if (!leg) return false;
   return Boolean(
@@ -67,30 +101,15 @@ function hasFlightData(leg: Partial<InsertQuoteFlight> | Partial<InsertBookingFl
 }
 
 function buildTxnScopeConds(scope?: Scope, branchOverride?: string): SQL[] {
-  const conds: SQL[] = [];
-  if (!scope) return conds;
-
-  if (scope.orgRole === "platform_admin") {
-    if (branchOverride) conds.push(eq(transaction.branch_id, branchOverride));
-    return conds;
-  }
-
-  // All non-platform roles are confined to their org.
-  conds.push(eq(transaction.org_id, scope.orgId));
-
-  if (scope.orgRole === "branch_manager" || scope.orgRole === "agent") {
-    // Branch users are pinned to their own branch — any override is ignored.
-    if (scope.branchId) conds.push(eq(transaction.branch_id, scope.branchId));
-  } else if (scope.orgRole === "org_admin" && branchOverride) {
-    // org_admin: optional branch narrowing. org_id condition above already
-    // prevents cross-org access if a foreign branch id is supplied.
+  if (!scope) return [];
+  // Org, shop pin (agents and branch managers: own shop plus own legacy deals, nothing with no shop) and the
+  // shop/homeworker partition all come from the shared helper.
+  const conds = buildTransactionScopeConds(scope);
+  // Admins may narrow to one branch; branch users are pinned to their own shop, so any override is ignored for
+  // them. For org_admin the org condition already prevents cross-org access if a foreign branch id is supplied.
+  if (branchOverride && (scope.orgRole === "platform_admin" || scope.orgRole === "org_admin")) {
     conds.push(eq(transaction.branch_id, branchOverride));
   }
-
-  // Shop <-> homeworker isolation (homeworkers: own branch + own rows).
-  const partition = buildPartitionCond(scope, transaction.branch_id, transaction.user_id);
-  if (partition) conds.push(partition);
-
   return conds;
 }
 
@@ -298,7 +317,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
   const quoteLostCond = options?.includeLost ? sql`TRUE` : sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`;
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes, allUsers, allClients, allQuoteVariants] = await Promise.all([
-    db.select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, travel_date: enquiry_table.travel_date, adults: enquiry_table.adults, children: enquiry_table.children, infants: enquiry_table.infants, holiday_type_id: enquiry_table.holiday_type_id, status: enquiry_table.status, date_created: enquiry_table.date_created, date_expiry: enquiry_table.date_expiry, is_future_deal: enquiry_table.is_future_deal, future_deal_date: enquiry_table.future_deal_date, destination_name: sql<string | null>`(
+    db.select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, travel_date: enquiry_table.travel_date, budget: enquiry_table.budget, no_of_nights: enquiry_table.no_of_nights, adults: enquiry_table.adults, children: enquiry_table.children, infants: enquiry_table.infants, holiday_type_id: enquiry_table.holiday_type_id, status: enquiry_table.status, date_created: enquiry_table.date_created, date_expiry: enquiry_table.date_expiry, is_future_deal: enquiry_table.is_future_deal, future_deal_date: enquiry_table.future_deal_date, destination_name: sql<string | null>`(
       SELECT d.name FROM enquiry_destination ed
       JOIN destination_table d ON ed.destination_id = d.id
       WHERE ed.enquiry_id = enquiry_table.id
@@ -874,12 +893,11 @@ export const transactionRepository = {
     dateTo?: Date;
     branchOverride?: string;
   } = {}) {
-    // Client-details context (clientId present): staff see the client's FULL
-    // deal history org-wide; homeworkers only their own deals. All other list
-    // contexts keep the branch-pinned scoping.
-    const conditions: SQL[] = filters.clientId
-      ? (scope ? buildTransactionRecordScopeConds(scope) : [])
-      : [...buildTxnScopeConds(scope, filters.branchOverride)];
+    // Owner decision: the client page's deals list and deal history are shop-pinned like the
+    // board (agents and branch managers see only their own shop's deals; org admins and social
+    // media managers stay org-wide; homeworkers only their own). The client itself is still
+    // visible org-wide. A branch override is ignored when a client is named.
+    const conditions: SQL[] = [...buildTxnScopeConds(scope, filters.clientId ? undefined : filters.branchOverride)];
     if (filters.clientId) conditions.push(eq(transaction.client_id, filters.clientId));
     if (filters.agentId) conditions.push(eq(transaction.user_id, filters.agentId));
     if (filters.dateFrom) conditions.push(sql`${transaction.created_at} >= ${filters.dateFrom.toISOString()}`);
@@ -1003,7 +1021,7 @@ export const transactionRepository = {
 
   async create(data: InsertTransaction, scope?: Scope): Promise<Transaction> {
     const values: InsertTransaction = scope
-      ? ({ ...data, org_id: (data as any).org_id ?? scope.orgId ?? null, branch_id: (data as any).branch_id ?? scope.branchId ?? null } as InsertTransaction)
+      ? { ...data, org_id: data.org_id ?? scope.orgId ?? null, branch_id: data.branch_id ?? scope.branchId ?? null }
       : data;
     const [result] = await db.insert(transaction).values(values).returning();
     return result;
@@ -1147,6 +1165,50 @@ export const transactionRepository = {
   },
 
   /**
+   * Atomic insert: transaction + enquiry + its relation rows, passengers and notes.
+   * Any failing insert rolls the whole lot back, so no orphan transaction is left behind.
+   */
+  async createWithEnquiryAndChildren(input: CreateTransactionWithEnquiryInput) {
+    return db.transaction(async (tx) => {
+      const [txn] = await tx.insert(transaction).values({
+        ...input.transactionData,
+        status: 'on_enquiry',
+        org_id: input.transactionData.org_id ?? input.scope.orgId ?? null,
+        branch_id: input.transactionData.branch_id ?? input.scope.branchId ?? null,
+      } as InsertTransaction).returning();
+
+      const [enq] = await tx.insert(enquiry_table).values({
+        ...(pickCreateColumns(enquiry_table, input.enquiryFields, PROTECTED_ENQUIRY_COLUMNS) as InsertEnquiryTable),
+        transaction_id: txn.id,
+      }).returning();
+
+      if (input.destinations?.length) {
+        await tx.insert(enquiry_destination).values(input.destinations.map((destination_id) => ({ enquiry_id: enq.id, destination_id })));
+      }
+      if (input.resorts?.length) {
+        await tx.insert(enquiry_resorts).values(input.resorts.map((resorts_id) => ({ enquiry_id: enq.id, resorts_id })));
+      }
+      if (input.accommodations?.length) {
+        await tx.insert(enquiry_accomodation).values(input.accommodations.map((accomodation_id) => ({ enquiry_id: enq.id, accomodation_id })));
+      }
+      if (input.boardBases?.length) {
+        await tx.insert(enquiry_board_basis).values(input.boardBases.map((board_basis_id) => ({ enquiry_id: enq.id, board_basis_id })));
+      }
+      if (input.departureAirports?.length) {
+        await tx.insert(enquiry_departure_airport).values(input.departureAirports.map((airport_id) => ({ enquiry_id: enq.id, airport_id })));
+      }
+      if (input.passengers?.length) {
+        await tx.insert(enquiry_passenger).values(input.passengers.map((p) => ({ enquiry_id: enq.id, type: p.type, age: p.age })));
+      }
+      if (input.notes?.length) {
+        await tx.insert(notes).values(input.notes.map((n) => ({ transaction_id: txn.id, content: n.content, agent_id: n.agent_id })));
+      }
+
+      return { transaction: txn, enquiry: enq };
+    });
+  },
+
+  /**
    * Atomic insert: transaction + quote + flights + primary accommodation + image rows.
    * The service is responsible for all data normalisation/conversion before calling.
    */
@@ -1155,12 +1217,12 @@ export const transactionRepository = {
       const [txn] = await tx.insert(transaction).values({
         ...input.transactionData,
         status: 'on_quote',
-        org_id: (input.transactionData as any).org_id ?? input.scope.orgId ?? null,
-        branch_id: (input.transactionData as any).branch_id ?? input.scope.branchId ?? null,
+        org_id: input.transactionData.org_id ?? input.scope.orgId ?? null,
+        branch_id: input.transactionData.branch_id ?? input.scope.branchId ?? null,
       } as InsertTransaction).returning();
 
       const [q] = await tx.insert(quote).values({
-        ...input.quoteFields,
+        ...(pickCreateColumns(quote, input.quoteFields, PROTECTED_QUOTE_COLUMNS) as InsertQuote),
         transaction_id: txn.id,
       } as InsertQuote).returning();
 
@@ -1214,12 +1276,12 @@ export const transactionRepository = {
       const [txn] = await tx.insert(transaction).values({
         ...input.transactionData,
         status: 'on_booking',
-        org_id: (input.transactionData as any).org_id ?? input.scope.orgId ?? null,
-        branch_id: (input.transactionData as any).branch_id ?? input.scope.branchId ?? null,
+        org_id: input.transactionData.org_id ?? input.scope.orgId ?? null,
+        branch_id: input.transactionData.branch_id ?? input.scope.branchId ?? null,
       } as InsertTransaction).returning();
 
       const [b] = await tx.insert(booking).values({
-        ...input.bookingFields,
+        ...(pickCreateColumns(booking, input.bookingFields, PROTECTED_BOOKING_COLUMNS) as InsertBooking),
         transaction_id: txn.id,
         booking_status: 'BOOKED',
       } as InsertBooking).returning();

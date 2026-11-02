@@ -334,6 +334,8 @@ export type FormLayout = "card" | "drawer";
 export type FormPresentation = "dialog" | "drawer";
 
 export interface QuoteRHFFormProps {
+  /** The saved quote being edited; lets the tag picker detach a tag from this quote. Absent when creating. */
+  quoteId?: string;
   defaultValues?: Partial<QuoteFormValues>;
   onSubmit: (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[]; items?: FormImageItem[] }) => Promise<void> | void;
   isLoading?: boolean;

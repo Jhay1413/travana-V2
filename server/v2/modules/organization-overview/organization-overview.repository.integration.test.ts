@@ -42,8 +42,11 @@ beforeEach(async () => {
   const ty = await txn(branchY.id);
   await makeBooking({ transaction_id: ty.id, travel_date: "2026-06-01", package_commission: "400", date_created: IN_MONTH });
 
-  // Branch Z (orgB): £9999 — must not appear when scoped to orgA
-  const tz = await txn(branchZ.id);
+  // Branch Z (orgB): £9999 — must not appear when scoped to orgA. The deal must be genuinely
+  // orgB's (orgB client + org_id): org scope resolves through the deal's client, so reusing
+  // orgA's client here would make it an orgA deal.
+  const clientB = await makeClient({ orgId: orgB.id });
+  const tz = await makeTransaction({ user_id: agent.id, org_id: orgB.id, branch_id: branchZ.id, client_id: clientB.id });
   await makeBooking({ transaction_id: tz.id, travel_date: "2026-06-01", package_commission: "9999", date_created: IN_MONTH });
   void branchW;
 });

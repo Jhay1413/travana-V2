@@ -1,8 +1,10 @@
 import { enquiryTableRepository } from "./enquiry.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { AppError } from "../../utils/error-handler";
+import { refuseDealWrite } from "../../utils/deal-access";
 import type { InsertEnquiryTable } from "@shared/schema";
 import type { ScopeOrTrusted } from "../../utils/scope-conditions";
+import { pickEditableEnquiryFields } from "./enquiry.types";
 
 async function assertEnquiryInScope(id: string, scope: ScopeOrTrusted) {
   const ok = await enquiryTableRepository.enquiryInScope(id, scope);
@@ -12,6 +14,17 @@ async function assertEnquiryInScope(id: string, scope: ScopeOrTrusted) {
 async function assertTransactionInScope(transactionId: string, scope: ScopeOrTrusted) {
   const ok = await enquiryTableRepository.transactionInScope(transactionId, scope);
   if (!ok) throw new AppError("Enquiry not found", 404);
+}
+
+// Writes use the shop-pinned write scope (403 for another shop's deal, 404 otherwise).
+async function assertEnquiryWritable(id: string, scope: ScopeOrTrusted) {
+  if (await enquiryTableRepository.enquiryInScopeForWrite(id, scope)) return;
+  refuseDealWrite(await enquiryTableRepository.enquiryInScope(id, scope), "Enquiry not found");
+}
+
+async function assertDealWritable(transactionId: string, scope: ScopeOrTrusted) {
+  if (await enquiryTableRepository.transactionInScopeForWrite(transactionId, scope)) return;
+  refuseDealWrite(await enquiryTableRepository.transactionInScope(transactionId, scope), "Enquiry not found");
 }
 
 export const newEnquiryService = {
@@ -42,17 +55,21 @@ export const newEnquiryService = {
 
   async createEnquiry(data: InsertEnquiryTable, scope: ScopeOrTrusted) {
     if (data.transaction_id) {
-      await assertTransactionInScope(data.transaction_id, scope);
+      await assertDealWritable(data.transaction_id, scope);
     }
-    return enquiryTableRepository.create(data);
+    // Only the enquiry's own columns plus the deal it hangs off (checked above) reach the insert.
+    const fields = pickEditableEnquiryFields(data as unknown as Record<string, unknown>);
+    return enquiryTableRepository.create({ ...fields, transaction_id: data.transaction_id } as InsertEnquiryTable);
   },
 
   async updateEnquiry(id: string, data: Partial<InsertEnquiryTable>, relations: any, scope: ScopeOrTrusted) {
-    await assertEnquiryInScope(id, scope);
-    const enquiry = await enquiryTableRepository.update(id, data);
+    await assertEnquiryWritable(id, scope);
+    // Whitelist the editable columns: transaction_id, org / branch, deleted_at, id... can never be set from a body.
+    const fields = pickEditableEnquiryFields(data as unknown as Record<string, unknown>) as Partial<InsertEnquiryTable>;
+    const enquiry = await enquiryTableRepository.update(id, fields);
     if (!enquiry) throw new AppError("Enquiry not found", 404);
 
-    if (data.status === 'LOST' && enquiry.transaction_id) {
+    if (fields.status === 'LOST' && enquiry.transaction_id) {
       await transactionRepository.update(enquiry.transaction_id, { is_active: false });
     }
 
@@ -100,7 +117,7 @@ export const newEnquiryService = {
    * transaction that has already moved on to a quote/booking is left alone.
    */
   async deleteEnquiry(id: string, scope: ScopeOrTrusted) {
-    await assertEnquiryInScope(id, scope);
+    await assertEnquiryWritable(id, scope);
     const enquiry = await enquiryTableRepository.findById(id);
     if (!enquiry) throw new AppError("Enquiry not found", 404);
 

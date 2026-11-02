@@ -5,6 +5,7 @@ import { s3Client, S3_BUCKET } from "../../config/s3";
 import { noteAttachmentRepository } from "./note-attachment.repository";
 import { noteRepository } from "./note.repository";
 import { AppError } from "../../utils/error-handler";
+import { refuseDealWrite } from "../../utils/deal-access";
 import type { NoteAttachment } from "@shared/schema";
 import type { Scope } from "../../utils/scope";
 import type { NoteAttachmentUpload, NoteAttachmentDownloadTarget } from "./note-attachment.types";
@@ -36,10 +37,22 @@ async function assertNoteInScope(noteId: string, scope: ScopeOrTrusted): Promise
   if (!row || row.orgId !== orgId) throw new AppError("Note not found", 404);
 }
 
+// Attaching to, or removing from, a note on a deal is a write to that deal: shop-pinned (403 for
+// another shop's deal in the same organisation). Client-level notes are not deal writes.
+async function assertNoteWritable(noteId: string, scope: ScopeOrTrusted): Promise<void> {
+  if (!effectiveOrgId(scope)) return;
+  const note = await noteRepository.findById(noteId);
+  if (!note?.transaction_id) return;
+  if (await noteRepository.transactionInWriteScope(note.transaction_id, scope)) return;
+  // Readable (same org and partition) = another shop's deal: 403. Not readable = 404.
+  const readable = await noteRepository.transactionBelongsToOrg(note.transaction_id, effectiveOrgId(scope) as string, scope);
+  refuseDealWrite(readable, "Note not found");
+}
+
 async function assertTransactionInScope(transactionId: string, scope: ScopeOrTrusted): Promise<void> {
   const orgId = effectiveOrgId(scope);
   if (!orgId) return;
-  const ok = await noteRepository.transactionBelongsToOrg(transactionId, orgId);
+  const ok = await noteRepository.transactionBelongsToOrg(transactionId, orgId, scope);
   if (!ok) throw new AppError("Attachments not found", 404);
 }
 
@@ -104,7 +117,7 @@ export const noteAttachmentService = {
 
   async listByClientId(clientId: string, includeDeals: boolean, scope: ScopeOrTrusted): Promise<NoteAttachment[]> {
     await assertClientInScope(clientId, scope);
-    return noteAttachmentRepository.findByClientId(clientId, includeDeals);
+    return noteAttachmentRepository.findByClientId(clientId, includeDeals, effectiveOrgId(scope) ? scope : undefined);
   },
 
   // Uploads each file's bytes to S3, then records its row (filename = the S3 key).
@@ -112,6 +125,7 @@ export const noteAttachmentService = {
     if (files.length === 0) throw new AppError("No file uploaded", 400);
     // Check scope once up front so an out-of-scope note fails before any S3 write.
     await assertNoteInScope(noteId, scope);
+    await assertNoteWritable(noteId, scope);
     const created: NoteAttachment[] = [];
     for (const file of files) {
       created.push(await uploadOne(noteId, file));
@@ -141,6 +155,7 @@ export const noteAttachmentService = {
 
   async deleteAttachment(id: string, scope: ScopeOrTrusted): Promise<NoteAttachment> {
     const attachment = await loadScopedAttachment(id, scope);
+    await assertNoteWritable(attachment.noteId, scope);
     await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: attachment.filename }));
     await noteAttachmentRepository.remove(id);
     return attachment;

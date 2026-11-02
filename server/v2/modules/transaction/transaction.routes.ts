@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { transactionController } from "./transaction.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { updatePriorityValidator, setFutureDealValidator, setLostValidator, listPipelineByStatusValidator, pipelineCountsValidator } from "./transaction.validator";
+import { createTransactionValidator, updatePriorityValidator, setFutureDealValidator, setLostValidator, listPipelineByStatusValidator, pipelineCountsValidator } from "./transaction.validator";
 import { blockReadOnlyClientWrites } from '../../middlewares/auth/block-read-only-roles';
 
 const router = Router();
@@ -25,7 +25,7 @@ router.post("/:id/lost", validate(setLostValidator), transactionController.setLo
 // quotes, booking); this name makes that explicit for callers that need it.
 router.get("/:id/details", transactionController.getTransactionById);
 router.get("/:id", transactionController.getTransactionById);
-router.post("/", upload.array("images", 10), transactionController.createTransaction);
+router.post("/", upload.array("images", 10), validate(createTransactionValidator), transactionController.createTransaction);
 router.patch("/:id", transactionController.updateTransaction);
 router.delete("/:id", transactionController.deleteTransaction);
 

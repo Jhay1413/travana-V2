@@ -2,10 +2,12 @@
 # Start once:  npm run db:test:up   (or: docker compose -f docker-compose.test.yml up -d)
 # Stop/wipe:   npm run db:test:down
 #
+# Uses the pgvector build of postgres:16 because shared/schema.ts has a vector(1536) column
+# (ai_embeddings); plain postgres:16 cannot push that schema.
 # Never points at real data — the integration tests TRUNCATE freely.
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     container_name: travana_test_pg
     environment:
       POSTGRES_USER: postgres

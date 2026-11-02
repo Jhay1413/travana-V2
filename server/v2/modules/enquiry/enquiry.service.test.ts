@@ -4,6 +4,8 @@ vi.mock("./enquiry.repository", () => ({
   enquiryTableRepository: {
     enquiryInScope: vi.fn(),
     transactionInScope: vi.fn(),
+    enquiryInScopeForWrite: vi.fn(),
+    transactionInScopeForWrite: vi.fn(),
     findById: vi.fn(),
     findByTransactionId: vi.fn(),
     findWithRelations: vi.fn(),
@@ -34,6 +36,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(enquiryTableRepository.enquiryInScope).mockResolvedValue(true as never);
   vi.mocked(enquiryTableRepository.transactionInScope).mockResolvedValue(true as never);
+  vi.mocked(enquiryTableRepository.enquiryInScopeForWrite).mockResolvedValue(true as never);
+  vi.mocked(enquiryTableRepository.transactionInScopeForWrite).mockResolvedValue(true as never);
 });
 
 describe("newEnquiryService.createEnquiry", () => {
@@ -47,6 +51,7 @@ describe("newEnquiryService.createEnquiry", () => {
 
   it("rejects when the transaction is out of scope", async () => {
     vi.mocked(enquiryTableRepository.transactionInScope).mockResolvedValue(false as never);
+    vi.mocked(enquiryTableRepository.transactionInScopeForWrite).mockResolvedValue(false as never);
 
     await expect(newEnquiryService.createEnquiry({ transaction_id: "t1" } as never, TRUSTED)).rejects.toMatchObject({
       statusCode: 404,
@@ -60,6 +65,38 @@ describe("newEnquiryService.getEnquiryById", () => {
     vi.mocked(enquiryTableRepository.findById).mockResolvedValue(undefined as never);
 
     await expect(newEnquiryService.getEnquiryById("e1", TRUSTED)).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe("newEnquiryService — only editable enquiry columns reach the database (B4)", () => {
+  it("update drops transaction_id, org / branch, deleted_at, id and unknown keys", async () => {
+    vi.mocked(enquiryTableRepository.update).mockResolvedValue({ id: "e1", transaction_id: "t1" } as never);
+    await newEnquiryService.updateEnquiry(
+      "e1",
+      {
+        title: "New title",
+        budget: "900",
+        transaction_id: "someone-elses-deal",
+        org_id: "other-org",
+        branch_id: "other-shop",
+        deleted_at: null,
+        deleted_by: null,
+        is_active: true,
+        id: "other-id",
+        notes: "not a column",
+      } as never,
+      null,
+      TRUSTED,
+    );
+    expect(enquiryTableRepository.update).toHaveBeenCalledWith("e1", { title: "New title", budget: "900" });
+  });
+
+  it("create keeps only the enquiry columns plus the checked transaction_id", async () => {
+    await newEnquiryService.createEnquiry(
+      { transaction_id: "t1", holiday_type_id: "h1", title: "T", deleted_at: new Date(), id: "x", is_active: false } as never,
+      TRUSTED,
+    );
+    expect(enquiryTableRepository.create).toHaveBeenCalledWith({ transaction_id: "t1", holiday_type_id: "h1", title: "T" });
   });
 });
 
@@ -140,6 +177,7 @@ describe("newEnquiryService.deleteEnquiry (soft delete)", () => {
 
   it("throws 404 when the enquiry is out of scope and deletes nothing", async () => {
     vi.mocked(enquiryTableRepository.enquiryInScope).mockResolvedValue(false as never);
+    vi.mocked(enquiryTableRepository.enquiryInScopeForWrite).mockResolvedValue(false as never);
 
     await expect(newEnquiryService.deleteEnquiry("e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
     expect(enquiryTableRepository.softDelete).not.toHaveBeenCalled();
@@ -149,6 +187,7 @@ describe("newEnquiryService.deleteEnquiry (soft delete)", () => {
   it("throws 404 for an already soft-deleted enquiry (excluded from the scope check / reads)", async () => {
     // enquiryInScope filters deleted_at IS NULL, so a deleted row reads as out of scope.
     vi.mocked(enquiryTableRepository.enquiryInScope).mockResolvedValue(false as never);
+    vi.mocked(enquiryTableRepository.enquiryInScopeForWrite).mockResolvedValue(false as never);
     await expect(newEnquiryService.deleteEnquiry("e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
   });
 
@@ -160,5 +199,25 @@ describe("newEnquiryService.deleteEnquiry (soft delete)", () => {
     await expect(newEnquiryService.getEnquiryById("e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
     await expect(newEnquiryService.getEnquiryWithRelations("e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
     await expect(newEnquiryService.getEnquiryByTransactionId("t1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+// Owner decision: enquiry writes use the shop-pinned write scope.
+describe("newEnquiryService - writes use the shop-pinned write scope", () => {
+  it("update, delete and create-on-a-deal are a 403 for a readable enquiry or deal in another shop", async () => {
+    vi.mocked(enquiryTableRepository.enquiryInScopeForWrite).mockResolvedValue(false as never);
+    vi.mocked(enquiryTableRepository.transactionInScopeForWrite).mockResolvedValue(false as never);
+    await expect(newEnquiryService.updateEnquiry("e1", { title: "x" }, null, TRUSTED)).rejects.toMatchObject({ statusCode: 403, message: "This deal belongs to another shop" });
+    await expect(newEnquiryService.deleteEnquiry("e1", TRUSTED)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(newEnquiryService.createEnquiry({ transaction_id: "t1" } as never, TRUSTED)).rejects.toMatchObject({ statusCode: 403 });
+    expect(enquiryTableRepository.update).not.toHaveBeenCalled();
+    expect(enquiryTableRepository.softDelete).not.toHaveBeenCalled();
+    expect(enquiryTableRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("reads keep the org-wide record scope", async () => {
+    vi.mocked(enquiryTableRepository.findById).mockResolvedValue({ id: "e1" } as never);
+    await newEnquiryService.getEnquiryById("e1", TRUSTED);
+    expect(enquiryTableRepository.enquiryInScopeForWrite).not.toHaveBeenCalled();
   });
 });

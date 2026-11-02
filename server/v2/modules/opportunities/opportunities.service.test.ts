@@ -59,6 +59,16 @@ describe("opportunitiesService.getAgents - picker scoping", () => {
     }
   });
 
+  it("an agent or branch_manager with no shop gets nobody (they have no deals to filter)", async () => {
+    for (const role of ["agent", "branch_manager"]) {
+      vi.clearAllMocks();
+      const result = await opportunitiesService.getAgents({ ...base, branchId: null, orgRole: role, orgRoles: [role] } as never);
+      expect(result).toEqual([]);
+      expect(repo.findAgentsInOrg).not.toHaveBeenCalled();
+      expect(repo.findAgentsInBranch).not.toHaveBeenCalled();
+    }
+  });
+
   it("org_admin gets the org-wide list", async () => {
     await opportunitiesService.getAgents({ ...base, orgRole: "org_admin", orgRoles: ["org_admin"] } as never);
 

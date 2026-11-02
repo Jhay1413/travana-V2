@@ -3,7 +3,6 @@ import { authStorage } from "./storage";
 import { isAuthenticated } from "./session";
 import { getUserId } from "../../utils/get-user-id";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -14,10 +13,11 @@ import { branchRepository } from "../../modules/branch/branch.repository";
 import { userOrgRolesRepository } from "../../modules/user-org-roles/user-org-roles.repository";
 import { primaryRole } from "../../modules/user-org-roles/user-org-roles.service";
 import { sanitizeUser } from "../../modules/user/user.sanitize";
-import { rejectBlockedSession } from "./account-standing";
+import { isOrgSuspendedFor, rejectBlockedSession, rejectOrgSuspended } from "./account-standing";
 import { resolveAccountBlock } from "./resolve-account-block";
 import { requireActiveAccount } from "./require-active-account";
 import { authProfileSchema } from "./auth-profile.validator";
+import passwordResetRoutes from "../../modules/user/password-reset.routes";
 
 export async function resolveOrgAndBranchForUser(
   user: {
@@ -35,6 +35,7 @@ export async function resolveOrgAndBranchForUser(
   branchType: "shop" | "homeworker" | null;
   ownsHomeworkerBranch: boolean;
   orgName: string | null;
+  orgActive: boolean | null;
   branchName: string | null;
 }> {
   let orgRole: string | null = user.orgRole ?? null;
@@ -90,6 +91,7 @@ export async function resolveOrgAndBranchForUser(
     branchType,
     ownsHomeworkerBranch,
     orgName: org?.name ?? null,
+    orgActive: org ? org.isActive : null,
     branchName: branch?.name ?? null,
   };
 }
@@ -122,6 +124,16 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    // Staff of a suspended agency cannot sign in (platform admins are exempt).
+    let preCtx: Awaited<ReturnType<typeof resolveOrgAndBranchForUser>> | null = null;
+    if (foundUser.role !== "platform_admin") {
+      preCtx = await resolveOrgAndBranchForUser(foundUser);
+      if (isOrgSuspendedFor(foundUser, preCtx.orgActive)) {
+        rejectOrgSuspended(res);
+        return;
+      }
+    }
+
     if (!foundUser.emailVerified) {
       res.status(403).json({
         message: "Please verify your email before signing in",
@@ -137,7 +149,7 @@ export async function loginHandler(req: Request, res: Response): Promise<void> {
         res.status(500).json({ message: "Login failed" });
         return;
       }
-      const ctx = await resolveOrgAndBranchForUser(foundUser, req.session);
+      const ctx = preCtx ?? (await resolveOrgAndBranchForUser(foundUser, req.session));
       res.json({ ...sanitizeUser(foundUser), ...ctx });
     });
   } catch (error) {
@@ -160,10 +172,15 @@ export async function currentUserHandler(req: Request, res: Response): Promise<v
       return;
     }
     const ctx = await resolveOrgAndBranchForUser(foundUser, req.session);
+    // Account block first (as orgBranchScope does), then the organisation check.
     // A user with no active membership may be suspended (ban is checked regardless).
     const block = await resolveAccountBlock(foundUser, ctx.branchId !== null);
     if (block) {
       rejectBlockedSession(req, res, block);
+      return;
+    }
+    if (isOrgSuspendedFor(foundUser, ctx.orgActive)) {
+      rejectOrgSuspended(res);
       return;
     }
     res.json({ ...sanitizeUser(foundUser), ...ctx });
@@ -290,69 +307,8 @@ export function registerAuthRoutes(app: Express): void {
     },
   });
 
-  app.post("/api/auth/forgot-password", async (req: any, res) => {
-    try {
-      const { email: rawEmail } = req.body;
-      if (!rawEmail || typeof rawEmail !== "string") {
-        return res.status(400).json({ message: "Email is required" });
-      }
-      const email = rawEmail.toLowerCase().trim();
-
-      const foundUser = await authStorage.getUserByEmail(email);
-      if (!foundUser) {
-        return res.json({ message: "If an account exists with that email, a reset link has been generated." });
-      }
-
-      const token = crypto.randomBytes(32).toString("hex");
-      const expiry = new Date(Date.now() + 60 * 60 * 1000);
-
-      await authStorage.updateUser(foundUser.id, {
-        resetToken: token,
-        resetTokenExpiry: expiry,
-      } as any);
-
-      console.log(`[auth] Password reset requested for ${email}`);
-
-      return res.json({ message: "If an account exists with that email, a reset link has been generated." });
-    } catch (error) {
-      console.error("Forgot password error:", error);
-      res.status(500).json({ message: "Something went wrong" });
-    }
-  });
-
-  app.post("/api/auth/reset-password", async (req: any, res) => {
-    try {
-      const { token, password } = req.body;
-      if (!token || !password) {
-        return res.status(400).json({ message: "Token and password are required" });
-      }
-
-      if (password.length < 6) {
-        return res.status(400).json({ message: "Password must be at least 6 characters" });
-      }
-
-      const foundUser = await authStorage.getUserByResetToken(token);
-      if (!foundUser) {
-        return res.status(400).json({ message: "Invalid or expired reset link" });
-      }
-
-      if (!foundUser.resetTokenExpiry || new Date(foundUser.resetTokenExpiry) < new Date()) {
-        return res.status(400).json({ message: "Reset link has expired" });
-      }
-
-      const hashed = await bcrypt.hash(password, 10);
-      await authStorage.updateUser(foundUser.id, {
-        password: hashed,
-        resetToken: null,
-        resetTokenExpiry: null,
-      } as any);
-
-      return res.json({ message: "Password has been reset successfully" });
-    } catch (error) {
-      console.error("Reset password error:", error);
-      res.status(500).json({ message: "Something went wrong" });
-    }
-  });
+  // POST /api/auth/forgot-password and POST /api/auth/reset-password
+  app.use("/api/auth", passwordResetRoutes);
 
   app.post("/api/auth/avatar", isAuthenticated, requireActiveAccount, avatarUpload.single("avatar"), async (req: any, res) => {
     try {

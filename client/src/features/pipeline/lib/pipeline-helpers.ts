@@ -158,7 +158,8 @@ export function getTimeAgo(d: string | null | undefined): string {
  *  supported, so those drops shouldn't even highlight as valid targets. */
 export function isValidDrop(from: PipelineStage, to: PipelineStage): boolean {
   if (from === to) return false;
-  if (from === "Booked" && to === "Lost") return false;
+  // A booking can't be marked lost, and can't be parked in Future.
+  if (from === "Booked" && (to === "Lost" || to === "Future")) return false;
   if (from === "Lost" && to !== "Enquiry" && to !== "Quoted" && to !== "In Play" && to !== "Future") return false;
   // Deals only move forward: no way back to Enquiry, and a booking stays booked.
   if (to === "Enquiry" && (from === "Quoted" || from === "In Play" || from === "Booked")) return false;
@@ -166,6 +167,13 @@ export function isValidDrop(from: PipelineStage, to: PipelineStage): boolean {
   // A booking needs a quote first.
   if (from === "Enquiry" && to === "Booked") return false;
   return true;
+}
+
+/** The toast shown when isValidDrop refuses a move, giving the real reason. */
+export function refusedMoveTitle(from: PipelineStage, to: PipelineStage): string {
+  if (from === "Enquiry" && to === "Booked") return "Create a quote before booking";
+  if (from === "Booked" && to === "Future") return "A booking can't be moved to Future";
+  return "Deals can't move back to an earlier stage";
 }
 
 /** Derives the board stage for a transaction returned by a column endpoint

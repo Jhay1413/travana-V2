@@ -1,4 +1,4 @@
-export type AuthBlockCode = "ACCOUNT_SUSPENDED" | "ACCOUNT_DEACTIVATED";
+export type AuthBlockCode = "ACCOUNT_SUSPENDED" | "ACCOUNT_DEACTIVATED" | "ORG_SUSPENDED";
 
 /** The slice of Storage this module needs, so tests can pass a plain object. */
 export interface NoticeStorage {
@@ -12,10 +12,11 @@ export const AUTH_NOTICE_KEY = "travana:auth-notice";
 export const AUTH_NOTICES: Record<AuthBlockCode, string> = {
   ACCOUNT_SUSPENDED: "Your account has been suspended. Contact your agency admin.",
   ACCOUNT_DEACTIVATED: "Your account has been deactivated. Contact your agency admin.",
+  ORG_SUSPENDED: "Your agency account has been suspended. Contact Travana support.",
 };
 
 export function isAuthBlockCode(value: unknown): value is AuthBlockCode {
-  return value === "ACCOUNT_SUSPENDED" || value === "ACCOUNT_DEACTIVATED";
+  return value === "ACCOUNT_SUSPENDED" || value === "ACCOUNT_DEACTIVATED" || value === "ORG_SUSPENDED";
 }
 
 /** Remember why the session ended, so the sign-in page can say so after the soft re-auth. Unknown codes are ignored. */

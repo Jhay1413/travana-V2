@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { PRIORITY_META, PRIORITY_OPTIONS, type PipelineStage } from "@/features/pipeline/lib/pipeline-helpers";
+import { PRIORITY_META, PRIORITY_OPTIONS, isValidDrop, type PipelineStage } from "@/features/pipeline/lib/pipeline-helpers";
 
 type Priority = "low" | "medium" | "high";
 
@@ -81,6 +81,8 @@ export function DealCardOverflowMenu({
   const canMarkLost = stage === "Enquiry" || stage === "Quoted" || stage === "In Play";
   const isFuture = stage === "Future";
   const isLost = stage === "Lost";
+  // A booking can't be parked: same rule as the board drop (Booked -> Future).
+  const canMoveToFuture = !isLost && isValidDrop(stage, "Future");
 
   return (
     <DropdownMenu>
@@ -112,7 +114,7 @@ export function DealCardOverflowMenu({
         <DropdownMenuSeparator />
         {isFuture ? (
           <DropdownMenuItem onClick={onReturnToPipeline} data-testid="menu-return-to-pipeline">Return to pipeline</DropdownMenuItem>
-        ) : !isLost ? (
+        ) : canMoveToFuture ? (
           <DropdownMenuItem onClick={onMoveToFuture} data-testid="menu-move-to-future">Move to Future…</DropdownMenuItem>
         ) : null}
         {isLost ? (

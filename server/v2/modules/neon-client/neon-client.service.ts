@@ -72,9 +72,14 @@ export const neonClientService = {
 
   async updateNeonClient(id: string, data: Partial<InsertClientTable>, scope: Scope): Promise<NeonClient> {
     const clean = stripSystemManagedFields(data);
+    // Scope-enforced fetch: an out-of-scope client reads as 404. A merged client is an
+    // archived duplicate, so it is read-only (the merge itself goes through mergeAtomic).
+    const current = await neonClientRepository.findById(id, scope);
+    if (!current) throw new AppError('Client not found', 404);
+    if (current.status === 'merged') {
+      throw new AppError('This client has already been merged into another client', 400);
+    }
     if (clean.referredByClientId) {
-      const current = await neonClientRepository.findById(id, scope);
-      if (!current) throw new AppError('Client not found', 404);
       await assertValidReferrer(id, clean.referredByClientId, scope, current.referredByClientId);
     }
     const safe = await stripOwnershipFields(clean, scope, async (b, o) => !!(await branchRepository.findById(b, o)));

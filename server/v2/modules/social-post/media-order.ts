@@ -1,4 +1,5 @@
 import { AppError } from "../../utils/error-handler";
+import { isAcceptableImageUrl, UNUSABLE_IMAGE_LABEL } from "../../utils/image-storage";
 
 /** Wire format of one `imageOrder` entry: `existing:<mediaId>`, `url:<index into imageUrls>` or `file:<index into files>`. */
 export const IMAGE_ORDER_TOKEN = /^(existing|url|file):(\d+)$/;
@@ -125,4 +126,45 @@ export function buildMediaSlots({ existingImageIds, inputFiles, inputUrls, prepa
   fileSlots.forEach((slot, i) => take(`f${i}`, slot));
   urlSlots.forEach((slot, j) => take(`u${j}`, slot));
   return slots;
+}
+
+export interface SanitizedUrlInput {
+  urls: string[];
+  /** Refused entries, reported back to the caller as failed images. */
+  dropped: string[];
+  /** The caller's `imageOrder` re-pointed at the kept urls (undefined when none was sent). */
+  order: string[] | undefined;
+}
+
+/**
+ * Client-supplied `imageUrls` are never refused wholesale: an entry that is not an acceptable image string (null, a
+ * protocol-relative or bare-host legacy value, a proxy URL for a non-public key) is dropped and reported. `url:N`
+ * tokens in `order` index into the ORIGINAL list, so they are re-pointed at the kept urls and tokens for dropped
+ * urls are removed; an index past the original list is left alone so assertOrderTokens still refuses it.
+ */
+export function sanitizeUrlInput(rawUrls: unknown, order: readonly string[] | undefined): SanitizedUrlInput {
+  const input = Array.isArray(rawUrls) ? rawUrls : [];
+  const urls: string[] = [];
+  const dropped: string[] = [];
+  const newIndex = new Map<number, number>();
+  input.forEach((entry, i) => {
+    if (isAcceptableImageUrl(entry)) {
+      newIndex.set(i, urls.length);
+      urls.push(entry);
+    } else {
+      dropped.push(typeof entry === "string" && entry.trim() ? entry : UNUSABLE_IMAGE_LABEL);
+    }
+  });
+  if (!order) return { urls, dropped, order: undefined };
+  const remapped: string[] = [];
+  for (const raw of order) {
+    const token = parseOrderToken(raw);
+    if (token?.kind === "url" && token.index < input.length) {
+      const mapped = newIndex.get(token.index);
+      if (mapped !== undefined) remapped.push(`url:${mapped}`);
+      continue;
+    }
+    remapped.push(raw);
+  }
+  return { urls, dropped, order: remapped };
 }

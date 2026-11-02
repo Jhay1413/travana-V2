@@ -28,5 +28,5 @@ export async function deleteTrainingObjectIfUnreferenced(
   );
   if (counts.some((n) => n > 0)) return;
 
-  await deleteImageByStoredUrl(canonical);
+  await deleteImageByStoredUrl(canonical, allowedPrefixes.map((p) => `${p}/`));
 }

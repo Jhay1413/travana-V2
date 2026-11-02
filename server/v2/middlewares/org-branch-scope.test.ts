@@ -8,7 +8,12 @@ vi.mock("../modules/user-org-roles/user-org-roles.repository", () => ({
   userOrgRolesRepository: { findRolesByUserAndOrg: vi.fn() },
 }));
 
+vi.mock("../modules/organization/organization.repository", () => ({
+  organizationRepository: { findById: vi.fn() },
+}));
+
 import { orgBranchScope } from "./org-branch-scope";
+import { organizationRepository } from "../modules/organization/organization.repository";
 import { authStorage } from "./auth/storage";
 import { branchMemberRepository } from "../modules/branch-member/branch-member.repository";
 import { userOrgRolesRepository } from "../modules/user-org-roles/user-org-roles.repository";
@@ -128,6 +133,7 @@ describe("orgBranchScope account standing", () => {
     expect(next).toHaveBeenCalledOnce();
     expect(req.orgId).toBe("orgX");
     expect(req.orgRole).toBe("org_admin");
+    expect(req.impersonating).toBe(true);
     expect(branchMemberRepository.findStandingByUserId).not.toHaveBeenCalled();
   });
 
@@ -163,5 +169,53 @@ describe("orgBranchScope account standing", () => {
     const { next } = await runBlocked({ inviteToken: "tok" });
     expect(next).toHaveBeenCalledOnce();
     expect(branchMemberRepository.findStandingByUserId).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suspended organisation: 403 ORG_SUSPENDED, session kept so unsuspending restores access.
+// ---------------------------------------------------------------------------
+
+describe("orgBranchScope suspended organisation", () => {
+  const membership = (orgIsActive: boolean) => ({
+    orgId: "org1", branchId: "b1", orgRole: "agent", branchType: "shop", ownerUserId: null, orgIsActive,
+  });
+
+  it("refuses staff of a suspended org with 403 ORG_SUSPENDED and keeps the session", async () => {
+    vi.mocked(branchMemberRepository.findActiveContextByUserId).mockResolvedValue(membership(false) as never);
+    const { res, next, destroy } = await runBlocked({});
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({
+      message: "Your agency account has been suspended. Contact Travana support.",
+      code: "ORG_SUSPENDED",
+    });
+    expect(destroy).not.toHaveBeenCalled();
+    expect(organizationRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it("lets the same user straight back in once the org is active (no extra query)", async () => {
+    vi.mocked(branchMemberRepository.findActiveContextByUserId).mockResolvedValue(membership(true) as never);
+    const { next } = await runBlocked({});
+    expect(next).toHaveBeenCalledOnce();
+    expect(organizationRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it("looks the org up only for a user with no active membership, and blocks if suspended", async () => {
+    vi.mocked(branchMemberRepository.findActiveContextByUserId).mockResolvedValue(undefined as never);
+    vi.mocked(branchMemberRepository.findStandingByUserId).mockResolvedValue({ total: 0, active: 0 } as never);
+    vi.mocked(organizationRepository.findById).mockResolvedValue({ isActive: false } as never);
+    const { res, next } = await runBlocked({});
+    expect(organizationRepository.findById).toHaveBeenCalledWith("org1");
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  it("never blocks a platform admin, including impersonating a suspended org", async () => {
+    vi.mocked(organizationRepository.findById).mockResolvedValue({ isActive: false } as never);
+    const { req, next } = await runBlocked({ role: "platform_admin" }, { session: { impersonateOrgId: "orgX" } });
+    expect(next).toHaveBeenCalledOnce();
+    expect(req.orgId).toBe("orgX");
+    expect(organizationRepository.findById).not.toHaveBeenCalled();
   });
 });

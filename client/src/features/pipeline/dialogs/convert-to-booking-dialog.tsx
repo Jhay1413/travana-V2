@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/hooks/use-toast";
+import { requestErrorMessage } from "@/lib/request-error";
 import { transactionKeys } from "@/hooks/queries";
 import { useConvertToBooking } from "@/hooks/mutations";
 import { PRIMARY_ACTION } from "@/features/pipeline/shared/button-styles";
@@ -31,7 +32,7 @@ export function ConvertToBookingDialog({ quoteId, onClose }: { quoteId: string |
 
   return (
     <Dialog open={!!quoteId} onOpenChange={(o) => { if (!o) close(); }}>
-      <DialogContent className="max-w-sm rounded-2xl border-social-border bg-card">
+      <DialogContent className="max-w-sm rounded-2xl border-social-border bg-card" data-testid="dialog-convert-booking">
         <DialogHeader>
           <DialogTitle className="text-[16px] font-semibold">Convert to Booking</DialogTitle>
           <DialogDescription className="text-[13px] text-social-muted">Enter the booking references to confirm.</DialogDescription>
@@ -45,8 +46,9 @@ export function ConvertToBookingDialog({ quoteId, onClose }: { quoteId: string |
               placeholder="e.g. HAY-1234567"
               aria-invalid={Boolean(errors.haysRef)}
               className={FIELD}
+              data-testid="input-convert-hays-ref"
             />
-            {errors.haysRef && <p className="text-[12px] font-medium text-red-600">{errors.haysRef}</p>}
+            {errors.haysRef && <p className="text-[12px] font-medium text-red-600" data-testid="error-convert-hays-ref">{errors.haysRef}</p>}
           </div>
           <div className="space-y-1.5">
             <Label className="text-[12px] font-medium text-social-muted">Supplier Ref</Label>
@@ -56,8 +58,9 @@ export function ConvertToBookingDialog({ quoteId, onClose }: { quoteId: string |
               placeholder="e.g. TUI 78451236"
               aria-invalid={Boolean(errors.supplierRef)}
               className={FIELD}
+              data-testid="input-convert-tour-ref"
             />
-            {errors.supplierRef && <p className="text-[12px] font-medium text-red-600">{errors.supplierRef}</p>}
+            {errors.supplierRef && <p className="text-[12px] font-medium text-red-600" data-testid="error-convert-tour-ref">{errors.supplierRef}</p>}
           </div>
           <Button
             className={PRIMARY_ACTION}
@@ -79,7 +82,7 @@ export function ConvertToBookingDialog({ quoteId, onClose }: { quoteId: string |
                     void queryClient.invalidateQueries({ queryKey: transactionKeys.all });
                     toast({ title: "Converted to booking" });
                   },
-                  onError: () => toast({ title: "Failed to convert", variant: "destructive" }),
+                  onError: (err: unknown) => toast({ title: requestErrorMessage(err, "Failed to convert"), variant: "destructive" }),
                 },
               );
             }}

@@ -3,7 +3,8 @@ import multer from "multer";
 import { quoteController } from "./quote.controller";
 import { quoteImageController } from "./quote-image.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { freeQuotesQueryValidator, freeQuoteStatusCountsValidator, addImagesValidator, reorderImagesValidator, presignQuoteImagesValidator, recentEngagementQueryValidator, setAcceptedValidator } from "./quote.validator";
+import { freeQuotesQueryValidator, freeQuoteStatusCountsValidator, addImagesValidator, reorderImagesValidator, presignQuoteImagesValidator, recentEngagementQueryValidator, setAcceptedValidator, detachQuoteTagValidator } from "./quote.validator";
+import { addFlightValidator, updateFlightValidator, addAccommodationValidator, updateAccommodationValidator, addTransferValidator, addPassengerValidator } from "./quote-child.validator";
 import { requireOrgRole } from "../../middlewares/auth/require-org-role";
 import { blockReadOnlyClientRoles } from "../../middlewares/auth/block-read-only-roles";
 import { restrictSocialManagerToFreeQuotes } from "./quote-social-guard.middleware";
@@ -42,18 +43,18 @@ router.patch("/:id/primary", quoteController.setPrimaryQuote);
 router.patch("/:id/accepted", blockReadOnlyClientRoles, validate(setAcceptedValidator), quoteController.setAccepted);
 router.delete("/:id", quoteController.deleteQuote);
 
-router.post("/:id/flights", quoteController.addFlight);
-router.patch("/:id/flights/:flightId", quoteController.updateFlight);
+router.post("/:id/flights", validate(addFlightValidator), quoteController.addFlight);
+router.patch("/:id/flights/:flightId", validate(updateFlightValidator), quoteController.updateFlight);
 router.delete("/:id/flights/:flightId", quoteController.removeFlight);
 
-router.post("/:id/accommodations", quoteController.addAccommodation);
-router.patch("/:id/accommodations/:accommodationId", quoteController.updateAccommodation);
+router.post("/:id/accommodations", validate(addAccommodationValidator), quoteController.addAccommodation);
+router.patch("/:id/accommodations/:accommodationId", validate(updateAccommodationValidator), quoteController.updateAccommodation);
 router.delete("/:id/accommodations/:accommodationId", quoteController.removeAccommodation);
 
-router.post("/:id/transfers", quoteController.addTransfer);
+router.post("/:id/transfers", validate(addTransferValidator), quoteController.addTransfer);
 router.delete("/:id/transfers/:transferId", quoteController.removeTransfer);
 
-router.post("/:id/passengers", quoteController.addPassenger);
+router.post("/:id/passengers", validate(addPassengerValidator), quoteController.addPassenger);
 router.delete("/:id/passengers/:passengerId", quoteController.removePassenger);
 
 router.post("/:quoteId/images/upload", upload.array("images", 50), quoteImageController.uploadImages);
@@ -65,6 +66,7 @@ router.patch("/:quoteId/images/:imageId/primary", quoteImageController.setPrimar
 
 router.put("/:id/tags", quoteController.updateQuoteTags);
 router.get("/:id/tags", quoteController.getQuoteTags);
+router.delete("/:id/tags/:tagId", validate(detachQuoteTagValidator), quoteController.detachQuoteTag);
 
 router.patch("/:id/portal-visibility", quoteController.setPortalVisibility);
 router.patch("/:id/featured", quoteController.setFeatured);

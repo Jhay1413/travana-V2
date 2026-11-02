@@ -2,7 +2,7 @@ import { db } from '../../config/database';
 import { enquiry_table, quote, booking, transaction, clientTable, user, branchMembers } from '@shared/schema';
 import { eq, and, sql, ilike, or, gte, lte, count, isNull, type SQL } from 'drizzle-orm';
 import type { Scope } from '../../utils/scope';
-import { buildPartitionCond, buildUserPartitionCond } from '../../utils/scope-conditions';
+import { buildTransactionScopeConds, buildUserPartitionCond } from '../../utils/scope-conditions';
 import { notSuspendedOrBanned } from '../../utils/user-conditions';
 import { userOrgRolesRepository } from '../user-org-roles/user-org-roles.repository';
 
@@ -17,16 +17,12 @@ export interface OpportunityFilters {
   scope: Scope;
 }
 
+/**
+ * The shared deal scope: org, the caller's own shop for agents and branch managers (their own legacy deals
+ * too, and NOTHING when they have no shop), and the shop/homeworker partition.
+ */
 function buildOpportunityScopeConds(scope: Scope): SQL[] {
-  const conds: SQL[] = [];
-  if (scope.orgRole === 'platform_admin') return conds;
-  conds.push(eq(transaction.org_id, scope.orgId));
-  if (scope.branchId && (scope.orgRole === 'branch_manager' || scope.orgRole === 'agent')) {
-    conds.push(eq(transaction.branch_id, scope.branchId));
-  }
-  const partition = buildPartitionCond(scope, transaction.branch_id, transaction.user_id);
-  if (partition) conds.push(partition);
-  return conds;
+  return buildTransactionScopeConds(scope);
 }
 
 function buildDateConditions(field: any, dateRange: string) {

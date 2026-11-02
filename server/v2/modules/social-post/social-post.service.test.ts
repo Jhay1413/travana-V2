@@ -36,7 +36,9 @@ vi.mock("../../utils/only-socials", () => ({
 }));
 vi.mock("../../utils/image-storage", () => ({
   s3KeyFromStoredUrl: () => null,
-  presignImageKey: vi.fn(),
+  publicImageKeyFromStoredUrl: (url: string) => (url.startsWith("/api/v2/files/img?key=social-upscale") ? "social-upscale/x" : null),
+  isStoredProxyUrl: (url: string) => url.startsWith("/api/v2/files/img?key="),
+  presignImageKey: vi.fn(async (key: string) => `https://s3.test/${key}`),
 }));
 vi.mock("../usage/usage.service", () => ({ usageService: {} }));
 vi.mock("../ai-embeddings/ai-embeddings.service", () => ({
@@ -48,6 +50,7 @@ import {
   buildOrgSocialContact,
   familySize,
   formatPostHTML,
+  resolveUploadableUrl,
   shortTourOperatorName,
   socialPostService,
   type PostDeal,
@@ -471,5 +474,15 @@ describe("socialPostService shop/homeworker partition", () => {
     await expect(socialPostService.updateTravelDeal("d1", {}, SMM)).rejects.toMatchObject({ statusCode: 404 });
     expect(mocks.repo.quoteBelongsToOrg).toHaveBeenCalledWith("q1", "org1", SMM);
     expect(mocks.repo.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveUploadableUrl only signs public image keys", () => {
+  it("presigns a public proxy key, passes external urls through, and refuses any other proxy key (400)", async () => {
+    expect(await resolveUploadableUrl("/api/v2/files/img?key=social-upscale%2Fx")).toBe("https://s3.test/social-upscale/x");
+    expect(await resolveUploadableUrl("https://cdn.test/a.jpg")).toBe("https://cdn.test/a.jpg");
+    for (const url of ["/api/v2/files/img?key=client-files%2F1.pdf", "/api/v2/files/img?key=hr%2Fdoc.pdf", "/api/v2/files/img?key=%E0%A4%A"]) {
+      await expect(resolveUploadableUrl(url), url).rejects.toMatchObject({ statusCode: 400 });
+    }
   });
 });

@@ -8,6 +8,8 @@ vi.mock("./audit.repository", () => ({
     recordDeletionAndPromoteSibling: vi.fn(),
   },
 }));
+vi.mock("../task/task.service", () => ({ taskService: { completeByEntity: vi.fn() } }));
+vi.mock("../ai-embeddings/ai-embeddings.service", () => ({ aiEmbeddingsService: { removeSourceById: vi.fn() } }));
 vi.mock("../quote/quote.repository", () => ({
   newQuoteRepository: {
     countActiveSiblings: vi.fn(),
@@ -17,6 +19,8 @@ vi.mock("../quote/quote.repository", () => ({
 
 import { auditService } from "./audit.service";
 import { auditRepository } from "./audit.repository";
+import { taskService } from "../task/task.service";
+import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { newQuoteRepository } from "../quote/quote.repository";
 import type { Scope } from "../../utils/scope";
 
@@ -50,6 +54,46 @@ describe("auditService.deleteQuote", () => {
       expect.objectContaining({ entityId: "q1" }),
     );
     expect(auditRepository.recordDeletionAndPromoteSibling).not.toHaveBeenCalled();
+  });
+
+  it("closes the quote's open tasks after a plain delete", async () => {
+    vi.mocked(auditRepository.findActiveQuoteById).mockResolvedValue({
+      id: "q1", transaction_id: "t1", isQuoteCopy: true, title: "Copy",
+    } as never);
+
+    await auditService.deleteQuote(SCOPE, { id: "q1", reason: "bad", performedBy: "user-1", performedByName: "Agent" });
+
+    expect(taskService.completeByEntity).toHaveBeenCalledWith("quote", "q1");
+    expect(aiEmbeddingsService.removeSourceById).not.toHaveBeenCalled();
+  });
+
+  it("closes tasks after a delete that promotes a sibling", async () => {
+    vi.mocked(auditRepository.findActiveQuoteById).mockResolvedValue({
+      id: "q1", transaction_id: "t1", isQuoteCopy: false, title: "Main",
+    } as never);
+    vi.mocked(newQuoteRepository.countActiveSiblings).mockResolvedValue(1 as never);
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({
+      id: "q2", transaction_id: "t1", deleted_at: null, quote_status: "quoted",
+    } as never);
+
+    await auditService.deleteQuote(SCOPE, { id: "q1", reason: "bad", performedBy: "user-1", performedByName: "Agent", newPrimaryQuoteId: "q2" });
+
+    expect(taskService.completeByEntity).toHaveBeenCalledWith("quote", "q1");
+  });
+
+  it("still succeeds when task clean-up fails, and drops a free quote's AI reference", async () => {
+    vi.mocked(auditRepository.findActiveQuoteById).mockResolvedValue({
+      id: "q1", transaction_id: "t1", isQuoteCopy: true, isFreeQuote: true, title: "Free",
+    } as never);
+    vi.mocked(taskService.completeByEntity).mockRejectedValue(new Error("boom"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await expect(
+      auditService.deleteQuote(SCOPE, { id: "q1", reason: "bad", performedBy: "user-1", performedByName: "Agent" }),
+    ).resolves.toBeUndefined();
+
+    expect(aiEmbeddingsService.removeSourceById).toHaveBeenCalledWith("quote", "q1");
+    spy.mockRestore();
   });
 
   it("rejects deleting a primary with siblings when newPrimaryQuoteId is missing", async () => {

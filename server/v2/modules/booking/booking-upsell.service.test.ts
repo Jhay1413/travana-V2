@@ -4,7 +4,7 @@ vi.mock("./booking-upsell.repository", () => ({
   bookingUpsellRepository: { create: vi.fn(), update: vi.fn(), findById: vi.fn(), findByBooking: vi.fn(), softDelete: vi.fn() },
 }));
 vi.mock("./booking.repository", () => ({
-  bookingRepository: { bookingInScope: vi.fn(), findById: vi.fn() },
+  bookingRepository: { bookingInScope: vi.fn(), bookingInScopeForWrite: vi.fn(), findById: vi.fn() },
 }));
 vi.mock("../tour-operator/tour-operator-link.service", () => ({
   tourOperatorLinkService: { assertOperatorsLinked: vi.fn() },
@@ -32,6 +32,7 @@ const OP_B = "22222222-2222-4222-8222-222222222222";
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(true);
+  vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(true);
   vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1", is_active: true } as never);
   vi.mocked(bookingUpsellRepository.create).mockResolvedValue({ id: "up1" } as never);
   vi.mocked(bookingUpsellRepository.update).mockResolvedValue({ id: "up1" } as never);
@@ -80,5 +81,35 @@ describe("bookingUpsellService.update - operator check", () => {
     vi.mocked(tourOperatorLinkService.assertOperatorsLinked).mockRejectedValue(new AppError("Tour operator is not in your list", 400));
     await expect(bookingUpsellService.update("up1", { tour_operator_id: OP_B }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
     expect(bookingUpsellRepository.update).not.toHaveBeenCalled();
+  });
+});
+
+// Owner decision: an upsell is a write to the booking, so it uses the shop-pinned write scope.
+describe("bookingUpsellService - writes use the shop-pinned write scope", () => {
+  const AGENT = { ...SCOPE, orgRole: "agent", orgRoles: ["agent"], branchId: "shop-1" } as Scope;
+
+  beforeEach(() => {
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(false);
+    vi.mocked(bookingUpsellRepository.findById).mockResolvedValue({ id: "up1", booking_id: "b1", is_active: true } as never);
+  });
+
+  it("create, update and remove are a 403 'This deal belongs to another shop' for a readable booking in another shop", async () => {
+    await expect(bookingUpsellService.create("b1", { upsell_type: "FEE" } as never, AGENT)).rejects.toMatchObject({ statusCode: 403, message: "This deal belongs to another shop" });
+    await expect(bookingUpsellService.update("up1", { description: "x" } as never, AGENT)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(bookingUpsellService.remove("up1", AGENT)).rejects.toMatchObject({ statusCode: 403 });
+    expect(bookingUpsellRepository.create).not.toHaveBeenCalled();
+    expect(bookingUpsellRepository.update).not.toHaveBeenCalled();
+    expect(bookingUpsellRepository.softDelete).not.toHaveBeenCalled();
+  });
+
+  it("is a 404 when the booking is not readable either", async () => {
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(false);
+    await expect(bookingUpsellService.create("b1", { upsell_type: "FEE" } as never, AGENT)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("listing keeps the org-wide read scope", async () => {
+    vi.mocked(bookingUpsellRepository.findByBooking).mockResolvedValue([]);
+    await bookingUpsellService.listByBooking("b1", AGENT);
+    expect(bookingRepository.bookingInScopeForWrite).not.toHaveBeenCalled();
   });
 });

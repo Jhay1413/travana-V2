@@ -31,7 +31,8 @@ export function RoleSelect({
   return (
     <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger aria-label={label} className={cn(TEAM_CONTROL, "w-full", disabled && "opacity-60", className)} data-testid={testId}>
-        <SelectValue placeholder={placeholder}>{value ? roleLabel(value) : undefined}</SelectValue>
+        {/* Always pass children: switching between none and some leaves the trigger blank. The label also covers disabled roles that aren't in `options`. */}
+        <SelectValue placeholder={placeholder}>{value ? roleLabel(value) : ""}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {options.map((o) => (

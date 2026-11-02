@@ -17,7 +17,7 @@ function nullIfBlank(value: string | undefined): string | null | undefined {
 async function removeStoredLogo(operator: TourOperatorLookup, what: string): Promise<void> {
   if (!operator.logo_url) return;
   try {
-    await deleteImageByStoredUrl(operator.logo_url);
+    await deleteImageByStoredUrl(operator.logo_url, [`${LOGO_S3_PREFIX}/`]);
   } catch (err) {
     console.error(`Failed to delete ${what} for tour operator ${operator.id}`, err);
   }

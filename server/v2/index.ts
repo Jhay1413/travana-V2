@@ -4,11 +4,10 @@ import { createServer } from "http";
 import routes from "./routes/index";
 import { setupAuth, registerAuthRoutes } from "./middlewares/auth";
 import { errorHandler } from "./middlewares/error.middleware";
-import { runDaysBeforeDepartureSweep } from "./modules/sms/sms.cron";
+import { startDepartureSweepScheduler } from "./modules/sms/sms.cron";
 import quotePublicRoutes from "./modules/quote/quote-public.routes";
 import websitePublicRoutes from "./modules/website-public/website-public.routes";
 import portalRoutes from "./modules/portal/portal.routes";
-import cron from "node-cron";
 
 const app = express();
 const httpServer = createServer(app);
@@ -117,16 +116,8 @@ app.use((req, res, next) => {
     () => {
       log(`serving on port ${port}`);
 
-      // 09:00 UTC daily: fire SMS templates with autoTrigger='days_before_departure'
-      // for bookings whose travel_date matches today + triggerDaysBefore.
-      cron.schedule("0 9 * * *", async () => {
-        try {
-          const summary = await runDaysBeforeDepartureSweep();
-          log(`[sms.cron] days-before-departure: ${JSON.stringify(summary)}`);
-        } catch (err) {
-          console.error("Days-before-departure SMS cron failed:", err);
-        }
-      });
+      // Same gated 09:00 UK sweep as server/index.ts (off unless SMS_DEPARTURE_SWEEP_ENABLED=true).
+      startDepartureSweepScheduler(process.env, log);
     },
   );
 })();

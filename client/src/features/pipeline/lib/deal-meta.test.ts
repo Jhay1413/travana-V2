@@ -13,6 +13,29 @@ describe("buildDealMeta", () => {
     expect(buildDealMeta(t, "Enquiry")).toBe("Tenerife · 12 Mar 2026 · 7 nights · Budget £2,500");
     expect(buildDealMeta(t, "Quoted")).not.toContain("Budget");
   });
+
+  // Shaped like an enquiry row from GET /transactions/pipeline/enquiry (the enquiry select in
+  // transaction.repository.ts enrichTransactionsLightweight), numeric budget as a string.
+  // If the server stops selecting budget / no_of_nights the card silently loses them; the
+  // repository integration test pins that side, this one pins what the card does with them.
+  it("reads nights and budget from an enquiry as the pipeline endpoint returns it", () => {
+    const t = {
+      id: "t1",
+      status: "on_enquiry",
+      enquiry: {
+        id: "e1", transaction_id: "t1", title: "Beach", travel_date: "2027-07-01", budget: "1800", no_of_nights: 7,
+        adults: 2, children: 0, infants: 0, destination_name: "Majorca", is_future_deal: false, future_deal_date: null,
+      },
+      quotes: [],
+      booking: null,
+    } as unknown as Transaction;
+    expect(buildDealMeta(t, "Enquiry")).toBe("Majorca · 1 Jul 2027 · 7 nights · Budget £1,800");
+  });
+
+  it("shows no nights or budget when the enquiry row does not carry them", () => {
+    const t = { id: "t1", enquiry: { travel_date: "2027-07-01", destination_name: "Majorca" }, quotes: [] } as unknown as Transaction;
+    expect(buildDealMeta(t, "Enquiry")).toBe("Majorca · 1 Jul 2027");
+  });
 });
 
 describe("isDueToday", () => {

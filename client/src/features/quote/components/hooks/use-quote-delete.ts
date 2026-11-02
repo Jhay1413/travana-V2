@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { isAxiosError } from "axios";
+import { requestErrorMessage, requestErrorStatus } from "@/lib/request-error";
 import { useAdminDeleteQuote } from "@/hooks/mutations";
 import { useQuotes } from "@/features/quote/api/use-quote-queries";
 import { useToast } from "@/hooks/use-toast";
@@ -71,8 +71,8 @@ export function useQuoteDelete(
           setLocation(clientId ? `/clients/${clientId}` : "/quotes");
         },
         onError: (err: unknown) => {
-          if (isAxiosError(err) && err.response?.status === 400) {
-            const message = (err.response?.data as { message?: string } | undefined)?.message;
+          if (requestErrorStatus(err) === 400) {
+            const message = requestErrorMessage(err, "");
             if (message === "NEW_PRIMARY_REQUIRED") {
               toast({
                 title: "Pick a quote to promote",

@@ -6,6 +6,7 @@ vi.mock("./transaction.repository", () => ({
     findByIdScopedForWrite: vi.fn(),
     findWithDetails: vi.fn(),
     create: vi.fn(),
+    createWithEnquiryAndChildren: vi.fn(),
     createWithQuoteAndChildren: vi.fn(),
     createWithBookingAndChildren: vi.fn(),
     update: vi.fn(),
@@ -44,6 +45,7 @@ vi.mock("../quote/quote.repository", () => ({
     replaceLoungePasses: vi.fn(),
     replaceAirportParkings: vi.fn(),
     replaceExtraAccommodations: vi.fn(),
+    replaceChildPassengers: vi.fn(),
     quoteInScope: vi.fn(),
     findTourOperatorIds: vi.fn(),
     upsertCruise: vi.fn(),
@@ -63,7 +65,7 @@ vi.mock("../booking/booking.repository", () => ({
   },
 }));
 vi.mock("../branch-member/branch-member.repository", () => ({
-  branchMemberRepository: { findActiveContextByUserIdInOrg: vi.fn(), findActiveContextByUserId: vi.fn() },
+  branchMemberRepository: { findActiveContextByUserIdInOrg: vi.fn(), findActiveContextByUserId: vi.fn(), findDefaultOwner: vi.fn() },
 }));
 vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn(), findOrgIdById: vi.fn() } }));
 vi.mock("../note/note.repository", () => ({ noteRepository: { create: vi.fn() } }));
@@ -72,7 +74,7 @@ vi.mock("../quote/quote.service", () => ({ newQuoteService: { createQuote: vi.fn
 vi.mock("../referral/referral.service", () => ({ referralService: { createReferral: vi.fn(), ensureReferralForBooking: vi.fn() } }));
 vi.mock("../../../services/vipEnrollment.service", () => ({ vipEnrollmentService: { enrollClient: vi.fn() } }));
 vi.mock("../wallet/wallet.service", () => ({ walletService: { applyBookingCredit: vi.fn() } }));
-vi.mock("../neon-client/neon-client.repository", () => ({ neonClientRepository: { findById: vi.fn(), update: vi.fn() } }));
+vi.mock("../neon-client/neon-client.repository", () => ({ neonClientRepository: { findById: vi.fn(), findByIdForDealCreate: vi.fn(), update: vi.fn() } }));
 vi.mock("../tour-operator/tour-operator-link.service", () => ({
   tourOperatorLinkService: { assertPayloadOperatorsLinked: vi.fn() },
 }));
@@ -94,7 +96,7 @@ import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 
 // transaction.service takes a real Scope; the repo is mocked so the value is opaque.
-const SCOPE = { orgId: "org1", orgRole: "agent" } as never;
+const SCOPE = { orgId: "org1", branchId: "shop1", orgRole: "agent", userId: "u1" } as never;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -257,8 +259,15 @@ describe("transactionService.updateTransaction deal reassignment across the part
 });
 
 describe("transactionService.deleteTransaction", () => {
+  it("403s (another shop) when nothing was removed but the deal is readable", async () => {
+    vi.mocked(transactionRepository.remove).mockResolvedValue(false as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1" } as never);
+    await expect(transactionService.deleteTransaction("t1", SCOPE)).rejects.toMatchObject({ statusCode: 403, message: "This deal belongs to another shop" });
+  });
+
   it("throws 404 when nothing was removed", async () => {
     vi.mocked(transactionRepository.remove).mockResolvedValue(false as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue(undefined as never);
 
     await expect(transactionService.deleteTransaction("t1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
   });
@@ -271,8 +280,15 @@ describe("transactionService.deleteTransaction", () => {
 });
 
 describe("transactionService.updatePriority", () => {
+  it("403s for a readable deal in another shop", async () => {
+    vi.mocked(transactionRepository.update).mockResolvedValue(undefined as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1" } as never);
+    await expect(transactionService.updatePriority("t1", "high", SCOPE)).rejects.toMatchObject({ statusCode: 403 });
+  });
+
   it("throws 404 when the transaction does not exist", async () => {
     vi.mocked(transactionRepository.update).mockResolvedValue(undefined as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue(undefined as never);
 
     await expect(transactionService.updatePriority("t1", "high", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
   });
@@ -288,8 +304,22 @@ describe("transactionService.updatePriority", () => {
 });
 
 describe("transactionService.setFutureDeal", () => {
+  it("403s for a readable deal in another shop (future and lost)", async () => {
+    vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue(undefined as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1" } as never);
+    await expect(transactionService.setFutureDeal("t1", "2099-01-01", SCOPE)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(transactionService.setLost("t1", true, SCOPE)).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it("updateTransaction 403s when the write scope refuses a readable deal", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_quote" } as never);
+    vi.mocked(transactionRepository.update).mockResolvedValue(undefined as never);
+    await expect(transactionService.updateTransaction("t1", { priority: "high" } as never, SCOPE)).rejects.toMatchObject({ statusCode: 403 });
+  });
+
   it("throws 404 when the transaction does not exist", async () => {
     vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue(undefined as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue(undefined as never);
 
     await expect(transactionService.setFutureDeal("t1", "2099-01-01", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
   });
@@ -435,23 +465,34 @@ describe("transactionService.getExpiringQuotes — classification", () => {
 
 describe("transactionService.createTransactionWithEnquiry — add enquiry", () => {
   beforeEach(() => {
-    vi.mocked(transactionRepository.create).mockResolvedValue({ id: "txn1" } as never);
-    vi.mocked(enquiryTableRepository.create).mockResolvedValue({ id: "enq1" } as never);
+    vi.mocked(transactionRepository.createWithEnquiryAndChildren).mockResolvedValue({
+      transaction: { id: "txn1" },
+      enquiry: { id: "enq1" },
+    } as never);
   });
 
-  it("creates the transaction as on_enquiry with the enquiry attached", async () => {
+  const lastInsert = () => vi.mocked(transactionRepository.createWithEnquiryAndChildren).mock.calls.at(-1)![0];
+
+  it("creates the transaction and enquiry in one atomic repository call", async () => {
     const result = await transactionService.createTransactionWithEnquiry(
-      {} as never,
-      { travel_date: "2026-07-01" } as never,
+      { user_id: "u1" } as never,
+      { travel_date: "2026-07-01", holiday_type_id: "h1" } as never,
       SCOPE,
     );
 
-    expect(vi.mocked(transactionRepository.create).mock.calls[0][0]).toMatchObject({ status: "on_enquiry" });
-    expect(vi.mocked(enquiryTableRepository.create).mock.calls[0][0]).toMatchObject({ transaction_id: "txn1" });
+    expect(transactionRepository.createWithEnquiryAndChildren).toHaveBeenCalledOnce();
+    expect(lastInsert()).toMatchObject({
+      transactionData: { user_id: "u1" },
+      enquiryFields: { travel_date: "2026-07-01", holiday_type_id: "h1" },
+      scope: SCOPE,
+    });
+    // No separate, non-atomic inserts any more.
+    expect(transactionRepository.create).not.toHaveBeenCalled();
+    expect(enquiryTableRepository.create).not.toHaveBeenCalled();
     expect(result).toMatchObject({ transaction: { id: "txn1" }, enquiry: { id: "enq1" } });
   });
 
-  it("persists the enquiry's multi-value relations and notes", async () => {
+  it("passes the multi-value relations, passengers (age defaults to 0) and notes through", async () => {
     await transactionService.createTransactionWithEnquiry(
       {} as never,
       {
@@ -460,12 +501,32 @@ describe("transactionService.createTransactionWithEnquiry — add enquiry", () =
         notes: "Wants a beach resort",
       } as never,
       SCOPE,
+      "agent1",
     );
 
-    expect(enquiryTableRepository.addDestination).toHaveBeenCalledTimes(2);
-    expect(enquiryTableRepository.addPassenger).toHaveBeenCalledTimes(2);
-    expect(enquiryTableRepository.addPassenger).toHaveBeenCalledWith("enq1", "child", 7);
-    expect(noteRepository.create).toHaveBeenCalledOnce();
+    expect(lastInsert()).toMatchObject({
+      destinations: ["d1", "d2"],
+      passengers: [{ type: "adult", age: 0 }, { type: "child", age: 7 }],
+      notes: [{ content: "Wants a beach resort", agent_id: "agent1" }],
+    });
+    // Notes go through the atomic call, not the separate note repository.
+    expect(noteRepository.create).not.toHaveBeenCalled();
+    // Relation arrays are not left inside the enquiry columns.
+    expect(lastInsert().enquiryFields).not.toHaveProperty("destinations");
+    expect(lastInsert().enquiryFields).not.toHaveProperty("passengers");
+    expect(lastInsert().enquiryFields).not.toHaveProperty("notes");
+  });
+
+  it("skips a truthy non-array relation or passengers value instead of throwing (as the old length checks did)", async () => {
+    await transactionService.createTransactionWithEnquiry(
+      {} as never,
+      { passengers: { type: "adult" }, destinations: "d1", resorts: 5 } as never,
+      SCOPE,
+    );
+    const insert = lastInsert();
+    expect(insert.passengers).toBeUndefined();
+    expect(insert.destinations).toBeUndefined();
+    expect(insert.resorts).toBeUndefined();
   });
 
   it("sanitises enquiry note HTML before saving", async () => {
@@ -474,7 +535,15 @@ describe("transactionService.createTransactionWithEnquiry — add enquiry", () =
       { notes: "<p>ok</p><script>alert(1)</script><img src=x onerror=alert(1)>" } as never,
       SCOPE,
     );
-    expect(vi.mocked(noteRepository.create).mock.calls.at(-1)?.[0].content).toBe("<p>ok</p>");
+    expect(lastInsert().notes?.[0].content).toBe("<p>ok</p>");
+  });
+
+  it("propagates a repository failure (the repository rolls back, nothing else is written)", async () => {
+    vi.mocked(transactionRepository.createWithEnquiryAndChildren).mockRejectedValue(new Error("not null violation"));
+    await expect(
+      transactionService.createTransactionWithEnquiry({} as never, { title: "No type" } as never, SCOPE),
+    ).rejects.toThrow("not null violation");
+    expect(transactionRepository.create).not.toHaveBeenCalled();
   });
 });
 
@@ -497,6 +566,40 @@ describe("transactionService.createTransactionWithQuote — add quote", () => {
     expect(transactionRepository.createWithQuoteAndChildren).toHaveBeenCalledOnce();
     expect(newQuoteRepository.replaceTransfers).toHaveBeenCalledWith("q1", [{ booking_ref: "T1" }]);
     expect(result).toMatchObject({ quote: { id: "q1" } });
+  });
+
+  it("drops unacceptable gallery strings, saves the rest and reports the skipped ones", async () => {
+    const result = await transactionService.createTransactionWithQuote(
+      { is_test: false } as never,
+      { not_for_social: true, images: ["https://cdn.test/a.jpg", null, "//cdn.test/b.jpg", "www.cdn.test/c.jpg"] } as never,
+      SCOPE,
+    );
+    expect(vi.mocked(transactionRepository.createWithQuoteAndChildren).mock.calls[0][0].images).toEqual(["https://cdn.test/a.jpg"]);
+    expect(result.skippedImageUrls).toEqual(["(not an image link)", "//cdn.test/b.jpg", "www.cdn.test/c.jpg"]);
+  });
+
+  it("saves child ages as passenger rows for the new quote", async () => {
+    await transactionService.createTransactionWithQuote(
+      { is_test: false } as never,
+      { not_for_social: true, childAges: [5, 9] } as never,
+      SCOPE,
+    );
+
+    expect(newQuoteRepository.replaceChildPassengers).toHaveBeenCalledWith("q1", "quote", [5, 9]);
+    // They are a passengers concern, not a quote column.
+    const insert = vi.mocked(transactionRepository.createWithQuoteAndChildren).mock.calls[0][0] as { quoteFields: Record<string, unknown> };
+    expect(insert.quoteFields).not.toHaveProperty("childAges");
+  });
+
+  it("writes no passenger rows when childAges was not sent", async () => {
+    await transactionService.createTransactionWithQuote({ is_test: false } as never, { not_for_social: true } as never, SCOPE);
+    expect(newQuoteRepository.replaceChildPassengers).not.toHaveBeenCalled();
+  });
+
+  it("hands the child ages to the free social copy too", async () => {
+    vi.mocked(newQuoteService.createQuote).mockResolvedValue({ id: "freeQ" } as never);
+    await transactionService.createTransactionWithQuote({ is_test: false } as never, { childAges: [4] } as never, SCOPE);
+    expect(vi.mocked(newQuoteService.createQuote).mock.calls[0][0]).toMatchObject({ childAges: [4] });
   });
 
   it("spins off a free social quote unless the quote is marked not_for_social / is_test", async () => {
@@ -605,7 +708,7 @@ describe("transactionService.createTransactionWithBooking — add booking", () =
       transaction: { id: "txn1", client_id: "c1" },
       booking: { id: "b1", travel_date: null, package_commission: null },
     } as never);
-    vi.mocked(neonClientRepository.findById).mockResolvedValue({ id: "c1", referredByClientId: null } as never);
+    vi.mocked(neonClientRepository.findByIdForDealCreate).mockResolvedValue({ id: "c1", referredByClientId: null } as never);
     vi.mocked(bookingRepository.countByClientId).mockResolvedValue(1 as never);
   });
 
@@ -647,11 +750,11 @@ describe("transactionService.createTransactionWithBooking — add booking", () =
       SCOPE,
     );
 
-    expect(walletService.applyBookingCredit).toHaveBeenCalledWith("c1", "b1", 50, { orgId: null });
+    expect(walletService.applyBookingCredit).toHaveBeenCalledWith("c1", "b1", 50, SCOPE);
   });
 
   it("delegates referral recording to ensureReferralForBooking when the client was referred", async () => {
-    vi.mocked(neonClientRepository.findById).mockResolvedValue({
+    vi.mocked(neonClientRepository.findByIdForDealCreate).mockResolvedValue({
       id: "c1",
       referredByClientId: "ref1",
       firstName: "Ada",
@@ -671,6 +774,186 @@ describe("transactionService.createTransactionWithBooking — add booking", () =
     await transactionService.createTransactionWithBooking({} as never, {} as never, SCOPE);
 
     expect(neonClientRepository.update).toHaveBeenCalledWith("c1", { badge: "VIP Client" });
+  });
+});
+
+describe("transactionService create: tenancy and ownership come from the caller, not the body (B1)", () => {
+  const ADMIN = { orgId: "org1", branchId: "shop1", orgRole: "org_admin", userId: "admin1" } as never;
+  const NO_SHOP = { orgId: "org1", branchId: null, orgRole: "agent", userId: "u1" } as never;
+  const created = { transaction: { id: "txn1" }, enquiry: { id: "enq1" }, quote: { id: "q1" }, booking: { id: "b1" } };
+
+  beforeEach(() => {
+    vi.mocked(transactionRepository.create).mockResolvedValue({ id: "txn1" } as never);
+    vi.mocked(transactionRepository.createWithEnquiryAndChildren).mockResolvedValue(created as never);
+    vi.mocked(transactionRepository.createWithQuoteAndChildren).mockResolvedValue(created as never);
+    vi.mocked(transactionRepository.createWithBookingAndChildren).mockResolvedValue(created as never);
+    vi.mocked(neonClientRepository.findByIdForDealCreate).mockResolvedValue({ id: "c1" } as never);
+  });
+
+  const writes = () => [
+    transactionRepository.create,
+    transactionRepository.createWithEnquiryAndChildren,
+    transactionRepository.createWithQuoteAndChildren,
+    transactionRepository.createWithBookingAndChildren,
+  ];
+
+  it("ignores a body org_id and branch_id from an agent on every create path (the caller's org and shop are used)", async () => {
+    const body = { client_id: "c1", user_id: "u1", org_id: "other-org", branch_id: "other-shop" } as never;
+    await transactionService.createTransaction(body, SCOPE);
+    await transactionService.createTransactionWithEnquiry(body, { holiday_type_id: "h" } as never, SCOPE);
+    await transactionService.createTransactionWithQuote(body, {} as never, SCOPE);
+    await transactionService.createTransactionWithBooking(body, {} as never, SCOPE);
+
+    const datas = [
+      vi.mocked(transactionRepository.create).mock.calls[0][0],
+      vi.mocked(transactionRepository.createWithEnquiryAndChildren).mock.calls[0][0].transactionData,
+      vi.mocked(transactionRepository.createWithQuoteAndChildren).mock.calls[0][0].transactionData,
+      vi.mocked(transactionRepository.createWithBookingAndChildren).mock.calls[0][0].transactionData,
+    ];
+    for (const data of datas) {
+      expect(data).toMatchObject({ client_id: "c1", user_id: "u1", org_id: "org1", branch_id: "shop1" });
+    }
+  });
+
+  it("copies only the known deal columns (no id / created_at / status injection)", async () => {
+    await transactionService.createTransaction({ id: "x", created_at: "2001-01-01", status: "on_booking", client_id: "c1", user_id: "u1", priority: "high" } as never, SCOPE);
+    const data = vi.mocked(transactionRepository.create).mock.calls[0][0] as unknown as Record<string, unknown>;
+    expect(data).not.toHaveProperty("id");
+    expect(data).not.toHaveProperty("created_at");
+    expect(data).not.toHaveProperty("status");
+    expect(data).toMatchObject({ priority: "high" });
+  });
+
+  it("lets an org admin pick a branch of their own org, and 400s on a foreign branch (nothing written)", async () => {
+    vi.mocked(branchRepository.findById).mockResolvedValueOnce({ id: "shop2" } as never);
+    await transactionService.createTransaction({ user_id: "u1", branch_id: "shop2" } as never, ADMIN);
+    expect(branchRepository.findById).toHaveBeenCalledWith("shop2", "org1");
+    expect(vi.mocked(transactionRepository.create).mock.calls[0][0]).toMatchObject({ org_id: "org1", branch_id: "shop2" });
+
+    vi.mocked(transactionRepository.create).mockClear();
+    vi.mocked(branchRepository.findById).mockResolvedValueOnce(undefined as never);
+    await expect(transactionService.createTransaction({ user_id: "u1", branch_id: "foreign" } as never, ADMIN)).rejects.toMatchObject({ statusCode: 400 });
+    expect(transactionRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("404s on a client outside the caller's org and partition, and writes nothing", async () => {
+    vi.mocked(neonClientRepository.findByIdForDealCreate).mockResolvedValue(undefined as never);
+    const body = { client_id: "foreign-client", user_id: "u1" } as never;
+    await expect(transactionService.createTransaction(body, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    await expect(transactionService.createTransactionWithEnquiry(body, { holiday_type_id: "h" } as never, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    await expect(transactionService.createTransactionWithQuote(body, {} as never, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    await expect(transactionService.createTransactionWithBooking(body, {} as never, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(neonClientRepository.findByIdForDealCreate).toHaveBeenCalledWith("foreign-client", SCOPE);
+    for (const w of writes()) expect(w).not.toHaveBeenCalled();
+  });
+
+  it("400s on an owner who is not on the caller's org roster, and writes nothing", async () => {
+    vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue(undefined as never);
+    await expect(transactionService.createTransaction({ client_id: "c1", user_id: "stranger" } as never, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+    expect(branchMemberRepository.findActiveContextByUserIdInOrg).toHaveBeenCalledWith("stranger", "org1");
+    for (const w of writes()) expect(w).not.toHaveBeenCalled();
+  });
+
+  it("refuses an agent or branch manager with no shop (403) on every create path, writing nothing", async () => {
+    const body = { client_id: "c1", user_id: "u1" } as never;
+    for (const scope of [NO_SHOP, { ...(NO_SHOP as object), orgRole: "branch_manager" } as never]) {
+      await expect(transactionService.createTransaction(body, scope)).rejects.toMatchObject({ statusCode: 403 });
+      await expect(transactionService.createTransactionWithEnquiry(body, { holiday_type_id: "h" } as never, scope)).rejects.toMatchObject({ statusCode: 403 });
+      await expect(transactionService.createTransactionWithQuote(body, {} as never, scope)).rejects.toMatchObject({ statusCode: 403 });
+      await expect(transactionService.createTransactionWithBooking(body, {} as never, scope)).rejects.toMatchObject({ statusCode: 403 });
+    }
+    for (const w of writes()) expect(w).not.toHaveBeenCalled();
+  });
+
+  it("update: copies only deal columns, and a client change must be a client the caller can see (404, nothing written)", async () => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", status: "on_quote", client_id: "c0", user_id: "u1", branch_id: "shop1" } as never);
+    vi.mocked(transactionRepository.update).mockResolvedValue({ id: "t1" } as never);
+
+    vi.mocked(neonClientRepository.findById).mockResolvedValue({ id: "c1" } as never);
+    await transactionService.updateTransaction("t1", { id: "x", created_at: "2001", priority: "high", client_id: "c1" } as never, SCOPE);
+    expect(neonClientRepository.findById).toHaveBeenCalledWith("c1", SCOPE);
+    expect(transactionRepository.update).toHaveBeenCalledWith("t1", { priority: "high", client_id: "c1" }, SCOPE);
+
+    vi.mocked(transactionRepository.update).mockClear();
+    vi.mocked(neonClientRepository.findById).mockResolvedValue(undefined as never);
+    await expect(transactionService.updateTransaction("t1", { client_id: "foreign" } as never, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(transactionRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("BLOCKER 1: the deal lands in its OWNER's shop for admins and the system scope; agents may only create for their own shop", async () => {
+    vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue({ branchId: "shopB", branchType: "shop", orgId: "org1" } as never);
+    await transactionService.createTransaction({ user_id: "agentB" } as never, ADMIN);
+    expect(vi.mocked(transactionRepository.create).mock.calls[0][0]).toMatchObject({ user_id: "agentB", branch_id: "shopB" });
+
+    vi.mocked(branchRepository.findById).mockResolvedValueOnce({ id: "shopC" } as never);
+    await transactionService.createTransaction({ user_id: "agentB", branch_id: "shopC" } as never, ADMIN);
+    expect(vi.mocked(transactionRepository.create).mock.calls[1][0]).toMatchObject({ branch_id: "shopC" });
+
+    const systemScope = { orgId: "org1", branchId: null, orgRole: "org_admin", orgRoles: ["org_admin"], userId: null } as never;
+    await transactionService.createTransactionWithEnquiry({ user_id: "agentB" } as never, { holiday_type_id: "h" } as never, systemScope);
+    expect(vi.mocked(transactionRepository.createWithEnquiryAndChildren).mock.calls[0][0].transactionData).toMatchObject({ branch_id: "shopB" });
+
+    // An agent of shop1 handing the deal to an owner in shopB: refused, nothing written.
+    vi.mocked(transactionRepository.create).mockClear();
+    await expect(transactionService.createTransaction({ user_id: "agentB" } as never, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+    expect(transactionRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("NIT 2: a platform admin with no organisation gets 400, not a 500", async () => {
+    const platform = { orgId: "", branchId: null, orgRole: "platform_admin", orgRoles: ["platform_admin"], userId: "p" } as never;
+    await expect(transactionService.createTransaction({ user_id: "u1" } as never, platform)).rejects.toMatchObject({ statusCode: 400 });
+    expect(transactionRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("NIT 3: empty-string client_id, lead_source and priority are treated as absent (never copied raw)", async () => {
+    await transactionService.createTransaction({ client_id: "", lead_source: "", priority: "", user_id: "u1" } as never, SCOPE);
+    const saved = vi.mocked(transactionRepository.create).mock.calls[0][0] as Record<string, unknown>;
+    expect(saved).not.toHaveProperty("client_id");
+    expect(saved).not.toHaveProperty("lead_source");
+    expect(saved).not.toHaveProperty("priority");
+    expect(neonClientRepository.findByIdForDealCreate).not.toHaveBeenCalled();
+  });
+
+  describe("a platform admin impersonating an organisation", () => {
+    const IMPERSONATING = { orgId: "org1", branchId: null, orgRole: "org_admin", orgRoles: ["org_admin"], userId: "pa1", impersonating: true } as never;
+
+    it("owns nothing there: the deal goes to the org's default owner and that owner's branch, whether user_id is themselves or blank", async () => {
+      vi.mocked(branchMemberRepository.findDefaultOwner).mockResolvedValue("owner1");
+      vi.mocked(branchMemberRepository.findActiveContextByUserIdInOrg).mockResolvedValue({ branchId: "shopO", branchType: "shop", orgId: "org1" } as never);
+
+      await transactionService.createTransaction({ user_id: "pa1" } as never, IMPERSONATING);
+      await transactionService.createTransaction({ user_id: "" } as never, IMPERSONATING);
+
+      expect(branchMemberRepository.findDefaultOwner).toHaveBeenCalledWith("org1");
+      for (const call of vi.mocked(transactionRepository.create).mock.calls) {
+        expect(call[0]).toMatchObject({ user_id: "owner1", branch_id: "shopO", org_id: "org1" });
+      }
+    });
+
+    it("a requested owner who is someone else is honoured, not replaced", async () => {
+      await transactionService.createTransaction({ user_id: "agentB" } as never, IMPERSONATING);
+      expect(branchMemberRepository.findDefaultOwner).not.toHaveBeenCalled();
+      expect(vi.mocked(transactionRepository.create).mock.calls[0][0]).toMatchObject({ user_id: "agentB" });
+    });
+
+    it("an org with no default owner is a clear 400 and nothing is written", async () => {
+      vi.mocked(branchMemberRepository.findDefaultOwner).mockResolvedValue(null);
+      await expect(transactionService.createTransaction({ user_id: "pa1" } as never, IMPERSONATING)).rejects.toMatchObject({
+        statusCode: 400,
+        message: expect.stringMatching(/no active members/),
+      });
+      expect(transactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("a normal admin who names themselves is NOT redirected to the default owner", async () => {
+      await transactionService.createTransaction({ user_id: "admin1" } as never, ADMIN);
+      expect(branchMemberRepository.findDefaultOwner).not.toHaveBeenCalled();
+    });
+  });
+
+  it("uses the caller's scope (not a trusted one) for the VIP/referral client lookup after a booking", async () => {
+    await transactionService.createTransactionWithBooking({ client_id: "c1", user_id: "u1" } as never, {} as never, SCOPE);
+    expect(neonClientRepository.findByIdForDealCreate).toHaveBeenLastCalledWith("c1", SCOPE);
   });
 });
 

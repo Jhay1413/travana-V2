@@ -7,6 +7,7 @@ import { getScope } from "../../utils/scope";
 import { authStorage } from "../../middlewares/auth";
 import { normalizeEnquiry } from "../../utils/enum-normalizers";
 import { uploadImageToS3 } from "../../utils/image-storage";
+import { QUOTE_STATUS_MAP } from "./quote-status-map";
 import type { ListPipelineByStatusQuery, PipelineCountsQuery } from "./transaction.validator";
 import type { DealPriority, PipelineFilters } from "./transaction.types";
 
@@ -34,41 +35,6 @@ function buildPipelineFilters(query: {
   if (query.quick) filters.quick = query.quick;
   return filters;
 }
-
-const QUOTE_STATUS_MAP: Record<string, string> = {
-  // New-enum identity pass-through
-  "quoted": "quoted",
-  "in_play": "in_play",
-  "lost": "lost",
-  "archived": "archived",
-  // Legacy label → new-enum mapping
-  "In Play": "quoted",
-  "in play": "quoted",
-  "New Lead": "quoted",
-  "NEW_LEAD": "quoted",
-  "Quote In Progress": "quoted",
-  "QUOTE_IN_PROGRESS": "quoted",
-  "Quote Call": "quoted",
-  "QUOTE_CALL": "quoted",
-  "Quote Ready": "quoted",
-  "QUOTE_READY": "quoted",
-  "Requote": "quoted",
-  "REQUOTE": "quoted",
-  "Awaiting Decision": "in_play",
-  "AWAITING_DECISION": "in_play",
-  "Won": "quoted",
-  "WON": "quoted",
-  "accepted": "quoted",
-  "draft": "quoted",
-  "Archived": "archived",
-  "ARCHIVED": "archived",
-  "Inactive": "archived",
-  "INACTIVE": "archived",
-  "Expired": "archived",
-  "EXPIRED": "archived",
-  "Lost": "lost",
-  "LOST": "lost",
-};
 
 function normalizeQuote(data: any) {
   const normalized = { ...data };
@@ -124,8 +90,9 @@ export const transactionController = {
     //   - homeworker            → pinned to scope.userId
     //   - org_admin             → branchOverride optional, confined to org
     //   - platform_admin        → branchOverride optional, no org confinement
-    // With clientId (client-details view): staff roles (incl. social_media_manager)
-    // see the client's full deal history org-wide; homeworkers still only their own.
+    // With clientId (client-details view): shop-pinned like the board for agents and branch
+    // managers; org_admin and social_media_manager see the client's full history org-wide;
+    // homeworkers only their own.
     // Filters below are additive — agentId + date range now work together.
     const transactions = await transactionService.listTransactions(scope, {
       clientId: asString(clientId),

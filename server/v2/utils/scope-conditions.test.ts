@@ -7,6 +7,7 @@ import {
   buildUserPartitionCond,
   buildTransactionScopeConds,
   buildTransactionRecordScopeConds,
+  buildTransactionWriteScopeConds,
   buildScopeConditions,
 } from "./scope-conditions";
 import type { Scope } from "./scope";
@@ -157,8 +158,9 @@ describe("transaction scope conditions use the partition helper", () => {
     expect(list).toHaveLength(3);
     expect(list[2]?.text).toMatch(EXCLUDE_HOMEWORKER_BRANCHES);
     const record = buildTransactionRecordScopeConds(s).map(render);
-    expect(record).toHaveLength(2);
+    expect(record).toHaveLength(3);
     expect(record[1]?.text).toMatch(EXCLUDE_HOMEWORKER_BRANCHES);
+    expect(record[2]?.text).toMatch(/"transaction"\."branch_id" is not null OR "transaction"\."user_id" = \$1/i);
   });
 
   it("homeworker in own branch: org + branch + owner", () => {
@@ -211,11 +213,102 @@ describe("buildScopeConditions partitionScope", () => {
     expect(buildScopeConditions({ orgId: "org1", branchId: null })).toHaveLength(2);
   });
 
+  it("fails closed for a branch manager or agent with no shop (never an org-wide read)", () => {
+    for (const orgRole of ["branch_manager", "agent"] as const) {
+      const conds = buildScopeConditions({ orgId: "org1", branchId: null, partitionScope: scopeOf({ orgRole, orgRoles: [orgRole], branchId: null }) });
+      expect(conds.map(render).some((c) => c?.text === "false")).toBe(true);
+    }
+    const admin = buildScopeConditions({ orgId: "org1", branchId: null, partitionScope: scopeOf({ orgRole: "org_admin", orgRoles: ["org_admin"], branchId: null }) });
+    expect(admin.map(render).some((c) => c?.text === "false")).toBe(false);
+  });
+
   it("adds the exclusion for shop staff and nothing for org_admin", () => {
-    const shop = buildScopeConditions({ orgId: "org1", branchId: null, partitionScope: scopeOf({}) });
+    const shop = buildScopeConditions({ orgId: "org1", branchId: null, partitionScope: scopeOf({ branchId: "b1" }) });
     expect(shop).toHaveLength(3);
     expect(render(shop[2])?.text).toMatch(EXCLUDE_HOMEWORKER_BRANCHES);
     const admin = buildScopeConditions({ orgId: "org1", branchId: null, partitionScope: scopeOf({ orgRole: "org_admin", orgRoles: ["org_admin"] }) });
     expect(admin).toHaveLength(2);
+  });
+});
+
+describe("buildTransactionWriteScopeConds (writes to a deal's quotes and bookings)", () => {
+  it("trusted scope yields no conditions", () => {
+    expect(buildTransactionWriteScopeConds({ orgId: null })).toEqual([]);
+  });
+
+  it("agent and branch manager are pinned to their own shop, unlike the org-wide record scope", () => {
+    for (const orgRole of ["agent", "branch_manager"] as const) {
+      const s = scopeOf({ orgRole, orgRoles: [orgRole], branchId: "b1" });
+      const write = buildTransactionWriteScopeConds(s).map(render);
+      expect(write).toHaveLength(3);
+      expect(write.some((c) => c?.text.includes('"transaction"."branch_id" = $') && c.params.includes("b1"))).toBe(true);
+      expect(buildTransactionRecordScopeConds(s)).toHaveLength(3);
+    }
+  });
+
+  it("org_admin stays org-wide even when carrying a branch", () => {
+    const s = scopeOf({ orgRole: "org_admin", orgRoles: ["org_admin"], branchId: "b1" });
+    expect(buildTransactionWriteScopeConds(s)).toHaveLength(1);
+  });
+
+  it("an agent or branch manager with NO shop gets no deals at all (fail closed), for writes and the board", () => {
+    for (const orgRole of ["agent", "branch_manager"] as const) {
+      const s = scopeOf({ orgRole, orgRoles: [orgRole], branchId: null });
+      for (const conds of [buildTransactionWriteScopeConds(s), buildTransactionScopeConds(s)]) {
+        expect(conds.map(render).some((c) => c?.text === "false")).toBe(true);
+      }
+    }
+  });
+
+  it("legacy deals with no shop recorded: the owning agent keeps them (write and board), others are pinned out", () => {
+    for (const orgRole of ["agent", "branch_manager"] as const) {
+      const s = scopeOf({ orgRole, orgRoles: [orgRole], branchId: "b1", userId: "owner" });
+      for (const conds of [buildTransactionWriteScopeConds(s), buildTransactionScopeConds(s)]) {
+        const pin = conds.map(render).find((c) => c?.text.includes('"transaction"."branch_id" = $'));
+        expect(pin?.text).toMatch(/"transaction"\."branch_id" = \$\d+ OR \("transaction"\."branch_id" is null AND "transaction"\."user_id" = \$\d+\)/i);
+        expect(pin?.params).toEqual(["b1", "owner"]);
+      }
+    }
+  });
+
+  it("record scope: no shop reads nothing; with a shop a legacy no-shop deal is readable only by its owner", () => {
+    for (const orgRole of ["agent", "branch_manager"] as const) {
+      const noShop = buildTransactionRecordScopeConds(scopeOf({ orgRole, orgRoles: [orgRole], branchId: null })).map(render);
+      expect(noShop.some((c) => c?.text === "false")).toBe(true);
+      const shop = buildTransactionRecordScopeConds(scopeOf({ orgRole, orgRoles: [orgRole], branchId: "b1", userId: "owner" })).map(render);
+      expect(shop[2]?.text).toMatch(/"transaction"\."branch_id" is not null OR "transaction"\."user_id" = \$1/i);
+      expect(shop[2]?.params).toEqual(["owner"]);
+    }
+  });
+
+  it("alsoReadable keeps a row class (free quotes) open on the no-shop arm, for agents with a shop", () => {
+    const extra = sql`free = true`;
+    const s = scopeOf({ orgRole: "agent", orgRoles: ["agent"], branchId: "b1", userId: "owner" });
+    const withOpen = buildTransactionRecordScopeConds(s, { alsoReadable: extra }).map(render);
+    expect(withOpen[2]?.text).toMatch(/is not null OR "transaction"\."user_id" = \$1 OR free = true/i);
+    const without = buildTransactionRecordScopeConds(s).map(render);
+    expect(without[2]?.text).not.toContain("free = true");
+    // A no-shop agent still reads nothing.
+    const noShop = buildTransactionRecordScopeConds(scopeOf({ orgRole: "agent", orgRoles: ["agent"], branchId: null }), { alsoReadable: extra }).map(render);
+    expect(noShop.some((c) => c?.text === "false")).toBe(true);
+  });
+
+  it("org admins and social_media_manager record scope has no legacy or no-shop pin", () => {
+    for (const orgRole of ["org_admin", "social_media_manager"] as const) {
+      const conds = buildTransactionRecordScopeConds(scopeOf({ orgRole, orgRoles: [orgRole], branchId: null })).map(render);
+      expect(conds.some((c) => c?.text === "false" || c?.text.includes("is not null"))).toBe(false);
+    }
+  });
+
+  it("org_admin and social_media_manager with no shop are unaffected", () => {
+    for (const orgRole of ["org_admin", "social_media_manager"] as const) {
+      const s = scopeOf({ orgRole, orgRoles: [orgRole], branchId: null });
+      expect(buildTransactionWriteScopeConds(s).map(render).some((c) => c?.text === "false")).toBe(false);
+    }
+  });
+
+  it("a homeworker keeps the own-deal partition", () => {
+    const conds = buildTransactionWriteScopeConds(HOMEWORKER_OWN).map(render);
+    expect(conds[1]?.text).toContain('"transaction"."user_id"');
   });
 });

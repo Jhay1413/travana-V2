@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useClients } from "@/hooks/queries";
+import { useRole } from "@/hooks/use-role";
 import axiosClient from "@/api/client/axios-client";
 import { cn } from "@/lib/utils";
 import lunaImg from "@assets/Luna-Platform-600-Final_1780477526775.png";
@@ -148,7 +149,9 @@ function TypingDots() {
 
 export function AskAiDialog({ open, onOpenChange }: AskAiDialogProps) {
   const { toast } = useToast();
-  const { data: clients = [] } = useClients();
+  const { orgRole } = useRole();
+  // Referral agents have no access to clients (the call would be refused with a 403).
+  const { data: clients = [] } = useClients({ enabled: orgRole !== "referral_agent" });
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [savingFor, setSavingFor] = useState<{ question: string; answer: string } | null>(null);

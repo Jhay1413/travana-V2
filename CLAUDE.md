@@ -403,6 +403,10 @@ DO NOT:
   and run `npm test` before reporting done. DB-backed integration tests go in
   `*.integration.test.ts` and are written, not run, unless the test database is
   already available.
+- Every heavy feature (a new screen or flow, anything touching money, access,
+  bookings, or messaging) MUST also ship with integration tests and Playwright
+  E2E tests in `e2e/` that drive the real screens. Run them before reporting done.
+  Update `docs/e2e-test-coverage.md` with what the new tests cover.
 - When a requirement, formula, access rule or data policy is unclear, ASK the
   user before implementing. Do not guess on anything that changes behaviour,
   money or visibility.

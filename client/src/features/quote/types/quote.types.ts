@@ -528,6 +528,8 @@ export interface EnrichedQuoteCruise extends QuoteCruise {
 }
 
 export interface EnrichedQuote extends Quote {
+  /** False when the deal is readable but belongs to another shop (writes would be refused with 403). Absent = editable. */
+  can_edit?: boolean;
   // Backend-computed customer total = sales_price − discounts + service_charge.
   total_price?: string | null;
   /** Sum of the line-item commissions (flights, accommodation, transfers, …); add package_commission for profit. */
@@ -568,6 +570,8 @@ export interface EnrichedQuote extends Quote {
 }
 
 export interface EnrichedBooking extends Booking {
+  /** False when the deal is readable but belongs to another shop (writes would be refused with 403). Absent = editable. */
+  can_edit?: boolean;
   // Backend-computed customer total = sales_price − discounts + service_charge.
   total_price?: string | null;
   /** Sum of the line-item commissions (flights, accommodation, transfers, …); add package_commission for profit. */

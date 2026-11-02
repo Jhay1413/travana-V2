@@ -2,7 +2,7 @@ import axios from "axios";
 import { imageSize } from "image-size";
 import { AppError } from "../../utils/error-handler";
 import { fetchViaHeadlessBrowser } from "../../utils/browser-fetch";
-import { presignImageKey, s3KeyFromStoredUrl, uploadBufferToS3 } from "../../utils/image-storage";
+import { presignImageKey, publicImageKeyFromStoredUrl, s3KeyFromStoredUrl, uploadBufferToS3 } from "../../utils/image-storage";
 import { resolveUploadableUrl } from "../social-post/social-post.service";
 import { assertPublicHttpUrl } from "../../utils/safe-fetch-url";
 import { usageService } from "../usage/usage.service";
@@ -140,7 +140,7 @@ function chooseScale(shortSide: number | null): UpscaleScale {
 /** A url fal can fetch. Resolved when the job RUNS so a queued job never holds an expired presign. */
 async function resolveFetchableUrl(input: Pick<PerformUpscaleInput, "originalUrl" | "sourceKind">): Promise<string> {
   if (input.sourceKind === "upload") {
-    const key = s3KeyFromStoredUrl(input.originalUrl);
+    const key = publicImageKeyFromStoredUrl(input.originalUrl);
     if (!key) throw new AppError("Failed to read source image", 500);
     return presignImageKey(key);
   }

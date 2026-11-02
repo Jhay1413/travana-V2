@@ -20,7 +20,7 @@ export default function ForgotPasswordPage() {
       await axios.post("/api/auth/forgot-password", { email });
       setSubmitted(true);
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Something went wrong");
+      setError(err?.message || "Something went wrong");
     } finally {
       setLoading(false);
     }

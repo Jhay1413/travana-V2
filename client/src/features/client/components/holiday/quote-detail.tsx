@@ -22,8 +22,10 @@ import { ViewsCard } from "@/features/client/components/holiday/views-card";
 
 /** The quote page: hero, details and money, activity, stage and compare in the centre; trip and views on the right. */
 export function QuoteDetail(props: HolidayDetailBaseProps) {
-  const { id, clientId, clientName, clientPhone, clientBadge, readOnly, onOpenExpiryDialog, onDeleted, quotes, bookings } = props;
+  const { id, clientId, clientName, clientPhone, clientBadge, readOnly: roleReadOnly, onOpenExpiryDialog, onDeleted, quotes, bookings } = props;
   const { data: raw, isLoading, error } = useQuote(id);
+  // Another shop's deal is readable but not editable: hide every write control, like a read-only role.
+  const readOnly = roleReadOnly || raw?.can_edit === false;
   const display = useMemo(() => (raw ? transformQuoteData(raw) : null), [raw]);
   const photos = useHolidayPhotos(raw);
   const [editOpen, setEditOpen] = useState(false);

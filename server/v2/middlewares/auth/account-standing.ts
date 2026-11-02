@@ -66,3 +66,21 @@ export function rejectBlockedSession(req: Request, res: Response, block: Account
   if (typeof req.logout === 'function') req.logout(() => destroy());
   else destroy();
 }
+
+/**
+ * Organisation suspended by a platform admin. Unlike a suspended or deactivated
+ * account the session is NOT destroyed, so unsuspending restores access at once.
+ */
+export const ORG_SUSPENDED_BLOCK = {
+  code: 'ORG_SUSPENDED',
+  message: 'Your agency account has been suspended. Contact Travana support.',
+} as const;
+
+/** Staff of an inactive organisation are blocked; platform admins never are (they may impersonate to investigate). */
+export function isOrgSuspendedFor(user: Pick<AccountStandingUser, 'role'>, orgIsActive: boolean | null | undefined): boolean {
+  return user.role !== 'platform_admin' && orgIsActive === false;
+}
+
+export function rejectOrgSuspended(res: Response): void {
+  res.status(403).json({ message: ORG_SUSPENDED_BLOCK.message, code: ORG_SUSPENDED_BLOCK.code });
+}

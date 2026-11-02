@@ -99,7 +99,7 @@ describe('deleteAsset S3 cleanup guard', () => {
     lessonRepo.findAssetById.mockResolvedValue(asset(OWN_URL) as never);
     await trainingLessonService.deleteAsset('a1', 'trusted' as never);
     expect(lessonRepo.deleteAsset).toHaveBeenCalledWith('a1');
-    expect(s3Delete).toHaveBeenCalledWith(OWN_URL);
+    expect(s3Delete).toHaveBeenCalledWith(OWN_URL, ['training-assets/']);
   });
   it('does NOT delete when another asset row references the URL', async () => {
     lessonRepo.findAssetById.mockResolvedValue(asset(OWN_URL) as never);

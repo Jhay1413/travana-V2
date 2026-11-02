@@ -1,5 +1,6 @@
 import { noteRepository, type NoteWithAuthor } from "./note.repository";
 import { AppError } from "../../utils/error-handler";
+import { refuseDealWrite } from "../../utils/deal-access";
 import type { Note, InsertNote } from "@shared/schema";
 import type { Scope } from "../../utils/scope";
 import { sanitizeRichText } from "../../utils/sanitize-rich-text";
@@ -24,6 +25,15 @@ async function assertClientInScope(clientId: string, scope: ScopeOrTrusted) {
   if (!orgId) return;
   const ok = await noteRepository.clientBelongsToOrg(clientId, orgId, scope);
   if (!ok) throw new AppError("Notes not found", 404);
+}
+
+// A note on a deal is a write to that deal: it needs the shop-pinned write scope (403 for another
+// shop's deal in the same organisation, 404 otherwise). Client-level notes are not deal writes.
+async function assertDealNoteWritable(transactionId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  if (await noteRepository.transactionInWriteScope(transactionId, scope)) return;
+  refuseDealWrite(await noteRepository.transactionBelongsToOrg(transactionId, orgId, scope), "Notes not found");
 }
 
 async function loadScopedNote(id: string, scope: ScopeOrTrusted): Promise<Note> {
@@ -86,6 +96,7 @@ export const noteService = {
     // caller could attach a note to another org's transaction or client.
     if (data.transaction_id) {
       await assertTransactionInScope(data.transaction_id, scope);
+      await assertDealNoteWritable(data.transaction_id, scope);
     }
     if (data.client_id) {
       await assertClientInScope(data.client_id, scope);
@@ -96,14 +107,16 @@ export const noteService = {
   },
 
   async updateNote(id: string, content: string, scope: ScopeOrTrusted): Promise<Note> {
-    await loadScopedNote(id, scope);
+    const existing = await loadScopedNote(id, scope);
+    if (existing.transaction_id) await assertDealNoteWritable(existing.transaction_id, scope);
     const note = await noteRepository.update(id, sanitizeRichText(content));
     if (!note) throw new AppError("Note not found", 404);
     return note;
   },
 
   async deleteNote(id: string, scope: ScopeOrTrusted): Promise<void> {
-    await loadScopedNote(id, scope);
+    const existing = await loadScopedNote(id, scope);
+    if (existing.transaction_id) await assertDealNoteWritable(existing.transaction_id, scope);
     await noteRepository.remove(id);
   },
 };

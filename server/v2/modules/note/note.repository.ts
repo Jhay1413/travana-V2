@@ -1,7 +1,7 @@
 import { db } from "../../config/database";
 import { notes, transaction, clientTable, user, type Note, type InsertNote } from "@shared/schema";
 import { and, eq, desc, or, sql } from "drizzle-orm";
-import { buildPartitionCond, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { buildPartitionCond, buildTransactionRecordScopeConds, buildTransactionScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export type NoteWithAuthor = Note & { author_name: string | null };
 
@@ -38,16 +38,17 @@ export const noteRepository = {
     // resolved via transaction.client_id since deal notes usually carry no
     // client_id of their own. The deal branch also applies the same
     // record-level scope conditions the client's deal LIST already uses
-    // (transaction.repository.ts findAll, clientId case) — org-wide for staff,
-    // pinned to transaction.user_id for homeworkers — so a homeworker can't
-    // see notes on a colleague's deal via this merged list. System notes are
+    // (transaction.repository.ts findAll, clientId case) — shop-pinned for agents
+    // and branch managers, pinned to transaction.user_id for homeworkers — so
+    // neither sees notes on another shop's or a colleague's deal via this merged
+    // list. Client-level notes (no deal) stay visible to everyone who can open the client. System notes are
     // excluded here so the (often numerous) automation rows aren't shipped
     // just to be filtered out client-side.
     const whereClause = options?.includeDeals
       ? and(
           or(
             and(eq(notes.client_id, clientId), sql`${notes.transaction_id} IS NULL`),
-            and(eq(transaction.client_id, clientId), ...buildTransactionRecordScopeConds(scope)),
+            and(eq(transaction.client_id, clientId), ...buildTransactionScopeConds(scope)),
           ),
           sql`${notes.description} IS DISTINCT FROM 'system'`,
         )
@@ -106,8 +107,20 @@ export const noteRepository = {
       .where(and(
         eq(transaction.id, transactionId),
         eq(clientTable.orgId, orgId),
-        scope ? buildPartitionCond(scope, transaction.branch_id, transaction.user_id) : undefined,
+        // Record read scope: partition, nothing for an agent / branch manager with no shop, and no other
+        // agent's legacy no-shop deals.
+        ...(scope ? buildTransactionRecordScopeConds(scope) : []),
       ))
+      .limit(1);
+    return !!row;
+  },
+
+  /** Write scope (shop-pinned): may the caller write notes on this deal? */
+  async transactionInWriteScope(transactionId: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: transaction.id })
+      .from(transaction)
+      .where(and(eq(transaction.id, transactionId), ...buildTransactionWriteScopeConds(scope)))
       .limit(1);
     return !!row;
   },

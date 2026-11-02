@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, sql, SQL } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or, sql, SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { transaction, clientTable, branches, branchMembers } from "@shared/schema";
 import { holdsHomeworkerRole, type Scope } from "./scope";
@@ -103,6 +103,15 @@ export function buildUserPartitionCond(
 }
 
 /**
+ * Legacy deals recorded before shops existed have no branch (branch_id NULL). They stay readable and editable
+ * by the agent or branch manager who owns them (user_id = caller); org admins see them through their org-wide
+ * scope, and other agents do not.
+ */
+function legacyOwnerCond(s: Scope): SQL {
+  return s.userId ? sql`(${isNull(transaction.branch_id)} AND ${eq(transaction.user_id, s.userId)})` : sql`false`;
+}
+
+/**
  * Role-aware per-request data-scope conditions on the `transaction` table.
  *
  * Mirrors the canonical pattern (buildOpportunityScopeConds / buildTxnScopeConds):
@@ -125,8 +134,10 @@ export function buildTransactionScopeConds(scope: ScopeOrTrusted): SQL[] {
 
   conds.push(eq(transaction.org_id, s.orgId));
 
-  if ((s.orgRole === "branch_manager" || s.orgRole === "agent") && s.branchId) {
-    conds.push(eq(transaction.branch_id, s.branchId));
+  if (s.orgRole === "branch_manager" || s.orgRole === "agent") {
+    // Their own shop only, plus their own legacy deals with no shop recorded. Fail closed: an agent or
+    // branch manager with no shop sees and edits no deals.
+    conds.push(s.branchId ? sql`(${eq(transaction.branch_id, s.branchId)} OR ${legacyOwnerCond(s)})` : sql`false`);
   }
 
   const partition = buildPartitionCond(s, transaction.branch_id, transaction.user_id);
@@ -145,8 +156,12 @@ export function buildTransactionScopeConds(scope: ScopeOrTrusted): SQL[] {
  * Homeworkers remain restricted to deals they own. Pipeline/dashboard/list
  * queries must keep using `buildTransactionScopeConds`, which pins branch
  * users to their branch.
+ *
+ * Exceptions for agents and branch managers: with NO shop they read no deals at
+ * all (fail closed), and a legacy deal with no shop recorded (branch_id NULL)
+ * is readable only by the agent who owns it (and by org admins).
  */
-export function buildTransactionRecordScopeConds(scope: ScopeOrTrusted): SQL[] {
+export function buildTransactionRecordScopeConds(scope: ScopeOrTrusted, opts: { alsoReadable?: SQL } = {}): SQL[] {
   const conds: SQL[] = [];
   if (scope.orgId === null) return conds; // trusted internal caller — no scoping
   const s = scope as Scope;
@@ -157,7 +172,39 @@ export function buildTransactionRecordScopeConds(scope: ScopeOrTrusted): SQL[] {
   const partition = buildPartitionCond(s, transaction.branch_id, transaction.user_id);
   if (partition) conds.push(partition);
 
+  if (s.orgRole === "branch_manager" || s.orgRole === "agent") {
+    if (!s.branchId) {
+      conds.push(sql`false`);
+    } else {
+      // `alsoReadable` keeps a class of rows open whatever their shop: quote lookups pass "is a free (social) quote",
+      // so free quotes with no shop recorded stay reachable by link and as a copy-to-client source.
+      const open = opts.alsoReadable ?? sql`false`;
+      conds.push(
+        s.userId
+          ? sql`(${isNotNull(transaction.branch_id)} OR ${eq(transaction.user_id, s.userId)} OR ${open})`
+          : sql`(${isNotNull(transaction.branch_id)} OR ${open})`,
+      );
+    }
+  }
+
   return conds;
+}
+
+/**
+ * Record-level scope for WRITES to a deal's quotes, bookings and their children.
+ *
+ * Owner decision: agents and branch managers may not edit or delete another
+ * shop's quotes or bookings, so writes use the same shop pinning as the board and
+ * the transaction write endpoints (buildTransactionScopeConds; the repository's
+ * findByIdScopedForWrite applies the same rule). Org admins and owners stay
+ * org-wide, homeworkers keep their own-deal partition, and a trusted caller
+ * ({ orgId: null }) is unrestricted. Reads keep buildTransactionRecordScopeConds
+ * (org-wide on purpose, see above).
+ *
+ * An agent or branch manager with NO shop gets no deals at all (fail closed).
+ */
+export function buildTransactionWriteScopeConds(scope: ScopeOrTrusted): SQL[] {
+  return buildTransactionScopeConds(scope);
 }
 
 /**
@@ -174,7 +221,10 @@ export function buildScopeConditions(scope: ScopeFilter): SQL[] {
     conds.push(eq(clientTable.orgId, scope.orgId));
   }
   if (scope.partitionScope) {
-    const partition = buildPartitionCond(scope.partitionScope, transaction.branch_id, transaction.user_id);
+    const p = scope.partitionScope;
+    // Fail closed: a branch manager or agent with no shop must never fall through to an org-wide read.
+    if ((p.orgRole === "branch_manager" || p.orgRole === "agent") && !p.branchId) conds.push(sql`false`);
+    const partition = buildPartitionCond(p, transaction.branch_id, transaction.user_id);
     if (partition) conds.push(partition);
   }
   return conds;

@@ -67,7 +67,9 @@ export const opportunitiesService = {
     if (holdsHomeworkerRole(scope)) {
       return scope.userId ? opportunitiesRepository.findSelfAsAgent(scope.userId, scope.orgId) : [];
     }
-    if (scope.branchId && (scope.orgRole === 'branch_manager' || scope.orgRole === 'agent')) {
+    if (scope.orgRole === 'branch_manager' || scope.orgRole === 'agent') {
+      // No shop, no deals, and so nobody to filter by.
+      if (!scope.branchId) return [];
       return opportunitiesRepository.findAgentsInBranch(scope.orgId, scope.branchId);
     }
     return opportunitiesRepository.findAgentsInOrg(scope.orgId, scope.branchId, scope);

@@ -24,8 +24,10 @@ import { ViewsCard } from "@/features/client/components/holiday/views-card";
  * quote the booking was made from (same deal), when the client page has it.
  */
 export function BookingDetail(props: HolidayDetailBaseProps) {
-  const { id, clientId, clientName, clientPhone, clientBadge, readOnly, onOpenExpiryDialog, onDeleted, quotes } = props;
+  const { id, clientId, clientName, clientPhone, clientBadge, readOnly: roleReadOnly, onOpenExpiryDialog, onDeleted, quotes } = props;
   const { data: raw, isLoading, error } = useBooking(id);
+  // Another shop's deal is readable but not editable: hide every write control, like a read-only role.
+  const readOnly = roleReadOnly || raw?.can_edit === false;
   const display = useMemo(() => (raw ? transformQuoteData(raw) : null), [raw]);
   const photos = useHolidayPhotos(raw);
   const [editOpen, setEditOpen] = useState(false);

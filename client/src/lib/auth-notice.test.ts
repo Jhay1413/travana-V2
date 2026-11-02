@@ -20,9 +20,10 @@ function memoryStorage(): NoticeStorage & { data: Map<string, string> } {
 }
 
 describe("auth-notice", () => {
-  it("recognises only the two block codes", () => {
+  it("recognises only the known block codes", () => {
     expect(isAuthBlockCode("ACCOUNT_SUSPENDED")).toBe(true);
     expect(isAuthBlockCode("ACCOUNT_DEACTIVATED")).toBe(true);
+    expect(isAuthBlockCode("ORG_SUSPENDED")).toBe(true);
     expect(isAuthBlockCode("SESSION_EXPIRED")).toBe(false);
     expect(isAuthBlockCode(undefined)).toBe(false);
   });

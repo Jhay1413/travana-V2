@@ -9,7 +9,8 @@ import { noteRepository } from "../modules/note/note.repository";
 import { searchRepository } from "../modules/search/search.repository";
 import { opportunitiesRepository } from "../modules/opportunities/opportunities.repository";
 import { db } from "../config/database";
-import { tickets, tasks } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { tickets, tasks, transaction } from "@shared/schema";
 import type { Scope } from "./scope";
 import {
   truncateAll, makeOrg, makeBranch, makeUser, makeTransaction, makeClient, makeBranchMember,
@@ -76,10 +77,12 @@ beforeEach(async () => {
   otherLegacyClient = await makeClient({ orgId: org.id, branchId: sharedHwBranch.id, createdBy: otherLegacyHomeworker.id });
   nullBranchClient = await makeClient({ orgId: org.id, branchId: null, createdBy: agent.id });
 
-  shopTxn = await makeTransaction({ user_id: agent.id, org_id: org.id, branch_id: shopBranch.id });
-  hwTxn = await makeTransaction({ user_id: homeworker.id, org_id: org.id, branch_id: hwBranch.id });
-  legacyTxn = await makeTransaction({ user_id: legacyHomeworker.id, org_id: org.id, branch_id: sharedHwBranch.id });
-  nullBranchTxn = await makeTransaction({ user_id: agent.id, org_id: org.id, branch_id: null });
+  // Every deal carries its client (as in the app): org-ownership checks such as
+  // noteRepository.transactionBelongsToOrg resolve the org through the deal's client.
+  shopTxn = await makeTransaction({ user_id: agent.id, org_id: org.id, branch_id: shopBranch.id, client_id: shopClient.id });
+  hwTxn = await makeTransaction({ user_id: homeworker.id, org_id: org.id, branch_id: hwBranch.id, client_id: hwClient.id });
+  legacyTxn = await makeTransaction({ user_id: legacyHomeworker.id, org_id: org.id, branch_id: sharedHwBranch.id, client_id: legacyClient.id });
+  nullBranchTxn = await makeTransaction({ user_id: agent.id, org_id: org.id, branch_id: null, client_id: nullBranchClient.id });
 });
 
 const asSmm = () =>
@@ -207,8 +210,13 @@ describe("partition: transactions list, pipeline and stats", () => {
   });
 
   it("a shop agent cannot update or delete a homeworker's deal", async () => {
+    // A non-empty patch: drizzle rejects an empty SET before it reaches the DB.
     expect(await transactionRepository.remove(hwTxn.id, asAgent())).toBe(false);
-    expect(await transactionRepository.update(hwTxn.id, {}, asAgent())).toBeUndefined();
+    expect(await transactionRepository.update(hwTxn.id, { lead_source: "FACEBOOK" }, asAgent())).toBeUndefined();
+    const [after] = await db.select({ leadSource: transaction.lead_source }).from(transaction).where(eq(transaction.id, hwTxn.id));
+    expect(after.leadSource).not.toBe("FACEBOOK");
+    // Positive control: the same patch on the agent's own shop deal does apply.
+    expect((await transactionRepository.update(shopTxn.id, { lead_source: "FACEBOOK" }, asAgent()))?.lead_source).toBe("FACEBOOK");
   });
 });
 
@@ -248,7 +256,9 @@ describe("partition: tickets and tasks", () => {
   });
 
   it("tickets: org_admin sees all", async () => {
-    const seen = (await ticketRepository.findAll(asOrgAdmin(), null)).map((t: { id: string }) => t.id);
+    // The default "mine" mode narrows to the caller's own tickets (and fails closed without a
+    // userId); the org-wide view is the "all" mode the service grants to admin roles.
+    const seen = (await ticketRepository.findAll(asOrgAdmin(), null, "all")).map((t: { id: string }) => t.id);
     for (const t of [hwTicket, shopTicket, legacyTicket, nullBranchLegacyTicket]) expect(seen).toContain(t.id);
   });
 

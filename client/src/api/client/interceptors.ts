@@ -36,6 +36,18 @@ axiosClient.interceptors.response.use(
       }
     }
     const responseData = (error.response?.data ?? {}) as Record<string, unknown>;
+    if (error.response?.status === 403 && responseData.code === "ORG_SUSPENDED") {
+      // The agency was suspended mid-session. The session stays alive server-side (unsuspending
+      // restores it), so show the reason on the sign-in page and re-validate. Auth endpoints never
+      // trigger re-validation (it would loop), and login shows the message inline instead.
+      const url = error.config?.url || "";
+      if (!url.includes("/api/auth/login")) {
+        writeAuthNotice(typeof window === "undefined" ? null : window.sessionStorage, responseData.code);
+      }
+      if (!url.includes("/api/auth/")) {
+        window.dispatchEvent(new Event("auth:unauthorized"));
+      }
+    }
     const message =
       (responseData.message as string | undefined) ||
       error.message ||

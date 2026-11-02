@@ -7,15 +7,10 @@ import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry
 import { enquiryApi } from "@/api";
 import { enquiryKeys } from "@/features/enquiry/api/use-enquiry-queries";
 import type { Transaction } from "@/features/quote/types";
-import { getStageForTransaction, isValidDrop, type PipelineStage } from "@/features/pipeline/lib/pipeline-helpers";
+import { getStageForTransaction, isValidDrop, refusedMoveTitle, type PipelineStage } from "@/features/pipeline/lib/pipeline-helpers";
 import type { PipelineCache } from "./use-pipeline-cache";
 import type { PipelineDialogs } from "./use-pipeline-dialogs";
 import type { PipelineParking } from "./use-pipeline-parking";
-
-function backwardOrBlockedTitle(from: PipelineStage, to: PipelineStage): string {
-  if (from === "Enquiry" && to === "Booked") return "Create a quote before booking";
-  return "Deals can't move back to an earlier stage";
-}
 
 /** Every stage transition the board supports (drag-and-drop and the drawer's
  *  "Move to…"). The rules are unchanged from the original board. */
@@ -123,7 +118,7 @@ export function usePipelineMoves(cache: PipelineCache, parking: PipelineParking,
       // Enquiry/Quoted/In Play/Future) — the server has no transition for
       // that. Restore it first, then chain into the requested column.
       if (from !== "Lost" && from !== "Future" && !isValidDrop(from, to)) {
-        toast({ title: backwardOrBlockedTitle(from, to), variant: "destructive" });
+        toast({ title: refusedMoveTitle(from, to), variant: "destructive" });
         return;
       }
 
@@ -187,7 +182,7 @@ export function usePipelineMoves(cache: PipelineCache, parking: PipelineParking,
       if (from === "Future") {
         const naturalStage = getStageForTransaction(tx);
         if (to !== naturalStage && !isValidDrop(naturalStage, to)) {
-          toast({ title: backwardOrBlockedTitle(naturalStage, to), variant: "destructive" });
+          toast({ title: refusedMoveTitle(naturalStage, to), variant: "destructive" });
           return;
         }
         cache.removeFromColumn("Future", tx);

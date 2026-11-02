@@ -1,5 +1,5 @@
 import { db } from '../../config/database';
-import { airport } from '@shared/schema';
+import { airport, type InsertAirport } from '@shared/schema';
 import { eq, inArray } from 'drizzle-orm';
 
 export const airportRepository = {
@@ -16,7 +16,7 @@ export const airportRepository = {
     return row || null;
   },
 
-  async create(data: any) {
+  async create(data: InsertAirport) {
     const [row] = await db.insert(airport).values(data).returning();
     return row;
   },

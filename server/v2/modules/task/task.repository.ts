@@ -3,7 +3,7 @@ import { tasks, quote, booking, enquiry_table, transaction, clientTable } from "
 import { eq, and, or, desc, gte, lte, inArray, sql, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
-import { buildPartitionCond, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { buildPartitionCond, buildTransactionRecordScopeConds, buildTransactionScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 type TaskNew = typeof tasks.$inferSelect;
 // id is generated here (randomUUID), so callers never supply it.
@@ -41,14 +41,15 @@ function buildTaskScopeConds(scope?: Scope, opts?: { entityScoped?: boolean }): 
 }
 
 /**
- * Is the task's entity one the caller can open? Same record-level rules as
- * `entityInScope` (deal visibility via the transaction, client visibility via the
- * client row), expressed as SQL so it can sit inside a task WHERE. Deal ids are
+ * Is the task's entity one the caller can change? Same rules as `entityInScope` with
+ * forWrite (deal-linked tasks need the shop-pinned WRITE scope on the transaction,
+ * client-linked tasks the client row's visibility), expressed as SQL so it can sit inside a task WHERE. Deal ids are
  * matched on entity_id alone because booking tasks may be stored as entity_type
  * "quote" with the booking id (see findByClient).
  */
 function buildEntityVisibleCond(scope: Scope): SQL {
-  const txnWhere = sql.join(buildTransactionRecordScopeConds(scope), sql` AND `);
+  const txnConds = buildTransactionWriteScopeConds(scope);
+  const txnWhere = txnConds.length ? sql.join(txnConds, sql` AND `) : sql`true`;
   const dealIds = (source: typeof quote | typeof booking | typeof enquiry_table) =>
     sql`SELECT ${source.id}::text FROM ${source} INNER JOIN ${transaction} ON ${source.transaction_id} = ${transaction.id} WHERE ${txnWhere}`;
   const clientConds: SQL[] = [eq(clientTable.orgId, scope.orgId)];
@@ -502,7 +503,7 @@ export const taskRepository = {
    * client)? Uses the same partitioned record-level conditions as the entity's
    * own detail page. Unknown entity types are not in scope.
    */
-  async entityInScope(entityType: string, entityId: string, scope: ScopeOrTrusted): Promise<boolean> {
+  async entityInScope(entityType: string, entityId: string, scope: ScopeOrTrusted, options: { forWrite?: boolean } = {}): Promise<boolean> {
     if (entityType === "client") {
       const s = scope as Scope;
       const conds: SQL[] = [eq(clientTable.id, entityId)];
@@ -512,7 +513,8 @@ export const taskRepository = {
       const [row] = await db.select({ id: clientTable.id }).from(clientTable).where(and(...conds)).limit(1);
       return !!row;
     }
-    const txnConds = buildTransactionRecordScopeConds(scope);
+    // Attaching a task to a deal is a write to that deal: shop-pinned like the board.
+    const txnConds = options.forWrite ? buildTransactionWriteScopeConds(scope) : buildTransactionRecordScopeConds(scope);
     if (entityType === "transaction") {
       const [row] = await db.select({ id: transaction.id }).from(transaction).where(and(eq(transaction.id, entityId), ...txnConds)).limit(1);
       return !!row;
@@ -539,8 +541,10 @@ export const taskRepository = {
 
   /**
    * Tasks on the client itself plus tasks on any of its enquiries, quotes and
-   * bookings (booking tasks may be stored as entity_type "quote" with the
-   * booking id, so the deal ids are matched on entity_id alone). The service
+   * bookings in the caller's shop (agents and branch managers do not see tasks
+   * on another shop's deals; client-level tasks stay visible). Booking tasks may be
+   * stored as entity_type "quote" with the booking id, so the deal ids are matched
+   * on entity_id alone. The service
    * has already verified the caller can open the client.
    */
   async findByClient(clientId: string, scope?: Scope): Promise<TaskNew[]> {
@@ -549,7 +553,7 @@ export const taskRepository = {
         .select({ id: source.id })
         .from(source)
         .innerJoin(transaction, eq(source.transaction_id, transaction.id))
-        .where(and(eq(transaction.client_id, clientId), ...buildTransactionRecordScopeConds(scope ?? { orgId: null })));
+        .where(and(eq(transaction.client_id, clientId), ...buildTransactionScopeConds(scope ?? { orgId: null })));
       return rows.map((r) => r.id);
     };
     const dealIds = (await Promise.all([idsFor(quote), idsFor(booking), idsFor(enquiry_table)])).flat();
@@ -576,6 +580,12 @@ export const taskRepository = {
    * assignee before an update, so it can tell an actual reassignment apart
    * from a resave that merely echoes back the same `userId`.
    */
+  /** A task of the caller's organisation, whatever the task / deal scope (used only to tell 403 from 404). */
+  async findByIdInOrg(id: string, orgId: string): Promise<TaskNew | undefined> {
+    const [result] = await db.select().from(tasks).where(and(eq(tasks.id, id), eq(tasks.orgId, orgId))).limit(1);
+    return result;
+  },
+
   async findById(id: string, scope?: Scope): Promise<TaskNew | undefined> {
     // Write-scope: this feeds the update path, so it must see exactly the tasks update can touch.
     const conds: SQL[] = [eq(tasks.id, id), ...taskWritableConds(scope)];

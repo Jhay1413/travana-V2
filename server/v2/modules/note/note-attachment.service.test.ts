@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("../../config/s3", () => ({
   s3Client: { send: vi.fn().mockResolvedValue({}) },
@@ -25,6 +25,7 @@ vi.mock("./note.repository", () => ({
     findById: vi.fn(),
     findByIdWithOrg: vi.fn(),
     transactionBelongsToOrg: vi.fn(),
+    transactionInWriteScope: vi.fn(),
     clientBelongsToOrg: vi.fn(),
   },
 }));
@@ -128,6 +129,36 @@ describe("noteAttachmentService listing", () => {
   });
 });
 
+describe("noteAttachmentService.uploadMany on a deal's note (write scope)", () => {
+  afterEach(() => {
+    vi.mocked(noteRepository.findById).mockReset();
+    vi.mocked(noteRepository.transactionInWriteScope).mockReset();
+    vi.mocked(noteRepository.transactionBelongsToOrg).mockReset();
+  });
+
+  beforeEach(() => {
+    vi.mocked(noteRepository.findByIdWithOrg).mockResolvedValue({ id: "n1", orgId: "org1" } as never);
+    vi.mocked(noteRepository.findById).mockResolvedValue({ id: "n1", transaction_id: "t1" } as never);
+    vi.mocked(noteRepository.transactionInWriteScope).mockResolvedValue(false);
+  });
+
+  it("403s when the deal is readable but belongs to another shop", async () => {
+    vi.mocked(noteRepository.transactionBelongsToOrg).mockResolvedValue(true);
+    await expect(noteAttachmentService.uploadMany("n1", [FILE], ORG_SCOPE)).rejects.toMatchObject({
+      statusCode: 403,
+      message: "This deal belongs to another shop",
+    });
+    expect(noteAttachmentRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("404s when the deal is not readable either (e.g. a no-shop agent, a homeworker's deal)", async () => {
+    vi.mocked(noteRepository.transactionBelongsToOrg).mockResolvedValue(false);
+    await expect(noteAttachmentService.uploadMany("n1", [FILE], ORG_SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(noteRepository.transactionBelongsToOrg).toHaveBeenCalledWith("t1", "org1", ORG_SCOPE);
+    expect(noteAttachmentRepository.create).not.toHaveBeenCalled();
+  });
+});
+
 describe("noteAttachmentService download and delete", () => {
   it("hides an attachment whose note is out of scope (download)", async () => {
     vi.mocked(noteAttachmentRepository.findById).mockResolvedValue(ATTACHMENT as never);
@@ -188,7 +219,8 @@ describe("noteAttachmentService.listByClientId", () => {
     vi.mocked(noteAttachmentRepository.findByClientId).mockResolvedValue([ATTACHMENT] as never);
     const out = await noteAttachmentService.listByClientId("c1", false, ORG_SCOPE);
     expect(out).toEqual([ATTACHMENT]);
-    expect(noteAttachmentRepository.findByClientId).toHaveBeenCalledWith("c1", false);
+    // The deal part of the list is shop-pinned, so the caller's scope is passed down.
+    expect(noteAttachmentRepository.findByClientId).toHaveBeenCalledWith("c1", false, ORG_SCOPE);
   });
 
   it("skips the org check for trusted callers", async () => {

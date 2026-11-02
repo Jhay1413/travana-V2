@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDueDateTime, formatNoActivityLabel, isValidDrop } from "./pipeline-helpers";
+import { formatDueDateTime, formatNoActivityLabel, isValidDrop, refusedMoveTitle } from "./pipeline-helpers";
 
 // Dates are built from local components (not ISO/UTC strings) so the
 // expected output doesn't depend on the machine's timezone.
@@ -55,6 +55,16 @@ describe("isValidDrop", () => {
     expect(isValidDrop("Booked", "Lost")).toBe(false);
   });
 
+  it("rejects parking a booking in Future", () => {
+    expect(isValidDrop("Booked", "Future")).toBe(false);
+  });
+
+  it("still allows parking an open deal in Future", () => {
+    expect(isValidDrop("Enquiry", "Future")).toBe(true);
+    expect(isValidDrop("Quoted", "Future")).toBe(true);
+    expect(isValidDrop("In Play", "Future")).toBe(true);
+  });
+
   it("allows a lost deal to be restored into Enquiry, Quoted, In Play, or Future", () => {
     expect(isValidDrop("Lost", "Enquiry")).toBe(true);
     expect(isValidDrop("Lost", "Quoted")).toBe(true);
@@ -86,5 +96,13 @@ describe("isValidDrop", () => {
     expect(isValidDrop("Booked", "Enquiry")).toBe(false);
     expect(isValidDrop("Booked", "Quoted")).toBe(false);
     expect(isValidDrop("Booked", "In Play")).toBe(false);
+  });
+});
+
+describe("refusedMoveTitle", () => {
+  it("gives the real reason for each refusal", () => {
+    expect(refusedMoveTitle("Booked", "Future")).toBe("A booking can't be moved to Future");
+    expect(refusedMoveTitle("Enquiry", "Booked")).toBe("Create a quote before booking");
+    expect(refusedMoveTitle("Quoted", "Enquiry")).toBe("Deals can't move back to an earlier stage");
   });
 });

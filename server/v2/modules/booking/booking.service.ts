@@ -1,4 +1,7 @@
 import { bookingRepository } from "./booking.repository";
+import { withoutProtectedKeys } from "../quote/quote-child.validator";
+import { assertBookingWritable, assertBookingDealWritable } from "./booking-access";
+import type { BookingChildKind } from "./booking.types";
 import { newQuoteRepository } from "../quote/quote.repository";
 import { quoteImageRepository } from "../quote/quote-image.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
@@ -47,16 +50,17 @@ async function assertTransactionInScope(transactionId: string, scope: ScopeOrTru
   if (!ok) throw new AppError("Booking not found", 404);
 }
 
-async function assertFlightInScope(flightId: string, scope: ScopeOrTrusted) {
-  if (effectiveOrgId(scope) === null) return;
-  const ok = await bookingRepository.flightInScope(flightId, scope);
-  if (!ok) throw new AppError("Flight not found", 404);
-}
+// Writes use the shop-pinned write scope (403 for another shop's booking, 404 otherwise); reads above
+// keep the org-wide record scope. See booking-access.ts.
+const assertBookingInScopeForWrite = assertBookingWritable;
+const assertTransactionInScopeForWrite = assertBookingDealWritable;
 
-async function assertAccommodationInScope(accommodationId: string, scope: ScopeOrTrusted) {
-  if (effectiveOrgId(scope) === null) return;
-  const ok = await bookingRepository.accommodationInScope(accommodationId, scope);
-  if (!ok) throw new AppError("Accommodation not found", 404);
+/** A child row is only reachable through its OWN booking: the booking named in the path must pass the
+ *  write scope and the child must belong to it. Anything else is a 404. */
+async function assertChildOfBookingForWrite(kind: BookingChildKind, bookingId: string, childId: string, scope: ScopeOrTrusted) {
+  await assertBookingInScopeForWrite(bookingId, scope);
+  const owner = await bookingRepository.findChildBookingId(kind, childId);
+  if (owner?.toLowerCase() !== bookingId.toLowerCase()) throw new AppError(kind === "flight" ? "Flight not found" : "Accommodation not found", 404);
 }
 
 // Total price the customer pays = sales price − discount + service charge.
@@ -172,8 +176,13 @@ export const bookingService = {
     // Surface the customer-facing total (sales − discount + service charge) and a per-person
     // figure derived from it, so the detail page displays consistent values regardless of any
     // previously-stored price_per_person.
+    // Readable but not editable = another shop's deal in the same organisation; the UI hides write controls.
+    // A social media manager is read-only on bookings, whatever shop they are in.
+    const readOnlyForRole = (scope as Scope).orgRole === "social_media_manager";
+    const can_edit = readOnlyForRole ? false : effectiveOrgId(scope) === null ? true : await bookingRepository.bookingInScopeForWrite(id, scope);
     return {
       ...b,
+      can_edit,
       service_commission,
       total_price: calcTotalPrice(b.sales_price, b.discounts, b.service_charge).toFixed(2),
       price_per_person: calcPricePerPerson(b.sales_price, b.adult, b.child, b.discounts, b.service_charge),
@@ -186,7 +195,7 @@ export const bookingService = {
     const q = await newQuoteRepository.findById(quoteId);
     if (!q) throw new AppError("Quote not found", 404);
 
-    await assertTransactionInScope(q.transaction_id, scope);
+    await assertTransactionInScopeForWrite(q.transaction_id, scope);
 
     const txn = await transactionRepository.findById(q.transaction_id);
     if (!txn) throw new AppError("Transaction not found", 404);
@@ -428,7 +437,7 @@ export const bookingService = {
     // A non-empty HAYS Ref must be in the HAY- format; it is saved in canonical form.
     const haysRef = normaliseNewHaysRef(rawData.hays_ref);
     const data = haysRef ? { ...rawData, hays_ref: haysRef } : rawData;
-    await assertTransactionInScope(data.transaction_id, scope);
+    await assertTransactionInScopeForWrite(data.transaction_id, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
 
     const txn = await transactionRepository.findById(data.transaction_id);
@@ -481,7 +490,7 @@ export const bookingService = {
   },
 
   async updateBooking(id: string, rawData: UpdateBookingPayload, scope: ScopeOrTrusted) {
-    await assertBookingInScope(id, scope);
+    await assertBookingInScopeForWrite(id, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, rawData, () => bookingRepository.findTourOperatorIds(id));
     // The stored HAYS Ref is only needed to skip the format check for an unchanged legacy value.
     const stored = "hays_ref" in rawData ? await bookingRepository.findById(id) : undefined;
@@ -596,7 +605,7 @@ export const bookingService = {
   },
 
   async deleteBooking(id: string, scope: ScopeOrTrusted) {
-    await assertBookingInScope(id, scope);
+    await assertBookingInScopeForWrite(id, scope);
     const booking = await bookingRepository.findById(id);
     if (booking?.transaction_id) {
       await referralService.voidReferralsByTransaction(booking.transaction_id);
@@ -605,24 +614,24 @@ export const bookingService = {
   },
 
   async addFlight(bookingId: string, flightData: Omit<InsertBookingFlight, 'booking_id'>, scope: ScopeOrTrusted) {
-    await assertBookingInScope(bookingId, scope);
+    await assertBookingInScopeForWrite(bookingId, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, flightData, async () => []);
-    return bookingRepository.addFlight({ ...flightData, booking_id: bookingId });
+    return bookingRepository.addFlight({ ...withoutProtectedKeys(flightData), booking_id: bookingId });
   },
 
-  async removeFlight(flightId: string, scope: ScopeOrTrusted) {
-    await assertFlightInScope(flightId, scope);
+  async removeFlight(bookingId: string, flightId: string, scope: ScopeOrTrusted) {
+    await assertChildOfBookingForWrite("flight", bookingId, flightId, scope);
     await bookingRepository.removeFlight(flightId);
   },
 
   async addAccommodation(bookingId: string, accommodationData: Omit<InsertBookingAccomodation, 'booking_id'>, scope: ScopeOrTrusted) {
-    await assertBookingInScope(bookingId, scope);
+    await assertBookingInScopeForWrite(bookingId, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, accommodationData, async () => []);
-    return bookingRepository.addAccommodation({ ...accommodationData, booking_id: bookingId });
+    return bookingRepository.addAccommodation({ ...withoutProtectedKeys(accommodationData), booking_id: bookingId });
   },
 
-  async removeAccommodation(accommodationId: string, scope: ScopeOrTrusted) {
-    await assertAccommodationInScope(accommodationId, scope);
+  async removeAccommodation(bookingId: string, accommodationId: string, scope: ScopeOrTrusted) {
+    await assertChildOfBookingForWrite("accommodation", bookingId, accommodationId, scope);
     await bookingRepository.removeAccommodation(accommodationId);
   },
 
@@ -632,7 +641,7 @@ export const bookingService = {
   },
 
   async updateBookingTags(id: string, tags: string[], scope: ScopeOrTrusted) {
-    await assertBookingInScope(id, scope);
+    await assertBookingInScopeForWrite(id, scope);
     await tagService.updateBookingTags(id, tags);
     return tagService.getBookingTags(id);
   },

@@ -90,7 +90,7 @@ describe("free-quote scoping with a real Scope", () => {
 describe("newQuoteRepository.findRecentClientEngagement - period HAVING", () => {
   it("renders >= and < on max(viewed_at) for a bounded range", async () => {
     await newQuoteRepository.findRecentClientEngagement({
-      orgId: "o1",
+      scope: TRUSTED,
       viewedFrom: new Date("2026-10-14T23:00:00Z"),
       viewedBefore: new Date("2026-10-15T23:00:00Z"),
     });
@@ -102,8 +102,21 @@ describe("newQuoteRepository.findRecentClientEngagement - period HAVING", () => 
   });
 
   it("adds no HAVING when no period bounds are given", async () => {
-    await newQuoteRepository.findRecentClientEngagement({ orgId: "o1" });
+    await newQuoteRepository.findRecentClientEngagement({ scope: TRUSTED });
     expect(havingCalls).toHaveLength(1);
     expect(havingCalls[0]).toBeUndefined();
+  });
+
+  it("applies the transaction scope: org + own shop for an agent, nothing at all for a no-shop agent", async () => {
+    const agent: Scope = { orgId: "org1", branchId: "b1", orgRole: "agent", orgRoles: ["agent"], userId: "u1", branchType: "shop", ownsHomeworkerBranch: false };
+    await newQuoteRepository.findRecentClientEngagement({ scope: agent });
+    const shop = renderWhere(0);
+    expect(shop.text).toContain("org_id");
+    expect(shop.text).toContain("branch_id");
+    expect(shop.params).toEqual(expect.arrayContaining(["org1", "b1"]));
+
+    resetCapture();
+    await newQuoteRepository.findRecentClientEngagement({ scope: { ...agent, branchId: null } });
+    expect(renderWhere(0).text).toContain("false");
   });
 });

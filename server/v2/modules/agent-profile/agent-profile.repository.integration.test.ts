@@ -1,7 +1,8 @@
 // Needs a live Postgres: run with `npm run test:integration`. Written, not run by `npm test`.
 import { describe, it, expect, beforeEach } from "vitest";
 import { db } from "../../config/database";
-import { quoteViewsTable } from "@shared/schema";
+import { eq } from "drizzle-orm";
+import { quoteViewsTable, transaction } from "@shared/schema";
 import { agentProfileRepository } from "./agent-profile.repository";
 import {
   truncateAll, makeOrg, makeBranch, makeUser, makeClient, makeBranchMember,
@@ -79,8 +80,27 @@ describe("agentProfileRepository (integration)", () => {
     const departures = await agentProfileRepository.listDepartures({ orgId: orgA.id, userId: ann.id }, "2026-10-19", "2026-10-26");
     expect(departures.map((d) => d.travelDate)).toEqual(["2026-10-21"]);
 
+    // The LOST booking (commission 10, seeded above) must not appear: lost deals are never "biggest deals".
     const deals = await agentProfileRepository.listBiggestDeals({ orgId: orgA.id, userId: ann.id }, 5);
-    expect(deals.map((d) => d.commission)).toEqual([1000, 10]);
+    expect(deals.map((d) => d.commission)).toEqual([1000]);
+  });
+
+  it("biggest deals leave out lost deals however they were lost, and keep live ones in commission order", async () => {
+    // A live deal with a NULL booking status (counts as live) and a smaller commission.
+    const live = await deal(orgA.id, branchX.id, ann.id);
+    await makeBooking({ transaction_id: live.id, package_commission: "300", date_created: IN_WINDOW, booking_status: null });
+    // A huge booking on a deal that was marked lost (transaction deactivated): still excluded.
+    const lostDeal = await deal(orgA.id, branchX.id, ann.id);
+    await makeBooking({ transaction_id: lostDeal.id, package_commission: "5000", date_created: IN_WINDOW, booking_status: "BOOKED" });
+    await db.update(transaction).set({ is_active: false }).where(eq(transaction.id, lostDeal.id));
+    // A huge booking whose own status is LOST: excluded.
+    const lostBooking = await deal(orgA.id, branchX.id, ann.id);
+    await makeBooking({ transaction_id: lostBooking.id, package_commission: "7000", date_created: IN_WINDOW, booking_status: "LOST" });
+
+    const deals = await agentProfileRepository.listBiggestDeals({ orgId: orgA.id, userId: ann.id }, 5);
+    expect(deals.map((d) => d.commission)).toEqual([1000, 300]);
+    expect(deals.map((d) => d.transactionId)).not.toContain(lostDeal.id);
+    expect(deals.map((d) => d.transactionId)).not.toContain(lostBooking.id);
   });
 
   it("lifetime profit covers every booking and upsell of the agent only", async () => {

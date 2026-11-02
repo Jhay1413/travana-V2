@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { isAxiosError } from "axios";
+import { requestErrorStatus } from "@/lib/request-error";
 import { quoteKeys, transactionKeys } from "@/hooks/queries";
 import { useUpdateQuote } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
@@ -36,7 +36,7 @@ export function useQuoteStatusUpdate(quoteId: string) {
             toast({ title: "Quote marked as lost" });
           },
           onError: (error) => {
-            if (isAxiosError(error) && error.response?.status === 409) {
+            if (requestErrorStatus(error) === 409) {
               toast({
                 title: "Reassign the primary quote first",
                 description:

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./sms.repository", () => ({
   smsRepository: {
     findClientById: vi.fn(),
+    isOrgActive: vi.fn(),
     findActiveTemplatesByTrigger: vi.fn(),
     isBookingFullyPaid: vi.fn(),
     hasRecentAutoSend: vi.fn(),
@@ -27,6 +28,7 @@ function template(id: string, category: string) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(repo.isOrgActive).mockResolvedValue(true);
   vi.mocked(repo.findClientById).mockResolvedValue({
     id: "c1", orgId: "o1", smsOptIn: true, phoneNumber: "07700900123", firstName: "Ann", surename: "Lee",
   } as never);
@@ -93,5 +95,31 @@ describe("days_before_departure sweep and fully-paid bookings", () => {
     await fireAutoTriggerForClient({ clientId: "c1", autoTrigger: "on_booking_create", dedupeSince: SINCE, bookingId: "bk1" });
 
     expect(repo.isBookingFullyPaid).not.toHaveBeenCalled();
+  });
+
+  it("fires only the templates configured for the days-before value being swept", async () => {
+    vi.mocked(repo.findActiveTemplatesByTrigger).mockResolvedValue([
+      { ...template("t14", "custom"), triggerDaysBefore: 14 },
+      { ...template("t7", "custom"), triggerDaysBefore: 7 },
+      { ...template("tnull", "custom"), triggerDaysBefore: null },
+    ] as never);
+
+    await fireAutoTriggerForClient({
+      clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE, bookingId: "bk1", triggerDaysBefore: 7,
+    });
+
+    expect(repo.hasRecentAutoSend).toHaveBeenCalledTimes(1);
+    expect(repo.hasRecentAutoSend).toHaveBeenCalledWith("t7", "c1", SINCE);
+  });
+
+  it("does not filter by days when no value is given (event triggers)", async () => {
+    vi.mocked(repo.findActiveTemplatesByTrigger).mockResolvedValue([
+      { ...template("t14", "custom"), triggerDaysBefore: 14 },
+      { ...template("t7", "custom"), triggerDaysBefore: 7 },
+    ] as never);
+
+    await fireAutoTriggerForClient({ clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE });
+
+    expect(repo.hasRecentAutoSend).toHaveBeenCalledTimes(2);
   });
 });

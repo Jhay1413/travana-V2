@@ -200,15 +200,17 @@ export const quoteController = {
 
   updateFlight: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const flightId = req.params.flightId as string;
-    const flight = await newQuoteService.updateFlight(flightId, req.body, scope);
+    const flight = await newQuoteService.updateFlight(quoteId, flightId, req.body, scope);
     return successResponse(res, flight, "Flight updated successfully");
   }),
 
   removeFlight: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const flightId = req.params.flightId as string;
-    await newQuoteService.removeFlight(flightId, scope);
+    await newQuoteService.removeFlight(quoteId, flightId, scope);
     res.status(204).send();
   }),
 
@@ -221,15 +223,17 @@ export const quoteController = {
 
   updateAccommodation: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const accommodationId = req.params.accommodationId as string;
-    const accommodation = await newQuoteService.updateAccommodation(accommodationId, req.body, scope);
+    const accommodation = await newQuoteService.updateAccommodation(quoteId, accommodationId, req.body, scope);
     return successResponse(res, accommodation, "Accommodation updated successfully");
   }),
 
   removeAccommodation: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const accommodationId = req.params.accommodationId as string;
-    await newQuoteService.removeAccommodation(accommodationId, scope);
+    await newQuoteService.removeAccommodation(quoteId, accommodationId, scope);
     res.status(204).send();
   }),
 
@@ -242,8 +246,9 @@ export const quoteController = {
 
   removeTransfer: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const transferId = req.params.transferId as string;
-    await newQuoteService.removeTransfer(transferId, scope);
+    await newQuoteService.removeTransfer(quoteId, transferId, scope);
     res.status(204).send();
   }),
 
@@ -256,8 +261,9 @@ export const quoteController = {
 
   removePassenger: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const passengerId = req.params.passengerId as string;
-    await newQuoteService.removePassenger(passengerId, scope);
+    await newQuoteService.removePassenger(quoteId, passengerId, scope);
     res.status(204).send();
   }),
 
@@ -273,6 +279,13 @@ export const quoteController = {
     await newQuoteService.updateQuoteTags(quoteId, tags, scope);
     const updatedQuote = await newQuoteService.getQuoteWithDetails(quoteId, scope);
     return successResponse(res, updatedQuote, "Tags updated successfully");
+  }),
+
+  // DELETE /quotes/:id/tags/:tagId - detach one tag from this quote only (never deletes the tag).
+  detachQuoteTag: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    await newQuoteService.detachQuoteTag(req.params.id as string, req.params.tagId as string, scope);
+    res.status(204).send();
   }),
 
   getQuoteTags: asyncHandler(async (req: Request, res: Response) => {

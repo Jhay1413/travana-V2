@@ -10,6 +10,12 @@ vi.mock("./quote.service", () => ({
     getFreeQuoteStatusCounts: vi.fn(),
     getRecentClientEngagement: vi.fn(),
     setAccepted: vi.fn(),
+    updateFlight: vi.fn(),
+    removeFlight: vi.fn(),
+    updateAccommodation: vi.fn(),
+    removeAccommodation: vi.fn(),
+    removeTransfer: vi.fn(),
+    removePassenger: vi.fn(),
   },
 }));
 // These two are imported at module load but unused by the methods under test.
@@ -244,5 +250,43 @@ describe("quoteController.listRecentClientEngagement — query parsing", () => {
     expect((await call({ limit: "500" }))?.[1]).toBe(50);
     expect((await call({ limit: "abc" }))?.[1]).toBe(10);
     expect((await call({ period: "month" }))?.[2]).toEqual({ mine: false, period: undefined });
+  });
+});
+
+describe("quoteController child endpoints pass the quote id from the path to the service", () => {
+  const params = { id: "q1", flightId: "f1", accommodationId: "a1", transferId: "t1", passengerId: "p1" };
+  const scopeArg = expect.objectContaining({ orgId: "o1", branchId: "br1", orgRole: "agent" });
+
+  it("updateFlight", async () => {
+    vi.mocked(newQuoteService.updateFlight).mockResolvedValue({ id: "f1" } as never);
+    await quoteController.updateFlight(req({ params, body: { flight_number: "X" } }), mockRes(), vi.fn());
+    expect(newQuoteService.updateFlight).toHaveBeenCalledWith("q1", "f1", { flight_number: "X" }, scopeArg);
+  });
+
+  it("removeFlight answers 204", async () => {
+    const res = mockRes();
+    await quoteController.removeFlight(req({ params }), res, vi.fn());
+    expect(newQuoteService.removeFlight).toHaveBeenCalledWith("q1", "f1", scopeArg);
+    expect(res.status).toHaveBeenCalledWith(204);
+  });
+
+  it("updateAccommodation, removeAccommodation, removeTransfer, removePassenger", async () => {
+    vi.mocked(newQuoteService.updateAccommodation).mockResolvedValue({ id: "a1" } as never);
+    await quoteController.updateAccommodation(req({ params, body: { room_type: "R" } }), mockRes(), vi.fn());
+    await quoteController.removeAccommodation(req({ params }), mockRes(), vi.fn());
+    await quoteController.removeTransfer(req({ params }), mockRes(), vi.fn());
+    await quoteController.removePassenger(req({ params }), mockRes(), vi.fn());
+    expect(newQuoteService.updateAccommodation).toHaveBeenCalledWith("q1", "a1", { room_type: "R" }, scopeArg);
+    expect(newQuoteService.removeAccommodation).toHaveBeenCalledWith("q1", "a1", scopeArg);
+    expect(newQuoteService.removeTransfer).toHaveBeenCalledWith("q1", "t1", scopeArg);
+    expect(newQuoteService.removePassenger).toHaveBeenCalledWith("q1", "p1", scopeArg);
+  });
+
+  it("a service 404 for a child addressed through the wrong quote reaches the error handler", async () => {
+    const next = vi.fn();
+    vi.mocked(newQuoteService.removeFlight).mockRejectedValue(new AppError("Flight not found", 404));
+    await quoteController.removeFlight(req({ params }), mockRes(), next);
+    await Promise.resolve(); // flush asyncHandler's .catch
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
   });
 });

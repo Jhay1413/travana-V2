@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { isAxiosError } from "axios";
+import { requestErrorStatus } from "@/lib/request-error";
 import { Ban, CalendarClock, CheckSquare, ChevronDown, Copy, Ellipsis, Pencil, RefreshCw, RotateCcw, Star, Ticket as TicketIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -136,7 +136,7 @@ export function QuoteActionsMenu({
           toast({ title: "Quote marked as lost" });
         },
         onError: (error) => {
-          if (isAxiosError(error) && error.response?.status === 400) {
+          if (requestErrorStatus(error) === 400) {
             toast({
               title: "Can't mark this deal as lost",
               description: "This deal has already been converted to a booking.",

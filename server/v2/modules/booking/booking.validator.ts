@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { flightBody, accommodationBody } from "../quote/quote-child.validator";
 import { HAYS_REF_MESSAGE, isValidHaysRef } from "@shared/booking-refs";
 
 export const addImagesValidator = z.object({
@@ -48,3 +49,8 @@ export const convertQuoteToBookingValidator = z.object({
     supplierRef: z.string({ required_error: "Supplier ref is required" }).trim().min(1, "Supplier ref is required"),
   }),
 });
+
+// POST /:id/flights and /:id/accommodations: the same columns as the quote children; id and
+// booking_id are rejected so a row can never be created under, or moved to, another booking.
+export const addBookingFlightValidator = z.object({ params: z.object({ id: z.string().uuid("Invalid booking id") }), body: flightBody });
+export const addBookingAccommodationValidator = z.object({ params: z.object({ id: z.string().uuid("Invalid booking id") }), body: accommodationBody });

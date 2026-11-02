@@ -17,8 +17,12 @@ import packageTypeRoutes from './package-type/package-type.routes';
 import cruiseExtraRoutes from './cruise-extra/cruise-extra.routes';
 import cruiseVoyageRoutes from './cruise-voyage/cruise-voyage.routes';
 import deletionCodeRoutes from './deletion-code/deletion-code.routes';
+import { settingsWriteGuard } from './settings-write-guard';
 
 const router = Router();
+// Writes need an admin role (plus the everyday quick-adds); reads stay open. See settings-write-guard.ts.
+router.use(settingsWriteGuard);
+
 router.use('/destinations',       destinationRoutes);
 router.use('/resorts',            resortRoutes);
 router.use('/accommodations',     accommodationRoutes);

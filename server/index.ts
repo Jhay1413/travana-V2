@@ -10,6 +10,7 @@ import websitePublicRoutes from "./routes/website-public.routes";
 import portalRoutes from "./routes/portal.routes";
 import { warmPool } from "./v2/config/database";
 import { startImageUpscaleWorker } from "./v2/modules/image-upscale/image-upscale.worker";
+import { startDepartureSweepScheduler } from "./v2/modules/sms/sms.cron";
 
 const app = express();
 const httpServer = createServer(app);
@@ -128,6 +129,9 @@ app.use((req, res, next) => {
 
       // Fail upscale jobs a dead process left mid-run and re-queue the unstarted ones.
       startImageUpscaleWorker();
+
+      // 09:00 UK departure reminder texts. OFF unless SMS_DEPARTURE_SWEEP_ENABLED=true (it texts real clients).
+      startDepartureSweepScheduler(process.env, log);
     },
   );
 })();

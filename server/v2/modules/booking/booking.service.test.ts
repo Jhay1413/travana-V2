@@ -8,8 +8,11 @@ vi.mock("./booking.repository", () => ({
   bookingRepository: {
     bookingInScope: vi.fn(),
     transactionInScope: vi.fn(),
-    flightInScope: vi.fn(),
-    accommodationInScope: vi.fn(),
+    bookingInScopeForWrite: vi.fn(),
+    transactionInScopeForWrite: vi.fn(),
+    findChildBookingId: vi.fn(),
+    removeFlight: vi.fn(),
+    removeAccommodation: vi.fn(),
     findById: vi.fn(),
     findByTransactionId: vi.fn(),
     findWithDetails: vi.fn(),
@@ -101,6 +104,19 @@ beforeEach(() => {
 });
 
 describe("bookingService.getBookingWithDetails — price math", () => {
+  it("S10: can_edit is false for a social media manager, and follows the write scope for others", async () => {
+    vi.mocked(bookingRepository.findWithDetails).mockResolvedValue({ id: "b1", sales_price: "1", adult: 1, child: 0 } as never);
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(true as never);
+    const smm = { orgId: "o1", orgRole: "social_media_manager", orgRoles: ["social_media_manager"], userId: "s1", branchId: null } as never;
+    const agent = { orgId: "o1", orgRole: "agent", orgRoles: ["agent"], userId: "a1", branchId: "b1" } as never;
+
+    expect((await bookingService.getBookingWithDetails("b1", smm)).can_edit).toBe(false);
+    expect((await bookingService.getBookingWithDetails("b1", agent)).can_edit).toBe(true);
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(false as never);
+    expect((await bookingService.getBookingWithDetails("b1", agent)).can_edit).toBe(false);
+  });
+
   it("adds the line-item service_commission from the repository", async () => {
     vi.mocked(bookingRepository.findWithDetails).mockResolvedValue({ id: "b1", sales_price: "100", adult: 1, child: 0 } as never);
     vi.mocked(bookingRepository.getServiceCommission).mockResolvedValue(31.25 as never);
@@ -535,6 +551,8 @@ describe("bookingService - operator must be in the org's list", () => {
     linked.mockImplementation(async (_org, ids) => ids.filter((id) => id === OP_A));
     vi.mocked(bookingRepository.transactionInScope).mockResolvedValue(true as never);
     vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.transactionInScopeForWrite).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(true as never);
     vi.mocked(bookingRepository.update).mockResolvedValue({ id: "b1" } as never);
     vi.mocked(bookingRepository.findTourOperatorIds).mockResolvedValue([]);
   });
@@ -567,5 +585,106 @@ describe("bookingService - operator must be in the org's list", () => {
     vi.mocked(newQuoteRepository.findById).mockResolvedValue(undefined as never);
     await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", ORG).catch(() => undefined);
     expect(linked).not.toHaveBeenCalled();
+  });
+});
+
+// Owner decision: agents and branch managers cannot edit or delete another shop's bookings. Writes use the
+// shop-pinned write scope; the org-wide read scope is not enough.
+describe("bookingService - writes use the shop-pinned write scope", () => {
+  const AGENT = { orgId: "o1", branchId: "b1", orgRole: "agent", orgRoles: ["agent"], userId: "u1" } as never;
+
+  beforeEach(() => {
+    // The org-wide read scope would allow every one of these; only the write scope refuses.
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.transactionInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(false as never);
+    vi.mocked(bookingRepository.transactionInScopeForWrite).mockResolvedValue(false as never);
+  });
+
+  const writes: Array<[string, () => Promise<unknown>]> = [
+    ["updateBooking", () => bookingService.updateBooking("b1", { title: "x" } as never, AGENT)],
+    ["deleteBooking", () => bookingService.deleteBooking("b1", AGENT)],
+    ["addFlight", () => bookingService.addFlight("b1", {} as never, AGENT)],
+    ["addAccommodation", () => bookingService.addAccommodation("b1", {} as never, AGENT)],
+    ["removeFlight", () => bookingService.removeFlight("b1", "f1", AGENT)],
+    ["removeAccommodation", () => bookingService.removeAccommodation("b1", "a1", AGENT)],
+    ["createBooking", () => bookingService.createBooking({ transaction_id: "t1" } as never, AGENT)],
+  ];
+
+  for (const [name, call] of writes) {
+    it(`${name} is a 403 'This deal belongs to another shop' outside the caller's write scope and writes nothing`, async () => {
+      await expect(call()).rejects.toMatchObject({ statusCode: 403, message: "This deal belongs to another shop" });
+      expect(bookingRepository.update).not.toHaveBeenCalled();
+      expect(bookingRepository.remove).not.toHaveBeenCalled();
+      expect(bookingRepository.create).not.toHaveBeenCalled();
+      expect(bookingRepository.removeFlight).not.toHaveBeenCalled();
+      expect(bookingRepository.removeAccommodation).not.toHaveBeenCalled();
+    });
+  }
+
+  it("convertQuoteToBooking is a 403 when the quote's deal is another shop's", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", transaction_id: "t1" } as never);
+    await expect(bookingService.convertQuoteToBooking("q1", "HAY-1234567", "X", AGENT)).rejects.toMatchObject({ statusCode: 403 });
+    expect(bookingRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("a booking that is neither writable nor readable is a plain 404", async () => {
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(false as never);
+    await expect(bookingService.deleteBooking("b1", AGENT)).rejects.toMatchObject({ statusCode: 404, message: "Booking not found" });
+  });
+
+  it("tags are a write: updateBookingTags uses the write scope", async () => {
+    await expect(bookingService.updateBookingTags("b1", ["x"], AGENT)).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it("booking child ids are compared case-insensitively and a child body cannot re-parent", async () => {
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue("ABC00000-0000-4000-8000-000000000001" as never);
+    await bookingService.removeFlight("abc00000-0000-4000-8000-000000000001", "f1", AGENT);
+    expect(bookingRepository.removeFlight).toHaveBeenCalledWith("f1");
+    vi.mocked(bookingRepository.addFlight).mockResolvedValue({ id: "f2" } as never);
+    await bookingService.addFlight("b1", { flight_number: "X", booking_id: "other", id: "evil" } as never, AGENT);
+    expect(bookingRepository.addFlight).toHaveBeenCalledWith({ flight_number: "X", booking_id: "b1" });
+  });
+
+  it("reads still use the org-wide record scope", async () => {
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1" } as never);
+    await bookingService.getBookingById("b1", AGENT);
+    expect(bookingRepository.bookingInScope).toHaveBeenCalledWith("b1", AGENT);
+    expect(bookingRepository.bookingInScopeForWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe("bookingService - booking children are reachable only through their own booking", () => {
+  const AGENT = { orgId: "o1", branchId: "b1", orgRole: "agent", orgRoles: ["agent"], userId: "u1" } as never;
+
+  beforeEach(() => {
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(true as never);
+  });
+
+  it("removes a flight addressed through its own booking", async () => {
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue("bA" as never);
+    await bookingService.removeFlight("bA", "f1", AGENT);
+    expect(bookingRepository.findChildBookingId).toHaveBeenCalledWith("flight", "f1");
+    expect(bookingRepository.removeFlight).toHaveBeenCalledWith("f1");
+  });
+
+  it("removeFlight is a 404 when the flight belongs to a different booking than the path's", async () => {
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue("bB" as never);
+    await expect(bookingService.removeFlight("bA", "f1", AGENT)).rejects.toMatchObject({ statusCode: 404 });
+    expect(bookingRepository.removeFlight).not.toHaveBeenCalled();
+  });
+
+  it("removeAccommodation is a 404 when the accommodation belongs to a different booking than the path's", async () => {
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue("bB" as never);
+    await expect(bookingService.removeAccommodation("bA", "a1", AGENT)).rejects.toMatchObject({ statusCode: 404 });
+    expect(bookingRepository.findChildBookingId).toHaveBeenCalledWith("accommodation", "a1");
+    expect(bookingRepository.removeAccommodation).not.toHaveBeenCalled();
+  });
+
+  it("removeFlight is a 404 when the flight does not exist", async () => {
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue(null as never);
+    await expect(bookingService.removeFlight("bA", "f1", AGENT)).rejects.toMatchObject({ statusCode: 404 });
+    expect(bookingRepository.removeFlight).not.toHaveBeenCalled();
   });
 });

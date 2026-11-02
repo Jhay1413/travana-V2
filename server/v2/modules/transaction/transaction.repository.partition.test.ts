@@ -78,3 +78,25 @@ describe("transaction repository private scope builder applies the partition", (
     expect(allWheres().some((w) => w.text.includes("NOT IN (SELECT"))).toBe(false);
   });
 });
+
+describe("findAll with a clientId (the client page's deals list and deal history)", () => {
+  const AGENT_OF_SHOP_1: Scope = { ...SHOP_AGENT, branchId: "shop-1" };
+  const BRANCH_MANAGER: Scope = { ...SHOP_AGENT, branchId: "shop-1", orgRole: "branch_manager", orgRoles: ["branch_manager"] };
+
+  it.each([["agent", AGENT_OF_SHOP_1], ["branch_manager", BRANCH_MANAGER]] as const)("%s: only their own shop's deals are listed", async (_name, scope) => {
+    await transactionRepository.findAll(scope, { clientId: "c1" });
+    expect(allWheres().some((w) => w.params.includes("shop-1") && w.params.includes("c1"))).toBe(true);
+  });
+
+  it("org_admin and social_media_manager are not shop-pinned (org-wide history)", async () => {
+    await transactionRepository.findAll({ ...ORG_ADMIN, branchId: "shop-1" }, { clientId: "c1" });
+    await transactionRepository.findAll({ ...SMM, branchId: "shop-1" }, { clientId: "c1" });
+    expect(allWheres().some((w) => w.params.includes("shop-1"))).toBe(false);
+    expect(allWheres().every((w) => w.params.includes("c1"))).toBe(true);
+  });
+
+  it("a branch override is ignored once a client is named", async () => {
+    await transactionRepository.findAll({ ...ORG_ADMIN, branchId: null }, { clientId: "c1", branchOverride: "other-shop" });
+    expect(allWheres().some((w) => w.params.includes("other-shop"))).toBe(false);
+  });
+});

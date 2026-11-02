@@ -7,9 +7,11 @@ vi.mock("./note.repository", () => ({
     findById: vi.fn(),
     findByIdWithOrg: vi.fn(),
     transactionBelongsToOrg: vi.fn(),
+    transactionInWriteScope: vi.fn(),
     clientBelongsToOrg: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    remove: vi.fn(),
   },
 }));
 
@@ -158,5 +160,39 @@ describe("noteService sanitising on read", () => {
     vi.mocked(noteRepository.findById).mockResolvedValue(row(dirty));
     const n = await noteService.getNote("n1", TRUSTED);
     expect(n.content).not.toMatch(/script|javascript:/i);
+  });
+});
+
+// Owner decision: a note on a deal is a write to that deal, so it needs the shop-pinned write scope.
+describe("noteService - notes on a deal use the shop-pinned write scope", () => {
+  beforeEach(() => {
+    vi.mocked(noteRepository.transactionBelongsToOrg).mockResolvedValue(true);
+    vi.mocked(noteRepository.clientBelongsToOrg).mockResolvedValue(true);
+    vi.mocked(noteRepository.transactionInWriteScope).mockResolvedValue(false);
+    vi.mocked(noteRepository.findByIdWithOrg).mockResolvedValue({ id: "n1", orgId: "org1", transaction_id: "t1", client_id: null } as never);
+    vi.mocked(noteRepository.findById).mockResolvedValue({ id: "n1", transaction_id: "t1", content: "x" } as never);
+  });
+
+  it("create, update and delete are a 403 for a readable deal in another shop", async () => {
+    await expect(noteService.createNote({ transaction_id: "t1", content: "hi" } as never, SHOP_AGENT)).rejects.toMatchObject({ statusCode: 403, message: "This deal belongs to another shop" });
+    await expect(noteService.updateNote("n1", "new", SHOP_AGENT)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(noteService.deleteNote("n1", SHOP_AGENT)).rejects.toMatchObject({ statusCode: 403 });
+    expect(noteRepository.create).not.toHaveBeenCalled();
+    expect(noteRepository.update).not.toHaveBeenCalled();
+    expect(noteRepository.remove).not.toHaveBeenCalled();
+  });
+
+  it("allows the write inside the caller's shop", async () => {
+    vi.mocked(noteRepository.transactionInWriteScope).mockResolvedValue(true);
+    vi.mocked(noteRepository.create).mockResolvedValue({ id: "n2" } as never);
+    await noteService.createNote({ transaction_id: "t1", content: "hi" } as never, SHOP_AGENT);
+    expect(noteRepository.create).toHaveBeenCalled();
+  });
+
+  it("a client-level note is not a deal write", async () => {
+    vi.mocked(noteRepository.create).mockResolvedValue({ id: "n3" } as never);
+    await noteService.createNote({ client_id: "c1", content: "hi" } as never, SHOP_AGENT);
+    expect(noteRepository.transactionInWriteScope).not.toHaveBeenCalled();
+    expect(noteRepository.create).toHaveBeenCalled();
   });
 });

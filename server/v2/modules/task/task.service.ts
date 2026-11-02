@@ -1,6 +1,7 @@
 import { taskRepository, entityLink, type TaskWithClient } from "./task.repository";
 import { notificationRepository } from "../notification/notification.repository";
 import { AppError } from "../../utils/error-handler";
+import { refuseDealWrite } from "../../utils/deal-access";
 import { tasks } from "@shared/schema";
 import type { Scope } from "../../utils/scope";
 import { stripOwnershipFields } from "../../utils/ownership-fields";
@@ -75,10 +76,25 @@ const branchExistsInOrg = async (branchId: string, orgId: string) => !!(await br
  * that names a booking resolves as that booking. Returns the real entity type,
  * or null when the entity is out of scope / unknown.
  */
-async function resolveEntityInScope(entityType: string, entityId: string, scope: Scope): Promise<string | null> {
-  if (await taskRepository.entityInScope(entityType, entityId, scope)) return entityType;
-  if (entityType === "quote" && (await taskRepository.entityInScope("booking", entityId, scope))) return "booking";
+async function resolveEntityInScope(entityType: string, entityId: string, scope: Scope, options: { forWrite?: boolean } = {}): Promise<string | null> {
+  const extra = options.forWrite ? ([{ forWrite: true }] as const) : ([] as const);
+  if (await taskRepository.entityInScope(entityType, entityId, scope, ...extra)) return entityType;
+  if (entityType === "quote" && (await taskRepository.entityInScope("booking", entityId, scope, ...extra))) return "booking";
   return null;
+}
+
+/**
+ * A task write was refused by the task / deal write scope. If the task hangs off a deal the caller can READ (a
+ * same-organisation deal in another shop) that is a 403 with the reason; everything else stays a plain 404.
+ */
+async function refuseTaskWrite(id: string, scope: Scope | undefined): Promise<never> {
+  if (scope?.orgId) {
+    const task = await taskRepository.findByIdInOrg(id, scope.orgId);
+    if (task?.entityType && task.entityId && task.entityType !== "client" && (await resolveEntityInScope(task.entityType, task.entityId, scope))) {
+      refuseDealWrite(true, "Task not found");
+    }
+  }
+  throw new AppError("Task not found", 404);
 }
 
 export const taskService = {
@@ -125,8 +141,12 @@ export const taskService = {
       // convention), so a "quote" id is also accepted when it names a booking.
       let realEntityType = data.entityType ?? null;
       if (data.entityType && data.entityId) {
-        realEntityType = await resolveEntityInScope(data.entityType, data.entityId, scope);
-        if (!realEntityType) throw new AppError("Not found", 404);
+        // Linking a task to a deal needs the shop-pinned write scope: 403 for another shop's deal in
+        // the same organisation, 404 when it is not readable at all.
+        realEntityType = await resolveEntityInScope(data.entityType, data.entityId, scope, { forWrite: true });
+        if (!realEntityType) {
+          refuseDealWrite(!!(await resolveEntityInScope(data.entityType, data.entityId, scope)), "Not found");
+        }
       }
       // orgId always from scope; a body branchId is only honoured for admins (inside their org).
       const safe = await stripOwnershipFields(data, scope, branchExistsInOrg);
@@ -178,7 +198,7 @@ export const taskService = {
     }
 
     const result = await taskRepository.update(id, patch, scope);
-    if (!result) throw new AppError("Task not found", 404);
+    if (!result) return refuseTaskWrite(id, scope);
 
     if (data.userId !== undefined && result.userId !== previous?.userId) {
       await notifyTaskAssignment(result, scope?.userId ?? null);
@@ -189,13 +209,13 @@ export const taskService = {
 
   async toggleComplete(id: string, scope?: Scope): Promise<TaskNew> {
     const result = await taskRepository.toggleComplete(id, scope);
-    if (!result) throw new AppError("Task not found", 404);
+    if (!result) return refuseTaskWrite(id, scope);
     return result;
   },
 
   async remove(id: string, scope?: Scope): Promise<void> {
     const removed = await taskRepository.remove(id, scope);
-    if (!removed) throw new AppError("Task not found", 404);
+    if (!removed) return refuseTaskWrite(id, scope);
   },
 
   async reassignByEntity(entityType: string, entityId: string, newUserId: string): Promise<void> {

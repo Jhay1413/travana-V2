@@ -39,6 +39,8 @@ export interface Scope {
   branchType: "shop" | "homeworker" | null;
   /** True only when the caller is inside a homeworker branch they own. */
   ownsHomeworkerBranch: boolean;
+  /** True when a platform admin is acting inside an organisation (they have no branch_members row there). */
+  impersonating?: boolean;
 }
 
 export function getScope(req: Request): Scope {
@@ -50,6 +52,7 @@ export function getScope(req: Request): Scope {
     userId: getUserId(req),
     branchType: req.branchType ?? null,
     ownsHomeworkerBranch: req.ownsHomeworkerBranch === true,
+    impersonating: req.impersonating === true,
   };
 }
 

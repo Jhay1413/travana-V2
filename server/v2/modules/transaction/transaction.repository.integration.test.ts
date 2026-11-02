@@ -4,6 +4,7 @@ import { transactionRepository } from "./transaction.repository";
 import { db } from "../../config/database";
 import {
   transaction, quote, booking, quote_flights, booking_flights, quoteImages, bookingImages,
+  enquiry_table, enquiry_passenger, notes,
 } from "@shared/schema";
 import {
   truncateAll, makeOrg, makeBranch, makeUser, makePackageType, makeClient, makeTransaction, makeQuote,
@@ -67,6 +68,54 @@ describe("transactionRepository.createWithQuoteAndChildren — atomic add quote"
     // The transaction row must NOT have been committed.
     expect(await db.select().from(transaction)).toHaveLength(0);
     expect(await db.select().from(quote)).toHaveLength(0);
+  });
+});
+
+describe("transactionRepository.createWithEnquiryAndChildren — atomic add enquiry", () => {
+  it("inserts transaction (on_enquiry) + enquiry + relations + passengers + notes together", async () => {
+    const result = await transactionRepository.createWithEnquiryAndChildren({
+      transactionData: { user_id: agent.id } as never,
+      enquiryFields: { holiday_type_id: pkg.id, title: "Beach" },
+      passengers: [{ type: "adult", age: 0 }, { type: "child", age: 7 }],
+      notes: [{ content: "<p>hi</p>", agent_id: agent.id }],
+      scope,
+    });
+
+    expect(result.transaction).toMatchObject({ status: "on_enquiry", org_id: orgA.id, branch_id: branchA1.id });
+    expect(result.enquiry).toMatchObject({ transaction_id: result.transaction.id, title: "Beach" });
+    expect(await db.select().from(enquiry_passenger).where(eq(enquiry_passenger.enquiry_id, result.enquiry.id))).toHaveLength(2);
+    const noteRows = await db.select().from(notes).where(eq(notes.transaction_id, result.transaction.id));
+    expect(noteRows).toHaveLength(1);
+    expect(noteRows[0]).toMatchObject({ content: "<p>hi</p>", agent_id: agent.id });
+  });
+
+  it("leaves no transaction behind when the enquiry insert fails (no holiday type)", async () => {
+    await expect(
+      transactionRepository.createWithEnquiryAndChildren({
+        transactionData: { user_id: agent.id } as never,
+        // holiday_type_id is NOT NULL: the enquiry insert fails AFTER the transaction row was inserted.
+        enquiryFields: { title: "No type" } as never,
+        scope,
+      }),
+    ).rejects.toThrow();
+
+    expect(await db.select().from(transaction)).toHaveLength(0);
+    expect(await db.select().from(enquiry_table)).toHaveLength(0);
+  });
+
+  it("rolls back transaction and enquiry when a later child insert fails", async () => {
+    await expect(
+      transactionRepository.createWithEnquiryAndChildren({
+        transactionData: { user_id: agent.id } as never,
+        enquiryFields: { holiday_type_id: pkg.id },
+        // Not a destination row: FK violation on enquiry_destination after the first two inserts.
+        destinations: ["00000000-0000-0000-0000-000000000000"],
+        scope,
+      }),
+    ).rejects.toThrow();
+
+    expect(await db.select().from(transaction)).toHaveLength(0);
+    expect(await db.select().from(enquiry_table)).toHaveLength(0);
   });
 });
 
@@ -134,5 +183,22 @@ describe("transactionRepository.findExpiringQuotes — date-driven (no is_expire
     const ids = rows.map((r) => r.quoteId).sort();
 
     expect(ids).toEqual([qNear.id, qPast.id].sort());
+  });
+});
+
+describe("transactionRepository.findPipelineByStatus — enquiry card fields", () => {
+  it("returns the enquiry's budget and nights so the pipeline card can show them", async () => {
+    const client = await makeClient({ firstName: "Pia", surename: "Pipeline", createdBy: agent.id, orgId: orgA.id, branchId: branchA1.id } as never);
+    const created = await transactionRepository.createWithEnquiryAndChildren({
+      transactionData: { user_id: agent.id, client_id: client.id } as never,
+      enquiryFields: { holiday_type_id: pkg.id, title: "Beach", budget: "1800", no_of_nights: 7 } as never,
+      scope,
+    });
+
+    const page = await transactionRepository.findPipelineByStatus(scope, "enquiry", 1, 10);
+    const item = page.items.find((i: { id: string }) => i.id === created.transaction.id);
+
+    expect(item?.enquiry).toMatchObject({ no_of_nights: 7 });
+    expect(Number(item?.enquiry?.budget)).toBe(1800);
   });
 });

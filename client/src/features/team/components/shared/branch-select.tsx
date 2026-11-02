@@ -27,7 +27,6 @@ export function BranchSelect({
   invalid?: boolean;
   testId?: string;
 }) {
-  const current = options.find((o) => o.id === value);
   return (
     <Select value={value || undefined} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger
@@ -37,7 +36,8 @@ export function BranchSelect({
         className={cn(TEAM_CONTROL, "w-full", invalid && "border-status-failed-fg", disabled && "opacity-60", className)}
         data-testid={testId}
       >
-        <SelectValue placeholder={emptyLabel}>{current?.name}</SelectValue>
+        {/* No children: Radix portals the chosen item's text into this node, and React-owned children there crash with removeChild. */}
+        <SelectValue placeholder={emptyLabel} />
       </SelectTrigger>
       <SelectContent>
         {options.map((o) => (

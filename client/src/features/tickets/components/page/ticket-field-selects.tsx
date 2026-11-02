@@ -89,7 +89,7 @@ export function TicketFieldSelects({ ticket, users: usersProp }: { ticket: Ticke
           }
         >
           <SelectTrigger className={TRIGGER} data-testid="ticket-reassign">
-            <SelectValue placeholder="Unassigned">{ticket.assignedToName || undefined}</SelectValue>
+            <SelectValue placeholder="Unassigned">{ticket.assignedToName || "Unassigned"}</SelectValue>
           </SelectTrigger>
           <SelectContent className="max-h-72">
             <SelectItem value={UNASSIGNED} data-testid="ticket-unassign">Unassigned</SelectItem>

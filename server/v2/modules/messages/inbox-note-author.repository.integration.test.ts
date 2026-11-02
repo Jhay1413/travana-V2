@@ -21,8 +21,16 @@ describe("inboxNoteAuthorRepository", () => {
     });
     const rows = await inboxNoteAuthorRepository.findByMessageIds(orgA.id, ["m1", "m2"]);
     expect(rows).toEqual([
-      { sendsevenMessageId: "m1", userId: ann.id, firstName: "Ann", lastName: "Lee", name: "ann", image: "a.png" },
+      { sendsevenMessageId: "m1", sendsevenNoteId: "note-1", userId: ann.id, firstName: "Ann", lastName: "Lee", name: "ann", image: "a.png" },
     ]);
+  });
+
+  it("also matches on the SendSeven note id (the thread listing and create response differ)", async () => {
+    await inboxNoteAuthorRepository.create({
+      orgId: orgA.id, sendsevenMessageId: "m1", sendsevenNoteId: "note-1", conversationId: "c1", userId: ann.id,
+    });
+    const rows = await inboxNoteAuthorRepository.findByMessageIds(orgA.id, ["note-1"]);
+    expect(rows.map((r) => r.sendsevenMessageId)).toEqual(["m1"]);
   });
 
   it("is scoped to the org", async () => {

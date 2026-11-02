@@ -20,10 +20,10 @@ import type {
 } from "@shared/schema";
 import { eq, asc, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilike, ne, exists, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { buildTransactionScopeConds, buildTransactionRecordScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 import type { QuoteEmbeddingDetails } from "./quote-embedding";
 import { fetchServiceCommissionMaps } from "../transaction/service-commission.repository";
-import { PORTAL_ACTIVE_WINDOW_DAYS, type PortalStatus, type SocialStatus, type SocialStatusCounts } from "./quote.types";
+import { PORTAL_ACTIVE_WINDOW_DAYS, type QuoteChildKind, type PortalStatus, type SocialStatus, type SocialStatusCounts } from "./quote.types";
 
 function toDateOrNull(value: unknown): Date | null {
   if (value == null) return null;
@@ -103,6 +103,13 @@ function buildFreeQuoteTagCondition(tagNames: string[]): SQL | undefined {
   );
 }
 
+const QUOTE_CHILD_TABLES = {
+  flight: quote_flights,
+  accommodation: quote_accomodation,
+  transfer: quote_transfers,
+  passenger: passengers,
+} as const;
+
 const departAirport = alias(airport, "depart_airport");
 const arriveAirport = alias(airport, "arrive_airport");
 const flightTourOp = alias(tour_operator, "flight_tour_op");
@@ -180,7 +187,8 @@ export const newQuoteRepository = {
       .select({ id: quote.id })
       .from(quote)
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .where(and(eq(quote.id, id), ...buildTransactionRecordScopeConds(scope)))
+      // Free (social) quotes with no shop recorded stay reachable, as they were before the legacy-deal rule.
+      .where(and(eq(quote.id, id), ...buildTransactionRecordScopeConds(scope, { alsoReadable: sql`${quote.isFreeQuote} = true` })))
       .limit(1);
     return !!row;
   },
@@ -191,6 +199,41 @@ export const newQuoteRepository = {
       .select({ id: transaction.id })
       .from(transaction)
       .where(and(eq(transaction.id, transactionId), ...buildTransactionRecordScopeConds(scope)))
+      .limit(1);
+    return !!row;
+  },
+
+  /**
+   * Whether quote `id` is a free (social) quote, looked up only inside organisation `orgId` when one
+   * is given: null for a missing quote AND for another organisation's, so callers cannot tell them apart.
+   */
+  async isFreeQuoteInOrg(id: string, orgId: string | null): Promise<boolean | null> {
+    const [row] = await db
+      .select({ isFree: quote.isFreeQuote })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(and(eq(quote.id, id), isNull(quote.deleted_at), ...(orgId ? [eq(transaction.org_id, orgId)] : [])))
+      .limit(1);
+    return row ? row.isFree === true : null;
+  },
+
+  /** Write scope (shop-pinned for agents and branch managers): may the caller change quote `id`? */
+  async quoteInScopeForWrite(id: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: quote.id })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(and(eq(quote.id, id), ...buildTransactionWriteScopeConds(scope)))
+      .limit(1);
+    return !!row;
+  },
+
+  /** Write scope: may the caller add a quote to / change deal `transactionId`? */
+  async transactionInScopeForWrite(transactionId: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: transaction.id })
+      .from(transaction)
+      .where(and(eq(transaction.id, transactionId), ...buildTransactionWriteScopeConds(scope)))
       .limit(1);
     return !!row;
   },
@@ -223,52 +266,11 @@ export const newQuoteRepository = {
     return row?.id ?? null;
   },
 
-  async flightBelongsToOrg(flightId: string, orgId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: quote_flights.id })
-      .from(quote_flights)
-      .innerJoin(quote, eq(quote_flights.quote_id, quote.id))
-      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(quote_flights.id, flightId), eq(clientTable.orgId, orgId)))
-      .limit(1);
-    return !!row;
-  },
-
-  async accommodationBelongsToOrg(accommodationId: string, orgId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: quote_accomodation.id })
-      .from(quote_accomodation)
-      .innerJoin(quote, eq(quote_accomodation.quote_id, quote.id))
-      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(quote_accomodation.id, accommodationId), eq(clientTable.orgId, orgId)))
-      .limit(1);
-    return !!row;
-  },
-
-  async transferBelongsToOrg(transferId: string, orgId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: quote_transfers.id })
-      .from(quote_transfers)
-      .innerJoin(quote, eq(quote_transfers.quote_id, quote.id))
-      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(quote_transfers.id, transferId), eq(clientTable.orgId, orgId)))
-      .limit(1);
-    return !!row;
-  },
-
-  async passengerBelongsToOrg(passengerId: string, orgId: string): Promise<boolean> {
-    const [row] = await db
-      .select({ id: passengers.id })
-      .from(passengers)
-      .innerJoin(quote, eq(passengers.quote_id, quote.id))
-      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-      .where(and(eq(passengers.id, passengerId), eq(clientTable.orgId, orgId)))
-      .limit(1);
-    return !!row;
+  /** The quote a child row (flight / accommodation / transfer / passenger) belongs to, or null when the row does not exist. */
+  async findChildQuoteId(kind: QuoteChildKind, childId: string): Promise<string | null> {
+    const table = QUOTE_CHILD_TABLES[kind];
+    const [row] = await db.select({ quoteId: table.quote_id }).from(table).where(eq(table.id, childId)).limit(1);
+    return row?.quoteId ?? null;
   },
 
   async findByTransactionId(transactionId: string, scope: ScopeOrTrusted): Promise<Quote[]> {
@@ -294,6 +296,9 @@ export const newQuoteRepository = {
           ne(quote.id, excludeQuoteId),
           isNull(quote.deleted_at),
           eq(quote.quote_status, 'lost'),
+          // Only main quotes decide whether the deal is lost. A lost copy (e.g. a main demoted when a
+          // newer quote took over) must not keep a revived deal inactive.
+          sql`${quote.isQuoteCopy} IS NOT TRUE`,
         ),
       );
     return rows;
@@ -317,15 +322,23 @@ export const newQuoteRepository = {
     return rows.length;
   },
 
-  /** Find the current primary quote (isQuoteCopy=false) for a transaction, excluding a specific quoteId. */
+  /** Find the current primary quote for a transaction, excluding a specific quoteId. "Primary" is
+   *  isQuoteCopy IS NOT TRUE, so a legacy NULL row counts as main (a superset of the `= FALSE` the
+   *  pipeline columns use). If a legacy deal has several mains, a live one (not lost/archived) is
+   *  returned first, then the oldest, so the result is deterministic. */
   async findCurrentPrimary(transactionId: string, excludeQuoteId?: string): Promise<Quote | undefined> {
     const conditions = [
       eq(quote.transaction_id, transactionId),
-      eq(quote.isQuoteCopy, false),
+      sql`${quote.isQuoteCopy} IS NOT TRUE`,
       isNull(quote.deleted_at),
     ];
     if (excludeQuoteId) conditions.push(ne(quote.id, excludeQuoteId));
-    const [row] = await db.select().from(quote).where(and(...conditions)).limit(1);
+    const [row] = await db
+      .select()
+      .from(quote)
+      .where(and(...conditions))
+      .orderBy(sql`CASE WHEN ${quote.quote_status} IN ('lost', 'archived') THEN 1 ELSE 0 END`, asc(quote.date_created), asc(quote.id))
+      .limit(1);
     return row;
   },
 
@@ -338,6 +351,41 @@ export const newQuoteRepository = {
         .update(quote)
         .set({ isQuoteCopy: false, ...(chosenExpiry ? { date_expiry: chosenExpiry } : {}) })
         .where(eq(quote.id, chosenQuoteId));
+    });
+  },
+
+  /** Inserts a new quote that takes over from a lost/archived main, all in one DB transaction.
+   *  The new row is inserted as a copy; the dead main is then demoted only if it is STILL a dead main
+   *  (isQuoteCopy not true and status lost/archived) - a concurrent request that got there first leaves
+   *  0 rows changed. Only when the demotion won is the new quote promoted to main and, when
+   *  `reactivateTransactionId` is given, the deal set active again (only if currently inactive).
+   *  Otherwise the new quote simply stays a copy. A failure anywhere rolls the insert back too. */
+  async createReplacingDeadPrimary(
+    data: InsertQuote,
+    deadQuoteId: string,
+    reactivateTransactionId?: string,
+  ): Promise<{ quote: Quote; promoted: boolean }> {
+    return db.transaction(async (tx) => {
+      const [inserted] = await tx.insert(quote).values({ ...data, isQuoteCopy: true }).returning();
+      const demoted = await tx
+        .update(quote)
+        .set({ isQuoteCopy: true })
+        .where(and(
+          eq(quote.id, deadQuoteId),
+          sql`${quote.isQuoteCopy} IS NOT TRUE`,
+          sql`${quote.quote_status} IN ('lost', 'archived')`,
+        ))
+        .returning({ id: quote.id });
+      if (demoted.length === 0) return { quote: inserted, promoted: false };
+
+      const [promotedQuote] = await tx.update(quote).set({ isQuoteCopy: false }).where(eq(quote.id, inserted.id)).returning();
+      if (reactivateTransactionId) {
+        await tx
+          .update(transaction)
+          .set({ is_active: true })
+          .where(and(eq(transaction.id, reactivateTransactionId), eq(transaction.is_active, false)));
+      }
+      return { quote: promotedQuote, promoted: true };
     });
   },
 
@@ -1595,7 +1643,8 @@ export const newQuoteRepository = {
   },
 
   async findRecentClientEngagement(opts: {
-    orgId: string | null;
+    /** The caller's scope: org, own shop for agents / branch managers (nothing with no shop) and the partition. */
+    scope: ScopeOrTrusted;
     userId?: string | null;
     limit?: number;
     /** Keep only quotes whose latest view is >= this instant. */
@@ -1603,7 +1652,7 @@ export const newQuoteRepository = {
     /** Keep only quotes whose latest view is < this instant. */
     viewedBefore?: Date;
   }) {
-    const { orgId, userId, limit = 10, viewedFrom, viewedBefore } = opts;
+    const { scope, userId, limit = 10, viewedFrom, viewedBefore } = opts;
     const lastViewed = sql`max(${quoteViewsTable.viewedAt})`;
     // viewed_at is timestamptz, so comparing against UTC ISO instants is exact.
     const havingParts: SQL[] = [];
@@ -1612,8 +1661,7 @@ export const newQuoteRepository = {
     // Include public-link views (viewerName IS NULL) too — anonymous views still
     // represent client engagement and must bump the quote up the recency list.
     // The frontend already handles null viewerName.
-    const whereParts: any[] = [];
-    if (orgId) whereParts.push(eq(transaction.org_id, orgId));
+    const whereParts: SQL[] = [...buildTransactionScopeConds(scope)];
     if (userId) whereParts.push(eq(transaction.user_id, userId));
 
     const grouped = await db

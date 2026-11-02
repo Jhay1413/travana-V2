@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { branchMembers, branches, user, userOrgRoles, type BranchMember } from "@shared/schema";
+import { branchMembers, branches, organization, user, userOrgRoles, type BranchMember } from "@shared/schema";
 import { and, asc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { REMOVED_REASON_PREFIX } from "../../utils/removed-user";
 
@@ -50,9 +50,12 @@ export const branchMemberRepository = {
         branchType: branches.branchType,
         ownerUserId: branches.ownerUserId,
         profitSharePercent: branches.profitSharePercent,
+        // Rides on the same query so the per-request suspension check costs nothing extra.
+        orgIsActive: organization.isActive,
       })
       .from(branchMembers)
       .innerJoin(branches, eq(branches.id, branchMembers.branchId))
+      .innerJoin(organization, eq(organization.id, branchMembers.orgId))
       // Archived branches never provide context.
       .where(and(
         eq(branchMembers.userId, userId),
@@ -106,13 +109,16 @@ export const branchMemberRepository = {
     const [admin] = await db
       .select({ userId: branchMembers.userId })
       .from(branchMembers)
-      .where(and(eq(branchMembers.orgId, orgId), eq(branchMembers.orgRole, "org_admin"), eq(branchMembers.isActive, true)))
+      .innerJoin(branches, eq(branches.id, branchMembers.branchId))
+      // Archived branches never provide context (same rule as findActiveContext).
+      .where(and(eq(branchMembers.orgId, orgId), eq(branchMembers.orgRole, "org_admin"), eq(branchMembers.isActive, true), eq(branches.isActive, true)))
       .limit(1);
     if (admin) return admin.userId;
     const [member] = await db
       .select({ userId: branchMembers.userId })
       .from(branchMembers)
-      .where(and(eq(branchMembers.orgId, orgId), eq(branchMembers.isActive, true)))
+      .innerJoin(branches, eq(branches.id, branchMembers.branchId))
+      .where(and(eq(branchMembers.orgId, orgId), eq(branchMembers.isActive, true), eq(branches.isActive, true)))
       .limit(1);
     return member?.userId ?? null;
   },

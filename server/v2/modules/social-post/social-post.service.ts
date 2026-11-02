@@ -12,7 +12,7 @@ import {
   uploadMediaFromUrl,
   fetchOnlySocialsPost,
 } from "../../utils/only-socials";
-import { s3KeyFromStoredUrl, presignImageKey } from "../../utils/image-storage";
+import { isStoredProxyUrl, publicImageKeyFromStoredUrl, presignImageKey } from "../../utils/image-storage";
 import { autoUpscaleService } from "../image-upscale/auto-upscale.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { buildDealEmbeddingText, buildDealEmbeddingMetadata } from "./deal-embedding";
@@ -112,8 +112,11 @@ async function mapWithConcurrency<T, R>(
  * OnlySocials CDN, legacy absolute URLs, etc.) is passed through unchanged.
  */
 export async function resolveUploadableUrl(url: string): Promise<string> {
-  const key = s3KeyFromStoredUrl(url);
-  if (!key) return boundScene7ImageUrl(url);
+  if (!isStoredProxyUrl(url)) return boundScene7ImageUrl(url);
+  // Only public image keys are ever signed: a proxy URL pointing at a private object (client files, HR
+  // documents, attachments) or a malformed one is invalid, never passed through or presigned.
+  const key = publicImageKeyFromStoredUrl(url);
+  if (!key) throw new AppError("Invalid image", 400);
   return presignImageKey(key);
 }
 

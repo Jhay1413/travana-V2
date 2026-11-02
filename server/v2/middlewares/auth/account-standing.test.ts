@@ -5,6 +5,9 @@ import {
   rejectBlockedSession,
   DEACTIVATED_BLOCK,
   SUSPENDED_BLOCK,
+  ORG_SUSPENDED_BLOCK,
+  isOrgSuspendedFor,
+  rejectOrgSuspended,
 } from "./account-standing";
 import { isRemovedUser, REMOVED_REASON_PREFIX } from "../../utils/removed-user";
 
@@ -88,5 +91,31 @@ describe("rejectBlockedSession", () => {
     rejectBlockedSession(req, resTyped, DEACTIVATED_BLOCK);
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith({ message: DEACTIVATED_BLOCK.message, code: "ACCOUNT_DEACTIVATED" });
+  });
+});
+
+describe("isOrgSuspendedFor", () => {
+  it("is true only for staff of an inactive org", () => {
+    expect(isOrgSuspendedFor({ role: null }, false)).toBe(true);
+    expect(isOrgSuspendedFor({ role: null }, true)).toBe(false);
+  });
+
+  it("treats an unknown org state as not suspended", () => {
+    expect(isOrgSuspendedFor({ role: null }, null)).toBe(false);
+    expect(isOrgSuspendedFor({ role: null }, undefined)).toBe(false);
+  });
+
+  it("never applies to platform admins", () => {
+    expect(isOrgSuspendedFor({ role: "platform_admin" }, false)).toBe(false);
+  });
+});
+
+describe("rejectOrgSuspended", () => {
+  it("answers 403 with the ORG_SUSPENDED code", () => {
+    const res = { status: vi.fn(), json: vi.fn() };
+    res.status.mockReturnValue(res);
+    rejectOrgSuspended(res as unknown as Response);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ message: ORG_SUSPENDED_BLOCK.message, code: "ORG_SUSPENDED" });
   });
 });

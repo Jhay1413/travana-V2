@@ -42,3 +42,6 @@ export interface SocialStatusCounts {
   scheduled: number;
   posted: number;
 }
+
+/** Child rows of a quote that are edited or removed one at a time by their own id. */
+export type QuoteChildKind = "flight" | "accommodation" | "transfer" | "passenger";

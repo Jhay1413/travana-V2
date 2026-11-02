@@ -7,6 +7,7 @@ export function StagePill({ stage, className }: { stage: PipelineStage; classNam
   const style = STAGE_STYLE[stage];
   return (
     <span
+      data-testid="stage-pill"
       className={cn(
         "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3 py-[3px] text-[12px] font-semibold",
         style.chipClass,

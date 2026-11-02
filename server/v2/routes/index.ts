@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { isAuthenticated, requirePlatformAdmin } from '../middlewares/auth';
 import { orgBranchScope } from '../middlewares/org-branch-scope';
 import { denyOrgRole } from '../middlewares/auth/require-org-role';
+import { restrictReferralAgent } from '../middlewares/auth/referral-gate';
 import { errorHandler } from '../middlewares/error.middleware';
 
 import onboardingRoutes from '../modules/onboarding/onboarding.routes';
@@ -90,7 +91,8 @@ import realtimeRoutes from '../realtime/realtime.routes';
 import usageRoutes from '../modules/usage/usage.routes';
 
 const router = Router();
-const auth = [isAuthenticated, orgBranchScope] as const;
+// restrictReferralAgent is default-deny for referral agents (Affiliate Hub only), see referral-gate.ts.
+const auth = [isAuthenticated, orgBranchScope, restrictReferralAgent] as const;
 // Homeworkers get everything an agent can, except social posting and the inbox.
 const noHomeworker = denyOrgRole(['homeworker']);
 

@@ -1,4 +1,4 @@
-import { isAxiosError } from "axios";
+import { requestErrorMessage } from "@/lib/request-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { quoteKeys } from "@/hooks/queries";
 import { useSetPrimaryQuote } from "@/hooks/mutations";
@@ -21,7 +21,7 @@ export function useSetAsMainQuote(quoteId: string) {
         queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });
       },
       onError: (err: unknown) => {
-        const message = isAxiosError(err) ? (err.response?.data as { message?: string } | undefined)?.message : undefined;
+        const message = requestErrorMessage(err, "");
         toast({
           title: "Couldn't set as main quote",
           description: message || "Please try again.",

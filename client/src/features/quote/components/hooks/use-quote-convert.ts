@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { useConvertToBooking } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
+import { requestErrorMessage } from "@/lib/request-error";
 
 export interface QuoteConvertOptions {
   /** Toast title on success: a fixed string, or a function of the HAYS ref that was just saved. Defaults to "Quote converted to booking". */
@@ -47,8 +48,9 @@ export function useQuoteConvert(quoteId: string, clientId: string, options: Quot
             setLocation(`/bookings/${booking.id}`);
           }
         },
-        onError: () => {
-          toast({ title: "Failed to convert", variant: "destructive" });
+        onError: (err: unknown) => {
+          // Shows the server's reason, e.g. "This deal belongs to another shop".
+          toast({ title: requestErrorMessage(err, "Failed to convert"), variant: "destructive" });
         },
       },
     );

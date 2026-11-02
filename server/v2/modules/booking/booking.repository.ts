@@ -17,9 +17,10 @@ import type {
 } from "@shared/schema";
 import { eq, asc, desc, sql, and, inArray, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { BookingChildKind } from "./booking.types";
 import { upsellWithOperatorColumns } from "./booking-upsell.repository";
 import { fetchServiceCommissionMaps } from "../transaction/service-commission.repository";
-import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { buildTransactionScopeConds, buildTransactionWriteScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 function toDateOrNull(value: unknown): Date | null {
   if (value == null) return null;
@@ -100,28 +101,35 @@ export const bookingRepository = {
     return !!row;
   },
 
-  async flightInScope(flightId: string, scope: ScopeOrTrusted): Promise<boolean> {
-    const scopeConds = buildTransactionScopeConds(scope);
+  /** Write scope (shop-pinned for agents and branch managers): may the caller change booking `id`? */
+  async bookingInScopeForWrite(id: string, scope: ScopeOrTrusted): Promise<boolean> {
     const [row] = await db
-      .select({ id: booking_flights.id })
-      .from(booking_flights)
-      .innerJoin(booking, eq(booking_flights.booking_id, booking.id))
+      .select({ id: booking.id })
+      .from(booking)
       .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-      .where(and(eq(booking_flights.id, flightId), ...scopeConds))
+      .where(and(eq(booking.id, id), ...buildTransactionWriteScopeConds(scope)))
       .limit(1);
     return !!row;
   },
 
-  async accommodationInScope(accommodationId: string, scope: ScopeOrTrusted): Promise<boolean> {
-    const scopeConds = buildTransactionScopeConds(scope);
+  /** Write scope: may the caller add a booking to / convert a quote on deal `transactionId`? */
+  async transactionInScopeForWrite(transactionId: string, scope: ScopeOrTrusted): Promise<boolean> {
     const [row] = await db
-      .select({ id: booking_accomodation.id })
-      .from(booking_accomodation)
-      .innerJoin(booking, eq(booking_accomodation.booking_id, booking.id))
-      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-      .where(and(eq(booking_accomodation.id, accommodationId), ...scopeConds))
+      .select({ id: transaction.id })
+      .from(transaction)
+      .where(and(eq(transaction.id, transactionId), ...buildTransactionWriteScopeConds(scope)))
       .limit(1);
     return !!row;
+  },
+
+  /** The booking a child row (flight / accommodation) belongs to, or null when the row does not exist. */
+  async findChildBookingId(kind: BookingChildKind, childId: string): Promise<string | null> {
+    if (kind === "flight") {
+      const [row] = await db.select({ bookingId: booking_flights.booking_id }).from(booking_flights).where(eq(booking_flights.id, childId)).limit(1);
+      return row?.bookingId ?? null;
+    }
+    const [row] = await db.select({ bookingId: booking_accomodation.booking_id }).from(booking_accomodation).where(eq(booking_accomodation.id, childId)).limit(1);
+    return row?.bookingId ?? null;
   },
 
   async findByTransactionId(transactionId: string): Promise<Booking | undefined> {

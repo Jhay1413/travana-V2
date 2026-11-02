@@ -47,7 +47,16 @@ export function ArchiveConfirm({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={confirm} disabled={archive.isPending} data-testid="button-confirm-archive-homeworker">
+          <AlertDialogAction
+            onClick={(e) => {
+              // Radix closes the dialog on click, which unmounts this component's host (Teams page) before the
+              // request returns and drops the per-call onSuccess/onError. Stay open; onSuccess closes it.
+              e.preventDefault();
+              confirm();
+            }}
+            disabled={archive.isPending}
+            data-testid="button-confirm-archive-homeworker"
+          >
             Archive
           </AlertDialogAction>
         </AlertDialogFooter>

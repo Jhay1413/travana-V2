@@ -1,4 +1,5 @@
 import { AlertCircle, Loader2 } from "lucide-react";
+import { requestErrorStatus } from "@/lib/request-error";
 import { Card } from "@/components/ui/card";
 import { AdminSetupChecklist } from "@/features/onboarding";
 import { useOrganizationOverviewStats } from "@/hooks/queries";
@@ -20,11 +21,7 @@ const SPAN_5 = "min-[1101px]:col-span-5";
 const SPAN_7 = "min-[1101px]:col-span-7";
 const SPAN_12 = "min-[1101px]:col-span-12";
 
-function errorStatus(error: unknown): number | undefined {
-  if (typeof error !== "object" || error === null || !("response" in error)) return undefined;
-  const response = (error as { response?: { status?: number } }).response;
-  return response?.status;
-}
+const errorStatus = requestErrorStatus;
 
 export function AdminDashboard() {
   const branch = useDashboardBranch();

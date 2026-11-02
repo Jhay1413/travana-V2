@@ -327,6 +327,8 @@ export default function QuotePage() {
                             data-testid="select-itinerary-owner"
                           />
 
+                          {/* Another shop's deal is readable but not editable: no edit, convert or delete. */}
+                          {quoteQuery.data?.can_edit !== false && (
                           <QuoteActionsRow
                             pageLabel={pageLabel}
                             canConvert={quote.status !== "accepted"}
@@ -339,6 +341,7 @@ export default function QuotePage() {
                             onAddTask={() => setShowAddTaskDialog(true)}
                             onDelete={openDeleteDialog}
                           />
+                          )}
                           </div>
                           <TooltipProvider>
                           <div className="flex flex-wrap items-center justify-start gap-2 self-start" data-testid="row-itinerary-actions">

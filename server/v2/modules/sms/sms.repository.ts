@@ -1,4 +1,4 @@
-import { db } from '../../config/database';
+import { db, pool } from '../../config/database';
 import {
   smsTemplatesTable,
   smsMessagesTable,
@@ -9,9 +9,15 @@ import {
   quote as quoteTable,
   organization as organizationTable,
 } from '@shared/schema';
-import { and, desc, eq, gte, isNotNull, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, gte, isNotNull, inArray, sql } from 'drizzle-orm';
 
 let warnedMissingChecksTable = false;
+
+/** Passed to the work run under the advisory lock. */
+export interface AdvisoryLockHandle {
+  /** False once the lock connection has failed: the lock is gone and the work should stop. */
+  isHeld(): boolean;
+}
 
 export const smsRepository = {
   /** List templates owned by an org, or all of them when orgId is null (platform_admin). */
@@ -56,16 +62,80 @@ export const smsRepository = {
       .orderBy(desc(smsTemplatesTable.updatedAt));
   },
 
-  /** All active templates with a given auto-trigger across every org. Used by the cron sweep. */
+  /**
+   * Runs `work` only if no other server instance is running the same job. Takes a
+   * session-level Postgres advisory lock on a dedicated pool connection (released when
+   * we unlock, or automatically when the connection or process dies), so concurrent
+   * instances cannot both sweep. Returns `{ acquired: false }` without running `work`
+   * when someone else holds it.
+   *
+   * The dedicated client has an `error` listener for the whole run: a checked-out
+   * client with no listener would turn a dropped connection into an uncaught error and
+   * crash the process. A drop is logged and flips `lock.isHeld()` to false so `work`
+   * can stop early (the lock is gone with the connection); the broken client is
+   * destroyed rather than returned to the pool.
+   */
+  async runWithAdvisoryLock<T>(
+    lockKey: number,
+    work: (lock: AdvisoryLockHandle) => Promise<T>,
+  ): Promise<{ acquired: true; result: T } | { acquired: false }> {
+    const client = await pool.connect();
+    let connectionError: Error | undefined;
+    const onError = (err: Error) => {
+      connectionError = err;
+      console.error('[sms] advisory lock connection lost:', err.message);
+    };
+    client.on('error', onError);
+    let locked = false;
+    try {
+      const res = await client.query('select pg_try_advisory_lock($1) as locked', [lockKey]);
+      locked = res.rows[0]?.locked === true;
+      if (!locked) return { acquired: false as const };
+      const result = await work({ isHeld: () => !connectionError });
+      return { acquired: true as const, result };
+    } catch (err) {
+      // Only a connection-level failure poisons the client; `work` errors are the caller's.
+      if (!locked) connectionError ??= err instanceof Error ? err : new Error(String(err));
+      throw err;
+    } finally {
+      if (locked && !connectionError) {
+        try {
+          await client.query('select pg_advisory_unlock($1)', [lockKey]);
+        } catch (err) {
+          connectionError = err instanceof Error ? err : new Error(String(err));
+          console.error('[sms] advisory unlock failed:', connectionError.message);
+        }
+      }
+      client.removeListener('error', onError);
+      client.release(connectionError);
+    }
+  },
+
+  /**
+   * All active templates with a given auto-trigger across every org that is not suspended
+   * (organization.is_active). Used by the cron sweep.
+   */
   async findAllActiveTemplatesByTrigger(autoTrigger: string) {
     return db
-      .select()
+      .select(getTableColumns(smsTemplatesTable))
       .from(smsTemplatesTable)
+      .innerJoin(organizationTable, eq(smsTemplatesTable.orgId, organizationTable.id))
       .where(and(
         eq(smsTemplatesTable.autoTrigger, autoTrigger as any),
         eq(smsTemplatesTable.active, true),
+        eq(organizationTable.isActive, true),
       ))
       .orderBy(desc(smsTemplatesTable.updatedAt));
+  },
+
+  /** False when the organisation is suspended (organization.is_active = false) or missing. */
+  async isOrgActive(orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ isActive: organizationTable.isActive })
+      .from(organizationTable)
+      .where(eq(organizationTable.id, orgId))
+      .limit(1);
+    return row?.isActive === true;
   },
 
   /**
@@ -183,22 +253,42 @@ export const smsRepository = {
 
   /**
    * Find the most recent active booking for a client (used to fill SMS template
-   * merge fields like balance_due, hays_ref, departure_date).
+   * merge fields like balance_due, hays_ref, departure_date). Walks the client's
+   * active transactions newest first and returns the first active booking, so a
+   * newer transaction with no booking (e.g. a quote only) does not blank the fields.
    */
   async findLatestActiveBookingForClient(clientId: string) {
-    const [latestTxn] = await db
-      .select({ id: transactionTable.id })
-      .from(transactionTable)
-      .where(eq(transactionTable.client_id, clientId))
+    const [row] = await db
+      .select({ booking: bookingTable })
+      .from(bookingTable)
+      .innerJoin(transactionTable, eq(bookingTable.transaction_id, transactionTable.id))
+      .where(and(
+        eq(transactionTable.client_id, clientId),
+        eq(transactionTable.is_active, true),
+        eq(bookingTable.is_active, true),
+      ))
       .orderBy(desc(transactionTable.created_at))
       .limit(1);
-    if (!latestTxn) return undefined;
-    const [bookingRow] = await db
-      .select()
+    return row?.booking || undefined;
+  },
+
+  /**
+   * One specific active booking, only if it belongs to this client (via its
+   * transaction). Used by the departure sweep so the message describes the booking
+   * that triggered it, not the client's newest one.
+   */
+  async findActiveBookingForClient(clientId: string, bookingId: string) {
+    const [row] = await db
+      .select({ booking: bookingTable })
       .from(bookingTable)
-      .where(and(eq(bookingTable.transaction_id, latestTxn.id), eq(bookingTable.is_active, true)))
+      .innerJoin(transactionTable, eq(bookingTable.transaction_id, transactionTable.id))
+      .where(and(
+        eq(bookingTable.id, bookingId),
+        eq(transactionTable.client_id, clientId),
+        eq(bookingTable.is_active, true),
+      ))
       .limit(1);
-    return bookingRow || undefined;
+    return row?.booking || undefined;
   },
 
   /**

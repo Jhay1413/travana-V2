@@ -35,7 +35,7 @@ export default function ResetPasswordPage() {
       await axios.post("/api/auth/reset-password", { token, password });
       setSuccess(true);
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Something went wrong");
+      setError(err?.message || "Something went wrong");
     } finally {
       setLoading(false);
     }

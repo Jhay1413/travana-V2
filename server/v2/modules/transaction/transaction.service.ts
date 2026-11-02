@@ -11,6 +11,8 @@ import { walletService } from "../wallet/wallet.service";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
+import { refuseDealWrite } from "../../utils/deal-access";
+import { partitionAcceptableImageUrls } from "../../utils/image-storage";
 import { normaliseNewHaysRef } from "../../utils/hays-ref";
 import { checkStatusTransition } from "./transaction-status-transition";
 import { branchService } from "../branch/branch.service";
@@ -88,6 +90,7 @@ interface QuoteRelationPayload extends InsertQuote {
   loungePasses?: Record<string, unknown>[];
   airportParkings?: Record<string, unknown>[];
   extraAccommodations?: Record<string, unknown>[];
+  childAges?: number[];
 }
 
 interface BookingRelationPayload extends InsertBooking {
@@ -136,12 +139,10 @@ function buildDateTimeFromParts(date: unknown, time: unknown): string | null {
   return date;
 }
 
-function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
-  if (!Array.isArray(images)) return [];
-  return images
-    .map((url) => (typeof url === "string" ? url.trim() : ""))
-    .filter((url) => url.length > 0)
-    .filter((url, index, arr) => arr.indexOf(url) === index);
+// Unacceptable image strings (null, protocol-relative, bare www., private proxy keys) are dropped and reported back
+// as skippedImageUrls; they never fail the save.
+function partitionImageUrls(images: string[] | undefined) {
+  return partitionAcceptableImageUrls(images);
 }
 
 // Build the cruise persistence payload from a relation payload, or null when no
@@ -262,6 +263,81 @@ async function resolveOwnerBranch(
   return undefined;
 }
 
+async function resolveCreateOwnerBranch(ownerId: string, scope: Scope, isAdmin: boolean): Promise<string | undefined> {
+  const assignee = scope.orgId
+    ? await branchMemberRepository.findActiveContextByUserIdInOrg(ownerId, scope.orgId)
+    : await branchMemberRepository.findActiveContextByUserId(ownerId);
+  if (!assignee) {
+    if (scope.orgId) throw new AppError("New owner is not an active member of this organisation", 400);
+    return undefined;
+  }
+  if (isAdmin) return assignee.branchId;
+  if (assignee.branchId !== scope.branchId) {
+    throw new AppError("The deal owner must be in your own shop", 400);
+  }
+  return assignee.branchId;
+}
+
+const UPDATABLE_DEAL_COLUMNS = ["status", "client_id", "user_id", "lead_source", "priority", "is_active", "is_test"] as const;
+const NEW_DEAL_COLUMNS = ["client_id", "user_id", "lead_source", "priority", "is_active", "is_test"] as const;
+
+/**
+ * Tenancy and ownership of a NEW deal are decided here, never by the request body:
+ *  - org_id is always the caller's org (a body org_id is ignored);
+ *  - branch_id is the caller's own shop; only org admins may pick another branch, and only one of their own org
+ *    (the same rule as updateTransaction); an agent or branch manager with no shop cannot create deals (403);
+ *  - client_id must be a client the caller can see (their org and partition), else 404;
+ *  - user_id must be an active member of the caller's org (and not across the shop/homeworker boundary).
+ * Only the known deal columns are copied, so id / created_at / status cannot be injected.
+ */
+async function prepareNewDeal(raw: Partial<InsertTransaction>, scope: Scope): Promise<InsertTransaction> {
+  // A platform admin who is not impersonating an organisation has no org to create a deal in.
+  if (!scope.orgId) throw new AppError("Select an organisation first", 400);
+  const isAdmin = scope.orgRole === "org_admin" || scope.orgRole === "platform_admin";
+  if (!isAdmin && (scope.orgRole === "agent" || scope.orgRole === "branch_manager") && !scope.branchId) {
+    throw new AppError("You are not in a shop yet, so you cannot create deals. Ask an admin to add you to a shop.", 403);
+  }
+
+  const picked: Record<string, unknown> = {};
+  for (const key of NEW_DEAL_COLUMNS) {
+    // An empty string is an absent value (the validator already reads it that way); copying it raw would hit a uuid/enum column.
+    if (raw[key] !== undefined && raw[key] !== "") picked[key] = raw[key];
+  }
+  // A missing or blank owner means "me" (the client page's wizard can send an empty user_id).
+  let ownerId = typeof raw.user_id === "string" && raw.user_id.trim() ? raw.user_id : scope.userId;
+  if (!ownerId) throw new AppError("user_id is required", 400);
+  // A platform admin impersonating an org is on no roster there, so "me" cannot own a deal: use the org's default owner.
+  if (scope.impersonating && ownerId === scope.userId) {
+    const defaultOwner = await branchMemberRepository.findDefaultOwner(scope.orgId);
+    if (!defaultOwner) {
+      throw new AppError("This organisation has no active members to own the deal. Add a member to the organisation first.", 400);
+    }
+    ownerId = defaultOwner;
+  }
+  picked.user_id = ownerId;
+  const data = picked as unknown as InsertTransaction;
+
+  if (typeof raw.client_id === "string" && raw.client_id) {
+    const client = await neonClientRepository.findByIdForDealCreate(raw.client_id, scope);
+    if (!client) throw new AppError("Client not found", 404);
+  }
+
+  // The deal belongs to its OWNER's shop. Admins (and the webhook's system scope, which is an org admin) create
+  // for anyone on the roster: the deal lands in the chosen branch, else the owner's own branch, else the caller's.
+  // Agents and branch managers may only create for an owner who is in their own shop (400 otherwise).
+  const ownerBranch = await resolveCreateOwnerBranch(ownerId, scope, isAdmin);
+
+  let branchId: string | null = ownerBranch ?? scope.branchId;
+  if (isAdmin && typeof raw.branch_id === "string" && raw.branch_id && scope.orgId) {
+    if (!(await branchRepository.findById(raw.branch_id, scope.orgId))) {
+      throw new AppError("Branch not found in this organisation", 400);
+    }
+    branchId = raw.branch_id;
+  }
+
+  return { ...data, org_id: scope.orgId ?? null, branch_id: branchId };
+}
+
 export const transactionService = {
   async listTransactions(
     scope: Scope,
@@ -319,64 +395,36 @@ export const transactionService = {
   },
 
   async createTransaction(data: InsertTransaction, scope: Scope) {
-    return await transactionRepository.create(data, scope);
+    return await transactionRepository.create(await prepareNewDeal(data, scope), scope);
   },
 
-  async createTransactionWithEnquiry(transactionData: InsertTransaction, enquiryData: CreateEnquiryPayload, scope: Scope, agentId?: string | null) {
+  async createTransactionWithEnquiry(rawTransactionData: InsertTransaction, enquiryData: CreateEnquiryPayload, scope: Scope, agentId?: string | null) {
+    const transactionData = await prepareNewDeal(rawTransactionData, scope);
     const { destinations, resorts, accommodations, boardBases, departureAirports, passengers, notes, agent_id, ...enquiryFields } = enquiryData;
-
-    const txn = await transactionRepository.create({
-      ...transactionData,
-      status: 'on_enquiry',
-    }, scope);
-
-    const enquiry = await enquiryTableRepository.create({
-      ...enquiryFields,
-      transaction_id: txn.id,
-    });
-
-    if (destinations?.length) {
-      for (const destId of destinations) {
-        await enquiryTableRepository.addDestination(enquiry.id, destId);
-      }
-    }
-    if (resorts?.length) {
-      for (const resortId of resorts) {
-        await enquiryTableRepository.addResort(enquiry.id, resortId);
-      }
-    }
-    if (accommodations?.length) {
-      for (const accommodationId of accommodations) {
-        await enquiryTableRepository.addAccommodation(enquiry.id, accommodationId);
-      }
-    }
-    if (boardBases?.length) {
-      for (const bbId of boardBases) {
-        await enquiryTableRepository.addBoardBasis(enquiry.id, bbId);
-      }
-    }
-    if (departureAirports?.length) {
-      for (const airportId of departureAirports) {
-        await enquiryTableRepository.addDepartureAirport(enquiry.id, airportId);
-      }
-    }
-    if (passengers?.length) {
-      for (const p of passengers) {
-        await enquiryTableRepository.addPassenger(enquiry.id, p.type, p.age ?? 0);
-      }
-    }
 
     const noteContents = notes
       ? (Array.isArray(notes) ? notes : [notes]).filter(Boolean)
       : [];
-    for (const content of noteContents) {
-      await noteRepository.create({ transaction_id: txn.id, content: sanitizeRichText(String(content)), agent_id: agentId || agent_id || null });
-    }
+    const noteAgentId = agentId || agent_id || null;
 
-    return { transaction: txn, enquiry };
+    // One database transaction: if any insert fails nothing is stored.
+    return await transactionRepository.createWithEnquiryAndChildren({
+      transactionData,
+      enquiryFields,
+      // A non-array value was silently skipped before (the old `.length` checks), so keep skipping it.
+      destinations: Array.isArray(destinations) ? destinations : undefined,
+      resorts: Array.isArray(resorts) ? resorts : undefined,
+      accommodations: Array.isArray(accommodations) ? accommodations : undefined,
+      boardBases: Array.isArray(boardBases) ? boardBases : undefined,
+      departureAirports: Array.isArray(departureAirports) ? departureAirports : undefined,
+      passengers: Array.isArray(passengers) ? passengers.map((p) => ({ type: p.type, age: p.age ?? 0 })) : undefined,
+      notes: noteContents.map((content) => ({ content: sanitizeRichText(String(content)), agent_id: noteAgentId })),
+      scope,
+    });
   },
 
-  async createTransactionWithQuote(transactionData: InsertTransaction, rawQuoteData: QuoteRelationPayload, scope: Scope) {
+  async createTransactionWithQuote(rawTransactionData: InsertTransaction, rawQuoteData: QuoteRelationPayload, scope: Scope) {
+    const transactionData = await prepareNewDeal(rawTransactionData, scope);
     // "Copy to client" from a social quote sends the source's id: its operators stay
     // allowed even if the agency no longer lists them. The key is STRIPPED here so it
     // never reaches the insert.
@@ -393,10 +441,11 @@ export const transactionService = {
     );
     const {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs, primaryAccommodation, images,
-      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations, childAges,
       ...quoteFields
     } = quoteData;
     const quoteDataRecord = quoteData as unknown as Record<string, unknown>;
+    const imageParts = partitionImageUrls(images);
 
     const normalizedOutboundFlight = normalizeFlightInput(outboundFlight);
     const normalizedInboundFlight = normalizeFlightInput(inboundFlight);
@@ -435,7 +484,7 @@ export const transactionService = {
       outboundConnectingLegs: normalizedOutboundConnecting.map((leg) => leg ? (convertFlightDates(leg as Record<string, unknown>) as any) : null).filter(Boolean) as any,
       inboundConnectingLegs: normalizedInboundConnecting.map((leg) => leg ? (convertFlightDates(leg as Record<string, unknown>) as any) : null).filter(Boolean) as any,
       primaryAccommodation: primaryAccommodation ? (convertAccommodationDates(primaryAccommodation) as any) : null,
-      images: normalizeUniqueImageUrls(images),
+      images: imageParts.accepted,
       scope,
     });
 
@@ -448,6 +497,8 @@ export const transactionService = {
     if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(mainQuoteId, extraAccommodations);
     const cruiseDataQ = buildCruiseData(quoteDataRecord);
     if (cruiseDataQ) await newQuoteRepository.upsertCruise(mainQuoteId, cruiseDataQ);
+    // Same child-passenger write as the add-quote-to-existing-deal / enquiry-to-quote paths.
+    if (childAges !== undefined) await newQuoteRepository.replaceChildPassengers(mainQuoteId, "quote", childAges);
 
     const { transaction: mainTxn } = result;
     if (!(quoteFields as any).not_for_social && !transactionData.is_test) {
@@ -463,23 +514,25 @@ export const transactionService = {
           outboundConnectingLegs: normalizedOutboundConnecting,
           inboundConnectingLegs: normalizedInboundConnecting,
           primaryAccommodation: primaryAccommodation || undefined,
-          images: normalizeUniqueImageUrls(images),
+          images: imageParts.accepted,
           transfers,
           carHires,
           attractionTickets,
           loungePasses,
           airportParkings,
           extraAccommodations,
+          childAges,
         } as any, { orgId: null });
       } catch (err) {
         console.error('FREE QUOTE - error creating free quote:', err);
       }
     }
 
-    return result;
+    return { ...result, skippedImageUrls: imageParts.dropped };
   },
 
-  async createTransactionWithBooking(transactionData: InsertTransaction, rawBookingData: BookingRelationPayload, scope: Scope) {
+  async createTransactionWithBooking(rawTransactionData: InsertTransaction, rawBookingData: BookingRelationPayload, scope: Scope) {
+    const transactionData = await prepareNewDeal(rawTransactionData, scope);
     // A non-empty HAYS Ref must be in the HAY- format (saved canonical); blank stays allowed.
     const haysRef = normaliseNewHaysRef(rawBookingData.hays_ref);
     const bookingData = haysRef ? { ...rawBookingData, hays_ref: haysRef } : rawBookingData;
@@ -491,6 +544,7 @@ export const transactionService = {
       ...bookingFields
     } = bookingData;
     const bookingDataRecord = bookingData as unknown as Record<string, unknown>;
+    const imageParts = partitionImageUrls(images);
 
     const normalizedOutboundFlight = normalizeFlightInput(outboundFlight);
     const normalizedInboundFlight = normalizeFlightInput(inboundFlight);
@@ -510,7 +564,7 @@ export const transactionService = {
       outboundConnectingLegs: normalizedOutboundConnecting.map((leg) => leg ? (convertFlightDates(leg as Record<string, unknown>) as any) : null).filter(Boolean) as any,
       inboundConnectingLegs: normalizedInboundConnecting.map((leg) => leg ? (convertFlightDates(leg as Record<string, unknown>) as any) : null).filter(Boolean) as any,
       primaryAccommodation: primaryAccommodation ? (convertAccommodationDates(primaryAccommodation) as any) : null,
-      images: normalizeUniqueImageUrls(images),
+      images: imageParts.accepted,
       scope,
     });
 
@@ -625,13 +679,12 @@ export const transactionService = {
 
     const walletCreditAmount = parseFloat(String(bookingFields.wallet_credit ?? 0)) || 0;
     if (walletCreditAmount > 0 && result.transaction.client_id) {
-      // Internal trusted call from a scoped transaction flow — bypass org check.
-      await walletService.applyBookingCredit(result.transaction.client_id, result.booking.id, walletCreditAmount, { orgId: null });
+      await walletService.applyBookingCredit(result.transaction.client_id, result.booking.id, walletCreditAmount, scope);
     }
 
     if (result.transaction.client_id) {
       try {
-        const client = await neonClientRepository.findById(result.transaction.client_id);
+        const client = await neonClientRepository.findByIdForDealCreate(result.transaction.client_id, scope);
         await vipEnrollmentService.enrollClient(result.transaction.client_id);
 
         await referralService.ensureReferralForBooking({
@@ -649,7 +702,7 @@ export const transactionService = {
       }
     }
 
-    return result;
+    return { ...result, skippedImageUrls: imageParts.dropped };
   },
 
   async updateTransaction(id: string, data: Partial<InsertTransaction>, scope: Scope) {
@@ -670,8 +723,16 @@ export const transactionService = {
     }
 
     // Tenancy fields are not request-controlled: org_id never; branch_id only for
-    // admins, and only to a branch of their own org.
-    const { org_id: _ignoredOrg, branch_id: requestedBranch, ...rest } = data;
+    // admins, and only to a branch of their own org. Only the deal's own columns are copied (id, created_at ...
+    // can never be set from a body), and a client change must stay inside the caller's org and partition.
+    const { branch_id: requestedBranch } = data;
+    const rest: Partial<InsertTransaction> = {};
+    for (const key of UPDATABLE_DEAL_COLUMNS) {
+      if (data[key] !== undefined) Object.assign(rest, { [key]: data[key] });
+    }
+    if (rest.client_id && rest.client_id !== oldTxn.client_id) {
+      if (!(await neonClientRepository.findById(rest.client_id, scope))) throw new AppError("Client not found", 404);
+    }
     const isAdmin = scope.orgRole === "org_admin" || scope.orgRole === "platform_admin";
     let patch: Partial<InsertTransaction> = rest;
     if (isAdmin && requestedBranch && scope.orgId) {
@@ -689,7 +750,8 @@ export const transactionService = {
     const txn = rehomeTo
       ? await transactionRepository.updateAndRehome(id, patch, scope, rehomeTo)
       : await transactionRepository.update(id, patch, scope);
-    if (!txn) throw new AppError("Transaction not found", 404);
+    // oldTxn was readable, so a miss here is the shop-pinned write scope: another shop's deal (403).
+    if (!txn) refuseDealWrite(true, "Transaction not found");
 
     if (data.user_id && data.user_id !== oldTxn.user_id) {
       const quotes = await newQuoteRepository.findByTransactionId(id, { orgId: null });
@@ -715,12 +777,12 @@ export const transactionService = {
 
   async deleteTransaction(id: string, scope: Scope) {
     const removed = await transactionRepository.remove(id, scope);
-    if (!removed) throw new AppError("Transaction not found", 404);
+    if (!removed) refuseDealWrite(!!(await transactionRepository.findById(id, scope)), "Transaction not found");
   },
 
   async updatePriority(id: string, priority: DealPriority, scope: Scope) {
     const txn = await transactionRepository.update(id, { priority }, scope);
-    if (!txn) throw new AppError("Transaction not found", 404);
+    if (!txn) refuseDealWrite(!!(await transactionRepository.findById(id, scope)), "Transaction not found");
     return txn;
   },
 
@@ -729,7 +791,7 @@ export const transactionService = {
     // path through transactionRepository.update — so this endpoint is no
     // looser than the others (findById alone is org-only, not branch-pinned).
     const txn = await transactionRepository.findByIdScopedForWrite(id, scope);
-    if (!txn) throw new AppError("Transaction not found", 404);
+    if (!txn) refuseDealWrite(!!(await transactionRepository.findById(id, scope)), "Transaction not found");
     if (txn.status === "on_booking") {
       throw new AppError("A booking cannot be marked as a future deal", 400);
     }
@@ -749,7 +811,7 @@ export const transactionService = {
   async setLost(id: string, lost: boolean, scope: Scope) {
     // Branch-pinned scope check — see setFutureDeal above.
     const txn = await transactionRepository.findByIdScopedForWrite(id, scope);
-    if (!txn) throw new AppError("Transaction not found", 404);
+    if (!txn) refuseDealWrite(!!(await transactionRepository.findById(id, scope)), "Transaction not found");
     if (txn.status === "on_booking") {
       throw new AppError("A booking cannot be marked lost via this endpoint", 400);
     }

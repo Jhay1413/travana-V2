@@ -393,7 +393,9 @@ function SidenavInner({
   // The endpoint returns `assignedTo = me OR userId = me`, which is exactly the
   // superset the predicate narrows, so counting here matches counting the page's
   // org-wide fetch.
-  const { data: assignedTickets } = useTicketsByUser(currentUser?.id || "");
+  // Referral agents only use the Affiliate Hub and have no access to tickets or the inbox: no calls for them.
+  const isReferralAgent = orgRole === "referral_agent";
+  const { data: assignedTickets } = useTicketsByUser(currentUser?.id || "", undefined, { enabled: !isReferralAgent });
   const ticketCount = useMemo(
     () => countMyActiveTickets(assignedTickets, currentUser?.id),
     [assignedTickets, currentUser?.id],
@@ -403,7 +405,7 @@ function SidenavInner({
   // can never disagree.
   // Homeworkers are denied the inbox server-side, so skip the badge poll.
   const isHomeworker = roles.includes("homeworker");
-  const { data: conversationBadges } = useConversationBadgeCounts(undefined, { enabled: roles.length > 0 && !isHomeworker });
+  const { data: conversationBadges } = useConversationBadgeCounts(undefined, { enabled: roles.length > 0 && !isHomeworker && !isReferralAgent });
   const conversationCount = unreadBadgeCount(conversationBadges);
 
   const badgeCounts = useMemo<Partial<Record<NavBadgeKey, number>>>(

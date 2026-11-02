@@ -44,6 +44,27 @@ describe("searchRepository.globalSearch partition", () => {
     expect(renderWhere(1).params).toEqual(expect.arrayContaining(["hw1", "u1"]));
   });
 
+  it("pins booking results (not client results) to the caller's own shop", async () => {
+    await searchRepository.globalSearch("ada", { orgId: "org1", scope: AGENT });
+    expect(renderWhere(1).params).toEqual(expect.arrayContaining(["org1", "b1"]));
+    expect(renderWhere(1).text).toContain('"transaction"."branch_id" = $');
+    expect(renderWhere(0).params).not.toContain("b1");
+  });
+
+  it("an agent or branch manager with no shop gets no booking results, but the same client results", async () => {
+    for (const orgRole of ["agent", "branch_manager"] as const) {
+      resetCapture();
+      await searchRepository.globalSearch("ada", { orgId: "org1", scope: { ...AGENT, orgRole, orgRoles: [orgRole], branchId: null } });
+      expect(renderWhere(1).text).toContain("false");
+      expect(renderWhere(0).text).not.toContain("false");
+    }
+  });
+
+  it("org_admin searches bookings org-wide (no shop pin)", async () => {
+    await searchRepository.globalSearch("ada", { orgId: "org1", scope: { ...AGENT, orgRole: "org_admin", orgRoles: ["org_admin"] } });
+    expect(renderWhere(1).params).not.toContain("b1");
+  });
+
   it("adds no partition for org_admin", async () => {
     await searchRepository.globalSearch("ada", {
       orgId: "org1",

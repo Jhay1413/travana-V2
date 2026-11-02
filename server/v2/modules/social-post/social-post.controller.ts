@@ -3,7 +3,7 @@ import { socialPostService } from "./social-post.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
-import { parseImageOrderField } from "./media-order";
+import { parseImageOrderField, sanitizeUrlInput } from "./media-order";
 
 export const socialPostController = {
   generatePost: asyncHandler(async (req: Request, res: Response) => {
@@ -32,11 +32,14 @@ export const socialPostController = {
     // Local wall-clock string for OnlySocials; falls back to the UTC value for old clients.
     const postScheduleLocal = (req.body.postScheduleLocal as string) || postSchedule;
     let existingImageIds: number[] = [];
-    let imageUrls: string[] = [];
+    let imageUrls: unknown = [];
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
+    const { urls, dropped, order } = sanitizeUrlInput(imageUrls, parseImageOrderField(req.body.imageOrder));
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const { deal, failedImageUrls, autoUpscale } = await socialPostService.schedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, imageUrls, getScope(req), parseImageOrderField(req.body.imageOrder));
+    const { deal, failedImageUrls: failedUploads, autoUpscale } = await socialPostService.schedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, urls, getScope(req), order);
+    // Dropped (unacceptable) entries are reported with the ones that failed to upload.
+    const failedImageUrls = [...dropped, ...failedUploads];
     const message = failedImageUrls.length
       ? `Post scheduled, but ${failedImageUrls.length} image(s) failed to upload`
       : "Post scheduled successfully";
@@ -53,11 +56,14 @@ export const socialPostController = {
     const postScheduleLocal = (req.body.postScheduleLocal as string) || postSchedule;
     const postContent = (req.body.postContent as string) || "";
     let existingImageIds: number[] = [];
-    let imageUrls: string[] = [];
+    let imageUrls: unknown = [];
     try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
+    const { urls, dropped, order } = sanitizeUrlInput(imageUrls, parseImageOrderField(req.body.imageOrder));
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const { deal, failedImageUrls, autoUpscale } = await socialPostService.reschedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, postContent, imageUrls, getScope(req), parseImageOrderField(req.body.imageOrder));
+    const { deal, failedImageUrls: failedUploads, autoUpscale } = await socialPostService.reschedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, postContent, urls, getScope(req), order);
+    // Dropped (unacceptable) entries are reported with the ones that failed to upload.
+    const failedImageUrls = [...dropped, ...failedUploads];
     const message = failedImageUrls.length
       ? `Post rescheduled, but ${failedImageUrls.length} image(s) failed to upload`
       : "Post rescheduled successfully";

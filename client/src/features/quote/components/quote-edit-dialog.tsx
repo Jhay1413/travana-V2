@@ -625,6 +625,7 @@ export function QuoteEditDialog({
     <OperatorNamesProvider record={quoteData}>
     <QuoteRHFForm
       key={quoteId + open}
+      quoteId={quoteId}
       layout={isDrawer ? "drawer" : "card"}
       defaultValues={defaultValues}
       existingImages={existingImages}

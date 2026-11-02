@@ -4,7 +4,7 @@ import { and, asc, eq, or, ilike, sql } from 'drizzle-orm';
 import { phoneDigitsCondition } from '../../utils/phone-search';
 import { clientNameCondition } from '../../utils/client-name-search';
 import type { Scope } from '../../utils/scope';
-import { buildPartitionCond } from '../../utils/scope-conditions';
+import { buildPartitionCond, buildTransactionScopeConds } from '../../utils/scope-conditions';
 
 interface SearchOpts {
   orgId: string | null;
@@ -99,9 +99,10 @@ export const searchRepository = {
       ilike(booking.supplier_ref, term),
     );
     const activeOnly = eq(booking.is_active, true);
-    const partition = buildPartitionCond(scope, transaction.branch_id, transaction.user_id);
+    // Booking results are pinned like the client page's deals: org, the caller's own shop for agents and branch
+    // managers (nothing at all with no shop), and the shop/homeworker partition. Client results stay org-wide.
     const whereClause = orgId
-      ? and(matchCondition, eq(transaction.org_id, orgId), activeOnly, partition)
+      ? and(matchCondition, activeOnly, ...buildTransactionScopeConds(scope))
       : and(matchCondition, activeOnly);
 
     const rows = await db

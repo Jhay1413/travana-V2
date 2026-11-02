@@ -139,6 +139,19 @@ describe("task write scope (taskWritableConds)", () => {
     }
   });
 
+  it("S5: the deal-linked arm uses the shop-pinned WRITE scope (own shop; nothing with no shop)", async () => {
+    resetCapture();
+    await taskRepository.update("t1", { title: "x" }, AGENT);
+    const shop = renderWhere(0);
+    expect(shop.text).toContain('"transaction"."branch_id" = $');
+    expect(shop.params).toEqual(expect.arrayContaining(["b1"]));
+
+    resetCapture();
+    await taskRepository.remove("t1", { ...AGENT, branchId: null });
+    // The deal arm degenerates to false; only the agent's own task (org + user) is left.
+    expect(renderWhere(0).text).toContain("false");
+  });
+
   it("keeps admins on the normal scope (no entity arm, no user restriction)", async () => {
     resetCapture();
     await taskRepository.update("t1", { title: "x" }, { ...AGENT, orgRole: "org_admin", orgRoles: ["org_admin"] });

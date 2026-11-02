@@ -1,4 +1,5 @@
 import { newQuoteRepository } from "./quote.repository";
+import { assertQuoteWritable, assertQuoteDealWritable } from "./quote-access";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { quoteImageRepository } from "./quote-image.repository";
 import { quoteImageService } from "./quote-image.service";
@@ -10,7 +11,9 @@ import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { buildQuoteEmbeddingText, buildQuoteEmbeddingMetadata } from "./quote-embedding";
 import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
+import { normalizeAcceptableImageUrls, partitionAcceptableImageUrls } from "../../utils/image-storage";
 import type { Scope } from "../../utils/scope";
+import { withoutProtectedKeys } from "./quote-child.validator";
 import type {
   Quote,
   InsertQuote,
@@ -25,7 +28,7 @@ import type {
   InsertQuoteAirportParking,
   InsertPassenger,
 } from "@shared/schema";
-import type { PortalStatus, RecentEngagementOptions, SocialStatus, SocialStatusCounts } from "./quote.types";
+import type { PortalStatus, QuoteChildKind, RecentEngagementOptions, SocialStatus, SocialStatusCounts } from "./quote.types";
 import { getLondonDayRange } from "../../utils/london-time";
 
 type ScopeOrTrusted = Scope | { orgId: null };
@@ -46,32 +49,24 @@ async function assertTransactionInScope(transactionId: string, scope: ScopeOrTru
   if (!ok) throw new AppError("Quote not found", 404);
 }
 
-async function assertFlightInScope(flightId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await newQuoteRepository.flightBelongsToOrg(flightId, orgId);
-  if (!ok) throw new AppError("Flight not found", 404);
-}
+// Writes use the shop-pinned write scope (403 for another shop's deal, 404 otherwise); reads above
+// keep the org-wide record scope. See quote-access.ts.
+const assertQuoteInScopeForWrite = assertQuoteWritable;
+const assertTransactionInScopeForWrite = assertQuoteDealWritable;
 
-async function assertAccommodationInScope(accommodationId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await newQuoteRepository.accommodationBelongsToOrg(accommodationId, orgId);
-  if (!ok) throw new AppError("Accommodation not found", 404);
-}
+const CHILD_LABELS: Record<QuoteChildKind, string> = {
+  flight: "Flight",
+  accommodation: "Accommodation",
+  transfer: "Transfer",
+  passenger: "Passenger",
+};
 
-async function assertTransferInScope(transferId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await newQuoteRepository.transferBelongsToOrg(transferId, orgId);
-  if (!ok) throw new AppError("Transfer not found", 404);
-}
-
-async function assertPassengerInScope(passengerId: string, scope: ScopeOrTrusted) {
-  const orgId = effectiveOrgId(scope);
-  if (!orgId) return;
-  const ok = await newQuoteRepository.passengerBelongsToOrg(passengerId, orgId);
-  if (!ok) throw new AppError("Passenger not found", 404);
+/** A child row is only reachable through its OWN quote: the quote named in the path must pass the
+ *  write scope, and the child must belong to that quote. Anything else is a 404. */
+async function assertChildOfQuoteForWrite(kind: QuoteChildKind, quoteId: string, childId: string, scope: ScopeOrTrusted) {
+  await assertQuoteInScopeForWrite(quoteId, scope);
+  const owner = await newQuoteRepository.findChildQuoteId(kind, childId);
+  if (owner?.toLowerCase() !== quoteId.toLowerCase()) throw new AppError(`${CHILD_LABELS[kind]} not found`, 404);
 }
 
 interface CruisePayloadData {
@@ -184,11 +179,7 @@ function clearFreeQuoteDiscountFields(fields: { discounts?: unknown; service_cha
 }
 
 function normalizeUniqueImageUrls(images: string[] | undefined): string[] {
-  if (!Array.isArray(images)) return [];
-  return images
-    .map((url) => (typeof url === "string" ? url.trim() : ""))
-    .filter((url) => url.length > 0)
-    .filter((url, index, arr) => arr.indexOf(url) === index);
+  return normalizeAcceptableImageUrls(images);
 }
 
 async function resolveAndGenerateGuru(accommodationId: string, userId?: string) {
@@ -373,8 +364,17 @@ async function createFreeSocialCopy(
 }
 
 export const newQuoteService = {
+  /** True/false when the quote that owns this child row is a free (social) quote or a deal quote; null when the child does not exist. */
+  async isFreeQuoteOfChild(kind: QuoteChildKind, childId: string, orgId: string | null = null): Promise<boolean | null> {
+    const quoteId = await newQuoteRepository.findChildQuoteId(kind, childId);
+    return quoteId ? newQuoteService.isFreeQuote(quoteId, orgId) : null;
+  },
+
   /** True for a social (free) quote; null when the quote does not exist. */
-  async isFreeQuote(id: string): Promise<boolean | null> {
+  async isFreeQuote(id: string, orgId: string | null = null): Promise<boolean | null> {
+    // With an org, another organisation's quote looks exactly like a missing one (null), so the guard's
+    // 403 (deal quote) versus pass-through 404 (missing) never reveals that a quote exists elsewhere.
+    if (orgId) return newQuoteRepository.isFreeQuoteInOrg(id, orgId);
     const q = await newQuoteRepository.findById(id);
     return q ? q.isFreeQuote === true : null;
   },
@@ -415,8 +415,14 @@ export const newQuoteService = {
     // Surface the customer-facing total (sales − discount + service charge) and a per-person
     // figure derived from it, so the detail page displays consistent values regardless of any
     // previously-stored price_per_person.
+    // Readable but not editable = another shop's deal in the same organisation; the UI hides write controls.
+    // A social media manager is read-only on deal quotes (it manages free / social quotes only), so for it
+    // can_edit is false unless the quote is a free quote.
+    const readOnlyForRole = (scope as Scope).orgRole === "social_media_manager" && !q.isFreeQuote;
+    const can_edit = !readOnlyForRole && (await newQuoteRepository.quoteInScopeForWrite(id, scope));
     return {
       ...q,
+      can_edit,
       service_commission,
       total_price: calcTotalPrice(q.sales_price, q.discounts, q.service_charge).toFixed(2),
       price_per_person: calcPricePerPerson(q.sales_price, q.adult, q.child, q.discounts, q.service_charge),
@@ -437,7 +443,11 @@ export const newQuoteService = {
 
     const cruiseData = buildCruiseData(data);
 
-    await assertTransactionInScope(quoteFields.transaction_id, scope);
+    // Unacceptable image strings (null, protocol-relative, bare www., a proxy URL for a private key) are dropped and
+    // reported as skippedImageUrls rather than failing the whole create/copy. Done BEFORE any write.
+    const { accepted: normalizedImages, dropped: skippedImageUrls } = partitionAcceptableImageUrls(images);
+
+    await assertTransactionInScopeForWrite(quoteFields.transaction_id, scope);
     if (!options?.skipOperatorCheck) {
       // "Copy to client" from a social quote: the copy may keep the SOURCE quote's
       // operators even if the agency no longer lists them. Only operators the caller
@@ -455,6 +465,27 @@ export const newQuoteService = {
     if (!txn) throw new AppError("Transaction not found", 404);
     if (scope.orgId && txn.org_id !== scope.orgId) {
       throw new AppError("Transaction not found", 404);
+    }
+
+    // A deal keeps exactly one main quote. A quote posted as main (isQuoteCopy false/absent):
+    // - first quote on the deal: stays main;
+    // - deal has a live main: stored as a copy (not refused);
+    // - deal's main is lost/archived: the new quote becomes main and the dead one is demoted
+    //   in the same repository transaction as the insert (the new row starts as a copy, so there
+    //   is never a moment with two mains).
+    // A free quote, or a quote the caller is creating already lost/archived, never takes over.
+    const mayTakeOver = !quoteFields.isFreeQuote && quoteFields.quote_status !== 'lost' && quoteFields.quote_status !== 'archived';
+    let deadPrimaryId: string | undefined;
+    let deadPrimaryWasLost = false;
+    if (!quoteFields.isQuoteCopy) {
+      const existingPrimary = await newQuoteRepository.findCurrentPrimary(txn.id);
+      if (existingPrimary) {
+        quoteFields.isQuoteCopy = true;
+        if (mayTakeOver && (existingPrimary.quote_status === 'lost' || existingPrimary.quote_status === 'archived')) {
+          deadPrimaryId = existingPrimary.id;
+          deadPrimaryWasLost = existingPrimary.quote_status === 'lost';
+        }
+      }
     }
 
     // A free quote never carries a discount or service charge — clear both
@@ -481,7 +512,20 @@ export const newQuoteService = {
       quoteFields.quote_status = 'quoted';
     }
 
-    const q = await newQuoteRepository.create(quoteFields);
+    let q: Quote;
+    if (deadPrimaryId) {
+      // Insert + takeover in one repository transaction. A deal marked lost through the quote
+      // (updateQuote) was also set inactive; a new main revives it, so it counts as active again.
+      // Only 'lost' did that, and only an inactive deal needs the write. If a concurrent request
+      // already replaced the dead main, the repository leaves this quote as a copy.
+      ({ quote: q } = await newQuoteRepository.createReplacingDeadPrimary(
+        quoteFields as InsertQuote,
+        deadPrimaryId,
+        deadPrimaryWasLost && txn.is_active === false ? txn.id : undefined,
+      ));
+    } else {
+      q = await newQuoteRepository.create(quoteFields);
+    }
 
     if (data.tags && Array.isArray(data.tags) && data.tags.length > 0) {
       await tagService.addQuoteTags(q.id, data.tags);
@@ -501,8 +545,6 @@ export const newQuoteService = {
         console.error('COMPLETE ENQUIRY TASKS (quote.service) - error:', err);
       }
     }
-
-    const normalizedImages = normalizeUniqueImageUrls(images);
 
     await writeQuoteSections(q.id, {
       outboundFlight, inboundFlight, outboundConnectingLegs, inboundConnectingLegs,
@@ -538,7 +580,7 @@ export const newQuoteService = {
       });
     }
 
-    return q;
+    return { ...q, skippedImageUrls };
   },
 
   async createSocialQuote(userId: string, data: Omit<CreateQuotePayload, 'transaction_id' | 'isFreeQuote'>, scope: ScopeOrTrusted) {
@@ -556,7 +598,7 @@ export const newQuoteService = {
   },
 
   async duplicateQuote(sourceQuoteId: string, data: Partial<CreateQuotePayload>, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(sourceQuoteId, scope);
+    await assertQuoteInScopeForWrite(sourceQuoteId, scope);
 
     const sourceQuote = await newQuoteRepository.findById(sourceQuoteId);
     if (!sourceQuote) throw new AppError("Quote not found", 404);
@@ -618,7 +660,7 @@ export const newQuoteService = {
   },
 
   async updateQuote(id: string, data: UpdateQuotePayload, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(id, scope);
+    await assertQuoteInScopeForWrite(id, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, () => newQuoteRepository.findTourOperatorIds(id));
 
     const {
@@ -628,6 +670,11 @@ export const newQuoteService = {
       transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations, deletedImageIds,
       ...quoteFields
     } = data;
+
+    // Strict on purpose: the edit dialog only ever sends images that are NEW in this save (typed links, direct uploads),
+    // never the saved gallery, so a legacy value already stored cannot trip this. Checked BEFORE any write, so a bad
+    // image (400) can never leave a half-applied save.
+    const normalizedUpdateImages = images && images.length > 0 ? normalizeUniqueImageUrls(images) : [];
 
     const cruiseData = buildCruiseData(data);
 
@@ -708,7 +755,9 @@ export const newQuoteService = {
     // reference-counted S3 cleanup (quote_images/accommodation_images/lodge_images/deal_images)
     // still applies.
     if (deletedImageIds && deletedImageIds.length > 0) {
-      await Promise.all(deletedImageIds.map((imageId) => quoteImageService.deleteImage(id, imageId)));
+      // Scope was checked at the top of updateQuote. Shared hotel-gallery images are skipped (never
+      // deleted from a quote): they simply stay in the gallery.
+      await Promise.all(deletedImageIds.map((imageId) => quoteImageService.removeOwnedImage(id, imageId)));
     }
 
     // Section writes below target distinct tables/rows and run concurrently — same
@@ -740,8 +789,7 @@ export const newQuoteService = {
     if (childAges !== undefined) writes.push(newQuoteRepository.replaceChildPassengers(id, "quote", childAges));
     if (tags !== undefined) writes.push(tagService.updateQuoteTags(id, tags));
 
-    if (images && images.length > 0) {
-      const normalizedUpdateImages = normalizeUniqueImageUrls(images);
+    if (normalizedUpdateImages.length > 0) {
       writes.push(quoteImageRepository.addImages(id, normalizedUpdateImages));
       if (primaryAccommodation?.accomodation_id) writes.push(newQuoteRepository.saveImagesToAccommodation(primaryAccommodation.accomodation_id as string, normalizedUpdateImages));
       // q is already resolved above (either from the update or the pre-fetch), so
@@ -775,7 +823,7 @@ export const newQuoteService = {
    *  newQuoteRepository.promoteSiblingAndRemove. A copy (isQuoteCopy=true)
    *  being deleted is unaffected by this guard. */
   async deleteQuote(id: string, scope: ScopeOrTrusted, newPrimaryQuoteId?: string) {
-    await assertQuoteInScope(id, scope);
+    await assertQuoteInScopeForWrite(id, scope);
     const existing = await newQuoteRepository.findById(id);
     if (!existing) throw new AppError("Quote not found", 404);
 
@@ -825,7 +873,7 @@ export const newQuoteService = {
    * first stamp (date and user); clearing removes both. Returns the enriched detail row.
    */
   async setAccepted(id: string, accepted: boolean, userId: string, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(id, scope);
+    await assertQuoteInScopeForWrite(id, scope);
     const existing = await newQuoteRepository.findById(id);
     if (!existing) throw new AppError("Quote not found", 404);
     if (existing.isFreeQuote) throw new AppError("Free quotes can't be accepted", 400);
@@ -846,7 +894,7 @@ export const newQuoteService = {
    * Throws AppError(400) if the chosen quote is lost or deleted (cannot be primary).
    */
   async setPrimaryQuote(quoteId: string, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(quoteId, scope);
+    await assertQuoteInScopeForWrite(quoteId, scope);
 
     const chosenQuote = await newQuoteRepository.findById(quoteId);
     if (!chosenQuote) throw new AppError("Quote not found", 404);
@@ -881,69 +929,75 @@ export const newQuoteService = {
   },
 
   async addFlight(quoteId: string, data: Omit<InsertQuoteFlight, 'quote_id'>, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(quoteId, scope);
+    await assertQuoteInScopeForWrite(quoteId, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
-    return newQuoteRepository.addFlight({ ...data, quote_id: quoteId });
+    return newQuoteRepository.addFlight({ ...withoutProtectedKeys(data), quote_id: quoteId });
   },
 
-  async updateFlight(flightId: string, data: Partial<InsertQuoteFlight>, scope: ScopeOrTrusted) {
-    await assertFlightInScope(flightId, scope);
+  async updateFlight(quoteId: string, flightId: string, data: Partial<InsertQuoteFlight>, scope: ScopeOrTrusted) {
+    await assertChildOfQuoteForWrite("flight", quoteId, flightId, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => {
       const current = await newQuoteRepository.findFlightTourOperatorId(flightId);
       return current ? [current] : [];
     });
-    return newQuoteRepository.updateFlight(flightId, data);
+    return newQuoteRepository.updateFlight(flightId, withoutProtectedKeys(data));
   },
 
-  async removeFlight(flightId: string, scope: ScopeOrTrusted) {
-    await assertFlightInScope(flightId, scope);
+  async removeFlight(quoteId: string, flightId: string, scope: ScopeOrTrusted) {
+    await assertChildOfQuoteForWrite("flight", quoteId, flightId, scope);
     await newQuoteRepository.removeFlight(flightId);
   },
 
   async addAccommodation(quoteId: string, data: Omit<InsertQuoteAccomodation, 'quote_id'>, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(quoteId, scope);
+    await assertQuoteInScopeForWrite(quoteId, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
-    return newQuoteRepository.addAccommodation({ ...data, quote_id: quoteId });
+    return newQuoteRepository.addAccommodation({ ...withoutProtectedKeys(data), quote_id: quoteId });
   },
 
-  async updateAccommodation(accommodationId: string, data: Partial<InsertQuoteAccomodation>, scope: ScopeOrTrusted) {
-    await assertAccommodationInScope(accommodationId, scope);
+  async updateAccommodation(quoteId: string, accommodationId: string, data: Partial<InsertQuoteAccomodation>, scope: ScopeOrTrusted) {
+    await assertChildOfQuoteForWrite("accommodation", quoteId, accommodationId, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => {
       const current = await newQuoteRepository.findAccommodationTourOperatorId(accommodationId);
       return current ? [current] : [];
     });
-    return newQuoteRepository.updateAccommodation(accommodationId, data);
+    return newQuoteRepository.updateAccommodation(accommodationId, withoutProtectedKeys(data));
   },
 
-  async removeAccommodation(accommodationId: string, scope: ScopeOrTrusted) {
-    await assertAccommodationInScope(accommodationId, scope);
+  async removeAccommodation(quoteId: string, accommodationId: string, scope: ScopeOrTrusted) {
+    await assertChildOfQuoteForWrite("accommodation", quoteId, accommodationId, scope);
     await newQuoteRepository.removeAccommodation(accommodationId);
   },
 
   async addTransfer(quoteId: string, data: Omit<InsertQuoteTransfer, 'quote_id'>, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(quoteId, scope);
+    await assertQuoteInScopeForWrite(quoteId, scope);
     await tourOperatorLinkService.assertPayloadOperatorsLinked(scope, data, async () => []);
-    return newQuoteRepository.addTransfer({ ...data, quote_id: quoteId });
+    return newQuoteRepository.addTransfer({ ...withoutProtectedKeys(data), quote_id: quoteId });
   },
 
-  async removeTransfer(transferId: string, scope: ScopeOrTrusted) {
-    await assertTransferInScope(transferId, scope);
+  async removeTransfer(quoteId: string, transferId: string, scope: ScopeOrTrusted) {
+    await assertChildOfQuoteForWrite("transfer", quoteId, transferId, scope);
     await newQuoteRepository.removeTransfer(transferId);
   },
 
   async addPassenger(quoteId: string, data: Omit<InsertPassenger, 'quote_id'>, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(quoteId, scope);
-    return newQuoteRepository.addPassenger({ ...data, quote_id: quoteId });
+    await assertQuoteInScopeForWrite(quoteId, scope);
+    return newQuoteRepository.addPassenger({ ...withoutProtectedKeys(data), quote_id: quoteId });
   },
 
-  async removePassenger(passengerId: string, scope: ScopeOrTrusted) {
-    await assertPassengerInScope(passengerId, scope);
+  async removePassenger(quoteId: string, passengerId: string, scope: ScopeOrTrusted) {
+    await assertChildOfQuoteForWrite("passenger", quoteId, passengerId, scope);
     await newQuoteRepository.removePassenger(passengerId);
   },
 
   async updateQuoteTags(quoteId: string, tagNames: string[], scope: ScopeOrTrusted) {
-    await assertQuoteInScope(quoteId, scope);
+    await assertQuoteInScopeForWrite(quoteId, scope);
     await tagService.updateQuoteTags(quoteId, tagNames);
+  },
+
+  /** Remove one tag from this quote only. 404 outside scope or when the tag is not on the quote. */
+  async detachQuoteTag(quoteId: string, tagId: string, scope: ScopeOrTrusted) {
+    await assertQuoteInScopeForWrite(quoteId, scope);
+    await tagService.detachQuoteTag(quoteId, tagId);
   },
 
   async getQuoteTags(quoteId: string, scope: ScopeOrTrusted) {
@@ -952,7 +1006,7 @@ export const newQuoteService = {
   },
 
   async setPortalVisibility(id: string, showOnPortal: boolean, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(id, scope);
+    await assertQuoteInScopeForWrite(id, scope);
     let token: string | undefined;
     if (showOnPortal) {
       const existing = await newQuoteRepository.findTokenById(id);
@@ -966,7 +1020,7 @@ export const newQuoteService = {
   },
 
   async setFeatured(id: string, isFeatured: boolean, scope: ScopeOrTrusted) {
-    await assertQuoteInScope(id, scope);
+    await assertQuoteInScopeForWrite(id, scope);
     await newQuoteRepository.setFeatured(id, isFeatured);
   },
 
@@ -979,7 +1033,6 @@ export const newQuoteService = {
   },
 
   async getRecentClientEngagement(scope: ScopeOrTrusted, limit = 10, options: RecentEngagementOptions = {}) {
-    const orgId = effectiveOrgId(scope);
     const role = (scope as Scope).orgRole;
     const isManagerLevel = role === "platform_admin" || role === "org_admin" || role === "branch_manager";
     // mine=true narrows every role (managers/admins included) to their own
@@ -991,7 +1044,7 @@ export const newQuoteService = {
     // "all" (or no period) = unfiltered; the rest are London-day ranges.
     const range = options.period && options.period !== "all" ? getLondonDayRange(options.period) : undefined;
     return newQuoteRepository.findRecentClientEngagement({
-      orgId,
+      scope,
       userId,
       limit,
       viewedFrom: range?.from,

@@ -16,6 +16,7 @@ vi.mock("./task.repository", () => ({
     reassignByEntity: vi.fn(),
     findEntityBranchId: vi.fn(),
     entityInScope: vi.fn(),
+    findByIdInOrg: vi.fn(),
   },
   entityLink: (entityType: string, entityId: string) => `/${entityType}s/${entityId}`,
 }));
@@ -73,8 +74,9 @@ describe("taskService.create entity scope", () => {
   it("accepts a booking id under the quote entity type, as the booking page stores them", async () => {
     vi.mocked(taskRepository.entityInScope).mockImplementation(async (type, id) => type === "booking" && id === "b1");
     await taskService.create({ entityType: "quote", entityId: "b1", userId: "u1", title: "T" } as never, SCOPE);
-    expect(taskRepository.entityInScope).toHaveBeenCalledWith("quote", "b1", SCOPE);
-    expect(taskRepository.entityInScope).toHaveBeenCalledWith("booking", "b1", SCOPE);
+    // Linking a task to a deal needs the shop-pinned write scope.
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("quote", "b1", SCOPE, { forWrite: true });
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("booking", "b1", SCOPE, { forWrite: true });
     expect(taskRepository.create).toHaveBeenCalled();
   });
 
@@ -89,8 +91,23 @@ describe("taskService.create entity scope", () => {
   it("still creates for the system (webhook) scope with no user when the entity is in the org", async () => {
     const system: Scope = { ...SCOPE, orgRole: "org_admin", orgRoles: ["org_admin"], branchId: null, userId: null };
     await taskService.create({ entityType: "enquiry", entityId: "e1", userId: "u1", title: "T" } as never, system);
-    expect(taskRepository.entityInScope).toHaveBeenCalledWith("enquiry", "e1", system);
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("enquiry", "e1", system, { forWrite: true });
     expect(taskRepository.create).toHaveBeenCalled();
+  });
+
+  it("is a 403 'This deal belongs to another shop' when the deal is readable but outside the write scope", async () => {
+    vi.mocked(taskRepository.entityInScope).mockImplementation(async (_type, _id, _scope, options) => !options?.forWrite);
+    await expect(taskService.create({ entityType: "quote", entityId: "q9", userId: "u1", title: "T" } as never, SCOPE)).rejects.toMatchObject({
+      statusCode: 403,
+      message: "This deal belongs to another shop",
+    });
+    expect(taskRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("is a 404 when the deal is not readable either", async () => {
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(false);
+    await expect(taskService.create({ entityType: "quote", entityId: "q9", userId: "u1", title: "T" } as never, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(taskRepository.create).not.toHaveBeenCalled();
   });
 
   it("lists a booking's tasks when asked under the quote type with the booking id", async () => {
@@ -442,5 +459,28 @@ describe("taskService.listByClient", () => {
     vi.mocked(taskRepository.findByClient).mockResolvedValue([{ id: "t1" }] as never);
     await expect(taskService.listByClient("c1", SCOPE)).resolves.toEqual([{ id: "t1" }]);
     expect(taskRepository.findByClient).toHaveBeenCalledWith("c1", SCOPE);
+  });
+});
+
+describe("task writes refused by the write scope (S5): 403 for a readable deal in another shop, else 404", () => {
+  const scope = { orgId: "o1", branchId: "b1", orgRole: "agent", orgRoles: ["agent"], userId: "u1", branchType: "shop", ownsHomeworkerBranch: false } as never;
+
+  it("403 'another shop' when the task's deal is readable, 404 when it is not or it is a client task", async () => {
+    vi.mocked(taskRepository.toggleComplete).mockResolvedValue(undefined as never);
+    vi.mocked(taskRepository.remove).mockResolvedValue(false as never);
+    vi.mocked(taskRepository.update).mockResolvedValue(undefined as never);
+    vi.mocked(taskRepository.findById).mockResolvedValue(undefined as never);
+    vi.mocked(taskRepository.findByIdInOrg).mockResolvedValue({ id: "t1", entityType: "quote", entityId: "q1" } as never);
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(true as never);
+
+    await expect(taskService.toggleComplete("t1", scope)).rejects.toMatchObject({ statusCode: 403, message: "This deal belongs to another shop" });
+    await expect(taskService.remove("t1", scope)).rejects.toMatchObject({ statusCode: 403 });
+    await expect(taskService.update("t1", { title: "x" } as never, scope)).rejects.toMatchObject({ statusCode: 403 });
+
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(false as never);
+    await expect(taskService.toggleComplete("t1", scope)).rejects.toMatchObject({ statusCode: 404 });
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(true as never);
+    vi.mocked(taskRepository.findByIdInOrg).mockResolvedValue({ id: "t1", entityType: "client", entityId: "c1" } as never);
+    await expect(taskService.remove("t1", scope)).rejects.toMatchObject({ statusCode: 404 });
   });
 });

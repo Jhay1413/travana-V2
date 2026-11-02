@@ -3,54 +3,42 @@ import { taskApi } from "./task.api";
 import { taskKeys } from "./use-task-queries";
 import type { InsertTaskNew } from "@shared/schema";
 
-function invalidateAllTaskQueries(queryClient: ReturnType<typeof useQueryClient>, entityType: string, entityId: string) {
-  queryClient.invalidateQueries({ queryKey: taskKeys.byEntity(entityType, entityId) });
-  queryClient.invalidateQueries({ queryKey: taskKeys.all });
-  queryClient.invalidateQueries({ queryKey: taskKeys.list() });
-  queryClient.invalidateQueries({ queryKey: taskKeys.listExtended() });
+// Every task list (entity, client page, user, dashboard, global) is keyed under
+// taskKeys.all, so invalidating that prefix refreshes whichever view shows the task.
+function invalidateAllTaskQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  return queryClient.invalidateQueries({ queryKey: taskKeys.all });
 }
 
-export function useCreateTask(entityType: string, entityId: string) {
+// The entity arguments are kept so existing call sites stay unchanged; the
+// invalidation no longer depends on them.
+export function useCreateTask(_entityType: string, _entityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: InsertTaskNew) => taskApi.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.byEntity(entityType, entityId) });
-      queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      queryClient.invalidateQueries({ queryKey: taskKeys.list() });
-      queryClient.invalidateQueries({ queryKey: taskKeys.listExtended() });
-    },
+    onSuccess: () => invalidateAllTaskQueries(queryClient),
   });
 }
 
-export function useUpdateTask(entityType: string, entityId: string) {
+export function useUpdateTask(_entityType: string, _entityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<InsertTaskNew> }) => taskApi.update(id, data),
-    onSuccess: () => {
-      // byUser keys live under taskKeys.all, so this also refreshes the
-      // "What's on" lists regardless of which view triggered the edit.
-      invalidateAllTaskQueries(queryClient, entityType, entityId);
-    },
+    onSuccess: () => invalidateAllTaskQueries(queryClient),
   });
 }
 
-export function useToggleTask(entityType: string, entityId: string) {
+export function useToggleTask(_entityType: string, _entityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => taskApi.toggleComplete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.byEntity(entityType, entityId) });
-    },
+    onSuccess: () => invalidateAllTaskQueries(queryClient),
   });
 }
 
-export function useDeleteTask(entityType: string, entityId: string) {
+export function useDeleteTask(_entityType: string, _entityId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => taskApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.byEntity(entityType, entityId) });
-    },
+    onSuccess: () => invalidateAllTaskQueries(queryClient),
   });
 }

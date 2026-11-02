@@ -43,6 +43,7 @@ import { conversationIntegrationService } from "../conversation-integration/conv
 import { knowledgeBaseRepository } from "../knowledge-base/knowledge-base.repository";
 import { messagesRepository } from "../messages/messages.repository";
 import { neonClientService } from "../neon-client/neon-client.service";
+import { organizationRepository } from "../organization/organization.repository";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
 import { orgUserId as defaultOwnerUserId, resolveAndCreateEnquiry } from "./enquiry-auto-create.service";
@@ -242,6 +243,13 @@ export const replyWorker = {
     const hasText = !!message.text?.trim();
     const isMediaMessage = MEDIA_MESSAGE_TYPES.has((message.message_type ?? "").toLowerCase());
     if (!hasText && !isMediaMessage) return;
+
+    // A suspended agency sends nothing automatically, so the AI stays silent.
+    const organization = await organizationRepository.findById(orgId);
+    if (organization?.isActive === false) {
+      console.log(`[sendseven-webhook] org ${orgId} is suspended — skipping reply.`);
+      return;
+    }
 
     const contactId = message.contact_id ?? contact?.id ?? null;
     // The sender's SendSeven contact/display name — lets the AI address an

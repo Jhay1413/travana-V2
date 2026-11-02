@@ -13,3 +13,14 @@ export function requestErrorMessage(err: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+/**
+ * The HTTP status of a failed request. The axios interceptor rejects with an Error that
+ * carries `.status`; a raw axios error carries it on `.response.status`. Read both.
+ */
+export function requestErrorStatus(err: unknown): number | undefined {
+  if (typeof err !== "object" || err === null) return undefined;
+  const e = err as { status?: unknown; response?: { status?: unknown } };
+  const status = e.status ?? e.response?.status;
+  return typeof status === "number" ? status : undefined;
+}

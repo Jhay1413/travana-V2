@@ -63,7 +63,7 @@ export function AppHeader() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useGlobalSearch(debouncedQuery);
+  } = useGlobalSearch(debouncedQuery, { enabled: orgRole !== "referral_agent" }); // referral agents have no access to clients or deals
 
   const clients = useMemo(
     () => globalSearchData?.pages.flatMap((p) => p.clients) ?? [],

@@ -57,6 +57,7 @@ import { summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function QuoteRHFForm({
+  quoteId,
   defaultValues,
   onSubmit,
   isLoading,
@@ -470,7 +471,7 @@ export function QuoteRHFForm({
             />
             <QuoteDrawerCostingsSection />
             <FormDrawerSection title="Tags" defaultOpen={initialTagsCount > 0} data-testid="drawer-section-tags">
-              <QuoteTagsSection bare />
+              <QuoteTagsSection bare quoteId={quoteId} />
             </FormDrawerSection>
             <FormField
               control={control}
@@ -571,7 +572,7 @@ export function QuoteRHFForm({
         <QuotePricingSection />
 
         {/* ── TAGS ──────────────────────────────────────────────────────────── */}
-        <QuoteTagsSection />
+        <QuoteTagsSection quoteId={quoteId} />
 
         {/* ── TEST TRANSACTION ──────────────────────────────────────────────── */}
         <QuoteTestToggleSection />

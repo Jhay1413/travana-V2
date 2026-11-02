@@ -4,7 +4,8 @@ import { branchMemberRepository } from '../modules/branch-member/branch-member.r
 import { userOrgRolesRepository } from '../modules/user-org-roles/user-org-roles.repository';
 import { primaryRole } from '../modules/user-org-roles/user-org-roles.service';
 import { getUserId } from '../../utils/get-user-id';
-import { accountBlock, rejectBlockedSession } from './auth/account-standing';
+import { accountBlock, isOrgSuspendedFor, rejectBlockedSession, rejectOrgSuspended } from './auth/account-standing';
+import { organizationRepository } from '../modules/organization/organization.repository';
 import { resolveAccountBlock } from './auth/resolve-account-block';
 
 export async function orgBranchScope(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -42,6 +43,7 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
       req.orgRole  = 'org_admin';
       req.branchType = null;
       req.ownsHomeworkerBranch = false;
+      req.impersonating = true;
       return next();
     }
 
@@ -68,6 +70,14 @@ export async function orgBranchScope(req: Request, res: Response, next: NextFunc
 
   if (!orgId) {
     res.status(403).json({ message: 'No organisation context' });
+    return;
+  }
+
+  // Suspended organisation: the flag arrives with the membership query. Only a user
+  // with no active membership (legacy orgId) needs a separate lookup.
+  const orgIsActive = membership ? membership.orgIsActive : (await organizationRepository.findById(orgId))?.isActive;
+  if (isOrgSuspendedFor(dbUser, orgIsActive)) {
+    rejectOrgSuspended(res);
     return;
   }
 

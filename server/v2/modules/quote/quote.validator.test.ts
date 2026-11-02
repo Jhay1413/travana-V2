@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { freeQuotesQueryValidator, freeQuoteStatusCountsValidator, recentEngagementQueryValidator, setAcceptedValidator } from "./quote.validator";
+import { freeQuotesQueryValidator, freeQuoteStatusCountsValidator, recentEngagementQueryValidator, setAcceptedValidator, detachQuoteTagValidator } from "./quote.validator";
 
 describe("freeQuotesQueryValidator", () => {
   it.each(["not_generated", "draft", "scheduled", "posted"])("accepts socialStatus %s", (socialStatus) => {
@@ -63,5 +63,19 @@ describe("setAcceptedValidator", () => {
   it("rejects extra body keys and a non-uuid id", () => {
     expect(setAcceptedValidator.safeParse({ params: { id }, body: { accepted: true, extra: 1 } }).success).toBe(false);
     expect(setAcceptedValidator.safeParse({ params: { id: "nope" }, body: { accepted: true } }).success).toBe(false);
+  });
+});
+
+describe("detachQuoteTagValidator", () => {
+  const id = "11111111-1111-4111-8111-111111111111";
+  const tagId = "22222222-2222-4222-8222-222222222222";
+
+  it("accepts a quote id and a tag id that are uuids", () => {
+    expect(detachQuoteTagValidator.safeParse({ params: { id, tagId } }).success).toBe(true);
+  });
+
+  it("rejects a malformed quote id or tag id", () => {
+    expect(detachQuoteTagValidator.safeParse({ params: { id: "nope", tagId } }).success).toBe(false);
+    expect(detachQuoteTagValidator.safeParse({ params: { id, tagId: "nope" } }).success).toBe(false);
   });
 });

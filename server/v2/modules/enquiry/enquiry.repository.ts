@@ -8,7 +8,7 @@ import {
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
 import { eq, desc, sql, and, isNull, type SQL } from "drizzle-orm";
-import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { buildTransactionScopeConds, buildTransactionRecordScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export const enquiryTableRepository = {
   async findById(id: string): Promise<EnquiryTable | undefined> {
@@ -23,6 +23,27 @@ export const enquiryTableRepository = {
       .from(enquiry_table)
       .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
       .where(and(eq(enquiry_table.id, id), isNull(enquiry_table.deleted_at), ...buildTransactionRecordScopeConds(scope)))
+      .limit(1);
+    return !!row;
+  },
+
+  /** Write scope (shop-pinned): may the caller change this enquiry? */
+  async enquiryInScopeForWrite(id: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: enquiry_table.id })
+      .from(enquiry_table)
+      .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
+      .where(and(eq(enquiry_table.id, id), isNull(enquiry_table.deleted_at), ...buildTransactionWriteScopeConds(scope)))
+      .limit(1);
+    return !!row;
+  },
+
+  /** Write scope (shop-pinned): may the caller add an enquiry to this deal? */
+  async transactionInScopeForWrite(transactionId: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: transaction.id })
+      .from(transaction)
+      .where(and(eq(transaction.id, transactionId), ...buildTransactionWriteScopeConds(scope)))
       .limit(1);
     return !!row;
   },

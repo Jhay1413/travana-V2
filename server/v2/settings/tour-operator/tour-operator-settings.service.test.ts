@@ -118,7 +118,7 @@ describe("remove", () => {
     vi.mocked(repo.findById).mockResolvedValue(op({ logo_url: "https://s3/logo.png" }));
     vi.mocked(repo.countReferences).mockResolvedValue({ links: 0, records: 0 });
     await service.remove("op1");
-    expect(deleteImageByStoredUrl).toHaveBeenCalledWith("https://s3/logo.png");
+    expect(deleteImageByStoredUrl).toHaveBeenCalledWith("https://s3/logo.png", ["tour-operator-logos/"]);
     expect(repo.remove).toHaveBeenCalledWith("op1");
   });
 
@@ -134,7 +134,7 @@ describe("logo upload", () => {
     vi.mocked(uploadImageToS3).mockResolvedValue("new-url");
     vi.mocked(repo.update).mockResolvedValue(op({ logo_url: "new-url" }));
     const out = await service.uploadLogo("op1", { originalname: "a.png" } as never);
-    expect(deleteImageByStoredUrl).toHaveBeenCalledWith("old");
+    expect(deleteImageByStoredUrl).toHaveBeenCalledWith("old", ["tour-operator-logos/"]);
     expect(repo.update).toHaveBeenCalledWith("op1", { logo_url: "new-url" });
     expect(out).toMatchObject({ logo_url: "new-url" });
   });

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { AppError } from "../../utils/error-handler";
-import { assertOrderTokens, buildMediaSlots, parseImageOrderField, parseOrderToken } from "./media-order";
+import { assertOrderTokens, buildMediaSlots, parseImageOrderField, parseOrderToken, sanitizeUrlInput } from "./media-order";
 import { scheduleMediaSchema } from "./social-post.validator";
 
 const file = (name: string) => ({ originalname: name }) as Express.Multer.File;
@@ -140,5 +140,32 @@ describe("buildMediaSlots", () => {
     expect(() => buildMediaSlots({ ...base, order: ["existing:99"] })).toThrow(AppError);
     expect(() => buildMediaSlots({ ...base, order: ["file:1"] })).toThrow(AppError);
     expect(() => buildMediaSlots({ ...base, order: ["url:2"] })).toThrow(AppError);
+  });
+});
+
+describe("sanitizeUrlInput", () => {
+  it("drops unacceptable urls, reports them and keeps the good ones", () => {
+    const out = sanitizeUrlInput(["https://a.test/1.jpg", null, "//cdn.test/x.jpg", "https://a.test/2.jpg"], undefined);
+    expect(out.urls).toEqual(["https://a.test/1.jpg", "https://a.test/2.jpg"]);
+    expect(out.dropped).toEqual(["(not an image link)", "//cdn.test/x.jpg"]);
+    expect(out.order).toBeUndefined();
+  });
+
+  it("re-points url:N tokens at the kept urls, removes tokens of dropped urls, and leaves other kinds alone", () => {
+    const out = sanitizeUrlInput(["bad", "https://a.test/1.jpg", "//x", "https://a.test/2.jpg"], ["url:3", "file:0", "url:0", "existing:7", "url:1", "url:2"]);
+    expect(out.urls).toEqual(["https://a.test/1.jpg", "https://a.test/2.jpg"]);
+    expect(out.order).toEqual(["url:1", "file:0", "existing:7", "url:0"]);
+    // the remapped order is valid for the kept list
+    expect(() => assertOrderTokens(out.order ?? [], { existingIds: [7], fileCount: 1, urlCount: out.urls.length })).not.toThrow();
+  });
+
+  it("still lets assertOrderTokens refuse an index past the original list", () => {
+    const out = sanitizeUrlInput(["https://a.test/1.jpg", "bad"], ["url:5"]);
+    expect(out.order).toEqual(["url:5"]);
+    expect(() => assertOrderTokens(out.order ?? [], { existingIds: [], fileCount: 0, urlCount: out.urls.length })).toThrow();
+  });
+
+  it("treats a non-array as no urls", () => {
+    expect(sanitizeUrlInput("nope", undefined)).toEqual({ urls: [], dropped: [], order: undefined });
   });
 });

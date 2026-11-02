@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../quote/quote-public.repository", () => ({
-  quotePublicRepository: { getOwnerByQuoteId: vi.fn() },
+  quotePublicRepository: { getOwnerByQuoteId: vi.fn(), getClientQuoteViews: vi.fn() },
+}));
+
+vi.mock("../quote/quote-access", () => ({
+  assertQuoteReadable: vi.fn(),
+  assertQuoteWritable: vi.fn(),
 }));
 
 vi.mock("./quote-share.repository", () => ({
@@ -11,6 +16,8 @@ vi.mock("./quote-share.repository", () => ({
 import { quoteShareService } from "./quote-share.service";
 import { quotePublicRepository } from "../quote/quote-public.repository";
 import { quoteShareRepository } from "./quote-share.repository";
+import { assertQuoteReadable, assertQuoteWritable } from "../quote/quote-access";
+import { AppError } from "../../utils/error-handler";
 import type { Scope } from "../../utils/scope";
 
 const scope = (over: Partial<Scope>): Scope => ({
@@ -88,6 +95,40 @@ describe("quoteShareService.verifyAccess", () => {
     await expect(
       quoteShareService.verifyAccess("q1", "u1", scope({ orgRole: "social_media_manager", orgRoles: ["social_media_manager"] })),
     ).rejects.toMatchObject({ statusCode: 403 });
+  });
+});
+
+describe("quoteShareService.verifyAccess deal scope (B2)", () => {
+  const agent = scope({ branchId: "shop1" });
+
+  it("write mode (generate-token, send-whatsapp, sent) goes through the shop-pinned write check, read mode through the read check", async () => {
+    await quoteShareService.verifyAccess("q1", "u1", agent, "write");
+    expect(assertQuoteWritable).toHaveBeenCalledWith("q1", agent);
+    expect(assertQuoteReadable).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    vi.mocked(quotePublicRepository.getOwnerByQuoteId).mockResolvedValue({ userId: "owner", orgId: "o1" });
+    await quoteShareService.verifyAccess("q1", "u1", agent, "read");
+    expect(assertQuoteReadable).toHaveBeenCalledWith("q1", agent);
+    expect(assertQuoteWritable).not.toHaveBeenCalled();
+  });
+
+  it("refuses another shop's quote on write with 403 and a no-shop / foreign deal with 404, even for the owner", async () => {
+    vi.mocked(assertQuoteWritable).mockRejectedValueOnce(new AppError("This deal belongs to another shop", 403));
+    await expect(quoteShareService.verifyAccess("q1", "owner", agent, "write")).rejects.toMatchObject({ statusCode: 403 });
+    vi.mocked(assertQuoteWritable).mockRejectedValueOnce(new AppError("Quote not found", 404));
+    await expect(quoteShareService.verifyAccess("q1", "owner", scope({ branchId: null }), "write")).rejects.toMatchObject({ statusCode: 404 });
+    vi.mocked(assertQuoteReadable).mockRejectedValueOnce(new AppError("Quote not found", 404));
+    await expect(quoteShareService.verifyAccess("q1", "u1", scope({ branchId: null }), "read")).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe("quoteShareService.getClientQuoteViews", () => {
+  it("hands the caller's full scope to the repository so the views are pinned like the client page deals", async () => {
+    vi.mocked(quotePublicRepository.getClientQuoteViews).mockResolvedValue([]);
+    const s = scope({ branchId: "shop1" });
+    await quoteShareService.getClientQuoteViews("c1", s);
+    expect(quotePublicRepository.getClientQuoteViews).toHaveBeenCalledWith("c1", s);
   });
 });
 

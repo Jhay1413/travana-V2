@@ -1,4 +1,5 @@
 import { tagRepository } from "./tag.repository";
+import { AppError } from "../../utils/error-handler";
 
 export const tagService = {
   async getAllTags() {
@@ -21,6 +22,12 @@ export const tagService = {
    */
   async updateQuoteTags(quoteId: string, tagNames: string[]) {
     await tagRepository.replaceQuoteTags(quoteId, tagNames);
+  },
+
+  /** Detach one tag from one quote (the tag and other quotes are untouched). 404 if not attached. */
+  async detachQuoteTag(quoteId: string, tagId: string) {
+    const removed = await tagRepository.detachTagFromQuote(quoteId, tagId);
+    if (!removed) throw new AppError("Tag not found on this quote", 404);
   },
 
   /**

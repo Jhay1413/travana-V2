@@ -29,7 +29,7 @@ describe("homeworker deny on inbox and social mounts", () => {
   }
 
   it("auth stack includes orgBranchScope", () => {
-    expect(source).toMatch(/const auth = \[isAuthenticated, orgBranchScope\]/);
+    expect(source).toMatch(/const auth = \[isAuthenticated, orgBranchScope, restrictReferralAgent\]/);
   });
 });
 
@@ -39,6 +39,18 @@ describe("blocked users cannot reach session-only routers", () => {
       const line = mountLine(path);
       expect(line).toContain("...auth");
       expect(line).not.toMatch(/\bisAuthenticated,/);
+    });
+  }
+});
+
+describe("referral agents are default-denied on every authenticated mount", () => {
+  it("the shared auth stack ends with the referral gate, after orgBranchScope populated the roles", () => {
+    expect(source).toMatch(/const auth = \[isAuthenticated, orgBranchScope, restrictReferralAgent\]/);
+  });
+
+  for (const path of ["/transactions", "/quotes", "/bookings", "/upsells", "/enquiries", "/clients", "/neon-clients", "/notes", "/tasks", "/tickets", "/search", "/ai", "/opportunities", "/dashboard", "/favorites", "/sms", "/image-upscale", "/client-files", "/note-attachments"]) {
+    it(`${path} sits behind the auth stack (and so the referral gate)`, () => {
+      expect(mountLine(path)).toContain("...auth");
     });
   }
 });

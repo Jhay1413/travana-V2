@@ -48,13 +48,9 @@ export const quoteImageRepository = {
   },
 
   /**
-   * Get the stored URL for a single quote image (used to clean up S3 on delete).
-   *
-   * A quote's merged `images` list can hand back an id from quoteImages,
-   * deal_images, accommodation_images or lodge_images (see `deleteImage`
-   * below for why), so the lookup mirrors that same fallback order/scoping:
-   * quoteImages and deal_images are scoped to this quote, while
-   * accommodation_images / lodge_images are master records matched by id alone.
+   * Get the stored URL for a single image THIS quote owns (quote_images, or deal_images owned by the
+   * quote), used to clean up S3 on delete. Shared accommodation / lodge library images are not the
+   * quote's to delete and are never returned here (see isSharedGalleryImage).
    */
   async getImageUrl(quoteId: string, imageId: string): Promise<string | null> {
     const [quoteImageRow] = await db
@@ -69,21 +65,23 @@ export const quoteImageRepository = {
       .from(deal_images)
       .where(and(eq(deal_images.id, imageId), eq(deal_images.owner_id, quoteId)))
       .limit(1);
-    if (dealImageRow?.url) return dealImageRow.url;
+    return dealImageRow?.url ?? null;
+  },
 
+  /**
+   * True when imageId is a row of the shared accommodation or lodge image library. Those are master
+   * records shared by every quote for that hotel or lodge, so a quote or booking endpoint must never
+   * delete them. (There is no per-quote "hidden" marker, so such a removal is refused instead.)
+   */
+  async isSharedGalleryImage(imageId: string): Promise<boolean> {
     const [accommodationRow] = await db
-      .select({ url: accommodation_images.image_url })
+      .select({ id: accommodation_images.id })
       .from(accommodation_images)
       .where(eq(accommodation_images.id, imageId))
       .limit(1);
-    if (accommodationRow?.url) return accommodationRow.url;
-
-    const [lodgeRow] = await db
-      .select({ url: lodge_images.image_url })
-      .from(lodge_images)
-      .where(eq(lodge_images.id, imageId))
-      .limit(1);
-    return lodgeRow?.url ?? null;
+    if (accommodationRow) return true;
+    const [lodgeRow] = await db.select({ id: lodge_images.id }).from(lodge_images).where(eq(lodge_images.id, imageId)).limit(1);
+    return !!lodgeRow;
   },
 
   /**
@@ -172,21 +170,15 @@ export const quoteImageRepository = {
   },
 
   /**
-   * Delete a specific image.
-   *
-   * A quote's `images` array is a merge of quoteImages, accommodation_images
-   * and lodge_images (see quote.repository `getById`), each labelled with the
-   * row's own id. The incoming imageId therefore belongs to whichever source
-   * table that row came from, so we try the delete against every source. The
-   * accommodation_images / lodge_images delete is a global removal because
-   * those tables are master records shared across all consumers.
+   * Delete a specific image THIS quote owns. A quote's images array is a merge of quoteImages,
+   * deal_images, accommodation_images and lodge_images, each labelled with the row's own id, but only the
+   * first two belong to the quote. The accommodation_images / lodge_images rows are shared master records
+   * and are NEVER deleted from here.
    */
   async deleteImage(quoteId: string, imageId: string) {
     await Promise.all([
       db.delete(quoteImages).where(and(eq(quoteImages.id, imageId), eq(quoteImages.quoteId, quoteId))),
       db.delete(deal_images).where(and(eq(deal_images.id, imageId), eq(deal_images.owner_id, quoteId))),
-      db.delete(accommodation_images).where(eq(accommodation_images.id, imageId)),
-      db.delete(lodge_images).where(eq(lodge_images.id, imageId)),
     ]);
   },
 

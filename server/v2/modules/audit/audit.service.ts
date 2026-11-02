@@ -1,5 +1,7 @@
 import { auditRepository } from './audit.repository';
 import { newQuoteRepository } from '../quote/quote.repository';
+import { taskService } from '../task/task.service';
+import { aiEmbeddingsService } from '../ai-embeddings/ai-embeddings.service';
 import { AppError } from '../../utils/error-handler';
 import type { Scope } from '../../utils/scope';
 
@@ -25,6 +27,20 @@ interface DeleteByAdmin {
 // past) its own expiry would silently inherit primary status without a fresh
 // quoted window.
 const NEW_PRIMARY_EXPIRY_MS = 6 * 24 * 60 * 60 * 1000;
+
+// Same clean-up newQuoteService.deleteQuote does after a delete: close the
+// quote's open tasks and drop a free quote's AI reference. Best-effort, so it
+// never blocks or undoes a delete that has already been recorded.
+async function cleanUpDeletedQuote(quoteId: string, isFreeQuote: boolean): Promise<void> {
+  if (isFreeQuote) {
+    void aiEmbeddingsService.removeSourceById('quote', quoteId);
+  }
+  try {
+    await taskService.completeByEntity('quote', quoteId);
+  } catch (err) {
+    console.error('COMPLETE QUOTE TASKS (audit.service delete) - error:', err);
+  }
+}
 
 export const auditService = {
   async findAll(scope: Scope) {
@@ -83,6 +99,7 @@ export const auditService = {
           newPrimaryId: input.newPrimaryQuoteId,
           newPrimaryExpiry: new Date(Date.now() + NEW_PRIMARY_EXPIRY_MS),
         });
+        await cleanUpDeletedQuote(input.id, quoteData.isFreeQuote === true);
         return;
       }
     }
@@ -97,6 +114,7 @@ export const auditService = {
       clientId,
       clientName,
     });
+    await cleanUpDeletedQuote(input.id, quoteData.isFreeQuote === true);
   },
 
   async deleteBooking(scope: Scope, input: DeleteByAdmin) {

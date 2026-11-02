@@ -9,7 +9,7 @@ import {
   type InsertClientTable,
 } from "@shared/schema";
 import { eq, desc, asc, sql, count, or, and, ilike, inArray, isNull, getTableColumns, type SQL } from "drizzle-orm";
-import type { Scope } from "../../utils/scope";
+import { holdsHomeworkerRole, type Scope } from "../../utils/scope";
 import { buildPartitionCond } from "../../utils/scope-conditions";
 import { phoneDigitsCondition } from "../../utils/phone-search";
 import { clientNameCondition } from "../../utils/client-name-search";
@@ -88,6 +88,20 @@ export type ClientDealCounts = {
 };
 
 export const neonClientRepository = {
+  /**
+   * The client check when CREATING a deal (never used for reads or lists, whose visibility is unchanged).
+   * Branch managers and homeworkers may also pick a client with no shop recorded (branch_id NULL, e.g. made by
+   * the SendSeven webhook); a client in another shop is still refused. Agents and admins: same as findById.
+   */
+  async findByIdForDealCreate(id: string, scope: Scope): Promise<NeonClient | undefined> {
+    const widened = scope.orgRole !== "platform_admin" && ((scope.orgRole === "branch_manager" && !!scope.branchId) || holdsHomeworkerRole(scope));
+    const conds: SQL[] = widened
+      ? [eq(clientTable.id, id), eq(clientTable.orgId, scope.orgId), or(isNull(clientTable.branchId), and(...buildClientScopeConds(scope))) as SQL]
+      : [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
+    const [result] = await db.select().from(clientTable).where(and(...conds)).limit(1);
+    return result;
+  },
+
   async findById(id: string, scope?: Scope): Promise<NeonClient | undefined> {
     const conds: SQL[] = [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
     const [result] = await db.select().from(clientTable).where(and(...conds)).limit(1);

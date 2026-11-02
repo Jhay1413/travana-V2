@@ -1,6 +1,7 @@
 import { db } from "../../config/database";
 import { noteAttachments, notes, transaction, type NoteAttachment, type InsertNoteAttachment } from "@shared/schema";
 import { eq, desc, asc, or, sql } from "drizzle-orm";
+import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export const noteAttachmentRepository = {
   async findById(id: string): Promise<NoteAttachment | undefined> {
@@ -30,9 +31,11 @@ export const noteAttachmentRepository = {
 
   // Attachments on a client's own notes, plus (optionally) notes on any of the
   // client's deals. Oldest first.
-  async findByClientId(clientId: string, includeDeals: boolean): Promise<NoteAttachment[]> {
+  async findByClientId(clientId: string, includeDeals: boolean, scope?: ScopeOrTrusted): Promise<NoteAttachment[]> {
     const onClient = eq(notes.client_id, clientId);
-    const onDeals = sql`${notes.transaction_id} IN (SELECT ${transaction.id} FROM ${transaction} WHERE ${transaction.client_id} = ${clientId})`;
+    // Deal attachments follow the same shop pin as the client page's deal list.
+    const dealScope = scope ? buildTransactionScopeConds(scope) : [];
+    const onDeals = sql`${notes.transaction_id} IN (SELECT ${transaction.id} FROM ${transaction} WHERE ${sql.join([eq(transaction.client_id, clientId), ...dealScope], sql` AND `)})`;
     const rows = await db
       .select({ attachment: noteAttachments })
       .from(noteAttachments)

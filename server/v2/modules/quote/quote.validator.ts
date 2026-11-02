@@ -75,6 +75,14 @@ export const freeQuoteStatusCountsValidator = z.object({
     .passthrough(),
 });
 
+// DELETE /:id/tags/:tagId — detach one tag from this quote only.
+export const detachQuoteTagValidator = z.object({
+  params: z.object({
+    id: z.string().uuid("Invalid quote id"),
+    tagId: z.string().uuid("Invalid tag id"),
+  }),
+});
+
 // PATCH /:id/accepted — manual "customer accepted" mark (true) or undo (false).
 export const setAcceptedValidator = z.object({
   params: z.object({ id: z.string().uuid("Invalid quote id") }),

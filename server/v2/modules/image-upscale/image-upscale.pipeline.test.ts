@@ -26,6 +26,9 @@ vi.mock("../../utils/image-storage", () => ({
   presignImageKey: vi.fn(async (key: string) => `https://s3.test/${key}`),
   s3KeyFromStoredUrl: (url: string) =>
     url.startsWith("/api/v2/files/img?key=") ? decodeURIComponent(url.split("key=")[1]) : null,
+  publicImageKeyFromStoredUrl: (url: string) =>
+    url.startsWith("/api/v2/files/img?key=") ? decodeURIComponent(url.split("key=")[1]) : null,
+  isStoredProxyUrl: (url: string) => url.startsWith("/api/v2/files/img?key="),
 }));
 vi.mock("../usage/usage.service", () => ({ usageService: { recordAiUsage: mocks.recordAiUsage } }));
 vi.mock("@fal-ai/client", () => ({ fal: { config: vi.fn(), subscribe: mocks.falSubscribe } }));
