@@ -2,14 +2,18 @@ import { Router } from "express";
 import multer from "multer";
 import { transactionController } from "./transaction.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { updatePriorityValidator, setFutureDealValidator, setLostValidator } from "./transaction.validator";
+import { createTransactionValidator, updatePriorityValidator, setFutureDealValidator, setLostValidator, listPipelineByStatusValidator, pipelineCountsValidator } from "./transaction.validator";
+import { blockReadOnlyClientWrites } from '../../middlewares/auth/block-read-only-roles';
 
 const router = Router();
+// social_media_manager is read-only on client data: refuse every write method.
+router.use(blockReadOnlyClientWrites);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 router.get("/", transactionController.listTransactions);
 router.get("/pipeline", transactionController.listTransactionsLightweight);
-router.get("/pipeline/:status", transactionController.listPipelineByStatus);
+router.get("/pipeline/:status", validate(listPipelineByStatusValidator), transactionController.listPipelineByStatus);
+router.get("/pipeline-counts", validate(pipelineCountsValidator), transactionController.getPipelineCounts);
 router.get("/expiring-quotes", transactionController.getExpiringQuotes);
 router.get("/stats", transactionController.getStats);
 // Registered before the generic /:id routes below so these specific-path
@@ -21,7 +25,7 @@ router.post("/:id/lost", validate(setLostValidator), transactionController.setLo
 // quotes, booking); this name makes that explicit for callers that need it.
 router.get("/:id/details", transactionController.getTransactionById);
 router.get("/:id", transactionController.getTransactionById);
-router.post("/", upload.array("images", 10), transactionController.createTransaction);
+router.post("/", upload.array("images", 10), validate(createTransactionValidator), transactionController.createTransaction);
 router.patch("/:id", transactionController.updateTransaction);
 router.delete("/:id", transactionController.deleteTransaction);
 

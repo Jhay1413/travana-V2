@@ -1,6 +1,8 @@
 import { Router } from "express";
 import multer from "multer";
 import { socialPostController } from "./social-post.controller";
+import { validate } from "../../middlewares/validation.middleware";
+import { scheduleMediaSchema } from "./social-post.validator";
 
 const router = Router();
 
@@ -23,8 +25,8 @@ router.get("/quote/:quoteId", socialPostController.getByQuoteId);
 router.patch("/:id", socialPostController.update);
 
 router.post("/media/upload", upload.array("files", 10), socialPostController.uploadMedia);
-router.post("/:id/schedule", upload.array("files", 10), socialPostController.schedulePost);
-router.put("/:id/reschedule", upload.array("files", 10), socialPostController.reschedulePost);
+router.post("/:id/schedule", upload.array("files", 10), validate(scheduleMediaSchema), socialPostController.schedulePost);
+router.put("/:id/reschedule", upload.array("files", 10), validate(scheduleMediaSchema), socialPostController.reschedulePost);
 router.delete("/:id/schedule", socialPostController.deleteScheduledPost);
 router.get("/:id/media", socialPostController.getPostMedia);
 

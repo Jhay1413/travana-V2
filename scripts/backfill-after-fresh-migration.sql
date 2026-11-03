@@ -23,18 +23,11 @@
 
 BEGIN;
 
--- ── 1. Per-org tour operator copies (was migration 0013) ────────────────────
--- Each org gets its own copy of every global (org_id IS NULL) catalog row.
--- Skips orgs that already have at least one copy.
-INSERT INTO tour_operator_table (name, commission_percentage, org_id)
-SELECT t.name, t.commission_percentage, o.id
-FROM organization o
-CROSS JOIN tour_operator_table t
-WHERE t.org_id IS NULL
-  AND NOT EXISTS (
-    SELECT 1 FROM tour_operator_table existing
-    WHERE existing.org_id = o.id
-  );
+-- ── 1. Tour operators (was migration 0013) — NOTHING TO COPY ────────────────
+-- Tour operators are now ONE platform-wide catalogue (tour_operator_table has no
+-- org_id); each org's commission/login lives in org_tour_operator and is added
+-- by the org itself. Seed the catalogue with scripts/seed-org-tour-operators.ts.
+-- Existing per-org copies are merged by scripts/migrate-tour-operators-to-catalogue.sql.
 
 -- ── 2. hr_records for users missing one (was migration 0015) ────────────────
 -- org_id from user.org_id, else the user's active branch membership.

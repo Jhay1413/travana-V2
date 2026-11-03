@@ -64,8 +64,8 @@ export const platformAdminRepository = {
     await db.update(organization).set({ isActive }).where(eq(organization.id, id));
   },
 
-  async updatePlan(id: string, plan: string, seatLimit?: number): Promise<void> {
-    const patch: { plan: string; seatLimit?: number } = { plan };
+  async updatePlan(id: string, plan: string, seatLimit?: number | null): Promise<void> {
+    const patch: { plan: string; seatLimit?: number | null } = { plan };
     if (seatLimit !== undefined) patch.seatLimit = seatLimit;
     await db.update(organization).set(patch).where(eq(organization.id, id));
   },
@@ -141,13 +141,6 @@ export const platformAdminRepository = {
       .from(user)
       .where(eq(user.orgId, orgId))
       .orderBy(asc(user.email));
-  },
-
-  async setUserOrgRole(userId: string, orgId: string, orgRole: string): Promise<void> {
-    await db
-      .update(user)
-      .set({ orgRole, updatedAt: new Date() })
-      .where(and(eq(user.id, userId), eq(user.orgId, orgId)));
   },
 
   async setUserBanned(userId: string, orgId: string, banned: boolean, reason?: string): Promise<void> {

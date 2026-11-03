@@ -1,8 +1,9 @@
 import { db } from "../../config/database";
-import { tasks, notifications, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
-import { eq, and, desc, gte, lte, inArray, type SQL } from "drizzle-orm";
+import { tasks, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
+import { eq, and, or, desc, gte, lte, inArray, sql, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
+import { buildPartitionCond, buildTransactionRecordScopeConds, buildTransactionScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 type TaskNew = typeof tasks.$inferSelect;
 // id is generated here (randomUUID), so callers never supply it.
@@ -27,7 +28,58 @@ function buildTaskScopeConds(scope?: Scope, opts?: { entityScoped?: boolean }): 
   ) {
     conds.push(eq(tasks.userId, scope.userId));
   }
+  // TRANSITIONAL NULL-branch arm: tasks.branch_id is nullable and legacy rows stay
+  // NULL until the Phase 8 migration rewrites it.
+  // Entity-scoped reads apply NO task-level partition: the service has already
+  // verified access to the entity itself (entityInScope), and everyone who can
+  // open the entity sees all of its tasks.
+  if (!opts?.entityScoped) {
+    const partition = buildPartitionCond(scope, tasks.branchId, tasks.userId, { allowNullBranchForOwner: true });
+    if (partition) conds.push(partition);
+  }
   return conds;
+}
+
+/**
+ * Is the task's entity one the caller can change? Same rules as `entityInScope` with
+ * forWrite (deal-linked tasks need the shop-pinned WRITE scope on the transaction,
+ * client-linked tasks the client row's visibility), expressed as SQL so it can sit inside a task WHERE. Deal ids are
+ * matched on entity_id alone because booking tasks may be stored as entity_type
+ * "quote" with the booking id (see findByClient).
+ */
+function buildEntityVisibleCond(scope: Scope): SQL {
+  const txnConds = buildTransactionWriteScopeConds(scope);
+  const txnWhere = txnConds.length ? sql.join(txnConds, sql` AND `) : sql`true`;
+  const dealIds = (source: typeof quote | typeof booking | typeof enquiry_table) =>
+    sql`SELECT ${source.id}::text FROM ${source} INNER JOIN ${transaction} ON ${source.transaction_id} = ${transaction.id} WHERE ${txnWhere}`;
+  const clientConds: SQL[] = [eq(clientTable.orgId, scope.orgId)];
+  const clientPartition = buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy);
+  if (clientPartition) clientConds.push(clientPartition);
+  const clientWhere = sql.join(clientConds, sql` AND `);
+  return sql`(
+    ${tasks.entityId} IN (${dealIds(quote)})
+    OR ${tasks.entityId} IN (${dealIds(booking)})
+    OR ${tasks.entityId} IN (${dealIds(enquiry_table)})
+    OR ${tasks.entityId} IN (SELECT ${transaction.id}::text FROM ${transaction} WHERE ${txnWhere})
+    OR (${tasks.entityType} = 'client' AND ${tasks.entityId} IN (SELECT ${clientTable.id}::text FROM ${clientTable} WHERE ${clientWhere}))
+  )`;
+}
+
+/**
+ * Conditions under which the caller may edit / complete / delete / reassign a task:
+ * anyone who can SEE the task can change it.
+ *  - admins, branch managers, platform admin: exactly the normal task scope
+ *    (they are not restricted to their own tasks).
+ *  - agent / homeworker: the task is theirs (normal task scope: org + own + partition)
+ *    OR its entity is visible to them (org + entity-visible, as the entity-scoped
+ *    list shows). Tasks with no entity stay own-task only.
+ */
+export function taskWritableConds(scope?: Scope): SQL[] {
+  const own = buildTaskScopeConds(scope);
+  if (!scope || (scope.orgRole !== "agent" && scope.orgRole !== "homeworker")) return own;
+  const viaEntity = [...buildTaskScopeConds(scope, { entityScoped: true }), buildEntityVisibleCond(scope)];
+  const either = or(and(...own), and(...viaEntity));
+  return either ? [either] : own;
 }
 
 const entityRouteMap: Record<string, string> = {
@@ -36,7 +88,7 @@ const entityRouteMap: Record<string, string> = {
   booking: "/bookings",
 };
 
-function entityLink(entityType: string, entityId: string): string {
+export function entityLink(entityType: string, entityId: string): string {
   const base = entityRouteMap[entityType] ?? `/${entityType}s`;
   return `${base}/${entityId}`;
 }
@@ -446,12 +498,71 @@ export const taskRepository = {
     });
   },
 
+  /**
+   * Can the caller open this entity (quote / enquiry / booking / transaction /
+   * client)? Uses the same partitioned record-level conditions as the entity's
+   * own detail page. Unknown entity types are not in scope.
+   */
+  async entityInScope(entityType: string, entityId: string, scope: ScopeOrTrusted, options: { forWrite?: boolean } = {}): Promise<boolean> {
+    if (entityType === "client") {
+      const s = scope as Scope;
+      const conds: SQL[] = [eq(clientTable.id, entityId)];
+      if (scope.orgId !== null && s.orgRole !== "platform_admin") conds.push(eq(clientTable.orgId, s.orgId));
+      const partition = buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy);
+      if (partition) conds.push(partition);
+      const [row] = await db.select({ id: clientTable.id }).from(clientTable).where(and(...conds)).limit(1);
+      return !!row;
+    }
+    // Attaching a task to a deal is a write to that deal: shop-pinned like the board.
+    const txnConds = options.forWrite ? buildTransactionWriteScopeConds(scope) : buildTransactionRecordScopeConds(scope);
+    if (entityType === "transaction") {
+      const [row] = await db.select({ id: transaction.id }).from(transaction).where(and(eq(transaction.id, entityId), ...txnConds)).limit(1);
+      return !!row;
+    }
+    const source = entityType === "quote" ? quote : entityType === "enquiry" ? enquiry_table : entityType === "booking" ? booking : null;
+    if (!source) return false;
+    const [row] = await db
+      .select({ id: source.id })
+      .from(source)
+      .innerJoin(transaction, eq(source.transaction_id, transaction.id))
+      .where(and(eq(source.id, entityId), ...txnConds))
+      .limit(1);
+    return !!row;
+  },
+
   async findByEntity(entityType: string, entityId: string, scope?: Scope): Promise<TaskNew[]> {
     const conds: SQL[] = [eq(tasks.entityType, entityType), eq(tasks.entityId, entityId), ...buildTaskScopeConds(scope, { entityScoped: true })];
     return await db
       .select()
       .from(tasks)
       .where(and(...conds))
+      .orderBy(desc(tasks.createdAt));
+  },
+
+  /**
+   * Tasks on the client itself plus tasks on any of its enquiries, quotes and
+   * bookings in the caller's shop (agents and branch managers do not see tasks
+   * on another shop's deals; client-level tasks stay visible). Booking tasks may be
+   * stored as entity_type "quote" with the booking id, so the deal ids are matched
+   * on entity_id alone. The service
+   * has already verified the caller can open the client.
+   */
+  async findByClient(clientId: string, scope?: Scope): Promise<TaskNew[]> {
+    const idsFor = async (source: typeof quote | typeof booking | typeof enquiry_table): Promise<string[]> => {
+      const rows = await db
+        .select({ id: source.id })
+        .from(source)
+        .innerJoin(transaction, eq(source.transaction_id, transaction.id))
+        .where(and(eq(transaction.client_id, clientId), ...buildTransactionScopeConds(scope ?? { orgId: null })));
+      return rows.map((r) => r.id);
+    };
+    const dealIds = (await Promise.all([idsFor(quote), idsFor(booking), idsFor(enquiry_table)])).flat();
+    const clientMatch = and(eq(tasks.entityType, "client"), eq(tasks.entityId, clientId));
+    const target = dealIds.length > 0 ? or(clientMatch, inArray(tasks.entityId, dealIds)) : clientMatch;
+    return await db
+      .select()
+      .from(tasks)
+      .where(and(target, ...buildTaskScopeConds(scope, { entityScoped: true })))
       .orderBy(desc(tasks.createdAt));
   },
 
@@ -464,16 +575,35 @@ export const taskRepository = {
       .orderBy(desc(tasks.createdAt));
   },
 
+  /**
+   * Plain, unresolved task row — used by the service layer to read the prior
+   * assignee before an update, so it can tell an actual reassignment apart
+   * from a resave that merely echoes back the same `userId`.
+   */
+  /** A task of the caller's organisation, whatever the task / deal scope (used only to tell 403 from 404). */
+  async findByIdInOrg(id: string, orgId: string): Promise<TaskNew | undefined> {
+    const [result] = await db.select().from(tasks).where(and(eq(tasks.id, id), eq(tasks.orgId, orgId))).limit(1);
+    return result;
+  },
+
+  async findById(id: string, scope?: Scope): Promise<TaskNew | undefined> {
+    // Write-scope: this feeds the update path, so it must see exactly the tasks update can touch.
+    const conds: SQL[] = [eq(tasks.id, id), ...taskWritableConds(scope)];
+    const [result] = await db.select().from(tasks).where(and(...conds)).limit(1);
+    return result;
+  },
+
   async create(taskData: InsertTaskNew, scope?: Scope): Promise<TaskNew> {
+    // orgId always comes from the caller's scope; the service decides branchId.
     const values = scope
-      ? { ...taskData, id: randomUUID(), orgId: (taskData as any).orgId ?? scope.orgId ?? null, branchId: (taskData as any).branchId ?? scope.branchId ?? null }
+      ? { ...taskData, id: randomUUID(), orgId: scope.orgId || null, branchId: taskData.branchId ?? scope.branchId ?? null }
       : { ...taskData, id: randomUUID() };
     const [result] = await db.insert(tasks).values(values).returning();
     return result;
   },
 
   async update(id: string, data: Partial<InsertTaskNew>, scope?: Scope): Promise<TaskNew | undefined> {
-    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const conds: SQL[] = [eq(tasks.id, id), ...taskWritableConds(scope)];
     const [existing] = await db.select().from(tasks).where(and(...conds)).limit(1);
     if (!existing) return undefined;
     const [result] = await db
@@ -485,7 +615,7 @@ export const taskRepository = {
   },
 
   async toggleComplete(id: string, scope?: Scope): Promise<TaskNew | undefined> {
-    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const conds: SQL[] = [eq(tasks.id, id), ...taskWritableConds(scope)];
     const [existing] = await db.select().from(tasks).where(and(...conds)).limit(1);
     if (!existing) return undefined;
     const [result] = await db
@@ -500,7 +630,7 @@ export const taskRepository = {
   },
 
   async remove(id: string, scope?: Scope): Promise<boolean> {
-    const conds: SQL[] = [eq(tasks.id, id), ...buildTaskScopeConds(scope)];
+    const conds: SQL[] = [eq(tasks.id, id), ...taskWritableConds(scope)];
     const result = await db.delete(tasks).where(and(...conds)).returning({ id: tasks.id });
     return result.length > 0;
   },
@@ -518,10 +648,34 @@ export const taskRepository = {
       );
   },
 
-  async reassignByEntity(entityType: string, entityId: string, newUserId: string): Promise<void> {
+  /**
+   * branch_id of the deal (transaction) an entity belongs to — or the client's
+   * branch for a client task. null when the entity has no branch or is unknown.
+   */
+  async findEntityBranchId(entityType: string, entityId: string): Promise<string | null> {
+    if (entityType === "client") {
+      const [row] = await db.select({ branchId: clientTable.branchId }).from(clientTable).where(eq(clientTable.id, entityId)).limit(1);
+      return row?.branchId ?? null;
+    }
+    if (entityType === "transaction") {
+      const [row] = await db.select({ branchId: transaction.branch_id }).from(transaction).where(eq(transaction.id, entityId)).limit(1);
+      return row?.branchId ?? null;
+    }
+    const source = entityType === "quote" ? quote : entityType === "enquiry" ? enquiry_table : entityType === "booking" ? booking : null;
+    if (!source) return null;
+    const [row] = await db
+      .select({ branchId: transaction.branch_id })
+      .from(source)
+      .innerJoin(transaction, eq(source.transaction_id, transaction.id))
+      .where(eq(source.id, entityId))
+      .limit(1);
+    return row?.branchId ?? null;
+  },
+
+  async reassignByEntity(entityType: string, entityId: string, newUserId: string, branchId?: string | null): Promise<void> {
     await db
       .update(tasks)
-      .set({ userId: newUserId })
+      .set(branchId ? { userId: newUserId, branchId } : { userId: newUserId })
       .where(
         and(
           eq(tasks.entityType, entityType),
@@ -529,40 +683,5 @@ export const taskRepository = {
           eq(tasks.completed, false)
         )
       );
-  },
-
-  async checkAndNotifyDueTasks(): Promise<void> {
-    const now = new Date();
-    const dueTasks = await db
-      .select()
-      .from(tasks)
-      .where(
-        and(
-          eq(tasks.completed, false),
-          eq(tasks.notified, false),
-          lte(tasks.dueDate, now)
-        )
-      );
-
-    if (dueTasks.length === 0) return;
-
-    const notificationRows = dueTasks
-      .filter(t => t.userId !== null && t.userId !== undefined)
-      .map(t => ({
-        userId: t.userId as string,
-        type: "task_due" as const,
-        title: "Task Due",
-        message: `Task "${t.title}" is now due.`,
-        link: entityLink(t.entityType ?? "", t.entityId ?? ""),
-      }));
-
-    const dueIds = dueTasks.map(t => t.id);
-
-    await db.transaction(async (tx) => {
-      if (notificationRows.length > 0) {
-        await tx.insert(notifications).values(notificationRows);
-      }
-      await tx.update(tasks).set({ notified: true }).where(inArray(tasks.id, dueIds));
-    });
   },
 };

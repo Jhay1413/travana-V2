@@ -10,6 +10,16 @@ const BASE = "/api/v2/conversations";
 
 export type ConversationStatus = "open" | "assigned" | "resolved" | "closed";
 
+export type AiReplyTone = "friendly" | "professional" | "short";
+export interface AiSuggestReplyBody {
+  tone?: AiReplyTone;
+  count?: number;
+}
+export interface AiSuggestReplyResult {
+  suggestion: string;
+  suggestions: { label: string; text: string }[];
+}
+
 export interface SsTagInfo {
   id: string;
   name: string;
@@ -20,6 +30,8 @@ export interface SsLastMessagePreview {
   text?: string | null;
   message_type?: string;
   direction?: string;
+  /** True for internal notes (not sent to the contact). */
+  is_internal?: boolean;
   created_at?: string | null;
 }
 
@@ -389,8 +401,8 @@ export const conversationsApi = {
   },
 
   // On-demand composer suggestion — returns text only, changes nothing server-side.
-  aiSuggestReply: async (id: string): Promise<{ suggestion: string }> => {
-    const { data } = await axiosClient.post<{ suggestion: string }>(`${BASE}/${id}/ai-suggest-reply`);
+  aiSuggestReply: async (id: string, body?: AiSuggestReplyBody): Promise<AiSuggestReplyResult> => {
+    const { data } = await axiosClient.post<AiSuggestReplyResult>(`${BASE}/${id}/ai-suggest-reply`, body ?? {});
     return data;
   },
 

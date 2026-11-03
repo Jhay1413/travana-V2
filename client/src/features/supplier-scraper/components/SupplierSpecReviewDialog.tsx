@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useApproveSupplierSpec } from "../api/use-supplier-scrapers";
+import { useApproveSupplierSpec, useUpdateSupplierScraper } from "../api/use-supplier-scrapers";
 import type { SupplierScraper } from "../types";
 
 interface FieldRule {
@@ -46,6 +46,21 @@ function looksOverfitted(rule: FieldRule): boolean {
   return !hasWildcard || (looksLikeProse && !/\|/.test(pattern));
 }
 
+interface FlightsSectionInfo {
+  startLabel: string;
+  endLabel?: string;
+  pickedAt?: string;
+}
+
+type FlightsSectionKey = "flightsSection" | "flightsOutboundSection" | "flightsReturnSection" | "itinerarySection";
+
+const FLIGHTS_SECTION_ROWS: { key: FlightsSectionKey; title: string }[] = [
+  { key: "flightsSection", title: "Flights section" },
+  { key: "flightsOutboundSection", title: "Outbound flights section" },
+  { key: "flightsReturnSection", title: "Return flights section" },
+  { key: "itinerarySection", title: "Itinerary section" },
+];
+
 interface SupplierSpecReviewDialogProps {
   scraper: SupplierScraper | null;
   onOpenChange: (open: boolean) => void;
@@ -53,11 +68,12 @@ interface SupplierSpecReviewDialogProps {
 
 export function SupplierSpecReviewDialog({ scraper, onOpenChange }: SupplierSpecReviewDialogProps) {
   const approveMutation = useApproveSupplierSpec();
+  const updateMutation = useUpdateSupplierScraper();
   const { toast } = useToast();
   const [showRaw, setShowRaw] = useState(false);
 
   const config = (scraper?.config ?? {}) as {
-    extraction?: { fields?: Record<string, FieldRule>; constants?: Record<string, unknown> };
+    extraction?: { fields?: Record<string, FieldRule>; constants?: Record<string, unknown>; flightsSection?: FlightsSectionInfo; flightsOutboundSection?: FlightsSectionInfo; flightsReturnSection?: FlightsSectionInfo; itinerarySection?: FlightsSectionInfo } & Record<string, unknown>;
     specNeedsReview?: boolean;
   };
   const spec = config.extraction;
@@ -79,6 +95,28 @@ export function SupplierSpecReviewDialog({ scraper, onOpenChange }: SupplierSpec
   const hasProvenance = useMemo(() => rules.some(([, r]) => r.origin != null), [rules]);
   const pickedCount = useMemo(() => rules.filter(([, r]) => r.origin === "picked").length, [rules]);
   const generatedCount = useMemo(() => rules.filter(([, r]) => r.origin === "generated").length, [rules]);
+
+  const sectionRows = FLIGHTS_SECTION_ROWS.filter((r) => spec?.[r.key]);
+
+  // The server replaces config.extraction wholesale on update (scraper.service.ts
+  // update), so removing the section = sending the spec back without that key.
+  const removeFlightsSection = (key: FlightsSectionKey, title: string) => {
+    if (!scraper || !spec) return;
+    const rest: Record<string, unknown> = { ...spec };
+    delete rest[key];
+    updateMutation.mutate(
+      { id: scraper.id, input: { config: { extraction: rest } } },
+      {
+        onSuccess: () => toast({ title: `${title} removed`, description: scraper.supplierName }),
+        onError: (err: unknown) =>
+          toast({
+            title: `Could not remove the ${title.toLowerCase()}`,
+            description: err instanceof Error ? err.message : "Please try again.",
+            variant: "destructive",
+          }),
+      },
+    );
+  };
 
   const submit = (approve: boolean) => {
     if (!scraper) return;
@@ -153,6 +191,33 @@ export function SupplierSpecReviewDialog({ scraper, onOpenChange }: SupplierSpec
                 </div>
               </div>
             )}
+
+            {sectionRows.map(({ key, title }) => {
+              const section = spec?.[key];
+              if (!section) return null;
+              return (
+                <div key={key} className="flex items-start justify-between gap-3 rounded-xl border border-black/10 px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <div className="font-medium text-black/70">{title}</div>
+                    <div className="text-black/50">
+                      Starts at &ldquo;{section.startLabel}&rdquo;
+                      {section.endLabel ? <> and ends at &ldquo;{section.endLabel}&rdquo;</> : null}
+                      {section.pickedAt && !Number.isNaN(Date.parse(section.pickedAt))
+                        ? ` · picked ${new Date(section.pickedAt).toLocaleDateString()}`
+                        : ""}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeFlightsSection(key, title)}
+                    disabled={updateMutation.isPending}
+                    className="shrink-0 rounded-lg border border-black/10 bg-white/70 px-2 py-1 text-[11px] font-medium text-black/60 transition hover:bg-black/5 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              );
+            })}
 
             <div className="overflow-hidden rounded-xl border border-black/10">
               <div

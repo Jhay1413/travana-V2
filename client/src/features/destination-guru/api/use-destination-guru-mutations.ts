@@ -21,3 +21,14 @@ export function useDeleteDestinationGuru() {
     },
   });
 }
+
+export function useUpdateDestinationGuruCoordinates() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, latitude, longitude }: { id: string; latitude: number; longitude: number }) =>
+      destinationGuruApi.updateCoordinates(id, { latitude, longitude }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: destinationGuruKeys.all });
+    },
+  });
+}

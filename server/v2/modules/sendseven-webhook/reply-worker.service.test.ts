@@ -90,6 +90,10 @@ vi.mock("../neon-client/neon-client.service", () => ({
   neonClientService: { getNeonClientById: vi.fn(async () => ({ id: "known-client-1", aiReplyEnabled: true })) },
 }));
 
+vi.mock("../organization/organization.repository", () => ({
+  organizationRepository: { findById: vi.fn() },
+}));
+
 vi.mock("./conversation-state.repository", () => ({
   conversationStateRepository: {
     find: vi.fn(async () => null),
@@ -157,6 +161,7 @@ import {
   triageImageAttachments,
 } from "../ai-conversation/ai-conversation.brain";
 import { classifyConversationRoute } from "../ai-conversation/conversation-router";
+import { organizationRepository } from "../organization/organization.repository";
 import { conversationStateRepository } from "./conversation-state.repository";
 import { sendsevenWebhookRepository } from "./sendseven-webhook.repository";
 import { conversationIntegrationRepository } from "../conversation-integration/conversation-integration.repository";
@@ -215,6 +220,7 @@ function makeState(overrides: Partial<SendsevenConversationState> = {}): Sendsev
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(organizationRepository.findById).mockResolvedValue({ id: ORG_ID, isActive: true } as never);
   vi.mocked(conversationStateRepository.find).mockResolvedValue(null);
   vi.mocked(conversationStateRepository.ensure).mockResolvedValue(makeState());
   vi.mocked(conversationStateRepository.update).mockResolvedValue(undefined);
@@ -237,6 +243,24 @@ function stateAtStartThenSend(atStart: SendsevenConversationState | null, atSend
   let call = 0;
   vi.mocked(conversationStateRepository.find).mockImplementation(async () => (call++ === 0 ? atStart : atSend));
 }
+
+describe("handleInbound — suspended organisation", () => {
+  it("stays silent and takes no reply turn when the agency is suspended", async () => {
+    vi.mocked(organizationRepository.findById).mockResolvedValue({ id: ORG_ID, isActive: false } as never);
+
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(sendsevenWebhookRepository.claimReplyTurn).not.toHaveBeenCalled();
+    expect(messagesRepository.createInternalNote).not.toHaveBeenCalled();
+    expect(messagesRepository.send).not.toHaveBeenCalled();
+  });
+
+  it("still handles the message for an active agency", async () => {
+    await replyWorker.handleInbound(ORG_ID, makeEvent());
+
+    expect(messagesRepository.createInternalNote).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("handleInbound — general-route reply claim (Fix 1a)", () => {
   it("sends no second reply when the same message is redelivered under a different event_id", async () => {

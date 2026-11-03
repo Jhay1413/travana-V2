@@ -78,6 +78,11 @@ export interface Conversation {
   preview: string;
   lastActivityAt: string; // ISO timestamp
   unread: boolean;
+  /**
+   * Raw provider "client is waiting on us" flag (`needs_reply`). Unlike `unread`
+   * it is never cleared locally by opening a thread or sending a note.
+   */
+  needsReply: boolean;
   /** Parked until `snoozedUntil`; hidden from Open until then. */
   snoozed: boolean;
   /** ISO timestamp the snooze expires, when snoozed. */

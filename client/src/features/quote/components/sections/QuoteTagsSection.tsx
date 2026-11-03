@@ -1,22 +1,45 @@
 import { useState, useEffect, useRef } from "react";
+import { requestErrorMessage, requestErrorStatus } from "@/lib/request-error";
 import { useFormContext } from "react-hook-form";
 import { Tag, X, Pencil, Trash2, Check } from "lucide-react";
 import { FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useTags } from "@/features/tag/api/use-tag-queries";
-import { useUpdateTag, useDeleteTag } from "@/features/tag/api/use-tag-mutations";
+import { useUpdateTag, useDeleteTag, useDetachQuoteTag } from "@/features/tag/api/use-tag-mutations";
+import { useRoles } from "@/hooks/use-role";
+import type { OrgRole } from "@/types/auth/auth.types";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteFormValues } from "@/features/quote/types";
 
+/** The server's error message for a failed tag request, or the fallback. */
+function tagErrorMessage(error: unknown): string {
+  return requestErrorMessage(error, "Please try again.");
+}
+
 /** A known tag entity (id + name) — ids are needed for rename/delete. */
 type KnownTag = { id: string; name: string };
 
-export function QuoteTagsSection({ bare = false }: { /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean } = {}) {
-  const { control } = useFormContext<QuoteFormValues>();
+const TAG_ADMIN_ROLES: OrgRole[] = ["org_admin", "platform_admin"];
+
+export function QuoteTagsSection({
+  bare = false,
+  quoteId,
+}: {
+  /** Render without the card wrapper and header (inside a drawer section). */
+  bare?: boolean;
+  /** Set when editing a saved quote: removing a saved tag then detaches it from this quote straight away. */
+  quoteId?: string;
+} = {}) {
+  const { control, formState } = useFormContext<QuoteFormValues>();
+  // Tags are global, so only admins may rename or delete one; everyone can remove a tag from their own quote.
+  const { hasAnyRole } = useRoles();
+  const canManageTags = hasAnyRole(TAG_ADMIN_ROLES);
+  const detachTag = useDetachQuoteTag();
+  const savedTagNames: string[] = (formState.defaultValues?.tags as string[] | undefined) ?? [];
   const { data: allTagsData = [] } = useTags();
-  const allTags: KnownTag[] = allTagsData.map((t: any) => ({ id: t.id, name: t.name }));
+  const allTags: KnownTag[] = allTagsData.map((t) => ({ id: t.id, name: t.name }));
   const allTagNames: string[] = allTags.map((t) => t.name);
   const [inputValue, setInputValue] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -100,16 +123,41 @@ export function QuoteTagsSection({ bare = false }: { /** Render without the card
               field.onChange(selected.map((t) => (t === tag.name ? newName : t)));
             }
             cancelEditing();
-          } catch (e: any) {
+          } catch (e: unknown) {
             toast({
               title: "Couldn't rename tag",
-              description: e?.response?.data?.message ?? "Please try again.",
+              description: tagErrorMessage(e),
               variant: "destructive",
             });
           }
         };
 
-        // Delete the tag ENTITY globally (cascades off every quote/client/booking).
+        // Remove a tag from THIS quote only; the tag and other quotes' links to it are untouched. A tag that
+        // is already saved on the quote is detached on the server straight away; a freshly picked one just
+        // leaves the form.
+        const removeFromQuote = async (tag: KnownTag) => {
+          const deselect = () => field.onChange(selected.filter((t) => t !== tag.name));
+          if (!quoteId || !savedTagNames.includes(tag.name)) {
+            deselect();
+            return;
+          }
+          try {
+            await detachTag.mutateAsync({ quoteId, tagId: tag.id });
+            deselect();
+          } catch (e: unknown) {
+            if (requestErrorStatus(e) === 404) {
+              deselect(); // already off this quote (e.g. re-added then removed again)
+              return;
+            }
+            toast({
+              title: "Couldn't remove tag",
+              description: tagErrorMessage(e),
+              variant: "destructive",
+            });
+          }
+        };
+
+        // Delete the tag ENTITY globally (admin only; cascades off every quote/client/booking).
         const confirmDelete = async (tag: KnownTag) => {
           try {
             await deleteTag.mutateAsync(tag.id);
@@ -117,10 +165,10 @@ export function QuoteTagsSection({ bare = false }: { /** Render without the card
               field.onChange(selected.filter((t) => t !== tag.name));
             }
             setPendingDeleteId(null);
-          } catch (e: any) {
+          } catch (e: unknown) {
             toast({
               title: "Couldn't delete tag",
-              description: e?.response?.data?.message ?? "Please try again.",
+              description: tagErrorMessage(e),
               variant: "destructive",
             });
           }
@@ -232,25 +280,42 @@ export function QuoteTagsSection({ bare = false }: { /** Render without the card
                           {isSelected && <span className="mr-1 text-blue-500">✓</span>}
                           {tag.name}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => startEditing(tag)}
-                          className="opacity-50 transition hover:opacity-100 hover:text-blue-600"
-                          aria-label={`Rename ${tag.name}`}
-                        >
-                          <Pencil className="h-2.5 w-2.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            cancelEditing();
-                            setPendingDeleteId(tag.id);
-                          }}
-                          className="opacity-50 transition hover:opacity-100 hover:text-red-600"
-                          aria-label={`Delete ${tag.name}`}
-                        >
-                          <Trash2 className="h-2.5 w-2.5" />
-                        </button>
+                        {isSelected && (
+                          <button
+                            type="button"
+                            disabled={detachTag.isPending}
+                            onClick={() => void removeFromQuote(tag)}
+                            className="opacity-50 transition hover:opacity-100 hover:text-red-600"
+                            aria-label={`Remove ${tag.name} from this quote`}
+                            title="Remove from this quote"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        )}
+                        {canManageTags && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEditing(tag)}
+                              className="opacity-50 transition hover:opacity-100 hover:text-blue-600"
+                              aria-label={`Rename ${tag.name}`}
+                            >
+                              <Pencil className="h-2.5 w-2.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                cancelEditing();
+                                setPendingDeleteId(tag.id);
+                              }}
+                              className="opacity-50 transition hover:opacity-100 hover:text-red-600"
+                              aria-label={`Delete ${tag.name} everywhere`}
+                              title="Delete this tag for every agency"
+                            >
+                              <Trash2 className="h-2.5 w-2.5" />
+                            </button>
+                          </>
+                        )}
                       </span>
                     );
                   })}

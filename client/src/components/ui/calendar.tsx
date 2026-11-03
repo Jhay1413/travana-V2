@@ -43,7 +43,7 @@ function Calendar({
       startMonth={startMonth ?? (usesDropdown ? new Date(thisYear - 10, 0) : undefined)}
       endMonth={endMonth ?? (usesDropdown ? new Date(thisYear + 10, 11) : undefined)}
       className={cn(
-        "bg-background group/calendar p-3 [--cell-size:2.25rem] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
+        "bg-background group/calendar p-3 [--cell-size:2.5rem] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
         String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
         className
@@ -103,7 +103,7 @@ function Calendar({
         table: "w-full border-collapse",
         weekdays: cn("flex", defaultClassNames.weekdays),
         weekday: cn(
-          "flex-1 select-none rounded-md text-[11px] font-semibold uppercase tracking-wide text-black/40",
+          "flex-1 select-none rounded-md text-xs font-semibold uppercase tracking-wide text-black/40",
           defaultClassNames.weekday
         ),
         week: cn("mt-1.5 flex w-full", defaultClassNames.week),
@@ -217,13 +217,19 @@ function CalendarDayButton({
       data-range-end={modifiers.range_end}
       data-range-middle={modifiers.range_middle}
       className={cn(
-        "flex aspect-square h-auto w-full min-w-[--cell-size] flex-col gap-1 rounded-lg text-sm font-normal leading-none text-black/80 transition hover:bg-black/[0.06] hover:text-black",
-        // Today gets a subtle ring so it stays findable once another day is selected.
-        "group-data-[today=true]/day:ring-1 group-data-[today=true]/day:ring-inset group-data-[today=true]/day:ring-primary/40",
+        "flex aspect-square h-auto w-full min-w-[--cell-size] flex-col gap-1 rounded-lg text-base font-normal leading-none text-black/80 transition hover:bg-black/[0.06] hover:text-black",
+        // Today is bold, tinted, and ringed so it reads at a glance next to normal days.
+        "group-data-[today=true]/day:bg-primary/10 group-data-[today=true]/day:font-semibold group-data-[today=true]/day:text-primary group-data-[today=true]/day:ring-2 group-data-[today=true]/day:ring-inset group-data-[today=true]/day:ring-primary",
         "data-[selected-single=true]:bg-primary data-[selected-single=true]:font-semibold data-[selected-single=true]:text-primary-foreground data-[selected-single=true]:shadow-sm data-[selected-single=true]:hover:bg-primary data-[selected-single=true]:hover:text-primary-foreground data-[selected-single=true]:ring-0",
+        // When today is also the selected day, the solid primary fill would hide the today
+        // ring above (same hue) — swap it for a primary-foreground ring so it still reads.
+        "data-[selected-single=true]:group-data-[today=true]/day:ring-2 data-[selected-single=true]:group-data-[today=true]/day:ring-inset data-[selected-single=true]:group-data-[today=true]/day:ring-primary-foreground",
         "data-[range-middle=true]:bg-accent/15 data-[range-middle=true]:text-foreground data-[range-middle=true]:rounded-none",
         "data-[range-start=true]:bg-primary data-[range-start=true]:text-primary-foreground data-[range-start=true]:rounded-lg",
         "data-[range-end=true]:bg-primary data-[range-end=true]:text-primary-foreground data-[range-end=true]:rounded-lg",
+        // Same fix for a range endpoint that lands on today.
+        "data-[range-start=true]:group-data-[today=true]/day:ring-2 data-[range-start=true]:group-data-[today=true]/day:ring-inset data-[range-start=true]:group-data-[today=true]/day:ring-primary-foreground",
+        "data-[range-end=true]:group-data-[today=true]/day:ring-2 data-[range-end=true]:group-data-[today=true]/day:ring-inset data-[range-end=true]:group-data-[today=true]/day:ring-primary-foreground",
         "group-data-[focused=true]/day:relative group-data-[focused=true]/day:z-10 group-data-[focused=true]/day:ring-2 group-data-[focused=true]/day:ring-primary/50",
         "[&>span]:text-xs [&>span]:opacity-70",
         defaultClassNames.day,

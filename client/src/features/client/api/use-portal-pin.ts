@@ -1,88 +1,63 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSendSms } from "@/features/sms/api/use-sms-mutations";
 import { useToast } from "@/hooks/use-toast";
+import { portalPinApi } from "./portal-pin.api";
+
+export const portalPinKeys = {
+  detail: (clientId: string) => ["portal-pin", clientId] as const,
+};
 
 /**
  * Portal PIN state and actions for one client — whether a PIN exists, set /
  * change / remove it, and text the client their portal login link. Shared by
- * the overview's Portal Access card and the older PortalPinSection so both
- * stay in step.
+ * the overview's Portal Access card and the PIN modal so both stay in step.
  */
 export function usePortalPin(clientId: string) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const sendSms = useSendSms();
-  const [hasPin, setHasPin] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetch(`/api/portal/has-pin/${clientId}`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((d: { hasPin?: boolean }) => {
-        if (cancelled) return;
-        setHasPin(!!d.hasPin);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [clientId]);
+  const statusQuery = useQuery({
+    queryKey: portalPinKeys.detail(clientId),
+    queryFn: () => portalPinApi.get(clientId),
+    enabled: !!clientId,
+  });
+
+  const setMutation = useMutation({
+    mutationFn: (pin: string) => portalPinApi.set(clientId, pin),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: portalPinKeys.detail(clientId) }),
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: () => portalPinApi.remove(clientId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: portalPinKeys.detail(clientId) }),
+  });
 
   /** Saves a 4-digit PIN; resolves true on success. */
   const setPin = useCallback(
     async (pin: string): Promise<boolean> => {
       if (!/^\d{4}$/.test(pin)) return false;
-      setSaving(true);
       try {
-        const res = await fetch("/api/portal/set-pin", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ clientId, pin }),
-        });
-        if (res.ok) {
-          setHasPin(true);
-          return true;
-        }
-        toast({ title: "Failed to save PIN", variant: "destructive" });
-        return false;
+        await setMutation.mutateAsync(pin);
+        return true;
       } catch {
         toast({ title: "Failed to save PIN", variant: "destructive" });
         return false;
-      } finally {
-        setSaving(false);
       }
     },
-    [clientId, toast],
+    [setMutation, toast],
   );
 
   const removePin = useCallback(async (): Promise<boolean> => {
-    setSaving(true);
     try {
-      const res = await fetch("/api/portal/remove-pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ clientId }),
-      });
-      if (res.ok) {
-        setHasPin(false);
-        return true;
-      }
-      toast({ title: "Failed to remove PIN", variant: "destructive" });
-      return false;
+      await removeMutation.mutateAsync();
+      return true;
     } catch {
       toast({ title: "Failed to remove PIN", variant: "destructive" });
       return false;
-    } finally {
-      setSaving(false);
     }
-  }, [clientId, toast]);
+  }, [removeMutation, toast]);
 
   const sendLink = useCallback(() => {
     sendSms.mutate(
@@ -126,5 +101,14 @@ export function usePortalPin(clientId: string) {
     );
   }, [clientId, sendSms, toast]);
 
-  return { hasPin, loading, saving, sending: sendSms.isPending, setPin, removePin, sendLink };
+  return {
+    hasPin: statusQuery.data?.hasPin ?? false,
+    mustChangePin: statusQuery.data?.mustChangePin ?? false,
+    loading: statusQuery.isLoading,
+    saving: setMutation.isPending || removeMutation.isPending,
+    sending: sendSms.isPending,
+    setPin,
+    removePin,
+    sendLink,
+  };
 }

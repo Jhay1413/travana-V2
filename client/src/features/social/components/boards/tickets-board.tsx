@@ -904,7 +904,11 @@ export default function TicketsBoard({ selectedTicketId }: { selectedTicketId?: 
   });
 
   const { toast } = useToast();
-  const { data: tickets, isLoading: ticketsLoading } = useTickets();
+  // Explicit "mine": useTickets() now defaults to "mine" too, but this board's
+  // own agentFilter ("me"/"all"/a specific agent, below) used to run against
+  // an unscoped fetch — "all" isn't used here since this component (unused —
+  // see TicketsInbox) can be rendered for a plain agent, for whom "all" 403s.
+  const { data: tickets, isLoading: ticketsLoading } = useTickets("mine");
   const pinnedTicketIds = usePinnedTicketIds();
   const { data: neonClientsData } = useNeonClients({ page: 1, limit: 20, search: customerSearch });
   const { data: users } = useUsers();

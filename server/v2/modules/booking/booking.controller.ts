@@ -28,7 +28,9 @@ export const bookingController = {
   convertQuoteToBooking: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const quoteId = req.params.quoteId as string;
-    const { haysRef, supplierRef } = req.body;
+    // The validator guarantees non-empty strings; validate() does not write the trimmed values back.
+    const haysRef = String(req.body.haysRef).trim();
+    const supplierRef = String(req.body.supplierRef).trim();
     const b = await bookingService.convertQuoteToBooking(quoteId, haysRef, supplierRef, scope);
     return successResponse(res, b, "Quote converted to booking successfully", 201);
   }),
@@ -62,8 +64,9 @@ export const bookingController = {
 
   removeFlight: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const bookingId = req.params.id as string;
     const flightId = req.params.flightId as string;
-    await bookingService.removeFlight(flightId, scope);
+    await bookingService.removeFlight(bookingId, flightId, scope);
     res.status(204).send();
   }),
 
@@ -76,8 +79,9 @@ export const bookingController = {
 
   removeAccommodation: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const bookingId = req.params.id as string;
     const accommodationId = req.params.accommodationId as string;
-    await bookingService.removeAccommodation(accommodationId, scope);
+    await bookingService.removeAccommodation(bookingId, accommodationId, scope);
     res.status(204).send();
   }),
 

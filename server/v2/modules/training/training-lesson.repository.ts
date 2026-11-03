@@ -77,6 +77,18 @@ export const trainingLessonRepository = {
     });
   },
 
+  /** Persist a new ordering for a set of assets (each row updated by id). */
+  async reorderAssets(order: { id: string; position: number }[]): Promise<void> {
+    await db.transaction(async (tx) => {
+      for (const entry of order) {
+        await tx
+          .update(training_lesson_asset)
+          .set({ position: entry.position })
+          .where(eq(training_lesson_asset.id, entry.id));
+      }
+    });
+  },
+
   async createAssets(data: InsertTrainingLessonAsset[]): Promise<TrainingLessonAsset[]> {
     if (data.length === 0) return [];
     return db.insert(training_lesson_asset).values(data).returning();
@@ -87,8 +99,35 @@ export const trainingLessonRepository = {
     return result;
   },
 
+  async updateAsset(id: string, patch: { caption: string | null }): Promise<TrainingLessonAsset | undefined> {
+    const [result] = await db
+      .update(training_lesson_asset)
+      .set({ caption: patch.caption })
+      .where(eq(training_lesson_asset.id, id))
+      .returning();
+    return result;
+  },
+
   async deleteAsset(id: string): Promise<void> {
     await db.delete(training_lesson_asset).where(eq(training_lesson_asset.id, id));
+  },
+
+  /** How many asset rows reference this exact stored URL. */
+  async countAssetsByUrl(url: string): Promise<number> {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(training_lesson_asset)
+      .where(eq(training_lesson_asset.asset_url, url));
+    return row?.n ?? 0;
+  },
+
+  /** How many lessons use this exact stored URL as their video. */
+  async countLessonsByVideoUrl(url: string): Promise<number> {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(training_lesson)
+      .where(eq(training_lesson.video_url, url));
+    return row?.n ?? 0;
   },
 
   /** Ordered assets for a single lesson. */

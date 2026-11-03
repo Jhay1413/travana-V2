@@ -10,6 +10,6 @@ export interface GlobalSearchOptions {
 export const searchService = {
   async globalSearch(q: string, scope: Scope, limit = 15, offset = 0) {
     const orgId = scope.orgRole === 'platform_admin' ? null : scope.orgId;
-    return searchRepository.globalSearch(q, { orgId, limit, offset });
+    return searchRepository.globalSearch(q, { orgId, scope, limit, offset });
   },
 };

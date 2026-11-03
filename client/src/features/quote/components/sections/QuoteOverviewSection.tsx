@@ -1,10 +1,12 @@
 import { useFormContext } from "react-hook-form";
 import { FileText, ExternalLink } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { usePackageTypes, useTourOperators } from "@/hooks/queries";
+import { findOperator, operatorSelectOptions, OperatorRateHint, useOperatorNames } from "@/features/tour-operator";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import { LEAD_SOURCES } from "@/features/quote/types/quote-form.types";
 import type { QuoteFormValues } from "@/features/quote/types";
@@ -13,6 +15,7 @@ export function QuoteOverviewSection() {
   const { control, setValue, getValues } = useFormContext<QuoteFormValues>();
   const { data: packageTypesData } = usePackageTypes();
   const { data: tourOperatorsData } = useTourOperators();
+  const operatorNames = useOperatorNames();
 
   return (
     <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
@@ -23,7 +26,7 @@ export function QuoteOverviewSection() {
           name="packageType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Package Type *</FormLabel>
+              <FormLabelTooltip className="text-xs font-medium text-black/60" tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Package Type *</FormLabelTooltip>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
@@ -63,14 +66,11 @@ export function QuoteOverviewSection() {
               <FormLabel className="text-xs font-medium text-black/60">Tour Operator</FormLabel>
               <FormControl>
                 <SearchableSelect
-                  options={(tourOperatorsData || []).map((op: { id: string; name: string | null }) => ({
-                    value: op.id,
-                    label: op.name || op.id,
-                  }))}
+                  options={operatorSelectOptions(tourOperatorsData, field.value, operatorNames[field.value ?? ""])}
                   value={field.value ?? ""}
                   onValueChange={(value) => {
                     field.onChange(value);
-                    const op = tourOperatorsData?.find((o: { id: string }) => o.id === value);
+                    const op = findOperator(tourOperatorsData, value);
                     if (op?.commission_percentage != null) {
                       const currentPrice = Number(getValues("price")) || 0;
                       const currentDiscount = Number(getValues("discount")) || 0;
@@ -83,6 +83,7 @@ export function QuoteOverviewSection() {
                   placeholder="Select operator..."
                 />
               </FormControl>
+              <OperatorRateHint operators={tourOperatorsData} selectedId={field.value} />
               <FormMessage />
             </FormItem>
           )}
@@ -93,7 +94,7 @@ export function QuoteOverviewSection() {
           name="leadSource"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Lead Source</FormLabel>
+              <FormLabelTooltip className="text-xs font-medium text-black/60" tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead Source</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">

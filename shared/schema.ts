@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, pgEnum, text, varchar, integer, bigint, decimal, numeric, timestamp, boolean, index, jsonb, uuid, date, unique, uniqueIndex, vector, check, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, text, varchar, integer, bigint, decimal, numeric, doublePrecision, timestamp, boolean, index, jsonb, uuid, date, unique, uniqueIndex, vector, check, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -17,6 +17,9 @@ export const withdrawal_method_enum = pgEnum('withdrawal_method_enum', ['bank_tr
 export const referral_payout_status_enum = pgEnum('referral_payout_status_enum', ['requested', 'approved', 'rejected']);
 export const referral_withdrawal_status_enum = pgEnum('referral_withdrawal_status_enum', ['pending', 'processed', 'rejected']);
 export const deal_priority_enum = pgEnum('deal_priority', ['low', 'medium', 'high']);
+export const taskPriorityEnum = pgEnum('task_priority', ['low', 'medium', 'high', 'urgent']);
+export type TaskPriority = (typeof taskPriorityEnum.enumValues)[number];
+export const TASK_PRIORITIES = taskPriorityEnum.enumValues;
 
 // ─── Training / LMS ───────────────────────────────────────────────────────────
 export const course_status_enum = pgEnum('course_status_enum', ['draft', 'published', 'archived']);
@@ -63,12 +66,29 @@ export const branches = pgTable("branches", {
   isDefault: boolean("is_default").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   branchType: varchar("branch_type", { length: 16 }).notNull().default("shop"),
+  // Homeworker branches: exactly one owning user and a profit share percent.
+  // Both stay NULL for shop branches (and for the legacy shared branch).
+  ownerUserId: text("owner_user_id").references(() => user.id, { onDelete: "set null" }),
+  profitSharePercent: numeric("profit_share_percent", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => ({
-  idx_branches_org: index("idx_branches_org_id").on(table.organizationId),
-}));
+}, (table) => [
+  index("idx_branches_org_id").on(table.organizationId),
+  index("idx_branches_org_type").on(table.organizationId, table.branchType),
+  unique("branches_owner_user_id_unique").on(table.ownerUserId),
+  check("branches_branch_type_check", sql`${table.branchType} IN ('shop', 'homeworker')`),
+  check("branches_profit_share_range", sql`${table.profitSharePercent} IS NULL OR ${table.profitSharePercent} BETWEEN 0 AND 100`),
+  check("branches_homeworker_fields_check", sql`${table.branchType} = 'homeworker' OR (${table.ownerUserId} IS NULL AND ${table.profitSharePercent} IS NULL)`),
+]);
 
-export const insertBranchSchema = createInsertSchema(branches).omit({ id: true, createdAt: true });
+const percentString = z
+  .string()
+  .regex(/^\d{1,3}(\.\d{1,2})?$/, "must be a number with up to 2 decimals")
+  .refine((v) => Number(v) <= 100, "must be between 0 and 100");
+
+export const insertBranchSchema = createInsertSchema(branches, {
+  branchType: z.enum(["shop", "homeworker"]),
+  profitSharePercent: percentString.nullable().optional(),
+}).omit({ id: true, createdAt: true });
 export type Branch = typeof branches.$inferSelect;
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 
@@ -218,6 +238,8 @@ export const clientTable = pgTable("client_table", {
   mergedIntoId: uuid("merged_into_id").references((): AnyPgColumn => clientTable.id, { onDelete: "set null" }),
   mergedAt: timestamp("merged_at"),
   mergedBy: text("merged_by").references(() => user.id, { onDelete: "set null" }),
+  // Audit link: set on a copy of a client duplicated into a homeworker branch.
+  splitFromClientId: uuid("split_from_client_id").references((): AnyPgColumn => clientTable.id, { onDelete: "set null" }),
 });
 
 export const insertClientTableSchema = createInsertSchema(clientTable).omit({ id: true, createdAt: true });
@@ -240,6 +262,28 @@ export const clientMergeLog = pgTable("client_merge_log", {
 export const insertClientMergeLogSchema = createInsertSchema(clientMergeLog).omit({ id: true, createdAt: true });
 export type InsertClientMergeLog = z.infer<typeof insertClientMergeLogSchema>;
 export type ClientMergeLog = typeof clientMergeLog.$inferSelect;
+
+// Saved passengers on a client. The client is the lead passenger: the lead row (is_lead) only stores
+// passport details — name/title/DOB come from client_table. first_name/surname may be '' on that row.
+export const clientPassenger = pgTable("client_passenger", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
+  isLead: boolean("is_lead").notNull().default(false),
+  title: varchar("title"),
+  firstName: varchar("first_name").notNull().default(""),
+  surname: varchar("surname").notNull().default(""),
+  dateOfBirth: date("date_of_birth", { mode: "string" }),
+  passportNumber: varchar("passport_number", { length: 20 }),
+  passportExpiry: date("passport_expiry", { mode: "string" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (t) => [
+  index("idx_client_passenger_client").on(t.clientId),
+  uniqueIndex("uq_client_passenger_one_lead").on(t.clientId).where(sql`${t.isLead} = true`),
+]);
+
+export type ClientPassengerRow = typeof clientPassenger.$inferSelect;
+export type InsertClientPassengerRow = typeof clientPassenger.$inferInsert;
 
 export const accomodation_type = pgTable('accomodation_type', {
   id: uuid('id')
@@ -302,17 +346,51 @@ export const accomodation_list = pgTable('accomodation_list_table', {
 export type AccomodationList = typeof accomodation_list.$inferSelect;
 export type InsertAccomodationList = typeof accomodation_list.$inferInsert;
 
+// Platform-wide tour-operator catalogue: identity only (name, code, website,
+// phone, logo). Per-organisation settings (commission, balance weeks, login)
+// live in `org_tour_operator`. Quote/booking FKs point at THIS table's id.
 export const tour_operator = pgTable('tour_operator_table', {
   id: uuid()
     .default(sql`gen_random_uuid()`)
     .primaryKey(),
-  name: varchar(),
-  commission_percentage: decimal({ precision: 5, scale: 2 }),
-  org_id: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
+  name: varchar().notNull(),
+  code: varchar("code", { length: 8 }),
+  website: text("website"),
+  phone: varchar("phone"),
   logo_url: text("logo_url"),
-});
+  created_by: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("uq_tour_operator_name_lower").on(sql`lower(${t.name})`),
+]);
 export type TourOperatorLookup = typeof tour_operator.$inferSelect;
 export type InsertTourOperatorLookup = typeof tour_operator.$inferInsert;
+
+// One row per (organisation, catalogue operator): that agency's commission,
+// balance-due weeks and portal login (password AES-256-GCM encrypted).
+export const org_tour_operator = pgTable('org_tour_operator', {
+  id: uuid()
+    .default(sql`gen_random_uuid()`)
+    .primaryKey(),
+  org_id: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  tour_operator_id: uuid("tour_operator_id").notNull().references(() => tour_operator.id, { onDelete: "cascade" }),
+  commission_percentage: decimal("commission_percentage", { precision: 5, scale: 2 }),
+  balance_due_weeks: integer("balance_due_weeks").notNull().default(14),
+  username: varchar("username"),
+  encrypted_password: text("encrypted_password"),
+  is_active: boolean("is_active").notNull().default(true),
+  created_by: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  updated_by: text("updated_by"),
+  created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  // Leading org_id also serves per-org lookups, so no separate org index.
+  uniqueIndex("uq_org_tour_operator_org_operator").on(t.org_id, t.tour_operator_id),
+  index("idx_org_tour_operator_operator").on(t.tour_operator_id),
+]);
+export type OrgTourOperator = typeof org_tour_operator.$inferSelect;
+export type InsertOrgTourOperator = typeof org_tour_operator.$inferInsert;
 
 // Per-organization, per-supplier scraper configuration. Each row lets one org
 // scrape one supplier (easyJet, TUI, …): login credentials (encrypted via
@@ -849,6 +927,9 @@ export const quote = pgTable('quote_table', {
   quote_token: varchar('quote_token', { length: 12 }),
   quote_sent_at: timestamp('quote_sent_at', { precision: 0, withTimezone: true }),
   quote_sent_via: varchar('quote_sent_via'),
+  // Manual "customer accepted" mark by the agent (the customer's own accept lives in quote_customer_actions).
+  accepted_at: timestamp('accepted_at', { precision: 0, withTimezone: true }),
+  accepted_by: text('accepted_by').references(() => user.id, { onDelete: 'set null' }),
   show_on_portal: boolean('show_on_portal').default(false),
   // Timestamp of when the quote was (last) added to the portal as a deal — set when
   // show_on_portal flips to true. Drives the "Latest Deals" 6-day recency window.
@@ -859,6 +940,7 @@ export const quote = pgTable('quote_table', {
   // Pipeline subqueries resolve quotes per transaction and filter by status;
   // leading transaction_id also serves the inArray(transaction_id) enrich lookups.
   index("idx_quote_transaction_status").on(table.transaction_id, table.quote_status),
+  index("idx_quote_main_tour_operator").on(table.main_tour_operator_id),
 ]);
 
 export const insertQuoteSchema = createInsertSchema(quote).omit({ id: true, date_created: true });
@@ -1064,6 +1146,7 @@ export const booking = pgTable('booking_table', {
   // on_booking pipeline column filters bookings to the current month by date_created.
   // (transaction_id already carries a unique index from its .unique() constraint.)
   index("idx_booking_date_created").on(table.date_created),
+  index("idx_booking_main_tour_operator").on(table.main_tour_operator_id),
 ]);
 
 export const insertBookingSchema = createInsertSchema(booking).omit({ id: true, date_created: true });
@@ -1295,11 +1378,30 @@ export const notes = pgTable('notes', {
   parent_id: varchar(),
   transaction_id: uuid().references(() => transaction.id, { onDelete: "cascade" }),
   client_id: uuid("client_id").references(() => clientTable.id, { onDelete: "set null" }),
-});
+}, (table) => [
+  // Pipeline board last-activity lookups filter notes by transaction_id.
+  index("idx_notes_transaction_id").on(table.transaction_id),
+]);
 
 export const insertNoteSchema = createInsertSchema(notes).omit({ id: true, createdAt: true });
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notes.$inferSelect;
+
+// Files attached to a note or a note reply. Replies live in `notes` too
+// (distinguished by parent_id), so a single note_id FK covers both.
+export const noteAttachments = pgTable("note_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  noteId: uuid("note_id").notNull().references(() => notes.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  size: integer("size").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertNoteAttachmentSchema = createInsertSchema(noteAttachments).omit({ id: true, createdAt: true });
+export type InsertNoteAttachment = z.infer<typeof insertNoteAttachmentSchema>;
+export type NoteAttachment = typeof noteAttachments.$inferSelect;
 
 export const task = pgTable('task', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
@@ -1481,6 +1583,8 @@ export const clientFiles = pgTable("client_files", {
   category: text("category"),
   allocationType: text("allocation_type"),
   allocationId: text("allocation_id"),
+  // Null for rows uploaded before uploader tracking existed.
+  uploadedBy: text("uploaded_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -1811,14 +1915,19 @@ export const tasks = pgTable("tasks", {
   entityId: varchar("entity_id"),
   userId: varchar("user_id"),
   title: text("title"),
+  description: text("description"),
   dueDate: timestamp("due_date"),
   completed: boolean("completed"),
   completedAt: timestamp("completed_at"),
   notified: boolean("notified"),
+  priority: taskPriorityEnum("priority").notNull().default("medium"),
   createdAt: timestamp("created_at").defaultNow(),
   orgId: uuid("org_id").references(() => organization.id, { onDelete: "set null" }),
   branchId: uuid("branch_id").references(() => branches.id, { onDelete: "set null" }),
-});
+}, (table) => [
+  // Pipeline board next-task / last-activity lookups filter tasks by entity_id.
+  index("idx_tasks_entity_id").on(table.entityId),
+]);
 
 export const insertTasksSchema = createInsertSchema(tasks).omit({ id: true, createdAt: true });
 export type TaskNew = typeof tasks.$inferSelect;
@@ -2161,6 +2270,49 @@ export const orgBotConfig = pgTable("org_bot_config", {
 export type OrgBotConfig = typeof orgBotConfig.$inferSelect;
 export const insertOrgBotConfigSchema = createInsertSchema(orgBotConfig).omit({ orgId: true, updatedBy: true, createdAt: true, updatedAt: true });
 
+// Per-org defaults for the Social Posts feature (link/price toggles, quick
+// schedule times, timezone). One row per org; absent row = built-in defaults.
+export const orgSocialSettings = pgTable("org_social_settings", {
+  orgId: uuid("org_id").primaryKey().references(() => organization.id, { onDelete: "cascade" }),
+  defaultViewLink: boolean("default_view_link").notNull().default(true),
+  defaultPriceBadge: boolean("default_price_badge").notNull().default(true),
+  timeShortcuts: text("time_shortcuts").array().notNull().default(sql`ARRAY['09:00','12:30','19:00']::text[]`),
+  timezone: text("timezone").notNull().default("Europe/London"),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export type OrgSocialSettings = typeof orgSocialSettings.$inferSelect;
+export type InsertOrgSocialSettings = typeof orgSocialSettings.$inferInsert;
+export const insertOrgSocialSettingsSchema = createInsertSchema(orgSocialSettings).omit({ orgId: true, updatedBy: true, createdAt: true, updatedAt: true });
+
+// Per-org WhatsApp template used to send quotes when the 24h window is closed.
+// Keys of quoteTemplateVariables are the template's placeholder numbers ("1", "2", ...).
+// updateTemplate* holds the "General update" template agents use to message a client once the window has closed.
+export type WhatsappTemplateVariableSource = "client_first_name" | "agent_name" | "agency_name" | "quote_link" | "message" | "custom";
+export type WhatsappTemplateVariable = { source: WhatsappTemplateVariableSource; text?: string };
+export type QuoteTemplateVariableSource = WhatsappTemplateVariableSource;
+export type QuoteTemplateVariable = WhatsappTemplateVariable;
+
+export const orgWhatsappSettings = pgTable("org_whatsapp_settings", {
+  orgId: uuid("org_id").primaryKey().references(() => organization.id, { onDelete: "cascade" }),
+  quoteTemplateName: text("quote_template_name"),
+  quoteTemplateLanguage: text("quote_template_language"),
+  quoteTemplateChannelId: text("quote_template_channel_id"),
+  quoteTemplateVariables: jsonb("quote_template_variables").$type<Record<string, WhatsappTemplateVariable>>().notNull().default({}),
+  updateTemplateName: text("update_template_name"),
+  updateTemplateLanguage: text("update_template_language"),
+  updateTemplateChannelId: text("update_template_channel_id"),
+  updateTemplateVariables: jsonb("update_template_variables").$type<Record<string, WhatsappTemplateVariable>>().notNull().default({}),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export type OrgWhatsappSettings = typeof orgWhatsappSettings.$inferSelect;
+export type InsertOrgWhatsappSettings = typeof orgWhatsappSettings.$inferInsert;
+
 // Company knowledge the AI is grounded on (one row per entry). RAG-ready.
 export const orgKnowledgeBase = pgTable("org_knowledge_base", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2344,7 +2496,14 @@ export const agentTargetTable = pgTable("agent_target_table", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   year: integer().notNull(),
   month: integer().notNull(),
+  // The EFFECTIVE target; every consumer (dashboard, org overview, onboarding) reads this.
   targetAmount: numeric("target_amount", { precision: 10, scale: 2 }).notNull(),
+  // Homeworker overrides: 'self' = the owner set it, 'admin' = an org admin overrode it.
+  source: text("source").notNull().default("admin"),
+  // The owner's own figure, kept while an admin override is in force so it can be reverted.
+  selfAmount: numeric("self_amount", { precision: 10, scale: 2 }),
+  note: text("note"),
+  updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
@@ -2355,16 +2514,70 @@ export const insertAgentTargetSchema = createInsertSchema(agentTargetTable).omit
 export type AgentTarget = typeof agentTargetTable.$inferSelect;
 export type InsertAgentTarget = z.infer<typeof insertAgentTargetSchema>;
 
+// Stored business (organisation-wide) monthly target; may drift from the sum of shop targets.
+export const orgTargetTable = pgTable("org_target_table", {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  organizationId: uuid("organization_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  year: integer().notNull(),
+  month: integer().notNull(),
+  targetAmount: numeric("target_amount", { precision: 10, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  unique("org_target_org_year_month_unique").on(table.organizationId, table.year, table.month)
+]);
+export type OrgTarget = typeof orgTargetTable.$inferSelect;
+
+// One row per homeworker branch per period; freezes the share percent used.
+// orgId is uuid (not text) because organization.id is uuid.
+export const homeworkerPayoutStatement = pgTable("homeworker_payout_statement", {
+  id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  branchId: uuid("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+  periodStart: date("period_start", { mode: "string" }).notNull(),
+  periodEnd: date("period_end", { mode: "string" }).notNull(),
+  grossProfit: numeric("gross_profit", { precision: 12, scale: 2 }).notNull(),
+  sharePercent: numeric("share_percent", { precision: 5, scale: 2 }).notNull(),
+  homeworkerShare: numeric("homeworker_share", { precision: 12, scale: 2 }).notNull(),
+  orgShare: numeric("org_share", { precision: 12, scale: 2 }).notNull(),
+  status: varchar("status", { length: 16 }).notNull().default("draft"),
+  finalisedBy: text("finalised_by").references(() => user.id, { onDelete: "set null" }),
+  finalisedAt: timestamp("finalised_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => [
+  unique("homeworker_payout_branch_period_unique").on(table.branchId, table.periodStart),
+  index("idx_homeworker_payout_org_period").on(table.orgId, table.periodStart),
+  check("homeworker_payout_status_check", sql`${table.status} IN ('draft', 'final')`),
+  check("homeworker_payout_period_order", sql`${table.periodEnd} > ${table.periodStart}`),
+  check("homeworker_payout_share_range", sql`${table.sharePercent} BETWEEN 0 AND 100`),
+]);
+
+export const insertHomeworkerPayoutStatementSchema = createInsertSchema(homeworkerPayoutStatement, {
+  status: z.enum(["draft", "final"]),
+  sharePercent: percentString,
+}).omit({ id: true, createdAt: true, updatedAt: true });
+export type HomeworkerPayoutStatement = typeof homeworkerPayoutStatement.$inferSelect;
+export type InsertHomeworkerPayoutStatement = z.infer<typeof insertHomeworkerPayoutStatementSchema>;
+
 export const destinationGuruTable = pgTable("destination_guru", {
   id: uuid().default(sql`gen_random_uuid()`).primaryKey(),
   destination: text().notNull(),
   country: text().notNull(),
   data: jsonb().notNull(),
   createdBy: text("created_by"),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  // 'ai' | 'backfill' | 'manual' | null — how the coordinates were obtained.
+  coordinatesSource: text("coordinates_source"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => [
-  unique("destination_guru_destination_unique").on(table.destination)
+  unique("destination_guru_destination_unique").on(table.destination),
+  check("destination_guru_lat_range", sql`${table.latitude} BETWEEN -90 AND 90`),
+  check("destination_guru_lng_range", sql`${table.longitude} BETWEEN -180 AND 180`),
+  check("destination_guru_coords_pair", sql`(${table.latitude} IS NULL) = (${table.longitude} IS NULL)`),
 ]);
 
 export const insertDestinationGuruSchema = createInsertSchema(destinationGuruTable).omit({ id: true, createdAt: true, updatedAt: true });
@@ -2924,3 +3137,92 @@ export const userOrgRoles = pgTable("user_org_roles", {
 
 export type UserOrgRole       = typeof userOrgRoles.$inferSelect;
 export type InsertUserOrgRole = typeof userOrgRoles.$inferInsert;
+
+// ─── Image upscale jobs (server-side, survive the user navigating away) ───────
+
+export const image_upscale_status_enum = pgEnum("image_upscale_status_enum", ["queued", "processing", "done", "failed"]);
+export const image_upscale_source_kind_enum = pgEnum("image_upscale_source_kind_enum", ["quote_image", "upload"]);
+
+export const imageUpscaleJob = pgTable("image_upscale_job", {
+  id:               uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId:            uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  createdBy:        text("created_by").references(() => user.id, { onDelete: "set null" }),
+  quoteId:          uuid("quote_id").references(() => quote.id, { onDelete: "set null" }),
+  sourceKind:       image_upscale_source_kind_enum("source_kind").notNull(),
+  // Quote image url (for quote_image) or the stored source-upload url (for upload).
+  // Kept so Revert works any time, even after the quote's url became the result.
+  originalUrl:      text("original_url").notNull(),
+  resultUrl:        text("result_url"),
+  status:           image_upscale_status_enum("status").notNull().default("queued"),
+  error:            text("error"),
+  scale:            integer("scale"),
+  sourceWidth:      integer("source_width"),
+  sourceHeight:     integer("source_height"),
+  resultWidth:      integer("result_width"),
+  resultHeight:     integer("result_height"),
+  replacedOnQuote:  boolean("replaced_on_quote").notNull().default(false),
+  revertedAt:       timestamp("reverted_at"),
+  createdAt:        timestamp("created_at").notNull().defaultNow(),
+  startedAt:        timestamp("started_at"),
+  finishedAt:       timestamp("finished_at"),
+}, (table) => ({
+  idx_quote:       index("idx_image_upscale_job_quote").on(table.quoteId),
+  idx_org_created: index("idx_image_upscale_job_org_created").on(table.orgId, table.createdAt),
+  // At most one in-flight job per quote image (backs the duplicate check; survives races).
+  uniq_active_quote_image: uniqueIndex("uniq_image_upscale_job_active_quote_image")
+    .on(table.quoteId, table.originalUrl)
+    .where(sql`${table.status} in ('queued', 'processing')`),
+  // Boot recovery, the sweep and the per-org cap only ever look at in-flight rows.
+  idx_active: index("idx_image_upscale_job_active")
+    .on(table.status)
+    .where(sql`${table.status} in ('queued', 'processing')`),
+}));
+
+export const insertImageUpscaleJobSchema = createInsertSchema(imageUpscaleJob).omit({
+  id: true,
+  createdAt: true,
+});
+export type ImageUpscaleJob = typeof imageUpscaleJob.$inferSelect;
+export type InsertImageUpscaleJob = typeof imageUpscaleJob.$inferInsert;
+
+// Departures & balances: the office's pre-departure checklist, one row per booking, created lazily
+// on the first tick (no row = every check false). `last_change_*` stamps the latest tick for the list.
+export const bookingDepartureChecks = pgTable("booking_departure_checks", {
+  bookingId: uuid("booking_id").primaryKey().references(() => booking.id, { onDelete: "cascade" }),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  checkIn: boolean("check_in").notNull().default(false),
+  ticketsInHouse: boolean("tickets_in_house").notNull().default(false),
+  passportInfo: boolean("passport_info").notNull().default(false),
+  ticketsPickUp: boolean("tickets_pick_up").notNull().default(false),
+  completed: boolean("completed").notNull().default(false),
+  fullyPaid: boolean("fully_paid").notNull().default(false),
+  lastChangeBy: text("last_change_by"),
+  lastChangeByName: text("last_change_by_name"),
+  lastChangeAt: timestamp("last_change_at", { withTimezone: true }),
+  lastChangeWhat: text("last_change_what"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_booking_departure_checks_org").on(table.orgId),
+]);
+
+export type BookingDepartureChecks = typeof bookingDepartureChecks.$inferSelect;
+export type InsertBookingDepartureChecks = typeof bookingDepartureChecks.$inferInsert;
+
+// Inbox internal notes: SendSeven replaces note meta and stamps the API key owner, so we record the
+// real author ourselves, keyed by the SendSeven message id. No row = author unknown (client shows "Team").
+export const inboxNoteAuthors = pgTable("inbox_note_authors", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  sendsevenMessageId: text("sendseven_message_id").notNull(),
+  sendsevenNoteId: text("sendseven_note_id"),
+  conversationId: text("conversation_id").notNull(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("uq_inbox_note_authors_message").on(table.sendsevenMessageId),
+  index("idx_inbox_note_authors_org").on(table.orgId),
+]);
+
+export type InboxNoteAuthor = typeof inboxNoteAuthors.$inferSelect;
+export type InsertInboxNoteAuthor = typeof inboxNoteAuthors.$inferInsert;

@@ -9,6 +9,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Spinner } from "@/components/ui/spinner";
+import { todayIsoDate } from "@/features/quote/lib/quote-expiry";
 
 interface QuoteExpiryDialogProps {
   open: boolean;
@@ -45,6 +46,7 @@ export function QuoteExpiryDialog({
             <DatePicker
               value={expiryDate}
               onChange={onExpiryDateChange}
+              min={todayIsoDate()}
               className="h-9"
               data-testid="input-expiry-date"
             />

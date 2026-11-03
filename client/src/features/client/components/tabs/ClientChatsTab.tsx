@@ -13,6 +13,7 @@ import {
   groupMessagesByDay,
   toUiConversation,
   toUiMessage,
+  buildClientInboxHref,
   useClientContactLink,
   useConversations,
   useCreateInternalNote,
@@ -35,7 +36,7 @@ function EmptyState({ icon: Icon, title, hint, action }: {
   action?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-3xl border border-black/10 bg-white/60 py-10 text-center">
+    <div className="rounded-xl border border-dashed border-social-border py-10 text-center">
       <Icon className="mx-auto mb-2 h-8 w-8 text-black/20" />
       <p className="text-sm font-medium text-black/50">{title}</p>
       <p className="mt-1 text-xs text-black/35">{hint}</p>
@@ -156,7 +157,7 @@ function ChatComposer({
       </div>
       <div
         className={cn(
-          "flex items-end gap-2 rounded-2xl border px-3 py-1.5",
+          "flex items-end gap-2 rounded-xl border px-3 py-1.5",
           mode === "note" ? "border-amber-400/40 bg-amber-400/5" : "border-black/10 bg-black/[0.02]",
         )}
       >
@@ -184,7 +185,7 @@ function ChatComposer({
           onClick={submit}
           disabled={!text.trim() || sending}
           size="icon"
-          className="mb-1 h-8 w-8 flex-none rounded-xl bg-black text-white hover:bg-black/85 disabled:opacity-40"
+          className="mb-1 h-8 w-8 flex-none rounded-[10px] bg-black text-white hover:bg-black/85 disabled:opacity-40"
           data-testid="client-chat-send"
         >
           {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -291,7 +292,7 @@ function ConversationThread({ conversation }: { conversation: Conversation }) {
 
 // Split out so the conversations query only ever runs with a real contact id —
 // listing with no `contact_id` would return the whole org's inbox.
-function LinkedContactChats({ contactId }: { contactId: string }) {
+function LinkedContactChats({ contactId, clientId }: { contactId: string; clientId: string }) {
   const [, navigate] = useLocation();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -347,7 +348,7 @@ function LinkedContactChats({ contactId }: { contactId: string }) {
           size="sm"
           variant="outline"
           className="flex-none gap-1.5 rounded-2xl text-xs"
-          onClick={() => navigate("/conversations")}
+          onClick={() => navigate(buildClientInboxHref(clientId))}
           data-testid="button-client-chats-open-inbox"
         >
           <ArrowUpRight className="h-3.5 w-3.5" /> Open inbox
@@ -368,7 +369,7 @@ function LinkedContactChats({ contactId }: { contactId: string }) {
           ))}
         </div>
 
-        <div className="flex h-[34rem] min-h-0 flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/70">
+        <div className="flex h-[34rem] min-h-0 flex-col overflow-hidden rounded-xl border border-social-border bg-card">
           {selected ? (
             <ConversationThread conversation={selected} />
           ) : (
@@ -452,7 +453,7 @@ function LinkedContactThreadBox({ contactId }: { contactId: string }) {
           })}
         </div>
       )}
-      <div className="flex h-[34rem] min-h-0 flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/70">
+      <div className="flex h-[34rem] min-h-0 flex-col overflow-hidden rounded-xl border border-social-border bg-card">
         <ConversationThread conversation={selected} />
       </div>
     </div>
@@ -515,7 +516,7 @@ export function ClientChatsTab({ clientId }: { clientId: string }) {
         title="Not connected to a conversation"
         hint="Link this client to a contact from the inbox to see their chat history here."
         action={
-          <Button size="sm" variant="outline" className="gap-1.5 rounded-2xl text-xs" onClick={() => navigate("/conversations")}>
+          <Button size="sm" variant="outline" className="gap-1.5 rounded-2xl text-xs" onClick={() => navigate(buildClientInboxHref(clientId))}>
             <ArrowUpRight className="h-3.5 w-3.5" /> Open inbox
           </Button>
         }
@@ -523,5 +524,5 @@ export function ClientChatsTab({ clientId }: { clientId: string }) {
     );
   }
 
-  return <LinkedContactChats contactId={contactId} />;
+  return <LinkedContactChats contactId={contactId} clientId={clientId} />;
 }

@@ -34,6 +34,8 @@ const BASE = `${API_V2}/training/courses`;
 const SECTIONS_BASE = `${API_V2}/training/sections`;
 const LESSONS_BASE = `${API_V2}/training/lessons`;
 const ASSETS_BASE = `${API_V2}/training/assets`;
+/** Server-side cap on files per upload request (`uploadAsset.array('files', 20)`). */
+const UPLOAD_BATCH_SIZE = 20;
 const UPLOADS_BASE = `${API_V2}/training/uploads`;
 
 export const trainingApi = {
@@ -79,7 +81,7 @@ export const trainingApi = {
     return data;
   },
 
-  /** Role-aware: `platform_admin` gets `isCorrect` on choices, learners never do. */
+  /** Role-aware: an author of the course gets `isCorrect` on choices, learners never do. */
   async getQuiz(courseId: string): Promise<QuizView> {
     const { data } = await axios.get<QuizView>(`${BASE}/${courseId}/quiz`);
     return data;
@@ -115,7 +117,7 @@ export const trainingApi = {
     return data;
   },
 
-  // === Admin (authoring, platform_admin only) ===
+  // === Admin (authoring; platform_admin or org_admin) ===
 
   /** Full replace-upsert of a course's quiz. */
   async upsertQuiz(courseId: string, input: UpsertQuizInput): Promise<QuizView> {
@@ -161,7 +163,7 @@ export const trainingApi = {
     return data;
   },
 
-  /** Permanently delete a course (platform_admin). Cascades to lessons, quiz, enrollments, certificates. */
+  /** Permanently delete a course (author only). Cascades to lessons, quiz, enrollments, certificates. */
   async deleteCourse(id: string): Promise<void> {
     await axios.delete(`${BASE}/${id}`);
   },
@@ -227,6 +229,12 @@ export const trainingApi = {
     return data;
   },
 
+  /** Reorder a lesson's slides. */
+  async reorderAssets(lessonId: string, order: { id: string; position: number }[]): Promise<TrainingLessonAsset[]> {
+    const { data } = await axios.patch<TrainingLessonAsset[]>(`${LESSONS_BASE}/${lessonId}/assets/reorder`, { order });
+    return data;
+  },
+
   async addAssets(
     lessonId: string,
     assets: { assetUrl: string; caption?: string | null; position?: number }[],
@@ -235,13 +243,32 @@ export const trainingApi = {
     return data;
   },
 
-  /** Graphics/slide images for a lesson — multipart, field name `files` (≤20, 5MB each). */
-  async uploadAssets(lessonId: string, files: File[]): Promise<TrainingLessonAsset[]> {
-    const formData = new FormData();
-    files.forEach((file) => formData.append("files", file));
-    const { data } = await axios.post<TrainingLessonAsset[]>(`${LESSONS_BASE}/${lessonId}/assets/upload`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+  /**
+   * Graphics/slide images for a lesson — multipart, field name `files` (5MB each).
+   * The server caps a request at 20 files, so larger sets are sent sequentially
+   * in batches of 20 (captions sliced in step) and the results concatenated.
+   */
+  async uploadAssets(
+    lessonId: string,
+    files: File[],
+    captions?: (string | null)[],
+  ): Promise<TrainingLessonAsset[]> {
+    const results: TrainingLessonAsset[] = [];
+    for (let start = 0; start < files.length; start += UPLOAD_BATCH_SIZE) {
+      const formData = new FormData();
+      // `captions` is a JSON array aligned by index with `files` (missing entries mean no description).
+      if (captions) formData.append("captions", JSON.stringify(captions.slice(start, start + UPLOAD_BATCH_SIZE)));
+      files.slice(start, start + UPLOAD_BATCH_SIZE).forEach((file) => formData.append("files", file));
+      const { data } = await axios.post<TrainingLessonAsset[]>(`${LESSONS_BASE}/${lessonId}/assets/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      results.push(...data);
+    }
+    return results;
+  },
+
+  async updateAsset(id: string, body: { caption: string | null }): Promise<TrainingLessonAsset> {
+    const { data } = await axios.patch<TrainingLessonAsset>(`${ASSETS_BASE}/${id}`, body);
     return data;
   },
 

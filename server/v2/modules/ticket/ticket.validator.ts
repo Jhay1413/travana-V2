@@ -5,6 +5,17 @@ export const createTicketValidator = z.object({
   body: insertTicketSchema,
 });
 
+// Shared with the controller (via ticketListModeSchema.parse) so the query
+// param is narrowed through the schema rather than an `as` cast.
+export const ticketListModeSchema = z.enum(["mine", "raised", "all"]).optional().default("mine");
+export type TicketListModeQuery = z.infer<typeof ticketListModeSchema>;
+
+/** GET /tickets — `scope` picks the slice of the caller's tickets returned;
+ *  "all" is further gated server-side to admin-tier roles (see ticket.service.ts). */
+export const listTicketsValidator = z.object({
+  query: z.object({ scope: ticketListModeSchema }),
+});
+
 export const updateTicketValidator = z.object({
   params: z.object({ id: z.string() }),
   body: insertTicketSchema.partial(),

@@ -27,7 +27,7 @@ export function SupplierScraperPicksResultView({ result }: SupplierScraperPicksR
             result.specNeedsReview ? "bg-amber-500/15 text-amber-700" : "bg-emerald-500/15 text-emerald-700"
           }`}
         >
-          {result.specNeedsReview ? "Spec needs review" : "Spec unchanged from review status"}
+          {result.specNeedsReview ? "Spec needs review" : "Picked fields verified — no review needed"}
         </span>
       </div>
 

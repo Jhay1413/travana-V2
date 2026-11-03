@@ -132,9 +132,24 @@ export function RichTextEditor({
 }
 
 export function RichTextDisplay({ content, className }: { content: string; className?: string }) {
+  // `prose`/`prose-sm`/`max-w-none` come from @tailwindcss/typography, which
+  // isn't registered in this project's Tailwind build (no `@plugin` for it in
+  // index.css) — so those classes are no-ops here and long unbroken strings
+  // (URLs, pasted text with no spaces) don't wrap and overflow past this
+  // element's box, visually overlapping whatever sits next to/after it.
+  // `[overflow-wrap:anywhere]` forces the break (kept alone — pairing it with
+  // `break-words` sets the same CSS property twice with no dedupe, and
+  // whichever wins loses the min-content shrinking this needs).
+  // `whitespace-pre-wrap` is kept: this component isn't only fed Tiptap HTML
+  // (whose getHTML() has no inter-tag whitespace to worry about) — it also
+  // renders literal plain-text content with real "\n\n" line breaks, e.g. the
+  // Ask-AI note saved via server/v2/modules/ai-ask/ai-ask.service.ts:62-63
+  // ("Q: ...\n\nA: ...", client-scoped, shown here through
+  // client-notes-list.tsx). Without pre-wrap those breaks collapse to a
+  // single space.
   return (
-    <div 
-      className={cn("prose prose-sm max-w-none", className)}
+    <div
+      className={cn("prose prose-sm max-w-none whitespace-pre-wrap [overflow-wrap:anywhere]", className)}
       dangerouslySetInnerHTML={{ __html: content }}
     />
   );

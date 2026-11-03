@@ -6,12 +6,10 @@ import { asyncHandler } from "../utils/async-handler";
 import { getUserId } from "../utils/get-user-id";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
-  // New-enum identity pass-through
   "quoted": "quoted",
   "in_play": "in_play",
   "lost": "lost",
   "archived": "archived",
-  // Legacy label → new-enum mapping
   "In Play": "quoted",
   "in play": "quoted",
   "New Lead": "quoted",
@@ -74,7 +72,7 @@ export const quoteController = {
     const search = (req.query.search as string) || "";
 
     const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd);
-    
+
     return successResponse(res, {
       quotes,
       page,
@@ -92,15 +90,14 @@ export const quoteController = {
   createQuote: asyncHandler(async (req: Request, res: Response) => {
     const body = req.body.data ? JSON.parse(req.body.data) : req.body;
     const files = (req.files as Express.Multer.File[]) || [];
-    
-    // Validate transaction_id is present
+
     if (!body.transaction_id) {
       return res.status(400).json({
         success: false,
         message: "transaction_id is required when creating a quote",
       });
     }
-    
+
     if (files.length > 0) {
       const uploaded = await socialPostService.uploadMedia(files);
       body.images = [...(body.images || []), ...uploaded.map((m) => m.url)];
@@ -223,10 +220,9 @@ export const quoteController = {
     res.status(204).send();
   }),
 
-  // Tag management
   updateQuoteTags: asyncHandler(async (req: Request, res: Response) => {
     const quoteId = req.params.id as string;
-    const { tags } = req.body; // Array of tag names
+    const { tags } = req.body;
 
     if (!Array.isArray(tags)) {
       return res

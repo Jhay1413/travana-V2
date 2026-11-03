@@ -1,7 +1,9 @@
 import { bookingUpsellRepository } from "./booking-upsell.repository";
 import { bookingRepository } from "./booking.repository";
+import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { UPSELL_TYPES, type UpsellBody } from "./booking-upsell.validator";
 import { AppError } from "../../utils/error-handler";
+import { assertBookingReadable, assertBookingWritable as assertBookingInWriteScope } from "./booking-access";
 import type { Scope } from "../../utils/scope";
 import type { InsertBookingUpsell } from "@shared/schema";
 
@@ -19,8 +21,7 @@ function assertValidType(type: string) {
 
 /** Resolve the parent booking, ensuring it exists, is active, and is in the caller's scope. */
 async function assertBookingWritable(bookingId: string, scope: Scope) {
-  const inScope = await bookingRepository.bookingInScope(bookingId, scope);
-  if (!inScope) throw new AppError("Booking not found", 404);
+  await assertBookingInWriteScope(bookingId, scope);
 
   const b = await bookingRepository.findById(bookingId);
   if (!b) throw new AppError("Booking not found", 404);
@@ -29,14 +30,14 @@ async function assertBookingWritable(bookingId: string, scope: Scope) {
 
 export const bookingUpsellService = {
   async listByBooking(bookingId: string, scope: Scope) {
-    const inScope = await bookingRepository.bookingInScope(bookingId, scope);
-    if (!inScope) throw new AppError("Booking not found", 404);
+    await assertBookingReadable(bookingId, scope);
     return bookingUpsellRepository.findByBooking(bookingId);
   },
 
   async create(bookingId: string, body: UpsellBody, scope: Scope) {
     await assertBookingWritable(bookingId, scope);
     assertValidType(body.upsell_type);
+    if (body.tour_operator_id) await tourOperatorLinkService.assertOperatorsLinked(scope, [body.tour_operator_id]);
 
     const data: InsertBookingUpsell = {
       booking_id: bookingId,
@@ -61,6 +62,10 @@ export const bookingUpsellService = {
     await assertBookingWritable(existing.booking_id, scope);
 
     if (body.upsell_type !== undefined) assertValidType(body.upsell_type);
+    // Only a CHANGED operator must be in the org's list; an old upsell may keep a removed one.
+    if (body.tour_operator_id && body.tour_operator_id !== existing.tour_operator_id) {
+      await tourOperatorLinkService.assertOperatorsLinked(scope, [body.tour_operator_id]);
+    }
 
     // Only patch the fields actually provided (keeps `added_at` immutable unless
     // explicitly corrected, so the recognition month doesn't drift on edits).

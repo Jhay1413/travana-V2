@@ -1,6 +1,14 @@
 import { AppError } from "../../utils/error-handler";
-import { sendSevenRequest, useSampleData } from "../../utils/sendseven";
-import type { ConnectTokenCreate, ConnectTokenResponse, SsChannel, SsChannelTypes } from "./channels.types";
+import { isSendSevenConfigured, sendSevenRequest, useSampleData } from "../../utils/sendseven";
+import type {
+  ConnectTokenCreate,
+  ConnectTokenResponse,
+  DelegateConnectCreate,
+  DelegateConnectResponse,
+  SsChannel,
+  SsChannelHealth,
+  SsChannelTypes,
+} from "./channels.types";
 
 // Repository: proxies channel operations to SendSeven using the CALLER'S OWN
 // org token (resolved by the sendSevenContext middleware). Connecting a channel
@@ -27,6 +35,10 @@ function notConnected(): AppError {
 }
 
 export const channelsRepository = {
+  isConfigured(): boolean {
+    return isSendSevenConfigured();
+  },
+
   listChannels(forCompose?: boolean): Promise<SsChannel[]> {
     if (useSampleData()) return Promise.resolve([]);
     return sendSevenRequest("GET", "/channels", { query: { for_compose: forCompose } });
@@ -40,6 +52,16 @@ export const channelsRepository = {
   createConnectToken(body: ConnectTokenCreate): Promise<ConnectTokenResponse> {
     if (useSampleData()) return Promise.reject(notConnected());
     return sendSevenRequest("POST", "/channel-connect-tokens", { body });
+  },
+
+  channelHealth(): Promise<SsChannelHealth> {
+    if (useSampleData()) return Promise.resolve({ has_errors: false, error_count: 0, integrations: [] });
+    return sendSevenRequest("GET", "/channels/health", {});
+  },
+
+  delegateConnect(body: DelegateConnectCreate): Promise<DelegateConnectResponse> {
+    if (useSampleData()) return Promise.reject(notConnected());
+    return sendSevenRequest("POST", "/channel-connect-tokens/delegate", { body });
   },
 
   deleteChannel(id: string): Promise<unknown> {

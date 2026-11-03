@@ -1,7 +1,15 @@
 import { chatRepository } from "./chat.repository";
 import { notificationRepository } from "../notification/notification.repository";
 import { AppError } from "../../utils/error-handler";
+import { sanitizeRichText } from "../../utils/sanitize-rich-text";
+import type { InsertChatMessage } from "@shared/schema";
 import { bridgeAgentReplyToPortal, isPortalSender } from "../../../services/portal-chat-bridge";
+
+// Rows written before write-side sanitising existed may hold unsafe HTML, so
+// content is also cleaned on the way out. sanitizeRichText is idempotent.
+function cleanLastMessage<T extends { content: string }>(m: T | undefined): T | null {
+  return m ? { ...m, content: sanitizeRichText(m.content ?? "") } : null;
+}
 
 export const chatService = {
   async getConversations(userId: string) {
@@ -18,7 +26,7 @@ export const chatService = {
       ...conv,
       participants: allParticipants[i] || [],
       unreadCount: unreadMap.get(conv.id) || 0,
-      lastMessage: lastMsgMap.get(conv.id) || null,
+      lastMessage: cleanLastMessage(lastMsgMap.get(conv.id)),
     }));
   },
 
@@ -48,13 +56,17 @@ export const chatService = {
     await chatService.verifyMembership(conversationId, userId);
     await chatRepository.updateLastRead(conversationId, userId);
     const messages = await chatRepository.findMessagesByConversation(conversationId);
-    return messages.reverse();
+    return messages
+      .map(m => (typeof m.content === "string" ? { ...m, content: sanitizeRichText(m.content) } : m))
+      .reverse();
   },
 
   async sendMessage(conversationId: string, senderId: string, content: string, fileData?: { fileUrl: string; fileName: string; fileType: string; fileSize: number }) {
-    if (!content.trim() && !fileData) throw new AppError("Message cannot be empty", 400);
+    // content is rendered as HTML by the client, so strip anything scriptable.
+    const safeContent = sanitizeRichText(content.trim()).trim();
+    if (!safeContent && !fileData) throw new AppError("Message cannot be empty", 400);
     await chatService.verifyMembership(conversationId, senderId);
-    const messageData: any = { conversationId, senderId, content: content.trim() || "" };
+    const messageData: InsertChatMessage = { conversationId, senderId, content: safeContent };
     if (fileData) {
       messageData.fileUrl = fileData.fileUrl;
       messageData.fileName = fileData.fileName;

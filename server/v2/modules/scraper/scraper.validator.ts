@@ -47,7 +47,9 @@ export const updateScraperValidator = z.object({
 // validated as a fixed shape rather than a loose record.
 const pickedFieldSchema = z.object({
   field: z.string().min(1),
-  value: z.string(),
+  // A whole flights-section block is multi-line. Truncated (not rejected) at 8000
+  // so an older bookmarklet sending more never fails the whole import.
+  value: z.string().transform((s) => s.slice(0, 8_000)),
   textIndex: z.number().int(),
   lineIndex: z.number().int(),
   linesBefore: z.array(z.string()).max(10),
@@ -130,6 +132,7 @@ export const savePicksValidator = z.object({
     headings: z.array(z.string().max(200)).max(20).optional(),
     apiJson: z.unknown().optional(),
     deepText: z.string().max(500_000).optional(),
+    flightsText: z.string().max(50_000).optional(),
     // Accepted for forward-compat logging; not otherwise interpreted server-side.
     pickerVersion: z.number().int().positive().optional(),
     // The package type the agent declared BEFORE picking (see

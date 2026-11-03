@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useRoute, useSearch } from "wouter";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -9,7 +9,7 @@ import {
   useTicketsByClient,
   useUsers,
   useCurrentUser,
-  useTasks,
+  useClientTasks,
   transactionKeys,
 } from "@/hooks/queries";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
@@ -23,20 +23,31 @@ import type { QuoteFormValues } from "@/features/quote/types/quote-form.types";
 import { useToast } from "@/hooks/use-toast";
 import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 
-import { transformNeonClientData, transformTicket, filesFor } from "@/features/client/components/client-types";
-import { EditClientDialog } from "@/features/client/components/modals/EditClientDialog";
+import { transformNeonClientData } from "@/features/client/components/client-types";
 import { MergeClientDialog } from "@/features/client/components/modals/MergeClientDialog";
 import { UploadFileDialog } from "@/features/client/components/modals/UploadFileDialog";
-import { AllHolidaysPanel } from "@/features/client/components/all-holidays-panel";
-import { HolidayDetailsPanel } from "@/features/client/components/holiday-details-panel";
-import { HolidayDetailView } from "@/features/client/components/holiday-detail-view";
-import { HolidayHeaderActions } from "@/features/client/components/holiday-header-actions";
-import { ClientIndexView } from "@/features/client/components/client-index-view";
-import { ClientIndexHeader, type ClientCreateKind } from "@/features/client/components/client-index-header";
+import { HolidayDetailPage } from "@/features/client/components/holiday/holiday-detail-page";
+import { useQuoteExpiry } from "@/features/quote/components/hooks";
+import { QuoteExpiryDialog } from "@/features/quote/components/QuoteExpiryDialog";
+import { ClientPageHeader } from "@/features/client/components/page/client-page-header";
+import { ClientStatBoxes } from "@/features/client/components/page/client-stat-boxes";
+import { ClientDashboardCard } from "@/features/client/components/page/client-dashboard-card";
+import { ClientDetailsCard } from "@/features/client/components/page/client-details-card";
+import { LiveDealsRail } from "@/features/client/components/page/live-deals-rail";
+import { useLiveDealsState } from "@/features/client/components/page/use-live-deals-state";
+import { EditClientModal } from "@/features/client/components/page/modals/edit-client-modal";
+import { ReferrerModal } from "@/features/client/components/page/modals/referrer-modal";
+import { PortalPinModal } from "@/features/client/components/page/modals/portal-pin-modal";
+import { ShareClientModal } from "@/features/client/components/page/modals/share-client-modal";
+import { computeClientStats } from "@/features/client/lib/client-stats";
+import { isClientReadOnly } from "@/features/client/lib/client-access";
+import { buildDealLabels, buildTaskHolidays } from "@/features/client/lib/deal-labels";
+import { resolveSelectionTransactionId } from "@/features/client/lib/holiday-transaction";
 import type { HolidaySelection } from "@/features/client/types";
+import type { CreateKind } from "@/components/shared/create-menu";
 import { QuoteCreateDialog } from "@/features/quote/components/quote-create-dialog";
 import { BookingCreateDialog } from "@/features/booking/components/booking-create-dialog";
-import { CreateTaskDialog } from "@/features/client/components/modals/CreateTaskDialog";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import {
   useClientEditForm,
@@ -49,10 +60,16 @@ import {
 export default function ClientPage() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/clients/:clientId");
+  const search = useSearch();
   const { toast } = useToast();
 
-  const { role } = useRole();
-  const [q, setQ] = useState("");
+  const { role, orgRole } = useRole();
+  const readOnly = isClientReadOnly(orgRole);
+  const [showReferrerModal, setShowReferrerModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  // Rail view state lives here so it survives opening a deal and coming back.
+  const liveDealsState = useLiveDealsState();
   const [showQuoteCreateDialog, setShowQuoteCreateDialog] = useState(false);
   const [showBookingCreateDialog, setShowBookingCreateDialog] = useState(false);
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
@@ -62,13 +79,21 @@ export default function ClientPage() {
   const [holidaySelection, setHolidaySelection] = useState<HolidaySelection | null>(null);
   const clientId = params?.clientId ?? "";
 
+  // Single shared "Update Expiry" dialog for the selected quote — both the
+  // header's action menu and the hero card's expired-banner button open it,
+  // but only one instance is ever mounted (avoids duplicate dialog/testid
+  // DOM nodes). Harmless to construct with an empty id when nothing/a
+  // non-quote is selected: the mutation only fires once the dialog is open
+  // and confirmed, which only ever happens via a quote's own trigger.
+  const quoteExpiry = useQuoteExpiry(holidaySelection?.type === "quote" ? holidaySelection.id : "");
+
   const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
   // The overview stats and Live Deals list come from this query, so it must
   // reflect a deal created moments ago — even when the page was left and
   // re-entered inside the 30s default stale window.
   const { data: transactionsData, isLoading: isLoadingTransactions } = useTransactions({ clientId }, { staleTime: 0, refetchOnMount: "always" });
   const { data: ticketsData } = useTicketsByClient(clientId);
-  const { data: tasksData } = useTasks("client", clientId);
+  const { data: tasksData } = useClientTasks(clientId);
   const { data: usersData } = useUsers();
   const { data: currentUser } = useCurrentUser();
 
@@ -78,31 +103,26 @@ export default function ClientPage() {
 
   const editForm = useClientEditForm(clientId, clientData);
   const fileActions = useClientFiles(clientId);
-  const taskCreate = useClientTaskCreate(clientId, currentUser?.id);
-  const ticketCreate = useClientTicketCreate(clientId, currentUser?.id);
+  const taskCreate = useClientTaskCreate();
+  const ticketCreate = useClientTicketCreate(clientId, currentUser?.id, {
+    transactionId: resolveSelectionTransactionId(holidaySelection, transactionsData ?? []),
+  });
   const enquiryActions = useClientEnquiryActions(clientId, currentUser?.id, () => {
     setConvertingFromEnquiryTxnId(null);
     setConvertingEnquiryId(null);
   });
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const create = params.get("create");
-    if (create === "enquiry") enquiryActions.setShowEnquiryWizard(true);
-    else if (create === "quote") setShowQuoteCreateDialog(true);
-    else if (create === "booking") setShowBookingCreateDialog(true);
-    else if (create === "task") taskCreate.setShowTaskDialog(true);
-    else if (create === "ticket") ticketCreate.setShowTicketDialog(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Deep-link support: /clients/:id?holiday=quote:<id> (or booking:/enquiry:)
   // opens the client page with that holiday selected in the center detail view —
   // the pipeline board and Pipeline Live link here instead of the old
-  // standalone pages. Re-parses on client change so stale selections never
-  // leak across clients.
+  // standalone pages. Keyed on the search string too (via wouter's useSearch,
+  // not window.location.search) so a same-page link that only changes the
+  // query string — e.g. another `navigate(...?holiday=...)` call while
+  // already on this route — re-parses instead of being a no-op, since
+  // clientId alone wouldn't change and wouter doesn't re-render on a
+  // search-only change otherwise.
   useEffect(() => {
-    const raw = new URLSearchParams(window.location.search).get("holiday");
+    const raw = new URLSearchParams(search).get("holiday");
     if (raw) {
       const [type, id] = raw.split(":");
       if ((type === "quote" || type === "booking" || type === "enquiry") && id) {
@@ -111,11 +131,15 @@ export default function ClientPage() {
       }
     }
     setHolidaySelection(null);
-  }, [clientId]);
+  }, [clientId, search]);
+
+  // The URL is the single source of truth for the open holiday; the parse effect above turns it into state.
+  function openHoliday(next: HolidaySelection) {
+    navigate(`/clients/${clientId}?holiday=${next.type}:${next.id}`);
+  }
 
   async function handleConvertEnquiryToQuote(enq: EnquiryTable) {
     if (!enq.transaction_id) {
-      console.error("❌ Enquiry missing transaction_id:", enq);
       toast({
         title: "Conversion Error",
         description: "This enquiry is missing a transaction ID and cannot be converted.",
@@ -200,30 +224,10 @@ export default function ClientPage() {
     [transactions],
   );
 
-  const tickets = useMemo(() => (ticketsData ? ticketsData.map(transformTicket) : []), [ticketsData]);
   const tasks = useMemo(() => tasksData ?? [], [tasksData]);
-  const files = useMemo(() => (client ? filesFor(client.id) : []), [client]);
-
-  function getUserName(userId: string) {
-    const user = usersData?.find((u) => u.id === userId);
-    return user?.name || "Unassigned";
-  }
-
-  const filteredTickets = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (!query) return tickets;
-    return tickets.filter((t) =>
-      `${t.id} ${t.subject} ${t.status} ${t.type} ${t.priority}`.toLowerCase().includes(query),
-    );
-  }, [q, tickets]);
-  void filteredTickets;
-
-  const filteredFiles = useMemo(() => {
-    const query = q.trim().toLowerCase();
-    if (!query) return files;
-    return files.filter((f) => `${f.id} ${f.name} ${f.type} ${f.updated}`.toLowerCase().includes(query));
-  }, [q, files]);
-  void setQ;
+  const stats = useMemo(() => computeClientStats(enquiries, quotes, bookings), [enquiries, quotes, bookings]);
+  const taskHolidays = useMemo(() => buildTaskHolidays(enquiries, quotes, bookings), [enquiries, quotes, bookings]);
+  const dealLabels = useMemo(() => buildDealLabels(enquiries, quotes, bookings), [enquiries, quotes, bookings]);
 
   if (isLoadingClient) {
     return (
@@ -246,7 +250,7 @@ export default function ClientPage() {
     );
   }
 
-  const handleCreate = (kind: ClientCreateKind) => {
+  const handleCreate = (kind: CreateKind) => {
     if (kind === "enquiry") enquiryActions.setShowEnquiryWizard(true);
     else if (kind === "quote") setShowQuoteCreateDialog(true);
     else if (kind === "booking") setShowBookingCreateDialog(true);
@@ -258,140 +262,113 @@ export default function ClientPage() {
     editForm.updateNeonClientMutation.mutate(
       { id: clientId, data: { referredByClientId } },
       {
-        onSuccess: () => toast({ title: referredByClientId ? "Referrer saved" : "Referrer removed" }),
+        onSuccess: () => {
+          setShowReferrerModal(false);
+          toast({ title: referredByClientId ? "Referrer saved" : "Referrer removed" });
+        },
         onError: () => toast({ title: referredByClientId ? "Failed to save referrer" : "Failed to remove referrer", variant: "destructive" }),
       },
     );
 
-  // Two layouts share one page: the redesigned overview (main column + "Live
-  // Deals" on the right) when nothing is selected, and the original
-  // three-column holidays / detail / details layout once a deal is opened.
+  // Two layouts share one page: the redesigned overview (header, stat boxes,
+  // dashboard card, side cards and the Live deals rail) when nothing is
+  // selected, and the original three-column holidays / detail / details layout
+  // once a deal is opened.
   const overviewLayout = (
     <section
-      className="text-compact -m-4 grid h-[calc(100vh-3.5rem)] grid-cols-1 gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[1fr_290px] xl:grid-cols-[1fr_320px] 3xl:grid-cols-[1fr_360px]"
+      className="-m-4 flex min-h-[calc(100vh-3.5rem)] flex-col bg-social-page md:-m-6 xl:h-[calc(100vh-3.5rem)] xl:min-h-0 xl:flex-row xl:overflow-hidden"
       data-testid="section-client-profile"
     >
-      <div className="flex min-h-0 min-w-0 flex-col">
-        <ClientIndexHeader
-          client={client}
+      <div className="flex min-w-0 flex-1 flex-col xl:min-h-0 xl:overflow-y-auto">
+        <ClientPageHeader
+          name={client.name}
+          phone={client.phone}
           clientData={clientData}
           isFavorited={isFavorited}
-          onToggleFavorite={handleToggleClientPin}
-          onChangeBadge={handleChangeClientBadge}
-          onEdit={editForm.openEditDialog}
-          onMerge={() => setShowMergeDialog(true)}
+          readOnly={readOnly}
           aiReplyEnabled={!!clientData?.aiReplyEnabled}
-          onToggleAiReply={handleToggleAiReply}
+          onEdit={editForm.openEditDialog}
+          onShare={() => setShowShareModal(true)}
+          onTogglePin={handleToggleClientPin}
+          onChangeBadge={handleChangeClientBadge}
+          clientId={clientId}
           onCreate={handleCreate}
+          onMerge={() => setShowMergeDialog(true)}
+          onToggleAiReply={handleToggleAiReply}
+          onChangeReferrer={() => setShowReferrerModal(true)}
         />
-        <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto bg-white p-4 md:py-6 md:pl-8 md:pr-6 dark:bg-transparent">
-          <ClientIndexView
-            clientId={clientId}
-            client={client}
-            clientData={clientData}
-            onSelectReferrer={(id) => saveReferrer(id)}
-            onClearReferrer={() => saveReferrer(null)}
-            onCreateTask={() => taskCreate.setShowTaskDialog(true)}
-            enquiries={enquiries}
-            quotes={quotes}
-            bookings={bookings}
-            tasks={tasks}
-            navigate={navigate}
-            onOpenDeal={setHolidaySelection}
-            clientFiles={fileActions.clientFilesData}
-            filteredFiles={filteredFiles}
-            onDeleteFile={fileActions.deleteFile}
-            onUploadFile={() => fileActions.setShowUploadFileModal(true)}
-            role={role}
-            rawTickets={ticketsData ?? []}
-            users={usersData ?? []}
-            onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
-          />
+        <div className="p-4 md:p-6" data-testid="client-index-view">
+          <div className="grid items-start gap-5 rounded-3xl border border-social-border bg-[#F1F4F8] p-4 md:p-6 min-[1400px]:grid-cols-[1.4fr_1fr] dark:bg-muted/40">
+            <div className="flex min-w-0 flex-col gap-5">
+              <ClientStatBoxes stats={stats} />
+              <ClientDashboardCard
+                clientId={clientId}
+                clientName={client.name}
+                role={role}
+                readOnly={readOnly}
+                tasks={tasks}
+                users={usersData ?? []}
+                taskHolidays={taskHolidays}
+                dealLabels={dealLabels}
+                rawTickets={ticketsData ?? []}
+                clientFiles={fileActions.clientFilesData}
+                onAddTask={() => taskCreate.setShowTaskDialog(true)}
+                onNewTicket={() => ticketCreate.setShowTicketDialog(true)}
+                onUploadFile={() => fileActions.setShowUploadFileModal(true)}
+                onDeleteFile={fileActions.deleteFile}
+                onOpenDeal={openHoliday}
+                onOpenTicket={(ticketId) => navigate(`/tickets/${ticketId}`)}
+              />
+            </div>
+            <div className="flex min-w-0 flex-col gap-5">
+              <ClientDetailsCard
+                clientId={clientId}
+                clientData={clientData}
+                readOnly={readOnly}
+                onEditClient={editForm.openEditDialog}
+                onChangePin={() => setShowPinModal(true)}
+              />
+            </div>
+          </div>
         </div>
       </div>
-      <AllHolidaysPanel
-        variant="live-deals"
-        className="hidden lg:flex"
+      <LiveDealsRail
         enquiries={enquiries}
         quotes={quotes}
         bookings={bookings}
-        selection={holidaySelection}
-        onSelect={setHolidaySelection}
+        state={liveDealsState}
+        isLoading={isLoadingTransactions}
+        readOnly={readOnly}
+        onSelect={openHoliday}
+        clientId={clientId}
         onCreate={handleCreate}
-        isLoadingTransactions={isLoadingTransactions}
       />
     </section>
   );
 
-  const detailLayout = (
-      <section
-        className="text-compact -m-4 grid h-[calc(100vh-3.5rem)] grid-cols-1 gap-0 overflow-hidden rounded-tl-lg md:-m-6 lg:grid-cols-[250px_1fr_240px] xl:grid-cols-[300px_1fr_300px] 3xl:grid-cols-[380px_1fr_380px]"
-        data-testid="section-client-profile"
-      >
-        <AllHolidaysPanel
-          className="hidden lg:flex"
-          enquiries={enquiries}
-          quotes={quotes}
-          bookings={bookings}
-          selection={holidaySelection}
-          onSelect={setHolidaySelection}
-          onCreate={handleCreate}
-          isLoadingTransactions={isLoadingTransactions}
-        />
-
-        <div className="flex min-h-0 min-w-0 flex-col">
-          {/* Center header — the client's name, aligned with the side panels'
-              76px headers (All Holidays / Details), per the design. When a
-              holiday is selected, the phone number becomes a pill next to the
-              name and the deal-actions cluster (agent / pin / link / share /
-              actions) takes the right side instead of the muted address line. */}
-          <div className="flex h-[76px] shrink-0 items-center justify-between gap-3 border-b border-black/10 bg-white px-4 3xl:px-6 dark:border-white/10 dark:bg-white/[0.04]">
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-2">
-                <h2 className="truncate text-sm font-semibold 3xl:text-base" data-testid="client-center-header">
-                  {client.name}
-                </h2>
-                {client.phone && (
-                  <span className="inline-flex shrink-0 items-center rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
-                    {client.phone}
-                  </span>
-                )}
-              </div>
-            </div>
-            {holidaySelection && (
-              <HolidayHeaderActions
-                selection={holidaySelection}
-                clientId={clientId}
-                clientName={client.name}
-                onDeleted={() => setHolidaySelection(null)}
-              />
-            )}
-          </div>
-          <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3 md:px-6 md:pb-6 md:pt-4">
-        {holidaySelection && (
-          <HolidayDetailView
-            clientId={clientId}
-            clientName={client.name}
-            selection={holidaySelection}
-            onBack={() => {
-              setHolidaySelection(null);
-              // A deal may have been created or converted while it was open.
-              queryClient.invalidateQueries({ queryKey: transactionKeys.list({ clientId }) });
-            }}
-          />
-        )}
-          </div>
-        </div>
-
-        <HolidayDetailsPanel
-          className="hidden lg:flex"
-          selection={holidaySelection}
-          enquiries={enquiries}
-          quotes={quotes}
-          bookings={bookings}
-        />
-      </section>
-  );
+  const detailLayout = holidaySelection ? (
+    <HolidayDetailPage
+      clientId={clientId}
+      clientName={client.name}
+      clientPhone={client.phone}
+      clientBadge={clientData?.badge}
+      selection={holidaySelection}
+      enquiries={enquiries}
+      quotes={quotes}
+      bookings={bookings}
+      readOnly={readOnly}
+      isLoadingTransactions={isLoadingTransactions}
+      onSelect={openHoliday}
+      onCreate={readOnly ? undefined : handleCreate}
+      onOpenExpiryDialog={quoteExpiry.openExpiryDialog}
+      onDeleted={() => {
+        // A deal may have been created, converted or deleted while it was open.
+        queryClient.invalidateQueries({ queryKey: transactionKeys.list({ clientId }) });
+        setHolidaySelection(null);
+        navigate(`/clients/${clientId}`);
+      }}
+    />
+  ) : null;
 
   return (
     <>
@@ -410,12 +387,22 @@ export default function ClientPage() {
             setConvertingEnquiryInitialValues(undefined);
           }
         }}
-        onSuccess={() => {
+        onSuccess={(newQuoteId) => {
+          // Only jump the selection when this was actually a conversion (not
+          // a plain "create quote" from the "+" menu, where convertingEnquiryId
+          // is never set). The dialog calls onOpenChange(false) before
+          // onSuccess, but that only schedules the convertingEnquiryId reset —
+          // this closure still sees the value captured at render time.
           if (convertingEnquiryId) {
             enquiryActions.updateEnquiryMutation.mutate({
               id: convertingEnquiryId,
               data: { status: "Converted" },
             });
+            // Converting drops the enquiry out of the holidays list immediately
+            // (the transactions API stops returning `enquiry` once it leaves
+            // on_enquiry) — select the new quote instead of leaving the
+            // selection pointing at something no longer in the list.
+            openHoliday({ type: "quote", id: newQuoteId });
           }
         }}
         initialValues={convertingEnquiryInitialValues}
@@ -426,18 +413,16 @@ export default function ClientPage() {
         open={showBookingCreateDialog}
         onOpenChange={setShowBookingCreateDialog}
         onSuccess={(bookingId) => {
-          navigate(`/clients/${clientId}/bookings/${bookingId}`);
+          navigate(`/clients/${clientId}?holiday=booking:${bookingId}`);
         }}
       />
 
-      <CreateTaskDialog
-        presentation="drawer"
+      <AddTaskModal
         open={taskCreate.showTaskDialog}
         onOpenChange={taskCreate.setShowTaskDialog}
-        taskForm={taskCreate.taskForm}
-        setTaskForm={taskCreate.setTaskForm}
-        isPending={taskCreate.createTaskMutation.isPending}
-        onConfirm={taskCreate.confirmCreateTask}
+        entityType="client"
+        entityId={clientId}
+        defaultAssignedToId={currentUser?.id}
       />
 
       <CreateTicketDialog
@@ -468,14 +453,26 @@ export default function ClientPage() {
         setUploadFile={fileActions.setUploadFile}
         onUpload={fileActions.handleUploadFile}
       />
-      <EditClientDialog
+      <EditClientModal
         open={editForm.showEditClient}
         onOpenChange={editForm.setShowEditClient}
-        editForm={editForm.editForm}
-        setEditForm={editForm.setEditForm}
+        form={editForm.editForm}
+        setForm={editForm.setEditForm}
         onSave={editForm.handleSaveClient}
         isPending={editForm.isPending}
       />
+      <ReferrerModal
+        open={showReferrerModal}
+        onOpenChange={setShowReferrerModal}
+        clientId={clientId}
+        firstName={clientData?.firstName || "this client"}
+        hasReferrer={!!clientData?.referredByClientId}
+        isPending={editForm.updateNeonClientMutation.isPending}
+        onSelect={saveReferrer}
+        onClear={() => saveReferrer(null)}
+      />
+      <PortalPinModal clientId={clientId} open={showPinModal} onOpenChange={setShowPinModal} />
+      <ShareClientModal open={showShareModal} onOpenChange={setShowShareModal} />
 
       <EnquiryWizard
         presentation="drawer"
@@ -492,6 +489,15 @@ export default function ClientPage() {
         sourceClientId={clientId}
         sourceClientName={client?.name || "this client"}
         onMerged={(survivingClientId) => navigate(`/clients/${survivingClientId}`)}
+      />
+
+      <QuoteExpiryDialog
+        open={quoteExpiry.showExpiryDialog}
+        onOpenChange={quoteExpiry.setShowExpiryDialog}
+        expiryDate={quoteExpiry.expiryDate}
+        onExpiryDateChange={quoteExpiry.setExpiryDate}
+        isPending={quoteExpiry.updateQuoteExpiryMutation.isPending}
+        onConfirm={quoteExpiry.confirmExpiry}
       />
     </>
   );

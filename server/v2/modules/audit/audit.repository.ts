@@ -106,6 +106,40 @@ export const auditRepository = {
     });
   },
 
+  /**
+   * Atomically write the deletion audit entry, promote a sibling quote to
+   * primary (isQuoteCopy=false, with a refreshed expiry), and soft-delete the
+   * old primary quote — all in one DB transaction, so the transaction is never
+   * left, even briefly, with zero primaries. Caller (auditService.deleteQuote)
+   * is responsible for validating that newPrimaryId is a live sibling of the
+   * same transaction before calling this.
+   */
+  async recordDeletionAndPromoteSibling(ctx: DeletionContext & { newPrimaryId: string; newPrimaryExpiry: Date }) {
+    await db.transaction(async (tx) => {
+      await tx.insert(auditLog).values({
+        action: 'delete',
+        entityType: 'quote',
+        entityId: ctx.entityId,
+        entityTitle: ctx.entityTitle,
+        entityData: ctx.entityData,
+        reason: ctx.reason,
+        performedBy: ctx.performedBy,
+        performedByName: ctx.performedByName,
+        clientId: ctx.clientId,
+        clientName: ctx.clientName,
+      });
+      // Promote first, then delete — the transaction is never left without a primary.
+      await tx
+        .update(quote)
+        .set({ isQuoteCopy: false, date_expiry: ctx.newPrimaryExpiry })
+        .where(eq(quote.id, ctx.newPrimaryId));
+      await tx
+        .update(quote)
+        .set({ deleted_at: new Date(), deleted_by_v2: ctx.performedBy, is_active: false })
+        .where(eq(quote.id, ctx.entityId));
+    });
+  },
+
   /** Atomically write the deletion audit entry and hard-delete the booking. */
   async recordDeletionAndDeleteBooking(ctx: DeletionContext) {
     await db.transaction(async (tx) => {

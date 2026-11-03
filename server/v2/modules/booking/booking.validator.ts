@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { flightBody, accommodationBody } from "../quote/quote-child.validator";
+import { HAYS_REF_MESSAGE, isValidHaysRef } from "@shared/booking-refs";
 
 export const addImagesValidator = z.object({
   body: z.object({
@@ -17,3 +19,38 @@ export const reorderImagesValidator = z.object({
       message: "Provide imageIds or imageUrls",
     }),
 });
+
+// PATCH /:id — the edit drawer sends a large free-form payload, so everything
+// passes through untouched. Only the two references are checked: when the key is
+// present it must be a non-empty string (the columns are NOT NULL, so null is
+// refused too). validate() does not write parsed values back, so the service
+// does the actual trimming.
+const bookingRefField = z.string({ invalid_type_error: "Reference cannot be empty" }).trim().min(1, "Reference cannot be empty").optional();
+
+export const updateBookingValidator = z.object({
+  body: z
+    .object({
+      hays_ref: bookingRefField,
+      supplier_ref: bookingRefField,
+    })
+    .passthrough(),
+});
+
+// POST /convert/:quoteId — both references are required and the HAYS Ref must be HAY- plus
+// 7 or 8 digits (any case / spacing accepted; the service saves the canonical form).
+export const convertQuoteToBookingValidator = z.object({
+  params: z.object({ quoteId: z.string().min(1) }),
+  body: z.object({
+    haysRef: z
+      .string({ required_error: "HAYS ref is required" })
+      .trim()
+      .min(1, "HAYS ref is required")
+      .refine(isValidHaysRef, HAYS_REF_MESSAGE),
+    supplierRef: z.string({ required_error: "Supplier ref is required" }).trim().min(1, "Supplier ref is required"),
+  }),
+});
+
+// POST /:id/flights and /:id/accommodations: the same columns as the quote children; id and
+// booking_id are rejected so a row can never be created under, or moved to, another booking.
+export const addBookingFlightValidator = z.object({ params: z.object({ id: z.string().uuid("Invalid booking id") }), body: flightBody });
+export const addBookingAccommodationValidator = z.object({ params: z.object({ id: z.string().uuid("Invalid booking id") }), body: accommodationBody });

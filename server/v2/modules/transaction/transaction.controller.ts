@@ -7,41 +7,34 @@ import { getScope } from "../../utils/scope";
 import { authStorage } from "../../middlewares/auth";
 import { normalizeEnquiry } from "../../utils/enum-normalizers";
 import { uploadImageToS3 } from "../../utils/image-storage";
+import { QUOTE_STATUS_MAP } from "./quote-status-map";
+import type { ListPipelineByStatusQuery, PipelineCountsQuery } from "./transaction.validator";
+import type { DealPriority, PipelineFilters } from "./transaction.types";
 
-const QUOTE_STATUS_MAP: Record<string, string> = {
-  // New-enum identity pass-through
-  "quoted": "quoted",
-  "in_play": "in_play",
-  "lost": "lost",
-  "archived": "archived",
-  // Legacy label → new-enum mapping
-  "In Play": "quoted",
-  "in play": "quoted",
-  "New Lead": "quoted",
-  "NEW_LEAD": "quoted",
-  "Quote In Progress": "quoted",
-  "QUOTE_IN_PROGRESS": "quoted",
-  "Quote Call": "quoted",
-  "QUOTE_CALL": "quoted",
-  "Quote Ready": "quoted",
-  "QUOTE_READY": "quoted",
-  "Requote": "quoted",
-  "REQUOTE": "quoted",
-  "Awaiting Decision": "in_play",
-  "AWAITING_DECISION": "in_play",
-  "Won": "quoted",
-  "WON": "quoted",
-  "accepted": "quoted",
-  "draft": "quoted",
-  "Archived": "archived",
-  "ARCHIVED": "archived",
-  "Inactive": "archived",
-  "INACTIVE": "archived",
-  "Expired": "archived",
-  "EXPIRED": "archived",
-  "Lost": "lost",
-  "LOST": "lost",
-};
+function splitCsv(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const parts = Array.from(new Set(value.split(",").map((p) => p.trim()).filter(Boolean)));
+  return parts.length > 0 ? parts : undefined;
+}
+
+// Turns the (already validated) raw query strings into the service's filter shape.
+// Only keys that were actually passed are set, so no-filter calls stay filter-free.
+function buildPipelineFilters(query: {
+  search?: string;
+  priority?: string;
+  tourOperatorId?: string;
+  quick?: PipelineFilters["quick"];
+}): PipelineFilters {
+  const filters: PipelineFilters = {};
+  const search = query.search?.trim();
+  if (search) filters.search = search;
+  const priorities = splitCsv(query.priority) as DealPriority[] | undefined;
+  if (priorities) filters.priorities = priorities;
+  const tourOperatorIds = splitCsv(query.tourOperatorId);
+  if (tourOperatorIds) filters.tourOperatorIds = tourOperatorIds;
+  if (query.quick) filters.quick = query.quick;
+  return filters;
+}
 
 function normalizeQuote(data: any) {
   const normalized = { ...data };
@@ -97,8 +90,9 @@ export const transactionController = {
     //   - homeworker            → pinned to scope.userId
     //   - org_admin             → branchOverride optional, confined to org
     //   - platform_admin        → branchOverride optional, no org confinement
-    // With clientId (client-details view): staff roles (incl. social_media_manager)
-    // see the client's full deal history org-wide; homeworkers still only their own.
+    // With clientId (client-details view): shop-pinned like the board for agents and branch
+    // managers; org_admin and social_media_manager see the client's full history org-wide;
+    // homeworkers only their own.
     // Filters below are additive — agentId + date range now work together.
     const transactions = await transactionService.listTransactions(scope, {
       clientId: asString(clientId),
@@ -136,8 +130,29 @@ export const transactionController = {
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 10));
     const agentId = req.query.agentId as string | undefined;
     const quoteStatusFilter = req.query.quoteStatus as string | undefined;
-    const result = await transactionService.listPipelineByStatus(getScope(req), column, page, limit, agentId || undefined, quoteStatusFilter || undefined);
+    // Already validated against the enum by listPipelineByStatusValidator —
+    // validate() checks req.query but doesn't reassign it, so this reads the
+    // raw query typed against the validator's own inferred shape.
+    const { sort, branchId, search, priority, tourOperatorId, quick } = req.query as unknown as ListPipelineByStatusQuery;
+    const scope = getScope(req);
+    const filters = buildPipelineFilters({ search, priority, tourOperatorId, quick });
+    const result = await transactionService.listPipelineByStatus(scope, column, page, limit, agentId || undefined, quoteStatusFilter || undefined, sort, scope.userId ?? undefined, branchId, filters);
     return successResponse(res, result, "Pipeline data retrieved");
+  }),
+
+  getPipelineCounts: asyncHandler(async (req: Request, res: Response) => {
+    // Validated by pipelineCountsValidator (validate() doesn't reassign req.query).
+    const { branchId, search, priority, tourOperatorId } = req.query as unknown as PipelineCountsQuery;
+    const agentId = req.query.agentId as string | undefined;
+    const { priorities, tourOperatorIds, search: term } = buildPipelineFilters({ search, priority, tourOperatorId });
+    const counts = await transactionService.getPipelineCounts(getScope(req), {
+      agentId: agentId || undefined,
+      branchId,
+      search: term,
+      priorities,
+      tourOperatorIds,
+    });
+    return successResponse(res, counts, "Pipeline counts retrieved");
   }),
 
   getTransactionById: asyncHandler(async (req: Request, res: Response) => {

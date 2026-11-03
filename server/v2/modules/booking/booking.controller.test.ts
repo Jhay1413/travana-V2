@@ -9,6 +9,8 @@ vi.mock("./booking.service", () => ({
     convertQuoteToBooking: vi.fn(),
     updateBooking: vi.fn(),
     deleteBooking: vi.fn(),
+    removeFlight: vi.fn(),
+    removeAccommodation: vi.fn(),
   },
 }));
 
@@ -81,6 +83,18 @@ describe("bookingController.convertQuoteToBooking", () => {
     expect(bookingService.convertQuoteToBooking).toHaveBeenCalledWith("q1", "H1", "S1", expect.objectContaining({ orgId: "o1" }));
     expect(res.status).toHaveBeenCalledWith(201);
   });
+
+  it("trims the references before they reach the service", async () => {
+    vi.mocked(bookingService.convertQuoteToBooking).mockResolvedValue({ id: "b1" } as never);
+
+    await bookingController.convertQuoteToBooking(
+      req({ params: { quoteId: "q1" }, body: { haysRef: "  H1 ", supplierRef: " S1  " } }),
+      mockRes(),
+      vi.fn(),
+    );
+
+    expect(bookingService.convertQuoteToBooking).toHaveBeenCalledWith("q1", "H1", "S1", expect.anything());
+  });
 });
 
 describe("bookingController.deleteBooking", () => {
@@ -109,5 +123,24 @@ describe("bookingController — error propagation", () => {
 
     expect(next).toHaveBeenCalledWith(err);
     expect(res.json).not.toHaveBeenCalled();
+  });
+});
+
+describe("bookingController child endpoints pass the booking id from the path to the service", () => {
+  const params = { id: "b1", flightId: "f1", accommodationId: "a1" };
+  const scopeArg = expect.objectContaining({ orgId: "o1", branchId: "br1", orgRole: "agent" });
+
+  it("removeFlight", async () => {
+    const res = mockRes();
+    await bookingController.removeFlight(req({ params }), res, vi.fn());
+    expect(bookingService.removeFlight).toHaveBeenCalledWith("b1", "f1", scopeArg);
+    expect(res.status).toHaveBeenCalledWith(204);
+  });
+
+  it("removeAccommodation", async () => {
+    const res = mockRes();
+    await bookingController.removeAccommodation(req({ params }), res, vi.fn());
+    expect(bookingService.removeAccommodation).toHaveBeenCalledWith("b1", "a1", scopeArg);
+    expect(res.status).toHaveBeenCalledWith(204);
   });
 });

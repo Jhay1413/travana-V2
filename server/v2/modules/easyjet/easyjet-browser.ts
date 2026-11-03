@@ -302,6 +302,17 @@ async function launchBrowser(ctx: EasyJetScrapeContext): Promise<Browser> {
   }
 }
 
+// Runs `fn` with a freshly launched browser (any configured backend) and always
+// closes it afterwards. Not pooled — for occasional one-off fetches by other modules.
+export async function withEasyJetBrowser<T>(ctx: EasyJetScrapeContext, fn: (browser: Browser) => Promise<T>): Promise<T> {
+  const browser = await launchBrowser(ctx);
+  try {
+    return await fn(browser);
+  } finally {
+    await closeBrowser(browser);
+  }
+}
+
 function isOnLoginPage(page: Page, ctx: EasyJetScrapeContext): boolean {
   // Empty identityHost = no login configured; url.includes("") would be true for
   // every page, so guard it — otherwise no-login suppliers look "always on login".

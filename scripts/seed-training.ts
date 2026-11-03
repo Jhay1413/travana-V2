@@ -23,6 +23,13 @@ import {
 // Videos use public, embedding-friendly sample MP4s that play in a native
 // <video> element; thumbnails/slides use deterministic picsum images. Swap
 // these for real uploaded assets in production.
+//
+// Rich text: training descriptions/captions are edited with the TipTap
+// RichTextEditor and stored as HTML. The "[SEED] Rich Text Showcase" course
+// carries HTML in all four rich fields (course, section, lesson description,
+// slide caption) to exercise the editor/RichTextDisplay round-trip. The other
+// courses deliberately keep plain text to represent legacy rows that predate
+// the editor and must still render.
 
 // Verified-live, embedding-friendly, HTTP Range-supported MP4s (checked 2026-07).
 // Native <video> playback needs no CORS. Swap for real uploads in production.
@@ -58,15 +65,28 @@ type QuizSeed = {
   questions: QuestionSeed[];
 };
 
+// Optional per-course section. Seeds without `sections` get one implicit
+// "Section 1" (no description) holding all lessons, as before.
+type SectionSeed = {
+  title: string;
+  description?: string; // HTML (rich text) or plain text
+  lessons: LessonSeed[];
+};
+
 type CourseSeed = {
   title: string;
   description: string;
   thumbnail_url: string;
   status: "draft" | "published";
   passing_score: number;
-  lessons: LessonSeed[];
+  lessons?: LessonSeed[]; // shorthand for a single default section
+  sections?: SectionSeed[]; // takes precedence over `lessons`
   quiz?: QuizSeed;
 };
+
+// Normalise either shape to a list of sections.
+const sectionsOf = (c: CourseSeed): SectionSeed[] =>
+  c.sections ?? [{ title: "Section 1", lessons: c.lessons ?? [] }];
 
 const COURSES: CourseSeed[] = [
   {
@@ -248,6 +268,69 @@ const COURSES: CourseSeed[] = [
     },
   },
   {
+    // HTML mirrors what TipTap (StarterKit + Link) emits. Captions stay well
+    // under the 2000-char cap enforced by training-lesson.validator.ts.
+    title: "[SEED] Rich Text Showcase",
+    description:
+      '<p>A tour of the <strong>Hub training</strong> rich-text fields. This course description is stored as <em>HTML</em>.</p><ul><li>Course description</li><li>Section description</li><li>Lesson description</li><li>Slide captions</li></ul>',
+    thumbnail_url: thumb("travana-richtext"),
+    status: "published",
+    passing_score: 70,
+    sections: [
+      {
+        title: "Handling a Holiday Enquiry",
+        description:
+          '<h3>What you will learn</h3><p>How to take a <strong>first enquiry</strong> from hello to a confirmed brief.</p><blockquote><p>The best agents ask more questions than they answer in the first call.</p></blockquote><p>Allow about <code>15 minutes</code> for this section.</p>',
+        lessons: [
+          {
+            title: "First Call Checklist",
+            description:
+              '<p>Use this checklist on <strong>every</strong> new enquiry:</p><ol><li>Greet the customer and confirm their name</li><li>Ask about <em>dates, budget and party size</em></li><li>Note any must-haves, such as accessibility needs</li></ol><p>Full guidance lives in the <a href="https://example.com/agent-handbook">agent handbook</a>.</p>',
+            type: "graphics",
+            assets: [
+              {
+                asset_url: slide("rich-bold"),
+                caption: "<p><strong>Listen first, sell second</strong></p>",
+              },
+              {
+                asset_url: slide("rich-bullets"),
+                caption:
+                  "<p><strong>Always capture:</strong></p><ul><li>Travel dates and flexibility</li><li>Budget per person</li><li>Who is travelling, including children</li><li>Departure airport</li></ul>",
+              },
+              {
+                asset_url: slide("rich-numbered"),
+                caption:
+                  "<p>Follow the quote workflow in order:</p><ol><li>Confirm the brief with the customer</li><li>Price two or three options</li><li>Send the quote with an expiry date</li><li>Follow up within 48 hours</li></ol>",
+              },
+              {
+                asset_url: slide("rich-link"),
+                caption:
+                  '<p>Check the latest entry rules on the <a href="https://www.gov.uk/foreign-travel-advice">FCDO travel advice</a> page before you confirm any booking.</p>',
+              },
+              {
+                asset_url: slide("rich-paragraphs"),
+                caption:
+                  "<p>A great quote tells a story. Open with the <em>experience</em>: the sunset from the balcony, the private transfer waiting at arrivals.</p><p>Only then introduce the price, framed as the cost of that experience rather than a line item.</p><p>Close with one clear next step so the customer always knows what to do.</p>",
+              },
+              {
+                asset_url: slide("rich-plain"),
+                caption: "Legacy plain-text caption: no HTML, should still render normally.",
+              },
+            ],
+          },
+          {
+            title: "Following Up on a Quote",
+            description:
+              "<p>Timing matters. Follow up <strong>within 48 hours</strong>, and always offer something new:</p><ul><li>A fresh photo or review of the resort</li><li>A reminder that the price is <em>held until the expiry date</em></li></ul>",
+            type: "video",
+            video_url: V.blazes,
+            video_duration_sec: 10,
+          },
+        ],
+      },
+    ],
+  },
+  {
     title: "[SEED] Advanced Objection Handling & Closing (draft)",
     description:
       "Work-in-progress course — visible only in the admin authoring list, not to learners. Used to demonstrate the draft state.",
@@ -286,14 +369,21 @@ async function main() {
       })
       .returning({ id: training_course.id });
 
-    // Each seed course gets one default section holding all its lessons.
+    // Sections hold the lessons; lesson position is course-wide.
+    let position = 0;
+    let sectionPos = 0;
+    for (const s of sectionsOf(c)) {
     const [section] = await db
       .insert(training_section)
-      .values({ course_id: course.id, title: "Section 1", position: 0 })
+      .values({
+        course_id: course.id,
+        title: s.title,
+        description: s.description ?? null,
+        position: sectionPos++,
+      })
       .returning({ id: training_section.id });
 
-    let position = 0;
-    for (const l of c.lessons) {
+    for (const l of s.lessons) {
       const [lesson] = await db
         .insert(training_lesson)
         .values({
@@ -319,6 +409,7 @@ async function main() {
           })),
         );
       }
+    }
     }
 
     if (c.quiz) {
@@ -356,7 +447,7 @@ async function main() {
     }
 
     const quizNote = c.quiz ? `, quiz (${c.quiz.questions.length} q)` : "";
-    console.log(`  ${c.status.padEnd(9)} "${c.title}" — ${c.lessons.length} lesson(s)${quizNote}`);
+    console.log(`  ${c.status.padEnd(9)} "${c.title}" — ${sectionsOf(c).reduce((n, s) => n + s.lessons.length, 0)} lesson(s)${quizNote}`);
   }
 
   console.log("\nDone.");

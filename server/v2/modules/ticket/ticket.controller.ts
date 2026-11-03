@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { ticketService } from "./ticket.service";
+import { ticketListModeSchema } from "./ticket.validator";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
@@ -8,7 +9,11 @@ import { AppError } from "../../utils/error-handler";
 
 export const ticketController = {
   listTickets: asyncHandler(async (req: Request, res: Response) => {
-    const tickets = await ticketService.listTickets(getScope(req));
+    // Already shape-checked by the listTicketsValidator middleware; re-parsing
+    // here (cheap — it's just an enum + default) narrows req.query.scope's
+    // `unknown`/string type to TicketListMode without an `as` cast.
+    const mode = ticketListModeSchema.parse(req.query.scope);
+    const tickets = await ticketService.listTickets(getScope(req), mode);
     return successResponse(res, tickets, "Tickets retrieved successfully");
   }),
 
@@ -28,7 +33,10 @@ export const ticketController = {
     const userId = req.params.userId as string;
     const statusRaw = req.query.status as string | undefined;
     const statuses = statusRaw ? statusRaw.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
-    const tickets = await ticketService.listTicketsByUser(userId, getScope(req), { statuses });
+    // Opt-in — defaults to the existing creator-or-assignee behaviour that
+    // other callers (sidebar badge, "what's on" widget) already depend on.
+    const assignedOnly = req.query.assignedOnly === "true";
+    const tickets = await ticketService.listTicketsByUser(userId, getScope(req), { statuses, assignedOnly });
     return successResponse(res, tickets, "Tickets retrieved successfully");
   }),
 

@@ -103,11 +103,15 @@ const TABLE_DEFS: Record<string, TableDef> = {
           </div>
         ),
       },
-      { key: "commission_percentage", label: "Commission %" },
+      { key: "code", label: "Code" },
+      { key: "website", label: "Website" },
+      { key: "phone", label: "Phone" },
     ],
     formFields: [
       { key: "name", label: "Name", type: "text", required: true, placeholder: "e.g. TUI, Jet2" },
-      { key: "commission_percentage", label: "Commission %", type: "number", placeholder: "e.g. 10.5", suffix: "%" },
+      { key: "code", label: "Code", type: "text", placeholder: "e.g. J2" },
+      { key: "website", label: "Website", type: "text", placeholder: "e.g. jet2holidays.com" },
+      { key: "phone", label: "Phone", type: "text", placeholder: "e.g. 0333 300 0000" },
       { key: "logo_url", label: "Logo", type: "image" },
     ],
     primaryLabel: (r) => r.name ?? "–",

@@ -2,13 +2,14 @@ import { Request, Response } from "express";
 import { bookingImageService } from "./booking-image.service";
 import { asyncHandler } from "../../utils/async-handler";
 import { successResponse } from "../../utils/response";
+import { getScope } from "../../utils/scope";
 
 export const bookingImageController = {
   addImages: asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.bookingId as string;
     const { images } = req.body;
 
-    const addedImages = await bookingImageService.addImages(bookingId, images);
+    const addedImages = await bookingImageService.addImages(bookingId, images, getScope(req));
 
     return successResponse(
       res,
@@ -21,7 +22,7 @@ export const bookingImageController = {
   getImages: asyncHandler(async (req: Request, res: Response) => {
     const bookingId = req.params.bookingId as string;
 
-    const images = await bookingImageService.getBookingImages(bookingId);
+    const images = await bookingImageService.getBookingImages(bookingId, getScope(req));
 
     return successResponse(res, images, "Images retrieved successfully");
   }),
@@ -30,7 +31,7 @@ export const bookingImageController = {
     const bookingId = req.params.bookingId as string;
     const imageId = req.params.imageId as string;
 
-    await bookingImageService.deleteImage(bookingId, imageId);
+    await bookingImageService.deleteImage(bookingId, imageId, getScope(req));
 
     return successResponse(res, null, "Image deleted successfully");
   }),
@@ -39,7 +40,7 @@ export const bookingImageController = {
     const bookingId = req.params.bookingId as string;
     const imageId = req.params.imageId as string;
 
-    const image = await bookingImageService.setPrimaryImage(bookingId, imageId);
+    const image = await bookingImageService.setPrimaryImage(bookingId, imageId, getScope(req));
 
     return successResponse(res, image, "Primary image updated successfully");
   }),
@@ -52,7 +53,7 @@ export const bookingImageController = {
     const bookingId = req.params.bookingId as string;
     const { imageIds, imageUrls } = req.body as { imageIds?: string[]; imageUrls?: string[] };
 
-    const images = await bookingImageService.reorderImages(bookingId, { imageIds, imageUrls });
+    const images = await bookingImageService.reorderImages(bookingId, { imageIds, imageUrls }, getScope(req));
 
     return successResponse(res, images, "Image order updated successfully");
   }),
@@ -77,7 +78,7 @@ export const bookingImageController = {
       }
     }
 
-    const addedImages = await bookingImageService.uploadFiles(bookingId, files);
+    const addedImages = await bookingImageService.uploadFiles(bookingId, files, getScope(req));
     return successResponse(res, addedImages, `${addedImages.length} image(s) uploaded successfully`, 201);
   }),
 };

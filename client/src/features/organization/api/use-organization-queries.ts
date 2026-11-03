@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { organizationApi, type Organization, type OrgMember } from "./organization.api";
+import { organizationApi, type Organization, type OrgMember, type SeatUsage } from "./organization.api";
 
 export const organizationKeys = {
   all: ["organization"] as const,
   current: () => [...organizationKeys.all, "current"] as const,
   members: () => [...organizationKeys.all, "members"] as const,
+  // Nested under members so every member mutation refreshes the seat count too.
+  seats: () => [...organizationKeys.members(), "seats"] as const,
 };
 
 export function useCurrentOrganization() {
@@ -29,6 +31,14 @@ export function useOrgMembers(options?: { enabled?: boolean }) {
   return useQuery<OrgMember[]>({
     queryKey: organizationKeys.members(),
     queryFn: organizationApi.listMembers,
+    enabled: options?.enabled ?? true,
+  });
+}
+
+export function useOrgSeats(options?: { enabled?: boolean }) {
+  return useQuery<SeatUsage>({
+    queryKey: organizationKeys.seats(),
+    queryFn: organizationApi.getSeats,
     enabled: options?.enabled ?? true,
   });
 }

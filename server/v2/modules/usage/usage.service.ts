@@ -85,7 +85,7 @@ export async function recordAiUsage(input: RecordAiUsageInput): Promise<void> {
       promptTokens,
       completionTokens,
       totalTokens,
-      messageCount: input.feature === "embedding" ? 0 : 1,
+      messageCount: input.feature === "embedding" || input.feature === "image_upscale" ? 0 : 1,
       costMicros,
     });
   } catch (err) {

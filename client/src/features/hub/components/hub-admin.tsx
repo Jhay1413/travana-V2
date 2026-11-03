@@ -11,13 +11,14 @@ import {
   Settings,
   Sparkles,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { HubSectionHeader, HubBadge, HubProgressBar } from "@/features/hub/components/hub-components";
 import { adminStats, trainingModules } from "@/data/hub-mock";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-function AdminCard({ icon: Icon, title, value, color, description }: { icon: React.ElementType; title: string; value: string | number; color: string; description: string }) {
+function AdminCard({ icon: Icon, title, value, color, description }: { icon: LucideIcon; title: string; value: string | number; color: string; description: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
       <div className={cn("grid h-10 w-10 place-items-center rounded-lg", color)}>

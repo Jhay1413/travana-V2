@@ -45,16 +45,38 @@ export interface FieldRule {
   // compatibility this needs.
   origin?: 'picked' | 'generated'; // 'picked' = a human clicked the element and it verified; 'generated' = the AI wrote it from one example page
   verifiedValue?: string; // the exact value the agent's click reproduced at pick time (deriveSpecFromPicks only stores a rule that verifies against it)
-  strategy?: string; // which derivation strategy produced this rule (see DerivationStrategy in picker-spec.ts) — 'url-param' | 'label-anchored' | 'heading-position' | 'title-prefix' | 'line-offset'
+  strategy?: string; // which derivation strategy produced this rule (see DerivationStrategy in picker-spec.ts) — 'url-param' | 'label-anchored' | 'heading-position' | 'title-prefix' | 'title-segment' | 'url-path-slug' | 'value-pattern-line' | 'line-offset'
   pickedAt?: string; // ISO timestamp of when the pick was made
 }
+
+// A picked region of the captured text (see ExtractionSpec.flightsSection and
+// ExtractionSpec.itinerarySection).
+export interface PickedSectionSpec {
+  startLabel: string;
+  endLabel?: string;
+  origin: 'picked';
+  pickedAt: string;
+  sampleText?: string;
+  // Which captured text the section was verified on. extractFlightsSection
+  // searches this source FIRST (a heading can also appear, without the cards,
+  // in another source).
+  source?: 'text' | 'flightsText' | 'deepText';
+  // Non-empty line count of the picked block. Direction sections use it to size
+  // a window when no unique end label exists (never a blind 4000-char window).
+  blockLines?: number;
+}
+// Kept for compatibility: the flights sections were the first users of this shape.
+export type FlightsSectionSpec = PickedSectionSpec;
 
 export interface ExtractionSpec {
   version: number;
   // Wait until the page contains something matching this before reading (so the
   // SPA has rendered the priced quote). Matched against innerText.
   wait?: { textMatches?: string; timeoutMs?: number };
-  // Fixed values merged into the result (e.g. tour_operator, currency).
+  // Fixed values merged into the result (e.g. tour_operator). A spec stored
+  // before this business went GBP-only may still carry a "currency" key here
+  // from when the AI generated one — the interpreter no longer reads it (see
+  // extraction.interpreter.ts's hardcoded `currency: 'GBP'`), so it is inert.
   constants?: Record<string, string | number>;
   // ScraperJson field name → how to extract it. Scalar fields only; the
   // interpreter derives the structured arrays (flights/transfers/luggage).
@@ -101,4 +123,22 @@ export interface ExtractionSpec {
   // (the case for every spec stored before this field existed) falls back to
   // the pre-existing field-based inference, unchanged.
   packageType?: 'cruise' | 'package-holiday' | 'lodge';
+  // Optional: where the flight legs sit on the page, as picked by an agent with
+  // the picker's "Flights Section" field. The interpreter reads flights from the
+  // text between startLabel and endLabel ONLY (extractFlightsSection) before
+  // falling back to the whole page. Labels are stable heading lines, never
+  // values. `sampleText` is a debugging aid and is never used for extraction.
+  flightsSection?: FlightsSectionSpec;
+  // Direction-specific variants for pages that lay out outbound flight ->
+  // accommodation -> return flight, where ONE box cannot hold both. Each is read
+  // on its own and every leg in it is forced to that direction. A direction
+  // without a section (or whose section doesn't parse) falls back to
+  // flightsSection / the whole page for that direction only.
+  flightsOutboundSection?: FlightsSectionSpec;
+  flightsReturnSection?: FlightsSectionSpec;
+  // Optional (cruise only): where the day-by-day itinerary sits, as picked with the
+  // picker's "Itinerary" field. When the section is found, the itinerary readers run
+  // on its text ONLY (extractItinerarySection) before the whole-page chain, so ports
+  // in a "Similar cruises" list elsewhere on the page can't leak in.
+  itinerarySection?: PickedSectionSpec;
 }

@@ -1,10 +1,12 @@
 import { useFormContext } from "react-hook-form";
 import { ExternalLink, X } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { usePackageTypes, useTourOperators } from "@/hooks/queries";
+import { findOperator, operatorSelectOptions, OperatorRateHint, useOperatorNames } from "@/features/tour-operator";
 import { drawerControlClass, drawerInputClass, drawerLabelClass } from "@/components/shared/form-drawer";
 import { commissionForOperator, operatorCommissionPct } from "@/features/quote/lib/pricing";
 import { formatLeadSource } from "@/features/quote/components/quote-types";
@@ -27,6 +29,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
   const { control, setValue, getValues } = useFormContext<SharedHolidayFormValues>();
   const { data: packageTypesData } = usePackageTypes();
   const { data: tourOperatorsData } = useTourOperators();
+  const operatorNames = useOperatorNames();
 
   return (
     <div className="space-y-5 px-7 pb-6 pt-6" data-testid="drawer-overview">
@@ -68,7 +71,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
           name="packageType"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Holiday Type</FormLabel>
+              <FormLabelTooltip className={drawerLabelClass} tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Holiday Type</FormLabelTooltip>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={drawerControlClass}>
@@ -94,14 +97,11 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
               <FormControl>
                 <SearchableSelect
                   className={drawerControlClass}
-                  options={(tourOperatorsData || []).map((op: { id: string; name: string | null }) => ({
-                    value: op.id,
-                    label: op.name || op.id,
-                  }))}
+                  options={operatorSelectOptions(tourOperatorsData, field.value, operatorNames[field.value ?? ""])}
                   value={field.value ?? ""}
                   onValueChange={(value) => {
                     field.onChange(value);
-                    const op = tourOperatorsData?.find((o: { id: string }) => o.id === value);
+                    const op = findOperator(tourOperatorsData, value);
                     const pct = operatorCommissionPct(op);
                     if (pct != null) {
                       setValue(
@@ -114,6 +114,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
                   placeholder="Select operator..."
                 />
               </FormControl>
+              <OperatorRateHint operators={tourOperatorsData} selectedId={field.value} />
               <FormMessage />
             </FormItem>
           )}
@@ -123,7 +124,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
           name="leadSource"
           render={({ field }) => (
             <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Lead Source</FormLabel>
+              <FormLabelTooltip className={drawerLabelClass} tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead Source</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={drawerControlClass}>

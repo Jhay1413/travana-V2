@@ -29,14 +29,15 @@ export const auditController = {
     const performer = await requirePerformer(req);
 
     const id = req.params.id as string;
-    const reason = String(req.body?.reason ?? '').trim();
-    if (!reason) return res.status(400).json({ success: false, error: 'Reason is required' });
+    const reason = String(req.body.reason).trim();
+    const newPrimaryQuoteId = typeof req.body.newPrimaryQuoteId === 'string' ? req.body.newPrimaryQuoteId : undefined;
 
     await auditService.deleteQuote(scope, {
       id,
       reason,
       performedBy: performer.userId,
       performedByName: performer.name,
+      newPrimaryQuoteId,
     });
     res.json({ success: true, message: 'Quote deleted successfully' });
   }),

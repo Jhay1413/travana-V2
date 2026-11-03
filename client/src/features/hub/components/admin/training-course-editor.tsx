@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6,13 +6,15 @@ import { useLocation, useRoute } from "wouter";
 import { ArrowLeft, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/shared/rich-text-editor";
+import { normalizeRichText } from "@/features/hub/lib/rich-text";
 import { Switch } from "@/components/ui/switch";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HubSectionHeader, HubBadge, HubEmptyState } from "@/features/hub/components/hub-components";
 import { useCourseContent } from "@/features/hub/api/use-training-queries";
 import { useAdminOrgSearch, useAdminOrg } from "@/hooks/queries";
+import { useRoles } from "@/hooks/use-role";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   useCreateCourse,
@@ -30,9 +32,12 @@ import { LessonRow } from "./training-lesson-row";
 import { LessonFormDialog, EMPTY_LESSON_FORM_VALUES, type LessonFormValues } from "./training-lesson-form-dialog";
 import { TrainingThumbnailUpload } from "./training-thumbnail-upload";
 import { COURSE_CATEGORIES, type CourseVisibility } from "@/features/hub/types/training.types";
-import type { DraftLesson } from "@/features/hub/types/training-admin.types";
+import type { DraftLesson, StagedSlide } from "@/features/hub/types/training-admin.types";
 
-const courseFormSchema = z
+// `requireOrgPick` is true only for platform admins, who choose the tenant.
+// Org admins' courses are always their own org's — the server fills the org id.
+const buildCourseFormSchema = (requireOrgPick: boolean) =>
+  z
   .object({
     title: z.string().min(1, "Title is required"),
     category: z.string().min(1, "Category is required"),
@@ -46,7 +51,7 @@ const courseFormSchema = z
     requireContentBeforeQuiz: z.boolean(),
   })
   .superRefine((val, ctx) => {
-    if (val.visibility === "org" && !val.orgId) {
+    if (requireOrgPick && val.visibility === "org" && !val.orgId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["orgId"],
@@ -55,7 +60,7 @@ const courseFormSchema = z
     }
   });
 
-type CourseFormValues = z.infer<typeof courseFormSchema>;
+type CourseFormValues = z.infer<ReturnType<typeof buildCourseFormSchema>>;
 
 const EMPTY_COURSE: CourseFormValues = {
   title: "",
@@ -103,9 +108,15 @@ export default function TrainingCourseEditor() {
   const createLesson = useCreateLesson();
   const uploadAssets = useUploadAssets();
 
+  // Platform admins pick global/org + the tenant; org admins (Owners) can only
+  // author for their own organisation, so the pickers are hidden for them.
+  const { hasRole } = useRoles();
+  const isPlatformAdmin = hasRole("platform_admin");
+  const courseFormSchema = useMemo(() => buildCourseFormSchema(isPlatformAdmin), [isPlatformAdmin]);
+
   const form = useForm<CourseFormValues>({
     resolver: zodResolver(courseFormSchema),
-    defaultValues: EMPTY_COURSE,
+    defaultValues: isPlatformAdmin ? EMPTY_COURSE : { ...EMPTY_COURSE, visibility: "org" },
   });
 
   // Draft lessons, create-mode only — persisted to the server on course submit.
@@ -122,14 +133,18 @@ export default function TrainingCourseEditor() {
     const t = setTimeout(() => setDebouncedOrgSearch(orgSearch), 250);
     return () => clearTimeout(t);
   }, [orgSearch]);
-  const { data: orgResults = [], isFetching: orgsSearching } = useAdminOrgSearch(debouncedOrgSearch);
+  const { data: orgResults = [], isFetching: orgsSearching } = useAdminOrgSearch(debouncedOrgSearch, isPlatformAdmin);
   const selectedOrgId = form.watch("orgId");
   // Resolve the chosen org's name directly by id so it displays even when it
   // isn't in the current (filtered) search results — e.g. editing an existing course.
-  const { data: selectedOrg } = useAdminOrg(selectedOrgId || undefined);
+  const { data: selectedOrg } = useAdminOrg(selectedOrgId || undefined, isPlatformAdmin);
+
+  // The rich-text editor only reads `content` on mount, so remount it whenever the form is reset.
+  const [descriptionEditorKey, setDescriptionEditorKey] = useState(0);
 
   useEffect(() => {
     if (course) {
+      setDescriptionEditorKey((k) => k + 1);
       form.reset({
         title: course.title,
         category: course.category,
@@ -167,7 +182,7 @@ export default function TrainingCourseEditor() {
       }
     : EMPTY_LESSON_FORM_VALUES;
 
-  const handleDraftDialogSubmit = (values: LessonFormValues, files: File[]) => {
+  const handleDraftDialogSubmit = (values: LessonFormValues, slides: StagedSlide[]) => {
     const draft: DraftLesson = {
       tempId: editingDraft?.tempId ?? nextDraftLessonId(),
       title: values.title,
@@ -175,7 +190,7 @@ export default function TrainingCourseEditor() {
       type: values.type,
       isRequired: values.isRequired,
       videoUrl: values.type === "video" ? (values.videoUrl ?? null) : null,
-      files: values.type === "graphics" ? files : [],
+      slides: values.type === "graphics" ? slides : [],
     };
     setDraftLessons((prev) => {
       if (editingDraft) {
@@ -208,12 +223,15 @@ export default function TrainingCourseEditor() {
     const payload = {
       title: values.title,
       category: values.category,
-      description: values.description || undefined,
-      thumbnailUrl: values.thumbnailUrl || undefined,
-      visibility: values.visibility as CourseVisibility,
+      // null (not undefined) so clearing the field actually clears it on update — the server only patches fields it is sent.
+      description: values.description || null,
+      thumbnailUrl: values.thumbnailUrl || null,
+      // Org admins always create/keep org-scoped courses; the server pins their
+      // own org id, so we omit it.
+      visibility: (isPlatformAdmin ? values.visibility : "org") as CourseVisibility,
       // Only org-scoped courses carry an orgId; global courses clear it so the
       // server stores org_id = NULL.
-      orgId: values.visibility === "org" ? values.orgId : null,
+      orgId: isPlatformAdmin ? (values.visibility === "org" ? values.orgId : null) : undefined,
       passingScore: values.passingScore,
       requireContentBeforeQuiz: values.requireContentBeforeQuiz,
     };
@@ -258,8 +276,13 @@ export default function TrainingCourseEditor() {
           videoUrl: draft.type === "video" ? draft.videoUrl : null,
         });
 
-        if (draft.type === "graphics" && draft.files.length > 0) {
-          await uploadAssets.mutateAsync({ lessonId: lesson.id, courseId: created.id, files: draft.files });
+        if (draft.type === "graphics" && draft.slides.length > 0) {
+          await uploadAssets.mutateAsync({
+            lessonId: lesson.id,
+            courseId: created.id,
+            files: draft.slides.map((s) => s.file),
+            captions: draft.slides.map((s) => s.caption.trim() || null),
+          });
         }
       } catch {
         lessonFailed = true;
@@ -305,6 +328,17 @@ export default function TrainingCourseEditor() {
         data-testid="training-course-editor-loading"
       >
         <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  // Org admins can read a published global course (as a learner) but cannot
+  // author it — the server 404s every mutation. Show the same forbidden state
+  // as the page guard instead of a broken editor.
+  if (!isNew && !isPlatformAdmin && course?.visibility === "global") {
+    return (
+      <div className="py-16 text-center" data-testid="training-course-editor-forbidden">
+        <p className="text-sm text-slate-500">Global courses can only be managed by platform administrators.</p>
       </div>
     );
   }
@@ -397,12 +431,14 @@ export default function TrainingCourseEditor() {
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Textarea
-                        {...field}
-                        rows={3}
-                        placeholder="What will staff learn in this course?"
-                        data-testid="input-course-description"
-                      />
+                      <div data-testid="input-course-description">
+                        <RichTextEditor
+                          key={descriptionEditorKey}
+                          content={field.value ?? ""}
+                          onChange={(html) => field.onChange(normalizeRichText(html))}
+                          placeholder="What will staff learn in this course?"
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -451,34 +487,44 @@ export default function TrainingCourseEditor() {
               />
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="visibility"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Visibility</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={(v) => {
-                          field.onChange(v as CourseVisibility);
-                          // Global courses have no org — clear any stale selection.
-                          if (v === "global") form.setValue("orgId", "");
-                        }}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-course-visibility">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="global">Global (all tenants)</SelectItem>
-                          <SelectItem value="org">Specific organization</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {isPlatformAdmin ? (
+                  <FormField
+                    control={form.control}
+                    name="visibility"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Visibility</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => {
+                            field.onChange(v as CourseVisibility);
+                            // Global courses have no org — clear any stale selection.
+                            if (v === "global") form.setValue("orgId", "");
+                          }}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-course-visibility">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="global">Global (all tenants)</SelectItem>
+                            <SelectItem value="org">Specific organization</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : (
+                  <div className="space-y-1" data-testid="text-course-visibility-note">
+                    {/* Plain label: FormLabel requires a FormField context, and there is no field here. */}
+                    <p className="text-sm font-medium leading-none">Visibility</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      This course will be visible to your organisation only.
+                    </p>
+                  </div>
+                )}
 
                 <FormField
                   control={form.control}
@@ -501,7 +547,7 @@ export default function TrainingCourseEditor() {
                 />
               </div>
 
-              {form.watch("visibility") === "org" && (
+              {isPlatformAdmin && form.watch("visibility") === "org" && (
                 <FormField
                   control={form.control}
                   name="orgId"
@@ -596,7 +642,7 @@ export default function TrainingCourseEditor() {
                           title={draft.title}
                           type={draft.type}
                           isRequired={draft.isRequired}
-                          mediaBadge={draft.type === "graphics" ? `${draft.files.length} image(s)` : undefined}
+                          mediaBadge={draft.type === "graphics" ? `${draft.slides.length} image(s)` : undefined}
                           index={i}
                           total={draftLessons.length}
                           onMoveUp={() => moveDraftLesson(i, -1)}
@@ -626,7 +672,7 @@ export default function TrainingCourseEditor() {
           onOpenChange={setDraftDialogOpen}
           dialogTitle={editingDraft ? "Edit lesson" : "Add lesson"}
           initialValues={draftInitialValues}
-          initialFiles={editingDraft?.files}
+          initialSlides={editingDraft?.slides}
           disableTypeChange={!!editingDraft}
           onSubmit={handleDraftDialogSubmit}
         />

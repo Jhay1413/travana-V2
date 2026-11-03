@@ -6,7 +6,7 @@ import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
 import { getScope } from "../../utils/scope";
 import { uploadImageToS3 } from "../../utils/image-storage";
-import type { PortalStatus } from "./quote.types";
+import { ENGAGEMENT_PERIODS, SOCIAL_STATUSES, type PortalStatus, type SocialStatus } from "./quote.types";
 
 const QUOTE_STATUS_MAP: Record<string, string> = {
   // New-enum identity pass-through
@@ -50,6 +50,12 @@ function normalizeQuoteStatus(data: any) {
   return data;
 }
 
+// Accepts "A,B" or repeated ?tags=A&tags=B (validated upstream as string | string[]).
+function parseTagsParam(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.join(",") : typeof value === "string" ? value : "";
+  return raw.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
 export const quoteController = {
   listQuotes: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
@@ -84,10 +90,24 @@ export const quoteController = {
     const portalStatusParam = req.query.portalStatus as string;
     const portalStatus: PortalStatus =
       portalStatusParam === "active" || portalStatusParam === "expired" ? portalStatusParam : "all";
+    // Comma-separated tag names, e.g. ?tags=Summer,Beach. Empty/absent ⇒ no tag filtering.
+    const tags = parseTagsParam(req.query.tags);
 
-    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus);
+    const socialStatusParam = req.query.socialStatus as string | undefined;
+    const socialStatus = SOCIAL_STATUSES.find((st): st is SocialStatus => st === socialStatusParam);
+
+    const quotes = await newQuoteService.listFreeQuotesPaginated(page, pageSize, scheduledOnly, scheduleFilter, search, rangeStart, rangeEnd, scope, unscheduledOnly, showOnPortal, portalStatus, tags, socialStatus);
 
     return successResponse(res, { quotes, page, pageSize, hasMore: quotes.length === pageSize }, "Free quotes retrieved successfully");
+  }),
+
+  // GET /quotes/free/status-counts - derived social-status counts, honouring search + tags.
+  getFreeQuoteStatusCounts: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    const search = (req.query.search as string) || "";
+    const tags = parseTagsParam(req.query.tags);
+    const counts = await newQuoteService.getFreeQuoteStatusCounts(search, tags, scope);
+    return successResponse(res, counts, "Free quote status counts retrieved successfully");
   }),
 
   getQuoteById: asyncHandler(async (req: Request, res: Response) => {
@@ -111,7 +131,12 @@ export const quoteController = {
       body.images = [...(body.images || []), ...urls];
     }
     normalizeQuoteStatus(body);
-    const quote = await newQuoteService.createQuote(body, scope);
+    // Set by "Copy to client" from a social quote: the source's operators stay allowed.
+    const sourceQuoteId = typeof body.source_quote_id === "string" && body.source_quote_id ? body.source_quote_id : undefined;
+    delete body.source_quote_id;
+    const quote = sourceQuoteId
+      ? await newQuoteService.createQuote(body, scope, { sourceQuoteId })
+      : await newQuoteService.createQuote(body, scope);
     return successResponse(res, quote, "Quote created successfully", 201);
   }),
 
@@ -161,7 +186,8 @@ export const quoteController = {
   deleteQuote: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const id = req.params.id as string;
-    await newQuoteService.deleteQuote(id, scope);
+    const newPrimaryQuoteId = typeof req.body?.newPrimaryQuoteId === "string" ? req.body.newPrimaryQuoteId : undefined;
+    await newQuoteService.deleteQuote(id, scope, newPrimaryQuoteId);
     res.status(204).send();
   }),
 
@@ -174,15 +200,17 @@ export const quoteController = {
 
   updateFlight: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const flightId = req.params.flightId as string;
-    const flight = await newQuoteService.updateFlight(flightId, req.body, scope);
+    const flight = await newQuoteService.updateFlight(quoteId, flightId, req.body, scope);
     return successResponse(res, flight, "Flight updated successfully");
   }),
 
   removeFlight: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const flightId = req.params.flightId as string;
-    await newQuoteService.removeFlight(flightId, scope);
+    await newQuoteService.removeFlight(quoteId, flightId, scope);
     res.status(204).send();
   }),
 
@@ -195,15 +223,17 @@ export const quoteController = {
 
   updateAccommodation: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const accommodationId = req.params.accommodationId as string;
-    const accommodation = await newQuoteService.updateAccommodation(accommodationId, req.body, scope);
+    const accommodation = await newQuoteService.updateAccommodation(quoteId, accommodationId, req.body, scope);
     return successResponse(res, accommodation, "Accommodation updated successfully");
   }),
 
   removeAccommodation: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const accommodationId = req.params.accommodationId as string;
-    await newQuoteService.removeAccommodation(accommodationId, scope);
+    await newQuoteService.removeAccommodation(quoteId, accommodationId, scope);
     res.status(204).send();
   }),
 
@@ -216,8 +246,9 @@ export const quoteController = {
 
   removeTransfer: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const transferId = req.params.transferId as string;
-    await newQuoteService.removeTransfer(transferId, scope);
+    await newQuoteService.removeTransfer(quoteId, transferId, scope);
     res.status(204).send();
   }),
 
@@ -230,8 +261,9 @@ export const quoteController = {
 
   removePassenger: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
+    const quoteId = req.params.id as string;
     const passengerId = req.params.passengerId as string;
-    await newQuoteService.removePassenger(passengerId, scope);
+    await newQuoteService.removePassenger(quoteId, passengerId, scope);
     res.status(204).send();
   }),
 
@@ -247,6 +279,13 @@ export const quoteController = {
     await newQuoteService.updateQuoteTags(quoteId, tags, scope);
     const updatedQuote = await newQuoteService.getQuoteWithDetails(quoteId, scope);
     return successResponse(res, updatedQuote, "Tags updated successfully");
+  }),
+
+  // DELETE /quotes/:id/tags/:tagId - detach one tag from this quote only (never deletes the tag).
+  detachQuoteTag: asyncHandler(async (req: Request, res: Response) => {
+    const scope = getScope(req);
+    await newQuoteService.detachQuoteTag(req.params.id as string, req.params.tagId as string, scope);
+    res.status(204).send();
   }),
 
   getQuoteTags: asyncHandler(async (req: Request, res: Response) => {
@@ -288,7 +327,11 @@ export const quoteController = {
     const scope = getScope(req);
     const limitRaw = Number.parseInt((req.query.limit as string) ?? "10", 10);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 50) : 10;
-    const rows = await newQuoteService.getRecentClientEngagement(scope, limit);
+    // mine/period are validated by recentEngagementQueryValidator upstream.
+    const mine = req.query.mine === "true";
+    const periodRaw = req.query.period;
+    const period = ENGAGEMENT_PERIODS.find((p) => p === periodRaw);
+    const rows = await newQuoteService.getRecentClientEngagement(scope, limit, { mine, period });
     return successResponse(res, rows, "Recent client engagement");
   }),
 
@@ -297,5 +340,16 @@ export const quoteController = {
     const id = req.params.id as string;
     const quote = await newQuoteService.setPrimaryQuote(id, scope);
     return successResponse(res, quote, "Primary quote updated successfully");
+  }),
+
+  // PATCH /quotes/:id/accepted — body validated by setAcceptedValidator.
+  setAccepted: asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ success: false, error: "Unauthorized" });
+    const scope = getScope(req);
+    const id = req.params.id as string;
+    const accepted = req.body.accepted as boolean;
+    const quote = await newQuoteService.setAccepted(id, accepted, userId, scope);
+    return successResponse(res, quote, accepted ? "Quote marked as accepted" : "Quote acceptance cleared");
   }),
 };

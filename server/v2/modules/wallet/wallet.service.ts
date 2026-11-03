@@ -68,6 +68,10 @@ export const walletService = {
 
   async applyBookingCredit(clientId: string, bookingId: string, amount: number, scope: ScopeOrTrusted) {
     await assertClientInScope(clientId, scope);
+    // The booking must be on one of THIS client's deals and one the caller may write to.
+    if (!(await walletTransactionRepository.bookingOfClientInWriteScope(bookingId, clientId, scope))) {
+      throw new AppError("Booking not found", 404);
+    }
     const balance = await walletTransactionRepository.getBalance(clientId);
     if (amount <= 0) throw new AppError("Amount must be greater than 0", 400);
     if (amount > balance + 0.001) {

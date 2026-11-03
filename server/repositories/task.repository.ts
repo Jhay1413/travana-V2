@@ -1,21 +1,10 @@
 import { db } from "../config/database";
-import { tasks, notifications, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
-import { eq, and, desc, lte, inArray } from "drizzle-orm";
+import { tasks, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 type TaskNew = typeof tasks.$inferSelect;
 type InsertTaskNew = typeof tasks.$inferInsert;
-
-const entityRouteMap: Record<string, string> = {
-  enquiry: "/enquiries",
-  quote: "/quotes",
-  booking: "/bookings",
-};
-
-function entityLink(entityType: string, entityId: string): string {
-  const base = entityRouteMap[entityType] ?? `/${entityType}s`;
-  return `${base}/${entityId}`;
-}
 
 export type TaskWithClient = TaskNew & { clientId: string | null; clientName: string | null; tags: string[] };
 
@@ -344,32 +333,5 @@ export const taskRepository = {
           eq(tasks.completed, false) // Only reassign incomplete tasks
         )
       );
-  },
-
-  async checkAndNotifyDueTasks(): Promise<void> {
-    const now = new Date();
-    const dueTasks = await db
-      .select()
-      .from(tasks)
-      .where(
-        and(
-          eq(tasks.completed, false),
-          eq(tasks.notified, false),
-          lte(tasks.dueDate, now)
-        )
-      );
-
-    for (const t of dueTasks) {
-      if (t.userId) {
-        await db.insert(notifications).values({
-          userId: t.userId,
-          type: "task_due",
-          title: "Task Due",
-          message: `Task "${t.title}" is now due.`,
-          link: entityLink(t.entityType ?? "", t.entityId ?? ""),
-        });
-      }
-      await db.update(tasks).set({ notified: true }).where(eq(tasks.id, t.id));
-    }
   },
 };

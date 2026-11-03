@@ -44,11 +44,21 @@ export function defaultHours(pattern: BranchOpeningPattern = "mon-fri"): BranchO
   });
 }
 
+/** "Monday", "mon" and "Mon" all give "Mon". Unknown text comes back unchanged. */
+export function dayKey(day: string): string {
+  const short = day.trim().slice(0, 3).toLowerCase();
+  return DAYS.find((d) => d.key.toLowerCase() === short)?.key ?? day;
+}
+
+/** Accepts short ("Mon") or full ("Monday") day names; always returns the seven short-keyed days. */
 export function ensureSevenDays(hours: BranchOpeningHour[] | undefined): BranchOpeningHour[] {
-  const map = new Map((hours ?? []).map((h) => [h.day, h]));
-  return DAYS.map(
-    (d) => map.get(d.key) ?? { day: d.key, open: !d.isWeekend, openTime: "09:00", closeTime: "17:30" },
-  );
+  const map = new Map((hours ?? []).map((h) => [dayKey(h.day), h]));
+  return DAYS.map((d) => {
+    const found = map.get(d.key);
+    return found
+      ? { ...found, day: d.key }
+      : { day: d.key, open: !d.isWeekend, openTime: "09:00", closeTime: "17:30" };
+  });
 }
 
 export function emptyBranchForm(): BranchFormState {

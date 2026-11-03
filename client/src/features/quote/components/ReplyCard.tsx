@@ -6,6 +6,7 @@ import type { TransactionNote } from "@/features/quote/types";
 import { formatRelativeTime } from "./quote-types";
 import { formatFullDateTime } from "@/lib/note-time";
 import { NoteEditor } from "@/components/shared/note-editor";
+import { NoteAttachments } from "@/features/note";
 
 export function ReplyCard({ reply, quoteId }: { reply: TransactionNote; quoteId: string }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -49,8 +50,11 @@ export function ReplyCard({ reply, quoteId }: { reply: TransactionNote; quoteId:
           <NoteEditor initialContent={reply.content ?? undefined} onSubmit={handleEdit} onCancel={() => setIsEditing(false)} submitLabel="Save" isLoading={updateMutation.isPending} compact />
         </div>
       ) : (
-        <div className="mt-1 prose prose-sm max-w-none text-[11px] text-black/60 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: reply.content || "" }} data-testid={`reply-content-${reply.id}`} />
+        /* Same reasoning as NoteCard.tsx: overflow-wrap kept alone (no break-words duplicate),
+           whitespace-pre-wrap kept because reply.content can be plain text with literal newlines. */
+        <div className="mt-1 prose prose-sm max-w-none whitespace-pre-wrap [overflow-wrap:anywhere] text-[11px] text-black/60 [&_a]:text-[#3b82f6] [&_ul]:pl-3 [&_ol]:pl-3" dangerouslySetInnerHTML={{ __html: reply.content || "" }} data-testid={`reply-content-${reply.id}`} />
       )}
+      <NoteAttachments transactionId={quoteId} noteId={reply.id} />
     </div>
   );
 }

@@ -280,7 +280,10 @@ function CurrencyInput({ value, onChange, placeholder, autoFocus, className, tes
   );
 }
 
-export default function AdminFinancialsTargets({ branchId }: { branchId?: string } = {}) {
+export default function AdminFinancialsTargets({
+  branchId,
+  hideShopTarget = false,
+}: { branchId?: string; /** Homeworker branches have agent targets only. */ hideShopTarget?: boolean } = {}) {
   // Fetch data from API (scoped to the selected branch when provided)
   const { data: overview, isLoading, error } = useTargetsOverview(branchId);
   const upsertShopMutation = useUpsertShopTargets(branchId);
@@ -399,7 +402,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
 
     // Update shop target
     const shopVal = parseInt(editDrafts.shop, 10);
-    if (!isNaN(shopVal) && shopVal >= 0) {
+    if (!hideShopTarget && !isNaN(shopVal) && shopVal >= 0) {
       setShopTargets(prev => ({ ...prev, [editMonth]: shopVal }));
       
       // Save to API
@@ -439,7 +442,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
     }
     
     setEditMonth(null);
-  }, [editMonth, editDrafts, agents, agentTargets, upsertShopMutation, upsertAgentMutation]);
+  }, [editMonth, editDrafts, agents, agentTargets, upsertShopMutation, upsertAgentMutation, hideShopTarget]);
 
   const applyWizard = useCallback(async () => {
     const shopVal = parseInt(wizardShopDefault, 10) || 0;
@@ -480,7 +483,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
 
     try {
       await Promise.all([
-        shopTargetsToSave.length > 0 ? upsertShopMutation.mutateAsync({ targets: shopTargetsToSave }) : Promise.resolve(),
+        !hideShopTarget && shopTargetsToSave.length > 0 ? upsertShopMutation.mutateAsync({ targets: shopTargetsToSave }) : Promise.resolve(),
         agentTargetsToSave.length > 0 ? upsertAgentMutation.mutateAsync({ targets: agentTargetsToSave }) : Promise.resolve(),
       ]);
     } catch (error) {
@@ -489,7 +492,10 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
 
     setWizardOpen(false);
     setWizardStep(0);
-  }, [wizardShopDefault, wizardAgentDefaults, wizardApplyMode, agents, shopTargets, agentTargets, upsertShopMutation, upsertAgentMutation]);
+  }, [wizardShopDefault, wizardAgentDefaults, wizardApplyMode, agents, shopTargets, agentTargets, upsertShopMutation, upsertAgentMutation, hideShopTarget]);
+
+  // Homeworker branches skip the shop step of the wizard.
+  const firstWizardStep = hideShopTarget ? 1 : 0;
 
   const wizardSteps = [
     { title: "Shop Target", icon: Store, desc: "Set the default monthly shop target" },
@@ -551,7 +557,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
             variant="outline"
             size="sm"
             className="gap-1.5 rounded-xl"
-            onClick={() => { setWizardStep(0); setWizardOpen(true); }}
+            onClick={() => { setWizardStep(firstWizardStep); setWizardOpen(true); }}
             data-testid="button-open-wizard"
           >
             <Wand2 className="h-3.5 w-3.5" />
@@ -573,11 +579,13 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
           </div>
           <p className="mt-1 text-[11px] text-black/40">{next12.filter((r) => r.status === "balanced").length} of {next12.length} months balanced</p>
         </Card>
+        {!hideShopTarget && (
         <Card className="rounded-2xl border-black/10 bg-white/80 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5">
           <p className="text-xs font-medium text-black/50 dark:text-white/50">Total Shop Target (12m)</p>
           <p className="mt-1 text-xl font-bold">{fmt(next12.reduce((s, r) => s + r.shop, 0))}</p>
           <p className="mt-0.5 text-[11px] text-black/40">Next 12 months combined</p>
         </Card>
+        )}
         <Card className="rounded-2xl border-black/10 bg-white/80 p-4 backdrop-blur dark:border-white/10 dark:bg-white/5">
           <p className="text-xs font-medium text-black/50 dark:text-white/50">Active Agents</p>
           <p className="mt-1 text-xl font-bold">{agents.length}</p>
@@ -585,11 +593,13 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
         </Card>
       </div>
 
-      <LiveProjectionsCard
-        agents={agents}
-        agentTargets={agentTargets}
-        shopTargets={shopTargets}
-      />
+      {!hideShopTarget && (
+        <LiveProjectionsCard
+          agents={agents}
+          agentTargets={agentTargets}
+          shopTargets={shopTargets}
+        />
+      )}
 
       <Card className="overflow-hidden rounded-2xl border-black/10 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-white/5" data-testid="card-full-overview">
         <div className="flex items-start justify-between gap-3 p-4 pb-2">
@@ -625,7 +635,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
             <thead>
               <tr className="border-b border-black/5 dark:border-white/5">
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-black/50">Month</th>
-                <th className="px-4 py-2.5 text-right text-xs font-medium text-black/50">Shop Target</th>
+                {!hideShopTarget && <th className="px-4 py-2.5 text-right text-xs font-medium text-black/50">Shop Target</th>}
                 {agents.map(a => (
                   <th key={a.id} className="px-3 py-2.5 text-right text-xs font-medium text-black/50">{a.name.split(" ")[0]}</th>
                 ))}
@@ -643,7 +653,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
                   data-testid={`row-overview-${row.key}`}
                 >
                   <td className="px-4 py-2 text-sm font-medium">{row.label}</td>
-                  <td className="px-4 py-2 text-right text-sm font-semibold">{fmt(row.shop)}</td>
+                  {!hideShopTarget && <td className="px-4 py-2 text-right text-sm font-semibold">{fmt(row.shop)}</td>}
                   {agents.map(a => (
                     <td key={a.id} className="px-3 py-2 text-right text-sm text-black/70">{fmt(agentTargets[a.id]?.[row.key] ?? 0)}</td>
                   ))}
@@ -668,6 +678,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
 
           <div className="mt-2 flex gap-1">
             {wizardSteps.map((s, i) => {
+              if (i < firstWizardStep) return null;
               const Icon = s.icon;
               const done = i < wizardStep;
               const current = i === wizardStep;
@@ -804,10 +815,10 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
               variant="ghost"
               size="sm"
               className="rounded-xl text-xs"
-              onClick={() => wizardStep > 0 ? setWizardStep(s => s - 1) : setWizardOpen(false)}
+              onClick={() => wizardStep > firstWizardStep ? setWizardStep(s => s - 1) : setWizardOpen(false)}
               data-testid="wizard-back"
             >
-              {wizardStep > 0 ? <><ChevronLeft className="mr-1 h-3 w-3" /> Back</> : "Cancel"}
+              {wizardStep > firstWizardStep ? <><ChevronLeft className="mr-1 h-3 w-3" /> Back</> : "Cancel"}
             </Button>
             {wizardStep < 2 ? (
               <Button
@@ -841,6 +852,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
           </SheetHeader>
 
           <div className="mt-5 space-y-5">
+            {!hideShopTarget && (<>
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5 text-xs font-medium text-black/60">
                 <Store className="h-3 w-3" /> Shop Target
@@ -854,6 +866,7 @@ export default function AdminFinancialsTargets({ branchId }: { branchId?: string
             </div>
 
             <div className="h-px bg-black/5" />
+            </>)}
 
             <div>
               <Label className="flex items-center gap-1.5 text-xs font-medium text-black/60">

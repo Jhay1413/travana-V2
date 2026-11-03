@@ -32,7 +32,7 @@ export { useRevenueDashboard, useMonthBookings, useMonthForwards, revenueKeys } 
 export { useTargetsOverview, useShopTargets, useUpsertShopTargets, useAgentTargets, useAgentTargetsByUserId, useUpsertAgentTargets, useAgents } from "@/features/reports/api/use-targets-queries";
 export { useTourOperators, tourOperatorKeys } from "@/features/tour-operator/api/use-tour-operator-queries";
 export { useAirports, useAirportsByCountries, airportKeys } from "@/features/airport/api/use-airport-queries";
-export { useAllTasks, useAllTasksExtended, useTasks, useUserTasks, taskKeys } from "@/features/tasks/api/use-task-queries";
+export { useAllTasks, useAllTasksExtended, useTasks, useClientTasks, useUserTasks, taskKeys } from "@/features/tasks/api/use-task-queries";
 export { useTags, useSearchTags, tagKeys } from "@/features/tag/api/use-tag-queries";
 export { usePackageTypes, useCountries, useDestinations, useDestinationSearch, useDestinationsByIds, useResortsByIds, useAccommodationsByIds, useResorts, useResortSearch, useAccommodations, useAccommodationSearch, useAccommodationTypes, useBoardBasis, useParks, useLodges, useCottages, useAllDestinations, useAllResorts, useAllAccommodations, useRoomTypes, useAccommodationImages, useLodgeImages, useCruiseLines, useShips, useCruiseItineraries, lookupKeys } from "@/features/lookups/api/use-lookup-queries";
 export { useChatConversations, useChatMessages, chatKeys } from "@/features/chat/api/use-chat-queries";

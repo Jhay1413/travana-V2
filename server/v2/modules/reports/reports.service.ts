@@ -52,9 +52,18 @@ function resolveRange(from?: string, to?: string): { from: Date; to: Date } {
 }
 
 function resolveScope(scope: Scope, branchIdFilter?: string) {
+  // Only admins may pick a branch via the query string; a branch_manager with no
+  // branch of their own must not be able to aim the report at an arbitrary
+  // (e.g. homeworker) branch.
+  const isAdmin = scope.orgRole === "org_admin" || scope.orgRole === "platform_admin";
+  // Fail closed: a branch manager (or agent) with no shop gets no report rather than an org-wide one.
+  if (!isAdmin && !scope.branchId && (scope.orgRole === "branch_manager" || scope.orgRole === "agent")) {
+    throw new AppError("You are not in a shop yet, so there are no reports for you. Ask an admin to add you to a shop.", 403);
+  }
   return {
     orgId: effectiveOrgId(scope),
-    branchId: scope.branchId ?? branchIdFilter ?? null,
+    branchId: scope.branchId ?? (isAdmin ? branchIdFilter : undefined) ?? null,
+    partitionScope: scope,
   };
 }
 

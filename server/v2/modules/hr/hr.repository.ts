@@ -31,6 +31,7 @@ function rowSelector() {
     orgRole: branchMembers.orgRole,
     branchId: branchMembers.branchId,
     branchName: branches.name,
+    branchOpeningPattern: branches.openingPattern,
     isActive: branchMembers.isActive,
     address: userProfiles.address,
     emergencyContactName: userProfiles.emergencyContactName,

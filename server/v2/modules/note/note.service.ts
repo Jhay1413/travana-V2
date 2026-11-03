@@ -1,7 +1,9 @@
 import { noteRepository, type NoteWithAuthor } from "./note.repository";
 import { AppError } from "../../utils/error-handler";
+import { refuseDealWrite } from "../../utils/deal-access";
 import type { Note, InsertNote } from "@shared/schema";
 import type { Scope } from "../../utils/scope";
+import { sanitizeRichText } from "../../utils/sanitize-rich-text";
 
 type ScopeOrTrusted = Scope | { orgId: null };
 
@@ -14,15 +16,24 @@ function effectiveOrgId(scope: ScopeOrTrusted): string | null {
 async function assertTransactionInScope(transactionId: string, scope: ScopeOrTrusted) {
   const orgId = effectiveOrgId(scope);
   if (!orgId) return;
-  const ok = await noteRepository.transactionBelongsToOrg(transactionId, orgId);
+  const ok = await noteRepository.transactionBelongsToOrg(transactionId, orgId, scope);
   if (!ok) throw new AppError("Notes not found", 404);
 }
 
 async function assertClientInScope(clientId: string, scope: ScopeOrTrusted) {
   const orgId = effectiveOrgId(scope);
   if (!orgId) return;
-  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId);
+  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId, scope);
   if (!ok) throw new AppError("Notes not found", 404);
+}
+
+// A note on a deal is a write to that deal: it needs the shop-pinned write scope (403 for another
+// shop's deal in the same organisation, 404 otherwise). Client-level notes are not deal writes.
+async function assertDealNoteWritable(transactionId: string, scope: ScopeOrTrusted) {
+  const orgId = effectiveOrgId(scope);
+  if (!orgId) return;
+  if (await noteRepository.transactionInWriteScope(transactionId, scope)) return;
+  refuseDealWrite(await noteRepository.transactionBelongsToOrg(transactionId, orgId, scope), "Notes not found");
 }
 
 async function loadScopedNote(id: string, scope: ScopeOrTrusted): Promise<Note> {
@@ -36,15 +47,32 @@ async function loadScopedNote(id: string, scope: ScopeOrTrusted): Promise<Note> 
   if (!row || row.orgId !== orgId) {
     throw new AppError("Note not found", 404);
   }
+  // Notes carry no branch of their own: they inherit the partition of the deal
+  // or client they belong to.
+  if (row.transaction_id) {
+    if (!(await noteRepository.transactionBelongsToOrg(row.transaction_id, orgId, scope))) {
+      throw new AppError("Note not found", 404);
+    }
+  } else if (row.client_id) {
+    if (!(await noteRepository.clientBelongsToOrg(row.client_id, orgId, scope))) {
+      throw new AppError("Note not found", 404);
+    }
+  }
   const n = await noteRepository.findById(id);
   if (!n) throw new AppError("Note not found", 404);
   return n;
 }
 
+// Rows written before write-side sanitising existed may hold unsafe HTML, so
+// content is also cleaned on the way out. sanitizeRichText is idempotent.
+function cleanContent<T extends { content: string | null }>(note: T): T {
+  return typeof note.content === "string" ? { ...note, content: sanitizeRichText(note.content) } : note;
+}
+
 export const noteService = {
   async listByTransactionId(transactionId: string, scope: ScopeOrTrusted): Promise<NoteWithAuthor[]> {
     await assertTransactionInScope(transactionId, scope);
-    return noteRepository.findByTransactionId(transactionId);
+    return (await noteRepository.findByTransactionId(transactionId)).map(cleanContent);
   },
 
   async listByClientId(
@@ -53,11 +81,11 @@ export const noteService = {
     options?: { includeDeals?: boolean },
   ): Promise<NoteWithAuthor[]> {
     await assertClientInScope(clientId, scope);
-    return noteRepository.findByClientId(clientId, scope, options);
+    return (await noteRepository.findByClientId(clientId, scope, options)).map(cleanContent);
   },
 
   async getNote(id: string, scope: ScopeOrTrusted): Promise<Note> {
-    return loadScopedNote(id, scope);
+    return cleanContent(await loadScopedNote(id, scope));
   },
 
   async createNote(data: InsertNote, scope: ScopeOrTrusted): Promise<Note> {
@@ -68,22 +96,27 @@ export const noteService = {
     // caller could attach a note to another org's transaction or client.
     if (data.transaction_id) {
       await assertTransactionInScope(data.transaction_id, scope);
+      await assertDealNoteWritable(data.transaction_id, scope);
     }
     if (data.client_id) {
       await assertClientInScope(data.client_id, scope);
     }
-    return noteRepository.create(data);
+    // content (incl. replies) is rendered as HTML by the client.
+    const safe = typeof data.content === "string" ? { ...data, content: sanitizeRichText(data.content) } : data;
+    return noteRepository.create(safe);
   },
 
   async updateNote(id: string, content: string, scope: ScopeOrTrusted): Promise<Note> {
-    await loadScopedNote(id, scope);
-    const note = await noteRepository.update(id, content);
+    const existing = await loadScopedNote(id, scope);
+    if (existing.transaction_id) await assertDealNoteWritable(existing.transaction_id, scope);
+    const note = await noteRepository.update(id, sanitizeRichText(content));
     if (!note) throw new AppError("Note not found", 404);
     return note;
   },
 
   async deleteNote(id: string, scope: ScopeOrTrusted): Promise<void> {
-    await loadScopedNote(id, scope);
+    const existing = await loadScopedNote(id, scope);
+    if (existing.transaction_id) await assertDealNoteWritable(existing.transaction_id, scope);
     await noteRepository.remove(id);
   },
 };

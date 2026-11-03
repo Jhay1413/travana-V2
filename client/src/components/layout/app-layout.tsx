@@ -9,6 +9,9 @@ import { ChatWidget } from "@/features/ai-chat";
 // and the layout is in the main bundle, so a barrel import would pull the whole
 // inbox into the entry chunk (same reason as app-sidenav's badge import).
 import { ConversationsRealtimeProvider } from "@/features/conversations/components/conversations-realtime-provider";
+// Deep import for the same reason: applies upscale.job.updated pushes (from the
+// shared SSE stream) to the job caches so a finished upscale shows up from any page.
+import { useUpscaleRealtime } from "@/features/image-upscale/api/use-upscale-realtime";
 
 function PageLoader() {
   return (
@@ -19,6 +22,7 @@ function PageLoader() {
 }
 
 export function AppLayout({ children }: { children: ReactNode }) {
+  useUpscaleRealtime();
   return (
     <ConversationsRealtimeProvider>
       {/* Dark-navy shell: full-height rail on the left (logo at its top), and

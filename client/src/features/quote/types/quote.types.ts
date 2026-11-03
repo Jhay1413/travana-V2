@@ -127,7 +127,11 @@ export interface Transaction {
   /** ISO timestamp of the deal's most recent activity, used for the "No activity for N days" card line. */
   last_activity_at?: string;
   /** The deal's next open task, if any — drives the card's task line. */
-  next_task?: { id: string; title: string | null; due_date: string | null; user_id: string | null } | null;
+  next_task?: { id: string; title: string | null; due_date: string | null; user_id: string | null; priority?: "low" | "medium" | "high" | "urgent" } | null;
+  /** Pipeline endpoints only: whether the viewing user pinned this deal (server-side, drives column order). */
+  pinned?: boolean;
+  /** ISO time the viewing user pinned this deal; null when not pinned. */
+  pinned_at?: string | null;
 }
 
 export interface EnquiryDestination {
@@ -135,6 +139,8 @@ export interface EnquiryDestination {
   enquiry_id: string;
   destination_id: string;
   name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  destination_name?: string | null;
 }
 
 export interface EnquiryResort {
@@ -142,6 +148,8 @@ export interface EnquiryResort {
   enquiry_id: string;
   resort_id: string;
   name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  resort_name?: string | null;
 }
 
 export interface EnquiryAccommodation {
@@ -149,6 +157,8 @@ export interface EnquiryAccommodation {
   enquiry_id: string;
   accomodation_id: string;
   name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  accomodation_name?: string | null;
 }
 
 export interface EnquiryBoardBasis {
@@ -156,12 +166,40 @@ export interface EnquiryBoardBasis {
   enquiry_id: string;
   board_basis_id: string;
   name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  board_basis_name?: string | null;
 }
 
 export interface EnquiryAirport {
   id: string;
   enquiry_id: string;
   airport_id: string;
+  name?: string;
+  /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
+  airport_name?: string | null;
+}
+
+export interface EnquiryPort {
+  id?: string;
+  enquiry_id: string;
+  port_id: string;
+  port_name?: string | null;
+  name?: string;
+}
+
+export interface EnquiryCruiseLine {
+  id?: string;
+  enquiry_id: string;
+  cruise_line_id: string;
+  cruise_line_name?: string | null;
+  name?: string;
+}
+
+export interface EnquiryCruiseDestination {
+  id?: string;
+  enquiry_id: string;
+  cruise_destination_id: string;
+  cruise_destination_name?: string | null;
   name?: string;
 }
 
@@ -214,6 +252,9 @@ export interface EnquiryTable {
   accommodations?: EnquiryAccommodation[];
   boardBases?: EnquiryBoardBasis[];
   airports?: EnquiryAirport[];
+  ports?: EnquiryPort[];
+  cruiseLines?: EnquiryCruiseLine[];
+  cruiseDestinations?: EnquiryCruiseDestination[];
   passengers?: (EnquiryPassenger | EnquiryPassengerInput)[];
 }
 
@@ -259,6 +300,14 @@ export interface Quote {
   portal_added_at: string | null;
   is_featured: boolean | null;
   not_for_social: boolean | null;
+  /** Public share token (set once the quote link has been generated). */
+  quote_token?: string | null;
+  /** First time the quote was shared, and the channel of the latest share. */
+  quote_sent_at?: string | null;
+  quote_sent_via?: string | null;
+  /** Manual "customer accepted" mark by an agent (undone by clearing both). */
+  accepted_at?: string | null;
+  accepted_by?: string | null;
   /** Joined fields, populated server-side on the pipeline endpoints. */
   destination_name?: string | null;
   main_tour_operator_name?: string;
@@ -423,6 +472,8 @@ export interface DealImage {
 export interface Booking {
   id: string;
   transaction_id: string;
+  /** The quote this booking was converted from, when known. */
+  quote_id?: string | null;
   deal_type: string | null;
   pre_booked_seats: string | null;
   flight_meals: boolean | null;
@@ -477,8 +528,14 @@ export interface EnrichedQuoteCruise extends QuoteCruise {
 }
 
 export interface EnrichedQuote extends Quote {
+  /** False when the deal is readable but belongs to another shop (writes would be refused with 403). Absent = editable. */
+  can_edit?: boolean;
   // Backend-computed customer total = sales_price − discounts + service_charge.
   total_price?: string | null;
+  /** Sum of the line-item commissions (flights, accommodation, transfers, …); add package_commission for profit. */
+  service_commission?: number | string | null;
+  /** Name of the agent who manually marked the quote accepted. */
+  accepted_by_name?: string | null;
   holiday_type_name?: string;
   main_tour_operator_name?: string;
   lead_source?: string;
@@ -513,8 +570,14 @@ export interface EnrichedQuote extends Quote {
 }
 
 export interface EnrichedBooking extends Booking {
+  /** False when the deal is readable but belongs to another shop (writes would be refused with 403). Absent = editable. */
+  can_edit?: boolean;
   // Backend-computed customer total = sales_price − discounts + service_charge.
   total_price?: string | null;
+  /** Sum of the line-item commissions (flights, accommodation, transfers, …); add package_commission for profit. */
+  service_commission?: number | string | null;
+  /** Name of the deal owner (the agent who owns the transaction). */
+  owner_name?: string | null;
   holiday_type_name?: string;
   main_tour_operator_name?: string;
   lead_source?: string;
@@ -621,6 +684,7 @@ export interface CreateTransactionData {
 }
 
 export interface CreateQuoteData {
+  source_quote_id?: string;
   transaction_id: string;
   holiday_type_id: string;
   travel_date: string;

@@ -1,3 +1,4 @@
+import type { AgentStatsWindows } from "./dashboard.types";
 import { db } from "../../config/database";
 import { clientTable, transaction, quote, booking, booking_upsell, user as userTable } from "@shared/schema";
 import { userOrgRolesRepository } from "../user-org-roles/user-org-roles.repository";
@@ -114,8 +115,8 @@ export const dashboardRepository = {
     const upsellProfitScoped = orgId
       ? upsellProfitBase
           .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
-          .where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false), ...orgFilter))
-      : upsellProfitBase.where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false)));
+          .where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false), eq(transaction.is_active, true), ...orgFilter))
+      : upsellProfitBase.where(and(eq(booking_upsell.is_active, true), eq(transaction.is_test, false), eq(transaction.is_active, true)));
 
     const bookingMonthBase = db
       .select({
@@ -221,6 +222,7 @@ export const dashboardRepository = {
             gte(booking_upsell.added_at, monthStart),
             sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
             eq(transaction.is_test, false),
+            eq(transaction.is_active, true),
             ...orgFilter,
           ))
           .groupBy(transaction.user_id)
@@ -229,6 +231,7 @@ export const dashboardRepository = {
           gte(booking_upsell.added_at, monthStart),
           sql`${booking_upsell.added_at} < ${monthEnd.toISOString()}`,
           eq(transaction.is_test, false),
+          eq(transaction.is_active, true),
         )).groupBy(transaction.user_id);
 
     const agentQuoteBase = db
@@ -326,22 +329,29 @@ export const dashboardRepository = {
     };
   },
 
-  async getAgentStats(userId: string): Promise<{
+  async getAgentStats(userId: string, windows: AgentStatsWindows): Promise<{
     todayProfit: number;
     weekProfit: number;
     monthProfit: number;
     bookingsCount: number;
     avgBookingValue: number;
+    todayBookingsCount: number;
+    weekBookingsCount: number;
+    monthBookingsCount: number;
+    monthAvgBookingValue: number;
+    todayUpsellsCount: number;
+    weekUpsellsCount: number;
+    monthUpsellsCount: number;
+    // Upsell commission already included in today/week/monthProfit (exposed so the
+    // UI can annotate it; never add it on top of the profit figures).
+    todayUpsellAmount: number;
+    weekUpsellAmount: number;
+    monthUpsellAmount: number;
     totalOpenQuotesValue: number;
     quotesCount: number;
   }> {
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dayOfWeek = now.getDay() || 7;
-    const weekStart = new Date(todayStart);
-    weekStart.setDate(weekStart.getDate() - (dayOfWeek - 1));
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    // Window boundaries are London-day UTC instants computed by the service.
+    const { todayStart, weekStart, monthStart, monthEnd } = windows;
 
     // Mirror the admin dashboard's agent-performance definition exactly so an
     // agent's own numbers match what admins see (organization-overview
@@ -357,13 +367,17 @@ export const dashboardRepository = {
         monthProfit: sql<number>`COALESCE(SUM(CASE WHEN ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()} THEN ${commission} ELSE 0 END), 0)`,
         totalBookingValue: sql<number>`COALESCE(SUM(${commission}), 0)`,
         bookingsCount: sql<number>`COUNT(*)`,
+        todayBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${todayStart.toISOString()})`,
+        weekBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${weekStart.toISOString()})`,
+        monthBookingsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking.date_created} >= ${monthStart.toISOString()} AND ${booking.date_created} < ${monthEnd.toISOString()})`,
       })
         .from(booking)
         .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-        .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+        .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
         .where(and(
           eq(transaction.user_id, userId),
           eq(transaction.is_test, false),
+          eq(transaction.is_active, true),
           bookingActiveCond,
         )),
 
@@ -386,6 +400,9 @@ export const dashboardRepository = {
         todayUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${todayStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
         weekUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${weekStart.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
         monthUpsell: sql<number>`COALESCE(SUM(CASE WHEN ${booking_upsell.added_at} >= ${monthStart.toISOString()} AND ${booking_upsell.added_at} < ${monthEnd.toISOString()} THEN CAST(${booking_upsell.commission} AS DECIMAL) ELSE 0 END), 0)`,
+        todayUpsellsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking_upsell.added_at} >= ${todayStart.toISOString()})`,
+        weekUpsellsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking_upsell.added_at} >= ${weekStart.toISOString()})`,
+        monthUpsellsCount: sql<number>`COUNT(*) FILTER (WHERE ${booking_upsell.added_at} >= ${monthStart.toISOString()} AND ${booking_upsell.added_at} < ${monthEnd.toISOString()})`,
       })
         .from(booking_upsell)
         .innerJoin(booking, eq(booking_upsell.booking_id, booking.id))
@@ -393,6 +410,7 @@ export const dashboardRepository = {
         .where(and(
           eq(transaction.user_id, userId),
           eq(transaction.is_test, false),
+          eq(transaction.is_active, true),
           bookingActiveCond,
           sql`${booking_upsell.is_active} = true`,
         )),
@@ -403,26 +421,37 @@ export const dashboardRepository = {
     const ua = upsellAgg[0];
     const bookingsCount = Number(ba.bookingsCount);
     const totalBookingValue = Number(ba.totalBookingValue);
+    const monthBookingsCount = Number(ba.monthBookingsCount);
+    const monthProfit = Number(ba.monthProfit) + Number(ua.monthUpsell);
 
     return {
       todayProfit: Number(ba.todayProfit) + Number(ua.todayUpsell),
       weekProfit: Number(ba.weekProfit) + Number(ua.weekUpsell),
-      monthProfit: Number(ba.monthProfit) + Number(ua.monthUpsell),
+      monthProfit,
       bookingsCount,
       avgBookingValue: bookingsCount > 0 ? totalBookingValue / bookingsCount : 0,
+      todayBookingsCount: Number(ba.todayBookingsCount),
+      weekBookingsCount: Number(ba.weekBookingsCount),
+      monthBookingsCount,
+      monthAvgBookingValue: monthBookingsCount > 0 ? monthProfit / monthBookingsCount : 0,
+      todayUpsellsCount: Number(ua.todayUpsellsCount),
+      weekUpsellsCount: Number(ua.weekUpsellsCount),
+      monthUpsellsCount: Number(ua.monthUpsellsCount),
+      todayUpsellAmount: Number(ua.todayUpsell),
+      weekUpsellAmount: Number(ua.weekUpsell),
+      monthUpsellAmount: Number(ua.monthUpsell),
       totalOpenQuotesValue: Number(oq.totalOpenQuotesValue),
       quotesCount: Number(oq.quotesCount),
     };
   },
 
-  async getMyProfit(userId: string): Promise<{ profitThisMonth: number }> {
+  async getMyProfit(userId: string, window: Pick<AgentStatsWindows, "monthStart" | "monthEnd">): Promise<{ profitThisMonth: number }> {
     try {
-      const now = new Date();
-      // Bound the month window exactly like getAgentStats / getAgentsPerformance:
-      // [startOfMonth, monthEnd) — first of this month inclusive, first of next
-      // month exclusive — so this figure matches the agent dashboard precisely.
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      // [monthStart, monthEnd): first of this London month inclusive, first of
+      // next month exclusive, computed by the service - same window as
+      // getAgentStats / getAgentsPerformance so this figure matches the dashboard.
+      const startOfMonth = window.monthStart;
+      const monthEnd = window.monthEnd;
 
       const [[bookingResult], [upsellResult]] = await Promise.all([
         db
@@ -433,11 +462,17 @@ export const dashboardRepository = {
           })
           .from(booking)
           .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
-          .innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
+          // leftJoin, not inner: a booking whose transaction has no client is
+          // still real revenue, and an inner join silently dropped it.
+          .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
           .where(
             and(
               eq(transaction.user_id, userId),
               eq(transaction.is_test, false),
+              // A deactivated transaction (e.g. one a lost quote wrongly
+              // deactivated) must not contribute commission — same rule as
+              // getAgentStats / getAgentsPerformance.
+              eq(transaction.is_active, true),
               sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
               gte(booking.date_created, startOfMonth),
               lt(booking.date_created, monthEnd)
@@ -459,6 +494,10 @@ export const dashboardRepository = {
             and(
               eq(transaction.user_id, userId),
               eq(transaction.is_test, false),
+              // Mirrors the booking aggregate above: an inactive transaction
+              // must not contribute upsell commission either, or the two halves
+              // of this figure disagree.
+              eq(transaction.is_active, true),
               sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
               sql`${booking_upsell.is_active} = true`,
               gte(booking_upsell.added_at, startOfMonth),

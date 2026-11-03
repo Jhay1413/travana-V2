@@ -392,3 +392,21 @@ DO NOT:
 - put feature business logic in `components/ui` or `components/layout`
 - reach into another feature's internals (import its `index.ts` instead)
 - use `any`
+
+---
+
+# Testing and Clarification Rules (AI Context)
+
+- Every feature or fix implemented MUST ship with unit tests for the layer it
+  touches (service tests mock the layer below; controller/middleware tests lock
+  the HTTP contract). Place them next to the code as `<feature>.<layer>.test.ts`
+  and run `npm test` before reporting done. DB-backed integration tests go in
+  `*.integration.test.ts` and are written, not run, unless the test database is
+  already available.
+- Every heavy feature (a new screen or flow, anything touching money, access,
+  bookings, or messaging) MUST also ship with integration tests and Playwright
+  E2E tests in `e2e/` that drive the real screens. Run them before reporting done.
+  Update `docs/e2e-test-coverage.md` with what the new tests cover.
+- When a requirement, formula, access rule or data policy is unclear, ASK the
+  user before implementing. Do not guess on anything that changes behaviour,
+  money or visibility.

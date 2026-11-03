@@ -99,7 +99,13 @@ export const scraperController = {
                 applied: result.picks.applied,
                 problems: result.picks.problems,
                 preserved: result.picks.preserved,
-                specNeedsReview: true,
+                // Reflects the spec's actual review state after the picks
+                // were merged (scraperService.importFromPage), not a
+                // hardcoded flag — a verified pick never itself flags a spec
+                // for review (see applyPickedFields), so this is only true
+                // when the OTHER, non-picked part of the spec still does
+                // (e.g. an AI spec this same call just generated).
+                specNeedsReview: result.specNeedsReview,
               },
             }
           : {}),

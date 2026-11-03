@@ -1,7 +1,7 @@
 import type { UseFormReturn } from "react-hook-form";
 import type { QueryClient } from "@tanstack/react-query";
 import type { JsonMappingResult } from "@/features/json-mapper/api/json-mapper.api";
-import { normalizeTransferType } from "@/features/quote/types/quote-form.types";
+import { normalizeTransferType, resolveImportedTransferType } from "@/features/quote/types/quote-form.types";
 
 type AirportRecord = { id: string; airport_name: string; airport_code?: string | null };
 type PackageTypeRecord = { id: string; name: string };
@@ -15,6 +15,8 @@ export interface JsonImportDeps {
   toast: (opts: { title: string; description?: string; variant?: "default" | "destructive" }) => void;
   setImageUrls?: (updater: (prev: string[]) => string[]) => void;
   skipLodgeResetRef?: React.MutableRefObject<boolean>;
+  /** True when importing into a social post quote (derives hotel check-in from the outbound arrival). */
+  socialPost?: boolean;
   fallbackFieldMapper?: (data: Record<string, any>, setIfPresent: (key: string, val: unknown) => void, toIsoDate: (d: string | undefined) => string) => void;
 }
 
@@ -349,13 +351,14 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
   const { jsonMapperApi } = await import("@/features/json-mapper/api/json-mapper.api");
 
-  const result = mapScraperJsonToFormFields(data);
+  const result = mapScraperJsonToFormFields(data, { socialCheckIn: deps.socialPost });
 
   const hasLodgeFieldsInJson = !!(
     data.lodge_type ||
     data.lodge_code ||
     data.lodge_id ||
     data.lodge_park_name ||
+    data.lodge_park_code ||
     Array.isArray(data.lodge_images) ||
     data.cottage_id !== undefined ||
     data.hot_tub !== undefined ||
@@ -374,7 +377,8 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   const lodgeParkName = data.lodge_park_name || data.resort || result.fields.resort || "";
   const lodgeCodeVal = data.lodge_code || data.cottage_id || null;
   const lodgeName = data.accommodation || result.fields.accommodation || "";
-  const parkCode = data.lodge_id || null;
+  // lodge_id is a lodges.id UUID on quote JSON, never a park code — don't read it here.
+  const parkCode = data.lodge_park_code || null;
 
   // Line items (extra hotels, transfers, etc.) are resolved in the SAME call.
   const { raw: lineItems, input: lineItemsInput } = collectLineItems(data, {
@@ -422,6 +426,7 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   // silently blank dropdown, and TanStack coalesces them.
   queryClient.invalidateQueries({ queryKey: ["lookup", "board-basis"] });
   queryClient.invalidateQueries({ queryKey: ["lookup", "room-types"] });
+  // Prefix key: refreshes the agency list dropdowns and the Tour operators page (catalogue + links).
   queryClient.invalidateQueries({ queryKey: ["tourOperators"] });
 
   if (idMapping.warnings.length > 0) {
@@ -431,8 +436,6 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
         : "Some values need attention",
       description: idMapping.warnings.join(", "),
     });
-  } else {
-    toast({ title: "JSON imported successfully", description: "All values mapped to database IDs" });
   }
 
   const idOnlyFields = new Set([
@@ -449,12 +452,6 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
       setValue(k, v as never);
     }
   }
-
-  // The loop above copies the raw JSON value, which may be missing OR a label
-  // that isn't one of the form's dropdown options (e.g. "Transfer included") —
-  // either would leave the select empty. Always set the normalized value:
-  // recognized types pass through, anything else becomes an explicit "None".
-  setValue("transferType", normalizeTransferType(result.fields.transferType) as never);
 
   if (idMapping.countryId) setValue("country", idMapping.countryId);
   if (idMapping.destinationId) setValue("destination", idMapping.destinationId);
@@ -473,6 +470,20 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   if (idMapping.roomTypeId) setValue("roomType", idMapping.roomTypeId);
 
   const serverDetectedLodge = (idMapping as unknown as Record<string, unknown>).isLodge === true;
+
+  // The loop above copies the raw JSON value, which may be missing OR a label
+  // that isn't one of the form's dropdown options (e.g. "Transfer included") —
+  // either would leave the select empty. Always set a resolved value, and do it
+  // here, once the lodge decision is final: lodges are self-drive, TUI is shared.
+  setValue(
+    "transferType",
+    resolveImportedTransferType({
+      isLodge: isLodgeQuote || serverDetectedLodge,
+      tourOperator: tourOp,
+      scrapedTransferType: result.fields.transferType,
+    }) as never,
+  );
+
   if (isLodgeQuote || serverDetectedLodge) {
     const hotTubPackageId = resolvePackageTypeId("Hot Tub Break", deps);
     if (hotTubPackageId) setValue("packageType", hotTubPackageId);
@@ -760,6 +771,7 @@ async function handleCruiseJson(data: Record<string, any>, deps: JsonImportDeps)
     // full-list caches these dropdowns render from may now be behind.
     queryClient.invalidateQueries({ queryKey: ["lookup", "board-basis"] });
     queryClient.invalidateQueries({ queryKey: ["lookup", "room-types"] });
+    // Prefix key: refreshes the agency list dropdowns and the Tour operators page (catalogue + links).
     queryClient.invalidateQueries({ queryKey: ["tourOperators"] });
 
     // mapToIds find-or-creates the operator; without setting the id the form's

@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import { clientFileService } from "./client-file.service";
 import { successResponse } from "../../utils/response";
+import { getScope } from "../../utils/scope";
 
 export const clientFileController = {
   async list(req: Request, res: Response) {
-    const files = await clientFileService.listByClientId((req.params.clientId as string));
+    const files = await clientFileService.listByClientId(req.params.clientId as string, getScope(req));
     return successResponse(res, files, "Client files retrieved");
   },
 
@@ -14,18 +15,18 @@ export const clientFileController = {
       return res.status(400).json({ success: false, message: "No file provided" });
     }
     const { title, category, allocationType, allocationId } = req.body;
-    const row = await clientFileService.upload((req.params.clientId as string), file, {
-      title,
-      category,
-      allocationType,
-      allocationId,
-    });
+    const row = await clientFileService.upload(
+      req.params.clientId as string,
+      file,
+      { title, category, allocationType, allocationId },
+      getScope(req),
+    );
     return successResponse(res, row, "File uploaded", 201);
   },
 
   async download(req: Request, res: Response) {
     const inline = req.query.inline === "1" || req.query.disposition === "inline";
-    const target = await clientFileService.getDownloadTarget((req.params.id as string), { inline });
+    const target = await clientFileService.getDownloadTarget(req.params.id as string, getScope(req), { inline });
     if (target.kind === "s3") {
       return res.redirect(target.url);
     }
@@ -36,7 +37,7 @@ export const clientFileController = {
   },
 
   async remove(req: Request, res: Response) {
-    await clientFileService.delete((req.params.id as string));
+    await clientFileService.delete(req.params.id as string, getScope(req));
     return res.status(204).send();
   },
 };

@@ -25,7 +25,15 @@ type ShopTargetInsert = typeof shopTargetTable.$inferInsert;
 // Wipe the tenant graph. CASCADE clears everything referencing user/organization
 // (branches, transaction, booking, …) so each test starts from empty.
 export async function truncateAll(): Promise<void> {
-  await db.execute(sql`TRUNCATE TABLE "user", "organization" RESTART IDENTITY CASCADE`);
+  // Last line of defence: never truncate anything but the disposable test database.
+  const current = await db.execute(sql`select current_database() as name`);
+  const name = (current.rows[0] as { name?: string } | undefined)?.name;
+  if (name !== "travana_test") {
+    throw new Error(`truncateAll refused: connected to "${name ?? "(unknown)"}", not "travana_test"`);
+  }
+  // "tags" is a global (org-less) table with a UNIQUE name, so cascading from user/organization
+  // never reaches it; leftovers would collide across tests and runs.
+  await db.execute(sql`TRUNCATE TABLE "user", "organization", "tags" RESTART IDENTITY CASCADE`);
 }
 
 export async function makeOrg(overrides: Partial<OrgInsert> = {}) {

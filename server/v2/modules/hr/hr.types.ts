@@ -12,6 +12,8 @@ export interface LeaveEntry {
   type: LeaveType;
   from: string;        // YYYY-MM-DD
   to: string;          // YYYY-MM-DD
+  /** Working days inside this leave's own dates (person's branch opening pattern, default Mon-Fri). */
+  workingDays: number;
   status: LeaveStatus;
   reason?: string | null;
   decidedBy?: string | null;
@@ -90,11 +92,16 @@ export interface HrReminder {
 
 export type InvitableRole = "agent" | "branch_manager" | "homeworker" | "referral_agent";
 
-export interface InviteEmployeePayload {
-  email: string;
-  branchId: string;
-  orgRole: InvitableRole;
-}
+export type InviteEmployeePayload =
+  | { email: string; branchId: string; orgRole: Exclude<InvitableRole, "homeworker"> }
+  | {
+      email: string;
+      orgRole: "homeworker";
+      firstName?: string;
+      lastName?: string;
+      profitSharePercent?: number | string;
+      displayName?: string;
+    };
 
 export interface UpdateEmployeePayload {
   status?: HrStatus;

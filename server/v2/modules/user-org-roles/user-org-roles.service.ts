@@ -1,4 +1,5 @@
 import { AppError } from '../../utils/error-handler';
+import { HOMEWORKER_INVITE_ONLY_MESSAGE } from '../../utils/homeworker-role';
 import { userOrgRolesRepository } from './user-org-roles.repository';
 import { branchMemberRepository } from '../branch-member/branch-member.repository';
 import { platformAdminAuditRepository } from '../platform-admin/platform-admin-audit.repository';
@@ -74,6 +75,15 @@ function assertCompatibleRoleSet(roles: string[]): void {
   if (roles.includes('org_admin') && roles.includes('branch_manager')) {
     throw new AppError('org_admin cannot be combined with branch_manager', 400);
   }
+
+  // A homeworker is a standalone, isolated role: it cannot also hold any other
+  // internal role (agent, social_media_manager, branch_manager, org_admin).
+  if (roles.includes('homeworker')) {
+    const conflicting = ['agent', 'social_media_manager', 'branch_manager', 'org_admin'].filter((r) => roles.includes(r));
+    if (conflicting.length > 0) {
+      throw new AppError(`homeworker cannot be combined with ${conflicting.join(', ')}`, 400);
+    }
+  }
 }
 
 export const userOrgRolesService = {
@@ -99,7 +109,16 @@ export const userOrgRolesService = {
     const existing = await userOrgRolesRepository.findRolesByUserAndOrg(userId, orgId);
     if (existing.includes(newRole)) return; // idempotent
 
-    assertCompatibleRoleSet([...existing, newRole]);
+    // Homeworkers are created by invite; a role can never be added into homeworker.
+    if (newRole === 'homeworker') {
+      throw new AppError(HOMEWORKER_INVITE_ONLY_MESSAGE, 400);
+    }
+
+    // Check against junction rows PLUS the active membership role: a homeworker may hold
+    // no junction row for it (membership only), which would otherwise bypass exclusivity.
+    const membership = await branchMemberRepository.findActiveContextByUserId(userId);
+    const membershipRole = membership?.orgId === orgId && membership.orgRole ? [membership.orgRole] : [];
+    assertCompatibleRoleSet([...existing, ...membershipRole, newRole]);
 
     await userOrgRolesRepository.addRole({
       userId,
@@ -134,6 +153,10 @@ export const userOrgRolesService = {
     roleToRemove: string,
     actor: RoleChangeActor,
   ): Promise<void> {
+    // Removing the homeworker role would leave an orphaned homeworker branch; archive instead.
+    if (roleToRemove === 'homeworker') {
+      throw new AppError(HOMEWORKER_INVITE_ONLY_MESSAGE, 400);
+    }
     const existing = await userOrgRolesRepository.findRolesByUserAndOrg(userId, orgId);
     if (!existing.includes(roleToRemove)) return; // idempotent
 
@@ -145,7 +168,7 @@ export const userOrgRolesService = {
     // branch_members.orgRole — removing agent does not leave them roleless.
     if (remaining.length === 0) {
       const [membership, userRole] = await Promise.all([
-        branchMemberRepository.findActiveByUserId(userId),
+        branchMemberRepository.findActiveContextByUserId(userId),
         userOrgRolesRepository.findUserRole(userId),
       ]);
       const hasMembershipRole = membership?.orgId === orgId && !!membership.orgRole;

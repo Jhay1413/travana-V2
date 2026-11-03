@@ -160,3 +160,9 @@ export function nextUkCallbackSlot(from: Date = new Date()): Date {
   }
   return nextHour;
 }
+
+/** London midnight (start of day) of a YYYY-MM-DD calendar date, as a UTC instant. */
+export function londonMidnight(ymd: string): Date {
+  const [year, month, day] = ymd.split("-").map(Number);
+  return ukLocalToUtc({ year, month, day, hour: 0, minute: 0, second: 0 });
+}

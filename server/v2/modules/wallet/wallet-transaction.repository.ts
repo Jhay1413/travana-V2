@@ -1,7 +1,8 @@
 import { db } from "../../config/database";
-import { wallet_transaction, clientTable, booking } from "@shared/schema";
+import { wallet_transaction, clientTable, booking, transaction } from "@shared/schema";
 import type { InsertWalletTransaction, WalletTransaction } from "@shared/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export const walletTransactionRepository = {
   async create(data: InsertWalletTransaction): Promise<WalletTransaction> {
@@ -33,6 +34,17 @@ export const walletTransactionRepository = {
       .where(eq(wallet_transaction.id, id))
       .limit(1);
     return result ?? null;
+  },
+
+  /** Is booking `bookingId` on a deal of client `clientId` that the caller may write to (shop-pinned write scope)? */
+  async bookingOfClientInWriteScope(bookingId: string, clientId: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: booking.id })
+      .from(booking)
+      .innerJoin(transaction, eq(booking.transaction_id, transaction.id))
+      .where(and(eq(booking.id, bookingId), eq(transaction.client_id, clientId), ...buildTransactionWriteScopeConds(scope)))
+      .limit(1);
+    return !!row;
   },
 
   async clientBelongsToOrg(clientId: string, orgId: string): Promise<boolean> {

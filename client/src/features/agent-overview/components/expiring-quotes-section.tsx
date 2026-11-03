@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { AlertCircle, CalendarClock } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useExpiringQuotes } from "@/hooks/queries";
+import { dealTypeHref } from "@/lib/deal-links";
 import { currencyFull } from "./helpers";
 
 export function ExpiringQuotesSection({
@@ -67,7 +68,7 @@ export function ExpiringQuotesSection({
                   <div
                     key={q.id}
                     className="group flex items-center gap-2.5 rounded-2xl border border-black/10 bg-black/5 px-3 py-2 transition hover:bg-black/7 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/7 cursor-pointer"
-                    onClick={() => navigate(`/clients/${q.clientId || "_"}/quotes/${q.id}`)}
+                    onClick={() => navigate(dealTypeHref("quote", q.id, q.clientId))}
                     data-testid={`row-expiry-${q.id}`}
                   >
                     <div

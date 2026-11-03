@@ -14,6 +14,7 @@ import {
   Forward,
   Gauge,
   Globe,
+  Handshake,
   HeartHandshake,
   Hotel,
   Inbox,
@@ -22,9 +23,9 @@ import {
   LayoutGrid,
   LifeBuoy,
   Link2,
-  ListChecks,
   Mail,
   Map,
+  Plug,
   MapPin,
   MessageCircle,
   MessageCircleMore,
@@ -42,6 +43,7 @@ import {
   Tent,
   ThumbsUp,
   Trash2,
+  TreePalm,
   TrendingUp,
   Trophy,
   Wrench,
@@ -86,11 +88,12 @@ const AGENT_NAV: NavConfig = [
       { path: "/agent-overview", label: "Agent Dashboard", icon: LayoutDashboard },
       { path: "/pipeline", label: "Pipeline", icon: Kanban },
       { path: "/social-posts", label: "Social Posts", icon: ThumbsUp },
-      { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
-      { path: "/tickets", label: "Tickets", icon: Tag, badge: "tickets" },
       { path: "/conversations", label: "Inbox", icon: Mail, badge: "conversations" },
+      { path: "/tickets", label: "Tickets", icon: Tag, badge: "tickets" },
       { path: "/chat", label: "Live Chat", icon: MessageCircleMore },
       { path: "/opportunities", label: "Opportunities", icon: Target },
+      { path: "/destination-guru", label: "Destination Guru", icon: TreePalm },
+      { path: "/agency/tour-operators", label: "Tour Operators", icon: Handshake },
       { path: "/tools", label: "Tools", icon: Wrench },
     ],
   },
@@ -106,9 +109,12 @@ const BRANCH_MANAGER_NAV: NavConfig = [
       { path: "/conversations", label: "Inbox", icon: Inbox, badge: "conversations" },
       { path: "/chat", label: "Live Chat", icon: MessageSquare },
       { path: "/sms-center", label: "Text", icon: MessageCircle },
-      { path: "/destination-guru", label: "Destination Guru", icon: Sparkles },
+      { path: "/destination-guru", label: "Destination Guru", icon: TreePalm },
       { path: "/opportunities", label: "Opportunities", icon: Target },
       { path: "/branch/targets", label: "Targets", icon: Target },
+      { path: "/agency/tour-operators", label: "Tour Operators", icon: Handshake },
+      { path: "/agency/departures", label: "Departures", icon: Plane },
+      { path: "/agency/integrations", label: "Integrations", icon: Plug },
       { path: "/hr", label: "HR", icon: HeartHandshake },
       { path: "/hr-v2", label: "HR V2", icon: HeartHandshake },
       { path: "/tools", label: "Tools", icon: Wrench },
@@ -119,8 +125,9 @@ const BRANCH_MANAGER_NAV: NavConfig = [
 // Platform-wide reference data (global catalog shared across all agencies),
 // grouped under one "Data Management" dropdown. Each link renders the generic
 // lookup CRUD page (/settings/:tableSlug). Shared by platform_admin and
-// org_admin navs so both stay in sync.
-const DATA_MANAGEMENT_SECTION: NavSection = {
+// org_admin navs so both stay in sync, except the tour operator catalogue,
+// which only platform admins curate (org admins use /agency/tour-operators).
+const PLATFORM_DATA_MANAGEMENT_SECTION: NavSection = {
   id: "data-management",
   label: "Data Management",
   icon: Database,
@@ -183,6 +190,16 @@ const DATA_MANAGEMENT_SECTION: NavSection = {
   ],
 };
 
+function withoutPath(entry: NavItem | NavSection, path: string): Array<NavItem | NavSection> {
+  if (isNavItem(entry)) return entry.path === path ? [] : [entry];
+  return [{ ...entry, items: entry.items.flatMap((child) => withoutPath(child, path)) }];
+}
+
+const DATA_MANAGEMENT_SECTION: NavSection = {
+  ...PLATFORM_DATA_MANAGEMENT_SECTION,
+  items: PLATFORM_DATA_MANAGEMENT_SECTION.items.flatMap((entry) => withoutPath(entry, "/settings/tour-operators")),
+};
+
 const ORG_ADMIN_NAV: NavConfig = [
   {
     id: "overview",
@@ -199,7 +216,9 @@ const ORG_ADMIN_NAV: NavConfig = [
       { path: "/agency/profile", label: "Profile & Branding", icon: Sparkles },
       { path: "/agency/team", label: "Teams & Roles", icon: Users },
       { path: "/agency/branches", label: "Branches", icon: Building2 },
+      { path: "/agency/homeworkers", label: "Homeworkers", icon: Briefcase },
       { path: "/agency/messaging", label: "Messaging", icon: RadioTower },
+      { path: "/agency/integrations", label: "Integrations", icon: Plug },
       { path: "/hr", label: "HR", icon: HeartHandshake },
     ],
   },
@@ -209,6 +228,8 @@ const ORG_ADMIN_NAV: NavConfig = [
     icon: TrendingUp,
     items: [
       { path: "/agency/targets", label: "Targets", icon: Target },
+      { path: "/agency/tour-operators", label: "Tour Operators", icon: Handshake },
+      { path: "/agency/departures", label: "Departures", icon: Plane },
       { path: "/agency/forwards", label: "Forwards", icon: Forward },
       { path: "/agency/leaderboard", label: "Leader Board", icon: Trophy },
     ],
@@ -258,7 +279,7 @@ const PLATFORM_ADMIN_NAV: NavConfig = [
       { path: "/platform-admin/audit-log", label: "Audit Log", icon: Activity },
     ],
   },
-  DATA_MANAGEMENT_SECTION,
+  PLATFORM_DATA_MANAGEMENT_SECTION,
 ];
 
 const REFERRAL_NAV: NavConfig = [
@@ -274,17 +295,27 @@ const SOCIAL_MEDIA_NAV: NavConfig = [
   {
     id: "main",
     items: [
-      { path: "/agent-overview", label: "Dashboard", icon: LayoutGrid },
       { path: "/social-posts", label: "Social Posts", icon: Share2 },
-      { path: "/pipeline", label: "Pipeline", icon: TrendingUp },
       { path: "/my-profile", label: "My Profile", icon: UserCircle },
     ],
   },
 ];
 
+// Homeworkers get the agent nav minus Social Posts and Inbox, which the server
+// denies for that role.
+const HOMEWORKER_HIDDEN_PATHS = ["/social-posts", "/conversations"];
+const HOMEWORKER_NAV: NavConfig = AGENT_NAV.map((section) => ({
+  ...section,
+  items: [
+    ...section.items.filter((item) => !(isNavItem(item) && HOMEWORKER_HIDDEN_PATHS.includes(item.path))),
+    { path: "/my-targets", label: "My Targets", icon: Target },
+    { path: "/my-statement", label: "My Statement", icon: CircleDollarSign },
+  ],
+}));
+
 export const NAV_BY_ROLE: Record<OrgRole, NavConfig> = {
   agent: AGENT_NAV,
-  homeworker: AGENT_NAV,
+  homeworker: HOMEWORKER_NAV,
   branch_manager: BRANCH_MANAGER_NAV,
   org_admin: ORG_ADMIN_NAV,
   platform_admin: PLATFORM_ADMIN_NAV,

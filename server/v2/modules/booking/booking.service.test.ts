@@ -8,11 +8,15 @@ vi.mock("./booking.repository", () => ({
   bookingRepository: {
     bookingInScope: vi.fn(),
     transactionInScope: vi.fn(),
-    flightInScope: vi.fn(),
-    accommodationInScope: vi.fn(),
+    bookingInScopeForWrite: vi.fn(),
+    transactionInScopeForWrite: vi.fn(),
+    findChildBookingId: vi.fn(),
+    removeFlight: vi.fn(),
+    removeAccommodation: vi.fn(),
     findById: vi.fn(),
     findByTransactionId: vi.fn(),
     findWithDetails: vi.fn(),
+    getServiceCommission: vi.fn(),
     findAllWithImages: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -38,7 +42,12 @@ vi.mock("./booking.repository", () => ({
     replaceLoungePasses: vi.fn(),
     replaceAirportParkings: vi.fn(),
     replaceExtraAccommodations: vi.fn(),
+    findTourOperatorIds: vi.fn(),
   },
+}));
+// The REAL link service runs; only its repository is faked.
+vi.mock("../tour-operator/org-tour-operator.repository", () => ({
+  orgTourOperatorRepository: { findLinkedOperatorIds: vi.fn() },
 }));
 vi.mock("../quote/quote.repository", () => ({
   newQuoteRepository: {
@@ -82,6 +91,7 @@ import { transactionRepository } from "../transaction/transaction.repository";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { referralService } from "../referral/referral.service";
 import { walletService } from "../wallet/wallet.service";
+import { orgTourOperatorRepository } from "../tour-operator/org-tour-operator.repository";
 import { AppError } from "../../utils/error-handler";
 
 // A "trusted" scope (orgId: null) short-circuits the in-scope assertions, so
@@ -90,9 +100,33 @@ const TRUSTED = { orgId: null } as const;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(bookingRepository.getServiceCommission).mockResolvedValue(0 as never);
 });
 
 describe("bookingService.getBookingWithDetails — price math", () => {
+  it("S10: can_edit is false for a social media manager, and follows the write scope for others", async () => {
+    vi.mocked(bookingRepository.findWithDetails).mockResolvedValue({ id: "b1", sales_price: "1", adult: 1, child: 0 } as never);
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(true as never);
+    const smm = { orgId: "o1", orgRole: "social_media_manager", orgRoles: ["social_media_manager"], userId: "s1", branchId: null } as never;
+    const agent = { orgId: "o1", orgRole: "agent", orgRoles: ["agent"], userId: "a1", branchId: "b1" } as never;
+
+    expect((await bookingService.getBookingWithDetails("b1", smm)).can_edit).toBe(false);
+    expect((await bookingService.getBookingWithDetails("b1", agent)).can_edit).toBe(true);
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(false as never);
+    expect((await bookingService.getBookingWithDetails("b1", agent)).can_edit).toBe(false);
+  });
+
+  it("adds the line-item service_commission from the repository", async () => {
+    vi.mocked(bookingRepository.findWithDetails).mockResolvedValue({ id: "b1", sales_price: "100", adult: 1, child: 0 } as never);
+    vi.mocked(bookingRepository.getServiceCommission).mockResolvedValue(31.25 as never);
+
+    const result = await bookingService.getBookingWithDetails("b1", TRUSTED);
+
+    expect(bookingRepository.getServiceCommission).toHaveBeenCalledWith("b1");
+    expect(result.service_commission).toBe(31.25);
+  });
+
   it("computes total_price as sales − discount + service charge", async () => {
     vi.mocked(bookingRepository.findWithDetails).mockResolvedValue({
       id: "b1",
@@ -190,6 +224,29 @@ describe("bookingService.createBooking — guard rules", () => {
   });
 });
 
+describe("bookingService.createBooking — HAYS ref", () => {
+  beforeEach(() => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, client_id: null } as never);
+    vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue(undefined as never);
+    vi.mocked(bookingRepository.create).mockResolvedValue({ id: "b1" } as never);
+  });
+
+  it("normalises a non-empty HAYS ref", async () => {
+    await bookingService.createBooking({ transaction_id: "t1", hays_ref: "hay12345678" } as never, TRUSTED);
+    expect(vi.mocked(bookingRepository.create).mock.calls[0][0]).toMatchObject({ hays_ref: "HAY-12345678" });
+  });
+
+  it("rejects a malformed HAYS ref with 400", async () => {
+    await expect(bookingService.createBooking({ transaction_id: "t1", hays_ref: "HAY12" } as never, TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(bookingRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("allows an empty HAYS ref", async () => {
+    await bookingService.createBooking({ transaction_id: "t1", hays_ref: "" } as never, TRUSTED);
+    expect(bookingRepository.create).toHaveBeenCalledOnce();
+  });
+});
+
 describe("bookingService.convertQuoteToBooking", () => {
   // Minimal valid setup: quote + transaction exist, no existing booking, no
   // relations and no client. Individual tests override what they care about.
@@ -213,7 +270,7 @@ describe("bookingService.convertQuoteToBooking", () => {
   it("throws 404 when the quote does not exist", async () => {
     vi.mocked(newQuoteRepository.findById).mockResolvedValue(undefined as never);
 
-    await expect(bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED)).rejects.toMatchObject({
+    await expect(bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED)).rejects.toMatchObject({
       statusCode: 404,
     });
     expect(bookingRepository.create).not.toHaveBeenCalled();
@@ -224,7 +281,7 @@ describe("bookingService.convertQuoteToBooking", () => {
     vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, client_id: null } as never);
     vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue({ id: "existing" } as never);
 
-    await expect(bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED)).rejects.toMatchObject({
+    await expect(bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED)).rejects.toMatchObject({
       statusCode: 400,
     });
     expect(bookingRepository.create).not.toHaveBeenCalled();
@@ -233,12 +290,12 @@ describe("bookingService.convertQuoteToBooking", () => {
   it("creates the booking, marks the quote WON and the transaction on_booking", async () => {
     happyPath();
 
-    const result = await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    const result = await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(bookingRepository.create).toHaveBeenCalledOnce();
     // refs from args + price_per_person derived from the quote (900 / 3 = 300.00)
     expect(vi.mocked(bookingRepository.create).mock.calls[0][0]).toMatchObject({
-      hays_ref: "H1",
+      hays_ref: "HAY-1234567",
       supplier_ref: "S1",
       booking_status: "BOOKED",
       price_per_person: "300.00",
@@ -249,6 +306,17 @@ describe("bookingService.convertQuoteToBooking", () => {
     expect(result).toMatchObject({ id: "b1", client_id: null });
   });
 
+  it("normalises the HAYS ref before saving", async () => {
+    happyPath();
+    await bookingService.convertQuoteToBooking("q1", " hay1234567 ", "S1", TRUSTED);
+    expect(vi.mocked(bookingRepository.create).mock.calls[0][0]).toMatchObject({ hays_ref: "HAY-1234567" });
+  });
+
+  it("rejects a malformed HAYS ref with 400 before touching the quote", async () => {
+    await expect(bookingService.convertQuoteToBooking("q1", "HAY105391", "S1", TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(bookingRepository.create).not.toHaveBeenCalled();
+  });
+
   it("copies quote relations (e.g. flights) onto the new booking", async () => {
     happyPath();
     vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({
@@ -257,7 +325,7 @@ describe("bookingService.convertQuoteToBooking", () => {
       passengers: [],
     } as never);
 
-    await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(bookingRepository.addFlight).toHaveBeenCalledOnce();
     expect(vi.mocked(bookingRepository.addFlight).mock.calls[0][0]).toMatchObject({
@@ -272,7 +340,7 @@ describe("bookingService.convertQuoteToBooking", () => {
     vi.mocked(bookingRepository.countByClientId).mockResolvedValue(3 as never);
     vi.mocked(neonClientRepository.findById).mockResolvedValue({ id: "c1", referredByClientId: null } as never);
 
-    await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(neonClientRepository.update).toHaveBeenCalledWith("c1", { badge: "VIP Client" });
   });
@@ -283,7 +351,7 @@ describe("bookingService.convertQuoteToBooking", () => {
     vi.mocked(bookingRepository.countByClientId).mockResolvedValue(2 as never);
     vi.mocked(neonClientRepository.findById).mockResolvedValue({ id: "c1", referredByClientId: null } as never);
 
-    await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(neonClientRepository.update).not.toHaveBeenCalled();
   });
@@ -301,12 +369,52 @@ describe("bookingService.convertQuoteToBooking", () => {
       phoneNumber: "123",
     } as never);
 
-    await bookingService.convertQuoteToBooking("q1", "H1", "S1", TRUSTED);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
 
     expect(referralService.ensureReferralForBooking).toHaveBeenCalledOnce();
     const arg = vi.mocked(referralService.ensureReferralForBooking).mock.calls[0][0] as any;
     expect(arg.client).toMatchObject({ id: "c1", referredByClientId: "referrer1" });
     expect(arg.transactionId).toBeDefined();
+  });
+});
+
+describe("bookingService.updateBooking — references", () => {
+  beforeEach(() => {
+    vi.mocked(bookingRepository.update).mockResolvedValue({ id: "b1" } as never);
+  });
+
+  it("trims the references and normalises a new HAYS ref before saving", async () => {
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1", hays_ref: "HAY105391" } as never);
+    await bookingService.updateBooking("b1", { hays_ref: "  hay1234567 ", supplier_ref: " TUI 1 " } as never, TRUSTED);
+    expect(vi.mocked(bookingRepository.update).mock.calls[0][1]).toMatchObject({ hays_ref: "HAY-1234567", supplier_ref: "TUI 1" });
+  });
+
+  it("lets an unchanged legacy-format HAYS ref through (the edit form resends it)", async () => {
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1", hays_ref: "HAY105391" } as never);
+    await bookingService.updateBooking("b1", { hays_ref: " HAY105391 ", supplier_ref: "TUI 1" } as never, TRUSTED);
+    expect(vi.mocked(bookingRepository.update).mock.calls[0][1]).toMatchObject({ hays_ref: "HAY105391" });
+  });
+
+  it("rejects a changed HAYS ref that is not in the HAY- format with 400", async () => {
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1", hays_ref: "HAY105391" } as never);
+    await expect(bookingService.updateBooking("b1", { hays_ref: "HAY105392" } as never, TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(bookingRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty or whitespace reference with 400 and never writes", async () => {
+    await expect(bookingService.updateBooking("b1", { hays_ref: "   " } as never, TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    await expect(bookingService.updateBooking("b1", { supplier_ref: "" } as never, TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(bookingRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a null reference with 400", async () => {
+    await expect(bookingService.updateBooking("b1", { hays_ref: null } as never, TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(bookingRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("leaves the references alone when the keys are absent", async () => {
+    await bookingService.updateBooking("b1", { title: "x" } as never, TRUSTED);
+    expect(vi.mocked(bookingRepository.update).mock.calls[0][1]).not.toHaveProperty("hays_ref");
   });
 });
 
@@ -429,5 +537,154 @@ describe("bookingService.deleteBooking", () => {
 
     expect(referralService.voidReferralsByTransaction).not.toHaveBeenCalled();
     expect(bookingRepository.remove).toHaveBeenCalledWith("b1");
+  });
+});
+
+describe("bookingService - operator must be in the org's list", () => {
+  const ORG = { orgId: "o1", orgRole: "org_admin" } as never;
+  const OP_A = "11111111-1111-4111-8111-111111111111";
+  const OP_B = "22222222-2222-4222-8222-222222222222";
+  const linked = vi.mocked(orgTourOperatorRepository.findLinkedOperatorIds);
+
+  beforeEach(() => {
+    linked.mockReset();
+    linked.mockImplementation(async (_org, ids) => ids.filter((id) => id === OP_A));
+    vi.mocked(bookingRepository.transactionInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.transactionInScopeForWrite).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.update).mockResolvedValue({ id: "b1" } as never);
+    vi.mocked(bookingRepository.findTourOperatorIds).mockResolvedValue([]);
+  });
+
+  it("createBooking rejects an unlinked line-item operator before writing", async () => {
+    await expect(
+      bookingService.createBooking({ transaction_id: "t1", main_tour_operator_id: OP_A, flights: [{ tour_operator_id: OP_B }] } as never, ORG),
+    ).rejects.toMatchObject({ statusCode: 400, message: "Tour operator is not in your list" });
+    expect(linked).toHaveBeenCalledWith("o1", [OP_A, OP_B]);
+    expect(bookingRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("updateBooking exempts operators already on the booking but rejects a new unlinked one", async () => {
+    vi.mocked(bookingRepository.findTourOperatorIds).mockResolvedValue([OP_B]);
+    await bookingService.updateBooking("b1", { main_tour_operator_id: OP_B } as never, ORG);
+    expect(bookingRepository.findTourOperatorIds).toHaveBeenCalledWith("b1");
+    expect(linked).not.toHaveBeenCalled();
+    vi.mocked(bookingRepository.findTourOperatorIds).mockResolvedValue([]);
+    await expect(bookingService.updateBooking("b1", { main_tour_operator_id: OP_B } as never, ORG)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("updateBooking does no operator lookup when none is sent, and trusted calls are not checked", async () => {
+    await bookingService.updateBooking("b1", { title: "x" } as never, ORG);
+    await bookingService.updateBooking("b1", { main_tour_operator_id: OP_B } as never, TRUSTED);
+    expect(bookingRepository.findTourOperatorIds).not.toHaveBeenCalled();
+    expect(linked).not.toHaveBeenCalled();
+  });
+
+  it("convertQuoteToBooking is exempt (it copies the quote's operators)", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue(undefined as never);
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", ORG).catch(() => undefined);
+    expect(linked).not.toHaveBeenCalled();
+  });
+});
+
+// Owner decision: agents and branch managers cannot edit or delete another shop's bookings. Writes use the
+// shop-pinned write scope; the org-wide read scope is not enough.
+describe("bookingService - writes use the shop-pinned write scope", () => {
+  const AGENT = { orgId: "o1", branchId: "b1", orgRole: "agent", orgRoles: ["agent"], userId: "u1" } as never;
+
+  beforeEach(() => {
+    // The org-wide read scope would allow every one of these; only the write scope refuses.
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.transactionInScope).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(false as never);
+    vi.mocked(bookingRepository.transactionInScopeForWrite).mockResolvedValue(false as never);
+  });
+
+  const writes: Array<[string, () => Promise<unknown>]> = [
+    ["updateBooking", () => bookingService.updateBooking("b1", { title: "x" } as never, AGENT)],
+    ["deleteBooking", () => bookingService.deleteBooking("b1", AGENT)],
+    ["addFlight", () => bookingService.addFlight("b1", {} as never, AGENT)],
+    ["addAccommodation", () => bookingService.addAccommodation("b1", {} as never, AGENT)],
+    ["removeFlight", () => bookingService.removeFlight("b1", "f1", AGENT)],
+    ["removeAccommodation", () => bookingService.removeAccommodation("b1", "a1", AGENT)],
+    ["createBooking", () => bookingService.createBooking({ transaction_id: "t1" } as never, AGENT)],
+  ];
+
+  for (const [name, call] of writes) {
+    it(`${name} is a 403 'This deal belongs to another shop' outside the caller's write scope and writes nothing`, async () => {
+      await expect(call()).rejects.toMatchObject({ statusCode: 403, message: "This deal belongs to another shop" });
+      expect(bookingRepository.update).not.toHaveBeenCalled();
+      expect(bookingRepository.remove).not.toHaveBeenCalled();
+      expect(bookingRepository.create).not.toHaveBeenCalled();
+      expect(bookingRepository.removeFlight).not.toHaveBeenCalled();
+      expect(bookingRepository.removeAccommodation).not.toHaveBeenCalled();
+    });
+  }
+
+  it("convertQuoteToBooking is a 403 when the quote's deal is another shop's", async () => {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", transaction_id: "t1" } as never);
+    await expect(bookingService.convertQuoteToBooking("q1", "HAY-1234567", "X", AGENT)).rejects.toMatchObject({ statusCode: 403 });
+    expect(bookingRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("a booking that is neither writable nor readable is a plain 404", async () => {
+    vi.mocked(bookingRepository.bookingInScope).mockResolvedValue(false as never);
+    await expect(bookingService.deleteBooking("b1", AGENT)).rejects.toMatchObject({ statusCode: 404, message: "Booking not found" });
+  });
+
+  it("tags are a write: updateBookingTags uses the write scope", async () => {
+    await expect(bookingService.updateBookingTags("b1", ["x"], AGENT)).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it("booking child ids are compared case-insensitively and a child body cannot re-parent", async () => {
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(true as never);
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue("ABC00000-0000-4000-8000-000000000001" as never);
+    await bookingService.removeFlight("abc00000-0000-4000-8000-000000000001", "f1", AGENT);
+    expect(bookingRepository.removeFlight).toHaveBeenCalledWith("f1");
+    vi.mocked(bookingRepository.addFlight).mockResolvedValue({ id: "f2" } as never);
+    await bookingService.addFlight("b1", { flight_number: "X", booking_id: "other", id: "evil" } as never, AGENT);
+    expect(bookingRepository.addFlight).toHaveBeenCalledWith({ flight_number: "X", booking_id: "b1" });
+  });
+
+  it("reads still use the org-wide record scope", async () => {
+    vi.mocked(bookingRepository.findById).mockResolvedValue({ id: "b1" } as never);
+    await bookingService.getBookingById("b1", AGENT);
+    expect(bookingRepository.bookingInScope).toHaveBeenCalledWith("b1", AGENT);
+    expect(bookingRepository.bookingInScopeForWrite).not.toHaveBeenCalled();
+  });
+});
+
+describe("bookingService - booking children are reachable only through their own booking", () => {
+  const AGENT = { orgId: "o1", branchId: "b1", orgRole: "agent", orgRoles: ["agent"], userId: "u1" } as never;
+
+  beforeEach(() => {
+    vi.mocked(bookingRepository.bookingInScopeForWrite).mockResolvedValue(true as never);
+  });
+
+  it("removes a flight addressed through its own booking", async () => {
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue("bA" as never);
+    await bookingService.removeFlight("bA", "f1", AGENT);
+    expect(bookingRepository.findChildBookingId).toHaveBeenCalledWith("flight", "f1");
+    expect(bookingRepository.removeFlight).toHaveBeenCalledWith("f1");
+  });
+
+  it("removeFlight is a 404 when the flight belongs to a different booking than the path's", async () => {
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue("bB" as never);
+    await expect(bookingService.removeFlight("bA", "f1", AGENT)).rejects.toMatchObject({ statusCode: 404 });
+    expect(bookingRepository.removeFlight).not.toHaveBeenCalled();
+  });
+
+  it("removeAccommodation is a 404 when the accommodation belongs to a different booking than the path's", async () => {
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue("bB" as never);
+    await expect(bookingService.removeAccommodation("bA", "a1", AGENT)).rejects.toMatchObject({ statusCode: 404 });
+    expect(bookingRepository.findChildBookingId).toHaveBeenCalledWith("accommodation", "a1");
+    expect(bookingRepository.removeAccommodation).not.toHaveBeenCalled();
+  });
+
+  it("removeFlight is a 404 when the flight does not exist", async () => {
+    vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue(null as never);
+    await expect(bookingService.removeFlight("bA", "f1", AGENT)).rejects.toMatchObject({ statusCode: 404 });
+    expect(bookingRepository.removeFlight).not.toHaveBeenCalled();
   });
 });

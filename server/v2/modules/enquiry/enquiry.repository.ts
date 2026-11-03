@@ -7,12 +7,12 @@ import {
   port, cruise_line, cruise_destination, transaction, park, lodges,
 } from "@shared/schema";
 import type { EnquiryTable, InsertEnquiryTable } from "@shared/schema";
-import { eq, desc, sql, and, type SQL } from "drizzle-orm";
-import { buildTransactionScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
+import { eq, desc, sql, and, isNull, type SQL } from "drizzle-orm";
+import { buildTransactionScopeConds, buildTransactionRecordScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export const enquiryTableRepository = {
   async findById(id: string): Promise<EnquiryTable | undefined> {
-    const [result] = await db.select().from(enquiry_table).where(eq(enquiry_table.id, id)).limit(1);
+    const [result] = await db.select().from(enquiry_table).where(and(eq(enquiry_table.id, id), isNull(enquiry_table.deleted_at))).limit(1);
     return result;
   },
 
@@ -22,7 +22,28 @@ export const enquiryTableRepository = {
       .select({ id: enquiry_table.id })
       .from(enquiry_table)
       .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
-      .where(and(eq(enquiry_table.id, id), ...buildTransactionRecordScopeConds(scope)))
+      .where(and(eq(enquiry_table.id, id), isNull(enquiry_table.deleted_at), ...buildTransactionRecordScopeConds(scope)))
+      .limit(1);
+    return !!row;
+  },
+
+  /** Write scope (shop-pinned): may the caller change this enquiry? */
+  async enquiryInScopeForWrite(id: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: enquiry_table.id })
+      .from(enquiry_table)
+      .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
+      .where(and(eq(enquiry_table.id, id), isNull(enquiry_table.deleted_at), ...buildTransactionWriteScopeConds(scope)))
+      .limit(1);
+    return !!row;
+  },
+
+  /** Write scope (shop-pinned): may the caller add an enquiry to this deal? */
+  async transactionInScopeForWrite(transactionId: string, scope: ScopeOrTrusted): Promise<boolean> {
+    const [row] = await db
+      .select({ id: transaction.id })
+      .from(transaction)
+      .where(and(eq(transaction.id, transactionId), ...buildTransactionWriteScopeConds(scope)))
       .limit(1);
     return !!row;
   },
@@ -38,12 +59,13 @@ export const enquiryTableRepository = {
   },
 
   async findByTransactionId(transactionId: string): Promise<EnquiryTable | undefined> {
-    const [result] = await db.select().from(enquiry_table).where(eq(enquiry_table.transaction_id, transactionId)).limit(1);
+    const [result] = await db.select().from(enquiry_table).where(and(eq(enquiry_table.transaction_id, transactionId), isNull(enquiry_table.deleted_at))).limit(1);
     return result;
   },
 
   async findAll(scope: ScopeOrTrusted): Promise<EnquiryTable[]> {
     const conditions: SQL[] = [
+      isNull(enquiry_table.deleted_at),
       eq(transaction.status, "on_enquiry"),
       eq(transaction.is_active, true),
       ...buildTransactionScopeConds(scope),
@@ -65,12 +87,16 @@ export const enquiryTableRepository = {
   },
 
   async update(id: string, data: Partial<InsertEnquiryTable>): Promise<EnquiryTable | undefined> {
-    const [result] = await db.update(enquiry_table).set(data).where(eq(enquiry_table.id, id)).returning();
+    const [result] = await db.update(enquiry_table).set(data).where(and(eq(enquiry_table.id, id), isNull(enquiry_table.deleted_at))).returning();
     return result;
   },
 
-  async remove(id: string): Promise<void> {
-    await db.delete(enquiry_table).where(eq(enquiry_table.id, id));
+  /** Soft delete — same semantics as quote: stamp deleted_at/deleted_by and deactivate. */
+  async softDelete(id: string, deletedBy: string | null): Promise<void> {
+    await db
+      .update(enquiry_table)
+      .set({ deleted_at: new Date(), deleted_by: deletedBy, is_active: false })
+      .where(and(eq(enquiry_table.id, id), isNull(enquiry_table.deleted_at)));
   },
 
   /** Bulk-clear is_future_deal on enquiries whose future_deal_date has arrived.
@@ -89,6 +115,7 @@ export const enquiryTableRepository = {
       .where(
         and(
           eq(enquiry_table.is_future_deal, true),
+          isNull(enquiry_table.deleted_at),
           sql`${enquiry_table.future_deal_date} <= CURRENT_DATE`,
           sql`${enquiry_table.transaction_id} IN (SELECT id FROM ${transaction} WHERE ${transaction.status} = 'on_enquiry')`,
         ),
@@ -107,7 +134,7 @@ export const enquiryTableRepository = {
       .from(enquiry_table)
       .leftJoin(package_type, eq(enquiry_table.holiday_type_id, package_type.id))
       .leftJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
-      .where(eq(enquiry_table.id, id))
+      .where(and(eq(enquiry_table.id, id), isNull(enquiry_table.deleted_at)))
       .limit(1);
 
     if (!enq) return undefined;

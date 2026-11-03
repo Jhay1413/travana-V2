@@ -1,14 +1,28 @@
 import { db } from "../../config/database";
-import { booking_upsell } from "@shared/schema";
+import { booking_upsell, tour_operator } from "@shared/schema";
 import type { InsertBookingUpsell, BookingUpsell } from "@shared/schema";
-import { eq, and, desc, gte, lt, sql } from "drizzle-orm";
+import { eq, and, desc, getTableColumns, gte, lt, sql } from "drizzle-orm";
+
+/** An upsell row plus the operator's display fields (null when it has none or the link was removed). */
+export type BookingUpsellWithOperator = BookingUpsell & {
+  tour_operator_name: string | null;
+  tour_operator_logo_url: string | null;
+};
+
+/** All upsell columns unchanged, plus the operator name/logo for labelling. */
+export const upsellWithOperatorColumns = {
+  ...getTableColumns(booking_upsell),
+  tour_operator_name: tour_operator.name,
+  tour_operator_logo_url: tour_operator.logo_url,
+};
 
 export const bookingUpsellRepository = {
   /** Active upsells for a booking, newest first. */
-  async findByBooking(bookingId: string): Promise<BookingUpsell[]> {
+  async findByBooking(bookingId: string): Promise<BookingUpsellWithOperator[]> {
     return db
-      .select()
+      .select(upsellWithOperatorColumns)
       .from(booking_upsell)
+      .leftJoin(tour_operator, eq(tour_operator.id, booking_upsell.tour_operator_id))
       .where(and(eq(booking_upsell.booking_id, bookingId), eq(booking_upsell.is_active, true)))
       .orderBy(desc(booking_upsell.added_at));
   },

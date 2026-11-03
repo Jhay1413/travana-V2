@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useLocation, useRoute, Redirect } from "wouter";
-import { ChevronLeft, ChevronDown, Link as LinkIcon, Pin, PinOff, Share2, Sparkles, Star } from "lucide-react";
+import { ChevronLeft, ChevronDown, Link as LinkIcon, Pin, PinOff, Share2, Star, TreePalm } from "lucide-react";
 import { useRole } from "@/hooks/use-role";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
@@ -30,6 +30,7 @@ import { QuoteEngagement } from "@/features/quote/components/QuoteEngagement";
 import { QuoteBookingReferences } from "@/features/quote/components/QuoteBookingReferences";
 import { QuoteCostingsCard } from "@/features/quote/components/QuoteCostingsCard";
 import { QuoteShareDialog } from "@/features/quote/components/QuoteShareDialog";
+import { useMarkQuoteSent } from "@/features/quote/api/use-quote-share-queries";
 import { QuoteConvertDialog } from "@/features/quote/components/QuoteConvertDialog";
 import { QuoteDeleteDialog } from "@/features/quote/components/QuoteDeleteDialog";
 import { QuoteExpiryDialog } from "@/features/quote/components/QuoteExpiryDialog";
@@ -96,11 +97,16 @@ export default function QuotePage() {
     shareToken, shareCopied, shareLoading,
     openShare, copyShareLink,
   } = useQuoteShare(quoteId);
+  const markQuoteSent = useMarkQuoteSent();
   const {
     showDeleteDialog, setShowDeleteDialog,
     deleteReason, setDeleteReason,
     adminDeleteQuoteMutation, openDeleteDialog, confirmDelete,
-  } = useQuoteDelete(quoteId, clientId, "Quote");
+    siblings: deleteSiblings, newPrimaryQuoteId, setNewPrimaryQuoteId,
+  } = useQuoteDelete(quoteId, clientId, "Quote", {
+    transactionId: quoteData?.transaction_id,
+    isPrimary: quoteData?.isQuoteCopy === false,
+  });
   const {
     showExpiryDialog, setShowExpiryDialog,
     expiryDate, setExpiryDate,
@@ -153,7 +159,7 @@ export default function QuotePage() {
 
   const ticketClientId = clientId || (quoteData as any)?.client_id || "";
   const { data: usersData } = useUsers();
-  const ticketCreate = useClientTicketCreate(ticketClientId, currentUser?.id);
+  const ticketCreate = useClientTicketCreate(ticketClientId, currentUser?.id, { transactionId: quoteData?.transaction_id ?? null });
 
   const pageLabel = "Quote";
 
@@ -293,7 +299,8 @@ export default function QuotePage() {
                               <QuoteExpiryPill
                                 dateExpiry={(quoteData as any)?.date_expiry}
                                 dateCreated={(quoteData as any)?.date_created}
-                                onUpdateExpiry={openExpiryDialog}
+                                isLost={quote.status === "lost"}
+                                onUpdateExpiry={() => openExpiryDialog((quoteData as any)?.date_expiry)}
                               />
                             </div>
                           </div>
@@ -320,6 +327,8 @@ export default function QuotePage() {
                             data-testid="select-itinerary-owner"
                           />
 
+                          {/* Another shop's deal is readable but not editable: no edit, convert or delete. */}
+                          {quoteQuery.data?.can_edit !== false && (
                           <QuoteActionsRow
                             pageLabel={pageLabel}
                             canConvert={quote.status !== "accepted"}
@@ -332,6 +341,7 @@ export default function QuotePage() {
                             onAddTask={() => setShowAddTaskDialog(true)}
                             onDelete={openDeleteDialog}
                           />
+                          )}
                           </div>
                           <TooltipProvider>
                           <div className="flex flex-wrap items-center justify-start gap-2 self-start" data-testid="row-itinerary-actions">
@@ -395,7 +405,7 @@ export default function QuotePage() {
                                 onClick={() => setShowGuruSheet(true)}
                                 aria-label="Destination Guru"
                               >
-                                <Sparkles className="xl:mr-2 h-4 w-4" />
+                                <TreePalm className="xl:mr-2 h-4 w-4" />
 
                               </Button>
                             </TooltipTrigger>
@@ -461,6 +471,7 @@ export default function QuotePage() {
       />
       {quoteData && (
         <QuoteCreateDialog
+          presentation="drawer"
           transactionId={quoteData.transaction_id}
           open={showCreateDialog}
           onOpenChange={setShowCreateDialog}
@@ -468,6 +479,7 @@ export default function QuotePage() {
       )}
       {quoteData && (
         <QuoteCreateDialog
+          presentation="drawer"
           transactionId={quoteData.transaction_id}
           clientId={clientId}
           userId={currentUser?.id}
@@ -499,6 +511,9 @@ export default function QuotePage() {
         shareLoading={shareLoading}
         onCopy={copyShareLink}
         clientId={clientId || undefined}
+        quoteId={quoteId}
+        clientPhone={clientData?.phone}
+        onSent={(via) => markQuoteSent.mutate({ quoteId, sentVia: via })}
       />
 
       <QuoteConvertDialog
@@ -520,6 +535,9 @@ export default function QuotePage() {
         onReasonChange={setDeleteReason}
         isPending={adminDeleteQuoteMutation.isPending}
         onConfirm={confirmDelete}
+        siblings={deleteSiblings}
+        newPrimaryQuoteId={newPrimaryQuoteId}
+        onNewPrimaryQuoteIdChange={setNewPrimaryQuoteId}
       />
 
       <QuoteExpiryDialog
@@ -540,6 +558,7 @@ export default function QuotePage() {
       />
 
       <CreateTicketDialog
+        presentation="drawer"
         open={ticketCreate.showTicketDialog}
         onOpenChange={ticketCreate.setShowTicketDialog}
         clientName={clientData?.name || quote.quoteTitle || "this client"}

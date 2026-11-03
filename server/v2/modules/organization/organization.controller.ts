@@ -38,7 +38,16 @@ export const organizationController = {
   }),
   updateMine: asyncHandler(async (req: Request, res: Response) => {
     const orgId = requireOrgId(req);
-    const data = await organizationService.update(orgId, req.body);
+    // validate() does not strip the body, so read only the fields an org admin may change.
+    // seatLimit and isActive are deliberately absent: the plan sets seats.
+    if (req.body?.plan !== undefined) {
+      throw new AppError('Contact us to change plan', 403);
+    }
+    const { name, slug, brandColor, logoUrl, settings } = req.body ?? {};
+    const patch = Object.fromEntries(
+      Object.entries({ name, slug, brandColor, logoUrl, settings }).filter(([, v]) => v !== undefined),
+    );
+    const data = await organizationService.update(orgId, patch);
     successResponse(res, data, 'Organisation updated');
   }),
 };

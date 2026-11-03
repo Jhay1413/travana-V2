@@ -1,9 +1,9 @@
 import axiosClient from "@/api/client/axios-client";
-import type { Ticket, CreateTicketData } from "../types";
+import type { Ticket, CreateTicketData, TicketListScope } from "../types";
 
 export const ticketApi = {
-  getAll: async (): Promise<Ticket[]> => {
-    const { data } = await axiosClient.get<Ticket[]>("/api/v2/tickets");
+  getAll: async (scope: TicketListScope = "mine"): Promise<Ticket[]> => {
+    const { data } = await axiosClient.get<Ticket[]>("/api/v2/tickets", { params: { scope } });
     return data;
   },
 
@@ -17,10 +17,13 @@ export const ticketApi = {
     return data;
   },
 
-  getByUser: async (userId: string, filters?: { statuses?: string[] }): Promise<Ticket[]> => {
+  getByUser: async (userId: string, filters?: { statuses?: string[]; assignedOnly?: boolean }): Promise<Ticket[]> => {
     const params = new URLSearchParams();
     if (filters?.statuses && filters.statuses.length > 0) {
       params.set("status", filters.statuses.join(","));
+    }
+    if (filters?.assignedOnly) {
+      params.set("assignedOnly", "true");
     }
     const qs = params.toString();
     const url = `/api/v2/tickets/user/${userId}${qs ? `?${qs}` : ""}`;

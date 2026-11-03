@@ -22,6 +22,24 @@ export function normalizeTransferType(value: unknown): string {
   return TRANSFER_TYPES.find((t) => t.toLowerCase() === trimmed.toLowerCase()) ?? "None";
 }
 
+// Transfer type applied when a scraped/imported quote is loaded into the form.
+// Lodge (Hot Tub Break) imports are always self-drive — Hoseasons scrapes carry
+// transfer "None" — and TUI imports always get a shared transfer. Everything
+// else keeps the scraped value, normalized onto TRANSFER_TYPES.
+export function resolveImportedTransferType({
+  isLodge,
+  tourOperator,
+  scrapedTransferType,
+}: {
+  isLodge: boolean;
+  tourOperator: string;
+  scrapedTransferType: unknown;
+}): string {
+  if (isLodge) return "Self-drive";
+  if (tourOperator.toLowerCase().includes("tui")) return "Shared Transfer";
+  return normalizeTransferType(scrapedTransferType);
+}
+
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
 
 export const flightLegSchema = z.object({
@@ -239,7 +257,10 @@ export const defaultQuoteFormValues: QuoteFormValues = {
   accommodationId: "",
   boardBasisId: "",
   checkInDate: "",
-  checkInTime: "",
+  // Prefilled for new quotes; every path that hydrates an existing quote
+  // (edit, copy) or an imported/scraped value sets this key explicitly on
+  // the object it merges over these defaults, so it always wins over "15:00".
+  checkInTime: "15:00",
   roomType: "",
   outboundDepartAirportId: "",
   outboundArriveAirportId: "",
@@ -313,6 +334,8 @@ export type FormLayout = "card" | "drawer";
 export type FormPresentation = "dialog" | "drawer";
 
 export interface QuoteRHFFormProps {
+  /** The saved quote being edited; lets the tag picker detach a tag from this quote. Absent when creating. */
+  quoteId?: string;
   defaultValues?: Partial<QuoteFormValues>;
   onSubmit: (values: QuoteFormValues, images?: { files: File[]; urls: string[]; deletedImageIds: string[]; items?: FormImageItem[] }) => Promise<void> | void;
   isLoading?: boolean;
@@ -322,6 +345,12 @@ export interface QuoteRHFFormProps {
   initialImageUrls?: string[];
   initialExtraAccomLabels?: string[];
   layout?: FormLayout;
+  /**
+   * Set when this form creates a social post (`QuoteCreateDialog`'s
+   * `socialPost` mode). Hides "Not For Social" — checking it there makes
+   * `createSocialQuote` reject the submission (quote.service.ts).
+   */
+  socialPost?: boolean;
 }
 
 export interface QuoteEditDialogProps {
@@ -351,5 +380,7 @@ export interface QuoteCreateDialogProps {
    * the create path can't carry them, since the form never loads them.
    */
   duplicateFromQuoteId?: string;
+  /** Quote a "Copy to client" is made from; sent as `source_quote_id` so its operators stay allowed. */
+  sourceQuoteId?: string;
   presentation?: FormPresentation;
 }

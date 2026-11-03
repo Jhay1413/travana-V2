@@ -17,8 +17,19 @@ export function useUpdateTag() {
   });
 }
 
+/** Remove a tag from one quote only (open to everyday roles; the tag itself is untouched). */
+export function useDetachQuoteTag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ quoteId, tagId }: { quoteId: string; tagId: string }) => tagApi.detachFromQuote(quoteId, tagId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: tagKeys.all });
+    },
+  });
+}
+
 /**
- * Delete a tag entity globally. The FK cascade detaches it from every
+ * Delete a tag entity globally (admin only). The FK cascade detaches it from every
  * quote/client/booking that referenced it. Invalidates the tag list.
  */
 export function useDeleteTag() {

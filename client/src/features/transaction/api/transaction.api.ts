@@ -1,5 +1,48 @@
 import axiosClient from "@/api/client/axios-client";
 import type { Transaction, CreateTransactionData } from "@/features/quote/types";
+import { appendPipelineFilterParams } from "../lib/pipeline-query";
+
+export type PipelineSort =
+  | "newest"
+  | "oldest"
+  | "oldest-activity"
+  | "latest_activity"
+  | "value_desc"
+  | "profit_desc"
+  | "name_asc"
+  | "quiet_first";
+export type PipelineQuick = "no_task" | "quiet_7";
+export type DealPriority = "low" | "medium" | "high";
+
+export interface PipelineQueryFilters {
+  search?: string;
+  priority?: DealPriority[];
+  tourOperatorId?: string[];
+  quick?: PipelineQuick;
+}
+
+export interface PipelineColumnPage {
+  items: Transaction[];
+  total: number;
+  page: number;
+  hasMore: boolean;
+  totalValue: number;
+  totalProfit: number;
+}
+
+export interface PipelineCounts {
+  all: number;
+  no_task: number;
+  quiet_7: number;
+}
+
+export interface PipelineCountsParams {
+  agentId?: string;
+  branchId?: string;
+  search?: string;
+  priority?: DealPriority[];
+  tourOperatorId?: string[];
+}
 
 export const transactionApi = {
   getAll: async (filters?: { clientId?: string; agentId?: string; dateFrom?: string; dateTo?: string; branchId?: string }): Promise<Transaction[]> => {
@@ -50,12 +93,28 @@ export const transactionApi = {
     limit: number,
     agentId?: string,
     quoteStatus?: string,
-  ): Promise<{ items: Transaction[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> => {
+    sort?: PipelineSort,
+    branchId?: string,
+    filters?: PipelineQueryFilters,
+  ): Promise<PipelineColumnPage> => {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (agentId) params.append("agentId", agentId);
     if (quoteStatus) params.append("quoteStatus", quoteStatus);
+    if (sort) params.append("sort", sort);
+    if (branchId) params.append("branchId", branchId);
+    appendPipelineFilterParams(params, filters);
     const { data } = await axiosClient.get(`/api/v2/transactions/pipeline/${status}?${params.toString()}`);
-    return data as { items: Transaction[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number };
+    return data as PipelineColumnPage;
+  },
+
+  getPipelineCounts: async (counts: PipelineCountsParams): Promise<PipelineCounts> => {
+    const params = new URLSearchParams();
+    if (counts.agentId) params.append("agentId", counts.agentId);
+    if (counts.branchId) params.append("branchId", counts.branchId);
+    appendPipelineFilterParams(params, { search: counts.search, priority: counts.priority, tourOperatorId: counts.tourOperatorId });
+    const query = params.toString();
+    const { data } = await axiosClient.get(`/api/v2/transactions/pipeline-counts${query ? `?${query}` : ""}`);
+    return data as PipelineCounts;
   },
 
   getStats: async () => {

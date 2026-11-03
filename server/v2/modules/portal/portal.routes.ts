@@ -7,12 +7,13 @@ import { tagService } from '../tag/tag.service';
 import { pushNotificationService } from '../notification/push-notification.service';
 import { quotePublicRepository } from '../quote/quote-public.repository';
 import { portalRepository } from './portal.repository';
+import { getPortalDeals } from './portal.service';
 import { neonClientRepository } from '../neon-client/neon-client.repository';
-import { fireAutoTriggerForClient } from '../sms/sms.service';
 import { bridgePortalMessageToChat } from '../../../services/portal-chat-bridge';
-import { getUserId } from '../../utils/get-user-id';
 import { signPortalToken, verifyPortalToken, DEFAULT_PORTAL_PIN } from './portal-auth';
 import { portalLoginTokenRepository } from './portal-login-token.repository';
+import { validate } from '../../middlewares/validation.middleware';
+import { listPortalDealsValidator } from './portal.validator';
 import bcrypt from 'bcryptjs';
 
 const portalRouter = Router();
@@ -27,14 +28,6 @@ function portalAuth(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ error: 'Invalid token' });
   }
   (req as any).portalClient = payload;
-  next();
-}
-
-function requireStaffAuth(req: Request, res: Response, next: NextFunction) {
-  const userId = getUserId(req);
-  if (!userId) {
-    return res.status(401).json({ error: 'Staff authentication required' });
-  }
   next();
 }
 
@@ -311,7 +304,7 @@ portalRouter.get('/deals/for-you', portalAuth, async (req: Request, res: Respons
   }
 });
 
-portalRouter.get('/deals', async (req: Request, res: Response) => {
+portalRouter.get('/deals', validate(listPortalDealsValidator), async (req: Request, res: Response) => {
   try {
     const filterCountry = ((req.query.country as string) || '').trim();
     const filterTag = ((req.query.tag as string) || '').trim();
@@ -320,15 +313,21 @@ portalRouter.get('/deals', async (req: Request, res: Response) => {
     // show an expired deal; omitting it still returns everything, for any caller
     // that genuinely wants the full history.
     const recentOnly = ((req.query.recent as string) || '') === '1';
+    // ?interests=1 restricts Latest Deals to deals sharing at least one tag with
+    // the logged-in client's saved Travel Interests. Silently ignored (no
+    // filter) for unauthenticated callers or clients with no saved interests,
+    // so the section never blanks out for a brand-new client.
+    const matchInterests = ((req.query.interests as string) || '') === '1';
 
-    const results = await portalRepository.findDeals({
+    const results = await getPortalDeals({
       country: filterCountry || undefined,
       tag: filterTag || undefined,
-      limit: 50,
       recentDays: recentOnly ? PORTAL_DEAL_WINDOW_DAYS : undefined,
+      matchInterests,
+      authorizationHeader: req.headers.authorization,
     });
     res.json(await enrichDealRows(results));
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error fetching portal deals:', err);
     res.status(500).json({ error: 'Failed to load deals' });
   }
@@ -816,93 +815,7 @@ portalRouter.post('/quote/:token/view', portalAuth, async (req: Request, res: Re
   }
 });
 
-// ── Staff Portal Endpoints ───────────────────────────────────────────────────
-
-portalRouter.get('/staff/has-pin/:clientId', requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const client = await neonClientRepository.findPortalPin(String((req.params.clientId as string)));
-    res.json({ hasPin: !!client?.portalPin });
-  } catch {
-    res.status(500).json({ error: 'Failed to check PIN' });
-  }
-});
-
-portalRouter.post('/staff/set-pin', requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId, pin } = req.body;
-    if (!clientId || !pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      return res.status(400).json({ error: 'Valid 4-digit PIN required' });
-    }
-    const hash = await bcrypt.hash(pin, 10);
-    await neonClientRepository.setPortalPin(clientId, hash);
-    void fireAutoTriggerForClient({
-      clientId,
-      autoTrigger: 'on_pin_set',
-      triggerSource: 'portal.staff.set-pin',
-      dedupeSince: new Date(Date.now() - 5 * 60 * 1000),
-    });
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('Set PIN error:', err);
-    res.status(500).json({ error: 'Failed to set PIN' });
-  }
-});
-
-portalRouter.post('/staff/remove-pin', requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = req.body;
-    if (!clientId) return res.status(400).json({ error: 'clientId required' });
-    await neonClientRepository.setPortalPin(clientId, null);
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('Remove PIN error:', err);
-    res.status(500).json({ error: 'Failed to remove PIN' });
-  }
-});
-
-// Separate named export for staff routes — mounted after auth middleware in index.ts
-export const portalStaffRouter = Router();
-
-portalStaffRouter.get('/has-pin/:clientId', requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const client = await neonClientRepository.findPortalPin(String((req.params.clientId as string)));
-    res.json({ hasPin: !!client?.portalPin });
-  } catch {
-    res.status(500).json({ error: 'Failed to check PIN' });
-  }
-});
-
-portalStaffRouter.post('/set-pin', requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId, pin } = req.body;
-    if (!clientId || !pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      return res.status(400).json({ error: 'Valid 4-digit PIN required' });
-    }
-    const hash = await bcrypt.hash(pin, 10);
-    await neonClientRepository.setPortalPin(clientId, hash);
-    void fireAutoTriggerForClient({
-      clientId,
-      autoTrigger: 'on_pin_set',
-      triggerSource: 'portal.staff.set-pin',
-      dedupeSince: new Date(Date.now() - 5 * 60 * 1000),
-    });
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('Set PIN error:', err);
-    res.status(500).json({ error: 'Failed to set PIN' });
-  }
-});
-
-portalStaffRouter.post('/remove-pin', requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = req.body;
-    if (!clientId) return res.status(400).json({ error: 'clientId required' });
-    await neonClientRepository.setPortalPin(clientId, null);
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('Remove PIN error:', err);
-    res.status(500).json({ error: 'Failed to remove PIN' });
-  }
-});
+// Staff portal-PIN management lives in the neon-client module
+// (GET/PUT/DELETE /api/v2/neon-clients/:id/portal-pin) where it is org-scoped.
 
 export default portalRouter;

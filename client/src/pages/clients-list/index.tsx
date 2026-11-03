@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { ChevronRight, Search, Users } from "lucide-react";
+import { ChevronRight, Pin, Search, Users } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { useNeonClients } from "@/hooks/queries";
+import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 
 export default function ClientsListPage() {
   const [, navigate] = useLocation();
@@ -15,6 +16,13 @@ export default function ClientsListPage() {
     limit: 15,
     search: search.trim() || undefined,
   });
+
+  // Fetched once for the whole list — no per-row favourite lookups.
+  const { data: favorites } = useFavorites();
+  const pinnedClientIds = useMemo(
+    () => new Set((favorites ?? []).filter((f) => f.itemType === "client").map((f) => f.itemId)),
+    [favorites],
+  );
 
   return (
     <div className="px-5 pb-8 pt-5">
@@ -80,10 +88,16 @@ export default function ClientsListPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div
-                        className="truncate text-sm font-semibold"
+                        className="flex items-center gap-1 truncate text-sm font-semibold"
                         data-testid={`text-clients-list-name-${client.id}`}
                       >
-                        {fullName}
+                        <span className="truncate">{fullName}</span>
+                        {pinnedClientIds.has(client.id) && (
+                          <Pin
+                            className="h-2.5 w-2.5 shrink-0 fill-amber-500 text-amber-500 dark:fill-amber-400 dark:text-amber-400"
+                            data-testid={`card-clients-list-pinned-${client.id}`}
+                          />
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-black/50 dark:text-white/50">
                         {client.email && <span className="truncate">{client.email}</span>}

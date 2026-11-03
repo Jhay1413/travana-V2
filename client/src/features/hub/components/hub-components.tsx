@@ -6,10 +6,11 @@ import {
   Megaphone,
   Sparkles,
   Trophy,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ICON_MAP: Record<string, React.ElementType> = {
+const ICON_MAP: Record<string, LucideIcon> = {
   GraduationCap,
   BookOpen,
   MapPin,

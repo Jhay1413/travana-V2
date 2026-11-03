@@ -23,6 +23,7 @@ export function getPublicBaseUrl(): string {
   // domain so links in SMS/emails point at production. In dev, prefer the
   // workspace dev domain.
   const candidates = [
+    process.env.BASE_URL,
     process.env.PUBLIC_BASE_URL,
     process.env.APP_URL,
     process.env.REPLIT_URL,

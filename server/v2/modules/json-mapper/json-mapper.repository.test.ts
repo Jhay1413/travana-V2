@@ -26,7 +26,8 @@ function primeDb(results: unknown[][]) {
     from: () => ({
       where: (clause: SQL) => {
         whereClauses.push(clause);
-        return { limit: async () => primedResults.shift() ?? [] };
+        const limit = async () => primedResults.shift() ?? [];
+        return { limit, orderBy: () => ({ limit }) };
       },
     }),
   }));
@@ -67,12 +68,19 @@ describe("findAccommodationByName", () => {
 });
 
 describe("exact-first ordering for the other name lookups", () => {
-  it("findTourOperatorByName tries exact, then contains", async () => {
+  it("findCatalogueOperatorByName tries exact, then contains (global, no org filter)", async () => {
     primeDb([[], [{ id: "t1", name: "Jet2holidays" }]]);
-    const row = await jsonMapperRepository.findTourOperatorByName("Jet2");
+    const row = await jsonMapperRepository.findCatalogueOperatorByName("Jet2");
     expect(row).toEqual({ id: "t1", name: "Jet2holidays" });
     expect(paramsOf(whereClauses[0])).toEqual(["Jet2"]);
     expect(paramsOf(whereClauses[1])).toEqual(["%Jet2%"]);
+  });
+
+  it("findCatalogueOperatorByName accepts a contains match only when it is unique", async () => {
+    primeDb([[], [{ id: "t1", name: "Jet2 City" }, { id: "t2", name: "Jet2 Holidays" }]]);
+    expect(await jsonMapperRepository.findCatalogueOperatorByName("Jet2")).toBeNull();
+    primeDb([[], [{ id: "t1", name: "Jet2 Holidays" }]]);
+    expect(await jsonMapperRepository.findCatalogueOperatorByName("Jet2")).toEqual({ id: "t1", name: "Jet2 Holidays" });
   });
 
   it("an exact destination hit wins without running the contains query", async () => {

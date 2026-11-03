@@ -19,8 +19,9 @@ export function useMessages(conversationId: string | null, enabled = true) {
 
 function useAfterWrite(conversationId?: string) {
   const qc = useQueryClient();
-  return () => {
-    if (conversationId) qc.invalidateQueries({ queryKey: messagesKeys.list(conversationId) });
+  return (targetConversationId?: string) => {
+    const id = targetConversationId ?? conversationId;
+    if (id) qc.invalidateQueries({ queryKey: messagesKeys.list(id) });
     // A new message changes the conversation's last_message / preview / ordering.
     qc.invalidateQueries({ queryKey: conversationsKeys.all });
   };
@@ -30,7 +31,7 @@ export function useSendMessage(conversationId?: string) {
   const afterWrite = useAfterWrite(conversationId);
   return useMutation({
     mutationFn: (body: MessageCreate) => messagesApi.send(body),
-    onSuccess: afterWrite,
+    onSuccess: () => afterWrite(),
   });
 }
 
@@ -38,7 +39,9 @@ export function useCreateInternalNote(conversationId?: string) {
   const afterWrite = useAfterWrite(conversationId);
   return useMutation({
     mutationFn: (body: InternalNoteCreate) => messagesApi.createInternalNote(body),
-    onSuccess: afterWrite,
+    // The note may target a conversation other than the selected one (Mark done
+    // on a non-selected row), so refresh the thread it was written to.
+    onSuccess: (_data, variables) => afterWrite(variables.conversation_id),
   });
 }
 

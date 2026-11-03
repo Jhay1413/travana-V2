@@ -5,8 +5,10 @@ const courseBody = z.object({
   category: z.string().min(1, 'Category is required'),
   description: z.string().nullable().optional(),
   thumbnailUrl: z.string().min(1).nullable().optional(),
-  visibility: z.enum(['global', 'org']),
-  // Only settable by platform_admin — but all authors ARE platform_admin in v1.
+  // Optional so org admins can omit it; the service forces 'org' + their own
+  // org for them, and requires it for platform_admin.
+  visibility: z.enum(['global', 'org']).optional(),
+  // Platform admins choose the tenant; an org_admin's value must equal their own org (enforced in service).
   orgId: z.string().uuid().nullable().optional(),
   passingScore: z.number().int().min(0).max(100).default(80),
   requireContentBeforeQuiz: z.boolean().default(true),

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '../../config/database';
 import {
   supplier_scraper,
@@ -43,6 +43,21 @@ export const scraperRepository = {
     const [row] = await db
       .update(supplier_scraper)
       .set({ ...data, updated_at: new Date() })
+      .where(eq(supplier_scraper.id, id))
+      .returning();
+    return row || null;
+  },
+
+  // Atomic top-level merge of `patch` into the stored config JSONB. Unlike
+  // update({ config }), this never writes back a stale snapshot, so keys saved
+  // concurrently by someone else (e.g. field picks) survive.
+  async mergeConfig(id: string, patch: Record<string, unknown>): Promise<SupplierScraper | null> {
+    const [row] = await db
+      .update(supplier_scraper)
+      .set({
+        config: sql`COALESCE(${supplier_scraper.config}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+        updated_at: new Date(),
+      })
       .where(eq(supplier_scraper.id, id))
       .returning();
     return row || null;

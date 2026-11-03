@@ -9,7 +9,6 @@ import {
   tasks,
   tickets,
   forwardsReport,
-  tour_operator,
   tourOperators,
   clientTable,
 } from "../shared/schema";
@@ -125,12 +124,9 @@ async function main() {
     .where(isNull(forwardsReport.org_id));
   console.log(`  forwardsReport: backfilled`);
 
-  // ── 9. Backfill tour_operator (org-scoped, no branch) ─────────────────────
-  await db
-    .update(tour_operator)
-    .set({ org_id: orgId })
-    .where(isNull(tour_operator.org_id));
-  console.log(`  tour_operator: backfilled`);
+  // ── 9. tour_operator is a platform-wide catalogue (no org_id) ─────────────
+  // Nothing to backfill. An org adds operators from the catalogue itself
+  // (org_tour_operator); see scripts/seed-org-tour-operators.ts.
 
   // ── 10. Backfill tourOperators (org-scoped, no branch) ────────────────────
   await db

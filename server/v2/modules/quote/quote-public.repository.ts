@@ -1,3 +1,4 @@
+// Intentionally outside the shop/homeworker partition: public quote links are token-gated, not staff reads.
 import { db } from "../../config/database";
 import {
   quote, quote_flights, quote_accomodation, quote_transfers, quote_car_hire,
@@ -26,6 +27,7 @@ export interface ClientQuoteViewSummary {
 import { eq, desc, sql, and, inArray, or, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import crypto from "crypto";
+import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 const departAirport = alias(airport, "depart_airport");
 const arriveAirport = alias(airport, "arrive_airport");
@@ -327,10 +329,11 @@ export const quotePublicRepository = {
 
   /**
    * Every quote of a client that has been opened at least once, with how often
-   * and when it was last viewed — the client page's "Views" tab. Scoped to an
-   * org when one is given so agents only see their own clients' quotes.
+   * and when it was last viewed — the client page's "Views" tab, dashboard card and holidays rail. Pinned
+   * like the client page's deal list (buildTransactionScopeConds): agents and branch managers see only their
+   * own shop's deals (nothing with no shop), homeworkers their own, admins the whole org.
    */
-  async getClientQuoteViews(clientId: string, orgId: string | null): Promise<ClientQuoteViewSummary[]> {
+  async getClientQuoteViews(clientId: string, scope: ScopeOrTrusted): Promise<ClientQuoteViewSummary[]> {
     const lastViewed = sql<string>`max(${quoteViewsTable.viewedAt})`;
     return db
       .select({
@@ -345,7 +348,7 @@ export const quotePublicRepository = {
       .from(quoteViewsTable)
       .innerJoin(quote, eq(quoteViewsTable.quoteId, quote.id))
       .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
-      .where(and(eq(transaction.client_id, clientId), ...(orgId ? [eq(transaction.org_id, orgId)] : [])))
+      .where(and(eq(transaction.client_id, clientId), ...buildTransactionScopeConds(scope)))
       .groupBy(quote.id)
       .orderBy(desc(lastViewed));
   },
@@ -431,6 +434,17 @@ export const quotePublicRepository = {
       .where(eq(quote.id, quoteId))
       .limit(1);
     return result?.userId || null;
+  },
+
+  /** The agent who owns the quote's deal and the org the deal belongs to. */
+  async getOwnerByQuoteId(quoteId: string): Promise<{ userId: string; orgId: string | null } | null> {
+    const [result] = await db
+      .select({ userId: transaction.user_id, orgId: transaction.org_id })
+      .from(quote)
+      .innerJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(eq(quote.id, quoteId))
+      .limit(1);
+    return result ?? null;
   },
 
   async notifyAgent(quoteId: string, title: string, message: string, link?: string) {

@@ -1,6 +1,7 @@
 import { AppError } from "../../utils/error-handler";
 import { planRepository } from "./plan.repository";
 import { branchRepository } from "../branch/branch.repository";
+import type { Tx } from "../branch/branch.repository";
 import type { Plan } from "@shared/schema";
 
 const FALLBACK_PLAN_CODE = "starter";
@@ -24,15 +25,18 @@ export const planService = {
     return fallback;
   },
 
-  async assertCanAddBranch(orgId: string): Promise<void> {
+  /** Pass `tx` to count inside a caller-held transaction (e.g. under an org lock). */
+  async assertCanAddBranch(orgId: string, tx?: Tx): Promise<void> {
     const plan = await this.getOrgPlan(orgId);
     if (plan.branchLimit === null) return;
 
-    const count = await branchRepository.countByOrg(orgId);
+    const count = tx ? await branchRepository.countByOrg(orgId, tx) : await branchRepository.countByOrg(orgId);
     if (count >= plan.branchLimit) {
       throw new AppError(
         `Plan "${plan.code}" allows ${plan.branchLimit} branch(es). Upgrade to add more.`,
         403,
+        true,
+        "BRANCH_LIMIT_REACHED",
       );
     }
   },

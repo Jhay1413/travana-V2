@@ -6,8 +6,9 @@ import {
   enquiry_table,
   quote,
   booking,
+  notes,
 } from '@shared/schema';
-import { eq, and, asc, inArray } from 'drizzle-orm';
+import { eq, and, asc, inArray, isNull } from 'drizzle-orm';
 
 export type FavoriteWithClient = typeof favorites.$inferSelect & {
   clientId: string | null;
@@ -28,6 +29,7 @@ export const favoriteRepository = {
     const enquiryIds = rows.filter((f) => f.itemType === "enquiry").map((f) => f.itemId);
     const quoteIds = rows.filter((f) => f.itemType === "quote").map((f) => f.itemId);
     const bookingIds = rows.filter((f) => f.itemType === "booking").map((f) => f.itemId);
+    const noteIds = rows.filter((f) => f.itemType === "note").map((f) => f.itemId);
     const directClientIds = rows.filter((f) => f.itemType === "client").map((f) => f.itemId);
 
     const clientIdByItem = new Map<string, string>();
@@ -46,7 +48,7 @@ export const favoriteRepository = {
           .select({ id: enquiry_table.id, client_id: transaction.client_id })
           .from(enquiry_table)
           .innerJoin(transaction, eq(enquiry_table.transaction_id, transaction.id))
-          .where(inArray(enquiry_table.id, enquiryIds));
+          .where(and(inArray(enquiry_table.id, enquiryIds), isNull(enquiry_table.deleted_at)));
         for (const e of enqs) {
           if (e.client_id) clientIdByItem.set(`enquiry:${e.id}`, e.client_id);
         }
@@ -69,6 +71,21 @@ export const favoriteRepository = {
           .where(inArray(booking.id, bookingIds));
         for (const b of bs) {
           if (b.client_id) clientIdByItem.set(`booking:${b.id}`, b.client_id);
+        }
+      }
+      if (noteIds.length > 0) {
+        const ns = await db
+          .select({
+            id: notes.id,
+            client_id: notes.client_id,
+            transaction_client_id: transaction.client_id,
+          })
+          .from(notes)
+          .leftJoin(transaction, eq(notes.transaction_id, transaction.id))
+          .where(inArray(notes.id, noteIds));
+        for (const n of ns) {
+          const clientId = n.client_id ?? n.transaction_client_id;
+          if (clientId) clientIdByItem.set(`note:${n.id}`, clientId);
         }
       }
       for (const cid of directClientIds) {

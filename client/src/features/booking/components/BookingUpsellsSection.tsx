@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useFieldArray, useWatch, type Control, type UseFormSetValue } from "react-hook-form";
-import { Plus, X, PackagePlus } from "lucide-react";
+import { Plus, X, PackagePlus, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -19,11 +19,13 @@ import {
   type UpsellsFormValues,
 } from "@/features/booking/types";
 import { useTourOperators } from "@/features/tour-operator/api/use-tour-operator-queries";
+import { operatorSelectOptions } from "@/features/tour-operator/lib/operator-options";
+import { useOperatorNames } from "@/features/tour-operator/components/operator-names-context";
 import type { TourOperator } from "@/features/tour-operator/types";
 
 // ─── Section Header (mirrors quote-extras-section) ────────────────────────────
 
-function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
+function SectionHeader({ icon: Icon, title }: { icon: LucideIcon; title: string }) {
   return (
     <div className="flex items-center gap-2 text-sm font-semibold">
       <Icon className="h-4 w-4" />
@@ -45,13 +47,15 @@ function UpsellRow({
   currentType,
   onRemove,
   tourOperators,
+  operatorsUnavailable = false,
 }: {
   control: Control<UpsellsFormValues>;
   setValue: UseFormSetValue<UpsellsFormValues>;
   index: number;
   currentType: ReturnType<typeof upsellTypeMeta>;
   onRemove: () => void;
-  tourOperators: TourOperator[];
+  tourOperators: TourOperator[] | undefined;
+  operatorsUnavailable?: boolean;
 }) {
   const p = `upsells.${index}` as const;
   const Icon = currentType.icon;
@@ -59,12 +63,13 @@ function UpsellRow({
   // Watch cost and tourOperatorId for auto-calc
   const cost = useWatch({ control, name: `upsells.${index}.cost` as "upsells.0.cost" });
   const tourOperatorId = useWatch({ control, name: `upsells.${index}.tourOperatorId` as "upsells.0.tourOperatorId" });
+  const operatorNames = useOperatorNames();
 
   // Auto-calc commission when cost or operator changes — mirrors booking-rhf-form pattern.
   // Only fires when an operator with a commission_percentage is selected.
   useEffect(() => {
     if (!tourOperatorId) return;
-    const op = tourOperators.find((o) => o.id === tourOperatorId);
+    const op = tourOperators?.find((o) => o.id === tourOperatorId);
     if (op?.commission_percentage == null) return;
     const costNum = Number(cost) || 0;
     const calc = parseFloat(((costNum * parseFloat(op.commission_percentage)) / 100).toFixed(2));
@@ -74,10 +79,6 @@ function UpsellRow({
     });
   }, [cost, tourOperatorId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const tourOperatorOptions = tourOperators.map((op) => ({
-    value: op.id,
-    label: op.name || op.id,
-  }));
 
   return (
     <div
@@ -140,11 +141,12 @@ function UpsellRow({
             <FormLabel className="text-xs font-medium text-black/60">Tour Operator</FormLabel>
             <FormControl>
               <SearchableSelect
-                options={tourOperatorOptions}
+                options={operatorSelectOptions(tourOperators, tourOperatorId, operatorNames[tourOperatorId ?? ""])}
+                disabled={operatorsUnavailable}
                 value={field.value ?? ""}
                 onValueChange={(value) => {
                   field.onChange(value);
-                  const op = tourOperators.find((o) => o.id === value);
+                  const op = tourOperators?.find((o) => o.id === value);
                   const costNum = Number(cost) || 0;
                   if (op?.commission_percentage != null && costNum > 0) {
                     const calc = parseFloat(((costNum * parseFloat(op.commission_percentage)) / 100).toFixed(2));
@@ -211,7 +213,8 @@ export function BookingUpsellsSection({
   // persisted `id`, and the default would overwrite it and strip it on submit,
   // making hydrated rows look like new creates.
   const { fields, append, remove } = useFieldArray({ control, name: "upsells", keyName: "_fieldId" });
-  const { data: tourOperatorsData = [] } = useTourOperators();
+  // The list endpoint is closed to some roles (403); disable the selector instead of showing an empty list.
+  const { data: tourOperatorsData, isError: operatorsUnavailable } = useTourOperators();
 
   const content = (
     <>
@@ -246,6 +249,7 @@ export function BookingUpsellsSection({
                 currentType={upsellTypeMeta(value.upsellType ?? "OTHER")}
                 onRemove={() => remove(index)}
                 tourOperators={tourOperatorsData}
+                operatorsUnavailable={operatorsUnavailable}
               />
             );
           })}

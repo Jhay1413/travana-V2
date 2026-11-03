@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
+import { requestOrigin } from "../../utils/link-base";
 import { hrService } from "./hr.service";
 import {
   addDocumentBodySchema,
@@ -28,7 +29,7 @@ export const hrController = {
 
   invite: asyncHandler(async (req: Request, res: Response) => {
     const body = inviteEmployeeBodySchema.parse(req.body);
-    const result = await hrService.invite(body, getScope(req));
+    const result = await hrService.invite(body, getScope(req), requestOrigin(req));
     res.status(201).json(result);
   }),
 

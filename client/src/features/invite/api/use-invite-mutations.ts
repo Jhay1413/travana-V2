@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { inviteApi, type AcceptInvitePayload, type SendInvitePayload } from "./invite.api";
 import { inviteKeys } from "./use-invite-queries";
+import { invalidateHomeworkerData } from "@/features/homeworkers/api/invalidate";
 import { organizationKeys } from "@/features/organization/api/use-organization-queries";
 
 export function useSendInvite() {
@@ -10,6 +11,8 @@ export function useSendInvite() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: inviteKeys.pending() });
       qc.invalidateQueries({ queryKey: organizationKeys.members() });
+      // A homeworker invite creates a branch; keep homeworker lists and the overview fresh.
+      invalidateHomeworkerData(qc);
     },
   });
 }
@@ -29,6 +32,8 @@ export function useRevokeInvite() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: inviteKeys.pending() });
       qc.invalidateQueries({ queryKey: organizationKeys.members() });
+      // Revoking a pending homeworker invite deletes their empty branch.
+      invalidateHomeworkerData(qc);
     },
   });
 }

@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { isAuthenticated } from "../../middlewares/auth";
 import { asyncHandler } from "../../utils/async-handler";
+import { blockReadOnlyClientRoles } from "../../middlewares/auth/block-read-only-roles";
 import { clientFileController } from "./client-file.controller";
 
 const ALLOWED_MIME_TYPES = [
@@ -28,8 +29,8 @@ const router = Router();
 router.use(isAuthenticated);
 
 router.get("/client/:clientId", asyncHandler(clientFileController.list));
-router.post("/client/:clientId", upload.single("file"), asyncHandler(clientFileController.upload));
+router.post("/client/:clientId", blockReadOnlyClientRoles, upload.single("file"), asyncHandler(clientFileController.upload));
 router.get("/:id/download", asyncHandler(clientFileController.download));
-router.delete("/:id", asyncHandler(clientFileController.remove));
+router.delete("/:id", blockReadOnlyClientRoles, asyncHandler(clientFileController.remove));
 
 export default router;

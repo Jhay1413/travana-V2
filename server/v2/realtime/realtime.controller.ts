@@ -41,12 +41,12 @@ export const realtimeController = {
     // oldest of their streams is closed here in favour of this new one.
     let unregister = (): void => {};
     if (userId) {
-      const registered = realtimeService.registerConnection(userId, () => close("replaced"));
+      const registered = realtimeService.registerConnection(userId, (reason) => close(reason));
       unregister = registered.unregister;
       console.log(`[realtime] open user=${userId} org=${orgId} connections=${registered.count}`);
     }
 
-    function close(reason: "replaced" | "client"): void {
+    function close(reason: "replaced" | "client" | "revoked"): void {
       if (closed) return;
       if (reason === "replaced") write(": replaced\n\n");
       closed = true;

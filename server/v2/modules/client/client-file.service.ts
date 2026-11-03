@@ -3,8 +3,11 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import path from "path";
 import fs from "fs";
 import { s3Client, S3_BUCKET } from "../../config/s3";
-import { clientFileRepository } from "./client-file.repository";
-import { ClientFile } from "@shared/schema";
+import { clientFileRepository, type ClientFileWithUploader } from "./client-file.repository";
+import { neonClientRepository } from "../neon-client/neon-client.repository";
+import { AppError } from "../../utils/error-handler";
+import type { Scope } from "../../utils/scope";
+import type { ClientFile } from "@shared/schema";
 
 const S3_KEY_PREFIX = "client-files";
 const PRESIGNED_URL_EXPIRES_IN = 60 * 5; // 5 minutes
@@ -21,16 +24,35 @@ export type DownloadTarget =
   | { kind: "s3"; url: string }
   | { kind: "local"; filePath: string; originalName: string; mimeType: string };
 
+// Out-of-scope clients and files read as 404 so existence is never leaked
+// across tenants.
+async function assertClientInScope(clientId: string, scope: Scope): Promise<void> {
+  const client = await neonClientRepository.findById(clientId, scope);
+  if (!client) throw new AppError("Client not found", 404);
+}
+
+async function loadScopedFile(id: string, scope: Scope): Promise<ClientFile> {
+  const file = await clientFileRepository.findById(id);
+  if (!file) throw new AppError("File not found", 404);
+  const client = await neonClientRepository.findById(file.clientId, scope);
+  if (!client) throw new AppError("File not found", 404);
+  return file;
+}
+
 export const clientFileService = {
-  async listByClientId(clientId: string): Promise<ClientFile[]> {
+  async listByClientId(clientId: string, scope: Scope): Promise<ClientFileWithUploader[]> {
+    await assertClientInScope(clientId, scope);
     return clientFileRepository.findByClientId(clientId);
   },
 
   async upload(
     clientId: string,
     file: Express.Multer.File,
-    meta: { title?: string; category?: string; allocationType?: string; allocationId?: string }
+    meta: { title?: string; category?: string; allocationType?: string; allocationId?: string },
+    scope: Scope
   ): Promise<ClientFile> {
+    await assertClientInScope(clientId, scope);
+
     const ext = path.extname(file.originalname);
     const s3Key = `${S3_KEY_PREFIX}/${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
 
@@ -55,6 +77,7 @@ export const clientFileService = {
         category: meta.category || null,
         allocationType: meta.allocationType || null,
         allocationId: meta.allocationId || null,
+        uploadedBy: scope.userId,
       });
     } catch (err) {
       // Clean up S3 object if DB insert fails
@@ -63,9 +86,8 @@ export const clientFileService = {
     }
   },
 
-  async getDownloadTarget(id: string, opts?: { inline?: boolean }): Promise<DownloadTarget> {
-    const file = await clientFileRepository.findById(id);
-    if (!file) throw Object.assign(new Error("File not found"), { statusCode: 404 });
+  async getDownloadTarget(id: string, scope: Scope, opts?: { inline?: boolean }): Promise<DownloadTarget> {
+    const file = await loadScopedFile(id, scope);
 
     // "inline" lets the browser render the file in a preview (e.g. a PDF in an
     // iframe); "attachment" forces a download.
@@ -88,14 +110,13 @@ export const clientFileService = {
     // Legacy local file
     const filePath = path.join(LOCAL_UPLOADS_DIR, file.filename);
     if (!fs.existsSync(filePath)) {
-      throw Object.assign(new Error("File not found on disk"), { statusCode: 404 });
+      throw new AppError("File not found on disk", 404);
     }
     return { kind: "local", filePath, originalName: file.originalName, mimeType: file.mimeType };
   },
 
-  async delete(id: string): Promise<void> {
-    const file = await clientFileRepository.findById(id);
-    if (!file) throw Object.assign(new Error("File not found"), { statusCode: 404 });
+  async delete(id: string, scope: Scope): Promise<void> {
+    const file = await loadScopedFile(id, scope);
 
     if (isS3Key(file.filename)) {
       await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: file.filename }));

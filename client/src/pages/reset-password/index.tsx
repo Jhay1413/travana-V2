@@ -35,7 +35,7 @@ export default function ResetPasswordPage() {
       await axios.post("/api/auth/reset-password", { token, password });
       setSuccess(true);
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Something went wrong");
+      setError(err?.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
@@ -49,7 +49,7 @@ export default function ResetPasswordPage() {
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
               <Plane className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-semibold tracking-tight">TravelHub</span>
+            <span className="text-xl font-semibold tracking-tight">Travana</span>
           </div>
         </div>
       </nav>

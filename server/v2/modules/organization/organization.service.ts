@@ -1,5 +1,8 @@
 import { AppError } from '../../utils/error-handler';
 import { organizationRepository } from './organization.repository';
+import { orgTourOperatorRepository } from '../tour-operator/org-tour-operator.repository';
+import { tourOperatorCommissionSeed } from '@shared/tour-operator-seed';
+import { planRepository } from '../plan/plan.repository';
 import type { InsertOrganization } from '@shared/schema';
 
 type OrgUpdate = Partial<InsertOrganization>;
@@ -15,8 +18,13 @@ export const organizationService = {
     return org;
   },
 
-  async create(data: any) {
-    return organizationRepository.create(data);
+  async create(data: InsertOrganization) {
+    // A new org is linked to the seed tour operators at their seed commission, atomically.
+    return orgTourOperatorRepository.transaction(async (tx) => {
+      const org = await organizationRepository.create(data, tx);
+      await orgTourOperatorRepository.linkSeedOperators(org.id, tourOperatorCommissionSeed, null, tx);
+      return org;
+    });
   },
 
   async update(id: string, data: OrgUpdate) {
@@ -27,13 +35,19 @@ export const organizationService = {
       }
     }
 
-    if (data.settings !== undefined) {
-      const current = await organizationRepository.findById(id);
-      if (!current) throw new AppError('Organization not found', 404);
-      data = {
-        ...data,
-        settings: { ...(current.settings as Record<string, unknown> ?? {}), ...(data.settings as Record<string, unknown>) },
-      };
+    // data.settings is passed as a patch; the repository merges it atomically in SQL.
+    // `onboarding` is server-owned (written only via mergeSettingsSection); a stale copy from a
+    // client's cached settings must never overwrite it.
+    if (data.settings && typeof data.settings === 'object') {
+      const { onboarding: _ignored, ...rest } = data.settings as Record<string, unknown>;
+      data = { ...data, settings: rest };
+    }
+
+    // The plan decides the seat allowance: a plan change copies plans.seatLimit onto the org
+    // (null = unlimited). An explicit seatLimit (platform admin) is kept as given.
+    if (data.plan && data.seatLimit === undefined) {
+      const plan = await planRepository.findByCode(data.plan);
+      if (plan) data = { ...data, seatLimit: plan.seatLimit };
     }
 
     const org = await organizationRepository.update(id, data);

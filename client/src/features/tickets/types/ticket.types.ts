@@ -31,6 +31,26 @@ export interface Ticket {
   // Like state for the viewer, hydrated by the list / detail endpoints.
   likeCount?: number;
   likedByMe?: boolean;
+  // Additive fields for the redesigned queue: client phone and last activity
+  // (latest of created / updated / newest reply) on list + detail rows, the
+  // linked holiday summary on the list endpoint only.
+  clientPhone?: string | null;
+  lastActivityAt?: string | null;
+  holiday?: TicketHolidaySummary | null;
+}
+
+export type TicketHolidayKind = "booking" | "quote" | "enquiry";
+
+export interface TicketHolidaySummary {
+  transactionId: string;
+  kind: TicketHolidayKind | null;
+  title: string | null;
+  travelDate: string | null;
+  nights: number | null;
+  operatorName: string | null;
+  operatorLogoUrl: string | null;
+  haysRef: string | null;
+  supplierRef: string | null;
 }
 
 export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "resolvedAt" | "dueDate" | "assignedTo" | "clientId"> & {
@@ -39,3 +59,7 @@ export type CreateTicketData = Omit<Ticket, "id" | "createdAt" | "updatedAt" | "
   dueDate?: string | null;
   assignedTo?: string | null;
 };
+
+// Which slice of GET /tickets to fetch — mirrors the server's TicketListMode.
+// "all" is admin-only; the server rejects it for anyone else.
+export type TicketListScope = "mine" | "raised" | "all";

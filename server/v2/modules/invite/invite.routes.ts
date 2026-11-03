@@ -8,6 +8,7 @@ import {
   sendInviteSchema,
   acceptInviteQuerySchema,
   acceptInviteSubmitSchema,
+  inviteUserIdParams,
 } from './invite.validator';
 
 const router = Router();
@@ -22,7 +23,7 @@ router.post('/accept', validate(acceptInviteSubmitSchema), inviteController.acce
 // Org admin or branch manager (server enforces branch scoping for managers)
 router.get('/',                isAuthenticated, orgBranchScope, inviterRoles, inviteController.list);
 router.post('/',               isAuthenticated, orgBranchScope, inviterRoles, validate(sendInviteSchema), inviteController.send);
-router.post('/:userId/resend', isAuthenticated, orgBranchScope, inviterRoles, inviteController.resend);
-router.delete('/:userId',      isAuthenticated, orgBranchScope, inviterRoles, inviteController.revoke);
+router.post('/:userId/resend', isAuthenticated, orgBranchScope, inviterRoles, validate(inviteUserIdParams), inviteController.resend);
+router.delete('/:userId',      isAuthenticated, orgBranchScope, inviterRoles, validate(inviteUserIdParams), inviteController.revoke);
 
 export default router;

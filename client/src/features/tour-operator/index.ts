@@ -2,4 +2,7 @@
 export { tourOperatorApi } from "./api/tour-operator.api";
 export * from "./types";
 export * from "./api/use-tour-operator-queries";
-export * from "./api/use-tour-operator-mutations";
+export * from "./lib/operator-options";
+export * from "./lib/operator-names";
+export { OperatorNamesProvider, useOperatorName, useOperatorNames } from "./components/operator-names-context";
+export { OperatorRateHint } from "./components/operator-rate-hint";

@@ -26,4 +26,8 @@ export const notificationService = {
   async deleteNotification(id: string): Promise<void> {
     await notificationRepository.remove(id);
   },
+
+  async clearAll(userId: string): Promise<void> {
+    await notificationRepository.removeAllByUserId(userId);
+  },
 };

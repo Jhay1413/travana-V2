@@ -1,0 +1,68 @@
+import { describe, expect, it } from "vitest";
+import type { Transaction } from "@/features/quote/types";
+import { buildDealMeta, isDueToday, nextTaskRowProps } from "./deal-meta";
+import { operatorCode } from "../shared/operator-tile";
+
+describe("buildDealMeta", () => {
+  it("falls back when nothing is known", () => {
+    expect(buildDealMeta({ id: "x" } as unknown as Transaction, "Quoted")).toBe("Dates not set");
+  });
+
+  it("joins destination, date, nights and the enquiry budget", () => {
+    const t = { id: "x", enquiry: { budget: "2500", travel_date: "2026-03-12T00:00:00", no_of_nights: 7, destination_name: "Tenerife" } } as unknown as Transaction;
+    expect(buildDealMeta(t, "Enquiry")).toBe("Tenerife · 12 Mar 2026 · 7 nights · Budget £2,500");
+    expect(buildDealMeta(t, "Quoted")).not.toContain("Budget");
+  });
+
+  // Shaped like an enquiry row from GET /transactions/pipeline/enquiry (the enquiry select in
+  // transaction.repository.ts enrichTransactionsLightweight), numeric budget as a string.
+  // If the server stops selecting budget / no_of_nights the card silently loses them; the
+  // repository integration test pins that side, this one pins what the card does with them.
+  it("reads nights and budget from an enquiry as the pipeline endpoint returns it", () => {
+    const t = {
+      id: "t1",
+      status: "on_enquiry",
+      enquiry: {
+        id: "e1", transaction_id: "t1", title: "Beach", travel_date: "2027-07-01", budget: "1800", no_of_nights: 7,
+        adults: 2, children: 0, infants: 0, destination_name: "Majorca", is_future_deal: false, future_deal_date: null,
+      },
+      quotes: [],
+      booking: null,
+    } as unknown as Transaction;
+    expect(buildDealMeta(t, "Enquiry")).toBe("Majorca · 1 Jul 2027 · 7 nights · Budget £1,800");
+  });
+
+  it("shows no nights or budget when the enquiry row does not carry them", () => {
+    const t = { id: "t1", enquiry: { travel_date: "2027-07-01", destination_name: "Majorca" }, quotes: [] } as unknown as Transaction;
+    expect(buildDealMeta(t, "Enquiry")).toBe("Majorca · 1 Jul 2027");
+  });
+});
+
+describe("isDueToday", () => {
+  const now = new Date(2026, 9, 15, 10, 0);
+  it("matches the same local day only", () => {
+    expect(isDueToday(new Date(2026, 9, 15, 17, 0).toISOString(), now)).toBe(true);
+    expect(isDueToday(new Date(2026, 9, 14, 17, 0).toISOString(), now)).toBe(false);
+    expect(isDueToday(null, now)).toBe(false);
+  });
+});
+
+describe("operatorCode", () => {
+  it("shortens operator names", () => {
+    expect(operatorCode("TUI")).toBe("TUI");
+    expect(operatorCode("Jet2holidays")).toBe("JET");
+    expect(operatorCode("P&O Cruises")).toBe("PC");
+    expect(operatorCode(null)).toBe("");
+  });
+});
+
+describe("nextTaskRowProps", () => {
+  it("maps no task to the empty state", () => {
+    expect(nextTaskRowProps(null)).toEqual({ title: null, dueDate: null });
+    expect(nextTaskRowProps(undefined)).toEqual({ title: null, dueDate: null });
+  });
+  it("maps a task, keeping an untitled one as a task", () => {
+    expect(nextTaskRowProps({ title: "Call", due_date: "2026-10-21T10:00:00Z" })).toEqual({ title: "Call", dueDate: "2026-10-21T10:00:00Z" });
+    expect(nextTaskRowProps({ title: null, due_date: null })).toEqual({ title: "", dueDate: null });
+  });
+});

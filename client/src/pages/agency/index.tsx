@@ -2,8 +2,12 @@ import { Switch, Route, Redirect } from "wouter";
 import AgencyProfilePage from "./profile";
 import AgencyBranchesPage from "./branches";
 import AgencyBranchDetailPage from "./branch-detail";
+import AgencyHomeworkersPage from "./homeworkers";
 import AgencyTeamPage from "./team";
+import AgencyTeamInvitePage from "./team-invite";
+import AgencyDeparturesPage from "./departures";
 import AgencyMessagingPage from "./messaging";
+import AgencyIntegrationsPage from "./integrations";
 import AgencyBillingPage from "./billing";
 import AgencyUsagePage from "./usage";
 import AgencyTargetsPage from "./targets";
@@ -24,11 +28,17 @@ export default function AgencyPage() {
       <Route path="/agency/branding" component={() => <Redirect to="/agency/profile" />} />
       <Route path="/agency/branches" component={AgencyBranchesPage} />
       <Route path="/agency/branches/:branchId" component={AgencyBranchDetailPage} />
+      <Route path="/agency/homeworkers" component={AgencyHomeworkersPage} />
+      <Route path="/agency/departures" component={AgencyDeparturesPage} />
+      <Route path="/agency/departures/balances" component={AgencyDeparturesPage} />
+      <Route path="/agency/team/invite" component={AgencyTeamInvitePage} />
       <Route path="/agency/team" component={AgencyTeamPage} />
       <Route path="/agency/messaging" component={AgencyMessagingPage} />
+      <Route path="/agency/integrations" component={AgencyIntegrationsPage} />
       <Route path="/agency/billing" component={AgencyBillingPage} />
       <Route path="/agency/usage" component={AgencyUsagePage} />
       <Route path="/agency/targets" component={AgencyTargetsPage} />
+      <Route path="/agency/targets/:rest*" component={AgencyTargetsPage} />
       <Route path="/agency/forwards" component={AgencyForwardsPage} />
       <Route path="/agency/leaderboard" component={AgencyLeaderboardPage} />
       <Route path="/agency/templates" component={AgencyTemplatesPage} />

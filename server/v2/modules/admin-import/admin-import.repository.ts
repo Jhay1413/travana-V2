@@ -19,7 +19,7 @@ export const tableConfig: Record<string, { label: string; columns: string[]; sea
   accomodation_type: { label: 'Accommodation Types', columns: ['id', 'type'], searchFields: ['type'], dependsOn: [] },
   accomodation_list: { label: 'Accommodation List', columns: ['id', 'type_id', 'name', 'resorts_id', 'description'], searchFields: ['name', 'description'], dependsOn: ['accomodation_type', 'resorts'] },
   board_basis: { label: 'Board Basis', columns: ['id', 'type'], searchFields: ['type'], dependsOn: [] },
-  tour_operator: { label: 'Tour Operators', columns: ['id', 'name', 'commission_percentage'], searchFields: ['name'], dependsOn: [] },
+  tour_operator: { label: 'Tour Operators', columns: ['id', 'name', 'code', 'website', 'phone', 'logo_url'], searchFields: ['name'], dependsOn: [] },
   package_type: { label: 'Package Types', columns: ['id', 'name'], searchFields: ['name'], dependsOn: [] },
   park: { label: 'Parks', columns: ['id', 'name', 'image_1', 'image_2', 'location', 'city', 'county', 'code', 'description'], searchFields: ['name', 'location', 'city'], dependsOn: [] },
   cottages: { label: 'Cottages', columns: ['id', 'cottage_name', 'location', 'cottage_code', 'bedrooms', 'bathrooms', 'sleeps', 'pets', 'image_1', 'image_2', 'details_url'], searchFields: ['cottage_name', 'location', 'cottage_code'], dependsOn: [] },

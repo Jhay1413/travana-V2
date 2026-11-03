@@ -16,6 +16,13 @@
 --   3. (Optional) Section 2 covers rows with no operator / no % set, by
 --      reverse-engineering the rate that was implied by the existing value.
 --
+-- NOTE: commission % now lives per organisation in org_tour_operator, so every
+-- query below joins the quote/booking's transaction to find its org and reads
+-- org_tour_operator.commission_percentage. Run it AFTER
+-- scripts/migrate-tour-operators-to-catalogue.sql and the db migration.
+-- The formula in this header differs from the one the client uses
+-- (price x % - discount + service charge) - decide which is right before running.
+--
 -- Everything is wrapped in a transaction — COMMIT only when happy, else ROLLBACK.
 -- ============================================================================
 
@@ -29,17 +36,18 @@ SELECT
   q.sales_price,
   q.discounts,
   q.service_charge,
-  op.commission_percentage,
+  ot.commission_percentage,
   q.package_commission                      AS commission_old,
   ROUND(
     (COALESCE(q.sales_price, 0) - COALESCE(q.discounts, 0))
-      * (op.commission_percentage / 100.0)
+      * (ot.commission_percentage / 100.0)
     + COALESCE(q.service_charge, 0)
   , 2)                                      AS commission_new
 FROM quote_table q
-JOIN tour_operator_table op ON op.id = q.main_tour_operator_id
+JOIN "transaction" tr ON tr.id = q.transaction_id
+JOIN org_tour_operator ot ON ot.tour_operator_id = q.main_tour_operator_id AND ot.org_id = tr.org_id
 WHERE q.sales_price IS NOT NULL
-  AND op.commission_percentage IS NOT NULL
+  AND ot.commission_percentage IS NOT NULL
 ORDER BY q.id
 LIMIT 100;
 
@@ -54,23 +62,27 @@ BEGIN;
 UPDATE quote_table AS q
 SET package_commission = ROUND(
       (COALESCE(q.sales_price, 0) - COALESCE(q.discounts, 0))
-        * (op.commission_percentage / 100.0)
+        * (ot.commission_percentage / 100.0)
       + COALESCE(q.service_charge, 0)
     , 2)
-FROM tour_operator_table AS op
-WHERE q.main_tour_operator_id = op.id
-  AND op.commission_percentage IS NOT NULL
+FROM org_tour_operator AS ot, "transaction" AS tr
+WHERE tr.id = q.transaction_id
+  AND ot.org_id = tr.org_id
+  AND ot.tour_operator_id = q.main_tour_operator_id
+  AND ot.commission_percentage IS NOT NULL
   AND q.sales_price IS NOT NULL;
 
 UPDATE booking_table AS b
 SET package_commission = ROUND(
       (COALESCE(b.sales_price, 0) - COALESCE(b.discounts, 0))
-        * (op.commission_percentage / 100.0)
+        * (ot.commission_percentage / 100.0)
       + COALESCE(b.service_charge, 0)
     , 2)
-FROM tour_operator_table AS op
-WHERE b.main_tour_operator_id = op.id
-  AND op.commission_percentage IS NOT NULL
+FROM org_tour_operator AS ot, "transaction" AS tr
+WHERE tr.id = b.transaction_id
+  AND ot.org_id = tr.org_id
+  AND ot.tour_operator_id = b.main_tour_operator_id
+  AND ot.commission_percentage IS NOT NULL
   AND b.sales_price IS NOT NULL;
 
 COMMIT;   -- ← change to ROLLBACK; if the numbers look wrong
@@ -103,9 +115,11 @@ COMMIT;   -- ← change to ROLLBACK; if the numbers look wrong
 --   AND q.sales_price <> 0
 --   AND (q.main_tour_operator_id IS NULL
 --        OR NOT EXISTS (
---          SELECT 1 FROM tour_operator_table op
---          WHERE op.id = q.main_tour_operator_id
---            AND op.commission_percentage IS NOT NULL
+--          SELECT 1 FROM org_tour_operator ot
+--          JOIN "transaction" tr ON tr.org_id = ot.org_id
+--          WHERE tr.id = q.transaction_id
+--            AND ot.tour_operator_id = q.main_tour_operator_id
+--            AND ot.commission_percentage IS NOT NULL
 --        ));
 --
 -- UPDATE booking_table AS b
@@ -118,9 +132,11 @@ COMMIT;   -- ← change to ROLLBACK; if the numbers look wrong
 --   AND b.sales_price <> 0
 --   AND (b.main_tour_operator_id IS NULL
 --        OR NOT EXISTS (
---          SELECT 1 FROM tour_operator_table op
---          WHERE op.id = b.main_tour_operator_id
---            AND op.commission_percentage IS NOT NULL
+--          SELECT 1 FROM org_tour_operator ot
+--          JOIN "transaction" tr ON tr.org_id = ot.org_id
+--          WHERE tr.id = b.transaction_id
+--            AND ot.tour_operator_id = b.main_tour_operator_id
+--            AND ot.commission_percentage IS NOT NULL
 --        ));
 --
 -- COMMIT;   -- ← or ROLLBACK;

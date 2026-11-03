@@ -1,6 +1,8 @@
 import { db } from '../../config/database';
 import { user, branchMembers, branches, organization, hrRecordsTable, userOrgRoles } from '@shared/schema';
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull, notExists } from 'drizzle-orm';
+import { AppError } from '../../utils/error-handler';
+import { placeholderNameForEmail } from '../../utils/homeworker-name';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -79,7 +81,57 @@ export const inviteRepository = {
   async deletePendingUser(id: string, orgId: string, tx?: Tx) {
     const runner = tx ?? db;
     // branchMembers cascade-delete on user delete via FK
-    await runner.delete(user).where(and(eq(user.id, id), eq(user.orgId, orgId), isNotNull(user.inviteToken)));
+    return runner
+      .delete(user)
+      .where(and(eq(user.id, id), eq(user.orgId, orgId), isNotNull(user.inviteToken)))
+      .returning({ id: user.id });
+  },
+
+  /** The homeworker branch this user owns, if any. */
+  async findOwnedHomeworkerBranch(userId: string, orgId: string) {
+    const [row] = await db
+      .select({ id: branches.id })
+      .from(branches)
+      .where(
+        and(
+          eq(branches.ownerUserId, userId),
+          eq(branches.organizationId, orgId),
+          eq(branches.branchType, 'homeworker'),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  },
+
+  /**
+   * Atomic: revoke an unaccepted homeworker invite. The user goes first
+   * (memberships, roles and the HR record cascade), then the now-empty branch.
+   * Guarded against a race (the invite accepted or another member added between
+   * the service's read and this write): exactly one pending user row must be
+   * deleted and no membership may still reference the branch, otherwise 409 and
+   * the transaction rolls back.
+   */
+  async deletePendingUserWithBranch(userId: string, orgId: string, branchId: string): Promise<void> {
+    await db.transaction(async (tx) => {
+      const deletedUsers = await this.deletePendingUser(userId, orgId, tx);
+      if (deletedUsers.length !== 1) {
+        throw new AppError('This invite can no longer be revoked; it may have been accepted', 409);
+      }
+      const deletedBranches = await tx
+        .delete(branches)
+        .where(
+          and(
+            eq(branches.id, branchId),
+            eq(branches.organizationId, orgId),
+            eq(branches.branchType, 'homeworker'),
+            notExists(tx.select({ id: branchMembers.id }).from(branchMembers).where(eq(branchMembers.branchId, branchId))),
+          ),
+        )
+        .returning({ id: branches.id });
+      if (deletedBranches.length !== 1) {
+        throw new AppError('Homeworker branch is no longer empty; archive the homeworker instead', 409);
+      }
+    });
   },
 
   async getOrgName(orgId: string): Promise<string | null> {
@@ -134,8 +186,26 @@ export const inviteRepository = {
     userPatch: Partial<typeof user.$inferInsert>,
   ): Promise<void> {
     await db.transaction(async (tx) => {
-      await this.updateUser(userId, userPatch, tx);
+      const updated = await this.updateUser(userId, userPatch, tx);
       await this.setBranchMembersActiveForUser(orgId, userId, true, tx);
+
+      // A homeworker's branch carries their name once they have accepted, but only
+      // while it still has the placeholder generated at invite time (a displayName
+      // chosen by the admin is preserved).
+      const branchName = typeof userPatch.name === 'string' ? userPatch.name.trim() : '';
+      if (branchName && updated?.email) {
+        await tx
+          .update(branches)
+          .set({ name: branchName })
+          .where(
+            and(
+              eq(branches.ownerUserId, userId),
+              eq(branches.organizationId, orgId),
+              eq(branches.branchType, 'homeworker'),
+              eq(branches.name, placeholderNameForEmail(updated.email)),
+            ),
+          );
+      }
     });
   },
 };

@@ -17,6 +17,14 @@ export interface DraftLesson {
   isRequired: boolean;
   /** Video lessons: the `playbackUrl` returned by `uploadVideoToS3`, set once the upload finishes (upload happens during authoring, independent of the course/lesson id). */
   videoUrl: string | null;
-  /** Graphics lessons: images staged locally; uploaded via `uploadAssets` right after the lesson is created on submit. */
-  files: File[];
+  /** Graphics lessons: slides (image + description) staged locally; uploaded via `uploadAssets` right after the lesson is created on submit. */
+  slides: StagedSlide[];
+}
+
+/** A slide staged in memory before upload: the image file plus its (optional) description. */
+export interface StagedSlide {
+  /** Stable client-only id (list key); never sent to the server. */
+  id: string;
+  file: File;
+  caption: string;
 }

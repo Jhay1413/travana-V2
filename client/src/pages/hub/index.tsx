@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Switch, Route, Redirect } from "wouter";
 import { HubShell } from "@/features/hub/components/hub-shell";
 import type { HubRole } from "@/data/hub-mock";
-import { useRole } from "@/hooks/use-role";
+import { useRoles } from "@/hooks/use-role";
 import HubDashboard from "@/features/hub/components/hub-dashboard";
 import HubTraining from "@/features/hub/components/hub-training";
 import HubAiIntel from "@/features/hub/components/hub-ai-intel";
@@ -16,7 +16,7 @@ import TrainingCourseEditor from "@/features/hub/components/admin/training-cours
 function TrainingAdminForbidden() {
   return (
     <div className="py-16 text-center">
-      <p className="text-sm text-slate-500">Training admin is only accessible to platform administrators.</p>
+      <p className="text-sm text-slate-500">Training admin is only accessible to platform administrators and organisation owners.</p>
     </div>
   );
 }
@@ -24,9 +24,10 @@ function TrainingAdminForbidden() {
 export default function HubPage() {
   const [role, setRole] = useState<HubRole>("Senior Agent");
   // Real (not mock) role check — training authoring is gated to the
-  // platform_admin org role, independent of the hub's demo role dropdown.
-  const { orgRole } = useRole();
-  const isPlatformAdmin = orgRole === "platform_admin";
+  // platform_admin / org_admin org roles, independent of the hub's demo role
+  // dropdown. (The server restricts org_admin to their own org's courses.)
+  const { hasAnyRole } = useRoles();
+  const canAuthorTraining = hasAnyRole(["platform_admin", "org_admin"]);
 
   return (
     <HubShell role={role} onRoleChange={setRole}>
@@ -36,10 +37,10 @@ export default function HubPage() {
         </Route>
         <Route path="/hub/training" component={HubTraining} />
         <Route path="/hub/training/admin/:courseId">
-          {isPlatformAdmin ? <TrainingCourseEditor /> : <TrainingAdminForbidden />}
+          {canAuthorTraining ? <TrainingCourseEditor /> : <TrainingAdminForbidden />}
         </Route>
         <Route path="/hub/training/admin">
-          {isPlatformAdmin ? <TrainingAdmin /> : <TrainingAdminForbidden />}
+          {canAuthorTraining ? <TrainingAdmin /> : <TrainingAdminForbidden />}
         </Route>
         <Route path="/hub/ai-intel" component={HubAiIntel} />
         <Route path="/hub/knowledge" component={HubKnowledge} />

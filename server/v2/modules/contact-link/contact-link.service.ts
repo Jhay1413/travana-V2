@@ -63,6 +63,15 @@ export const contactLinkService = {
     return client;
   },
 
+  // Links only when the contact has no link yet. A contact already linked to
+  // another client (shared phone numbers) is never reassigned.
+  async linkIfUnlinked(contactId: string, clientId: string, scope: Scope): Promise<"linked" | "already_linked" | "linked_to_other"> {
+    const existing = await contactLinkRepository.findByContact(scope.orgId, contactId);
+    if (existing) return existing.clientId === clientId ? "already_linked" : "linked_to_other";
+    await this.link(contactId, clientId, scope);
+    return "linked";
+  },
+
   async createAndLink(contactId: string, input: CreateClientFromContactInput, scope: Scope): Promise<NeonClient> {
     const data: InsertClientTable = {
       title: input.title ?? null,

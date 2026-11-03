@@ -22,7 +22,7 @@ export const enquiryApi = {
     return data;
   },
 
-  update: async (id: string, enquiryData: Partial<EnquiryTable> & { destinations?: string[]; resorts?: string[]; boardBases?: string[]; departureAirports?: string[]; passengers?: any[] }): Promise<EnquiryTable> => {
+  update: async (id: string, enquiryData: Partial<EnquiryTable> & { destinations?: string[]; resorts?: string[]; accommodations?: string[]; boardBases?: string[]; departureAirports?: string[]; passengers?: any[] }): Promise<EnquiryTable> => {
     const { data } = await axiosClient.patch<EnquiryTable>(`/api/v2/enquiries/${id}`, enquiryData);
     return data;
   },

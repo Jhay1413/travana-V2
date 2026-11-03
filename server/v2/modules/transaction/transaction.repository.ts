@@ -1,11 +1,15 @@
 import { db } from "../../config/database";
-import { transaction, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks } from "@shared/schema";
-import type { Transaction, InsertTransaction, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
+import { publicClientColumns } from "../neon-client/neon-client.serializer";
+import { transaction, tickets, enquiry_table, quote, booking, clientTable, user, enquiry_destination, enquiry_resorts, enquiry_accomodation, enquiry_board_basis, enquiry_departure_airport, enquiry_passenger, destination, package_type, deal_images, quoteImages, bookingImages, accommodation_images, lodge_images, booking_accomodation, booking_flights, booking_transfers, booking_car_hire, booking_attraction_ticket, booking_lounge_pass, booking_airport_parking, park, quote_accomodation, accomodation_list, board_basis, room_type, quote_flights, airport, tour_operator, resorts, country, quote_transfers, quote_car_hire, quote_attraction_ticket, quote_lounge_pass, quote_airport_parking, notes, tasks, favorites } from "@shared/schema";
+import type { Transaction, TaskPriority, InsertTransaction, InsertEnquiryTable, InsertQuote, InsertBooking, InsertQuoteFlight, InsertQuoteAccomodation, InsertBookingFlight, InsertBookingAccomodation } from "@shared/schema";
+import { tourOperatorFields } from "./tour-operator-fields";
 import { eq, desc, and, sql, inArray, count, or, lt, lte, isNull, gte, getTableColumns, type SQL, type Column } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
-import { buildTransactionRecordScopeConds } from "../../utils/scope-conditions";
-import type { NextTask } from "./transaction.types";
+import { buildTransactionRecordScopeConds, buildTransactionScopeConds } from "../../utils/scope-conditions";
+import type { NextTask, PipelineCandidateItem, PipelineFilters, PipelineQuickCounts, PipelineSqlSort, PipelineTotals } from "./transaction.types";
+import { fetchServiceCommissionMaps } from "./service-commission.repository";
+import { dealProfitExpr, dealValueExpr, pipelineFilterConds, quickCond, sortExpr } from "./transaction-pipeline.sql";
 
 interface ConnectingLeg extends Partial<InsertQuoteFlight> {}
 interface BookingConnectingLeg extends Partial<InsertBookingFlight> {}
@@ -19,6 +23,20 @@ interface CreateTransactionWithQuoteInput {
   inboundConnectingLegs?: ConnectingLeg[];
   primaryAccommodation?: (Partial<InsertQuoteAccomodation> & { accomodation_id?: string | null }) | null;
   images?: string[];
+  scope: Scope;
+}
+
+export interface CreateTransactionWithEnquiryInput {
+  transactionData: InsertTransaction;
+  enquiryFields: Omit<InsertEnquiryTable, "transaction_id">;
+  destinations?: string[];
+  resorts?: string[];
+  accommodations?: string[];
+  boardBases?: string[];
+  departureAirports?: string[];
+  passengers?: Array<{ type: string; age: number }>;
+  /** Already sanitised note bodies. */
+  notes?: Array<{ content: string; agent_id: string | null }>;
   scope: Scope;
 }
 
@@ -51,83 +69,24 @@ async function getPackageTypeMap(): Promise<Map<string, string>> {
   return map;
 }
 
-// Sum line-item commission per quote / per booking. Mirrors the canonical
-// formula in server/v2/utils/commission-sql.ts (totalQuoteCommissionExpr /
-// totalBookingCommissionExpr) — all 7 line-item tables on each side. The
-// caller adds package_commission separately to get the total.
-//
-// Each side is a single round-trip: UNION ALL across the 7 line-item tables,
-// summed per id in SQL. This replaces the previous 7-queries-per-side fan-out
-// (14 round-trips) and is backed by the per-table quote_id / booking_id indexes.
-async function fetchServiceCommissionMaps(
-  quoteIds: string[],
-  bookingIds: string[],
-): Promise<{ quoteMap: Map<string, number>; bookingMap: Map<string, number> }> {
-  const quoteMap = new Map<string, number>();
-  const bookingMap = new Map<string, number>();
+// Columns a request body may never set when a deal is created: ids and parents, deletion and acceptance stamps,
+// share tokens, the free-quote flag and portal switches. Everything else that is a real column is kept.
+const PROTECTED_ENQUIRY_COLUMNS: ReadonlySet<string> = new Set(["id", "transaction_id", "deleted_by", "deleted_at", "deletion_code", "date_created", "is_active"]);
+const PROTECTED_QUOTE_COLUMNS: ReadonlySet<string> = new Set([
+  "id", "transaction_id", "deal_id", "deleted_by", "deleted_by_v2", "deleted_at", "deletion_code", "isFreeQuote", "quote_token",
+  "quote_sent_at", "quote_sent_via", "accepted_at", "accepted_by", "date_created", "parent_quote_id", "portal_added_at", "show_on_portal", "is_featured",
+]);
+const PROTECTED_BOOKING_COLUMNS: ReadonlySet<string> = new Set(["id", "transaction_id", "quote_id", "deleted_by", "deleted_by_user", "deleted_at", "deletion_code", "date_created"]);
 
-  const tasks: Promise<unknown>[] = [];
-
-  if (quoteIds.length > 0) {
-    const ids = sql.join(quoteIds.map((id) => sql`${id}`), sql`, `);
-    tasks.push(
-      db.execute(sql`
-        SELECT id, SUM(commission) AS commission FROM (
-          SELECT ${quote_flights.quote_id} AS id, ${quote_flights.commission} AS commission FROM ${quote_flights} WHERE ${quote_flights.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_accomodation.quote_id}, ${quote_accomodation.commission} FROM ${quote_accomodation} WHERE ${quote_accomodation.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_transfers.quote_id}, ${quote_transfers.commission} FROM ${quote_transfers} WHERE ${quote_transfers.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_car_hire.quote_id}, ${quote_car_hire.commission} FROM ${quote_car_hire} WHERE ${quote_car_hire.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_attraction_ticket.quote_id}, ${quote_attraction_ticket.commission} FROM ${quote_attraction_ticket} WHERE ${quote_attraction_ticket.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_lounge_pass.quote_id}, ${quote_lounge_pass.commission} FROM ${quote_lounge_pass} WHERE ${quote_lounge_pass.quote_id} IN (${ids})
-          UNION ALL
-          SELECT ${quote_airport_parking.quote_id}, ${quote_airport_parking.commission} FROM ${quote_airport_parking} WHERE ${quote_airport_parking.quote_id} IN (${ids})
-        ) t
-        WHERE id IS NOT NULL
-        GROUP BY id
-      `).then((res) => {
-        for (const r of res.rows as Array<{ id: string; commission: string | null }>) {
-          quoteMap.set(r.id, parseFloat(r.commission ?? "0") || 0);
-        }
-      }),
-    );
+/** The values of `table`'s own columns, minus the protected ones (a whitelist built from the table definition). */
+export function pickCreateColumns(table: Parameters<typeof getTableColumns>[0], values: object, protectedKeys: ReadonlySet<string>): Record<string, unknown> {
+  const columns = Object.keys(getTableColumns(table));
+  const source = values as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of columns) {
+    if (!protectedKeys.has(key) && source[key] !== undefined) out[key] = source[key];
   }
-
-  if (bookingIds.length > 0) {
-    const ids = sql.join(bookingIds.map((id) => sql`${id}`), sql`, `);
-    tasks.push(
-      db.execute(sql`
-        SELECT id, SUM(commission) AS commission FROM (
-          SELECT ${booking_flights.booking_id} AS id, ${booking_flights.commission} AS commission FROM ${booking_flights} WHERE ${booking_flights.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_accomodation.booking_id}, ${booking_accomodation.commission} FROM ${booking_accomodation} WHERE ${booking_accomodation.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_transfers.booking_id}, ${booking_transfers.commission} FROM ${booking_transfers} WHERE ${booking_transfers.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_car_hire.booking_id}, ${booking_car_hire.commission} FROM ${booking_car_hire} WHERE ${booking_car_hire.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_attraction_ticket.booking_id}, ${booking_attraction_ticket.commission} FROM ${booking_attraction_ticket} WHERE ${booking_attraction_ticket.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_lounge_pass.booking_id}, ${booking_lounge_pass.commission} FROM ${booking_lounge_pass} WHERE ${booking_lounge_pass.booking_id} IN (${ids})
-          UNION ALL
-          SELECT ${booking_airport_parking.booking_id}, ${booking_airport_parking.commission} FROM ${booking_airport_parking} WHERE ${booking_airport_parking.booking_id} IN (${ids})
-        ) t
-        WHERE id IS NOT NULL
-        GROUP BY id
-      `).then((res) => {
-        for (const r of res.rows as Array<{ id: string; commission: string | null }>) {
-          bookingMap.set(r.id, parseFloat(r.commission ?? "0") || 0);
-        }
-      }),
-    );
-  }
-
-  await Promise.all(tasks);
-  return { quoteMap, bookingMap };
+  return out;
 }
 
 function hasFlightData(leg: Partial<InsertQuoteFlight> | Partial<InsertBookingFlight> | null | undefined): boolean {
@@ -142,28 +101,15 @@ function hasFlightData(leg: Partial<InsertQuoteFlight> | Partial<InsertBookingFl
 }
 
 function buildTxnScopeConds(scope?: Scope, branchOverride?: string): SQL[] {
-  const conds: SQL[] = [];
-  if (!scope) return conds;
-
-  if (scope.orgRole === "platform_admin") {
-    if (branchOverride) conds.push(eq(transaction.branch_id, branchOverride));
-    return conds;
-  }
-
-  // All non-platform roles are confined to their org.
-  conds.push(eq(transaction.org_id, scope.orgId));
-
-  if (scope.orgRole === "branch_manager" || scope.orgRole === "agent") {
-    // Branch users are pinned to their own branch — any override is ignored.
-    if (scope.branchId) conds.push(eq(transaction.branch_id, scope.branchId));
-  } else if (scope.orgRole === "homeworker" && scope.userId) {
-    conds.push(eq(transaction.user_id, scope.userId));
-  } else if (scope.orgRole === "org_admin" && branchOverride) {
-    // org_admin: optional branch narrowing. org_id condition above already
-    // prevents cross-org access if a foreign branch id is supplied.
+  if (!scope) return [];
+  // Org, shop pin (agents and branch managers: own shop plus own legacy deals, nothing with no shop) and the
+  // shop/homeworker partition all come from the shared helper.
+  const conds = buildTransactionScopeConds(scope);
+  // Admins may narrow to one branch; branch users are pinned to their own shop, so any override is ignored for
+  // them. For org_admin the org condition already prevents cross-org access if a foreign branch id is supplied.
+  if (branchOverride && (scope.orgRole === "platform_admin" || scope.orgRole === "org_admin")) {
     conds.push(eq(transaction.branch_id, branchOverride));
   }
-
   return conds;
 }
 
@@ -173,7 +119,7 @@ async function enrichTransactions(txns: Transaction[]) {
   const clientIds = Array.from(new Set(txns.map(t => t.client_id).filter((id): id is string => !!id)));
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes, allClients] = await Promise.all([
-    db.select().from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    db.select().from(enquiry_table).where(and(inArray(enquiry_table.transaction_id, txnIds), isNull(enquiry_table.deleted_at))),
     // Full quote rows plus the display joins the client-details panels need
     // (destination / operator / departing airport) — same scalar-subquery
     // pattern as enrichTransactionsLightweight below.
@@ -371,12 +317,12 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
   const quoteLostCond = options?.includeLost ? sql`TRUE` : sql`(${quote.quote_status} IS NULL OR ${quote.quote_status} != 'lost')`;
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes, allUsers, allClients, allQuoteVariants] = await Promise.all([
-    db.select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, travel_date: enquiry_table.travel_date, adults: enquiry_table.adults, children: enquiry_table.children, infants: enquiry_table.infants, holiday_type_id: enquiry_table.holiday_type_id, status: enquiry_table.status, date_created: enquiry_table.date_created, date_expiry: enquiry_table.date_expiry, is_future_deal: enquiry_table.is_future_deal, future_deal_date: enquiry_table.future_deal_date, destination_name: sql<string | null>`(
+    db.select({ id: enquiry_table.id, transaction_id: enquiry_table.transaction_id, title: enquiry_table.title, travel_date: enquiry_table.travel_date, budget: enquiry_table.budget, no_of_nights: enquiry_table.no_of_nights, adults: enquiry_table.adults, children: enquiry_table.children, infants: enquiry_table.infants, holiday_type_id: enquiry_table.holiday_type_id, status: enquiry_table.status, date_created: enquiry_table.date_created, date_expiry: enquiry_table.date_expiry, is_future_deal: enquiry_table.is_future_deal, future_deal_date: enquiry_table.future_deal_date, destination_name: sql<string | null>`(
       SELECT d.name FROM enquiry_destination ed
       JOIN destination_table d ON ed.destination_id = d.id
       WHERE ed.enquiry_id = enquiry_table.id
       LIMIT 1
-    )` }).from(enquiry_table).where(inArray(enquiry_table.transaction_id, txnIds)),
+    )` }).from(enquiry_table).where(and(inArray(enquiry_table.transaction_id, txnIds), isNull(enquiry_table.deleted_at))),
     db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, travel_date: quote.travel_date, num_of_nights: quote.num_of_nights, adult: quote.adult, child: quote.child, infant: quote.infant, sales_price: quote.sales_price, package_commission: quote.package_commission, holiday_type_id: quote.holiday_type_id, quote_status: quote.quote_status, isQuoteCopy: quote.isQuoteCopy, date_created: quote.date_created, date_expiry: quote.date_expiry, is_future_deal: quote.is_future_deal, future_deal_date: quote.future_deal_date, discounts: quote.discounts, service_charge: quote.service_charge, destination_name: sql<string | null>`(
       SELECT d.name FROM quote_accomodation qa
       JOIN accomodation_list_table al ON qa.accomodation_id = al.id
@@ -398,14 +344,14 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
     )`, main_tour_operator_logo_url: sql<string | null>`(
       SELECT tour_operator_table.logo_url FROM tour_operator_table
       WHERE tour_operator_table.id = quote_table.main_tour_operator_id
-    )` }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, quoteLostCond, isNull(quote.deleted_at))),
+    )` }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, sql`(${quote.isQuoteCopy} IS NOT TRUE)`, quoteLostCond, isNull(quote.deleted_at))).orderBy(quote.date_created),
     db.select({ id: booking.id, transaction_id: booking.transaction_id, title: booking.title, travel_date: booking.travel_date, adult: booking.adult, child: booking.child, infant: booking.infant, sales_price: booking.sales_price, package_commission: booking.package_commission, holiday_type_id: booking.holiday_type_id, hays_ref: booking.hays_ref, supplier_ref: booking.supplier_ref, booking_status: booking.booking_status, discounts: booking.discounts, service_charge: booking.service_charge, date_created: booking.date_created, destination_name: sql<string | null>`(
       SELECT d.name FROM booking_accomodation ba
       JOIN accomodation_list_table al ON ba.accomodation_id = al.id
       JOIN resorts_table r ON al.resorts_id = r.id
       JOIN destination_table d ON r.destination_id = d.id
       WHERE ba.booking_id = booking_table.id
-      ORDER BY ba.is_primary DESC NULLS LAST
+      ORDER BY ba.is_primary DESC NULLS LAST, ba.id
       LIMIT 1
     )`, main_tour_operator_name: sql<string | null>`(
       SELECT tour_operator_table.name FROM tour_operator_table
@@ -478,10 +424,10 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
   const [notesRows, taskRows] = await Promise.all([
     db.select({ transaction_id: notes.transaction_id, createdAt: notes.createdAt }).from(notes).where(inArray(notes.transaction_id, txnIds)),
     activityEntityIds.length > 0
-      ? db.select({ id: tasks.id, entityId: tasks.entityId, title: tasks.title, dueDate: tasks.dueDate, completed: tasks.completed, completedAt: tasks.completedAt, createdAt: tasks.createdAt, userId: tasks.userId })
+      ? db.select({ id: tasks.id, entityId: tasks.entityId, title: tasks.title, dueDate: tasks.dueDate, completed: tasks.completed, completedAt: tasks.completedAt, createdAt: tasks.createdAt, userId: tasks.userId, priority: tasks.priority })
           .from(tasks)
           .where(and(inArray(tasks.entityId, activityEntityIds), inArray(tasks.entityType, ['enquiry', 'quote', 'booking'])))
-      : Promise.resolve([] as { id: string; entityId: string | null; title: string | null; dueDate: Date | null; completed: boolean | null; completedAt: Date | null; createdAt: Date | null; userId: string | null }[]),
+      : Promise.resolve([] as { id: string; entityId: string | null; title: string | null; dueDate: Date | null; completed: boolean | null; completedAt: Date | null; createdAt: Date | null; userId: string | null; priority: TaskPriority }[]),
   ]);
 
   const notesMaxByTxn = new Map<string, number>();
@@ -571,7 +517,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
 
     const nt = nextTaskByTxn.get(txn.id);
     const next_task: NextTask | null = nt
-      ? { id: nt.id, title: nt.title ?? null, due_date: nt.dueDate ? new Date(nt.dueDate).toISOString() : null, user_id: nt.userId ?? null }
+      ? { id: nt.id, title: nt.title ?? null, due_date: nt.dueDate ? new Date(nt.dueDate).toISOString() : null, user_id: nt.userId ?? null, priority: nt.priority }
       : null;
 
     return {
@@ -599,6 +545,250 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
 // already in the past — a still-valid future expiry is left untouched.
 function bumpStaleExpirySql(column: Column) {
   return sql`CASE WHEN ${column} IS NULL OR ${column} < NOW() THEN NOW() + INTERVAL '7 days' ELSE ${column} END`;
+}
+
+const PIPELINE_COLUMNS = ["enquiry", "quoted", "in_play", "booking", "future", "lost"] as const;
+
+// Shared by findPipelineByStatus and findPipelineCandidates so both the
+// normal (SQL-ordered) path and the "oldest activity" candidate-fetch path
+// (see transaction.service.ts) filter identically. Column keys are the board
+// column identifiers; callers must validate `column` against PIPELINE_COLUMNS
+// before calling. Phase 3: status-derivation model — each column maps purely
+// to transaction.status + (for quoted/in_play) the primary quote's quote_status.
+// No time-window filters; expiry is display-only.
+function buildPipelineConditions(scope: Scope | undefined, column: string, agentId?: string, quoteStatusFilter?: string, branchId?: string, filters?: PipelineFilters): SQL {
+  // Base conditions shared by every column.
+  const conditions: SQL[] = [
+    sql`${transaction.client_id} IS NOT NULL`,
+    eq(transaction.is_test, false),
+    ...buildTxnScopeConds(scope),
+  ];
+  if (agentId) conditions.push(eq(transaction.user_id, agentId));
+  if (branchId) conditions.push(eq(transaction.branch_id, branchId));
+
+  // Display filter for the Enquiry / Quoted / In Play columns, derived from dates the
+  // same way as server/v2/utils/expiry.ts (effectiveExpiry = date_expiry, else date_created + 7d).
+  // We show items that are EITHER not yet expired (effectiveExpiry >= NOW()) OR expired but
+  // within the current calendar month (effectiveExpiry >= start-of-month). Those two cases
+  // collapse to a single bound: effectiveExpiry >= DATE_TRUNC('month', NOW()). Expired-this-month
+  // cards still surface so the agent can act on them (the client pulses their border); anything
+  // that expired in a previous month drops off the board.
+  // NOTE: this filters DISPLAY only — it never mutates quote_status / enquiry.status.
+  const enquiryVisible = sql`(
+    (e.date_expiry IS NOT NULL AND e.date_expiry >= DATE_TRUNC('month', NOW()))
+    OR (e.date_expiry IS NULL AND e.date_created >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
+  )`;
+  const quoteVisible = sql`(
+    (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= DATE_TRUNC('month', NOW()))
+    OR (${quote.date_expiry} IS NULL AND ${quote.date_created} >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
+  )`;
+
+  if (column === "enquiry") {
+    // Enquiry column: an active, non-lost, non-expired, non-future enquiry is still pending.
+    conditions.push(eq(transaction.status, "on_enquiry"));
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM ${enquiry_table} e
+      WHERE e.transaction_id = ${transaction.id}
+        AND e.deleted_at IS NULL
+        AND e.is_active IS NOT FALSE
+        AND e.status <> 'LOST'
+        AND e.is_future_deal IS NOT TRUE
+        AND ${enquiryVisible}
+    )`);
+  } else if (column === "quoted") {
+    // Quoted column: deal is on_quote AND its primary quote is 'quoted', not expired, not a future deal.
+    conditions.push(eq(transaction.status, "on_quote"));
+    // Legacy quoteStatusFilter: if provided, it overrides the default 'quoted' match
+    // in the EXISTS. Kept for backwards compat but largely redundant post-Phase 3.
+    const quotedStatus = (quoteStatusFilter && quoteStatusFilter === "in_play") ? "in_play" : "quoted";
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM ${quote}
+      WHERE ${quote.transaction_id} = ${transaction.id}
+        AND ${quote.isQuoteCopy} = FALSE
+        AND ${quote.deleted_at} IS NULL
+        AND ${quote.quote_status}::text = ${quotedStatus}
+        AND ${quote.is_future_deal} IS NOT TRUE
+        AND ${quoteVisible}
+    )`);
+  } else if (column === "in_play") {
+    // In Play column: deal is on_quote AND its primary quote is 'in_play', not expired, not a future deal.
+    conditions.push(eq(transaction.status, "on_quote"));
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM ${quote}
+      WHERE ${quote.transaction_id} = ${transaction.id}
+        AND ${quote.isQuoteCopy} = FALSE
+        AND ${quote.deleted_at} IS NULL
+        AND ${quote.quote_status}::text = 'in_play'
+        AND ${quote.is_future_deal} IS NOT TRUE
+        AND ${quoteVisible}
+    )`);
+  } else if (column === "booking") {
+    // booking column: transaction.status = 'on_booking', limited to bookings
+    // created in the current calendar month (keeps the column focused on recent wins).
+    // Excludes LOST bookings so a booking can't appear in both Booked and Lost.
+    conditions.push(eq(transaction.status, "on_booking"));
+    conditions.push(sql`EXISTS (
+      SELECT 1 FROM ${booking}
+      WHERE ${booking.transaction_id} = ${transaction.id}
+        AND ${booking.date_created} >= DATE_TRUNC('month', NOW())
+        AND ${booking.booking_status}::text IS DISTINCT FROM 'LOST'
+    )`);
+  } else if (column === "future") {
+    // Future column: an enquiry/quote earmarked for a future date. No expiry window.
+    conditions.push(sql`(
+      (${transaction.status} = 'on_enquiry' AND EXISTS (
+        SELECT 1 FROM ${enquiry_table} e
+        WHERE e.transaction_id = ${transaction.id}
+          AND e.deleted_at IS NULL
+          AND e.is_active IS NOT FALSE
+          AND e.is_future_deal = TRUE
+          AND e.status <> 'LOST'
+      ))
+      OR (${transaction.status} = 'on_quote' AND EXISTS (
+        SELECT 1 FROM ${quote}
+        WHERE ${quote.transaction_id} = ${transaction.id}
+          AND ${quote.isQuoteCopy} = FALSE
+          AND ${quote.deleted_at} IS NULL
+          AND ${quote.quote_status}::text != 'lost'
+          AND ${quote.is_future_deal} = TRUE
+      ))
+    )`);
+  } else {
+    // lost column: an enquiry/primary-quote/booking explicitly marked lost. No expiry window.
+    // Free quotes (isFreeQuote) are excluded from lost detection entirely — they
+    // aren't a customer-facing stage and shouldn't drive the deal's pipeline column.
+    // NULL quote_status is treated as "not lost" throughout (matches the eq() below
+    // and the IS DISTINCT FROM check, both of which are NULL-safe).
+    conditions.push(sql`(
+      (${transaction.status} = 'on_enquiry' AND EXISTS (
+        SELECT 1 FROM ${enquiry_table} e
+        WHERE e.transaction_id = ${transaction.id} AND e.deleted_at IS NULL AND e.status = 'LOST'
+      ))
+      OR (${transaction.status} = 'on_quote' AND EXISTS (
+        SELECT 1 FROM ${quote}
+        WHERE ${quote.transaction_id} = ${transaction.id}
+          AND ${quote.isQuoteCopy} = FALSE
+          AND ${quote.deleted_at} IS NULL
+          AND ${quote.isFreeQuote} IS NOT TRUE
+          AND ${quote.quote_status}::text = 'lost'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM ${quote}
+        WHERE ${quote.transaction_id} = ${transaction.id}
+          AND ${quote.isQuoteCopy} = FALSE
+          AND ${quote.deleted_at} IS NULL
+          AND ${quote.isFreeQuote} IS NOT TRUE
+          AND (${quote.quote_status}::text IS DISTINCT FROM 'lost')
+      ))
+      OR (${transaction.status} = 'on_booking' AND EXISTS (
+        SELECT 1 FROM ${booking}
+        WHERE ${booking.transaction_id} = ${transaction.id} AND ${booking.booking_status}::text = 'LOST'
+      ))
+    )`);
+  }
+
+  // Optional board filters (search / priority / tour operator / quick chip).
+  // Always ANDed onto the scope + column conditions above, never replacing them.
+  conditions.push(...pipelineFilterConds(filters));
+
+  return and(...conditions)!;
+}
+
+// "oldest" reverses the default newest-first order (used by the agent
+// dashboard's Pipeline Live "Oldest" view); "oldest-activity" is handled
+// separately (see findPipelineCandidates + transaction.service.ts, since
+// last_activity_at is computed in JS, not a SQL column) and never reaches
+// this function. The future column overrides this with its own ordering.
+function buildPipelineOrderBy(column: string, sort?: "newest" | "oldest"): SQL {
+  // (Redesign sorts go through buildPipelineOrderByForSort below.)
+  if (column === "future") {
+    // Sort by the earmarked future date, soonest first, falling back to created_at.
+    const futureDealDateExpr = sql`(
+      CASE WHEN ${transaction.status} = 'on_enquiry'
+        THEN (
+          SELECT e.future_deal_date FROM ${enquiry_table} e
+          WHERE e.transaction_id = ${transaction.id} AND e.deleted_at IS NULL AND e.is_future_deal = TRUE
+          ORDER BY e.date_created DESC LIMIT 1
+        )
+        ELSE (
+          SELECT ${quote.future_deal_date} FROM ${quote}
+          WHERE ${quote.transaction_id} = ${transaction.id} AND ${quote.isQuoteCopy} = FALSE AND ${quote.deleted_at} IS NULL
+          ORDER BY ${quote.future_deal_date} ASC NULLS LAST LIMIT 1
+        )
+      END
+    )`;
+    return sql`${futureDealDateExpr} ASC NULLS LAST, ${transaction.created_at} DESC`;
+  }
+  return sort === "oldest" ? sql`${transaction.created_at} ASC` : sql`${transaction.created_at} DESC`;
+}
+
+// The redesign's SQL-side sorts. Unlike newest/oldest these also apply to the
+// future column (the user explicitly picked one), so they bypass the
+// future-date ordering above.
+function buildPipelineOrderByForSort(column: string, sort?: PipelineSqlSort): SQL {
+  if (sort && sort !== "newest" && sort !== "oldest") return sortExpr(sort, column === "lost");
+  return buildPipelineOrderBy(column, sort);
+}
+
+// Whole-column aggregates (no LIMIT). value/profit use the card formula and are
+// only computed when withMoney is set (page 1); otherwise it is a plain count.
+async function aggregatePipelineColumn(where: SQL, column: string, withMoney: boolean): Promise<PipelineTotals> {
+  if (!withMoney) {
+    const [countRow] = await db.select({ total: count() }).from(transaction).where(where);
+    return { total: Number(countRow?.total ?? 0), totalValue: 0, totalProfit: 0 };
+  }
+  const includeLost = column === "lost";
+  const [row] = await db
+    .select({
+      total: count(),
+      totalValue: sql<string | null>`COALESCE(SUM(${dealValueExpr(includeLost)}), 0)`,
+      totalProfit: sql<string | null>`COALESCE(SUM(${dealProfitExpr(includeLost)}), 0)`,
+    })
+    .from(transaction)
+    .where(where);
+  const round2 = (v: string | number | null | undefined): number => {
+    const n = Number(v ?? 0);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+  };
+  return { total: Number(row?.total ?? 0), totalValue: round2(row?.totalValue), totalProfit: round2(row?.totalProfit) };
+}
+
+// Per-user pin lookup for the board. Returns the time the viewing user pinned
+// this deal (NULL when not pinned). The pin target is resolved from the deal's
+// own status, which is 1:1 with the pipeline column family and mirrors the
+// client's resolveDealTarget (features/transaction/lib/resolve-deal-target.ts):
+//   on_enquiry -> the deal's live enquiry   (favorites.item_type = 'enquiry')
+//   on_booking -> the deal's booking        (favorites.item_type = 'booking')
+//   on_quote   -> the deal's primary quote  (non-copy, not deleted; 'quote')
+// Pins are stored in `favorites` (one row per user + item), so a correlated
+// subquery keeps ordering correct across pagination without a join fan-out.
+//
+// The `::text` casts are required, not cosmetic: `favorites.item_id` is varchar
+// while enquiry/booking/quote ids are uuid, and Postgres has no implicit cast
+// between them — without these the whole pipeline query dies with
+// `operator does not exist: character varying = uuid` (SQLSTATE 42883).
+// Cast the uuid side, never `item_id::uuid`: `favorites` holds ids for several
+// entity types, so one non-uuid value there would error the entire query.
+function buildPinnedAtExpr(userId: string): SQL {
+  return sql`(
+    SELECT MAX(${favorites.createdAt}) FROM ${favorites}
+    WHERE ${favorites.userId} = ${userId}
+      AND (
+        (${transaction.status} = 'on_enquiry' AND ${favorites.itemType} = 'enquiry' AND ${favorites.itemId} IN (
+          SELECT e.id::text FROM ${enquiry_table} e
+          WHERE e.transaction_id = ${transaction.id} AND e.deleted_at IS NULL
+        ))
+        OR (${transaction.status} = 'on_booking' AND ${favorites.itemType} = 'booking' AND ${favorites.itemId} IN (
+          SELECT ${booking.id}::text FROM ${booking}
+          WHERE ${booking.transaction_id} = ${transaction.id}
+        ))
+        OR (${transaction.status} = 'on_quote' AND ${favorites.itemType} = 'quote' AND ${favorites.itemId} IN (
+          SELECT ${quote.id}::text FROM ${quote}
+          WHERE ${quote.transaction_id} = ${transaction.id}
+            AND ${quote.isQuoteCopy} = FALSE
+            AND ${quote.deleted_at} IS NULL
+        ))
+      )
+  )`;
 }
 
 export const transactionRepository = {
@@ -703,12 +893,11 @@ export const transactionRepository = {
     dateTo?: Date;
     branchOverride?: string;
   } = {}) {
-    // Client-details context (clientId present): staff see the client's FULL
-    // deal history org-wide; homeworkers only their own deals. All other list
-    // contexts keep the branch-pinned scoping.
-    const conditions: SQL[] = filters.clientId
-      ? (scope ? buildTransactionRecordScopeConds(scope) : [])
-      : [...buildTxnScopeConds(scope, filters.branchOverride)];
+    // Owner decision: the client page's deals list and deal history are shop-pinned like the
+    // board (agents and branch managers see only their own shop's deals; org admins and social
+    // media managers stay org-wide; homeworkers only their own). The client itself is still
+    // visible org-wide. A branch override is ignored when a client is named.
+    const conditions: SQL[] = [...buildTxnScopeConds(scope, filters.clientId ? undefined : filters.branchOverride)];
     if (filters.clientId) conditions.push(eq(transaction.client_id, filters.clientId));
     if (filters.agentId) conditions.push(eq(transaction.user_id, filters.agentId));
     if (filters.dateFrom) conditions.push(sql`${transaction.created_at} >= ${filters.dateFrom.toISOString()}`);
@@ -726,176 +915,113 @@ export const transactionRepository = {
     return enrichTransactionsLightweight(txns);
   },
 
-  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
-    // Phase 3: status-derivation model. Column keys: enquiry | quoted | in_play | booking | future | lost.
-    // Each column maps purely to transaction.status + (for quoted/in_play) the primary
-    // quote's quote_status. No time-window filters; expiry is display-only.
-
+  async findPipelineByStatus(scope: Scope | undefined, column: string, page: number, limit: number, agentId?: string, quoteStatusFilter?: string, sort?: PipelineSqlSort, pinnedForUserId?: string, branchId?: string, filters?: PipelineFilters): Promise<{ items: any[]; total: number; page: number; hasMore: boolean; totalProfit: number; totalValue: number }> {
     const emptyPage = { items: [] as any[], total: 0, page, hasMore: false, totalProfit: 0, totalValue: 0 };
 
-    if (!["enquiry", "quoted", "in_play", "booking", "future", "lost"].includes(column)) {
+    if (!(PIPELINE_COLUMNS as readonly string[]).includes(column)) {
       return emptyPage;
     }
 
-    // Base conditions shared by every column.
-    const conditions: SQL[] = [
-      sql`${transaction.client_id} IS NOT NULL`,
-      eq(transaction.is_test, false),
-      ...buildTxnScopeConds(scope),
-    ];
-    if (agentId) conditions.push(eq(transaction.user_id, agentId));
+    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter, branchId, filters);
+    const baseOrderBy = buildPipelineOrderByForSort(column, sort);
 
-    // Display filter for the Enquiry / Quoted / In Play columns, derived from dates the
-    // same way as server/v2/utils/expiry.ts (effectiveExpiry = date_expiry, else date_created + 7d).
-    // We show items that are EITHER not yet expired (effectiveExpiry >= NOW()) OR expired but
-    // within the current calendar month (effectiveExpiry >= start-of-month). Those two cases
-    // collapse to a single bound: effectiveExpiry >= DATE_TRUNC('month', NOW()). Expired-this-month
-    // cards still surface so the agent can act on them (the client pulses their border); anything
-    // that expired in a previous month drops off the board.
-    // NOTE: this filters DISPLAY only — it never mutates quote_status / enquiry.status.
-    const enquiryVisible = sql`(
-      (e.date_expiry IS NOT NULL AND e.date_expiry >= DATE_TRUNC('month', NOW()))
-      OR (e.date_expiry IS NULL AND e.date_created >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
-    )`;
-    const quoteVisible = sql`(
-      (${quote.date_expiry} IS NOT NULL AND ${quote.date_expiry} >= DATE_TRUNC('month', NOW()))
-      OR (${quote.date_expiry} IS NULL AND ${quote.date_created} >= DATE_TRUNC('month', NOW()) - INTERVAL '7 days')
-    )`;
+    const offset = (page - 1) * limit;
+    const totalsPromise = aggregatePipelineColumn(where, column, page === 1);
 
-    let orderByClause: SQL = sql`${transaction.created_at} DESC`;
-
-    if (column === "enquiry") {
-      // Enquiry column: an active, non-lost, non-expired, non-future enquiry is still pending.
-      conditions.push(eq(transaction.status, "on_enquiry"));
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM ${enquiry_table} e
-        WHERE e.transaction_id = ${transaction.id}
-          AND e.is_active IS NOT FALSE
-          AND e.status <> 'LOST'
-          AND e.is_future_deal IS NOT TRUE
-          AND ${enquiryVisible}
-      )`);
-    } else if (column === "quoted") {
-      // Quoted column: deal is on_quote AND its primary quote is 'quoted', not expired, not a future deal.
-      conditions.push(eq(transaction.status, "on_quote"));
-      // Legacy quoteStatusFilter: if provided, it overrides the default 'quoted' match
-      // in the EXISTS. Kept for backwards compat but largely redundant post-Phase 3.
-      const quotedStatus = (quoteStatusFilter && quoteStatusFilter === "in_play") ? "in_play" : "quoted";
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM ${quote}
-        WHERE ${quote.transaction_id} = ${transaction.id}
-          AND ${quote.isQuoteCopy} = FALSE
-          AND ${quote.deleted_at} IS NULL
-          AND ${quote.quote_status}::text = ${quotedStatus}
-          AND ${quote.is_future_deal} IS NOT TRUE
-          AND ${quoteVisible}
-      )`);
-    } else if (column === "in_play") {
-      // In Play column: deal is on_quote AND its primary quote is 'in_play', not expired, not a future deal.
-      conditions.push(eq(transaction.status, "on_quote"));
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM ${quote}
-        WHERE ${quote.transaction_id} = ${transaction.id}
-          AND ${quote.isQuoteCopy} = FALSE
-          AND ${quote.deleted_at} IS NULL
-          AND ${quote.quote_status}::text = 'in_play'
-          AND ${quote.is_future_deal} IS NOT TRUE
-          AND ${quoteVisible}
-      )`);
-    } else if (column === "booking") {
-      // booking column: transaction.status = 'on_booking', limited to bookings
-      // created in the current calendar month (keeps the column focused on recent wins).
-      // Excludes LOST bookings so a booking can't appear in both Booked and Lost.
-      conditions.push(eq(transaction.status, "on_booking"));
-      conditions.push(sql`EXISTS (
-        SELECT 1 FROM ${booking}
-        WHERE ${booking.transaction_id} = ${transaction.id}
-          AND ${booking.date_created} >= DATE_TRUNC('month', NOW())
-          AND ${booking.booking_status}::text IS DISTINCT FROM 'LOST'
-      )`);
-    } else if (column === "future") {
-      // Future column: an enquiry/quote earmarked for a future date. No expiry window.
-      conditions.push(sql`(
-        (${transaction.status} = 'on_enquiry' AND EXISTS (
-          SELECT 1 FROM ${enquiry_table} e
-          WHERE e.transaction_id = ${transaction.id}
-            AND e.is_active IS NOT FALSE
-            AND e.is_future_deal = TRUE
-            AND e.status <> 'LOST'
-        ))
-        OR (${transaction.status} = 'on_quote' AND EXISTS (
-          SELECT 1 FROM ${quote}
-          WHERE ${quote.transaction_id} = ${transaction.id}
-            AND ${quote.isQuoteCopy} = FALSE
-            AND ${quote.deleted_at} IS NULL
-            AND ${quote.quote_status}::text != 'lost'
-            AND ${quote.is_future_deal} = TRUE
-        ))
-      )`);
-      // Sort by the earmarked future date, soonest first, falling back to created_at.
-      const futureDealDateExpr = sql`(
-        CASE WHEN ${transaction.status} = 'on_enquiry'
-          THEN (
-            SELECT e.future_deal_date FROM ${enquiry_table} e
-            WHERE e.transaction_id = ${transaction.id} AND e.is_future_deal = TRUE
-            ORDER BY e.date_created DESC LIMIT 1
-          )
-          ELSE (
-            SELECT ${quote.future_deal_date} FROM ${quote}
-            WHERE ${quote.transaction_id} = ${transaction.id} AND ${quote.isQuoteCopy} = FALSE AND ${quote.deleted_at} IS NULL
-            ORDER BY ${quote.future_deal_date} ASC NULLS LAST LIMIT 1
-          )
-        END
-      )`;
-      orderByClause = sql`${futureDealDateExpr} ASC NULLS LAST, ${transaction.created_at} DESC`;
-    } else {
-      // lost column: an enquiry/primary-quote/booking explicitly marked lost. No expiry window.
-      // Free quotes (isFreeQuote) are excluded from lost detection entirely — they
-      // aren't a customer-facing stage and shouldn't drive the deal's pipeline column.
-      // NULL quote_status is treated as "not lost" throughout (matches the eq() below
-      // and the IS DISTINCT FROM check, both of which are NULL-safe).
-      conditions.push(sql`(
-        (${transaction.status} = 'on_enquiry' AND EXISTS (
-          SELECT 1 FROM ${enquiry_table} e
-          WHERE e.transaction_id = ${transaction.id} AND e.status = 'LOST'
-        ))
-        OR (${transaction.status} = 'on_quote' AND EXISTS (
-          SELECT 1 FROM ${quote}
-          WHERE ${quote.transaction_id} = ${transaction.id}
-            AND ${quote.isQuoteCopy} = FALSE
-            AND ${quote.deleted_at} IS NULL
-            AND ${quote.isFreeQuote} IS NOT TRUE
-            AND ${quote.quote_status}::text = 'lost'
-        ) AND NOT EXISTS (
-          SELECT 1 FROM ${quote}
-          WHERE ${quote.transaction_id} = ${transaction.id}
-            AND ${quote.isQuoteCopy} = FALSE
-            AND ${quote.deleted_at} IS NULL
-            AND ${quote.isFreeQuote} IS NOT TRUE
-            AND (${quote.quote_status}::text IS DISTINCT FROM 'lost')
-        ))
-        OR (${transaction.status} = 'on_booking' AND EXISTS (
-          SELECT 1 FROM ${booking}
-          WHERE ${booking.transaction_id} = ${transaction.id} AND ${booking.booking_status}::text = 'LOST'
-        ))
-      )`);
+    if (!pinnedForUserId) {
+      const [{ total, totalValue, totalProfit }, txns] = await Promise.all([
+        totalsPromise,
+        db.select().from(transaction).where(where).orderBy(baseOrderBy).limit(limit).offset(offset),
+      ]);
+      const enriched = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
+      return { items: enriched, total, page, hasMore: page * limit < total, totalProfit, totalValue };
     }
 
-    const where = and(...conditions);
-    const [countResult] = await db.select({ total: count() }).from(transaction).where(where);
-    const total = countResult?.total || 0;
-
-    const totalProfit = 0;
-    const totalValue = 0;
-
-    const txns = await db.select().from(transaction).where(where).orderBy(orderByClause).limit(limit).offset((page - 1) * limit);
+    // Pinned deals lead each column (most-recently-pinned first), then the
+    // column's normal order — applied in SQL so it holds across pagination.
+    const pinnedAt = buildPinnedAtExpr(pinnedForUserId);
+    const orderByClause = sql`(${pinnedAt}) IS NOT NULL DESC, (${pinnedAt}) DESC NULLS LAST, ${baseOrderBy}`;
+    const [{ total, totalValue, totalProfit }, rows] = await Promise.all([
+      totalsPromise,
+      db
+        .select({ ...getTableColumns(transaction), pinned_at: sql<Date | string | null>`(${pinnedAt})` })
+        .from(transaction)
+        .where(where)
+        .orderBy(orderByClause)
+        .limit(limit)
+        .offset(offset),
+    ]);
+    const pinnedAtById = new Map<string, Date | string | null>(rows.map((r) => [r.id, r.pinned_at]));
+    const txns: Transaction[] = rows.map(({ pinned_at: _pinnedAt, ...txn }) => txn);
     const enriched = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
-    return { items: enriched, total, page, hasMore: page * limit < total, totalProfit, totalValue };
+    const items = enriched.map((item) => {
+      const raw = pinnedAtById.get(item.id) ?? null;
+      const parsed = raw ? new Date(raw) : null;
+      const valid = parsed !== null && Number.isFinite(parsed.getTime());
+      return { ...item, pinned: valid, pinned_at: valid ? parsed.toISOString() : null };
+    });
+    return { items, total, page, hasMore: page * limit < total, totalProfit, totalValue };
+  },
+
+  // Enriched candidate set for a pipeline column with no SQL-level order or
+  // page/limit applied beyond `cap` — used for the "oldest activity" view
+  // (see transaction.service.ts), which sorts by last_activity_at (a value
+  // computed in JS during enrichment, not a SQL column) and paginates itself.
+  // `transaction` has no updated_at/activity column to order by, so rows are
+  // capped to the `cap` OLDEST-created matches (ASC), not newest — last_activity_at
+  // only ever moves forward from created_at, so the oldest-created rows are the
+  // ones most likely to include the genuinely stalest-activity deals; capping
+  // by newest-created would systematically exclude exactly the rows this view
+  // is trying to surface. This is still an approximation: a deal created just
+  // outside the cap with zero activity since could rank ahead of one included
+  // here — acceptable for a live dashboard "oldest activity" view, not a
+  // general-purpose paginated listing. `total` is the true, uncapped count of
+  // matching rows (see listPipelineByOldestActivity for how it's reconciled
+  // with the capped page actually served).
+  async findPipelineCandidates(scope: Scope | undefined, column: string, agentId: string | undefined, quoteStatusFilter: string | undefined, cap: number, branchId?: string, filters?: PipelineFilters, withMoney = true): Promise<{ items: PipelineCandidateItem[] } & PipelineTotals> {
+    if (!(PIPELINE_COLUMNS as readonly string[]).includes(column)) {
+      return { items: [], total: 0, totalValue: 0, totalProfit: 0 };
+    }
+
+    const where = buildPipelineConditions(scope, column, agentId, quoteStatusFilter, branchId, filters);
+    const [{ total, totalValue, totalProfit }, txns] = await Promise.all([
+      aggregatePipelineColumn(where, column, withMoney),
+      db.select().from(transaction).where(where).orderBy(sql`${transaction.created_at} ASC`).limit(cap),
+    ]);
+    const items = await enrichTransactionsLightweight(txns, { includeLost: column === "lost" });
+    return { items, total, totalValue, totalProfit };
+  },
+
+  // Chip counts over the OPEN columns (enquiry, quoted, in_play): one row per
+  // column with the filtered total and a per-quick-chip count. `quick` is not
+  // accepted here — the chips are what is being counted.
+  async countPipelineQuickByColumn(scope: Scope | undefined, agentId: string | undefined, branchId: string | undefined, filters: Omit<PipelineFilters, "quick"> | undefined): Promise<PipelineQuickCounts[]> {
+    const openColumns = ["enquiry", "quoted", "in_play"] as const;
+    return Promise.all(
+      openColumns.map(async (column) => {
+        const where = buildPipelineConditions(scope, column, agentId, undefined, branchId, filters);
+        const [row] = await db
+          .select({
+            all: count(),
+            due_today: sql<number>`COUNT(*) FILTER (WHERE ${quickCond("due_today")})::int`,
+            no_task: sql<number>`COUNT(*) FILTER (WHERE ${quickCond("no_task")})::int`,
+            quiet_7: sql<number>`COUNT(*) FILTER (WHERE ${quickCond("quiet_7")})::int`,
+          })
+          .from(transaction)
+          .where(where);
+        return {
+          all: Number(row?.all ?? 0),
+          due_today: Number(row?.due_today ?? 0),
+          no_task: Number(row?.no_task ?? 0),
+          quiet_7: Number(row?.quiet_7 ?? 0),
+        };
+      }),
+    );
   },
 
   async create(data: InsertTransaction, scope?: Scope): Promise<Transaction> {
     const values: InsertTransaction = scope
-      ? ({ ...data, org_id: (data as any).org_id ?? scope.orgId ?? null, branch_id: (data as any).branch_id ?? scope.branchId ?? null } as InsertTransaction)
+      ? { ...data, org_id: data.org_id ?? scope.orgId ?? null, branch_id: data.branch_id ?? scope.branchId ?? null }
       : data;
     const [result] = await db.insert(transaction).values(values).returning();
     return result;
@@ -905,6 +1031,33 @@ export const transactionRepository = {
     const conds: SQL[] = [eq(transaction.id, id), ...buildTxnScopeConds(scope)];
     const [result] = await db.update(transaction).set(data).where(and(...conds)).returning();
     return result;
+  },
+
+  /**
+   * Updates a deal AND moves everything attached to it into `branchId` in one DB
+   * transaction: its tasks (via its quotes/enquiries/bookings, or the deal itself)
+   * and its tickets. Used when an admin hands a deal across the shop/homeworker
+   * partition, so the new owner's side can open all of it.
+   */
+  async updateAndRehome(id: string, data: Partial<InsertTransaction>, scope: Scope, branchId: string): Promise<Transaction | undefined> {
+    const conds: SQL[] = [eq(transaction.id, id), ...buildTxnScopeConds(scope)];
+    return db.transaction(async (tx) => {
+      const [result] = await tx.update(transaction).set({ ...data, branch_id: branchId }).where(and(...conds)).returning();
+      if (!result) return undefined;
+      await tx
+        .update(tasks)
+        .set({ branchId })
+        .where(
+          or(
+            and(eq(tasks.entityType, "transaction"), eq(tasks.entityId, id)),
+            and(eq(tasks.entityType, "quote"), sql`${tasks.entityId} IN (SELECT ${quote.id}::text FROM ${quote} WHERE ${quote.transaction_id} = ${id})`),
+            and(eq(tasks.entityType, "enquiry"), sql`${tasks.entityId} IN (SELECT ${enquiry_table.id}::text FROM ${enquiry_table} WHERE ${enquiry_table.transaction_id} = ${id})`),
+            and(eq(tasks.entityType, "booking"), sql`${tasks.entityId} IN (SELECT ${booking.id}::text FROM ${booking} WHERE ${booking.transaction_id} = ${id})`),
+          ),
+        );
+      await tx.update(tickets).set({ branchId }).where(eq(tickets.transactionId, id));
+      return result;
+    });
   },
 
   async remove(id: string, scope?: Scope): Promise<boolean> {
@@ -918,11 +1071,11 @@ export const transactionRepository = {
     const [txn] = await db.select().from(transaction).where(and(...conds)).limit(1);
     if (!txn) return undefined;
 
-    const [enquiryResult] = await db.select().from(enquiry_table).where(eq(enquiry_table.transaction_id, id)).limit(1);
+    const [enquiryResult] = await db.select().from(enquiry_table).where(and(eq(enquiry_table.transaction_id, id), isNull(enquiry_table.deleted_at))).limit(1);
     const rawQuotes = await db.select().from(quote).where(and(eq(quote.transaction_id, id), isNull(quote.deleted_at)));
     const [bookingResult] = await db.select().from(booking).where(eq(booking.transaction_id, id)).limit(1);
-    const [client] = txn.client_id ? await db.select().from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
-    const [agent] = txn.user_id ? await db.select().from(user).where(eq(user.id, txn.user_id)).limit(1) : [undefined];
+    const [client] = txn.client_id ? await db.select(publicClientColumns).from(clientTable).where(eq(clientTable.id, txn.client_id)).limit(1) : [undefined];
+    const [agent] = txn.user_id ? await db.select({ id: user.id, name: user.name, email: user.email, image: user.image, phoneNumber: user.phoneNumber, firstName: user.firstName, lastName: user.lastName }).from(user).where(eq(user.id, txn.user_id)).limit(1) : [undefined];
 
     const quoteIds = rawQuotes.map(q => q.id);
     let allAccoms: any[] = [];
@@ -946,8 +1099,14 @@ export const transactionRepository = {
       ]);
     }
 
+    const operatorIds = [...rawQuotes.map(q => q.main_tour_operator_id), bookingResult?.main_tour_operator_id].filter((v): v is string => !!v);
+    const operators = operatorIds.length > 0
+      ? await db.select({ id: tour_operator.id, name: tour_operator.name, logo_url: tour_operator.logo_url }).from(tour_operator).where(inArray(tour_operator.id, operatorIds))
+      : [];
+
     const quotes = rawQuotes.map(q => ({
       ...q,
+      ...tourOperatorFields(q.main_tour_operator_id, operators),
       accommodations: allAccoms.filter(a => a.accommodation.quote_id === q.id).map(a => ({ ...a.accommodation, accomodation_name: a.accomodation_name, board_basis_name: a.board_basis_name, room_type_name: a.room_type_name, resort_name: a.resort_name, destination_name: a.destination_name, country_name: a.country_name })),
       flights: allFlights.filter(f => f.flight.quote_id === q.id).map(f => ({ ...f.flight, departing_airport_name: f.departing_airport_name })),
     }));
@@ -964,7 +1123,7 @@ export const transactionRepository = {
       enrichedEnquiry = { ...enquiryResult, destinations, resorts: resorts2, accommodations, boardBases, airports };
     }
 
-    return { ...txn, enquiry: enrichedEnquiry, quotes, booking: bookingResult || null, client: client || null, agent: agent || null };
+    return { ...txn, enquiry: enrichedEnquiry, quotes, booking: bookingResult ? { ...bookingResult, ...tourOperatorFields(bookingResult.main_tour_operator_id, operators) } : null, client: client || null, agent: agent || null };
   },
 
   async findExpiringQuotes(scope?: Scope, agentId?: string) {
@@ -1006,6 +1165,50 @@ export const transactionRepository = {
   },
 
   /**
+   * Atomic insert: transaction + enquiry + its relation rows, passengers and notes.
+   * Any failing insert rolls the whole lot back, so no orphan transaction is left behind.
+   */
+  async createWithEnquiryAndChildren(input: CreateTransactionWithEnquiryInput) {
+    return db.transaction(async (tx) => {
+      const [txn] = await tx.insert(transaction).values({
+        ...input.transactionData,
+        status: 'on_enquiry',
+        org_id: input.transactionData.org_id ?? input.scope.orgId ?? null,
+        branch_id: input.transactionData.branch_id ?? input.scope.branchId ?? null,
+      } as InsertTransaction).returning();
+
+      const [enq] = await tx.insert(enquiry_table).values({
+        ...(pickCreateColumns(enquiry_table, input.enquiryFields, PROTECTED_ENQUIRY_COLUMNS) as InsertEnquiryTable),
+        transaction_id: txn.id,
+      }).returning();
+
+      if (input.destinations?.length) {
+        await tx.insert(enquiry_destination).values(input.destinations.map((destination_id) => ({ enquiry_id: enq.id, destination_id })));
+      }
+      if (input.resorts?.length) {
+        await tx.insert(enquiry_resorts).values(input.resorts.map((resorts_id) => ({ enquiry_id: enq.id, resorts_id })));
+      }
+      if (input.accommodations?.length) {
+        await tx.insert(enquiry_accomodation).values(input.accommodations.map((accomodation_id) => ({ enquiry_id: enq.id, accomodation_id })));
+      }
+      if (input.boardBases?.length) {
+        await tx.insert(enquiry_board_basis).values(input.boardBases.map((board_basis_id) => ({ enquiry_id: enq.id, board_basis_id })));
+      }
+      if (input.departureAirports?.length) {
+        await tx.insert(enquiry_departure_airport).values(input.departureAirports.map((airport_id) => ({ enquiry_id: enq.id, airport_id })));
+      }
+      if (input.passengers?.length) {
+        await tx.insert(enquiry_passenger).values(input.passengers.map((p) => ({ enquiry_id: enq.id, type: p.type, age: p.age })));
+      }
+      if (input.notes?.length) {
+        await tx.insert(notes).values(input.notes.map((n) => ({ transaction_id: txn.id, content: n.content, agent_id: n.agent_id })));
+      }
+
+      return { transaction: txn, enquiry: enq };
+    });
+  },
+
+  /**
    * Atomic insert: transaction + quote + flights + primary accommodation + image rows.
    * The service is responsible for all data normalisation/conversion before calling.
    */
@@ -1014,12 +1217,12 @@ export const transactionRepository = {
       const [txn] = await tx.insert(transaction).values({
         ...input.transactionData,
         status: 'on_quote',
-        org_id: (input.transactionData as any).org_id ?? input.scope.orgId ?? null,
-        branch_id: (input.transactionData as any).branch_id ?? input.scope.branchId ?? null,
+        org_id: input.transactionData.org_id ?? input.scope.orgId ?? null,
+        branch_id: input.transactionData.branch_id ?? input.scope.branchId ?? null,
       } as InsertTransaction).returning();
 
       const [q] = await tx.insert(quote).values({
-        ...input.quoteFields,
+        ...(pickCreateColumns(quote, input.quoteFields, PROTECTED_QUOTE_COLUMNS) as InsertQuote),
         transaction_id: txn.id,
       } as InsertQuote).returning();
 
@@ -1073,12 +1276,12 @@ export const transactionRepository = {
       const [txn] = await tx.insert(transaction).values({
         ...input.transactionData,
         status: 'on_booking',
-        org_id: (input.transactionData as any).org_id ?? input.scope.orgId ?? null,
-        branch_id: (input.transactionData as any).branch_id ?? input.scope.branchId ?? null,
+        org_id: input.transactionData.org_id ?? input.scope.orgId ?? null,
+        branch_id: input.transactionData.branch_id ?? input.scope.branchId ?? null,
       } as InsertTransaction).returning();
 
       const [b] = await tx.insert(booking).values({
-        ...input.bookingFields,
+        ...(pickCreateColumns(booking, input.bookingFields, PROTECTED_BOOKING_COLUMNS) as InsertBooking),
         transaction_id: txn.id,
         booking_status: 'BOOKED',
       } as InsertBooking).returning();

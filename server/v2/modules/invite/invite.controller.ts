@@ -3,6 +3,8 @@ import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
 import { AppError } from '../../utils/error-handler';
 import { getUserId } from '../../../utils/get-user-id';
+import { getRequestActor } from '../../utils/request-actor';
+import { requestOrigin } from '../../utils/link-base';
 import { inviteService, type ActorContext } from './invite.service';
 
 function actorFromRequest(req: Request): ActorContext {
@@ -12,16 +14,17 @@ function actorFromRequest(req: Request): ActorContext {
     userId:   getUserId(req),
     orgRole:  req.orgRole ?? '',
     branchId: req.branchId ?? null,
+    requestActor: getRequestActor(req),
   };
 }
 
 export const inviteController = {
   send: asyncHandler(async (req: Request, res: Response) => {
-    const data = await inviteService.send(req.body, actorFromRequest(req));
+    const data = await inviteService.send(req.body, actorFromRequest(req), requestOrigin(req));
     successResponse(res, data, 'Invite sent', 201);
   }),
   resend: asyncHandler(async (req: Request, res: Response) => {
-    const data = await inviteService.resend(req.params.userId as string, actorFromRequest(req));
+    const data = await inviteService.resend(req.params.userId as string, actorFromRequest(req), requestOrigin(req));
     successResponse(res, data, 'Invite re-sent');
   }),
   accept: asyncHandler(async (req: Request, res: Response) => {

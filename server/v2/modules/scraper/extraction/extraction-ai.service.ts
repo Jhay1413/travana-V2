@@ -73,6 +73,22 @@ export const fieldRuleSchema = z.object({
   pickedAt: z.preprocess(nullToUndef, z.string().optional()),
 });
 
+// A picked flights region (ExtractionSpec.flightsSection and its direction variants).
+const flightsSectionSchema = z.preprocess(
+  nullToUndef,
+  z
+    .object({
+      startLabel: z.string().min(1).max(200),
+      endLabel: z.preprocess(nullToUndef, z.string().min(1).max(200).optional()),
+      origin: z.literal('picked'),
+      pickedAt: z.string(),
+      sampleText: z.preprocess(nullToUndef, z.string().max(2000).optional()),
+      source: z.preprocess(nullToUndef, z.enum(['text', 'flightsText', 'deepText']).optional()),
+      blockLines: z.preprocess(nullToUndef, z.number().int().min(1).max(500).optional()),
+    })
+    .optional(),
+);
+
 // Exported for tests: the validator and the interpreter must agree on the set
 // of field sources, and they silently drifted apart once already.
 export const specSchema = z.object({
@@ -99,6 +115,12 @@ export const specSchema = z.object({
   // test in spec-sources.test.ts exists to catch the next one of these.
   imageContainerIncludes: z.preprocess(nullToUndef, z.string().optional()),
   flightModalTrigger: z.preprocess(nullToUndef, z.string().optional()),
+  // Set only by the field picker (picker-spec.ts) — kept here so a spec that
+  // carries them is never stripped by a round-trip through this schema.
+  flightsSection: flightsSectionSchema,
+  flightsOutboundSection: flightsSectionSchema,
+  flightsReturnSection: flightsSectionSchema,
+  itinerarySection: flightsSectionSchema,
   // Declared, not inferred. See extraction.types.ts for why: an inferred type
   // dropped Virgin Voyages' entire cruise block when its ship_name regex
   // matched nothing. The AI is told (SYSTEM_PROMPT) to emit the ONE package
@@ -108,20 +130,22 @@ export const specSchema = z.object({
 
 // Fields common to any deal, then package-type-specific ones. The page is ONE
 // type — the AI only includes the fields it actually finds.
-const COMMON_FIELDS = [
+export const COMMON_FIELDS = [
   'adults', 'children', 'infants', 'no_of_nights', 'travel_date',
-  'price_per_person', 'sales_price', 'tourist_tax_total', 'currency',
+  'price_per_person', 'sales_price', 'tourist_tax_total',
   'tour_operator', 'country', 'destination', 'resort', 'quote_title',
 ];
-const PACKAGE_HOLIDAY_FIELDS = [
+export const PACKAGE_HOLIDAY_FIELDS = [
   'accommodation', 'board_basis', 'room_type', 'departure_airport_name',
   'arrival_airport_name', 'transfer_type', 'star_rating', 'review_score',
 ];
-const CRUISE_FIELDS = [
+export const CRUISE_FIELDS = [
   'cruise_line', 'ship_name', 'cruise_date', 'cruise_title', 'embarkation',
   'debarkation', 'cabin_type', 'cabin_number', 'cruise_only',
 ];
-const LODGE_FIELDS = ['lodge_type', 'lodge_park_name', 'cottage_id', 'hot_tub', 'pets'];
+// COMMON/PACKAGE_HOLIDAY/CRUISE/LODGE_FIELDS must each match the corresponding
+// group in public/capture-bookmarklet.js — picker-spec.test.ts fails if they drift.
+export const LODGE_FIELDS = ['accommodation', 'lodge_code', 'lodge_park_name', 'lodge_park_code', 'lodge_type', 'cottage_id', 'hot_tub', 'pets'];
 
 const SYSTEM_PROMPT = `You write a JSON "extraction spec" that a fixed interpreter uses to read a travel deal from a rendered web page. You NEVER write code — only declarative rules (regex + transforms).
 
@@ -132,7 +156,7 @@ Always try to extract the COMMON fields: ${COMMON_FIELDS.join(', ')}.
 Then add ONLY the fields for the package type this page actually is, and set "packageType" to match:
 - PACKAGE HOLIDAY (hotel + flights): "packageType": "package-holiday", plus ${PACKAGE_HOLIDAY_FIELDS.join(', ')}.
 - CRUISE (ship sailing): "packageType": "cruise", plus ${CRUISE_FIELDS.join(', ')}. You may also add an "itineraryRegex" (matchAll; group1 = day number or "Day 3", group2 = the day's port/description) for the day-by-day plan.
-- HOT TUB BREAK / LODGE (self-catering lodge/cottage with a hot tub, e.g. Hoseasons/Haven/Parkdean): "packageType": "lodge", plus ${LODGE_FIELDS.join(', ')}. For a lodge, "accommodation" is the LODGE/COTTAGE name and "lodge_park_name" is the HOLIDAY PARK it sits in — extract BOTH; without them the park/lodge won't populate. For hot_tub, a rule that matches the words "hot tub" is enough (the interpreter treats any non-empty match as true); pets uses transform "number".
+- HOT TUB BREAK / LODGE (self-catering lodge/cottage with a hot tub, e.g. Hoseasons/Haven/Parkdean): "packageType": "lodge", plus ${LODGE_FIELDS.join(', ')}. For a lodge, "accommodation" is the LODGE/COTTAGE name and "lodge_park_name" is the HOLIDAY PARK it sits in — extract BOTH; without them the park/lodge won't populate. Also extract "lodge_code" (the unit/lodge code, usually the trailing code of the deal URL path, e.g. "…-lp33338" -> "lp33338", or a "Lodge/Cottage ref" label on the page) and "lodge_park_code" (the holiday park's own code/ID if the page shows one; omit it if there is none — do not reuse the lodge code). For hot_tub, a rule that matches the words "hot tub" is enough (the interpreter treats any non-empty match as true); pets uses transform "number".
 
 Always extract "accommodation" (the property/lodge/hotel name — usually in the page title or the main heading) and the "sales_price" / "price_per_person" total, on every page type. A spec that only reads URL params (dates, occupancy) and no page content is WRONG — read the rendered text for the name and price.
 
@@ -141,7 +165,7 @@ Output ONLY a JSON object with this shape:
   "version": 1,
   "packageType": "cruise"|"package-holiday"|"lodge",
   "wait": { "textMatches": "<regex that appears once the priced quote has rendered, e.g. a currency amount>", "timeoutMs": 30000 },
-  "constants": { "tour_operator": "<operator name>", "currency": "GBP" },
+  "constants": { "tour_operator": "<operator name>" },
   "fields": {
     "<fieldName>": { "from": "text"|"title"|"url"|"images"|"headings"|"deepText", "regex": "<JS regex; capture group 1 is the value>", "group": 1, "transform": "number"|"date"|"titleCase"|null, "urlSegment": <int, only for from:url>, "map": {"raw":"canonical"}, "fallback": <value> }
   },

@@ -3,14 +3,11 @@ import { asyncHandler } from "../../utils/async-handler";
 import { successResponse } from "../../utils/response";
 import { AppError } from "../../utils/error-handler";
 import { channelsService } from "./channels.service";
+import type { ConnectTokenCreate, DelegateConnectCreate } from "./channels.types";
 
 // Connecting/disconnecting a channel means authorising the org's own social
 // accounts — an org-admin/manager action. Reads are open to any staff member.
 const MANAGER_ROLES = new Set(["org_admin", "branch_manager", "platform_admin"]);
-
-// SendSeven's connect-token flow only accepts these types (SMS/email are
-// provisioned via other flows) — filtering here avoids opaque 422s.
-const CONNECTABLE_TYPES = new Set(["whatsapp", "messenger", "instagram", "telegram", "gmail"]);
 
 function requireChannelManager(req: Request): void {
   const roles = req.orgRoles ?? [];
@@ -36,26 +33,45 @@ export const channelsController = {
     return successResponse(res, await channelsService.channelTypes(), "Channel types retrieved");
   }),
 
-  // POST /api/v2/channels/connect-token
+  // GET /api/v2/channels/status  -> { provisioned }
+  status: asyncHandler(async (_req: Request, res: Response) => {
+    return successResponse(res, await channelsService.workspaceStatus(), "Workspace status retrieved");
+  }),
+
+  // GET /api/v2/channels/health
+  health: asyncHandler(async (_req: Request, res: Response) => {
+    return successResponse(res, await channelsService.channelHealth(), "Channel health retrieved");
+  }),
+
+  // POST /api/v2/channels/connect-token  (body validated by connectTokenValidator)
   createConnectToken: asyncHandler(async (req: Request, res: Response) => {
     requireChannelManager(req);
-    const body = (req.body ?? {}) as { allowed_channel_types?: string[]; partner_redirect_url?: string; name?: string };
-    if (!Array.isArray(body.allowed_channel_types) || body.allowed_channel_types.length === 0) {
-      throw new AppError("allowed_channel_types is required", 400);
-    }
-    const types = body.allowed_channel_types.map((t) => t.toLowerCase()).filter((t) => CONNECTABLE_TYPES.has(t));
-    if (types.length === 0) {
-      throw new AppError(
-        `Unsupported channel type(s). Connectable types: ${Array.from(CONNECTABLE_TYPES).join(", ")}`,
-        400,
-      );
-    }
-    const result = await channelsService.createConnectToken({
-      allowed_channel_types: types,
+    const body = req.body as ConnectTokenCreate;
+    const payload: ConnectTokenCreate = {
+      allowed_channel_types: body.allowed_channel_types,
       partner_redirect_url: body.partner_redirect_url ?? null,
       name: body.name ?? null,
-    });
+    };
+    if (body.expires_in_hours !== undefined) payload.expires_in_hours = body.expires_in_hours;
+    if (body.max_uses !== undefined) payload.max_uses = body.max_uses;
+    if (body.partner_name !== undefined) payload.partner_name = body.partner_name;
+    const result = await channelsService.createConnectToken(payload);
     return successResponse(res, result, "Connect link generated", 201);
+  }),
+
+  // POST /api/v2/channels/connect-token/delegate  (body validated by delegateConnectValidator)
+  delegateConnect: asyncHandler(async (req: Request, res: Response) => {
+    requireChannelManager(req);
+    const body = req.body as DelegateConnectCreate;
+    const payload: DelegateConnectCreate = {
+      email: body.email,
+      channel_types: body.channel_types,
+      recipient_name: body.recipient_name ?? null,
+      note: body.note ?? null,
+    };
+    if (body.expires_in_hours !== undefined) payload.expires_in_hours = body.expires_in_hours;
+    const result = await channelsService.delegateConnect(payload);
+    return successResponse(res, result, "Connect link sent", 201);
   }),
 
   // DELETE /api/v2/channels/:channelId

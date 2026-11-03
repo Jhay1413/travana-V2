@@ -13,7 +13,7 @@ import type {
   UpsertQuizInput,
 } from "../types/training.types";
 
-/** Admin course list: every course in scope, any status (platform_admin only). */
+/** Admin course list: every course in scope, any status (platform_admin: all courses; org_admin: own org only). */
 export function useAdminCourses() {
   return useQuery<TrainingCourse[]>({
     queryKey: trainingKeys.adminList(),
@@ -68,7 +68,7 @@ export function useArchiveCourse() {
   });
 }
 
-/** Permanently delete a course (platform_admin). Irreversible — cascades to all its content, enrollments and certificates. */
+/** Permanently delete a course (author only). Irreversible — cascades to all its content, enrollments and certificates. */
 export function useDeleteCourse() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -174,6 +174,17 @@ export function useReorderLessons() {
   });
 }
 
+export function useReorderAssets() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ lessonId, order }: { lessonId: string; courseId: string; order: { id: string; position: number }[] }) =>
+      trainingApi.reorderAssets(lessonId, order),
+    onSuccess: (_data, { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
 export function useAddAssets() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -194,9 +205,29 @@ export function useAddAssets() {
 export function useUploadAssets() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ lessonId, files }: { lessonId: string; courseId: string; files: File[] }) =>
-      trainingApi.uploadAssets(lessonId, files),
+    mutationFn: ({
+      lessonId,
+      files,
+      captions,
+    }: {
+      lessonId: string;
+      courseId: string;
+      files: File[];
+      captions?: (string | null)[];
+    }) => trainingApi.uploadAssets(lessonId, files, captions),
     onSuccess: (_data: TrainingLessonAsset[], { courseId }) => {
+      queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
+    },
+  });
+}
+
+/** Edit a persisted slide's description (stored in the asset's `caption` column). */
+export function useUpdateAsset() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, caption }: { id: string; courseId: string; caption: string | null }) =>
+      trainingApi.updateAsset(id, { caption }),
+    onSuccess: (_data, { courseId }) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.detail(courseId) });
     },
   });
@@ -212,7 +243,7 @@ export function useDeleteAsset() {
   });
 }
 
-/** Full replace-upsert of a course's quiz (authoring, `platform_admin` only). */
+/** Full replace-upsert of a course's quiz (authoring; org_admin limited to own-org courses). */
 export function useUpsertQuiz() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -224,7 +255,7 @@ export function useUpsertQuiz() {
   });
 }
 
-/** Full replace-upsert of a LESSON's quiz (authoring, `platform_admin` only). */
+/** Full replace-upsert of a LESSON's quiz (authoring; org_admin limited to own-org courses). */
 export function useUpsertLessonQuiz() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -238,7 +269,7 @@ export function useUpsertLessonQuiz() {
   });
 }
 
-/** Full replace-upsert of a SECTION's quiz (authoring, `platform_admin` only). */
+/** Full replace-upsert of a SECTION's quiz (authoring; org_admin limited to own-org courses). */
 export function useUpsertSectionQuiz() {
   const queryClient = useQueryClient();
   return useMutation({

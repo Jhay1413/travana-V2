@@ -1,3 +1,4 @@
+import { isPreviewSearch } from "@/features/quote/lib/preview-search";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -37,6 +38,7 @@ import {
   Droplets,
   Plug,
   Info,
+  type LucideIcon,
 } from "lucide-react";
 import {
   usePublicQuote,
@@ -335,7 +337,7 @@ function ClimateBar({ entry, maxHigh }: { entry: GuruMonthTemp; maxHigh: number 
   );
 }
 
-function EssentialRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+function EssentialRow({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-white/[0.06] last:border-0">
       <div className="w-7 h-7 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0 mt-0.5">
@@ -1244,7 +1246,7 @@ export default function PublicQuotePage() {
   const viewLogged = useRef(false);
 
   useEffect(() => {
-    if (shouldRenderPublic && token && !viewLogged.current) {
+    if (shouldRenderPublic && token && !viewLogged.current && !isPreviewSearch(window.location.search)) {
       viewLogged.current = true;
       logView.mutate({ token });
     }
@@ -1321,7 +1323,7 @@ export function PublicQuoteContent({ quote, token, isPortal = false }: { quote: 
       <footer className="border-t border-white/5 py-6 mt-8">
         <div className="max-w-5xl mx-auto px-4 md:px-8 text-center">
           <p className="text-white/20 text-xs">
-            Powered by TravelHub · Quote prepared exclusively for you
+            Powered by Travana · Quote prepared exclusively for you
           </p>
         </div>
       </footer>

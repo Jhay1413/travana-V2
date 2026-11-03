@@ -8,6 +8,8 @@ vi.mock("./transaction.service", () => ({
     createTransactionWithQuote: vi.fn(),
     createTransactionWithBooking: vi.fn(),
     deleteTransaction: vi.fn(),
+    listPipelineByStatus: vi.fn(),
+    getPipelineCounts: vi.fn(),
   },
 }));
 vi.mock("../social-post/social-post.service", () => ({ socialPostService: { uploadMedia: vi.fn() } }));
@@ -124,5 +126,59 @@ describe("transactionController — error propagation", () => {
     await Promise.resolve();
 
     expect(next).toHaveBeenCalledWith(err);
+  });
+});
+
+describe("transactionController.listPipelineByStatus — filters", () => {
+  it("passes an empty filter object when no new params are sent", async () => {
+    vi.mocked(transactionService.listPipelineByStatus).mockResolvedValue({ items: [] } as never);
+
+    await transactionController.listPipelineByStatus(req({ params: { status: "quote" }, query: {} }), mockRes(), vi.fn());
+
+    const args = vi.mocked(transactionService.listPipelineByStatus).mock.calls[0];
+    expect(args[1]).toBe("quoted");
+    expect(args[9]).toEqual({});
+  });
+
+  it("parses CSV params, trims search and forwards quick", async () => {
+    vi.mocked(transactionService.listPipelineByStatus).mockResolvedValue({ items: [] } as never);
+    const query = { search: "  paris ", priority: "low,high", tourOperatorId: "a,b,a", quick: "due_today", sort: "value_desc" };
+
+    await transactionController.listPipelineByStatus(req({ params: { status: "enquiry" }, query }), mockRes(), vi.fn());
+
+    const args = vi.mocked(transactionService.listPipelineByStatus).mock.calls[0];
+    expect(args[6]).toBe("value_desc");
+    expect(args[9]).toEqual({ search: "paris", priorities: ["low", "high"], tourOperatorIds: ["a", "b"], quick: "due_today" });
+  });
+
+  it("treats an empty search as absent", async () => {
+    vi.mocked(transactionService.listPipelineByStatus).mockResolvedValue({ items: [] } as never);
+
+    await transactionController.listPipelineByStatus(req({ params: { status: "enquiry" }, query: { search: "" } }), mockRes(), vi.fn());
+
+    expect(vi.mocked(transactionService.listPipelineByStatus).mock.calls[0][9]).toEqual({});
+  });
+});
+
+describe("transactionController.getPipelineCounts", () => {
+  it("parses the filters, never passes quick, and wraps the counts in the envelope", async () => {
+    const counts = { all: 3, due_today: 1, no_task: 1, quiet_7: 0 };
+    vi.mocked(transactionService.getPipelineCounts).mockResolvedValue(counts);
+    const res = mockRes();
+
+    await transactionController.getPipelineCounts(
+      req({ query: { agentId: "a1", search: "x", priority: "high", tourOperatorId: "t1,t2", quick: "no_task" } }),
+      res,
+      vi.fn(),
+    );
+
+    expect(vi.mocked(transactionService.getPipelineCounts).mock.calls[0][1]).toEqual({
+      agentId: "a1",
+      branchId: undefined,
+      search: "x",
+      priorities: ["high"],
+      tourOperatorIds: ["t1", "t2"],
+    });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: counts }));
   });
 });

@@ -4,6 +4,7 @@ import { successResponse } from "../../utils/response";
 import { AppError } from "../../utils/error-handler";
 import { getScope } from "../../utils/scope";
 import { conversationsService } from "./conversations.service";
+import type { SuggestReplyOptions } from "../sendseven-webhook/suggest-reply.service";
 
 function num(v: unknown): number | undefined {
   if (v === undefined || v === null || v === "") return undefined;
@@ -243,8 +244,9 @@ export const conversationsController = {
   // conversation access (it's an agent writing aid, not an admin control).
   aiSuggestReply: asyncHandler(async (req: Request, res: Response) => {
     const { orgId, userId } = getScope(req);
-    const suggestion = await conversationsService.suggestReply(orgId, requireParam(req, "conversation_id"), userId);
-    return successResponse(res, { suggestion }, "Suggestion generated");
+    const { tone, count } = (req.body ?? {}) as SuggestReplyOptions;
+    const { suggestions } = await conversationsService.suggestReply(orgId, requireParam(req, "conversation_id"), userId, { tone, count });
+    return successResponse(res, { suggestion: suggestions[0]?.text ?? "", suggestions }, "Suggestion generated");
   }),
 
   // POST /api/v2/conversations/:conversation_id/ai-state/enable

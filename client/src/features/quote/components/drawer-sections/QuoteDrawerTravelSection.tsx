@@ -1,5 +1,6 @@
 import { useFormContext, useWatch } from "react-hook-form";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -20,7 +21,13 @@ const NUMBER_CLASS = cn(drawerInputClass, "w-[70px] px-2 text-center");
  * row, passenger counts and child ages on the second, then the remaining
  * travel fields (meals, seats, cruise stays).
  */
-export function QuoteDrawerTravelSection({ showCruiseStay = false }: { showCruiseStay?: boolean }) {
+export function QuoteDrawerTravelSection({
+  showCruiseStay = false,
+  showFlightExtras = true,
+}: {
+  showCruiseStay?: boolean;
+  showFlightExtras?: boolean;
+}) {
   const { control } = useFormContext<SharedHolidayFormValues>();
   const passengersChildren = useWatch({ control, name: "passengersChildren" });
   const childCount = Number(passengersChildren) || 0;
@@ -59,7 +66,7 @@ export function QuoteDrawerTravelSection({ showCruiseStay = false }: { showCruis
           name="transferType"
           render={({ field }) => (
             <FormItem className="w-[190px] space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Transfer</FormLabel>
+              <FormLabelTooltip className={drawerLabelClass} tip="How guests get between the airport and their accommodation: private or shared transfer, seaplane, speedboat, self-drive, or none.">Transfer</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={drawerControlClass}>
@@ -136,40 +143,44 @@ export function QuoteDrawerTravelSection({ showCruiseStay = false }: { showCruis
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-x-6 gap-y-4">
-        <FormField
-          control={control}
-          name="flightMeals"
-          render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Flight Meals</FormLabel>
-              <Select value={field.value ?? ""} onValueChange={field.onChange}>
+        {showFlightExtras && (
+          <>
+          <FormField
+            control={control}
+            name="flightMeals"
+            render={({ field }) => (
+              <FormItem className="space-y-1.5">
+                <FormLabelTooltip className={drawerLabelClass} tip="Whether meals are included on the flights (Yes or No).">Flight Meals</FormLabelTooltip>
+                <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                  <FormControl>
+                    <SelectTrigger className={drawerControlClass}>
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="Yes">Yes</SelectItem>
+                    <SelectItem value="No">No</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name="preBookedSeats"
+            render={({ field }) => (
+              <FormItem className="space-y-1.5">
+                <FormLabel className={drawerLabelClass}>Pre-booked Seats</FormLabel>
                 <FormControl>
-                  <SelectTrigger className={drawerControlClass}>
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
+                  <Input {...field} value={field.value ?? ""} className={drawerInputClass} placeholder="e.g. 2A, 2B" />
                 </FormControl>
-                <SelectContent>
-                  <SelectItem value="Yes">Yes</SelectItem>
-                  <SelectItem value="No">No</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={control}
-          name="preBookedSeats"
-          render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Pre-booked Seats</FormLabel>
-              <FormControl>
-                <Input {...field} value={field.value ?? ""} className={drawerInputClass} placeholder="e.g. 2A, 2B" />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          </>
+        )}
         {showCruiseStay && (
           <>
             <FormField

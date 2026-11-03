@@ -7,8 +7,9 @@ import { useTrainingCourses, useMyEnrollments } from "@/features/hub/api/use-tra
 import { TrainingCourseView } from "@/features/hub/components/training-course-view";
 import { COURSE_CATEGORIES, type TrainingCourse, type MyEnrollment } from "@/features/hub/types/training.types";
 import { Button } from "@/components/ui/button";
-import { useRole } from "@/hooks/use-role";
+import { useRoles } from "@/hooks/use-role";
 import { cn } from "@/lib/utils";
+import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 
 /** Special filter tab: courses the current user is enrolled in. */
 const MY_COURSES_TAB = "My Courses";
@@ -114,7 +115,10 @@ function TrainingCourseCard({
           {course.title}
         </h3>
         {course.description ? (
-          <p className="mt-1.5 line-clamp-3 text-xs text-slate-500 dark:text-slate-400">{course.description}</p>
+          <RichTextDisplay
+            content={course.description}
+            className="mt-1.5 line-clamp-3 text-xs text-slate-500 dark:text-slate-400"
+          />
         ) : (
           <p className="mt-1.5 text-xs italic text-slate-400 dark:text-slate-600">No description available.</p>
         )}
@@ -163,8 +167,9 @@ export default function HubTraining() {
   );
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [, navigate] = useLocation();
-  const { orgRole } = useRole();
-  const isPlatformAdmin = orgRole === "platform_admin";
+  const { hasAnyRole } = useRoles();
+  // Server scopes org_admin to their own org's courses.
+  const canManageTraining = hasAnyRole(["platform_admin", "org_admin"]);
   const { data: courses = [], isLoading, isError } = useTrainingCourses();
   const { data: myEnrollments = [] } = useMyEnrollments();
 
@@ -218,7 +223,7 @@ export default function HubTraining() {
         title="Training Centre"
         subtitle="Develop your skills and knowledge to close more deals."
         action={
-          isPlatformAdmin ? (
+          canManageTraining ? (
             <Button
               variant="outline"
               size="sm"

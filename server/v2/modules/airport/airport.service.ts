@@ -1,12 +1,13 @@
 import { airportRepository } from './airport.repository';
 import { AppError } from '../../utils/error-handler';
+import type { InsertAirport } from '@shared/schema';
 
 export const airportService = {
   async listAirports(opts?: { countryIds?: string[] }) {
     return airportRepository.findAll(opts);
   },
 
-  async createAirport(data: any) {
+  async createAirport(data: InsertAirport) {
     return airportRepository.create(data);
   },
 

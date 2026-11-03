@@ -110,6 +110,8 @@ export interface ScrapedQuoteJson {
   lodge_type?: string;
   lodge_code?: string;
   lodge_park_name?: string;
+  // The holiday park's own code (park_table.code); the lodge's is lodge_code.
+  lodge_park_code?: string;
   cottage_id?: string;
   hot_tub?: boolean;
   pets?: number;

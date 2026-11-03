@@ -1,5 +1,6 @@
 import { ChevronRight, ImagePlus, Pin } from "lucide-react";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
+import { dealTypeHref } from "@/lib/deal-links";
 import { currency, formatUKDate, type Client } from "../client-types";
 
 export interface QuoteRowCardData {
@@ -55,7 +56,7 @@ export function QuoteRowCard({
         isChild ? "pl-9 border-sky-500/20 bg-sky-500/[0.04]" : ""
       }`}
       data-testid={`card-${itemType}-intro-${q.id}`}
-      onClick={() => navigate(`/clients/${clientId}/${isBooking ? "bookings" : "quotes"}/${q.id}`)}
+      onClick={() => navigate(dealTypeHref(isBooking ? "booking" : "quote", q.id, clientId))}
     >
       <div className="flex items-start gap-3">
         <div

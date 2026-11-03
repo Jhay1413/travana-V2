@@ -122,6 +122,26 @@ export const tagRepository = {
   },
 
   /**
+   * Detach one tag from one quote. Only the quote-tag link row goes; the tag itself and its
+   * links to other quotes, clients and bookings are untouched. Returns false when the tag was
+   * not attached to this quote.
+   */
+  async detachTagFromQuote(quoteId: string, tagId: string): Promise<boolean> {
+    return db.transaction(async (tx) => {
+      const removed = await tx
+        .delete(quoteTags)
+        .where(and(eq(quoteTags.quoteId, quoteId), eq(quoteTags.tagId, tagId)))
+        .returning({ tagId: quoteTags.tagId });
+      if (removed.length === 0) return false;
+      await tx
+        .update(tags)
+        .set({ usageCount: sql`GREATEST(${tags.usageCount} - 1, 0)` })
+        .where(eq(tags.id, tagId));
+      return true;
+    });
+  },
+
+  /**
    * Replace all tags for a quote.
    *
    * Wrapped in a transaction for atomicity. Diffs the current tags against

@@ -35,48 +35,42 @@ import type {
 } from "./branch-overview.types";
 import { buildScopeConditions, needsClientJoin, type ScopeFilter } from "../../utils/scope-conditions";
 import { totalBookingCommissionExpr, totalQuoteCommissionExpr, totalUpsellCommissionExpr } from "../../utils/commission-sql";
+import { getLondonWindows } from "../../utils/london-time";
+import {
+  ukAddDays, ukDateString, ukMonthEnd, ukStartOfDay, ukStartOfNextYear, ukStartOfYear, ukYearMonth,
+} from "../../utils/london-dates";
 import { quoteStatsConds } from "../../utils/quote-conditions";
 
 const bookingActiveCond = sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`;
 
-function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function startOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function startOfWeek(d: Date) {
-  const today = startOfDay(d);
-  const dayOfWeek = today.getDay() || 7;
-  const monday = new Date(today);
-  monday.setDate(monday.getDate() - (dayOfWeek - 1));
-  return monday;
-}
-
-function startOfYear(d: Date) {
-  return new Date(d.getFullYear(), 0, 1);
-}
-
-function addDays(d: Date, days: number) {
-  const out = new Date(d);
-  out.setDate(out.getDate() + days);
-  return out;
+/**
+ * Every window the overview reports on, as UTC instants of Europe/London days.
+ * Today / Week / Month are UK days whatever zone the server runs in, so a booking
+ * made at 23:30 or 00:30 UK time lands on the right day.
+ */
+export function getBranchOverviewWindows(now: Date) {
+  const { todayStart, weekStart, monthStart, monthEnd } = getLondonWindows(now);
+  return {
+    todayStart,
+    weekStart,
+    monthStart,
+    monthEnd,
+    yearStart: ukStartOfYear(now),
+    nextYearStart: ukStartOfNextYear(now),
+    ninetyDaysAgo: ukAddDays(todayStart, -90),
+    fourteenDaysAgo: ukAddDays(todayStart, -14),
+    in7Days: ukAddDays(todayStart, 7),
+    in30Days: ukAddDays(todayStart, 30),
+  };
 }
 
 export const branchOverviewRepository = {
   async getStats(scope: ScopeFilter): Promise<BranchOverviewStats> {
     const now = new Date();
-    const todayStart = startOfDay(now);
-    const weekStart = startOfWeek(now);
-    const monthStart = startOfMonth(now);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const yearStart = startOfYear(now);
-    const ninetyDaysAgo = addDays(todayStart, -90);
-    const fourteenDaysAgo = addDays(todayStart, -14);
-    const in7Days = addDays(todayStart, 7);
-    const in30Days = addDays(todayStart, 30);
+    const {
+      todayStart, weekStart, monthStart, monthEnd, yearStart, nextYearStart,
+      ninetyDaysAgo, fourteenDaysAgo, in7Days, in30Days,
+    } = getBranchOverviewWindows(now);
 
     const baseCond = buildScopeConditions(scope);
     const joinClient = needsClientJoin(scope);
@@ -121,7 +115,7 @@ export const branchOverviewRepository = {
         const withClient = joinClient
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
-        return withClient.where(and(...baseCond));
+        return withClient.where(and(eq(transaction.is_active, true), ...baseCond));
       })(),
 
       // Active clients in last 90 days (distinct client_id on transactions)
@@ -171,6 +165,7 @@ export const branchOverviewRepository = {
           and(
             gte(enquiry_table.date_created, yearStart),
             sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`,
+            isNull(enquiry_table.deleted_at),
             ...baseCond,
           ),
         );
@@ -209,6 +204,7 @@ export const branchOverviewRepository = {
           and(
             gte(booking.date_created, yearStart),
             sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
+            eq(transaction.is_active, true),
             ...baseCond,
           ),
         );
@@ -216,8 +212,8 @@ export const branchOverviewRepository = {
 
       // Calendar-year trend (Jan–Dec of the current year), commission + booking count.
       (() => {
-        const trendStart = new Date(now.getFullYear(), 0, 1);
-        const trendEnd = new Date(now.getFullYear() + 1, 0, 1);
+        const trendStart = yearStart;
+        const trendEnd = nextYearStart;
         const q = db
           .select({
             month: sql<string>`TO_CHAR(DATE_TRUNC('month', ${booking.date_created}), 'YYYY-MM')`,
@@ -235,6 +231,7 @@ export const branchOverviewRepository = {
               gte(booking.date_created, trendStart),
               sql`${booking.date_created} < ${trendEnd.toISOString()}`,
               bookingActiveCond,
+              eq(transaction.is_active, true),
               ...baseCond,
             ),
           )
@@ -268,7 +265,7 @@ export const branchOverviewRepository = {
           : innerBase;
         const destDeduped = db
           .$with("br_dest_deduped")
-          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond)));
+          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, eq(transaction.is_active, true), ...baseCond)));
         return db
           .with(destDeduped)
           .select({
@@ -308,7 +305,7 @@ export const branchOverviewRepository = {
           : innerBase;
         const resortDeduped = db
           .$with("br_resort_deduped")
-          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond)));
+          .as(innerWithClient.where(and(gte(booking.date_created, yearStart), bookingActiveCond, eq(transaction.is_active, true), ...baseCond)));
         return db
           .with(resortDeduped)
           .select({
@@ -338,7 +335,7 @@ export const branchOverviewRepository = {
           ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
           : q;
         return withClient
-          .where(and(gte(booking.date_created, yearStart), bookingActiveCond, ...baseCond))
+          .where(and(gte(booking.date_created, yearStart), bookingActiveCond, eq(transaction.is_active, true), ...baseCond))
           .groupBy(tour_operator.id, tour_operator.name)
           .orderBy(desc(sql`COUNT(DISTINCT ${booking.id})`))
           .limit(5);
@@ -384,7 +381,7 @@ export const branchOverviewRepository = {
     const monthTarget = await this.getMonthlyShopTarget(scope.branchId, now);
 
     // Per-month shop targets for the calendar year (used by the trend chart).
-    const yearTargets = await this.getYearlyShopTargets(scope.branchId, now.getFullYear());
+    const yearTargets = await this.getYearlyShopTargets(scope.branchId, ukYearMonth(now).year);
 
     const kpi = kpiRow[0];
     const monthBookingsCount = Number(kpi.monthBookingsCount);
@@ -524,6 +521,7 @@ export const branchOverviewRepository = {
           and(
             gte(booking.date_created, monthStart),
             sql`${booking.date_created} < ${monthEnd.toISOString()}`,
+            eq(transaction.is_active, true),
             ...baseCond,
           ),
         )
@@ -687,8 +685,8 @@ export const branchOverviewRepository = {
         : q;
       return withClient.where(
         and(
-          gte(booking.travel_date, todayStart.toISOString().slice(0, 10)),
-          lte(booking.travel_date, in7Days.toISOString().slice(0, 10)),
+          gte(booking.travel_date, ukDateString(todayStart)),
+          lte(booking.travel_date, ukDateString(in7Days)),
           bookingActiveCond,
           ...baseCond,
         ),
@@ -705,8 +703,8 @@ export const branchOverviewRepository = {
         : q;
       return withClient.where(
         and(
-          gte(booking.travel_date, todayStart.toISOString().slice(0, 10)),
-          lte(booking.travel_date, in30Days.toISOString().slice(0, 10)),
+          gte(booking.travel_date, ukDateString(todayStart)),
+          lte(booking.travel_date, ukDateString(in30Days)),
           bookingActiveCond,
           ...baseCond,
         ),
@@ -824,14 +822,15 @@ export const branchOverviewRepository = {
 
   async getMonthlyShopTarget(branchId: string | null, when: Date): Promise<number> {
     if (!branchId) return 0;
+    const { year, month } = ukYearMonth(when);
     const [row] = await db
       .select({ amount: shopTargetTable.targetAmount })
       .from(shopTargetTable)
       .where(
         and(
           eq(shopTargetTable.branchId, branchId),
-          eq(shopTargetTable.year, when.getFullYear()),
-          eq(shopTargetTable.month, when.getMonth() + 1),
+          eq(shopTargetTable.year, year),
+          eq(shopTargetTable.month, month),
         ),
       )
       .limit(1);
@@ -845,25 +844,22 @@ export const branchOverviewRepository = {
     customTo?: Date,
   ): Promise<AgentsPerformanceResponse> {
     const now = new Date();
-    const todayStart = startOfDay(now);
-    const weekStart = startOfWeek(now);
-    const monthStart = startOfMonth(now);
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const { todayStart, weekStart, monthStart, monthEnd } = getBranchOverviewWindows(now);
 
     let from: Date;
     let to: Date;
     if (range === "day") {
       from = todayStart;
-      to = addDays(todayStart, 1);
+      to = ukAddDays(todayStart, 1);
     } else if (range === "week") {
       from = weekStart;
-      to = addDays(todayStart, 1);
+      to = ukAddDays(todayStart, 1);
     } else if (range === "month") {
       from = monthStart;
       to = monthEnd;
     } else {
-      from = customFrom ? startOfDay(customFrom) : monthStart;
-      to = customTo ? addDays(startOfDay(customTo), 1) : monthEnd;
+      from = customFrom ? ukStartOfDay(customFrom) : monthStart;
+      to = customTo ? ukAddDays(ukStartOfDay(customTo), 1) : monthEnd;
     }
 
     const joinClient = needsClientJoin(scope);
@@ -888,7 +884,7 @@ export const branchOverviewRepository = {
         ? q.innerJoin(clientTable, eq(transaction.client_id, clientTable.id))
         : q;
       return withClient
-        .where(and(bookingActiveCond, ...baseCond))
+        .where(and(bookingActiveCond, eq(transaction.is_active, true), ...baseCond))
         .groupBy(transaction.user_id);
     };
 
@@ -937,8 +933,8 @@ export const branchOverviewRepository = {
           .where(
             and(
               eq(agentTargetTable.branchId, scope.branchId),
-              eq(agentTargetTable.year, now.getFullYear()),
-              eq(agentTargetTable.month, now.getMonth() + 1),
+              eq(agentTargetTable.year, ukYearMonth(now).year),
+              eq(agentTargetTable.month, ukYearMonth(now).month),
             ),
           )
       : [];
@@ -1013,7 +1009,7 @@ export const branchOverviewRepository = {
     monthStart: Date,
     now: Date,
   ): Promise<TourOperatorBreakdownRow[]> {
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const monthEnd = ukMonthEnd(now);
     const joinClient = needsClientJoin(scope);
     const baseCond = buildScopeConditions(scope);
 
@@ -1039,6 +1035,7 @@ export const branchOverviewRepository = {
             gte(booking.date_created, monthStart),
             sql`${booking.date_created} < ${monthEnd.toISOString()}`,
             bookingActiveCond,
+            eq(transaction.is_active, true),
             ...baseCond,
           ),
         )
@@ -1114,7 +1111,7 @@ export const branchOverviewRepository = {
     now: Date,
   ): BranchOverviewTrendPoint[] {
     const byMonth = new Map(rows.map((r) => [r.month, r] as const));
-    const year = now.getFullYear();
+    const year = ukYearMonth(now).year;
     const result: BranchOverviewTrendPoint[] = [];
     for (let m = 1; m <= 12; m += 1) {
       const key = `${year}-${String(m).padStart(2, "0")}`;

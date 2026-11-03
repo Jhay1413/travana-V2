@@ -25,4 +25,8 @@ export const notificationApi = {
   delete: async (id: string): Promise<void> => {
     await axiosClient.delete(`/api/v2/notifications/${id}`);
   },
+
+  clearAll: async (): Promise<void> => {
+    await axiosClient.delete(`/api/v2/notifications`);
+  },
 };

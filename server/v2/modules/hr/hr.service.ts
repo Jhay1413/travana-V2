@@ -6,6 +6,8 @@ import type { Scope } from "../../utils/scope";
 import { s3Client, S3_BUCKET } from "../../config/s3";
 import { hrRepository, type HrRepositoryRow, type HrNoteRow } from "./hr.repository";
 import { inviteService } from "../invite/invite.service";
+import { countWorkingDays, currentLondonYear, holidayWorkingDaysInYear, toOpeningPattern } from "../../utils/leave-days";
+import { homeworkerService } from "../homeworker/homeworker.service";
 import type { HrDocument, HrLeave } from "@shared/schema";
 import type {
   AddDocumentPayload,
@@ -66,12 +68,13 @@ function mapHrDocument(row: HrDocument): DocumentEntry {
   };
 }
 
-function mapHrLeave(row: HrLeave): LeaveEntry {
+function mapHrLeave(row: HrLeave, openingPattern: string | null | undefined): LeaveEntry {
   return {
     id: row.id,
     type: row.type as LeaveType,
     from: row.fromDate,
     to: row.toDate,
+    workingDays: countWorkingDays(row.fromDate, row.toDate, toOpeningPattern(openingPattern)),
     status: row.status as LeaveStatus,
     reason: row.reason ?? null,
     decidedBy: row.decidedBy ?? null,
@@ -90,15 +93,12 @@ function mapHrNote(row: HrNoteRow): NoteEntry {
   };
 }
 
-function countHolidayDays(holidays: LeaveEntry[]): number {
-  return holidays
-    .filter((h) => h.status === "Approved" && h.type === "Annual")
-    .reduce((total, h) => {
-      const start = new Date(h.from);
-      const end = new Date(h.to);
-      const days = Math.max(0, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
-      return total + days;
-    }, 0);
+/**
+ * Approved Annual leave in WORKING days (by the person's branch opening pattern, default Mon-Fri)
+ * that fall in the current London year. The agent profile uses the same helper.
+ */
+function countHolidayDays(holidays: LeaveEntry[], openingPattern: string | null | undefined): number {
+  return holidayWorkingDaysInYear(holidays, currentLondonYear(), toOpeningPattern(openingPattern));
 }
 
 function toEmployeeRow(
@@ -129,7 +129,7 @@ function toEmployeeRow(
     contractType: (row.contractType as EmployeeRow["contractType"]) ?? null,
     contractEndDate: row.contractEndDate ?? null,
     holidayAllowance: row.holidayAllowance ?? null,
-    holidayUsedDays: countHolidayDays(holidays),
+    holidayUsedDays: countHolidayDays(holidays, row.branchOpeningPattern),
     holidays,
     documents,
     notes,
@@ -155,7 +155,7 @@ async function loadChildrenForRow(
   ]);
   return {
     documents: docs.map(mapHrDocument),
-    holidays: leaves.map(mapHrLeave),
+    holidays: leaves.map((l) => mapHrLeave(l, row.branchOpeningPattern)),
     notes: notes.map(mapHrNote),
   };
 }
@@ -257,7 +257,7 @@ export const hrService = {
 
     return rows.map((row) => {
       const documents = (row.hrId ? docsMap.get(row.hrId) ?? [] : []).map(mapHrDocument);
-      const holidays = (row.hrId ? leavesMap.get(row.hrId) ?? [] : []).map(mapHrLeave);
+      const holidays = (row.hrId ? leavesMap.get(row.hrId) ?? [] : []).map((l) => mapHrLeave(l, row.branchOpeningPattern));
       const notes = (row.hrId ? notesMap.get(row.hrId) ?? [] : []).map(mapHrNote);
       return toEmployeeRow(row, documents, holidays, notes, scope);
     });
@@ -277,11 +277,20 @@ export const hrService = {
     return buildReminders(rows);
   },
 
-  async invite(payload: InviteEmployeePayload, scope: Scope) {
+  async invite(payload: InviteEmployeePayload, scope: Scope, requestOrigin?: string | null) {
+    if (!scope.orgId || !scope.userId) throw new AppError("Missing scope context", 400);
+    // Homeworkers get their own branch: one creation path, org admins only.
+    if (payload.orgRole === "homeworker") {
+      const { orgRole: _role, ...input } = payload;
+      return homeworkerService.invite(
+        input,
+        { orgId: scope.orgId, userId: scope.userId, orgRole: scope.orgRole, orgRoles: scope.orgRoles },
+        requestOrigin,
+      );
+    }
     if (scope.orgRole === "branch_manager" && payload.branchId !== scope.branchId) {
       throw new AppError("Branch managers can only invite onto their own branch", 403);
     }
-    if (!scope.orgId || !scope.userId) throw new AppError("Missing scope context", 400);
     return inviteService.send(
       { email: payload.email, branchId: payload.branchId, orgRole: payload.orgRole },
       {
@@ -289,7 +298,8 @@ export const hrService = {
         userId: scope.userId,
         orgRole: scope.orgRole,
         branchId: scope.branchId,
-      } as any,
+      },
+      requestOrigin,
     );
   },
 

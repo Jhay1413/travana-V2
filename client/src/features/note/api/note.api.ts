@@ -6,6 +6,8 @@ export type CreateNoteData = {
   client_id?: string;
   content: string;
   description?: string;
+  /** Id of the note being replied to. */
+  parent_id?: string;
 };
 
 export const noteApi = {

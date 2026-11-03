@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto';
 import { getPresignedPutUrl, buildImageProxyUrl } from '../../utils/image-storage';
 import { AppError } from '../../utils/error-handler';
+import { isCourseAuthorRole } from './training.service';
+import { TRAINING_THUMBNAIL_PREFIX, TRAINING_VIDEO_PREFIX } from './training-storage.util';
+import type { ScopeOrTrusted } from './training.repository';
 import type { PresignUploadInput, PresignUploadResult } from './training.types';
 
 /**
@@ -37,7 +40,11 @@ export const trainingUploadService = {
    * training.routes.ts for why it's reused instead of duplicated) so the client
    * can store it directly as `videoUrl` / `thumbnailUrl`.
    */
-  async presignUpload(input: PresignUploadInput): Promise<PresignUploadResult> {
+  async presignUpload(input: PresignUploadInput, scope: ScopeOrTrusted): Promise<PresignUploadResult> {
+    // Not tied to a course (fresh UUID key, nothing persisted), so there is no
+    // ownership to check — only that the caller holds an authoring role.
+    if (!isCourseAuthorRole(scope)) throw new AppError('You do not have permission to perform this action', 403);
+
     const isImage = input.kind === 'image';
     const allowed = isImage ? ALLOWED_IMAGE_MIME_TYPES : ALLOWED_VIDEO_MIME_TYPES;
     const ext = allowed[input.contentType];
@@ -48,8 +55,10 @@ export const trainingUploadService = {
       );
     }
 
-    const prefix = isImage ? 'training-thumbnails' : 'training-videos';
-    const key = `${prefix}/${Date.now()}-${randomUUID()}${ext}`;
+    // Org segment makes uploads attributable; prefix checks match the top-level folder only.
+    const prefix = isImage ? TRAINING_THUMBNAIL_PREFIX : TRAINING_VIDEO_PREFIX;
+    const orgSegment = scope.orgId || 'platform';
+    const key = `${prefix}/${orgSegment}/${Date.now()}-${randomUUID()}${ext}`;
     const uploadUrl = await getPresignedPutUrl(key, input.contentType);
     const playbackUrl = buildImageProxyUrl(key);
 

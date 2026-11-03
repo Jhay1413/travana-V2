@@ -10,10 +10,11 @@ export const clientKeys = {
   detail: (id: string) => [...clientKeys.details(), id] as const,
 };
 
-export function useClients() {
+export function useClients(options: { enabled?: boolean } = {}) {
   return useQuery<Client[]>({
     queryKey: clientKeys.list(),
     queryFn: clientApi.getAll,
+    enabled: options.enabled ?? true,
   });
 }
 

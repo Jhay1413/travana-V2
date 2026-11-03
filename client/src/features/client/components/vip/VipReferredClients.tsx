@@ -8,7 +8,7 @@ interface VipReferredClientsProps {
 
 export function VipReferredClients({ clients }: VipReferredClientsProps) {
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4" data-testid="vip-referred-clients">
+    <div className="rounded-xl border border-social-border bg-card p-4" data-testid="vip-referred-clients">
       <div className="mb-3 flex items-center gap-2">
         <UserPlus className="h-4 w-4 text-purple-500" />
         <span className="text-xs font-semibold text-black/80">Clients Referred</span>

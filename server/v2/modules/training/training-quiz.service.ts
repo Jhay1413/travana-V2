@@ -4,7 +4,7 @@ import { trainingProgressRepository } from './training-progress.repository';
 import { trainingLessonRepository } from './training-lesson.repository';
 import { getSectionOrThrow } from './training-section.service';
 import { getContentComplete, assertLessonUnlocked, assertSectionQuizUnlocked } from './training-progress.service';
-import { trainingService, isAdminContext } from './training.service';
+import { trainingService, canAuthorCourse } from './training.service';
 import type { ScopeOrTrusted } from './training.repository';
 import { AppError } from '../../utils/error-handler';
 import type { Scope } from '../../utils/scope';
@@ -132,8 +132,8 @@ async function requireLesson(lessonId: string): Promise<TrainingLesson> {
 
 export const trainingQuizService = {
   /**
-   * Full replace-upsert of a course's quiz (authoring, `platform_admin`
-   * only). Validates question/choice shape server-side (Zod only checks
+   * Full replace-upsert of a course's quiz (authoring; own-course only for org_admin,
+   * platform_admin any course). Validates question/choice shape server-side (Zod only checks
    * structural shape) before writing the transaction.
    */
   async upsertQuiz(courseId: string, input: UpsertQuizInput, scope: ScopeOrTrusted): Promise<QuizView> {
@@ -151,8 +151,8 @@ export const trainingQuizService = {
   },
 
   /**
-   * Full replace-upsert of a LESSON's quiz (authoring, `platform_admin`
-   * only) — same validation and tree shape as the course final quiz, keyed
+   * Full replace-upsert of a LESSON's quiz (authoring; own-course only for org_admin,
+   * platform_admin any course) — same validation and tree shape as the course final quiz, keyed
    * by lesson instead.
    */
   async upsertLessonQuiz(lessonId: string, input: UpsertQuizInput, scope: ScopeOrTrusted): Promise<QuizView> {
@@ -173,8 +173,8 @@ export const trainingQuizService = {
   },
 
   /**
-   * Full replace-upsert of a SECTION's quiz (authoring, `platform_admin`
-   * only) — same validation and tree shape, keyed by section.
+   * Full replace-upsert of a SECTION's quiz (authoring; own-course only for org_admin,
+   * platform_admin any course) — same validation and tree shape, keyed by section.
    */
   async upsertSectionQuiz(sectionId: string, input: UpsertQuizInput, scope: ScopeOrTrusted): Promise<QuizView> {
     const section = await getSectionOrThrow(sectionId);
@@ -194,42 +194,44 @@ export const trainingQuizService = {
   },
 
   /**
-   * Role-aware read: `platform_admin` (authoring context) gets `is_correct`
-   * on every choice for the builder; any other staff (learner) only ever
+   * Role-aware read: a caller who can author THIS course (platform_admin, or
+   * an org_admin on their own org's course) gets `is_correct` on every choice
+   * for the builder; anyone else, including an org_admin taking a global course
+   * as a learner, only ever
    * sees it once the course is published + visible (404 otherwise, same
    * 404-as-permission pattern as `trainingService.getCourse`), and never
    * with `is_correct` attached. `quiz: null` (empty questions) means the
    * course has no quiz yet.
    */
   async getQuiz(courseId: string, scope: ScopeOrTrusted): Promise<QuizView> {
-    await trainingService.getCourse(courseId, scope);
+    const course = await trainingService.getCourse(courseId, scope);
 
     const quizData = await trainingQuizRepository.findQuizWithQuestions(courseId);
     if (!quizData) return { quiz: null, questions: [] };
 
-    return shapeQuizView(quizData.quiz, quizData.questions, isAdminContext(scope));
+    return shapeQuizView(quizData.quiz, quizData.questions, canAuthorCourse(course, scope));
   },
 
   /** Role-aware read of a LESSON's quiz — same gating as `getQuiz`, via the lesson's course. */
   async getLessonQuiz(lessonId: string, scope: ScopeOrTrusted): Promise<QuizView> {
     const lesson = await requireLesson(lessonId);
-    await trainingService.getCourse(lesson.course_id, scope);
+    const course = await trainingService.getCourse(lesson.course_id, scope);
 
     const quizData = await trainingQuizRepository.findQuizWithQuestionsByLessonId(lessonId);
     if (!quizData) return { quiz: null, questions: [] };
 
-    return shapeQuizView(quizData.quiz, quizData.questions, isAdminContext(scope));
+    return shapeQuizView(quizData.quiz, quizData.questions, canAuthorCourse(course, scope));
   },
 
   /** Role-aware read of a SECTION's quiz — same gating as `getQuiz`, via the section's course. */
   async getSectionQuiz(sectionId: string, scope: ScopeOrTrusted): Promise<QuizView> {
     const section = await getSectionOrThrow(sectionId);
-    await trainingService.getCourse(section.course_id, scope);
+    const course = await trainingService.getCourse(section.course_id, scope);
 
     const quizData = await trainingQuizRepository.findQuizWithQuestionsBySectionId(sectionId);
     if (!quizData) return { quiz: null, questions: [] };
 
-    return shapeQuizView(quizData.quiz, quizData.questions, isAdminContext(scope));
+    return shapeQuizView(quizData.quiz, quizData.questions, canAuthorCourse(course, scope));
   },
 
   /**
@@ -240,7 +242,7 @@ export const trainingQuizService = {
   async submitAttempt(courseId: string, input: SubmitQuizInput, scope: Scope): Promise<QuizAttemptResult> {
     if (!scope.userId) throw new AppError('User not found in scope', 401);
 
-    const course = await trainingService.getCourse(courseId, scope);
+    const course = await trainingService.getCourseForLearner(courseId, scope);
 
     const quizData = await trainingQuizRepository.findQuizWithQuestions(courseId);
     if (!quizData || quizData.questions.length === 0) {
@@ -317,7 +319,7 @@ export const trainingQuizService = {
     if (!scope.userId) throw new AppError('User not found in scope', 401);
 
     const lesson = await requireLesson(lessonId);
-    const course = await trainingService.getCourse(lesson.course_id, scope);
+    const course = await trainingService.getCourseForLearner(lesson.course_id, scope);
 
     const quizData = await trainingQuizRepository.findQuizWithQuestionsByLessonId(lessonId);
     if (!quizData || quizData.questions.length === 0) {
@@ -377,7 +379,7 @@ export const trainingQuizService = {
     if (!scope.userId) throw new AppError('User not found in scope', 401);
 
     const section = await getSectionOrThrow(sectionId);
-    const course = await trainingService.getCourse(section.course_id, scope);
+    const course = await trainingService.getCourseForLearner(section.course_id, scope);
 
     const quizData = await trainingQuizRepository.findQuizWithQuestionsBySectionId(sectionId);
     if (!quizData || quizData.questions.length === 0) {

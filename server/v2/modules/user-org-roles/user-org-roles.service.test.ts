@@ -10,7 +10,7 @@ vi.mock("./user-org-roles.repository", () => ({
   },
 }));
 vi.mock("../branch-member/branch-member.repository", () => ({
-  branchMemberRepository: { findActiveByUserId: vi.fn() },
+  branchMemberRepository: { findActiveContextByUserId: vi.fn() },
 }));
 vi.mock("../platform-admin/platform-admin-audit.repository", () => ({
   platformAdminAuditRepository: { create: vi.fn() },
@@ -34,6 +34,81 @@ describe("primaryRole — role ranking", () => {
 
   it("returns null for an empty set", () => {
     expect(primaryRole([])).toBeNull();
+  });
+
+  it("returns homeworker for a homeworker-only set", () => {
+    expect(primaryRole(["homeworker"])).toBe("homeworker");
+  });
+});
+
+describe("userOrgRolesService.addRole — homeworker exclusivity", () => {
+  it("rejects homeworker + agent", async () => {
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["homeworker"] as never);
+
+    await expect(userOrgRolesService.addRole("u1", "o1", "agent", ACTOR)).rejects.toMatchObject({ statusCode: 400 });
+    expect(userOrgRolesRepository.addRole).not.toHaveBeenCalled();
+  });
+
+  it("rejects agent + homeworker", async () => {
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["agent"] as never);
+
+    await expect(userOrgRolesService.addRole("u1", "o1", "homeworker", ACTOR)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("rejects homeworker + social_media_manager", async () => {
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["homeworker"] as never);
+
+    await expect(userOrgRolesService.addRole("u1", "o1", "social_media_manager", ACTOR)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+  });
+
+  it("rejects homeworker + branch_manager and homeworker + org_admin", async () => {
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["homeworker"] as never);
+
+    await expect(userOrgRolesService.addRole("u1", "o1", "branch_manager", ACTOR)).rejects.toMatchObject({ statusCode: 400 });
+    await expect(userOrgRolesService.addRole("u1", "o1", "org_admin", ACTOR)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("rejects adding homeworker even to a user with no roles (created by invite only)", async () => {
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue([] as never);
+
+    await expect(userOrgRolesService.addRole("u1", "o1", "homeworker", ACTOR)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Homeworkers are created by invite; archive and re-invite instead",
+    });
+    expect(userOrgRolesRepository.addRole).not.toHaveBeenCalled();
+  });
+});
+
+describe("userOrgRolesService.addRole - membership role bypass", () => {
+  it("rejects adding agent to a homeworker who only holds the role via their active membership", async () => {
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue([] as never);
+    vi.mocked(branchMemberRepository.findActiveContextByUserId).mockResolvedValue({ orgId: "o1", orgRole: "homeworker" } as never);
+
+    await expect(userOrgRolesService.addRole("u1", "o1", "agent", ACTOR)).rejects.toMatchObject({ statusCode: 400 });
+    expect(userOrgRolesRepository.addRole).not.toHaveBeenCalled();
+  });
+
+  it("ignores a membership in another org", async () => {
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue([] as never);
+    vi.mocked(branchMemberRepository.findActiveContextByUserId).mockResolvedValue({ orgId: "other", orgRole: "homeworker" } as never);
+
+    await userOrgRolesService.addRole("u1", "o1", "agent", ACTOR);
+
+    expect(userOrgRolesRepository.addRole).toHaveBeenCalled();
+  });
+});
+
+describe("userOrgRolesService.removeRole - homeworker", () => {
+  it("rejects removing the homeworker role with the invite-only 400", async () => {
+    vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["homeworker"] as never);
+
+    await expect(userOrgRolesService.removeRole("u1", "o1", "homeworker", ACTOR)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Homeworkers are created by invite; archive and re-invite instead",
+    });
+    expect(userOrgRolesRepository.removeRole).not.toHaveBeenCalled();
   });
 });
 
@@ -89,7 +164,7 @@ describe("userOrgRolesService.addRole", () => {
 describe("userOrgRolesService.removeRole", () => {
   it("refuses to remove the user's last remaining role", async () => {
     vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["agent"] as never);
-    vi.mocked(branchMemberRepository.findActiveByUserId).mockResolvedValue(null as never);
+    vi.mocked(branchMemberRepository.findActiveContextByUserId).mockResolvedValue(null as never);
     vi.mocked(userOrgRolesRepository.findUserRole).mockResolvedValue("agent" as never);
 
     await expect(userOrgRolesService.removeRole("u1", "o1", "agent", ACTOR)).rejects.toMatchObject({
@@ -109,7 +184,7 @@ describe("userOrgRolesService.removeRole", () => {
 
   it("allows removing the last user_org_roles entry when a branch membership role remains", async () => {
     vi.mocked(userOrgRolesRepository.findRolesByUserAndOrg).mockResolvedValue(["agent"] as never);
-    vi.mocked(branchMemberRepository.findActiveByUserId).mockResolvedValue({ orgId: "o1", orgRole: "branch_manager" } as never);
+    vi.mocked(branchMemberRepository.findActiveContextByUserId).mockResolvedValue({ orgId: "o1", orgRole: "branch_manager" } as never);
     vi.mocked(userOrgRolesRepository.findUserRole).mockResolvedValue("agent" as never);
 
     await userOrgRolesService.removeRole("u1", "o1", "agent", ACTOR);

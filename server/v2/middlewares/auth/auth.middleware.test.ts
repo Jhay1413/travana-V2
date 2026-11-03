@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./storage", () => ({ authStorage: { getUser: vi.fn() } }));
 
-import { requireOrgRole } from "./require-org-role";
+import { requireOrgRole, denyOrgRole } from "./require-org-role";
 import { requirePlatformAdmin } from "./require-platform-admin";
 import { authStorage } from "./storage";
 
@@ -79,5 +79,53 @@ describe("requirePlatformAdmin", () => {
 
     expect(next).toHaveBeenCalledOnce();
     expect(res.status).not.toHaveBeenCalled();
+  });
+});
+
+describe("denyOrgRole", () => {
+  it("blocks a denied role with 403", () => {
+    const res = mockRes();
+    const next = vi.fn();
+
+    denyOrgRole(["homeworker"])({ orgRole: "homeworker" } as never, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("denies a user whose primary role is agent but who also holds homeworker", () => {
+    const res = mockRes();
+    const next = vi.fn();
+
+    denyOrgRole(["homeworker"])({ orgRole: "agent", orgRoles: ["agent", "homeworker"] } as never, res, next);
+
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("lets through a multi-role user without a denied role", () => {
+    const next = vi.fn();
+
+    denyOrgRole(["homeworker"])({ orgRole: "org_admin", orgRoles: ["org_admin", "agent"] } as never, mockRes(), next);
+
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("lets other roles through", () => {
+    const res = mockRes();
+    const next = vi.fn();
+
+    denyOrgRole(["homeworker"])({ orgRole: "agent" } as never, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("lets a request with no role through (auth is enforced elsewhere)", () => {
+    const next = vi.fn();
+
+    denyOrgRole(["homeworker"])({} as never, mockRes(), next);
+
+    expect(next).toHaveBeenCalledOnce();
   });
 });

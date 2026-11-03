@@ -37,7 +37,7 @@ export const ticketAttachmentController = {
 
     const disposition = inline ? 'inline' : 'attachment';
     res.setHeader('Content-Type', target.mimeType);
-    res.setHeader('Content-Disposition', `${disposition}; filename="${target.originalName}"`);
+    res.setHeader('Content-Disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(target.originalName)}`);
     return res.sendFile(target.filePath);
   }),
 

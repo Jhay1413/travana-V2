@@ -6,6 +6,16 @@ vi.mock("./quote.service", () => ({
     createQuote: vi.fn(),
     duplicateQuote: vi.fn(),
     deleteQuote: vi.fn(),
+    listFreeQuotesPaginated: vi.fn(),
+    getFreeQuoteStatusCounts: vi.fn(),
+    getRecentClientEngagement: vi.fn(),
+    setAccepted: vi.fn(),
+    updateFlight: vi.fn(),
+    removeFlight: vi.fn(),
+    updateAccommodation: vi.fn(),
+    removeAccommodation: vi.fn(),
+    removeTransfer: vi.fn(),
+    removePassenger: vi.fn(),
   },
 }));
 // These two are imported at module load but unused by the methods under test.
@@ -66,6 +76,21 @@ describe("quoteController.createQuote — controller-level validation", () => {
   });
 });
 
+describe("quoteController.createQuote - source_quote_id (copy to client)", () => {
+  it("passes the source quote id as an option and does not leak it into the quote fields", async () => {
+    vi.mocked(newQuoteService.createQuote).mockResolvedValue({ id: "q1" } as never);
+    await quoteController.createQuote(
+      req({ body: { transaction_id: "t1", source_quote_id: "src1", main_tour_operator_id: "op1" } }),
+      mockRes(),
+      vi.fn(),
+    );
+    const [data, , options] = vi.mocked(newQuoteService.createQuote).mock.calls[0];
+    expect(data).not.toHaveProperty("source_quote_id");
+    expect(data).toMatchObject({ main_tour_operator_id: "op1" });
+    expect(options).toEqual({ sourceQuoteId: "src1" });
+  });
+});
+
 describe("quoteController.duplicateQuote", () => {
   it("returns 201 with the duplicated quote", async () => {
     vi.mocked(newQuoteService.duplicateQuote).mockResolvedValue({ id: "q2" } as never);
@@ -75,6 +100,38 @@ describe("quoteController.duplicateQuote", () => {
 
     expect(newQuoteService.duplicateQuote).toHaveBeenCalledWith("q1", {}, expect.objectContaining({ orgId: "o1" }));
     expect(res.status).toHaveBeenCalledWith(201);
+  });
+});
+
+describe("quoteController.setAccepted", () => {
+  it("passes id, flag, user and scope to the service and returns the quote", async () => {
+    vi.mocked(newQuoteService.setAccepted).mockResolvedValue({ id: "q1" } as never);
+    const res = mockRes();
+
+    await quoteController.setAccepted(req({ params: { id: "q1" }, body: { accepted: true } }), res, vi.fn());
+
+    expect(newQuoteService.setAccepted).toHaveBeenCalledWith("q1", true, "u1", expect.objectContaining({ orgId: "o1" }));
+    expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, data: { id: "q1" } });
+  });
+
+  it("401s without calling the service when there is no user", async () => {
+    const res = mockRes();
+
+    await quoteController.setAccepted(req({ params: { id: "q1" }, body: { accepted: true }, user: undefined }), res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(newQuoteService.setAccepted).not.toHaveBeenCalled();
+  });
+
+  it("forwards a service 404 to next", async () => {
+    const err = new AppError("Quote not found", 404);
+    vi.mocked(newQuoteService.setAccepted).mockRejectedValue(err);
+    const next = vi.fn();
+
+    await quoteController.setAccepted(req({ params: { id: "q1" }, body: { accepted: false } }), mockRes(), next);
+    await Promise.resolve();
+
+    expect(next).toHaveBeenCalledWith(err);
   });
 });
 
@@ -101,5 +158,135 @@ describe("quoteController — error propagation", () => {
     await Promise.resolve();
 
     expect(next).toHaveBeenCalledWith(err);
+  });
+});
+
+describe("quoteController.listFreeQuotes — socialStatus param", () => {
+  beforeEach(() => {
+    vi.mocked(newQuoteService.listFreeQuotesPaginated).mockResolvedValue([] as never);
+  });
+
+  it("forwards a valid socialStatus as the last service argument", async () => {
+    const res = mockRes();
+
+    await quoteController.listFreeQuotes(req({ query: { socialStatus: "scheduled" } }), res, vi.fn());
+
+    const args = vi.mocked(newQuoteService.listFreeQuotesPaginated).mock.calls[0];
+    expect(args[12]).toBe("scheduled");
+    expect(res.json.mock.calls[0][0]).toMatchObject({ success: true });
+  });
+
+  it("keeps existing params working when socialStatus is absent", async () => {
+    await quoteController.listFreeQuotes(
+      req({ query: { page: "2", pageSize: "5", search: "rome", tags: "A, B", unscheduledOnly: "true" } }),
+      mockRes(),
+      vi.fn(),
+    );
+
+    const args = vi.mocked(newQuoteService.listFreeQuotesPaginated).mock.calls[0];
+    expect(args[0]).toBe(2);
+    expect(args[1]).toBe(5);
+    expect(args[4]).toBe("rome");
+    expect(args[8]).toBe(true);
+    expect(args[11]).toEqual(["A", "B"]);
+    expect(args[12]).toBeUndefined();
+  });
+});
+
+describe("quoteController.getFreeQuoteStatusCounts", () => {
+  it("returns the counts with search and tags parsed from the query", async () => {
+    const counts = { total: 10, not_generated: 4, draft: 3, scheduled: 2, posted: 1 };
+    vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mockResolvedValue(counts as never);
+    const res = mockRes();
+
+    await quoteController.getFreeQuoteStatusCounts(req({ query: { search: "rome", tags: "Summer, Beach" } }), res, vi.fn());
+
+    const args = vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mock.calls[0];
+    expect(args[0]).toBe("rome");
+    expect(args[1]).toEqual(["Summer", "Beach"]);
+    expect(args[2]).toMatchObject({ orgId: "o1" });
+    expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, data: counts });
+  });
+
+  it("accepts tags supplied as a repeated query param (array)", async () => {
+    vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mockResolvedValue({} as never);
+
+    await quoteController.getFreeQuoteStatusCounts(req({ query: { tags: ["Summer", "Beach"] } }), mockRes(), vi.fn());
+
+    expect(vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mock.calls[0][1]).toEqual(["Summer", "Beach"]);
+  });
+
+  it("defaults to empty search and no tags", async () => {
+    vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mockResolvedValue({} as never);
+
+    await quoteController.getFreeQuoteStatusCounts(req({ query: {} }), mockRes(), vi.fn());
+
+    const args = vi.mocked(newQuoteService.getFreeQuoteStatusCounts).mock.calls[0];
+    expect(args[0]).toBe("");
+    expect(args[1]).toEqual([]);
+  });
+});
+
+describe("quoteController.listRecentClientEngagement — query parsing", () => {
+  const call = async (query: Record<string, unknown>) => {
+    vi.mocked(newQuoteService.getRecentClientEngagement).mockResolvedValue([] as never);
+    await quoteController.listRecentClientEngagement(req({ query }), mockRes(), vi.fn());
+    return vi.mocked(newQuoteService.getRecentClientEngagement).mock.lastCall;
+  };
+
+  it("with no params: limit 10, mine false, no period (legacy behaviour)", async () => {
+    const c = await call({});
+    expect(c?.[1]).toBe(10);
+    expect(c?.[2]).toEqual({ mine: false, period: undefined });
+  });
+
+  it("forwards mine=true and a valid period", async () => {
+    const c = await call({ limit: "5", mine: "true", period: "yesterday" });
+    expect(c?.[1]).toBe(5);
+    expect(c?.[2]).toEqual({ mine: true, period: "yesterday" });
+  });
+
+  it("clamps limit to 50, falls back to 10 on junk, and ignores an unknown period", async () => {
+    expect((await call({ limit: "500" }))?.[1]).toBe(50);
+    expect((await call({ limit: "abc" }))?.[1]).toBe(10);
+    expect((await call({ period: "month" }))?.[2]).toEqual({ mine: false, period: undefined });
+  });
+});
+
+describe("quoteController child endpoints pass the quote id from the path to the service", () => {
+  const params = { id: "q1", flightId: "f1", accommodationId: "a1", transferId: "t1", passengerId: "p1" };
+  const scopeArg = expect.objectContaining({ orgId: "o1", branchId: "br1", orgRole: "agent" });
+
+  it("updateFlight", async () => {
+    vi.mocked(newQuoteService.updateFlight).mockResolvedValue({ id: "f1" } as never);
+    await quoteController.updateFlight(req({ params, body: { flight_number: "X" } }), mockRes(), vi.fn());
+    expect(newQuoteService.updateFlight).toHaveBeenCalledWith("q1", "f1", { flight_number: "X" }, scopeArg);
+  });
+
+  it("removeFlight answers 204", async () => {
+    const res = mockRes();
+    await quoteController.removeFlight(req({ params }), res, vi.fn());
+    expect(newQuoteService.removeFlight).toHaveBeenCalledWith("q1", "f1", scopeArg);
+    expect(res.status).toHaveBeenCalledWith(204);
+  });
+
+  it("updateAccommodation, removeAccommodation, removeTransfer, removePassenger", async () => {
+    vi.mocked(newQuoteService.updateAccommodation).mockResolvedValue({ id: "a1" } as never);
+    await quoteController.updateAccommodation(req({ params, body: { room_type: "R" } }), mockRes(), vi.fn());
+    await quoteController.removeAccommodation(req({ params }), mockRes(), vi.fn());
+    await quoteController.removeTransfer(req({ params }), mockRes(), vi.fn());
+    await quoteController.removePassenger(req({ params }), mockRes(), vi.fn());
+    expect(newQuoteService.updateAccommodation).toHaveBeenCalledWith("q1", "a1", { room_type: "R" }, scopeArg);
+    expect(newQuoteService.removeAccommodation).toHaveBeenCalledWith("q1", "a1", scopeArg);
+    expect(newQuoteService.removeTransfer).toHaveBeenCalledWith("q1", "t1", scopeArg);
+    expect(newQuoteService.removePassenger).toHaveBeenCalledWith("q1", "p1", scopeArg);
+  });
+
+  it("a service 404 for a child addressed through the wrong quote reaches the error handler", async () => {
+    const next = vi.fn();
+    vi.mocked(newQuoteService.removeFlight).mockRejectedValue(new AppError("Flight not found", 404));
+    await quoteController.removeFlight(req({ params }), mockRes(), next);
+    await Promise.resolve(); // flush asyncHandler's .catch
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
   });
 });

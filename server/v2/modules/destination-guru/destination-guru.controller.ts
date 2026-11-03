@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { destinationGuruService } from './destination-guru.service';
 import { asyncHandler } from '../../utils/async-handler';
-import { successResponse } from '../../utils/response';
 import { getUserId } from '../../utils/get-user-id';
 import { getScope } from '../../utils/scope';
 
@@ -18,11 +17,10 @@ export const destinationGuruController = {
   }),
 
   generate: asyncHandler(async (req: Request, res: Response) => {
-    const { destination } = req.body;
-    if (!destination || typeof destination !== 'string' || !destination.trim()) {
-      return res.status(400).json({ success: false, message: 'Destination is required' });
-    }
+    const { destination } = req.body as { destination: string };
     const userId = getUserId(req);
+    // validate() only checks the parsed shape — it doesn't rewrite req.body
+    // with the schema's transforms, so trim here too (see validation.middleware.ts).
     const result = await destinationGuruService.generate(destination.trim(), userId || undefined, getScope(req).orgId);
     res.json({ success: true, data: result });
   }),
@@ -36,5 +34,11 @@ export const destinationGuruController = {
   remove: asyncHandler(async (req: Request, res: Response) => {
     await destinationGuruService.remove((req.params.id as string));
     res.json({ success: true, message: 'Destination removed' });
+  }),
+
+  updateCoordinates: asyncHandler(async (req: Request, res: Response) => {
+    const { latitude, longitude } = req.body as { latitude: number; longitude: number };
+    const result = await destinationGuruService.updateCoordinates(req.params.id as string, latitude, longitude);
+    res.json({ success: true, data: result });
   }),
 };

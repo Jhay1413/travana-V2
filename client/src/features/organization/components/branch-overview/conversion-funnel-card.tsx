@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   XCircle,
   Sparkles,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Select,
@@ -497,7 +498,7 @@ function PredictionBox({
   highlighted = false,
   testId,
 }: {
-  icon: React.ElementType;
+  icon: LucideIcon;
   label: string;
   value: string;
   hint?: string;

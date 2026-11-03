@@ -131,9 +131,9 @@ export const adminDataService = {
     }
   },
 
-  async getFiles(clientId: string): Promise<CustomerSafeFile[]> {
+  async getFiles(orgId: string, clientId: string): Promise<CustomerSafeFile[]> {
     try {
-      const files = await clientFileService.listByClientId(clientId);
+      const files = await clientFileService.listByClientId(clientId, systemScope(orgId));
       return files.map((f) => ({
         id: f.id,
         title: f.title ?? null,
@@ -148,16 +148,16 @@ export const adminDataService = {
   },
 
   // Verifies fileId belongs to THIS client BEFORE resolving a download target —
-  // clientFileService.getDownloadTarget looks up by id alone with no ownership
-  // check, so we never trust a fileId the model supplies without confirming it
+  // clientFileService.getDownloadTarget is org-scoped but not client-scoped, so
+  // we never trust a fileId the model supplies without confirming it
   // first appeared in this client's own file list.
-  async getFileLink(clientId: string, fileId: string): Promise<string | null> {
+  async getFileLink(orgId: string, clientId: string, fileId: string): Promise<string | null> {
     try {
-      const files = await clientFileService.listByClientId(clientId);
+      const files = await clientFileService.listByClientId(clientId, systemScope(orgId));
       const owned = files.some((f) => f.id === fileId);
       if (!owned) return null;
 
-      const target = await clientFileService.getDownloadTarget(fileId, { inline: true });
+      const target = await clientFileService.getDownloadTarget(fileId, systemScope(orgId), { inline: true });
       return target.kind === "s3" ? target.url : null;
     } catch (err) {
       console.error(`[admin-data] getFileLink failed for client ${clientId} file ${fileId}:`, err);

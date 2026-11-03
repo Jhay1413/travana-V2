@@ -1,6 +1,8 @@
 import { db } from "../../config/database";
-import { clientFiles, InsertClientFile, ClientFile } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { clientFiles, user, InsertClientFile, ClientFile } from "@shared/schema";
+import { eq, desc, getTableColumns } from "drizzle-orm";
+
+export type ClientFileWithUploader = ClientFile & { uploadedByName: string | null };
 
 export const clientFileRepository = {
   async findById(id: string): Promise<ClientFile | null> {
@@ -8,10 +10,11 @@ export const clientFileRepository = {
     return row ?? null;
   },
 
-  async findByClientId(clientId: string): Promise<ClientFile[]> {
+  async findByClientId(clientId: string): Promise<ClientFileWithUploader[]> {
     return db
-      .select()
+      .select({ ...getTableColumns(clientFiles), uploadedByName: user.name })
       .from(clientFiles)
+      .leftJoin(user, eq(user.id, clientFiles.uploadedBy))
       .where(eq(clientFiles.clientId, clientId))
       .orderBy(desc(clientFiles.createdAt));
   },

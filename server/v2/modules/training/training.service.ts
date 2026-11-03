@@ -3,7 +3,8 @@ import { trainingLessonRepository } from './training-lesson.repository';
 import { trainingSectionRepository } from './training-section.repository';
 import { trainingQuizRepository } from './training-quiz.repository';
 import { AppError } from '../../utils/error-handler';
-import type { Scope } from '../../utils/scope';
+import { normalizeTrainingUrl, TRAINING_THUMBNAIL_PREFIX } from './training-storage.util';
+import { hasAnyRole, type Scope } from '../../utils/scope';
 import type { InsertTrainingCourse, TrainingCourse, TrainingLessonAsset } from '@shared/schema';
 import type { CreateCourseInput, UpdateCourseInput, CourseWithContent, LessonWithAssets } from './training.types';
 
@@ -24,28 +25,75 @@ export function courseVisibleTo(course: TrainingCourse, scope: ScopeOrTrusted, o
   return course.org_id === null || course.org_id === s.orgId;
 }
 
-/**
- * Shared "am I in an admin authoring context" check: a trusted internal
- * caller or `platform_admin` — used to decide draft/archived visibility and
- * whether quiz correctness (`is_correct`) may be exposed.
- */
-export function isAdminContext(scope: ScopeOrTrusted): boolean {
+function isPlatformScope(scope: ScopeOrTrusted): boolean {
   return scope.orgId === null || (scope as Scope).orgRole === 'platform_admin';
 }
 
+function hasOrgAdminRole(scope: ScopeOrTrusted): boolean {
+  if (scope.orgId === null) return false;
+  const s = scope as Scope;
+  return s.orgRole === 'org_admin' || hasAnyRole(s.orgRoles, ['org_admin']);
+}
+
+/**
+ * Role-level authoring check, for operations with no course row yet (create,
+ * admin list, upload presign): a trusted internal caller, `platform_admin`
+ * or `org_admin`.
+ */
+export function isCourseAuthorRole(scope: ScopeOrTrusted): boolean {
+  return isPlatformScope(scope) || hasOrgAdminRole(scope);
+}
+
+/**
+ * THE authoring rule, used by every course-content mutation and by the
+ * draft / answer-key visibility decisions: a trusted internal caller or
+ * `platform_admin` may author any course; an `org_admin` may author only
+ * courses owned by their own organisation (never global courses, never
+ * another org's). Every other role may not author.
+ */
+export function canAuthorCourse(course: TrainingCourse, scope: ScopeOrTrusted): boolean {
+  if (isPlatformScope(scope)) return true;
+  if (!hasOrgAdminRole(scope)) return false;
+  const orgId = (scope as Scope).orgId;
+  return Boolean(orgId) && course.org_id === orgId;
+}
+
+const FORBIDDEN_MESSAGE = 'You do not have permission to perform this action';
+const OWN_ORG_ONLY_MESSAGE = 'Organisation admins can only create courses for their own organisation';
+
 export const trainingService = {
   async createCourse(input: CreateCourseInput, scope: ScopeOrTrusted): Promise<TrainingCourse> {
-    if (input.visibility === 'org' && !input.orgId) {
-      throw new AppError("orgId is required when visibility is 'org'", 400);
+    if (!isCourseAuthorRole(scope)) throw new AppError(FORBIDDEN_MESSAGE, 403);
+
+    let visibility: 'global' | 'org';
+    let orgId: string | null;
+
+    if (isPlatformScope(scope)) {
+      if (!input.visibility) throw new AppError('visibility is required', 400);
+      visibility = input.visibility;
+      if (visibility === 'org' && !input.orgId) {
+        throw new AppError("orgId is required when visibility is 'org'", 400);
+      }
+      orgId = visibility === 'org' ? input.orgId ?? null : null;
+    } else {
+      // org_admin: always their own organisation, never global.
+      const ownOrgId = (scope as Scope).orgId;
+      if (!ownOrgId || input.visibility === 'global' || (input.orgId && input.orgId !== ownOrgId)) {
+        throw new AppError(OWN_ORG_ONLY_MESSAGE, 403);
+      }
+      visibility = 'org';
+      orgId = ownOrgId;
     }
 
     const data: InsertTrainingCourse = {
       title: input.title,
       category: input.category,
       description: input.description ?? null,
-      thumbnail_url: input.thumbnailUrl ?? null,
-      visibility: input.visibility,
-      org_id: input.visibility === 'org' ? input.orgId ?? null : null,
+      thumbnail_url: input.thumbnailUrl
+        ? normalizeTrainingUrl(input.thumbnailUrl, TRAINING_THUMBNAIL_PREFIX, 'thumbnailUrl')
+        : null,
+      visibility,
+      org_id: orgId,
       passing_score: input.passingScore ?? 80,
       require_content_before_quiz: input.requireContentBeforeQuiz ?? true,
       created_by: (scope as Scope).userId ?? null,
@@ -55,17 +103,31 @@ export const trainingService = {
     return trainingRepository.createCourse(data);
   },
 
-  async updateCourse(id: string, input: UpdateCourseInput, scope: ScopeOrTrusted): Promise<TrainingCourse> {
-    const course = await this.getCourse(id, scope);
+  async updateCourse(id: string, rawInput: UpdateCourseInput, scope: ScopeOrTrusted): Promise<TrainingCourse> {
+    const course = await this.getCourseForAuthoring(id, scope);
     if (course.status === 'archived') {
       throw new AppError('Cannot edit an archived course', 400);
+    }
+
+    let input = rawInput;
+    if (!isPlatformScope(scope)) {
+      // org_admin: the course must stay in their own organisation.
+      if (rawInput.visibility === 'global' || (rawInput.orgId && rawInput.orgId !== (scope as Scope).orgId)) {
+        throw new AppError('Organisation admins can only manage courses for their own organisation', 403);
+      }
+      // Ownership never changes for an org author; ignore any (null) orgId.
+      input = { ...rawInput, orgId: undefined };
     }
 
     const patch: Partial<InsertTrainingCourse> = {};
     if (input.title !== undefined) patch.title = input.title;
     if (input.category !== undefined) patch.category = input.category;
     if (input.description !== undefined) patch.description = input.description ?? null;
-    if (input.thumbnailUrl !== undefined) patch.thumbnail_url = input.thumbnailUrl ?? null;
+    if (input.thumbnailUrl !== undefined) {
+      patch.thumbnail_url = input.thumbnailUrl
+        ? normalizeTrainingUrl(input.thumbnailUrl, TRAINING_THUMBNAIL_PREFIX, 'thumbnailUrl')
+        : null;
+    }
     if (input.passingScore !== undefined) patch.passing_score = input.passingScore;
     if (input.requireContentBeforeQuiz !== undefined) patch.require_content_before_quiz = input.requireContentBeforeQuiz;
 
@@ -88,19 +150,49 @@ export const trainingService = {
   },
 
   /**
-   * Shared read path for both the learner-facing GET and the admin
-   * update/publish/archive flows. `platform_admin` may fetch any course by id
-   * (draft included, for authoring); everyone else only sees it once
-   * published and in-scope — otherwise this throws the same 404 an
-   * out-of-scope resource would, matching the booking module's pattern.
+   * Authoring-aware read, used by the course-content GET and the quiz GETs
+   * (NOT by learner write flows — those use `getCourseForLearner`). Anyone who
+   * `canAuthorCourse` that course may fetch it in any status (draft included,
+   * for authoring); everyone else only sees it once published and in-scope —
+   * otherwise this throws the same 404 an out-of-scope resource would,
+   * matching the booking module's pattern. An `org_admin` therefore sees their
+   * own org's drafts but a global course only once published, as a learner.
    */
   async getCourse(id: string, scope: ScopeOrTrusted): Promise<TrainingCourse> {
     const course = await trainingRepository.findCourseById(id);
     if (!course) throw new AppError('Course not found', 404);
 
-    if (!courseVisibleTo(course, scope, { publishedOnly: !isAdminContext(scope) })) {
+    if (canAuthorCourse(course, scope)) return course;
+    if (!courseVisibleTo(course, scope, { publishedOnly: true })) {
       throw new AppError('Course not found', 404);
     }
+    return course;
+  },
+
+  /**
+   * Strict learner read for enroll / progress / quiz attempts: in-scope AND
+   * published for everyone except trusted / platform_admin (who bypass the
+   * published check). Unlike `getCourse`, an org_admin gets no draft access
+   * here, so learner flows behave identically for every role.
+   */
+  async getCourseForLearner(id: string, scope: ScopeOrTrusted): Promise<TrainingCourse> {
+    const course = await trainingRepository.findCourseById(id);
+    if (!course) throw new AppError('Course not found', 404);
+
+    if (!courseVisibleTo(course, scope, { publishedOnly: !isPlatformScope(scope) })) {
+      throw new AppError('Course not found', 404);
+    }
+    return course;
+  },
+
+  /**
+   * Read path for every authoring mutation: the course must exist and the
+   * caller must `canAuthorCourse` it, else 404 (404-as-permission, so an
+   * org_admin cannot even probe global / foreign courses).
+   */
+  async getCourseForAuthoring(id: string, scope: ScopeOrTrusted): Promise<TrainingCourse> {
+    const course = await trainingRepository.findCourseById(id);
+    if (!course || !canAuthorCourse(course, scope)) throw new AppError('Course not found', 404);
     return course;
   },
 
@@ -157,12 +249,12 @@ export const trainingService = {
   },
 
   /**
-   * Authoring guard shared by lesson/asset mutation endpoints: the parent
-   * course must exist and be visible to the caller (404-as-permission, same
-   * as `getCourse`), and must not be archived.
+   * Authoring guard shared by section/lesson/asset/quiz mutation endpoints:
+   * the parent course must exist and be authorable by the caller
+   * (`getCourseForAuthoring`, 404-as-permission), and must not be archived.
    */
   async assertCourseEditable(courseId: string, scope: ScopeOrTrusted): Promise<TrainingCourse> {
-    const course = await this.getCourse(courseId, scope);
+    const course = await this.getCourseForAuthoring(courseId, scope);
     if (course.status === 'archived') {
       throw new AppError('Cannot edit an archived course', 400);
     }
@@ -170,7 +262,7 @@ export const trainingService = {
   },
 
   async publishCourse(id: string, scope: ScopeOrTrusted): Promise<TrainingCourse> {
-    const course = await this.getCourse(id, scope);
+    const course = await this.getCourseForAuthoring(id, scope);
     if (course.status === 'archived') {
       throw new AppError('Cannot publish an archived course', 400);
     }
@@ -180,7 +272,7 @@ export const trainingService = {
   },
 
   async archiveCourse(id: string, scope: ScopeOrTrusted): Promise<TrainingCourse> {
-    const course = await this.getCourse(id, scope);
+    const course = await this.getCourseForAuthoring(id, scope);
     if (course.status === 'archived') {
       throw new AppError('Course is already archived', 400);
     }
@@ -190,20 +282,28 @@ export const trainingService = {
   },
 
   /**
-   * Permanently delete a course. `getCourse` enforces the same visibility gate
-   * as every other authoring op (404-as-permission), so a caller can only
-   * delete a course they can see. The FK cascade on `course_id` removes the
+   * Permanently delete a course. `getCourseForAuthoring` enforces the same
+   * ownership gate as every other authoring op (404-as-permission), so a caller
+   * can only delete a course they may author. The FK cascade on `course_id` removes the
    * course's lessons, assets, quiz, questions, choices, enrollments, progress,
    * attempts and certificates in one shot — this is irreversible.
    */
   async deleteCourse(id: string, scope: ScopeOrTrusted): Promise<void> {
-    await this.getCourse(id, scope);
+    await this.getCourseForAuthoring(id, scope);
     await trainingRepository.deleteCourse(id);
   },
 
-  /** Admin: every course in scope, any status. */
+  /**
+   * Admin list, any status. platform_admin / trusted: every course.
+   * org_admin: only courses owned by their own org (global courses are not
+   * theirs to manage). Other roles: 403.
+   */
   async listCourses(scope: ScopeOrTrusted): Promise<TrainingCourse[]> {
-    return trainingRepository.listCoursesForAdmin(scope);
+    if (isPlatformScope(scope)) return trainingRepository.listCoursesForAdmin(scope);
+    if (!hasOrgAdminRole(scope)) throw new AppError(FORBIDDEN_MESSAGE, 403);
+    const orgId = (scope as Scope).orgId;
+    if (!orgId) return [];
+    return trainingRepository.listCoursesForOrg(orgId);
   },
 
   /** Learner: published courses only, visibility-scoped. */

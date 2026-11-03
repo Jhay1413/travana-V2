@@ -1,3 +1,5 @@
+import type { ImageUpscaleJobDto } from "../modules/image-upscale/image-upscale.types";
+
 // Thin real-time event contract — no message content, no PII. Clients respond
 // by invalidating the matching TanStack queries and re-fetching through the
 // existing org-scoped REST endpoints (SendSeven stays the single source of
@@ -24,7 +26,11 @@ export type TicketEventType = "ticket.changed";
 // a second agent's tab drops the comment out of the unanswered queue live.
 export type CommentEventType = "comment.received" | "comment.updated";
 
-export type RealtimeEventType = ConversationEventType | TicketEventType | CommentEventType;
+// Image upscale job lifecycle (queued → processing → done/failed, and reverted).
+// Org-wide delivery; the job carries quoteId so clients filter to what they show.
+export type ImageUpscaleEventType = "upscale.job.updated";
+
+export type RealtimeEventType = ConversationEventType | TicketEventType | CommentEventType | ImageUpscaleEventType;
 
 export interface ConversationRealtimeEvent {
   type: ConversationEventType;
@@ -51,6 +57,18 @@ export interface CommentRealtimeEvent {
   channelId?: string;
 }
 
+// Unlike the thin events above this carries the job DTO (urls + dimensions, no
+// PII) so the client can upsert its cache without a round-trip.
+export interface ImageUpscaleRealtimeEvent {
+  type: ImageUpscaleEventType;
+  orgId: string;
+  job: ImageUpscaleJobDto;
+}
+
 // A union, not one interface with optional ids: a ticket event has no
 // conversation and must not be able to claim one.
-export type RealtimeEvent = ConversationRealtimeEvent | TicketRealtimeEvent | CommentRealtimeEvent;
+export type RealtimeEvent =
+  | ConversationRealtimeEvent
+  | TicketRealtimeEvent
+  | CommentRealtimeEvent
+  | ImageUpscaleRealtimeEvent;

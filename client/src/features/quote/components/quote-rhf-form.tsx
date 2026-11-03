@@ -11,6 +11,8 @@ import {
   type ImportValidation,
 } from "@/features/quote/api/use-page-capture-import";
 import { withMoneyFieldsQuarantined } from "@/features/quote/lib/import-validation";
+import { pricePerPersonFor } from "@/features/quote/lib/pricing";
+import { deriveCheckIn } from "@/lib/check-in-time";
 import { ImportValidationPanel } from "@/features/quote/components/sections/ImportValidationPanel";
 import { SupplierScraperPicksResultView, type SupplierScraperPicksResult } from "@/features/supplier-scraper";
 import {
@@ -55,6 +57,7 @@ import { summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function QuoteRHFForm({
+  quoteId,
   defaultValues,
   onSubmit,
   isLoading,
@@ -64,6 +67,7 @@ export function QuoteRHFForm({
   initialImageUrls = [],
   initialExtraAccomLabels = [],
   layout = "card",
+  socialPost = false,
 }: QuoteRHFFormProps) {
   const isDrawer = layout === "drawer";
   const form = useForm<QuoteFormValues>({
@@ -158,7 +162,18 @@ export function QuoteRHFForm({
   }, [parkId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Child ages sync ───────────────────────────────────────────────────────
+  // Only reconciles childAges with the children count on a genuine change to
+  // that count during this session — never on mount. A loaded quote/booking
+  // can legitimately have a childAges array whose length doesn't match its
+  // stored child count (e.g. AI-extracted enquiries, legacy data); running
+  // this on the initial render would "helpfully" pad/truncate that array
+  // and silently wipe out real ages the moment an edit form opens.
+  const isChildAgesFirstRender = useRef(true);
   useEffect(() => {
+    if (isChildAgesFirstRender.current) {
+      isChildAgesFirstRender.current = false;
+      return;
+    }
     const currentAges = form.getValues("childAges");
     const count = Number(passengersChildren) || 0;
     if (currentAges.length !== count) {
@@ -168,17 +183,19 @@ export function QuoteRHFForm({
   }, [passengersChildren, setValue, form]);
 
   // ── Price per person calculation ──────────────────────────────────────────
+  // Derived from price/discount/serviceCharge/traveller counts via the shared
+  // helper (features/quote/lib/pricing) so this recomputes the same way whether
+  // those fields changed from typing OR from a deal import's setValue calls.
+  // `price` must be a dependency, not just read off getValues — otherwise an
+  // import that sets price without changing the traveller counts (which start
+  // at the same default) never re-fires this effect and price-per-person is
+  // left stale until the agent edits price/discount/service charge by hand.
   useEffect(() => {
-    const price = Number(form.getValues("price")) || 0;
-    const currentDiscount = Number(form.getValues("discount")) || 0;
-    const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-    const adults = Number(passengersAdults) || 0;
-    const children = Number(passengersChildren) || 0;
-    const total = adults + children;
-    // Total price = price − discount + service charge, split across all passengers.
-    const netPrice = price - currentDiscount + currentServiceCharge;
-    setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+    setValue(
+      "pricePerPerson",
+      pricePerPersonFor(price, discount, serviceCharge, passengersAdults, passengersChildren),
+    );
+  }, [price, passengersAdults, passengersChildren, discount, serviceCharge, setValue]);
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   // Commission = price × operator % − discount + service charge. The discount is
@@ -207,12 +224,44 @@ export function QuoteRHFForm({
     if (!checkInDate) return;
     const date = parseISO(checkInDate);
     if (!isValid(date)) return;
-    setValue("outboundDepartDate", checkInDate, { shouldDirty: true });
+    // Social posts derive check-in FROM the flights (it can be the day after an
+    // overnight arrival), so it must not overwrite an already-set departure date.
+    if (!socialPost || !form.getValues("outboundDepartDate")) {
+      setValue("outboundDepartDate", checkInDate, { shouldDirty: true });
+    }
     const nightCount = Number(nights) || 0;
     if (nightCount > 0) {
       setValue("inboundDepartDate", format(addDays(date, nightCount), "yyyy-MM-dd"), { shouldDirty: true });
     }
   }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Social post: auto-fill check-in from the outbound arrival ─────────────
+  // Applies only while the user hasn't hand-edited the value (it is empty, the
+  // form default, or still what we last filled in).
+  const outboundArriveDate = useWatch({ control, name: "outboundArriveDate" });
+  const outboundArriveTime = useWatch({ control, name: "outboundArriveTime" });
+  const outboundConnectingLegs = useWatch({ control, name: "outboundConnectingLegs" });
+  const travelDate = useWatch({ control, name: "travelDate" });
+  const lastAutoCheckIn = useRef<{ date: string; time: string } | null>(null);
+  useEffect(() => {
+    if (!socialPost) return;
+    const lastLeg = outboundConnectingLegs?.[outboundConnectingLegs.length - 1];
+    const arrival = lastLeg?.arriveDate || lastLeg?.arriveTime
+      ? { date: lastLeg.arriveDate, time: lastLeg.arriveTime }
+      : { date: outboundArriveDate, time: outboundArriveTime };
+    if (!arrival.date && !arrival.time) return;
+    const derived = deriveCheckIn(arrival, travelDate);
+    const last = lastAutoCheckIn.current;
+    const currentDate = form.getValues("checkInDate") ?? "";
+    const currentTime = form.getValues("checkInTime") ?? "";
+    if (derived.date && (!currentDate || currentDate === last?.date || currentDate === derived.date)) {
+      if (currentDate !== derived.date) setValue("checkInDate", derived.date, { shouldDirty: true });
+    }
+    if (!currentTime || currentTime === "15:00" || currentTime === last?.time || currentTime === derived.time) {
+      if (currentTime !== derived.time) setValue("checkInTime", derived.time, { shouldDirty: true });
+    }
+    lastAutoCheckIn.current = derived;
+  }, [socialPost, outboundArriveDate, outboundArriveTime, outboundConnectingLegs, travelDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── JSON upload ───────────────────────────────────────────────────────────
   // Shared by the file-based JSON import and the easyJet URL import: stage the
@@ -235,6 +284,7 @@ export function QuoteRHFForm({
       toast,
       setImageUrls: setImageUrlsFromJson,
       skipLodgeResetRef,
+      socialPost,
       fallbackFieldMapper: (data, setIfPresent) => {
         setIfPresent("quoteLink", data.quoteLink || data.quote_link || data.link || data.source_url);
       },
@@ -356,9 +406,35 @@ export function QuoteRHFForm({
                 onPageCaptureImport={handlePageCaptureImport}
                 pageCapturePending={pageCaptureImport.isPending}
               />
+
+              {/* ── IMPORT VALIDATION (errors/warnings from the last capture import) */}
+              {importValidation && (
+                <div className="mt-3">
+                  <ImportValidationPanel validation={importValidation} onDismiss={() => setImportValidation(null)} />
+                </div>
+              )}
+
+              {/* ── FIELD PICKS APPLIED — same feedback the card/dialog layout
+                   shows, so a drawer import doesn't silently drop it. */}
+              {importPicks && (
+                <div className="mt-3 space-y-2 rounded-xl border border-black/10 bg-white/70 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-semibold text-black/70">Field picks applied to this supplier's spec</p>
+                    <button
+                      type="button"
+                      onClick={() => setImportPicks(null)}
+                      aria-label="Dismiss field-pick results"
+                      className="text-black/40 transition hover:text-black/70"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <SupplierScraperPicksResultView result={importPicks} />
+                </div>
+              )}
             </div>
             <QuoteDrawerOverview />
-            <QuoteDrawerTravelSection showCruiseStay={isCruise} />
+            <QuoteDrawerTravelSection showCruiseStay={isCruise} showFlightExtras={!isHotTubBreak} />
             {isHotTubBreak && (
               <FormDrawerSection title="Lodge Details" data-testid="drawer-section-lodge">
                 <QuoteLodgeDetailsSection bare />
@@ -395,7 +471,7 @@ export function QuoteRHFForm({
             />
             <QuoteDrawerCostingsSection />
             <FormDrawerSection title="Tags" defaultOpen={initialTagsCount > 0} data-testid="drawer-section-tags">
-              <QuoteTagsSection bare />
+              <QuoteTagsSection bare quoteId={quoteId} />
             </FormDrawerSection>
             <FormField
               control={control}
@@ -408,18 +484,20 @@ export function QuoteRHFForm({
                   submitLabel={submitLabel}
                   data-testid="drawer-footer"
                 >
-                  <FormField
-                    control={control}
-                    name="not_for_social"
-                    render={({ field: social }) => (
-                      <FormDrawerCheckbox
-                        label="Not for social"
-                        checked={!!social.value}
-                        onCheckedChange={social.onChange}
-                        data-testid="form-drawer-not-for-social"
-                      />
-                    )}
-                  />
+                  {!socialPost && (
+                    <FormField
+                      control={control}
+                      name="not_for_social"
+                      render={({ field: social }) => (
+                        <FormDrawerCheckbox
+                          label="Not for social"
+                          checked={!!social.value}
+                          onCheckedChange={social.onChange}
+                          data-testid="form-drawer-not-for-social"
+                        />
+                      )}
+                    />
+                  )}
                 </FormDrawerFooter>
               )}
             />
@@ -428,6 +506,7 @@ export function QuoteRHFForm({
           <>
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
         <QuoteImportRow
+          hideNotForSocial={socialPost}
           onJsonUpload={handleJsonUpload}
           onPageCaptureImport={handlePageCaptureImport}
           pageCapturePending={pageCaptureImport.isPending}
@@ -472,7 +551,7 @@ export function QuoteRHFForm({
         />
 
         {/* ── TRAVEL DETAILS ────────────────────────────────────────────────── */}
-        <QuoteTravelDetailsSection showCruiseStay={isCruise} />
+        <QuoteTravelDetailsSection showCruiseStay={isCruise} showFlightExtras={!isHotTubBreak} />
 
         {/* ── HOT TUB BREAK: LODGE DETAILS ─────────────────────────────────── */}
         {isHotTubBreak && <QuoteLodgeDetailsSection />}
@@ -493,7 +572,7 @@ export function QuoteRHFForm({
         <QuotePricingSection />
 
         {/* ── TAGS ──────────────────────────────────────────────────────────── */}
-        <QuoteTagsSection />
+        <QuoteTagsSection quoteId={quoteId} />
 
         {/* ── TEST TRANSACTION ──────────────────────────────────────────────── */}
         <QuoteTestToggleSection />

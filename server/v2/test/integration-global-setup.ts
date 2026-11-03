@@ -10,6 +10,8 @@ export async function setup() {
   const client = new Client({ connectionString: TEST_DATABASE_URL, connectionTimeoutMillis: 4000 });
   try {
     await client.connect();
+    // The schema has a pgvector column and drizzle-kit push does not create extensions.
+    await client.query("CREATE EXTENSION IF NOT EXISTS vector");
     await client.end();
   } catch (err) {
     throw new Error(

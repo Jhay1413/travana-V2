@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countMyActiveTickets, isActiveTicket, isMyTicket } from "./ticket-filters";
+import { countMyActiveTickets, isActiveTicket, isMyTicket, leavesPageAfterStatus } from "./ticket-filters";
 
 const ME = "user-me";
 const OTHER = "user-other";
@@ -69,5 +69,14 @@ describe("badge count agrees with the page's default Me / Active view", () => {
   it("reads zero rather than throwing before the query resolves", () => {
     expect(countMyActiveTickets(undefined, ME)).toBe(0);
     expect(countMyActiveTickets(tickets, undefined)).toBe(0);
+  });
+});
+
+describe("leavesPageAfterStatus", () => {
+  it("is true only for Resolved", () => {
+    expect(leavesPageAfterStatus("Resolved")).toBe(true);
+    expect(leavesPageAfterStatus("resolved")).toBe(true);
+    expect(leavesPageAfterStatus("Open")).toBe(false);
+    expect(leavesPageAfterStatus("Closed")).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Reply, Trash2 } from "lucide-react";
 import { RichTextDisplay } from "@/components/shared/rich-text-editor";
 import { NoteEditor } from "@/components/shared/note-editor";
@@ -13,26 +13,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useClientNotes } from "@/hooks/queries";
-import { useCreateClientNote, useUpdateClientNote, useDeleteClientNote } from "@/hooks/mutations";
+import { useUpdateClientNote, useDeleteClientNote } from "@/hooks/mutations";
+import {
+  ClientNoteAttachments,
+  groupAttachmentsByNote,
+  useClientNoteAttachments,
+  useCreateClientNoteWithAttachments,
+  type NoteAttachment,
+} from "@/features/note";
+import { visibleRows } from "@/lib/visible-rows";
 import { useToast } from "@/hooks/use-toast";
 import { formatNoteDate, parseTimestamp } from "@/lib/note-time";
 import type { TransactionNote } from "@/features/quote/types";
 import type { User as ApiUser } from "@/features/user/types";
-import type { HolidaySelection } from "@/features/client/types";
+import type { DealKind, DealLabelInfo, DealLabelLookup, HolidaySelection } from "@/features/client/types";
 
-/** Which kind of deal (transaction) a note belongs to. */
-export type DealKind = "enquiry" | "quote" | "booking";
+export type { DealKind, DealLabelInfo, DealLabelLookup };
 
-/** Everything a note row needs to render + open the deal it belongs to. */
-export interface DealLabelInfo {
-  kind: DealKind;
-  /** The enquiry/quote/booking's own id — NOT the transaction id — passed to onOpenDeal as `{ type: kind, id }`. */
-  id: string;
-  title: string;
-}
-
-/** transaction_id → deal label info, built once by the page from its already-loaded enquiries/quotes/bookings. */
-export type DealLabelLookup = Map<string, DealLabelInfo>;
+const NOTES_PREVIEW_LIMIT = 5;
 
 const DEAL_KIND_LABEL: Record<DealKind, string> = {
   enquiry: "Enquiry",
@@ -89,6 +87,8 @@ function ClientNoteRow({
   authorName,
   dealInfo,
   onOpenDeal,
+  attachments,
+  readOnly = false,
 }: {
   clientId: string;
   note: TransactionNote;
@@ -96,6 +96,10 @@ function ClientNoteRow({
   /** Resolved deal label when the note has a transaction_id; null falls back to a generic "Deal" pill. */
   dealInfo: DealLabelInfo | null;
   onOpenDeal?: (selection: HolidaySelection) => void;
+  /** Saved files on this note. */
+  attachments: NoteAttachment[];
+  /** Hides edit + delete (social_media_manager is read-only). */
+  readOnly?: boolean;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -148,7 +152,7 @@ function ClientNoteRow({
             <DealPill dealInfo={dealInfo} onOpenDeal={onOpenDeal} data-testid={`client-index-note-deal-${note.id}`} />
           )}
         </div>
-        {!isEditing && (
+        {!isEditing && !readOnly && (
           <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
             <button
               type="button"
@@ -192,6 +196,7 @@ function ClientNoteRow({
           <RichTextDisplay content={note.content || ""} />
         </div>
       )}
+      <ClientNoteAttachments clientId={clientId} attachments={attachments} />
 
       <AlertDialog open={confirmDelete} onOpenChange={(open) => !deleteMutation.isPending && setConfirmDelete(open)}>
         <AlertDialogContent>
@@ -230,17 +235,24 @@ export function ClientNotesList({
   users,
   dealsByTransactionId,
   onOpenDeal,
+  readOnly = false,
 }: {
   clientId: string;
   users: ApiUser[];
   /** transaction_id → deal label, built by the page from its already-loaded enquiries/quotes/bookings. */
   dealsByTransactionId?: DealLabelLookup;
-  /** Opens a deal's pill in the detail layout — the same handler AllHolidaysPanel's onSelect uses (not a URL navigation: the page's `?holiday=` parsing only re-runs when clientId changes, so a same-page URL update alone wouldn't open anything). */
+  /** Opens a deal's pill in the detail layout — the same handler AllHolidaysPanel's onSelect uses (not a URL navigation: the page's `?holiday=` parsing is a separate code path and calling it directly here is simpler than round-tripping through a URL update). */
   onOpenDeal?: (selection: HolidaySelection) => void;
+  /** Hides the composer and the per-note edit/delete actions. */
+  readOnly?: boolean;
 }) {
   const { data: notes, isLoading, isError, refetch } = useClientNotes(clientId, { includeDeals: true });
   const { toast } = useToast();
-  const createMutation = useCreateClientNote(clientId);
+  const createMutation = useCreateClientNoteWithAttachments(clientId);
+  const { data: attachmentRows } = useClientNoteAttachments(clientId, true);
+  const attachmentsByNote = useMemo(() => groupAttachmentsByNote(attachmentRows ?? []), [attachmentRows]);
+  const [expandedRaw, setExpanded] = useState(false);
+  useEffect(() => setExpanded(false), [clientId]);
 
   const userNameById = useMemo(() => new Map(users.map((u) => [u.id, u.name || u.email || ""])), [users]);
 
@@ -252,10 +264,18 @@ export function ClientNotesList({
     [notes],
   );
 
-  const handleCreate = async (html: string) => {
+  // Expanded only means something while the list is longer than the preview.
+  const expanded = expandedRaw && rows.length > NOTES_PREVIEW_LIMIT;
+  const shownRows = visibleRows(rows, expanded, NOTES_PREVIEW_LIMIT);
+
+  const handleCreate = async (html: string, files?: File[]) => {
     try {
-      await createMutation.mutateAsync({ content: html });
-      toast({ title: "Note added" });
+      const { uploadFailed } = await createMutation.mutateAsync({ data: { content: html }, files });
+      toast(
+        uploadFailed
+          ? { title: "Note added, but its attachments failed to upload", variant: "destructive" }
+          : { title: "Note added" },
+      );
     } catch (err) {
       // Re-throw so NoteEditor keeps the typed content instead of clearing it
       // (it only clears on a resolved promise) — the toast is the only thing
@@ -286,8 +306,10 @@ export function ClientNotesList({
           No notes yet. Add a general note about this customer below, or write one from any of their deals.
         </p>
       ) : (
-        <div className="divide-y divide-black/[0.05] dark:divide-white/[0.05]">
-          {rows.map((note) => {
+        <div
+          className={`divide-y divide-black/[0.05] dark:divide-white/[0.05]${expanded ? " max-h-[60vh] overflow-y-auto" : ""}`}
+        >
+          {shownRows.map((note) => {
             const authorName =
               note.author_name ||
               (note.user_id && userNameById.get(note.user_id)) ||
@@ -302,19 +324,35 @@ export function ClientNotesList({
                 authorName={authorName}
                 dealInfo={dealInfo}
                 onOpenDeal={onOpenDeal}
+                attachments={attachmentsByNote.get(note.id) ?? []}
+                readOnly={readOnly}
               />
             );
           })}
         </div>
       )}
 
-      <div className="mt-3" data-testid="client-index-note-composer">
-        <NoteEditor
-          placeholder="Add a note about this customer…"
-          onSubmit={handleCreate}
-          isLoading={createMutation.isPending}
-        />
-      </div>
+      {!isError && !isLoading && rows.length > NOTES_PREVIEW_LIMIT && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-[13px] font-semibold text-social-orange-text transition hover:underline"
+          data-testid="client-index-view-all-notes"
+        >
+          {expanded ? "Show less" : `View all notes (${rows.length})`}
+        </button>
+      )}
+
+      {!readOnly && (
+        <div className="mt-3" data-testid="client-index-note-composer">
+          <NoteEditor
+            placeholder="Add a note about this customer…"
+            allowAttachments
+            onSubmit={handleCreate}
+            isLoading={createMutation.isPending}
+          />
+        </div>
+      )}
     </div>
   );
 }

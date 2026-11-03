@@ -5,13 +5,12 @@ import routes from "./routes/index";
 import v2Routes from "./v2/routes/index";
 import { setupAuth, registerAuthRoutes } from "./v2/middlewares/auth";
 import { errorHandler } from "./middlewares/error.middleware";
-import { taskRepository } from "./repositories/task.repository";
-import { checkStaleTickets } from "./services/ticket-notification.service";
 import quotePublicRoutes from "./routes/quote-public.routes";
 import websitePublicRoutes from "./routes/website-public.routes";
-import portalRoutes, { portalStaffRouter } from "./routes/portal.routes";
-import cron from "node-cron";
+import portalRoutes from "./routes/portal.routes";
 import { warmPool } from "./v2/config/database";
+import { startImageUpscaleWorker } from "./v2/modules/image-upscale/image-upscale.worker";
+import { startDepartureSweepScheduler } from "./v2/modules/sms/sms.cron";
 
 const app = express();
 const httpServer = createServer(app);
@@ -59,7 +58,7 @@ app.use((req, res, next) => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
+      if (capturedJsonResponse && res.locals.skipResponseLog !== true) {
         const responseStr = JSON.stringify(capturedJsonResponse);
         logLine += ` :: ${responseStr.length > 500 ? responseStr.slice(0, 500) + "...[truncated]" : responseStr}`;
       }
@@ -87,8 +86,6 @@ app.use((req, res, next) => {
 
   await setupAuth(app);
   registerAuthRoutes(app);
-
-  app.use("/api/portal", portalStaffRouter);
 
   // v2 routes mounted under /api/v2/* (parallel to v1 at /api/*)
   app.use("/api/v2", v2Routes);
@@ -130,21 +127,11 @@ app.use((req, res, next) => {
       // does not have to open a dozen in parallel (see v2/config/database.ts).
       void warmPool();
 
-      // Every 30 minutes: check due tasks and stale tickets. Runs on a cron
-      // schedule (not a 60s setInterval) so the DB can scale to zero when idle.
-      cron.schedule("*/30 * * * *", async () => {
-        try {
-          await taskRepository.checkAndNotifyDueTasks();
-        } catch (err) {
-          console.error("Task notification check failed:", err);
-        }
-        try {
-          await checkStaleTickets();
-        } catch (err) {
-          console.error("Ticket notification check failed:", err);
-        }
-      });
+      // Fail upscale jobs a dead process left mid-run and re-queue the unstarted ones.
+      startImageUpscaleWorker();
 
+      // 09:00 UK departure reminder texts. OFF unless SMS_DEPARTURE_SWEEP_ENABLED=true (it texts real clients).
+      startDepartureSweepScheduler(process.env, log);
     },
   );
 })();

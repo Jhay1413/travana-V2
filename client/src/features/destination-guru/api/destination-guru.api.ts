@@ -7,8 +7,18 @@ export type DestinationGuruRecord = {
   country: string;
   data: DestinationGuruData;
   createdBy: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  // 'failed' = geocoding was attempted (generation-time or backfill) but
+  // didn't resolve — lat/lng stay null, same as any other un-pinned row.
+  coordinatesSource: "ai" | "backfill" | "manual" | "failed" | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type UpdateDestinationGuruCoordinatesInput = {
+  latitude: number;
+  longitude: number;
 };
 
 export const destinationGuruApi = {
@@ -34,5 +44,13 @@ export const destinationGuruApi = {
 
   remove: async (id: string): Promise<void> => {
     await axiosClient.delete(`/api/v2/destination-guru/${id}`);
+  },
+
+  updateCoordinates: async (
+    id: string,
+    body: UpdateDestinationGuruCoordinatesInput,
+  ): Promise<DestinationGuruRecord> => {
+    const { data } = await axiosClient.patch(`/api/v2/destination-guru/${id}/coordinates`, body);
+    return data;
   },
 };

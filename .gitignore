@@ -9,3 +9,10 @@ vite.config.ts.*
 # easyJet trade-portal scraper browser profile
 .easyjet-session/
 .claude/settings.local.json
+
+# Playwright E2E artefacts
+test-results/
+e2e-results/
+playwright-report/
+blob-report/
+playwright/.cache/

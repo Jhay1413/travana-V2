@@ -2,6 +2,7 @@ import { AppError } from "../../utils/error-handler";
 import { sendSevenRequest, useSampleData, warnSendSevenOnce, type SsQuery } from "../../utils/sendseven";
 import {
   sampleBadgeCounts,
+  sampleBulkClose,
   sampleConversationById,
   sampleConversationList,
   sampleConversationPatched,
@@ -11,6 +12,7 @@ import type {
   SsBadgeCounts,
   SsConversation,
   SsConversationList,
+  SsWhatsappWindowStatus,
 } from "./conversations.types";
 
 // Repository layer: the ONLY place that talks to the SendSeven conversations
@@ -19,6 +21,12 @@ import type {
 //
 // TEMPORARY: while the API is unconfigured, read + status-change ops serve
 // sample fixture data instead of erroring, so the inbox is usable end-to-end.
+// The fixture store is STATEFUL (in-process memory, reset on restart): status
+// writes (close/reopen/snooze/unsnooze/update/assign/bulk-close) are applied to
+// it, so a closed conversation really leaves the Open list and the badge counts
+// drop. It used to return a patched copy without storing it, so the inbox
+// refetch after a close brought the conversation straight back. `merge` has no
+// fixture branch (it needs message re-parenting) and returns 503 when unconfigured.
 
 const warnOnce = warnSendSevenOnce;
 
@@ -46,6 +54,11 @@ function notFound(id: string): never {
 }
 
 export const conversationsRepository = {
+  // The WhatsApp 24h window lives under /whatsapp, not /conversations.
+  getWhatsappWindow(id: string): Promise<SsWhatsappWindowStatus> {
+    return sendSevenRequest<SsWhatsappWindowStatus>("GET", `/whatsapp/conversations/${encodeURIComponent(id)}/whatsapp-window`);
+  },
+
   // ── Reads ──
   list(params: ListConversationsParams): Promise<SsConversationList> {
     if (useSampleData()) {
@@ -122,7 +135,9 @@ export const conversationsRepository = {
 
   close(id: string, body: unknown): Promise<SsConversation> {
     if (useSampleData()) {
-      return Promise.resolve(sampleConversationPatched(id, { status: "closed", closed_at: new Date().toISOString() }) ?? notFound(id));
+      return Promise.resolve(
+        sampleConversationPatched(id, { status: "closed", closed_at: new Date().toISOString(), snoozed_until: null }) ?? notFound(id),
+      );
     }
     return request("POST", `/${id}/close`, { body });
   },
@@ -170,6 +185,7 @@ export const conversationsRepository = {
 
   // ── Writes: collection-level ──
   bulkClose(body: unknown): Promise<unknown> {
+    if (useSampleData()) return Promise.resolve(sampleBulkClose(body));
     return request("POST", "/bulk-close", { body });
   },
 

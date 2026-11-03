@@ -1,4 +1,5 @@
 import axiosClient from "@/api/client/axios-client";
+import { BRANCH_ENDPOINTS } from "@/api/endpoints";
 
 export interface BranchOpeningHour {
   day:       string;
@@ -8,6 +9,8 @@ export interface BranchOpeningHour {
 }
 
 export type BranchOpeningPattern = "mon-fri" | "mon-sat" | "seven-days";
+
+export type BranchType = "shop" | "homeworker";
 
 export interface Branch {
   id:               string;
@@ -23,6 +26,8 @@ export interface Branch {
   isDefault:        boolean;
   isActive:         boolean;
   createdAt:        string;
+  /** Present on servers that return it; absent means shop. */
+  branchType?:      BranchType;
 }
 
 export type BranchInput = Partial<{
@@ -39,23 +44,24 @@ export type BranchInput = Partial<{
 }>;
 
 export const branchApi = {
-  list: async (): Promise<Branch[]> => {
-    const { data } = await axiosClient.get<Branch[]>("/api/v2/branches");
+  /** Shop branches by default; "homeworker" is admin-only on the server. */
+  list: async (type: BranchType = "shop"): Promise<Branch[]> => {
+    const { data } = await axiosClient.get<Branch[]>(BRANCH_ENDPOINTS.base, { params: { type } });
     return data;
   },
   getById: async (id: string): Promise<Branch> => {
-    const { data } = await axiosClient.get<Branch>(`/api/v2/branches/${id}`);
+    const { data } = await axiosClient.get<Branch>(BRANCH_ENDPOINTS.byId(id));
     return data;
   },
   create: async (input: BranchInput): Promise<Branch> => {
-    const { data } = await axiosClient.post<Branch>("/api/v2/branches", input);
+    const { data } = await axiosClient.post<Branch>(BRANCH_ENDPOINTS.base, input);
     return data;
   },
   update: async (id: string, input: BranchInput): Promise<Branch> => {
-    const { data } = await axiosClient.patch<Branch>(`/api/v2/branches/${id}`, input);
+    const { data } = await axiosClient.patch<Branch>(BRANCH_ENDPOINTS.byId(id), input);
     return data;
   },
   remove: async (id: string): Promise<void> => {
-    await axiosClient.delete(`/api/v2/branches/${id}`);
+    await axiosClient.delete(BRANCH_ENDPOINTS.byId(id));
   },
 };

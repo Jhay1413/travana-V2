@@ -35,8 +35,8 @@ export const enquiryController = {
   updateEnquiry: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const id = req.params.id as string;
-    const { destinations, resorts, boardBases, departureAirports, passengers, ...enquiryData } = req.body;
-    const relations = { destinations, resorts, boardBases, departureAirports, passengers };
+    const { destinations, resorts, accommodations, boardBases, departureAirports, passengers, ...enquiryData } = req.body;
+    const relations = { destinations, resorts, accommodations, boardBases, departureAirports, passengers };
     const enquiry = await newEnquiryService.updateEnquiry(id, normalizeEnquiry(enquiryData), relations, scope);
     return successResponse(res, enquiry, "Enquiry updated successfully");
   }),

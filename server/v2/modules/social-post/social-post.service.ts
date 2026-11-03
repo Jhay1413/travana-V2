@@ -12,10 +12,13 @@ import {
   uploadMediaFromUrl,
   fetchOnlySocialsPost,
 } from "../../utils/only-socials";
-import { s3KeyFromStoredUrl, presignImageKey } from "../../utils/image-storage";
+import { isStoredProxyUrl, publicImageKeyFromStoredUrl, presignImageKey } from "../../utils/image-storage";
+import { autoUpscaleService } from "../image-upscale/auto-upscale.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { buildDealEmbeddingText, buildDealEmbeddingMetadata } from "./deal-embedding";
 import type { TravelDeal } from "@shared/schema";
+import { toOnlySocialsBody } from "@shared/social-post-body";
+import type { AutoUpscaleItem, AutoUpscaleSkip } from "../image-upscale/image-upscale.types";
 import type {
   OnlySocialsMediaUploadResponse,
   OnlySocialsMediaContent,
@@ -23,8 +26,21 @@ import type {
   OrganizationBranding,
 } from "./social-post.types";
 import type { Scope } from "../../utils/scope";
+import { assertOrderTokens, buildMediaSlots, type MediaSlot } from "./media-order";
 
 type ScopeOrTrusted = Scope | { orgId: null };
+
+/** What auto-upscaling did at schedule time, surfaced so the UI can tell the user. */
+export interface AutoUpscaleSummary {
+  upscaled: AutoUpscaleItem[];
+  skipped: AutoUpscaleSkip[];
+}
+
+export interface SchedulePostResult {
+  deal: TravelDeal;
+  failedImageUrls: string[];
+  autoUpscale: AutoUpscaleSummary;
+}
 
 // Best-effort vector-store sync for a POSTED deal (fire-and-forget, mirrors
 // quote.service#syncFreeQuoteEmbedding): a schedule/reschedule/edit must never
@@ -87,10 +103,6 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-type MediaTask =
-  | { kind: "file"; file: Express.Multer.File }
-  | { kind: "url"; url: string };
-
 /**
  * OnlySocials fetches media URLs itself (`uploadMediaFromUrl` does a
  * server-side `axios.get(imageUrl)`), so it needs a fully-qualified, publicly
@@ -99,9 +111,12 @@ type MediaTask =
  * those for a short-lived presigned S3 URL first. Any other URL (external
  * OnlySocials CDN, legacy absolute URLs, etc.) is passed through unchanged.
  */
-async function resolveUploadableUrl(url: string): Promise<string> {
-  const key = s3KeyFromStoredUrl(url);
-  if (!key) return boundScene7ImageUrl(url);
+export async function resolveUploadableUrl(url: string): Promise<string> {
+  if (!isStoredProxyUrl(url)) return boundScene7ImageUrl(url);
+  // Only public image keys are ever signed: a proxy URL pointing at a private object (client files, HR
+  // documents, attachments) or a malformed one is invalid, never passed through or presigned.
+  const key = publicImageKeyFromStoredUrl(url);
+  if (!key) throw new AppError("Invalid image", 400);
   return presignImageKey(key);
 }
 
@@ -124,71 +139,50 @@ function boundScene7ImageUrl(url: string): string {
 
 /**
  * Upload new files and quote-image URLs to OnlySocials and return the full
- * ordered list of media ids (existing + uploaded). Files and URLs are uploaded
- * together through a single bounded-concurrency queue, so total time scales with
+ * ordered list of media ids, following the order of `slots`. Files and URLs are
+ * uploaded through a single bounded-concurrency queue, so total time scales with
  * the slowest few uploads rather than the image count. File upload errors fail
  * the operation; URL fetch/upload errors are skipped, but reported back via
  * `failedUrls` so callers can tell the user which images were dropped.
  */
-async function resolveMediaIds(
-  existingImageIds: number[],
-  newFiles: Express.Multer.File[],
-  imageUrls: string[],
-): Promise<{ ids: number[]; failedUrls: string[] }> {
-  const tasks: MediaTask[] = [
-    ...newFiles.map((file): MediaTask => ({ kind: "file", file })),
-    ...imageUrls.map((url): MediaTask => ({ kind: "url", url })),
-  ];
-
+async function resolveMediaIds(slots: MediaSlot[]): Promise<{ ids: number[]; failedUrls: string[] }> {
+  const uploads = slots.filter((slot) => slot.kind !== "existing").length;
   console.log(
-    `[SocialPost][timing] resolveMediaIds start: existing=${existingImageIds.length} files=${newFiles.length} urls=${imageUrls.length} concurrency=${MEDIA_UPLOAD_CONCURRENCY}`,
+    `[SocialPost][timing] resolveMediaIds start: slots=${slots.length} uploads=${uploads} concurrency=${MEDIA_UPLOAD_CONCURRENCY}`,
   );
-
-  if (tasks.length === 0) {
-    console.log("[SocialPost][timing] resolveMediaIds: nothing to upload (existing-only)");
-    return { ids: [...existingImageIds], failedUrls: [] };
-  }
 
   const startedAt = Date.now();
   const failedUrls: string[] = [];
-  const uploaded = await mapWithConcurrency(tasks, MEDIA_UPLOAD_CONCURRENCY, async (task, index) => {
-    const label = task.kind === "file" ? `file#${index} (${task.file.originalname})` : `url#${index} (${task.url})`;
+  const resolved = await mapWithConcurrency(slots, MEDIA_UPLOAD_CONCURRENCY, async (slot, index) => {
+    if (slot.kind === "existing") return slot.id;
+    const label = slot.kind === "file" ? `file#${index} (${slot.file.originalname})` : `url#${index} (${slot.url})`;
     const taskStart = Date.now();
-    if (task.kind === "file") {
-      const result = await uploadOnlySocialsMedia(task.file);
+    if (slot.kind === "file") {
+      const result = await uploadOnlySocialsMedia(slot.file);
       console.log(`[SocialPost][timing]   uploaded ${label} in ${Date.now() - taskStart}ms`);
       return Number(result.id);
     }
     try {
-      const uploadableUrl = await resolveUploadableUrl(task.url);
+      const uploadableUrl = await resolveUploadableUrl(slot.url);
       const result = await uploadMediaFromUrl(uploadableUrl);
       console.log(`[SocialPost][timing]   uploaded ${label} in ${Date.now() - taskStart}ms`);
       return Number(result.id);
     } catch (err) {
-      console.error(
-        `[SocialPost][timing]   FAILED ${label} after ${Date.now() - taskStart}ms:`,
-        err,
-      );
-      failedUrls.push(task.url);
+      console.error(`[SocialPost][timing]   FAILED ${label} after ${Date.now() - taskStart}ms:`, err);
+      failedUrls.push(slot.url);
       return null;
     }
   });
 
-  const ok = uploaded.filter((id): id is number => id !== null).length;
-  console.log(
-    `[SocialPost][timing] resolveMediaIds done: ${ok}/${tasks.length} uploaded in ${Date.now() - startedAt}ms total`,
-  );
-
-  return {
-    ids: [...existingImageIds, ...uploaded.filter((id): id is number => id !== null)],
-    failedUrls,
-  };
+  const ids = resolved.filter((id): id is number => id !== null);
+  console.log(`[SocialPost][timing] resolveMediaIds done: ${ids.length}/${slots.length} in ${Date.now() - startedAt}ms total`);
+  return { ids, failedUrls };
 }
 
 async function assertQuoteInScope(quoteId: string, scope: ScopeOrTrusted) {
   const orgId = effectiveOrgId(scope);
   if (!orgId) return;
-  const ok = await socialPostRepository.quoteBelongsToOrg(quoteId, orgId);
+  const ok = await socialPostRepository.quoteBelongsToOrg(quoteId, orgId, scope);
   if (!ok) throw new AppError("Quote not found", 404);
 }
 
@@ -199,6 +193,10 @@ async function assertDealInScope(dealId: string, scope: ScopeOrTrusted): Promise
   if (!orgId) return deal;
   const row = await socialPostRepository.findByIdWithOrg(dealId);
   if (!row || row.orgId !== orgId) {
+    throw new AppError("Travel deal not found", 404);
+  }
+  // A deal inherits the shop/homeworker partition of the quote it was made from.
+  if (deal.quote_id && !(await socialPostRepository.quoteBelongsToOrg(deal.quote_id, orgId, scope))) {
     throw new AppError("Travel deal not found", 404);
   }
   return deal;
@@ -229,6 +227,18 @@ export interface PostDeal {
   luggageTransfers?: string | null;
   tourOperator?: string | null;
   price?: string | null;
+  familySize?: 3 | 4 | null;
+}
+
+/** Family deal = exactly 2 adults and 1 or 2 children (infants never count). */
+export function familySize(
+  adults: number | null | undefined,
+  children: number | null | undefined,
+): 3 | 4 | null {
+  if (adults !== 2) return null;
+  if (children === 1) return 3;
+  if (children === 2) return 4;
+  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -245,20 +255,29 @@ function readOptionalString(value: unknown): string | null {
  * org admins can configure) — if unset, the fields come back null and the
  * caller must omit them rather than fall back to any hardcoded agency.
  */
-function buildOrgSocialContact(org: OrganizationBranding | null): OrgSocialContact {
+export function buildOrgSocialContact(org: OrganizationBranding | null): OrgSocialContact {
   const social = org && isRecord(org.settings.social) ? org.settings.social : null;
+  const profile = org && isRecord(org.settings.profile) ? org.settings.profile : null;
   return {
     businessName: org?.name?.trim() || null,
-    phone: social ? readOptionalString(social.phone) : null,
+    phone: (social ? readOptionalString(social.phone) : null) ?? (profile ? readOptionalString(profile.phone) : null),
     website: social ? readOptionalString(social.website) : null,
     instagramUrl: social ? readOptionalString(social.instagramUrl) : null,
   };
 }
 
-/** Turn an org's business name into a hashtag-safe token, e.g. "Tina's Travel" -> "#TinasTravel". */
-function toHashtag(name: string): string | null {
-  const cleaned = name.replace(/[^a-zA-Z0-9]/g, "");
-  return cleaned ? `#${cleaned}` : null;
+const TOUR_OPERATOR_SHORT_NAMES: Record<string, string> = {
+  easyjet: "Ejet",
+  easyjetholidays: "Ejet",
+  jet2: "Jet2",
+  jet2holidays: "Jet2",
+  jet2holidayscom: "Jet2",
+};
+
+/** Shortens well-known tour operator names for posts; unknown names are returned trimmed. */
+export function shortTourOperatorName(name: string): string {
+  const key = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return TOUR_OPERATOR_SHORT_NAMES[key] ?? name.trim();
 }
 
 /**
@@ -270,8 +289,8 @@ function formatContactBlock(contact: OrgSocialContact): string {
   const hasContactDetails = !!(contact.phone || contact.website || contact.instagramUrl);
   if (!hasContactDetails) return "";
 
-  const lines = ["<br>To Book:<br>"];
-  if (contact.phone) lines.push(`☎ Call us on ${contact.phone}<br>`);
+  const lines = ["<br>To Book<br>"];
+  if (contact.phone) lines.push(`☎️ Call us on ${contact.phone}<br>`);
   lines.push("💬 Private message<br>");
   lines.push("📍 Pop in and see us<br>");
   if (contact.website) lines.push(`🌐 Visit our website: ${contact.website}<br>`);
@@ -283,30 +302,38 @@ export function formatPostHTML(
   deal: PostDeal,
   subtitle: string,
   resortSummary: string,
-  hashtags: string[],
   contact: OrgSocialContact
 ): string {
   const tropicalEmoji = pickRandomEmoji(EMOJI_POOLS.tropical);
   const subtitleEmoji = pickRandomEmoji(EMOJI_POOLS.subtitle);
 
-  const priceSection = deal.price ? `💸 Total cost from £${deal.price}pp<br>` : "";
-  const hashtagLine = hashtags.join(" ");
+  const priceSection = !deal.price
+    ? ""
+    : deal.familySize
+      ? `💸 Total cost from £${deal.price} for a Family of ${deal.familySize}<br>`
+      : `💸 Total cost from £${deal.price}pp<br>`;
   const contactBlock = formatContactBlock(contact);
+  const tourOperatorLine =
+    deal.tourOperator && deal.tourOperator !== "N/A" ? `${shortTourOperatorName(deal.tourOperator)}<br>\n` : "";
+
+  // Optional detail lines are only emitted when present, so a missing one never
+  // leaves a stray blank line once newlines are treated as line breaks.
+  const detailLines = [
+    `📅 ${safeDateFormat(deal.travelDate)}<br>`,
+    `🌙 ${deal.nights} Nights<br>`,
+    deal.boardBasis && deal.boardBasis !== "N/A" ? `🍽️ ${deal.boardBasis}<br>` : "",
+    deal.departureAirport && deal.departureAirport !== "N/A" ? `✈️ ${deal.departureAirport}<br>` : "",
+    deal.luggageTransfers && deal.luggageTransfers !== "N/A" ? `🧳 ${deal.luggageTransfers} 🚌<br>` : "",
+  ].filter(Boolean);
 
   return `${tropicalEmoji} ${deal.title} ${tropicalEmoji}<br>
 ${subtitleEmoji} ${subtitle} ${subtitleEmoji}<br>
 <br>
-📅 ${safeDateFormat(deal.travelDate)}<br>
-🌙 ${deal.nights} Nights<br>
-${deal.boardBasis && deal.boardBasis !== "N/A" ? `🍽️ ${deal.boardBasis}<br>` : ""}
-${deal.departureAirport && deal.departureAirport !== "N/A" ? `✈️ ${deal.departureAirport}<br>` : ""}
-${deal.luggageTransfers && deal.luggageTransfers !== "N/A" ? `🧳 ${deal.luggageTransfers} 🚌<br>` : ""}
+${detailLines.join("\n")}
 <br>
 ${priceSection}<br>
 ${resortSummary}<br>
-${contactBlock}${deal.tourOperator && deal.tourOperator !== "N/A" ? `🏢 ${deal.tourOperator}<br>` : ""}
-<br>
-${hashtagLine}`;
+${tourOperatorLine}${contactBlock}`;
 }
 
 async function callOpenAI(prompt: string, systemPrompt: string, maxTokens: number, orgId?: string | null): Promise<string> {
@@ -391,7 +418,10 @@ export const socialPostService = {
     // Branding always follows the quote's own org, even when the caller is a
     // platform admin acting outside their normal org scope — never falls back
     // to any hardcoded agency's contact details.
-    const dealOrgId = await socialPostRepository.findOrgIdForQuote(params.quoteId);
+    const [dealOrgId, passengerCounts] = await Promise.all([
+      socialPostRepository.findOrgIdForQuote(params.quoteId),
+      socialPostRepository.findPassengerCountsForQuote(params.quoteId),
+    ]);
     const orgBranding = dealOrgId ? await socialPostRepository.findOrganizationBrandingById(dealOrgId) : null;
     const contact = buildOrgSocialContact(orgBranding);
 
@@ -427,14 +457,9 @@ export const socialPostService = {
       : safeTitle;
 
     const defaultResortSummary = isHotTub
-      ? "🛁 Why You'll Love It:<br>🌿 Surrounded by peaceful countryside<br>🔥 Private hot tub included<br>🛏️ Comfortable lodge accommodation"
-      : "🌞 Why You'll Love It:<br>🏖️ Great destination & atmosphere<br>🏨 Quality accommodation<br>🌴 Memorable holiday experience";
-    const businessHashtag = contact.businessName ? toHashtag(contact.businessName) : null;
-    const defaultHashtags = isHotTub
-      ? ["#HotTubBreak", "#LodgeBreak", "#UKBreak", "#HolidayPark", "#WeekendGetaway", "#CoupleRetreat", "#HotTub", "#LodgeLife", "#TravelDeals", ...(businessHashtag ? [businessHashtag] : [])]
-      : ["#TravelDeals", "#HolidayDeals", "#TravelAgency", "#BookNow", "#HolidayTime", "#TravelLife", "#Vacation", "#HolidayGoals", ...(businessHashtag ? [businessHashtag] : []), "#Travel"];
-
-    const [subtitleResult, resortSummaryResult, hashtagsRawResult] = await Promise.allSettled([
+      ? "🛁 Why You'll Love It:<br>🔥 Private hot tub included<br>🛏️ Comfortable lodge accommodation<br>😊 Memorable getaway"
+      : "✨ Why You'll Love It:<br>📍 Great destination & atmosphere<br>🏨 Quality accommodation<br>😊 Memorable holiday experience";
+    const [subtitleResult, resortSummaryResult] = await Promise.allSettled([
       callOpenAI(
         isHotTub
           ? `Write a short, catchy subtitle (max 10 words) for a hot tub lodge break at "${propertyLabel}" in ${locationLabel}. Make it cosy and romantic. Return ONLY the subtitle text, no quotes.`
@@ -445,18 +470,21 @@ export const socialPostService = {
       ),
       callOpenAI(
         isHotTub
-          ? `Write a brief, engaging lodge summary in bullet form using relevant icons for "${propertyLabel}" in ${locationLabel}. Focus on the cosy atmosphere, hot tub experience, and countryside setting.
+          ? `Write a brief, engaging lodge summary in bullet form for "${propertyLabel}" in ${locationLabel}. Focus on the cosy atmosphere, the hot tub experience, and the setting.
 
-It should start with:
-🛁 Why You'll Love It:
-🌿 Surrounded by peaceful countryside
+Format:
+- First line: "<emoji> Why You'll Love It:" where <emoji> is ONE emoji that best fits this break (for example 🛁 for a hot tub lodge).
+- Then 3-4 short bullet lines, each starting with an emoji relevant to THAT line and the location.
+- Do not use any fixed or repeated lines; only mention things that are plausible for this specific lodge and location.
 
 NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`
-          : `Write a brief, engaging resort summary in bullet form using travel icons for "${safeTitle}" in ${safeDestination}. Focus on what makes this destination special, the atmosphere, and key amenities.
+          : `Write a brief, engaging resort summary in bullet form for "${safeTitle}" in ${safeDestination}. Focus on what makes this destination special, the atmosphere, and key amenities.
 
-It should start with:
-🌞 Why You'll Love It:
-🏖️ Close to golden sands & turquoise waters
+Format:
+- First line: "<emoji> Why You'll Love It:" where <emoji> is ONE emoji that best fits this destination and deal (for example 🗼 for Paris, 🎢 for Orlando, ⛷️ for a ski trip, 🌴 for a beach resort).
+- Then 3-4 short bullet lines, each starting with an emoji relevant to THAT line and the destination.
+- Do not use any fixed or forced lines.
+- Do NOT mention beaches, sand, sea or golden sands unless the destination is genuinely coastal.
 
 NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
         isHotTub
@@ -465,28 +493,21 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
         200,
         usageOrgId
       ),
-      callOpenAI(
-        isHotTub
-          ? `Generate 10 relevant Facebook hashtags for a hot tub lodge break in ${locationLabel} (${safeNights} nights). Return ONLY the hashtags separated by spaces, e.g. #HotTubBreak #LodgeBreak`
-          : `Generate 10 relevant Facebook hashtags for a travel deal to ${safeDestination} (${safeNights} nights). Return ONLY the hashtags separated by spaces, e.g. #TravelDeals #Tenerife`,
-        "You are a social media expert for a travel agency.",
-        80,
-        usageOrgId
-      ),
     ]);
 
     if (subtitleResult.status === "rejected") console.error("[SocialPost] Subtitle generation failed:", subtitleResult.reason?.message);
     if (resortSummaryResult.status === "rejected") console.error("[SocialPost] Resort summary generation failed:", resortSummaryResult.reason?.message);
-    if (hashtagsRawResult.status === "rejected") console.error("[SocialPost] Hashtag generation failed:", hashtagsRawResult.reason?.message);
 
     const subtitle = subtitleResult.status === "fulfilled" && subtitleResult.value ? subtitleResult.value : `${safeTitle} — Book Now`;
-    const resortSummary = resortSummaryResult.status === "fulfilled" && resortSummaryResult.value ? resortSummaryResult.value : defaultResortSummary;
-    const hashtagsRaw = hashtagsRawResult.status === "fulfilled" && hashtagsRawResult.value ? hashtagsRawResult.value : "";
+    // The model is told to use <br> but sometimes returns plain newlines.
+    const resortSummary = toOnlySocialsBody(
+      resortSummaryResult.status === "fulfilled" && resortSummaryResult.value ? resortSummaryResult.value : defaultResortSummary
+    );
 
-    const parsedHashtags = hashtagsRaw.split(/\s+/).filter((h) => h.startsWith("#")).slice(0, 12);
-    const hashtags = parsedHashtags.length > 0 ? parsedHashtags : defaultHashtags;
-
-    const displayPrice = pricePerPerson || salesPrice || null;
+    // Family deals (2 adults + 1-2 children) show the total price; if the total
+    // is unknown, fall back to the per-person line.
+    const familyDealSize = salesPrice ? familySize(passengerCounts?.adults, passengerCounts?.children) : null;
+    const displayPrice = familyDealSize && salesPrice ? salesPrice : pricePerPerson || salesPrice || null;
 
     const deal: PostDeal = {
       title: safeTitle,
@@ -497,24 +518,31 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
       luggageTransfers: transferType && transferType !== "none" ? transferType : null,
       tourOperator: tourOperator?.trim() || null,
       price: displayPrice,
+      familySize: familyDealSize,
     };
 
-    const postHTML = formatPostHTML(deal, subtitle, resortSummary, hashtags, contact);
+    const postHTML = toOnlySocialsBody(formatPostHTML(deal, subtitle, resortSummary, contact));
 
-    return await socialPostRepository.create({
-      quote_id: quoteId,
+    const generated = {
       title: safeTitle,
       subtitle,
       post: postHTML,
       resortSummary,
-      hashtags,
+      hashtags: [],
       travelDate: safeTravelDate,
       nights: safeNights,
       boardBasis: boardBasis || null,
       departureAirport: departureAirport || null,
       luggageTransfers: transferType && transferType !== "none" ? transferType : null,
       price: displayPrice,
-    });
+    };
+
+    // Regenerating must not create a second deal for the quote: refresh the
+    // generated fields on the existing row, leaving onlySocialsId/postSchedule alone.
+    const existing = await socialPostRepository.findByQuoteId(quoteId);
+    if (existing) return await socialPostRepository.update(existing.id, generated);
+
+    return await socialPostRepository.create({ quote_id: quoteId, ...generated });
   },
 
   async getTravelDealByQuoteId(quoteId: string, scope: ScopeOrTrusted): Promise<TravelDeal | null> {
@@ -525,7 +553,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
   async updateTravelDeal(id: string, data: Partial<TravelDeal>, scope: ScopeOrTrusted): Promise<TravelDeal> {
     await assertDealInScope(id, scope);
-    const updated = await socialPostRepository.update(id, data);
+    const payload = typeof data.post === "string" ? { ...data, post: toOnlySocialsBody(data.post) } : data;
+    const updated = await socialPostRepository.update(id, payload);
     // Only posted deals live in the vector store; keep the row fresh on edits.
     if (updated.onlySocialsId) syncDealEmbedding(updated);
     return updated;
@@ -538,21 +567,35 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     existingImageIds: number[],
     newFiles: Express.Multer.File[],
     imageUrls: string[] = [],
-    scope: ScopeOrTrusted = { orgId: null }
-  ): Promise<{ deal: TravelDeal; failedImageUrls: string[] }> {
+    scope: ScopeOrTrusted = { orgId: null },
+    imageOrder?: string[],
+  ): Promise<SchedulePostResult> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] schedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
+    if (imageOrder) assertOrderTokens(imageOrder, { existingIds: existingImageIds, fileCount: newFiles.length, urlCount: imageUrls.length });
+
+    // Never blocks or fails the schedule: unusable images fall back to the original.
+    const tUpscale = Date.now();
+    const prepared = await autoUpscaleService.prepareImagesForPost({
+      quoteId: deal.quote_id,
+      imageUrls,
+      files: newFiles,
+      scope,
+    });
+    console.log(`[SocialPost][timing] auto-upscale phase: ${Date.now() - tUpscale}ms`);
 
     const tMedia = Date.now();
-    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
+    const { ids: allImageIds, failedUrls } = await resolveMediaIds(
+      buildMediaSlots({ existingImageIds, inputFiles: newFiles, inputUrls: imageUrls, prepared, order: imageOrder }),
+    );
     console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids, ${failedUrls.length} failed)`);
 
     // OnlySocials stores the date/time verbatim (no timezone), so give it the
     // user's local wall-clock value; the DB keeps the absolute UTC instant.
     const tSchedule = Date.now();
-    const result = await scheduleOnlySocialsPost(postScheduleLocal, deal.post, allImageIds);
+    const result = await scheduleOnlySocialsPost(postScheduleLocal, toOnlySocialsBody(deal.post), allImageIds);
     console.log(`[SocialPost][timing] scheduleOnlySocialsPost: ${Date.now() - tSchedule}ms`);
 
     const tDb = Date.now();
@@ -563,7 +606,11 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
     console.log(`[SocialPost][timing] schedulePost DONE id=${id} total=${Date.now() - t0}ms`);
     syncDealEmbedding(updated);
-    return { deal: updated, failedImageUrls: failedUrls };
+    return {
+      deal: updated,
+      failedImageUrls: failedUrls,
+      autoUpscale: { upscaled: prepared.upscaled, skipped: prepared.skipped },
+    };
   },
 
   async reschedulePost(
@@ -574,16 +621,30 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     newFiles: Express.Multer.File[],
     postContent: string,
     imageUrls: string[] = [],
-    scope: ScopeOrTrusted = { orgId: null }
-  ): Promise<{ deal: TravelDeal; failedImageUrls: string[] }> {
+    scope: ScopeOrTrusted = { orgId: null },
+    imageOrder?: string[],
+  ): Promise<SchedulePostResult> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] reschedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
+    if (imageOrder) assertOrderTokens(imageOrder, { existingIds: existingImageIds, fileCount: newFiles.length, urlCount: imageUrls.length });
+
+    // Never blocks or fails the schedule: unusable images fall back to the original.
+    const tUpscale = Date.now();
+    const prepared = await autoUpscaleService.prepareImagesForPost({
+      quoteId: deal.quote_id,
+      imageUrls,
+      files: newFiles,
+      scope,
+    });
+    console.log(`[SocialPost][timing] auto-upscale phase: ${Date.now() - tUpscale}ms`);
 
     const tMedia = Date.now();
-    const { ids: allImageIds, failedUrls } = await resolveMediaIds(existingImageIds, newFiles, imageUrls);
+    const { ids: allImageIds, failedUrls } = await resolveMediaIds(
+      buildMediaSlots({ existingImageIds, inputFiles: newFiles, inputUrls: imageUrls, prepared, order: imageOrder }),
+    );
     console.log(`[SocialPost][timing] media phase total: ${Date.now() - tMedia}ms (${allImageIds.length} ids, ${failedUrls.length} failed)`);
 
     // OnlySocials gets the local wall-clock value; the DB keeps the UTC instant.
@@ -591,7 +652,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
       newPostScheduleLocal,
-      postContent,
+      toOnlySocialsBody(postContent),
       allImageIds
     );
     console.log(`[SocialPost][timing] rescheduleOnlySocialsPost: ${Date.now() - tSchedule}ms`);
@@ -604,7 +665,11 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
     console.log(`[SocialPost][timing] reschedulePost DONE id=${id} total=${Date.now() - t0}ms`);
     syncDealEmbedding(updated);
-    return { deal: updated, failedImageUrls: failedUrls };
+    return {
+      deal: updated,
+      failedImageUrls: failedUrls,
+      autoUpscale: { upscaled: prepared.upscaled, skipped: prepared.skipped },
+    };
   },
 
   async deleteScheduledPost(id: string, scope: ScopeOrTrusted): Promise<TravelDeal> {

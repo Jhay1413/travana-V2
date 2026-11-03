@@ -2,6 +2,8 @@ import { and, eq, gte, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm"
 import { db } from "../../config/database";
 import { booking, enquiry_table, quote, transaction } from "@shared/schema";
 import { quoteStatsConds } from "../../utils/quote-conditions";
+import type { Scope } from "../../utils/scope";
+import { buildPartitionCond } from "../../utils/scope-conditions";
 
 // Repository for the internal-chat assistant's "analytics tool": real,
 // scoped counts of enquiries/quotes/bookings for a date window. Never
@@ -18,6 +20,8 @@ export interface ResolvedAnalyticsScope {
   orgId?: string;
   branchId?: string;
   userId?: string;
+  // The caller's full scope, used only to layer the shop/homeworker partition.
+  partitionScope?: Scope;
 }
 
 export interface PipelineStatsParams {
@@ -50,6 +54,11 @@ function buildAnalyticsScopeConds(resolvedScope: ResolvedAnalyticsScope): SQL[] 
     conds.push(eq(transaction.user_id, resolvedScope.userId));
   }
 
+  if (resolvedScope.partitionScope) {
+    const partition = buildPartitionCond(resolvedScope.partitionScope, transaction.branch_id, transaction.user_id);
+    if (partition) conds.push(partition);
+  }
+
   return conds;
 }
 
@@ -77,6 +86,7 @@ export const internalChatAnalyticsRepository = {
             gte(enquiry_table.date_created, from),
             lt(enquiry_table.date_created, to),
             sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`,
+            isNull(enquiry_table.deleted_at),
             isNotNull(transaction.client_id),
             ...scopeConds,
           ),

@@ -2,6 +2,7 @@ import { db } from '../../config/database';
 import { enquiry_table, quote, booking, transaction, clientTable, user, branchMembers } from '@shared/schema';
 import { eq, and, sql, ilike, or, gte, lte, count, isNull, type SQL } from 'drizzle-orm';
 import type { Scope } from '../../utils/scope';
+import { buildTransactionScopeConds, buildUserPartitionCond } from '../../utils/scope-conditions';
 import { notSuspendedOrBanned } from '../../utils/user-conditions';
 import { userOrgRolesRepository } from '../user-org-roles/user-org-roles.repository';
 
@@ -16,17 +17,12 @@ export interface OpportunityFilters {
   scope: Scope;
 }
 
+/**
+ * The shared deal scope: org, the caller's own shop for agents and branch managers (their own legacy deals
+ * too, and NOTHING when they have no shop), and the shop/homeworker partition.
+ */
 function buildOpportunityScopeConds(scope: Scope): SQL[] {
-  const conds: SQL[] = [];
-  if (scope.orgRole === 'platform_admin') return conds;
-  conds.push(eq(transaction.org_id, scope.orgId));
-  if (scope.branchId && (scope.orgRole === 'branch_manager' || scope.orgRole === 'agent')) {
-    conds.push(eq(transaction.branch_id, scope.branchId));
-  }
-  if (scope.orgRole === 'homeworker' && scope.userId) {
-    conds.push(eq(transaction.user_id, scope.userId));
-  }
-  return conds;
+  return buildTransactionScopeConds(scope);
 }
 
 function buildDateConditions(field: any, dateRange: string) {
@@ -54,7 +50,7 @@ export const opportunitiesRepository = {
   async findEnquiries(filters: OpportunityFilters) {
     const { page, limit, status, search, dateRange, agentId, sortBy = 'newest', scope } = filters;
     const offset = (page - 1) * limit;
-    const conditions: any[] = [eq(transaction.is_active, true), eq(transaction.is_test, false), ...buildOpportunityScopeConds(scope)];
+    const conditions: any[] = [isNull(enquiry_table.deleted_at), eq(transaction.is_active, true), eq(transaction.is_test, false), ...buildOpportunityScopeConds(scope)];
     if (status && status !== 'all') conditions.push(sql`${enquiry_table.status} = ${status}`);
     if (agentId && agentId !== 'all') conditions.push(eq(transaction.user_id, agentId));
     if (dateRange && dateRange !== 'all-time') conditions.push(...buildDateConditions(enquiry_table.date_created, dateRange));
@@ -96,31 +92,44 @@ export const opportunitiesRepository = {
     return { rows, total: totalResult?.total || 0 };
   },
 
-  async findAgents(scope: Scope) {
-    if (scope.orgRole === 'platform_admin') {
-      return db
-        .select({ id: user.id, name: user.name, firstName: user.firstName })
-        .from(user)
-        .where(notSuspendedOrBanned())
-        .orderBy(user.firstName);
-    }
+  /** Every non-suspended user across all orgs (platform admin picker). */
+  async findAgentsAcrossPlatform() {
+    return db
+      .select({ id: user.id, name: user.name, firstName: user.firstName })
+      .from(user)
+      .where(notSuspendedOrBanned())
+      .orderBy(user.firstName);
+  },
+
+  /** Only the given user, if they belong to the org. */
+  async findSelfAsAgent(userId: string, orgId: string) {
+    return db
+      .select({ id: user.id, name: user.name, firstName: user.firstName })
+      .from(user)
+      .where(and(eq(user.id, userId), eq(user.orgId, orgId), notSuspendedOrBanned()));
+  },
+
+  /** Active members of one branch, excluding pure social media managers. */
+  async findAgentsInBranch(orgId: string, branchId: string) {
+    const socialOnly = new Set(await userOrgRolesRepository.findSocialOnlyUserIds({ orgId, branchId }));
+    const rows = await db
+      .select({ id: user.id, name: user.name, firstName: user.firstName })
+      .from(user)
+      .innerJoin(branchMembers, and(eq(branchMembers.userId, user.id), eq(branchMembers.isActive, true)))
+      .where(and(eq(user.orgId, orgId), eq(branchMembers.branchId, branchId), notSuspendedOrBanned()))
+      .orderBy(user.firstName);
+    return rows.filter((r) => !socialOnly.has(r.id));
+  },
+
+  /** Every user in the org, excluding pure social media managers. */
+  async findAgentsInOrg(orgId: string, branchId: string | null, scope?: Scope) {
     // Pure social media managers aren't sales agents — keep them out of the picker.
-    const socialOnly = new Set(
-      await userOrgRolesRepository.findSocialOnlyUserIds({ orgId: scope.orgId, branchId: scope.branchId }),
-    );
-    const rows =
-      scope.branchId && (scope.orgRole === 'branch_manager' || scope.orgRole === 'agent')
-        ? await db
-            .select({ id: user.id, name: user.name, firstName: user.firstName })
-            .from(user)
-            .innerJoin(branchMembers, and(eq(branchMembers.userId, user.id), eq(branchMembers.isActive, true)))
-            .where(and(eq(user.orgId, scope.orgId), eq(branchMembers.branchId, scope.branchId), notSuspendedOrBanned()))
-            .orderBy(user.firstName)
-        : await db
-            .select({ id: user.id, name: user.name, firstName: user.firstName })
-            .from(user)
-            .where(and(eq(user.orgId, scope.orgId), notSuspendedOrBanned()))
-            .orderBy(user.firstName);
+    const socialOnly = new Set(await userOrgRolesRepository.findSocialOnlyUserIds({ orgId, branchId }));
+    const rows = await db
+      .select({ id: user.id, name: user.name, firstName: user.firstName })
+      .from(user)
+      .where(and(eq(user.orgId, orgId), notSuspendedOrBanned(), scope ? buildUserPartitionCond(scope, user.id) : undefined))
+      .orderBy(user.firstName);
     return rows.filter((r) => !socialOnly.has(r.id));
   },
 };

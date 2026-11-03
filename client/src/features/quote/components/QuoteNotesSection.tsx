@@ -2,10 +2,10 @@ import { useMemo } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Spinner } from "@/components/ui/spinner";
 import { useNotes } from "@/hooks/queries";
-import { useCreateNote } from "@/hooks/mutations";
+import { useCreateNoteWithAttachments } from "@/features/note";
 import { useCurrentUser } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
-import type { TransactionNote } from "@/features/quote/types";
+import { groupNotesByParent } from "@/features/note/lib/group-notes";
 import { NoteCard } from "./NoteCard";
 import { NoteEditor } from "@/components/shared/note-editor";
 
@@ -19,15 +19,15 @@ export function QuoteNotesSection({
 }) {
   const { data: notesData, isLoading } = useNotes(transactionId);
   const { data: currentUser } = useCurrentUser();
-  const createMutation = useCreateNote(transactionId);
+  const createMutation = useCreateNoteWithAttachments(transactionId);
   const { toast } = useToast();
 
   const authorName = currentUser?.name || "Agent";
 
-  const topLevelNotes = useMemo(() => {
-    if (!notesData) return [];
-    return notesData.filter((n) => !n.parent_id);
-  }, [notesData]);
+  const { topLevel: topLevelNotes, repliesByParent } = useMemo(
+    () => groupNotesByParent(notesData ?? []),
+    [notesData],
+  );
 
   const displayedNotes = useMemo(() => {
     if (maxNotes == null) return topLevelNotes;
@@ -39,27 +39,18 @@ export function QuoteNotesSection({
       .slice(0, maxNotes);
   }, [topLevelNotes, maxNotes]);
 
-  const repliesByParent = useMemo(() => {
-    if (!notesData) return new Map<string, TransactionNote[]>();
-    const map = new Map<string, TransactionNote[]>();
-    notesData
-      .filter((n) => n.parent_id)
-      .forEach((n) => {
-        const existing = map.get(n.parent_id!) || [];
-        existing.push(n);
-        map.set(n.parent_id!, existing);
-      });
-    return map;
-  }, [notesData]);
-
-  const handleCreate = (html: string) => {
-    createMutation.mutate(
-      { transaction_id: transactionId, content: html },
-      {
-        onSuccess: () => toast({ title: "Note added" }),
-        onError: () => toast({ title: "Failed to add note", variant: "destructive" }),
-      }
-    );
+  const handleCreate = async (html: string, files?: File[]) => {
+    try {
+      const { uploadFailed } = await createMutation.mutateAsync({ data: { transaction_id: transactionId, content: html }, files });
+      
+      toast(uploadFailed
+        ? { title: "Note added, but its attachments failed to upload", variant: "destructive" }
+        : { title: "Note added" });
+    } catch (err) {
+      toast({ title: "Failed to add note", variant: "destructive" });
+      // Re-throw so NoteEditor keeps the typed content and files.
+      throw err;
+    }
   };
 
   return (
@@ -100,6 +91,7 @@ export function QuoteNotesSection({
       <div className="mt-2">
         <NoteEditor
           placeholder="Add a note…"
+          allowAttachments
           onSubmit={handleCreate}
           isLoading={createMutation.isPending}
         />

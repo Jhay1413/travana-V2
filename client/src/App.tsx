@@ -11,6 +11,7 @@ import { useRole } from "@/hooks/use-role";
 import { BrandingApplier } from "@/components/branding-applier";
 import { AppLayout } from "@/components/layout/app-layout";
 import { RoleRoute } from "@/components/role-route";
+import { ADMIN_MENU_ROLES, MenuModeProvider, useMenuMode } from "@/components/layout/menu-mode-context";
 // EmailInbox lives in components/ (not pages/) — kept as a static import.
 import EmailInbox from "@/features/email/components/email-inbox";
 // PortalPinGate is a named export used as a layout wrapper — kept static.
@@ -18,12 +19,14 @@ import { PortalPinGate } from "@/pages/portal/portal-pin-gate";
 import { Loader2 } from "lucide-react";
 import type { OrgRole } from "@/types/auth/auth.types";
 import { BotSettingsPage, KnowledgeBasePage } from "@/features/ai-assistant";
+import { canRunOnboarding, onboardingRedirectFor, shouldHoldForOnboarding, useOnboardingGate } from "@/features/onboarding";
 
 // ── Lazy page imports ──────────────────────────────────────────────────────────
 const NotFound = lazy(() => import("@/pages/not-found"));
 const ForbiddenPage = lazy(() => import("@/pages/forbidden"));
 const LandingPage = lazy(() => import("@/pages/landing"));
 const SignupAgencyPage = lazy(() => import("@/pages/signup-agency"));
+const OnboardingRoute = lazy(() => import("@/pages/onboarding"));
 const WelcomeTeamPage = lazy(() => import("@/pages/welcome-team"));
 const AgencyPage = lazy(() => import("@/pages/agency"));
 const PlatformAdminDashboard = lazy(() => import("@/pages/platform-admin/dashboard"));
@@ -45,19 +48,24 @@ const ClientPage = lazy(() => import("@/pages/client"));
 const QuotePage = lazy(() => import("@/pages/quote"));
 const EnquiryPage = lazy(() => import("@/pages/enquiry"));
 const TicketsPage = lazy(() => import("@/pages/tickets"));
+const TicketDetailPage = lazy(() => import("@/pages/tickets/ticket"));
 const AdminImportPage = lazy(() => import("@/pages/admin-import"));
 const AdminLookupPage = lazy(() => import("@/pages/admin-lookup"));
 const SettingsLookupPage = lazy(() => import("@/pages/settings-lookup"));
 const ToolsPage = lazy(() => import("@/pages/tools"));
+const ImageUpscalePage = lazy(() => import("@/pages/image-upscale"));
 const BookingPage = lazy(() => import("@/pages/booking-standalone"));
 const BookingsPage = lazy(() => import("@/pages/bookings"));
-const TasksPage = lazy(() => import("@/pages/tasks"));
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const PipelinePage = lazy(() => import("@/pages/pipeline"));
 const ChatPage = lazy(() => import("@/pages/chat"));
+const MyStatementPage = lazy(() => import("@/pages/my-statement"));
+const MyTargetsPage = lazy(() => import("@/pages/my-targets"));
 const ConversationsPage = lazy(() => import("@/pages/conversations"));
 const HubPage = lazy(() => import("@/pages/hub"));
 const SocialPostsPage = lazy(() => import("@/pages/social-posts"));
+const SocialPostsCalendarPage = lazy(() => import("@/pages/social-posts/calendar"));
+const SocialPostsSettingsPage = lazy(() => import("@/pages/social-posts/settings"));
 const SocialQuotePage = lazy(() => import("@/pages/social-quote"));
 const DestinationGuruPage = lazy(() => import("@/pages/destination-guru"));
 const SmsCenterPage = lazy(() => import("@/pages/sms-center"));
@@ -93,6 +101,8 @@ const ALL_ROLES: OrgRole[] = [
   "homeworker",
   "referral_agent",
 ];
+import { INBOX_SOCIAL_ROLES, MY_TARGETS_ROLES, SOCIAL_ROLES } from "@/config/homeworker-access";
+
 const STAFF_ROLES: OrgRole[] = ["platform_admin", "org_admin", "branch_manager", "agent", "homeworker"];
 // Client pages (client list/details + deal drill-downs) are also open to
 // social media managers, who get org-wide read access to client deal history.
@@ -101,6 +111,18 @@ const MANAGER_ROLES: OrgRole[] = ["platform_admin", "org_admin", "branch_manager
 const ADMIN_ROLES: OrgRole[] = ["platform_admin", "org_admin"];
 const PLATFORM_ROLES: OrgRole[] = ["platform_admin"];
 const REFERRAL_ROLES: OrgRole[] = ["referral_agent", "platform_admin"];
+
+/** /settings/tour-operators: the catalogue for platform admins, a redirect to /agency/tour-operators for everyone else. */
+function TourOperatorsCatalogueRoute() {
+  const { orgRole } = useRole();
+  if (!PLATFORM_ROLES.includes(orgRole)) return <Redirect to="/agency/tour-operators" />;
+  // The lookup page reads its table from the :tableSlug param.
+  return (
+    <Route path="/settings/:tableSlug">
+      <SettingsLookupPage />
+    </Route>
+  );
+}
 
 function LoadingScreen() {
   return (
@@ -115,17 +137,38 @@ function LoadingScreen() {
 
 function AuthenticatedRouter() {
   const { orgRole } = useRole();
+  const { mode } = useMenuMode();
   const [location] = useLocation();
-  const homePath =
-    orgRole === "referral_agent"
+  // Org admins whose onboarding is still pending land in the wizard instead of their home.
+  const onboarding = useOnboardingGate();
+  // Admin-eligible users default to the agent menu (see menu-mode-context), so
+  // "/" lands them on the agent dashboard unless they've switched to admin —
+  // otherwise they'd land on the agency dashboard with an agent sidebar.
+  const isAdminMenuActive = ADMIN_MENU_ROLES.includes(orgRole) && mode === "admin";
+  const homePath = onboarding.isPending
+    ? "/onboarding"
+    : orgRole === "referral_agent"
       ? "/referral-hub"
-      : orgRole === "platform_admin"
-        ? "/platform-admin"
-        : orgRole === "org_admin"
-          ? "/agency/overview"
+      : orgRole === "social_media_manager"
+        ? "/social-posts"
+        : isAdminMenuActive
+          ? orgRole === "platform_admin"
+            ? "/platform-admin"
+            : "/agency/overview"
           : orgRole === "branch_manager"
             ? "/branch-overview"
             : "/agent-overview";
+
+  // Hard gate: a pending org admin can only reach the wizard (fails open on error/loading).
+  if (shouldHoldForOnboarding(location, onboarding.isLoading)) return <LoadingScreen />;
+  const onboardingRedirect = onboardingRedirectFor(location, onboarding);
+  if (onboardingRedirect) return <Redirect to={onboardingRedirect} />;
+
+  // The onboarding wizard has its own full-screen shell (icon rail), outside AppLayout.
+  if (location === "/onboarding") {
+    if (onboarding.isLoading) return <LoadingScreen />;
+    return canRunOnboarding(orgRole) ? <OnboardingRoute /> : <ForbiddenPage />;
+  }
 
   // TheHUB ships its own full-page shell (HubShell) and must NOT inherit the CRM
   // AppLayout chrome. Render it standalone — still auth-gated (we're inside
@@ -138,7 +181,7 @@ function AuthenticatedRouter() {
   return (
     <AppLayout>
       <Switch>
-        <Route path="/">{() => <Redirect to={homePath} />}</Route>
+        <Route path="/">{() => (onboarding.isLoading ? <LoadingScreen /> : <Redirect to={homePath} />)}</Route>
         <Route path="/welcome-team" component={WelcomeTeamPage} />
         <Route path="/forbidden" component={ForbiddenPage} />
 
@@ -146,6 +189,7 @@ function AuthenticatedRouter() {
         <RoleRoute path="/branch-overview" allow={MANAGER_ROLES} component={BranchOverviewPage} />
         <RoleRoute path="/agency/overview" allow={ADMIN_ROLES} component={OrganizationOverviewPage} />
         <RoleRoute path="/agents/:agentId" allow={MANAGER_ROLES} component={AgentStatsPage} />
+        <RoleRoute path="/agents/:agentId/:tab" allow={MANAGER_ROLES} component={AgentStatsPage} />
 
         <RoleRoute path="/platform-admin/audit-log" allow={PLATFORM_ROLES} component={PlatformAdminAuditPage} />
         <RoleRoute path="/platform-admin/usage" allow={PLATFORM_ROLES} component={PlatformAdminUsagePage} />
@@ -155,24 +199,34 @@ function AuthenticatedRouter() {
         <RoleRoute path="/platform-admin" allow={PLATFORM_ROLES} component={PlatformAdminDashboard} />
         <RoleRoute path="/referral-hub" allow={REFERRAL_ROLES} component={ReferralAgentDashboard} />
 
+        <RoleRoute path="/agency/departures/balances" allow={MANAGER_ROLES} component={AgencyPage} />
+        <RoleRoute path="/agency/departures" allow={MANAGER_ROLES} component={AgencyPage} />
+        <RoleRoute path="/agency/integrations" allow={MANAGER_ROLES} component={AgencyPage} />
+        <RoleRoute path="/agency/team/invite" allow={MANAGER_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency/team" allow={MANAGER_ROLES} component={AgencyPage} />
+        {/* Staff read the list; writes are enforced by the server. Above '/agency/*'. */}
+        <RoleRoute path="/agency/tour-operators" allow={STAFF_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency/*" allow={ADMIN_ROLES} component={AgencyPage} />
         <RoleRoute path="/agency" allow={ADMIN_ROLES} component={AgencyPage} />
         <RoleRoute path="/admin/import" allow={ADMIN_ROLES} component={AdminImportPage} />
         <RoleRoute path="/admin/lookup/:tableSlug" allow={ADMIN_ROLES} component={AdminLookupPage} />
+        <RoleRoute path="/tools/upscale" allow={CLIENT_VIEW_ROLES} component={ImageUpscalePage} />
         <RoleRoute path="/tools" allow={STAFF_ROLES} component={ToolsPage} />
         <RoleRoute path="/settings/bot" allow={ADMIN_ROLES} component={BotSettingsPage} />
         <RoleRoute path="/settings/knowledge-base" allow={ADMIN_ROLES} component={KnowledgeBasePage} />
         {/* Must stay above the '/settings/:tableSlug' catch-all below — Switch
             takes the first match, so the param route would swallow it. */}
         <RoleRoute path="/settings/client-duplicates" allow={ADMIN_ROLES} component={ClientDuplicatesPage} />
+        {/* The global operator catalogue is curated by platform admins only; other staff
+            with an old bookmark go to their own list. Social media managers and referral
+            agents are still denied by the route guard. */}
+        <RoleRoute path="/settings/tour-operators" allow={STAFF_ROLES} component={TourOperatorsCatalogueRoute} />
         <RoleRoute path="/settings/:tableSlug" allow={ADMIN_ROLES} component={SettingsLookupPage} />
         <RoleRoute path="/hr" allow={MANAGER_ROLES} component={HrPage} />
         <RoleRoute path="/hr-v2" allow={MANAGER_ROLES} component={HrV2Page} />
         <RoleRoute path="/branch/targets" allow={MANAGER_ROLES} component={BranchTargetsPage} />
 
         <RoleRoute path="/bookings" allow={MANAGER_ROLES} component={BookingsPage} />
-        <RoleRoute path="/tasks" allow={MANAGER_ROLES} component={TasksPage} />
         <RoleRoute path="/reports" allow={MANAGER_ROLES} component={ReportsPage} />
 
         <RoleRoute path="/clients" allow={CLIENT_VIEW_ROLES} component={ClientsListPage} />
@@ -188,14 +242,18 @@ function AuthenticatedRouter() {
         <RoleRoute path="/opportunities" allow={STAFF_ROLES} component={OpportunitiesPage} />
         <RoleRoute path="/my-profile" allow={STAFF_ROLES} component={MyProfilePage} />
         <RoleRoute path="/chat" allow={STAFF_ROLES} component={ChatPage} />
-        <RoleRoute path="/conversations" allow={STAFF_ROLES} component={ConversationsPage} />
+        <RoleRoute path="/my-statement" allow={["homeworker"]} component={MyStatementPage} />
+        <RoleRoute path="/my-targets" allow={MY_TARGETS_ROLES} component={MyTargetsPage} />
+        <RoleRoute path="/conversations" allow={INBOX_SOCIAL_ROLES} component={ConversationsPage} />
         <RoleRoute path="/email" allow={STAFF_ROLES} component={EmailInbox} />
         <RoleRoute path="/destination-guru" allow={STAFF_ROLES} component={DestinationGuruPage} />
         <RoleRoute path="/sms-center" allow={STAFF_ROLES} component={SmsCenterPage} />
-        <RoleRoute path="/social-posts" allow={STAFF_ROLES} component={SocialPostsPage} />
-        <RoleRoute path="/social-posts/quotes/:quoteId" allow={STAFF_ROLES} component={SocialQuotePage} />
+        <RoleRoute path="/social-posts" allow={SOCIAL_ROLES} component={SocialPostsPage} />
+        <RoleRoute path="/social-posts/calendar" allow={SOCIAL_ROLES} component={SocialPostsCalendarPage} />
+        <RoleRoute path="/social-posts/settings" allow={SOCIAL_ROLES} component={SocialPostsSettingsPage} />
+        <RoleRoute path="/social-posts/quotes/:quoteId" allow={SOCIAL_ROLES} component={SocialQuotePage} />
         <RoleRoute path="/tickets" allow={STAFF_ROLES} component={TicketsPage} />
-        <RoleRoute path="/tickets/:ticketId" allow={STAFF_ROLES} component={TicketsPage} />
+        <RoleRoute path="/tickets/:ticketId" allow={STAFF_ROLES} component={TicketDetailPage} />
         {/* /hub is handled standalone (outside AppLayout) above — TheHUB has its own shell. */}
         <RoleRoute path="/feedback" allow={ALL_ROLES} component={FeedbackPage} />
 
@@ -325,9 +383,11 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <AuthSync />
-        <Suspense fallback={<LoadingScreen />}>
-          <AppRouter />
-        </Suspense>
+        <MenuModeProvider>
+          <Suspense fallback={<LoadingScreen />}>
+            <AppRouter />
+          </Suspense>
+        </MenuModeProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );

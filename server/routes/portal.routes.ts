@@ -14,7 +14,6 @@ import { eq, and, desc, isNotNull, inArray, sql, asc, ilike, exists, notExists }
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { getUserId } from "../utils/get-user-id";
 import { quotePublicRepository } from "../repositories/quote-public.repository";
 import { portalLoginTokenRepository } from "../v2/modules/portal/portal-login-token.repository";
 import { bridgePortalMessageToChat } from "../services/portal-chat-bridge";
@@ -73,6 +72,9 @@ portalRouter.post("/login", async (req: Request, res: Response) => {
       .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName, portalPin: clientTable.portalPin, mustChangePin: clientTable.mustChangePin })
       .from(clientTable)
       .where(eq(clientTable.email, email.toLowerCase().trim()))
+      // Several rows can share an email (a client duplicated into a homeworker branch has no PIN):
+      // prefer the record that has portal access, then the oldest, so a PIN-less copy never shadows it.
+      .orderBy(sql`(${clientTable.portalPin} IS NOT NULL) DESC`, asc(clientTable.createdAt))
       .limit(1);
 
     if (!client) {
@@ -168,14 +170,6 @@ portalRouter.post("/change-pin", portalAuth, async (req: Request, res: Response)
     res.status(500).json({ error: "Failed to change PIN" });
   }
 });
-
-function requireStaffAuth(req: Request, res: Response, next: NextFunction) {
-  const userId = getUserId(req);
-  if (!userId) {
-    return res.status(401).json({ error: "Staff authentication required" });
-  }
-  next();
-}
 
 
 portalRouter.post("/webauthn/register", portalAuth, async (req: Request, res: Response) => {
@@ -996,50 +990,6 @@ portalRouter.post("/wallet/withdraw", portalAuth, async (req: Request, res: Resp
 });
 
 // ── End VIP Referral Portal Endpoints ──────────────────────────────────────
-
-export const portalStaffRouter = Router();
-
-portalStaffRouter.get("/has-pin/:clientId", requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const [client] = await db
-      .select({ portalPin: clientTable.portalPin })
-      .from(clientTable)
-      .where(eq(clientTable.id, req.params.clientId))
-      .limit(1);
-    res.json({ hasPin: !!client?.portalPin });
-  } catch (err: any) {
-    res.status(500).json({ error: "Failed to check PIN" });
-  }
-});
-
-portalStaffRouter.post("/set-pin", requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId, pin } = req.body;
-    if (!clientId || !pin || pin.length !== 4 || !/^\d{4}$/.test(pin)) {
-      return res.status(400).json({ error: "Valid 4-digit PIN required" });
-    }
-
-    const hash = await bcrypt.hash(pin, 10);
-    // A staff-chosen PIN is final, so clear any pending forced-change flag.
-    await db.update(clientTable).set({ portalPin: hash, mustChangePin: false }).where(eq(clientTable.id, clientId));
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Set PIN error:", err);
-    res.status(500).json({ error: "Failed to set PIN" });
-  }
-});
-
-portalStaffRouter.post("/remove-pin", requireStaffAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = req.body;
-    if (!clientId) return res.status(400).json({ error: "clientId required" });
-    await db.update(clientTable).set({ portalPin: null, mustChangePin: false }).where(eq(clientTable.id, clientId));
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Remove PIN error:", err);
-    res.status(500).json({ error: "Failed to remove PIN" });
-  }
-});
 
 // Ownership guard: tells the portal whether the logged-in client owns the quote
 // behind this share token, so the UI can show it or bounce them away.

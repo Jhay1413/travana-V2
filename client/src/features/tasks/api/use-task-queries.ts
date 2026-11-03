@@ -8,6 +8,7 @@ export const taskKeys = {
   listExtended: () => [...taskKeys.all, "listExtended"] as const,
   byEntity: (entityType: string, entityId: string) =>
     [...taskKeys.all, "byEntity", entityType, entityId] as const,
+  forClient: (clientId: string) => [...taskKeys.all, "forClient", clientId] as const,
   byUser: (userId: string) => [...taskKeys.all, "byUser", userId] as const,
 };
 
@@ -30,6 +31,15 @@ export function useTasks(entityType: string, entityId: string) {
     queryKey: taskKeys.byEntity(entityType, entityId),
     queryFn: () => taskApi.getByEntity(entityType, entityId),
     enabled: !!entityType && !!entityId,
+  });
+}
+
+/** Tasks on a client and on all of its enquiries, quotes and bookings. */
+export function useClientTasks(clientId: string) {
+  return useQuery<TaskNew[]>({
+    queryKey: taskKeys.forClient(clientId),
+    queryFn: () => taskApi.getForClient(clientId),
+    enabled: !!clientId,
   });
 }
 

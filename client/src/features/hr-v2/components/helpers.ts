@@ -104,6 +104,11 @@ function mapApiStatus(s: ApiHrStatus): EmployeeStatus {
   return s === "Terminated" ? "Archived" : s;
 }
 
+/** Calendar days from start to end, both included; used when the server sends no working-day count. */
+function calendarDays(h: ApiLeaveEntry): number {
+  return Math.max(0, Math.round((new Date(h.to).getTime() - new Date(h.from).getTime()) / 86_400_000) + 1);
+}
+
 function mapApiHoliday(h: ApiLeaveEntry) {
   const days =
     Math.max(0, Math.round((new Date(h.to).getTime() - new Date(h.from).getTime()) / 86_400_000) + 1);

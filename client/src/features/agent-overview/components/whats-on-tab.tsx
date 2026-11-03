@@ -4,10 +4,11 @@ import { useLocation } from "wouter";
 import { ChevronRight, LifeBuoy, ListChecks, Pencil, Plus } from "lucide-react";
 import { DatePicker } from "@/components/ui/date-picker";
 import { EditTaskDialog } from "@/features/tasks/components/tasks/EditTaskDialog";
-import { CreateTaskDialog } from "@/features/tasks/components/tasks/CreateTaskDialog";
+import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { Separator } from "@/components/ui/separator";
 import { useAllTasksExtended, useUserTasks } from "@/hooks/queries";
 import { useTickets, useTicketsByUser } from "@/features/tickets/api/use-ticket-queries";
+import { dealDeepLinkHref } from "@/lib/deal-links";
 import { currency } from "./helpers";
 
 export type WhatsOnFilter = "all" | "today" | "tomorrow" | "this-week" | "custom" | "overdue";
@@ -110,7 +111,13 @@ export function WhatsOnTab({
     statuses: ["open", "in_progress"],
   });
   const { data: allTasksRaw } = useAllTasksExtended();
-  const { data: allTicketsRaw } = useTickets();
+  // Only fetched/used for the "all agents" branch below, and only that branch
+  // needs org/branch-wide tickets rather than just the viewer's own — this
+  // widget lives on branch/org overview pages, restricted to admin-tier roles,
+  // which is exactly who the server allows to request "all". Gated with
+  // `enabled` so the per-agent view (allUsers false, the common case) never
+  // fires this request — its result isn't read below when allUsers is false.
+  const { data: allTicketsRaw } = useTickets("all", { enabled: allUsers });
 
   const overdueTasks = useMemo(() => {
     const source = allUsers ? allTasksRaw : overdueTasksData;
@@ -263,22 +270,7 @@ export function WhatsOnTab({
             const overdue = isTaskOverdue(task);
             // Pulse the border for any overdue task, regardless of the active filter.
             const showOverduePulse = overdue;
-            let taskHref: string | null = null;
-            if (task.entityType === "quote" && task.entityId) {
-              taskHref = task.clientId
-                ? `/clients/${task.clientId}/quotes/${task.entityId}`
-                : `/quotes/${task.entityId}`;
-            } else if (task.entityType === "booking" && task.entityId) {
-              taskHref = task.clientId
-                ? `/clients/${task.clientId}/bookings/${task.entityId}`
-                : `/bookings/${task.entityId}`;
-            } else if (task.entityType === "enquiry" && task.entityId) {
-              taskHref = task.clientId
-                ? `/clients/${task.clientId}/enquiries/${task.entityId}`
-                : `/enquiries/${task.entityId}`;
-            } else if (task.entityType === "client" && task.clientId) {
-              taskHref = `/clients/${task.clientId}`;
-            }
+            const taskHref = dealDeepLinkHref(task.entityType, task.entityId, task.clientId);
             return (
               <motion.button
                 key={task.id}
@@ -508,10 +500,12 @@ export function WhatsOnTab({
         entityId={editingTask?.entityId ?? ""}
       />
 
-      <CreateTaskDialog
+      <AddTaskModal
         open={creatingTask}
         onOpenChange={setCreatingTask}
         defaultAssignedToId={allUsers ? undefined : userId}
+        title="New task"
+        successToast="Task created"
       />
     </div>
   );

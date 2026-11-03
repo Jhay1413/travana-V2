@@ -57,6 +57,7 @@ function bookingRangeConds(scope: ReportScope): SQL[] {
     gte(booking.date_created, scope.from),
     lte(booking.date_created, scope.to),
     sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
+    eq(transaction.is_active, true),
     ...buildScopeConditions(scope),
   ];
   if (scope.agentId) conds.push(eq(transaction.user_id, scope.agentId));
@@ -356,6 +357,7 @@ export const reportsRepository = {
             gte(enquiry_table.date_created, scope.from),
             lte(enquiry_table.date_created, scope.to),
             sql`(${enquiry_table.is_active} IS NULL OR ${enquiry_table.is_active} = true)`,
+            isNull(enquiry_table.deleted_at),
             ...buildScopeConditions(scope),
           ),
         )
@@ -480,6 +482,7 @@ export const reportsRepository = {
               gte(booking.date_created, yearStart),
               lte(booking.date_created, yearEnd),
               sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
+              eq(transaction.is_active, true),
               eq(transaction.is_test, false),
               eq(transaction.branch_id, scope.branchId),
             ),
@@ -503,6 +506,7 @@ export const reportsRepository = {
               gte(booking.date_created, yearStart),
               lte(booking.date_created, yearEnd),
               sql`(${booking.is_active} IS NULL OR ${booking.is_active} = true)`,
+              eq(transaction.is_active, true),
               eq(transaction.is_test, false),
               eq(transaction.branch_id, scope.branchId),
             ),

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import type { UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2 } from "lucide-react";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2, type LucideIcon } from "lucide-react";
 import { walletApi } from "@/features/wallet/api/wallet.api";
 import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
 import { QuoteImagesSection } from "@/features/quote/components/sections/QuoteImagesSection";
@@ -19,7 +20,7 @@ import { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/
 import type { BookingFormValues, FlightLegValue, BookingRHFFormProps, ExtrasFormValues, UpsellsFormValues } from "@/features/booking/types";
 import { QuoteExtrasSection as BookingExtrasSection } from "@/features/quote/components/quote-extras-section";
 import { TRANSFER_TYPES } from "@/features/quote/types/quote-form.types";
-import { operatorCommissionPct, recomputePricing } from "@/features/quote/lib/pricing";
+import { operatorCommissionPct, recomputePricing, pricePerPersonFor } from "@/features/quote/lib/pricing";
 import { BookingUpsellsSection } from "@/features/booking/components/BookingUpsellsSection";
 import { QuoteLodgeDetailsSection } from "@/features/quote/components/sections/QuoteLodgeDetailsSection";
 import { QuoteCruiseDetailsSection } from "@/features/quote/components/sections/QuoteCruiseDetailsSection";
@@ -41,6 +42,7 @@ import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { operatorSelectOptions, OperatorRateHint, useOperatorNames } from "@/features/tour-operator";
 import {
   Form,
   FormField,
@@ -72,6 +74,8 @@ import { summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
 import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
 import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
+import { orderBoardBasisRows } from "@/features/lookups";
+import { HAYS_REF_MESSAGE, normaliseHaysRef } from "@shared/booking-refs";
 
 const emptyFlightLeg: FlightLegValue = {
   departAirportId: "",
@@ -89,7 +93,7 @@ function SectionHeader({
   icon: Icon,
   title,
 }: {
-  icon: React.ElementType;
+  icon: LucideIcon;
   title: string;
 }) {
   return (
@@ -394,6 +398,7 @@ export function BookingRHFForm({
   const { data: packageTypesData } = usePackageTypes();
   const { data: airportsData } = useAirports();
   const { data: tourOperatorsData } = useTourOperators();
+  const operatorNames = useOperatorNames();
   const { data: boardBasisData } = useBoardBasis();
   const { data: roomTypeData } = useRoomTypes();
   const { data: countriesData } = useCountries();
@@ -460,17 +465,19 @@ export function BookingRHFForm({
   }, [passengersChildren, setValue, form]);
 
   // ── Price per person calculation ──────────────────────────────────────────
+  // Derived from price/discount/serviceCharge/traveller counts via the shared
+  // helper (features/quote/lib/pricing) so this recomputes the same way whether
+  // those fields changed from typing OR from an import's setValue calls.
+  // `price` must be a dependency, not just read off getValues — otherwise an
+  // import that sets price without changing the traveller counts (which start
+  // at the same default) never re-fires this effect and price-per-person is
+  // left stale until the agent edits price/discount/service charge by hand.
   useEffect(() => {
-    const price = Number(form.getValues("price")) || 0;
-    const currentDiscount = Number(form.getValues("discount")) || 0;
-    const currentServiceCharge = Number(form.getValues("serviceCharge")) || 0;
-    const adults = Number(passengersAdults) || 0;
-    const children = Number(passengersChildren) || 0;
-    const total = adults + children;
-    // Total price = price − discount + service charge, split across all passengers.
-    const netPrice = price - currentDiscount + currentServiceCharge;
-    setValue("pricePerPerson", total > 0 ? parseFloat((netPrice / total).toFixed(2)) : 0);
-  }, [passengersAdults, passengersChildren, discount, serviceCharge]); // eslint-disable-line react-hooks/exhaustive-deps
+    setValue(
+      "pricePerPerson",
+      pricePerPersonFor(price, discount, serviceCharge, passengersAdults, passengersChildren),
+    );
+  }, [price, passengersAdults, passengersChildren, discount, serviceCharge, setValue]);
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   // Commission = price × operator % − discount + service charge. The discount is
@@ -562,15 +569,6 @@ export function BookingRHFForm({
     [airportsData]
   );
 
-  const tourOperatorOptions = useMemo(
-    () =>
-      (tourOperatorsData || []).map((op: { id: string; name: string | null }) => ({
-        value: op.id,
-        label: op.name || op.id,
-      })),
-    [tourOperatorsData]
-  );
-
   const countryOptions = useMemo(
     () =>
       (countriesData || []).map((c: { id: string; country_name: string }) => ({
@@ -609,7 +607,7 @@ export function BookingRHFForm({
 
   const boardBasisOptions = useMemo(
     () =>
-      (boardBasisData || []).map((b: { id: string; type: string }) => ({
+      orderBoardBasisRows(boardBasisData || []).map((b: { id: string; type: string }) => ({
         value: b.id,
         label: b.type,
       })),
@@ -701,12 +699,28 @@ export function BookingRHFForm({
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(
-        (values) => onSubmit(values, {
-          files: pendingFiles(imageItems),
-          urls: resolvedUrls(imageItems),
-          deletedImageIds,
-          items: imageItems,
-        }),
+        (values) => {
+          // HAYS Ref format: a non-empty value is checked on create, and on edit only when it
+          // differs from the stored one (older bookings keep their legacy format).
+          const haysRef = (values.haysRef ?? "").trim();
+          let submitted = values;
+          if (haysRef && haysRef !== (defaultValues?.haysRef ?? "").trim()) {
+            const normalised = normaliseHaysRef(haysRef);
+            if (!normalised) {
+              form.setError("haysRef", { type: "validate", message: HAYS_REF_MESSAGE });
+              toast({ title: "Can't save yet", description: HAYS_REF_MESSAGE, variant: "destructive" });
+              scrollToFirstFormError();
+              return;
+            }
+            submitted = { ...values, haysRef: normalised };
+          }
+          return onSubmit(submitted, {
+            files: pendingFiles(imageItems),
+            urls: resolvedUrls(imageItems),
+            deletedImageIds,
+            items: imageItems,
+          });
+        },
         // Without this, a failed validation makes the Save button appear to do
         // nothing — the inline message can be scrolled out of view in this
         // long dialog.
@@ -751,7 +765,7 @@ export function BookingRHFForm({
                         {...field}
                         value={field.value ?? ""}
                         className={drawerInputClass}
-                        placeholder="Enter Hays reference..."
+                        placeholder="e.g. HAY-1234567"
                       />
                     </FormControl>
                     <FormMessage />
@@ -877,7 +891,7 @@ export function BookingRHFForm({
                       {...field}
                       value={field.value ?? ""}
                       className="h-9 rounded-xl border-black/10 bg-white/70"
-                      placeholder="Enter Hays reference..."
+                      placeholder="e.g. HAY-1234567"
                     />
                   </FormControl>
                   <FormMessage />
@@ -915,7 +929,7 @@ export function BookingRHFForm({
               name="packageType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Package Type *</FormLabel>
+                  <FormLabelTooltip className="text-xs font-medium text-black/60" tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Package Type *</FormLabelTooltip>
                   <Select
                     value={field.value}
                     onValueChange={field.onChange}
@@ -965,7 +979,7 @@ export function BookingRHFForm({
                   <FormLabel className="text-xs font-medium text-black/60">Tour Operator</FormLabel>
                   <FormControl>
                     <SearchableSelect
-                      options={tourOperatorOptions}
+                      options={operatorSelectOptions(tourOperatorsData, field.value, operatorNames[field.value ?? ""])}
                       value={field.value ?? ""}
                       onValueChange={(value) => {
                         field.onChange(value);
@@ -982,6 +996,7 @@ export function BookingRHFForm({
                       placeholder="Select operator..."
                     />
                   </FormControl>
+                  <OperatorRateHint operators={tourOperatorsData} selectedId={field.value} />
                   <FormMessage />
                 </FormItem>
               )}
@@ -992,7 +1007,7 @@ export function BookingRHFForm({
               name="leadSource"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Lead Source</FormLabel>
+                  <FormLabelTooltip className="text-xs font-medium text-black/60" tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead Source</FormLabelTooltip>
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
@@ -1060,7 +1075,7 @@ export function BookingRHFForm({
               name="transferType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Transfer Type</FormLabel>
+                  <FormLabelTooltip className="text-xs font-medium text-black/60" tip="How guests get between the airport and their accommodation: private or shared transfer, seaplane, speedboat, self-drive, or none.">Transfer Type</FormLabelTooltip>
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">
@@ -1142,7 +1157,7 @@ export function BookingRHFForm({
               name="flightMeals"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-xs font-medium text-black/60">Flight Meals</FormLabel>
+                  <FormLabelTooltip className="text-xs font-medium text-black/60" tip="Whether meals are included on the flights (Yes or No).">Flight Meals</FormLabelTooltip>
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
                     <FormControl>
                       <SelectTrigger className="h-9 rounded-xl border-black/10 bg-white/70">

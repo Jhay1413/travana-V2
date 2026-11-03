@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { destinationGuruDataSchema } from "./destination-guru.service";
+import { coordinatesSchema, idParamValidator, updateCoordinatesValidator } from "./destination-guru.validator";
 
 const validPayload = {
   destination: "Corfu",
@@ -80,5 +81,87 @@ describe("destinationGuruDataSchema", () => {
     const invalid = { ...validPayload, mustDo: [] };
     const result = destinationGuruDataSchema.safeParse(invalid);
     expect(result.success).toBe(false);
+  });
+
+  it("accepts a payload carrying an extra coordinates field (coordinates isn't part of the content shape)", () => {
+    const withCoordinates = { ...validPayload, coordinates: { lat: 39.6243, lng: 19.9217 } };
+    const result = destinationGuruDataSchema.safeParse(withCoordinates);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("coordinatesSchema", () => {
+  it("accepts a valid lat/lng pair", () => {
+    const result = coordinatesSchema.safeParse({ lat: 39.6243, lng: 19.9217 });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a latitude out of range (91)", () => {
+    const result = coordinatesSchema.safeParse({ lat: 91, lng: 19.9217 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a longitude out of range (-181)", () => {
+    const result = coordinatesSchema.safeParse({ lat: 39.6243, lng: -181 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a string instead of a number", () => {
+    const result = coordinatesSchema.safeParse({ lat: "39.6243", lng: 19.9217 });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects (0, 0) — the null-island sentinel, not a real destination", () => {
+    const result = coordinatesSchema.safeParse({ lat: 0, lng: 0 });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("updateCoordinatesValidator", () => {
+  it("rejects a bad uuid in params.id", () => {
+    const result = updateCoordinatesValidator.safeParse({
+      params: { id: "not-a-uuid" },
+      body: { latitude: 39.6243, longitude: 19.9217 },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a valid uuid and coordinate pair", () => {
+    const result = updateCoordinatesValidator.safeParse({
+      params: { id: "9f9c1c1a-6c1e-4f3a-8f9a-9b1e6c1a2b3c" },
+      body: { latitude: 39.6243, longitude: 19.9217 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects (0, 0) on the manual PATCH too, sharing the AI path's null-island rule", () => {
+    const result = updateCoordinatesValidator.safeParse({
+      params: { id: "9f9c1c1a-6c1e-4f3a-8f9a-9b1e6c1a2b3c" },
+      body: { latitude: 0, longitude: 0 },
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe("Coordinates (0, 0) are not a valid destination location");
+    }
+  });
+
+  it("rejects an out-of-range latitude", () => {
+    const result = updateCoordinatesValidator.safeParse({
+      params: { id: "9f9c1c1a-6c1e-4f3a-8f9a-9b1e6c1a2b3c" },
+      body: { latitude: 91, longitude: 19.9217 },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("idParamValidator", () => {
+  it("rejects a non-uuid id", () => {
+    const result = idParamValidator.safeParse({ params: { id: "not-a-uuid" } });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a valid uuid", () => {
+    const result = idParamValidator.safeParse({ params: { id: "9f9c1c1a-6c1e-4f3a-8f9a-9b1e6c1a2b3c" } });
+    expect(result.success).toBe(true);
   });
 });

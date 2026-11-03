@@ -489,7 +489,11 @@ export const newQuoteService = {
     // When marked lost, deactivate the quote and its parent transaction
     if (quoteData.quote_status === 'lost' && q.transaction_id) {
       await newQuoteRepository.update(id, { is_active: false });
-      await transactionRepository.update(q.transaction_id, { is_active: false });
+      // A transaction that already progressed to a booking was WON; only this quote lost.
+      const txn = await transactionRepository.findById(q.transaction_id);
+      if (txn?.status !== 'on_booking') {
+        await transactionRepository.update(q.transaction_id, { is_active: false });
+      }
     }
 
     // Update lead_source on the transaction table

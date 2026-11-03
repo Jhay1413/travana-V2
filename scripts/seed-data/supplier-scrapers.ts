@@ -158,7 +158,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "PHP",
           "tour_operator": "Agoda"
         }
       },
@@ -271,7 +270,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "USD",
           "tour_operator": "Carnival"
         },
         "packageType": "cruise",
@@ -427,7 +425,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "Celebrity Cruises"
         },
         "packageType": "cruise",
@@ -540,7 +537,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "Cunard"
         },
         "luggageRegex": "",
@@ -694,7 +690,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "Easyjet"
         },
         "luggageRegex": "(\\d+)\\s*x\\s*hold bags?",
@@ -805,7 +800,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "Hoseasons"
         }
       },
@@ -987,7 +981,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "Jet2holidays"
         },
         "luggageRegex": "(\\d+)kg ([\\w ]+)",
@@ -1133,7 +1126,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "MSC Cruises"
         },
         "packageType": "cruise",
@@ -1247,7 +1239,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "USD",
           "tour_operator": "Norwegian Cruise Line"
         },
         "packageType": "cruise",
@@ -1362,7 +1353,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "P&O Cruises"
         },
         "packageType": "cruise",
@@ -1418,12 +1408,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "group": 1,
             "regex": "Guests?\\s*\\n*[0-9]+ Adults?\\s*\\n*([0-9]+) Children?",
             "transform": "number"
-          },
-          "currency": {
-            "from": "url",
-            "group": 1,
-            "regex": "selectedCurrencyCode=([A-Z]{3})",
-            "fallback": "GBP"
           },
           "ship_name": {
             "from": "text",
@@ -1531,7 +1515,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "Royal Caribbean"
         },
         "packageType": "cruise",
@@ -1712,7 +1695,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "TUI"
         },
         "packageType": "package-holiday",
@@ -1813,7 +1795,6 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         },
         "version": 1,
         "constants": {
-          "currency": "GBP",
           "tour_operator": "Virgin Voyages"
         },
         "packageType": "cruise",

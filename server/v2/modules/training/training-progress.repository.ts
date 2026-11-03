@@ -1,11 +1,30 @@
 import { db } from '../../config/database';
-import { training_enrollment, training_lesson, training_lesson_progress } from '@shared/schema';
+import {
+  training_certificate,
+  training_course,
+  training_enrollment,
+  training_lesson,
+  training_lesson_progress,
+} from '@shared/schema';
 import type {
   TrainingEnrollment,
   InsertTrainingEnrollment,
   TrainingLessonProgress,
 } from '@shared/schema';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
+
+export interface EnrollmentDetailRow {
+  enrollmentId: string;
+  courseId: string;
+  title: string;
+  category: string;
+  status: TrainingEnrollment['status'];
+  enrolledAt: Date;
+  completedAt: Date | null;
+  lessonsTotal: number;
+  lessonsCompleted: number;
+  certificate: { issuedAt: Date; certificateNo: string | null } | null;
+}
 
 export const trainingProgressRepository = {
   async findEnrollment(courseId: string, userId: string): Promise<TrainingEnrollment | undefined> {
@@ -79,6 +98,62 @@ export const trainingProgressRepository = {
         row.status === 'completed' ? 100 : total > 0 ? Math.round((completed / total) * 100) : 0;
       return { courseId: row.courseId, status: row.status, progressPct };
     });
+  },
+
+  /**
+   * Admin view of one user's enrolments: course title/category, REQUIRED lesson counts (same basis as
+   * listEnrollmentsByUser, so the profile matches /my-courses) and the issued certificate, if any. Only courses that are
+   * global (no org) or belong to `orgId` are returned, so another organisation's course never leaks.
+   */
+  async listEnrollmentDetailsByUser(userId: string, orgId: string): Promise<EnrollmentDetailRow[]> {
+    const rows = await db
+      .select({
+        enrollmentId: training_enrollment.id,
+        courseId: training_course.id,
+        title: training_course.title,
+        category: training_course.category,
+        status: training_enrollment.status,
+        enrolledAt: training_enrollment.enrolled_at,
+        completedAt: training_enrollment.completed_at,
+        lessonsTotal: sql<number>`count(${training_lesson.id}) filter (where ${training_lesson.is_required})`,
+        lessonsCompleted: sql<number>`count(${training_lesson.id}) filter (where ${training_lesson.is_required} and ${training_lesson_progress.completed})`,
+        certificateId: training_certificate.id,
+        certificateIssuedAt: training_certificate.issued_at,
+        certificateNo: training_certificate.certificate_no,
+      })
+      .from(training_enrollment)
+      .innerJoin(training_course, eq(training_course.id, training_enrollment.course_id))
+      .leftJoin(training_lesson, eq(training_lesson.course_id, training_course.id))
+      .leftJoin(
+        training_lesson_progress,
+        and(
+          eq(training_lesson_progress.lesson_id, training_lesson.id),
+          eq(training_lesson_progress.enrollment_id, training_enrollment.id),
+        ),
+      )
+      .leftJoin(training_certificate, eq(training_certificate.enrollment_id, training_enrollment.id))
+      .where(
+        and(
+          eq(training_enrollment.user_id, userId),
+          or(isNull(training_course.org_id), eq(training_course.org_id, orgId)),
+        ),
+      )
+      .groupBy(training_enrollment.id, training_course.id, training_certificate.id)
+      .orderBy(sql`${training_enrollment.enrolled_at} desc`);
+
+    return rows.map((r) => ({
+      enrollmentId: r.enrollmentId,
+      courseId: r.courseId,
+      title: r.title,
+      category: r.category,
+      status: r.status,
+      enrolledAt: r.enrolledAt,
+      completedAt: r.completedAt,
+      // Postgres count() comes back as a string (bigint).
+      lessonsTotal: Number(r.lessonsTotal),
+      lessonsCompleted: Number(r.lessonsCompleted),
+      certificate: r.certificateId ? { issuedAt: r.certificateIssuedAt as Date, certificateNo: r.certificateNo ?? null } : null,
+    }));
   },
 
   /** Flip an enrollment to `completed` once content is done and the quiz is passed. */

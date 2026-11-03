@@ -8,6 +8,7 @@ import {
   Coins,
   PiggyBank,
   Target,
+  type LucideIcon,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -25,7 +26,7 @@ function StatBox({
 }: {
   label: string;
   value: string;
-  icon: React.ElementType;
+  icon: LucideIcon;
   color: string;
   subtext?: string;
   testId?: string;

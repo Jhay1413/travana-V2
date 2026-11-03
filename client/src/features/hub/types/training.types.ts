@@ -123,7 +123,7 @@ export interface LessonProgress {
  * === Quiz (Phase 3) ===
  * Mirrors `server/v2/modules/training/training.types.ts` (search "Quiz
  * (Phase 3)"). `isCorrect` is only ever present on choices for
- * `platform_admin` (the authoring builder) — the learner runner never
+ * a course author (the authoring builder) — the learner runner never
  * receives it and must grade purely from the attempt `results`.
  */
 export type QuestionType = "single" | "multiple";
@@ -239,7 +239,7 @@ export interface MyEnrollment {
 }
 
 /**
- * === Admin (authoring, platform_admin only) ===
+ * === Admin (authoring; platform_admin or org_admin) ===
  * Input payload shapes mirror `server/v2/modules/training/*.validator.ts`
  * (camelCase, since these are request bodies, unlike the raw snake_case
  * response row types above).

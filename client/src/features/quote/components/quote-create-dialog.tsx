@@ -1,3 +1,4 @@
+import { sourceQuoteField } from "@/features/quote/lib/source-quote";
 import { useMemo, useState } from "react";
 import {
   Dialog,
@@ -136,8 +137,9 @@ export function buildQuotePayload(
     main_tour_operator_id: values.tourOperatorId || undefined,
     not_for_social: values.not_for_social === true,
     transfer_type: values.transferType || undefined,
-    pre_booked_seats: values.preBookedSeats || undefined,
-    flight_meals: values.flightMeals === "Yes",
+    // Hot Tub Break hides these fields, so never persist a stale value.
+    pre_booked_seats: isHotTubBreak ? undefined : values.preBookedSeats || undefined,
+    flight_meals: isHotTubBreak ? false : values.flightMeals === "Yes",
     country: values.country || undefined,
     destination: values.destination || undefined,
     resort: values.resort || undefined,
@@ -228,6 +230,7 @@ export function QuoteCreateDialog({
   socialPost = false,
   markAsCopy = false,
   duplicateFromQuoteId,
+  sourceQuoteId,
   presentation = "dialog",
 }: QuoteCreateDialogProps) {
   const { toast } = useToast();
@@ -328,6 +331,7 @@ export function QuoteCreateDialog({
       const json: CreateQuoteData = {
         ...quotePayload,
         transaction_id: transactionId,
+        ...sourceQuoteField(sourceQuoteId),
         ...(imageUrls.length > 0 && { images: imageUrls }),
         ...(markAsCopy && initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
       } as CreateQuoteData;
@@ -386,6 +390,7 @@ export function QuoteCreateDialog({
         quote: {
           ...quotePayload,
           quote_status: values.status || "QUOTE_IN_PROGRESS",
+          ...sourceQuoteField(sourceQuoteId),
           ...(imageUrls.length > 0 && { images: imageUrls }),
           ...(markAsCopy && initialValues && Object.keys(initialValues).length > 0 && { isQuoteCopy: true }),
         },
@@ -428,6 +433,7 @@ export function QuoteCreateDialog({
       submitLabel={socialPost ? "Create Social Post" : "Create Quote"}
       onCancel={isDrawer ? undefined : () => onOpenChange(false)}
       initialImageUrls={initialImages}
+      socialPost={socialPost}
     />
   );
 

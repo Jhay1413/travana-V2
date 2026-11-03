@@ -9,7 +9,11 @@ export type AiUsageFeature =
   | "enquiry_ai"
   | "ai_ask"
   | "destination_guru"
+  | "scraper_flights"
+  | "scraper_itinerary"
+  | "scraper_geo"
   | "social_post"
+  | "image_upscale"
   | "embedding"
   | "staff_chat_test";
 

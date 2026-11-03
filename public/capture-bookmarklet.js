@@ -30,7 +30,7 @@
   // Bump on every change. Shown in the capture alert so it's obvious which
   // version is actually installed in the bookmarks bar — an old bookmarklet
   // silently producing old-shaped captures is otherwise impossible to spot.
-  var VERSION = 'v15';
+  var VERSION = 'v16';
   var MAX_TEXT = 400000;
   // deepText() walks hidden nodes and pierces shadow roots, so on a large page
   // it can be far bigger than `text` once every collapsed panel, inactive tab
@@ -492,7 +492,7 @@
   // up filled in.
   var COMMON_FIELD_GROUP = {
     name: 'Always',
-    fields: ['sales_price', 'price_per_person', 'travel_date', 'no_of_nights', 'adults', 'quote_title', 'tour_operator', 'currency'],
+    fields: ['sales_price', 'price_per_person', 'travel_date', 'no_of_nights', 'adults', 'children', 'infants', 'quote_title', 'tour_operator', 'tourist_tax_total', 'country', 'destination', 'resort'],
   };
   // Keyed by the exact `packageType` value the server's ExtractionSpec expects
   // (extraction.types.ts) — 'cruise' | 'package-holiday' | 'lodge' — so the
@@ -505,35 +505,110 @@
       // the quote's headline — pick it and the server fills quote_title from it
       // too (see extraction.interpreter.ts), so an agent never has to point at
       // the same words twice.
-      fields: ['cruise_title', 'cruise_line', 'ship_name', 'cruise_date', 'cabin_type', 'cabin_number', 'embarkation', 'debarkation'],
+      fields: ['cruise_title', 'cruise_line', 'ship_name', 'cruise_date', 'cabin_type', 'cabin_number', 'embarkation', 'debarkation', 'cruise_only', 'itinerary_section', 'flights_section', 'flights_outbound_section', 'flights_return_section'],
     },
     'package-holiday': {
       buttonLabel: 'Package Holiday',
       groupName: 'Package Holiday',
-      fields: ['accommodation', 'board_basis', 'room_type', 'departure_airport_name', 'arrival_airport_name'],
+      fields: ['accommodation', 'board_basis', 'room_type', 'departure_airport_name', 'arrival_airport_name', 'transfer_type', 'star_rating', 'review_score', 'flights_section', 'flights_outbound_section', 'flights_return_section'],
     },
     lodge: {
       buttonLabel: 'Hot Tub Break',
       groupName: 'Hot Tub Break (Lodge)',
-      fields: ['lodge_type', 'lodge_park_name', 'cottage_id', 'hot_tub', 'pets'],
+      fields: ['accommodation', 'lodge_code', 'lodge_park_name', 'lodge_park_code', 'lodge_type', 'cottage_id', 'hot_tub', 'pets'],
     },
   };
 
-  // Every element the picker itself puts on the page carries this attribute on
-  // its ROOT node (the panel, the mode-chooser). isOwnUI() walks up from an
-  // event target looking for it, so a click or hover anywhere inside our own
-  // UI is never mistaken for a pick or a page click to suppress.
+  // Every piece of UI the picker puts on the page lives inside a shadow root
+  // (see createShadowUI below), and this attribute is set on the shadow HOST
+  // element that carries it. isOwnUI() walks up from an event target looking
+  // for it, so a click or hover anywhere inside our own UI is never mistaken
+  // for a pick or a page click to suppress.
+  //
+  // Why the host and not an inner node: a document-level listener (the
+  // picker's capture-phase mousemove/click/keydown) sees events from inside a
+  // shadow root RETARGETED to the host element, so the host is the only node
+  // of ours it can ever observe.
   var UI_ATTR = 'data-travana-picker-ui';
 
+  // Walks up from a node looking for UI_ATTR. parentNode stops at a shadow
+  // root (its parentNode is null), so hop across the boundary via .host.
   function isOwnUI(node) {
     while (node) {
       if (node.nodeType === 1 && node.hasAttribute && node.hasAttribute(UI_ATTR)) return true;
-      node = node.parentNode;
+      node = node.parentNode || node.host;
     }
     return false;
   }
 
+  // Event-aware version of isOwnUI. Retargeting normally already hands us the
+  // host as e.target, but composedPath() lists every node the event really
+  // passed through (including ones inside the shadow tree), so checking it
+  // too makes the answer correct even if the target were ever an inner node.
+  function isOwnUIEvent(e) {
+    if (e.composedPath) {
+      var path = e.composedPath();
+      for (var i = 0; i < path.length; i++) {
+        if (path[i] && path[i].nodeType === 1 && path[i].hasAttribute && path[i].hasAttribute(UI_ATTR)) return true;
+      }
+    }
+    return isOwnUI(e.target);
+  }
+
+  // Builds an isolated mount point for one piece of picker UI.
+  //
+  // Why a shadow root: the picker used to append plain <div>/<button> nodes
+  // straight into document.body, styled only by inline cssText. Host-page CSS
+  // still wins over that: any rule carrying !important (e.g. a defensive
+  // "body > div { display:none !important }" or a colour/visibility override)
+  // beats an inline style without !important, and INHERITED properties such as
+  // color leak in from the page. On some supplier sites (hoseasons) that left
+  // the panel box visible but its rows hidden or invisible, with no error to
+  // see. A shadow root stops host selectors from matching our nodes at all.
+  //
+  // Inherited properties still cross the shadow boundary, so the first thing
+  // inside is a wrapper with "all:initial", which resets every property to its
+  // initial value, followed by the few things our UI relies on re-applied.
+  //
+  // The host element itself is still a normal child of <body> that host CSS can
+  // target, so it uses a custom tag name (unlikely to match "div" rules) and
+  // important inline declarations, which beat any non-inline !important rule.
+  //
+  // Returns { wrap, remove }: build the UI into wrap, call remove() to tear
+  // down. remove() deletes the HOST, so nothing is left behind in the page.
+  function createShadowUI() {
+    var host = document.createElement('travana-picker-ui');
+    host.setAttribute(UI_ATTR, '1');
+    host.style.setProperty('all', 'initial', 'important');
+    host.style.setProperty('display', 'block', 'important');
+    host.style.setProperty('position', 'static', 'important');
+    var root = host.attachShadow ? host.attachShadow({ mode: 'open' }) : host;
+    var wrap = document.createElement('div');
+    // all:initial MUST come first; everything after it is what the UI needs
+    // back: block layout, the base font and text colour, and left alignment.
+    wrap.style.cssText = 'all:initial;display:block;position:static;color:#111;text-align:left;' +
+      'font:12px/1.4 -apple-system,Segoe UI,Arial,sans-serif;';
+    root.appendChild(wrap);
+    document.body.appendChild(host);
+    return {
+      wrap: wrap,
+      remove: function () {
+        if (host.parentNode) host.parentNode.removeChild(host);
+      },
+    };
+  }
+
+  // Field keys whose generated label would read badly. Outbound/Return sections are
+  // for pages laid out outbound flight -> hotel -> return flight, where one
+  // Flights Section box cannot hold both.
+  var LABEL_OVERRIDES = {
+    flights_outbound_section: 'Outbound Flights',
+    flights_return_section: 'Return Flights',
+    itinerary_section: 'Itinerary',
+  };
+
   function prettyLabel(key) {
+    if (LABEL_OVERRIDES[key]) return LABEL_OVERRIDES[key];
     return key.replace(/_/g, ' ').replace(/\b\w/g, function (c) {
       return c.toUpperCase();
     });
@@ -542,10 +617,14 @@
   // Visible text of a picked element, trimmed — this is the ground truth the
   // server matches back against `text`. innerText (not textContent) so it
   // reflects what the agent actually saw and clicked, not hidden siblings.
+  // Newlines are KEPT: the Flights Section pick is a whole multi-line block (every
+  // leg), and the server reads its first/last lines. Capped so a pick on a huge
+  // wrapper can't blow the payload (the server schema allows the same maximum).
+  var MAX_PICK_VALUE = 8000;
   function textOf(el) {
     var t = el.innerText;
     if (!t) t = el.textContent || '';
-    return t.trim();
+    return t.trim().slice(0, MAX_PICK_VALUE);
   }
 
   function ancestorTags(el) {
@@ -575,13 +654,57 @@
     var empty = { textIndex: -1, occurrenceIndex: -1, occurrenceCount: 0, lineIndex: -1, linesBefore: [], linesAfter: [] };
     if (!value) return empty;
 
+    var needle = value;
     var positions = [];
     var from = 0;
     while (true) {
-      var at = text.indexOf(value, from);
+      var at = text.indexOf(needle, from);
       if (at < 0) break;
       positions.push(at);
-      from = at + Math.max(value.length, 1);
+      from = at + Math.max(needle.length, 1);
+    }
+    // A multi-line block (Flights Section) can differ from the body's text in
+    // blank lines / spacing, so fall back to locating its first line — as a
+    // WHOLE line only (never a substring of a longer one). When that line occurs
+    // several times, take the occurrence whose next non-empty line equals the
+    // block's second non-empty line; with no such occurrence and more than one
+    // candidate the pick is left unlocated rather than guessed.
+    if (!positions.length && value.indexOf('\n') >= 0) {
+      var vNonEmpty = [];
+      var vParts = value.split('\n');
+      for (var vp = 0; vp < vParts.length; vp++) {
+        if (vParts[vp].trim()) vNonEmpty.push(vParts[vp].trim());
+      }
+      var firstLine = vNonEmpty[0] || '';
+      var secondLine = vNonEmpty[1] || '';
+      var tLines = text.split('\n');
+      var cands = [];
+      var run = 0;
+      for (var tl = 0; tl < tLines.length; tl++) {
+        if (firstLine && tLines[tl].trim() === firstLine) {
+          var nextLine = '';
+          for (var nl = tl + 1; nl < tLines.length; nl++) {
+            if (tLines[nl].trim()) {
+              nextLine = tLines[nl].trim();
+              break;
+            }
+          }
+          cands.push({ pos: run + tLines[tl].indexOf(firstLine), matchesSecond: nextLine === secondLine });
+        }
+        run += tLines[tl].length + 1;
+      }
+      var chosen = null;
+      for (var ci = 0; ci < cands.length; ci++) {
+        if (cands[ci].matchesSecond) {
+          chosen = cands[ci];
+          break;
+        }
+      }
+      if (!chosen && cands.length === 1) chosen = cands[0];
+      if (chosen) {
+        needle = firstLine;
+        positions.push(chosen.pos);
+      }
     }
     if (!positions.length) return empty;
 
@@ -620,8 +743,21 @@
     for (var b = lineIndex - 1; b >= 0 && linesBefore.length < 3; b--) {
       if (lines[b].trim()) linesBefore.unshift(lines[b].trim());
     }
+    // linesAfter must start AFTER the picked block, which for a multi-line value
+    // spans several lines: walk past as many non-empty lines as the value has.
+    var valueLineCount = 0;
+    var valueLines = value.split('\n');
+    for (var vl = 0; vl < valueLines.length; vl++) {
+      if (valueLines[vl].trim()) valueLineCount++;
+    }
+    var lastLine = lineIndex;
+    var seen = lines[lineIndex] && lines[lineIndex].trim() ? 1 : 0;
+    while (seen < valueLineCount && lastLine + 1 < lines.length) {
+      lastLine++;
+      if (lines[lastLine].trim()) seen++;
+    }
     var linesAfter = [];
-    for (var af = lineIndex + 1; af < lines.length && linesAfter.length < 2; af++) {
+    for (var af = lastLine + 1; af < lines.length && linesAfter.length < 2; af++) {
       if (lines[af].trim()) linesAfter.push(lines[af].trim());
     }
 
@@ -858,7 +994,7 @@
     function onMouseMove(e) {
       if (!armedField) return;
       var el = e.target;
-      if (!el || el.nodeType !== 1 || isOwnUI(el)) {
+      if (!el || el.nodeType !== 1 || isOwnUIEvent(e)) {
         clearHighlight();
         return;
       }
@@ -871,7 +1007,7 @@
     // happens because the page has already moved on.
     function onClickCapture(e) {
       if (!armedField) return;
-      if (isOwnUI(e.target)) return; // clicks on our own panel behave normally
+      if (isOwnUIEvent(e)) return; // clicks on our own panel behave normally
       e.preventDefault();
       e.stopPropagation();
       var el = e.target;
@@ -895,8 +1031,10 @@
     document.addEventListener('click', onClickCapture, true);
     document.addEventListener('keydown', onKeyDown, true);
 
+    // Mounted inside a shadow root so host-page CSS cannot hide or recolour it
+    // (see createShadowUI). UI_ATTR is on the shadow host, not on the panel.
+    var ui = createShadowUI();
     var panel = document.createElement('div');
-    panel.setAttribute(UI_ATTR, '1');
     panel.style.cssText = PANEL_CSS;
 
     var header = document.createElement('div');
@@ -952,11 +1090,25 @@
     footer.appendChild(cancelBtn);
     panel.appendChild(footer);
 
-    document.body.appendChild(panel);
+    ui.wrap.appendChild(panel);
     var cleanupDrag = makeDraggable(header, panel);
     renderList();
 
+    // A throw while building the rows used to leave an empty list and nothing
+    // in the console. Show a short message inside the panel instead.
     function renderList() {
+      try {
+        renderListRows();
+      } catch (err) {
+        while (list.firstChild) list.removeChild(list.firstChild);
+        var errBox = document.createElement('div');
+        errBox.style.cssText = 'padding:8px 6px;color:#c00;font-weight:600;';
+        errBox.textContent = 'Travana could not render the field list. ' + (err && err.message ? err.message : err);
+        list.appendChild(errBox);
+      }
+    }
+
+    function renderListRows() {
       typeLabel.textContent = 'Type: ' + PACKAGE_TYPE_GROUPS[currentType].groupName;
       var groups = currentGroups();
       while (list.firstChild) list.removeChild(list.firstChild);
@@ -1081,7 +1233,8 @@
       document.removeEventListener('keydown', onKeyDown, true);
       cleanupDrag();
       clearHighlight();
-      if (panel.parentNode) panel.parentNode.removeChild(panel);
+      // Removes the shadow HOST, not just the panel inside it.
+      ui.remove();
     }
   }
 
@@ -1095,8 +1248,9 @@
   // the panel's "Change" button, so there is exactly one place this question
   // is asked.
   function showChoosePackageType(onChosen) {
+    // Shadow-root mount, same isolation as the field-picker panel.
+    var ui = createShadowUI();
     var chooser = document.createElement('div');
-    chooser.setAttribute(UI_ATTR, '1');
     chooser.style.cssText = 'position:fixed;top:16px;right:16px;width:220px;z-index:2147483647;' +
       'background:#ffffff;color:#111;border:1px solid #ccc;border-radius:8px;' +
       'box-shadow:0 6px 24px rgba(0,0,0,.3);padding:10px;' +
@@ -1114,14 +1268,14 @@
         btn.textContent = PACKAGE_TYPE_GROUPS[typeKey].buttonLabel;
         btn.style.cssText = BTN_CSS + 'display:block;width:100%;margin-bottom:6px;';
         btn.addEventListener('click', function () {
-          document.body.removeChild(chooser);
+          ui.remove();
           onChosen(typeKey);
         });
         chooser.appendChild(btn);
       })(order[i]);
     }
 
-    document.body.appendChild(chooser);
+    ui.wrap.appendChild(chooser);
   }
 
   function runPickerMode() {
@@ -1142,8 +1296,9 @@
   // reuses the exact same UI_ATTR exclusion the field picker relies on rather
   // than adding a second, different mechanism for one dialog.
   function showChooser() {
+    // Shadow-root mount, same isolation as the field-picker panel.
+    var ui = createShadowUI();
     var chooser = document.createElement('div');
-    chooser.setAttribute(UI_ATTR, '1');
     chooser.style.cssText = 'position:fixed;top:16px;right:16px;width:220px;z-index:2147483647;' +
       'background:#ffffff;color:#111;border:1px solid #ccc;border-radius:8px;' +
       'box-shadow:0 6px 24px rgba(0,0,0,.3);padding:10px;' +
@@ -1164,14 +1319,14 @@
     pickerBtn.style.cssText = BTN_SECONDARY_CSS + 'display:block;width:100%;';
     chooser.appendChild(pickerBtn);
 
-    document.body.appendChild(chooser);
+    ui.wrap.appendChild(chooser);
 
     instantBtn.addEventListener('click', function () {
-      document.body.removeChild(chooser);
+      ui.remove();
       runInstantCapture();
     });
     pickerBtn.addEventListener('click', function () {
-      document.body.removeChild(chooser);
+      ui.remove();
       runPickerMode();
     });
   }

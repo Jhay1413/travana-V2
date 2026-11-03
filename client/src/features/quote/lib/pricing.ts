@@ -51,6 +51,28 @@ export function commissionForOperator(
 }
 
 /**
+ * Price per person = (price − discount + service charge) / (adults + children).
+ * The single source of truth for this arithmetic — used by both the manual
+ * price/discount/service-charge edit handlers (via `recomputePricing` below)
+ * and the reactive effect that recomputes it whenever price, discount, service
+ * charge or traveller counts change (including a deal import setting them
+ * programmatically). Returns 0 rather than dividing by zero when there are no
+ * travellers yet.
+ */
+export function pricePerPersonFor(
+  price: unknown,
+  discount: unknown,
+  serviceCharge: unknown,
+  adults: unknown,
+  children: unknown,
+): number {
+  const total = num(adults) + num(children);
+  if (total <= 0) return 0;
+  const netPrice = num(price) - num(discount) + num(serviceCharge);
+  return round2(netPrice / total);
+}
+
+/**
  * Recompute commission and price-per-person after one of the price fields
  * changes. `prev` must be captured before the form value is updated so the
  * no-operator delta path can compare old and new discount / service charge.
@@ -74,9 +96,7 @@ export function recomputePricing(
     commission = round2(prev.commission + delta);
   }
 
-  const total = prev.adults + prev.children;
-  const netPrice = nextPrice - nextDiscount + nextServiceCharge;
-  const pricePerPerson = total > 0 ? round2(netPrice / total) : 0;
+  const pricePerPerson = pricePerPersonFor(nextPrice, nextDiscount, nextServiceCharge, prev.adults, prev.children);
 
   return { commission, pricePerPerson };
 }

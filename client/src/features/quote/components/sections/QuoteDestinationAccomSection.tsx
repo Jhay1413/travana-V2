@@ -16,6 +16,7 @@ import {
   useBoardBasis,
   useRoomTypes,
 } from "@/hooks/queries";
+import { orderBoardBasisRows } from "@/features/lookups";
 import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
 import { AddDestinationModal } from "@/features/lookups/components/lookups/add-destination-modal";
 import { AddResortModal } from "@/features/lookups/components/lookups/add-resort-modal";
@@ -357,7 +358,7 @@ export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: For
               <FormControl>
                 <SearchableSelect
                   className={controlCls}
-                  options={(boardBasisData || []).map((b: { id: string; type: string }) => ({
+                  options={orderBoardBasisRows(boardBasisData || []).map((b: { id: string; type: string }) => ({
                     value: b.id,
                     label: b.type,
                   }))}

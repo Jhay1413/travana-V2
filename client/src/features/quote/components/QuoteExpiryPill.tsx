@@ -1,14 +1,21 @@
 import { RefreshCw } from "lucide-react";
+import { getQuoteExpiryInfo } from "@/features/quote/lib/quote-expiry";
+import { useLiveNow } from "@/features/quote/components/hooks/use-live-now";
 
 interface QuoteExpiryPillProps {
   dateExpiry: string | Date | null | undefined;
   dateCreated: string | Date | null | undefined;
-  onUpdateExpiry?: (currentIsoDate: string) => void;
+  /** A lost quote's expiry is no longer meaningful — suppresses the pill
+   *  entirely so it doesn't disagree with a "Lost" badge shown elsewhere. */
+  isLost?: boolean;
+  onUpdateExpiry?: () => void;
 }
 
-export function QuoteExpiryPill({ dateExpiry, dateCreated, onUpdateExpiry }: QuoteExpiryPillProps) {
-  const now = new Date();
-  const expiry = dateExpiry ? new Date(dateExpiry) : null;
+export function QuoteExpiryPill({ dateExpiry, dateCreated, isLost, onUpdateExpiry }: QuoteExpiryPillProps) {
+  // Re-derives every minute so a quote crossing its expiry while the page is
+  // left open re-badges without waiting for a refetch.
+  const now = useLiveNow();
+  const info = isLost ? null : getQuoteExpiryInfo(dateExpiry, dateCreated, now);
 
   const renderUpdateButton = (variant: "red" | "orange" | "emerald") => {
     if (!onUpdateExpiry) return null;
@@ -20,10 +27,7 @@ export function QuoteExpiryPill({ dateExpiry, dateCreated, onUpdateExpiry }: Quo
     return (
       <button
         type="button"
-        onClick={() => {
-          const iso = dateExpiry ? new Date(dateExpiry).toISOString().split("T")[0] : "";
-          onUpdateExpiry(iso);
-        }}
+        onClick={onUpdateExpiry}
         title="Update expiry"
         aria-label="Update expiry"
         className={`inline-flex h-5 w-5 items-center justify-center rounded-full transition ${colorMap[variant]}`}
@@ -34,28 +38,9 @@ export function QuoteExpiryPill({ dateExpiry, dateCreated, onUpdateExpiry }: Quo
     );
   };
 
-  if (!expiry) {
-    const created = dateCreated ? new Date(dateCreated) : null;
-    if (created && now.getTime() - created.getTime() > 7 * 24 * 60 * 60 * 1000) {
-      return (
-        <span className="inline-flex items-center gap-1">
-          <span
-            className="inline-flex items-center rounded-full border border-red-500/25 bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600"
-            data-testid="pill-expiry-expired"
-          >
-            Expired
-          </span>
-          {renderUpdateButton("red")}
-        </span>
-      );
-    }
-    return null;
-  }
+  if (!info) return null;
 
-  const diffMs = expiry.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) {
+  if (info.status === "expired") {
     return (
       <span className="inline-flex items-center gap-1">
         <span
@@ -69,14 +54,14 @@ export function QuoteExpiryPill({ dateExpiry, dateCreated, onUpdateExpiry }: Quo
     );
   }
 
-  if (diffDays <= 2) {
+  if (info.status === "expiring-soon") {
     return (
       <span className="inline-flex items-center gap-1">
         <span
           className="inline-flex items-center rounded-full border border-orange-500/25 bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold text-orange-600"
           data-testid="pill-expiry-soon"
         >
-          Expires in {diffDays}d
+          {info.diffDays === 0 ? "Expires today" : `Expires in ${info.diffDays}d`}
         </span>
         {renderUpdateButton("orange")}
       </span>
@@ -89,7 +74,7 @@ export function QuoteExpiryPill({ dateExpiry, dateCreated, onUpdateExpiry }: Quo
         className="inline-flex items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-700"
         data-testid="pill-expiry-active"
       >
-        Expires in {diffDays}d
+        Expires in {info.diffDays}d
       </span>
       {renderUpdateButton("emerald")}
     </span>

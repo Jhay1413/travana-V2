@@ -1,5 +1,6 @@
 import { smsRepository } from './sms.repository';
 import { getPublicBaseUrl } from '../../utils/public-url';
+import { AppError } from '../../utils/error-handler';
 import {
   platformAdminCreditsRepository,
   startOfMonthUtc,
@@ -36,6 +37,8 @@ const CONNEXA_BASE = 'https://cnxa.io';
 const DEFAULT_TOKEN_TTL_MS = 55 * 60 * 1000;
 const TOKEN_REFRESH_LEAD_MS = 30_000;
 const DEFAULT_SENDER = 'Quotehub by';
+/** A stalled Connexa call must not hold the departure sweep (and its lock) for ever. */
+export const CONNEXA_TIMEOUT_MS = 15_000;
 
 function getCreds() {
   const email = process.env.CONNEXA_EMAIL ?? '';
@@ -61,6 +64,7 @@ async function getBearerToken(): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ email, password }),
+    signal: AbortSignal.timeout(CONNEXA_TIMEOUT_MS),
   });
   const data: any = await res.json().catch(() => ({}));
   const token = data?.access_token ?? data?.token ?? data?.response?.data?.access_token;
@@ -143,13 +147,14 @@ export async function sendSms({ to, body }: { to: string; body: string }): Promi
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
       Accept: 'application/json',
-    },                                                                                    
+    },
     body: JSON.stringify({
       sender_id: "Quotehub by",
       message: body,
       contact_number: toConnexaPhone(to),
     }),
-  });     
+    signal: AbortSignal.timeout(CONNEXA_TIMEOUT_MS),
+  });
   const data: any = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = data?.error || data?.response?.message || data?.message || `HTTP ${res.status}`;
@@ -187,11 +192,84 @@ function buildQuoteUrl(token: string): string {
   return `${getPublicBaseUrl()}/portal/quote/${token}`;
 }
 
+/** Brand name merged into quote-share messages (SMS and WhatsApp). */
+export const QUOTE_SHARE_COMPANY_NAME = "Tina's Travel";
+
+/**
+ * Body of the Share dialog's primary "Send" message. ASCII only - the SMS
+ * provider rejects non-GSM characters (e.g. em dash). Reused for WhatsApp so
+ * both channels say the same thing. Keep in sync with the client `bodyOverride`
+ * in client/src/features/quote/components/QuoteShareDialog.tsx.
+ */
+export const PUBLIC_QUOTE_MESSAGE_BODY =
+  'Hi {{first_name}}, your quote is ready - tap to view it: {{quote_url}} - {{company_name}}';
+
+export function buildPublicQuoteUrl(token: string): string {
+  // Public quote view — no login/PIN required; anyone with the link can view
+  // the quote. Used when the sender explicitly shares the public link instead
+  // of the portal one, so we never seed a PIN or magic-login token for it.
+  return `${getPublicBaseUrl()}/view-quote/${token}`;
+}
+
+/** Renders the public-link quote message for one client + quote token. */
+export function buildPublicQuoteMessage(opts: {
+  firstName: string | null | undefined;
+  token: string;
+}): { text: string; quoteUrl: string } {
+  const quoteUrl = buildPublicQuoteUrl(opts.token);
+  const text = mergeTemplate(PUBLIC_QUOTE_MESSAGE_BODY, {
+    first_name: opts.firstName ?? '',
+    quote_url: quoteUrl,
+    company_name: QUOTE_SHARE_COMPANY_NAME,
+  });
+  return { text, quoteUrl };
+}
+
+/**
+ * Resolve which quote's share token to use for a client's SMS context.
+ *
+ * Callers that know exactly which quote is being shared (e.g. the Share
+ * Quote dialog's "Send" / "Send via SMS" buttons) should pass `quoteId`, so
+ * that quote's token is used even if a newer quote for the same client (e.g.
+ * a copy made after it) has since been tokened too — otherwise the org's
+ * most-recently-tokened quote always wins, and the agent can end up copying
+ * one quote's link while the client is texted a different one. `quoteId` is
+ * never trusted blindly: it's looked up scoped to `clientId` via
+ * `findTokenedQuoteForClient`, so a quote belonging to a different client is
+ * rejected with an `AppError` rather than silently used or silently ignored.
+ *
+ * Every caller that omits `quoteId` — including `fireAutoTriggerForClient`'s
+ * auto-fire templates, which never have a "viewed quote" to point at — keeps
+ * the original latest-tokened-quote fallback unchanged.
+ */
+export async function resolveQuoteToken(
+  clientId: string,
+  quoteId?: string,
+): Promise<{ id: string; token: string } | undefined> {
+  if (quoteId) {
+    const row = await smsRepository.findTokenedQuoteForClient(clientId, quoteId);
+    if (!row?.token) {
+      throw new AppError('Quote does not belong to this client', 400);
+    }
+    return { id: row.id, token: row.token };
+  }
+  const row = await smsRepository.findLatestTokenedQuoteForClient(clientId);
+  return row?.token ? { id: row.id, token: row.token } : undefined;
+}
+
 /**
  * Build the SMS template merge context for a client. Best-effort: missing
  * data leaves placeholders blank rather than throwing.
  */
-export async function buildContextForClient(client: any): Promise<MergeContext> {
+export interface SmsContextClient {
+  id: string;
+  orgId?: string | null;
+  email?: string | null;
+  firstName?: string | null;
+  surename?: string | null;
+}
+
+export async function buildContextForClient(client: SmsContextClient, opts: { bookingId?: string } = {}): Promise<MergeContext> {
   const email = (client.email ?? '').trim();
   const ctx: MergeContext = {
     first_name: client.firstName ?? '',
@@ -218,7 +296,12 @@ export async function buildContextForClient(client: any): Promise<MergeContext> 
     } catch { /* best-effort */ }
   }
   try {
-    const bookingRow = await smsRepository.findLatestActiveBookingForClient(client.id);
+    // A named booking (the departure sweep) is used as is; if it is gone the fields stay
+    // blank rather than describing a different trip. Event triggers have no booking id
+    // and use the client's latest active booking.
+    const bookingRow = opts.bookingId
+      ? await smsRepository.findActiveBookingForClient(client.id, opts.bookingId)
+      : await smsRepository.findLatestActiveBookingForClient(client.id);
     if (bookingRow) {
       ctx.hays_ref = bookingRow.hays_ref ?? '';
       ctx.supplier_ref = bookingRow.supplier_ref ?? '';
@@ -265,9 +348,13 @@ export async function fireAutoTriggerForClient(opts: {
   autoTrigger: AutoTrigger;
   triggerSource?: string;
   dedupeSince?: Date;
+  /** Departure sweep only: fire just the templates configured for this many days before. */
+  triggerDaysBefore?: number;
   /** When sourced from a specific booking, pass it so context picks the right row. */
   bookingTitle?: string;
-}): Promise<{ sent: number; skipped: number; failed: number }> {
+  /** The booking that fired this send (the departure sweep); lets paid bookings skip balance reminders. */
+  bookingId?: string;
+}): Promise<{ sent: number; skipped: number; failed: number; suspended?: true }> {
   let sent = 0; let skipped = 0; let failed = 0;
   try {
     const client = await smsRepository.findClientById(opts.clientId);
@@ -281,13 +368,27 @@ export async function fireAutoTriggerForClient(opts: {
     // (would otherwise pick up templates from arbitrary orgs).
     if (!client.orgId) return { sent, skipped, failed };
 
-    const templates = await smsRepository.findActiveTemplatesByTrigger(client.orgId, opts.autoTrigger);
+    // A suspended organisation sends nothing automatically and must not use SMS credit.
+    if (!(await smsRepository.isOrgActive(client.orgId))) {
+      return { sent, skipped: 1, failed, suspended: true };
+    }
+
+    const found = await smsRepository.findActiveTemplatesByTrigger(client.orgId, opts.autoTrigger);
+    const templates = opts.triggerDaysBefore === undefined
+      ? found
+      : found.filter((t) => t.triggerDaysBefore === opts.triggerDaysBefore);
     if (templates.length === 0) return { sent, skipped, failed };
 
-    const ctx = await buildContextForClient(client);
+    const ctx = await buildContextForClient(client, { bookingId: opts.bookingId });
     const clientName = `${client.firstName ?? ''} ${client.surename ?? ''}`.trim();
 
+    // Looked up lazily, once: only a balance_due template cares whether the booking is fully paid.
+    let fullyPaid: boolean | undefined;
     for (const t of templates) {
+      if (opts.autoTrigger === 'days_before_departure' && opts.bookingId && t.category === 'balance_due') {
+        fullyPaid ??= await smsRepository.isBookingFullyPaid(opts.bookingId);
+        if (fullyPaid) { skipped++; continue; }
+      }
       if (opts.dedupeSince) {
         const already = await smsRepository.hasRecentAutoSend(t.id, client.id, opts.dedupeSince);
         if (already) { skipped++; continue; }

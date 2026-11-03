@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { DealImage } from "@/features/quote/types";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
+import { dealTypeHref } from "@/lib/deal-links";
 import { currency, formatUKDate, type BookingWithJoins, type QuoteWithJoins, type Client } from "../client-types";
 import { QuoteRowCard } from "./QuoteRowCard";
 import { quoteToRow } from "../hooks/use-client-quote-groups";
@@ -83,7 +84,7 @@ export function ClientBookedTab({
                 type="button"
                 className="group w-full rounded-3xl border border-black/10 bg-white/70 p-3 text-left transition hover:bg-black/[0.03] active:scale-[0.99]"
                 data-testid={`card-booking-${b.id}`}
-                onClick={() => navigate(`/clients/${clientId}/bookings/${b.id}`)}
+                onClick={() => navigate(dealTypeHref("booking", b.id, clientId))}
               >
                 <div className="flex items-start gap-3">
                   <div

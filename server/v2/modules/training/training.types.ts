@@ -27,10 +27,9 @@ export interface CreateCourseInput {
   category: string;
   description?: string | null;
   thumbnailUrl?: string | null;
-  visibility: 'global' | 'org';
-  // Only meaningful when visibility === 'org'. All authors are platform_admin
-  // in v1, so orgId is the only signal for which tenant an org-scoped course
-  // belongs to.
+  // Required for platform_admin; org_admin may omit (forced to 'org').
+  visibility?: 'global' | 'org';
+  // Only meaningful when visibility === 'org'. For org_admin it is always their own org.
   orgId?: string | null;
   passingScore?: number;
   requireContentBeforeQuiz?: boolean;

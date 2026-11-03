@@ -1,3 +1,4 @@
+import { OperatorNamesProvider } from "@/features/tour-operator";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -96,12 +97,14 @@ export function BookingUpsellsDialog({
             )}
             {!isLoading && !isError && bookingData && (
               <Form {...form}>
+                <OperatorNamesProvider record={bookingData}>
                 <form id="upsells-form" onSubmit={form.handleSubmit(handleSubmit)}>
                   <BookingUpsellsSection
                     control={form.control as unknown as Control<UpsellsFormValues>}
                     setValue={form.setValue as unknown as UseFormSetValue<UpsellsFormValues>}
                   />
                 </form>
+                </OperatorNamesProvider>
               </Form>
             )}
           </div>
