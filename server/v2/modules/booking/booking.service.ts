@@ -397,6 +397,10 @@ export const bookingService = {
       );
     }
 
+    // The extras were copied after the booking row, so its per person (which includes the
+    // extras not in the package) is recomputed now that they are in place.
+    await refreshBookingPricePerPerson(b.id);
+
     // Record which quote converted to this booking; there is no WON status on the quote.
     // The deal is won when transaction.status = 'on_booking' and booking.quote_id points here.
     await bookingRepository.update(b.id, { quote_id: quoteId });
