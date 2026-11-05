@@ -249,7 +249,12 @@ export const ticketRepository = {
     return results[0];
   },
 
-  async findAll(scope?: Scope, viewerUserId: string | null = null, mode: TicketListMode = "mine"): Promise<TicketWithNames[]> {
+  async findAll(
+    scope?: Scope,
+    viewerUserId: string | null = null,
+    mode: TicketListMode = "mine",
+    assignedTo?: string,
+  ): Promise<TicketWithNames[]> {
     const conds = buildTicketScopeConds(scope);
     // Narrows the security boundary above down to the requested view.
     //
@@ -275,6 +280,9 @@ export const ticketRepository = {
         conds.push(eq(tickets.userId, scope.userId));
       }
     }
+    // ANDed on top of the scope conditions, so an assignee outside the caller's
+    // org / branch / own tickets matches nothing rather than leaking rows.
+    if (assignedTo) conds.push(eq(tickets.assignedTo, assignedTo));
     const query = buildTicketWithNamesQuery(viewerUserId);
     return conds.length > 0
       ? await query.where(and(...conds)).orderBy(desc(tickets.createdAt))

@@ -91,6 +91,7 @@ export function QuoteDrawerCostingsSection() {
       adults: Number(getValues("passengersAdults")) || 0,
       children: Number(getValues("passengersChildren")) || 0,
       operatorCommissionPct: operatorCommissionPct(op),
+      extrasTotal: extrasCustomerTotal(getValues()),
     });
     onChange(raw);
     if (result.commission != null) {

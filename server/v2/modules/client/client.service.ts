@@ -1,4 +1,4 @@
-import { withTrimmedPhone } from "@shared/phone";
+import { isPhoneChanged, isValidPhoneNumber, PHONE_ERROR_MESSAGE, withNormalizedPhone } from "@shared/phone";
 import { clientRepository } from "./client.repository";
 import { AppError } from "../../utils/error-handler";
 import type { Client, InsertClient } from "./client.types";
@@ -38,16 +38,20 @@ export const clientService = {
   },
 
   async createClient(data: InsertClient, scope: Scope): Promise<Client> {
-    const clean = withTrimmedPhone(stripSystemManagedFields(data));
+    const clean = withNormalizedPhone(stripSystemManagedFields(data));
     await assertValidReferrer(null, clean.referredByClientId, scope);
     return await clientRepository.create(clean, scope);
   },
 
   async updateClient(id: string, data: Partial<InsertClient>, scope: Scope): Promise<Client> {
-    const clean = withTrimmedPhone(stripSystemManagedFields(data));
+    const stripped = stripSystemManagedFields(data);
+    const current = await clientRepository.findById(id, scope);
+    if (!current) throw new AppError("Client not found", 404);
+    // The UK phone rule applies only when the phone is new or changed (legacy numbers stay saveable).
+    const phoneChanged = isPhoneChanged(stripped.phoneNumber, current.phoneNumber);
+    if (phoneChanged && !isValidPhoneNumber(stripped.phoneNumber)) throw new AppError(PHONE_ERROR_MESSAGE, 400);
+    const clean = phoneChanged ? withNormalizedPhone(stripped) : stripped;
     if (clean.referredByClientId) {
-      const current = await clientRepository.findById(id, scope);
-      if (!current) throw new AppError("Client not found", 404);
       await assertValidReferrer(id, clean.referredByClientId, scope, current.referredByClientId);
     }
     const safe = await stripOwnershipFields(clean, scope, async (b, o) => !!(await branchRepository.findById(b, o)));

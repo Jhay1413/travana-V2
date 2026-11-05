@@ -72,12 +72,13 @@ function typeChipClass(type: string): string {
 
 // The author's uploaded profile photo (user.image) when they have one,
 // otherwise their initial in a blue circle — same treatment as the Notes tab.
-function PostAvatar({ name, imageUrl }: { name: string; imageUrl?: string | null }) {
+function PostAvatar({ name, imageUrl, small = false }: { name: string; imageUrl?: string | null; small?: boolean }) {
+  const size = small ? "h-7 w-7" : "h-9 w-9";
   if (imageUrl) {
-    return <img src={imageUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />;
+    return <img src={imageUrl} alt="" className={cn("shrink-0 rounded-full object-cover", size)} />;
   }
   return (
-    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#3b82f6]/10 text-sm font-bold text-[#3b82f6]">
+    <span className={cn("grid shrink-0 place-items-center rounded-full bg-[#3b82f6]/10 font-bold text-[#3b82f6]", size, small ? "text-xs" : "text-sm")}>
       {(name.trim() || "?").charAt(0).toUpperCase()}
     </span>
   );
@@ -116,6 +117,7 @@ function PostBubble({
   onCancelDelete,
   isLiking = false,
   nested = false,
+  replyingToName,
   footer,
   attachments,
   onDeleteAttachment,
@@ -125,6 +127,8 @@ function PostBubble({
   isMe: boolean;
   /** Rendered under a parent comment — gets the thread rail beside it. */
   nested?: boolean;
+  /** Author of the comment this one answers (nested replies only). */
+  replyingToName?: string;
   /** Rendered under the bubble, inside its column (e.g. the replies toggle). */
   footer?: ReactNode;
   onReply?: () => void;
@@ -155,7 +159,7 @@ function PostBubble({
     <div className={cn("flex", isMe ? "justify-end" : "justify-start", isMe && !nested && "pr-8")} data-testid={`ticket-reply-${post.id}`}>
       <div className={cn("relative mt-4", nested ? "max-w-full" : "max-w-[75%]")}>
         <div className="absolute -top-4 left-0">
-          <PostAvatar name={post.authorName} imageUrl={post.authorImage} />
+          <PostAvatar name={post.authorName} imageUrl={post.authorImage} small={nested} />
         </div>
         <div className={cn("rounded-2xl px-4 py-2.5 text-sm", colors.bubble)}>
           <div className="mb-1 flex flex-wrap items-baseline gap-1 pl-6 text-xs">
@@ -165,6 +169,11 @@ function PostBubble({
               {isEdited ? " (edited)" : ""}
             </span>
           </div>
+          {nested && replyingToName && (
+            <div className="mb-1 pl-6 text-[11px] text-black/45 dark:text-white/45" data-testid={`ticket-reply-replying-to-${post.id}`}>
+              Replying to <span className="font-semibold">{replyingToName}</span>
+            </div>
+          )}
           {isEditing ? (
             <div className="pl-6">
               <NoteEditor
@@ -451,11 +460,12 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const renderPost = (post: ThreadPost, nested = false, footer?: ReactNode) => (
+  const renderPost = (post: ThreadPost, nested = false, footer?: ReactNode, replyingToName?: string) => (
     <div key={post.id}>
       <PostBubble
         post={post}
         nested={nested}
+        replyingToName={replyingToName}
         footer={footer}
         isMe={isMine(post.authorId)}
         attachments={attachmentsFor(post)}
@@ -507,12 +517,10 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
               )}
               {(childrenByParent.get(reply.id) ?? []).length > 0 && !collapsedReplies.has(reply.id) && (
                 <div
-                  className={cn(
-                    "flex w-fit max-w-[88%] flex-col space-y-3 border-l-2 border-black/[0.08] pl-4 dark:border-white/10",
-                    isMine(reply.userId) ? "self-end" : "self-start ml-2",
-                  )}
+                  className="ml-10 flex w-fit max-w-[88%] flex-col space-y-3 self-start border-l-[3px] border-black/20 pl-4 dark:border-white/25"
+                  data-testid={`ticket-reply-replies-${reply.id}`}
                 >
-                  {(childrenByParent.get(reply.id) ?? []).map((child) => renderPost(toPost(child), true))}
+                  {(childrenByParent.get(reply.id) ?? []).map((child) => renderPost(toPost(child), true, undefined, toPost(reply).authorName))}
                 </div>
               )}
             </div>

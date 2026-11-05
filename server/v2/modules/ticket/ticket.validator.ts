@@ -10,10 +10,10 @@ export const createTicketValidator = z.object({
 export const ticketListModeSchema = z.enum(["mine", "raised", "all"]).optional().default("mine");
 export type TicketListModeQuery = z.infer<typeof ticketListModeSchema>;
 
-/** GET /tickets — `scope` picks the slice of the caller's tickets returned;
+/** GET /tickets — `assignedTo` narrows to one assignee (still inside the caller's own scope); `scope` picks the slice of the caller's tickets returned;
  *  "all" is further gated server-side to admin-tier roles (see ticket.service.ts). */
 export const listTicketsValidator = z.object({
-  query: z.object({ scope: ticketListModeSchema }),
+  query: z.object({ scope: ticketListModeSchema, assignedTo: z.string().min(1).max(100).optional() }),
 });
 
 export const updateTicketValidator = z.object({

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useFieldArray, useFormContext, type Control } from "react-hook-form";
+import { useState, useEffect, useRef } from "react";
+import { useFieldArray, useFormContext, useWatch, type Control } from "react-hook-form";
 import type { ExtrasFormValues } from "@/features/booking/types";
 import { useCruiseStayAccommodations } from "@/features/quote/components/hooks/use-cruise-stay-accommodations";
 import {
@@ -37,6 +37,9 @@ import {
   useAccommodationSearch,
   useRoomTypes,
 } from "@/hooks/queries";
+import { autoExtraCommission, extraCommissionPct, nextExtraCommission } from "@/features/quote/lib/extra-commission";
+import { operatorCommissionPct } from "@/features/quote/lib/pricing";
+import { includedPackageResets } from "@/features/quote/lib/extras-included-toggle";
 import { withExtraDateDefaults, type ExtrasDateContext } from "@/features/quote/lib/extras-date-defaults";
 import { orderBoardBasisRows } from "@/features/lookups";
 import { operatorSelectOptions, useOperatorNames } from "@/features/tour-operator";
@@ -120,19 +123,43 @@ function IncludedToggle({ control, name, onInclude }: { control: Control<ExtrasF
 }
 
 function CostCommissionFields({ control, costName, commissionName }: { control: Control<ExtrasFormValues>; costName: any; commissionName: any }) {
+  const { setValue: setFormValue } = useFormContext();
+  const manualName = String(costName).replace(/.cost$/, ".commissionManual");
+  // The cost only reaches the customer total while the extra is NOT included in the package.
+  const includedName = String(costName).replace(/\.cost$/,".isIncludedInPackage");
+  const included = useWatch({ control, name: includedName as any }) as boolean | undefined;
+  const costValue = useWatch({ control, name: costName }) as number | string | undefined;
+  const showIncludedHint = included !== false && (Number(costValue) || 0) > 0;
   return (
     <>
       <FormField control={control} name={costName} render={({ field }) => (
         <FormItem>
           <FormLabel className="text-xs font-medium text-black/60">Cost (£)</FormLabel>
           <FormControl><Input type="number" min={0} step={0.01} className="rounded-xl text-sm" {...field} /></FormControl>
+          {showIncludedHint && (
+            <p className="text-[10px] text-amber-700" data-testid="extra-cost-included-hint">Not added to the total while included in the package.</p>
+          )}
           <FormMessage />
         </FormItem>
       )} />
       <FormField control={control} name={commissionName} render={({ field }) => (
         <FormItem>
           <FormLabel className="text-xs font-medium text-black/60">Commission (£)</FormLabel>
-          <FormControl><Input type="number" min={0} step={0.01} className="rounded-xl text-sm" {...field} /></FormControl>
+          <FormControl>
+            <Input
+              type="number"
+              min={0}
+              step={0.01}
+              className="rounded-xl text-sm"
+              data-testid="extra-commission-input"
+              {...field}
+              onChange={(e) => {
+                field.onChange(e);
+                // Typed by hand: stop auto-calculating this extra.
+                setFormValue(manualName, true);
+              }}
+            />
+          </FormControl>
           <FormMessage />
         </FormItem>
       )} />
@@ -165,6 +192,50 @@ function BookingRefTourOpFields({ control, prefix }: { control: Control<ExtrasFo
         </FormItem>
       )} />
     </>
+  );
+}
+
+/**
+ * Keeps an extra's commission = cost × its operator's % (main operator's % when it has none) while it is
+ * NOT included in the package, until the agent types a commission by hand. Also shows the figure on the card.
+ * Only a change to cost / included / operator recalculates, so opening a saved extra never rewrites it.
+ */
+function ExtraCommissionSummary({ control, prefix, mainTourOperatorId }: { control: Control<ExtrasFormValues>; prefix: string; mainTourOperatorId: string }) {
+  const { setValue } = useFormContext();
+  const { data: tourOperatorsData } = useTourOperators();
+  const cost = useWatch({ control, name: `${prefix}.cost` as any }) as number | string | undefined;
+  const included = useWatch({ control, name: `${prefix}.isIncludedInPackage` as any }) as boolean | undefined;
+  const operatorId = useWatch({ control, name: `${prefix}.tourOperatorId` as any }) as string | undefined;
+  const manual = useWatch({ control, name: `${prefix}.commissionManual` as any }) as boolean | undefined;
+  const commission = useWatch({ control, name: `${prefix}.commission` as any }) as number | string | undefined;
+
+  const pctFor = (id: string | undefined) =>
+    operatorCommissionPct(id ? (tourOperatorsData || []).find((o: { id: string }) => o.id === id) : undefined);
+  const extraOperatorPct = pctFor(operatorId);
+  const mainOperatorPct = pctFor(mainTourOperatorId);
+  const input = { cost, isIncludedInPackage: included, extraOperatorPct, mainOperatorPct };
+
+  const key = `${Number(cost) || 0}|${included}|${operatorId ?? ""}`;
+  const lastKey = useRef(key);
+  useEffect(() => {
+    if (lastKey.current === key) return;
+    lastKey.current = key;
+    const next = nextExtraCommission({ ...input, manual });
+    if (next != null) setValue(`${prefix}.commission`, next, { shouldDirty: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const pct = extraCommissionPct(extraOperatorPct, mainOperatorPct);
+  const shown = Number(commission) || 0;
+  let note = "";
+  if (included !== false) note = "Included in package - covered by the package commission";
+  else if (manual) note = "set by hand";
+  else if (pct == null) note = "no operator commission rate set";
+  else note = `${pct}% of £${(Number(cost) || 0).toFixed(2)} = £${autoExtraCommission(input).toFixed(2)}`;
+  return (
+    <p className="text-[11px] text-black/55" data-testid="extra-commission-summary">
+      <span className="font-semibold text-black/75">Commission £{shown.toFixed(2)}</span> ({note})
+    </p>
   );
 }
 
@@ -226,11 +297,8 @@ function TransferExtra({ control, index, mainTourOperatorId, setValue, onRemove 
           </FormItem>
         )} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
-        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
-        setValue(`${p}.cost`, 0);
-        setValue(`${p}.commission`, 0);
-      }} />
+      <ExtraCommissionSummary control={control} prefix={p} mainTourOperatorId={mainTourOperatorId} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => includedPackageResets(p, mainTourOperatorId).forEach((r) => setValue(r.path, r.value))} />
     </ExtraCard>
   );
 }
@@ -288,22 +356,21 @@ function CarHireExtra({ control, index, mainTourOperatorId, setValue, onRemove }
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">No. of Days</FormLabel>
             <FormControl><Input type="number" min={1} className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormMessage />
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.driverAge` as any} render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">Driver Age</FormLabel>
             <FormControl><Input type="number" min={17} className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormMessage />
           </FormItem>
         )} />
         <BookingRefTourOpFields control={control} prefix={p} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
-        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
-        setValue(`${p}.cost`, 0);
-        setValue(`${p}.commission`, 0);
-      }} />
+      <ExtraCommissionSummary control={control} prefix={p} mainTourOperatorId={mainTourOperatorId} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => includedPackageResets(p, mainTourOperatorId).forEach((r) => setValue(r.path, r.value))} />
     </ExtraCard>
   );
 }
@@ -337,16 +404,14 @@ function AttractionTicketExtra({ control, index, mainTourOperatorId, setValue, o
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">No. of Tickets</FormLabel>
             <FormControl><Input type="number" min={1} className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormMessage />
           </FormItem>
         )} />
         <BookingRefTourOpFields control={control} prefix={p} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
-        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
-        setValue(`${p}.cost`, 0);
-        setValue(`${p}.commission`, 0);
-      }} />
+      <ExtraCommissionSummary control={control} prefix={p} mainTourOperatorId={mainTourOperatorId} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => includedPackageResets(p, mainTourOperatorId).forEach((r) => setValue(r.path, r.value))} />
     </ExtraCard>
   );
 }
@@ -394,11 +459,8 @@ function LoungePassExtra({ control, index, airportOptions, mainTourOperatorId, s
           </FormItem>
         )} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
-        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
-        setValue(`${p}.cost`, 0);
-        setValue(`${p}.commission`, 0);
-      }} />
+      <ExtraCommissionSummary control={control} prefix={p} mainTourOperatorId={mainTourOperatorId} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => includedPackageResets(p, mainTourOperatorId).forEach((r) => setValue(r.path, r.value))} />
     </ExtraCard>
   );
 }
@@ -481,11 +543,8 @@ function AirportParkingExtra({ control, index, airportOptions, mainTourOperatorI
         <BookingRefTourOpFields control={control} prefix={p} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
-        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
-        setValue(`${p}.cost`, 0);
-        setValue(`${p}.commission`, 0);
-      }} />
+      <ExtraCommissionSummary control={control} prefix={p} mainTourOperatorId={mainTourOperatorId} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => includedPackageResets(p, mainTourOperatorId).forEach((r) => setValue(r.path, r.value))} />
     </ExtraCard>
   );
 }
@@ -623,16 +682,14 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
           <FormItem>
             <FormLabel className="text-xs font-medium text-black/60">No. of Nights</FormLabel>
             <FormControl><Input type="number" min={0} className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormMessage />
           </FormItem>
         )} />
         <BookingRefTourOpFields control={control} prefix={p} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
       </FieldGrid>
-      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => {
-        setValue(`${p}.tourOperatorId`, mainTourOperatorId);
-        setValue(`${p}.cost`, 0);
-        setValue(`${p}.commission`, 0);
-      }} />
+      <ExtraCommissionSummary control={control} prefix={p} mainTourOperatorId={mainTourOperatorId} />
+      <IncludedToggle control={control} name={`${p}.isIncludedInPackage`} onInclude={() => includedPackageResets(p, mainTourOperatorId).forEach((r) => setValue(r.path, r.value))} />
     </ExtraCard>
   );
 }

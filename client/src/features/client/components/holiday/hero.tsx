@@ -9,6 +9,7 @@ import { timeAgo } from "@/features/quote/lib/quote-views";
 import type { EnrichedBooking, EnrichedQuote } from "@/features/quote/types";
 import { formatQuotePassengers } from "@/features/client/components/holiday-fields";
 import { gbp2 } from "@/features/client/lib/holiday-format";
+import { quotePerPerson, quoteTotal } from "@/features/quote/lib/quote-money";
 import type { MosaicImage } from "@/features/client/lib/hero-mosaic";
 import { RefChips } from "@/features/client/components/holiday/ref-chips";
 import { HeroMosaic } from "@/features/client/components/holiday/hero-mosaic";
@@ -62,7 +63,10 @@ export function Hero({ display, raw, mode, photos, stars, readOnly = false, onOp
   const title = display.quoteTitle || (isQuote ? "Untitled quote" : "Untitled booking");
   const place = [display.destinationName || display.destination, display.countryName].filter(Boolean).join(", ");
   const pax = formatQuotePassengers(display);
-  const total = display.commissions.price;
+  // Same total as the Costings tab and pipeline card (extras not in the package included);
+  // per person is worked out from it live, so older deals with a stale saved figure still read right.
+  const total = quoteTotal(raw);
+  const perPerson = quotePerPerson(total, display.passengers?.adults, display.passengers?.children);
   const nightsLine = [display.nights ? `${display.nights} nights` : null, display.accommodation.board || null].filter(Boolean).join(", ");
 
   return (
@@ -117,9 +121,9 @@ export function Hero({ display, raw, mode, photos, stars, readOnly = false, onOp
         </div>
         <div className="flex flex-col items-end gap-1 text-right max-[620px]:items-start max-[620px]:text-left">
           <span className="text-[32px] font-semibold leading-none tabular-nums text-social-navy">{gbp2(total)}</span>
-          {display.pricePerPerson > 0 && (
-            <span className="text-sm text-qp-muted">
-              <b className="font-semibold text-foreground">{gbp2(display.pricePerPerson)}</b> per person{pax ? ` · ${pax}` : ""}
+          {perPerson > 0 && (
+            <span className="text-sm text-qp-muted" data-testid="holiday-hero-per-person">
+              <b className="font-semibold text-foreground">{gbp2(perPerson)}</b> per person{pax ? ` · ${pax}` : ""}
             </span>
           )}
           {!isQuote && (

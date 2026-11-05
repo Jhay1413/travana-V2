@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "@/features/quote/types";
 import { getTransactionProfit, getTransactionValue } from "@/features/pipeline/lib/pipeline-helpers";
-import { computeQuoteMoney, extrasCommission, extrasCustomerTotal, formFinalTotal, formTotalProfit, moneyBarSegments, quoteMarginPercent, quoteProfit, quoteTotal } from "./quote-money";
+import { computeQuoteMoney, extrasCommission, extrasCustomerTotal, formFinalTotal, formTotalProfit, moneyBarSegments, quoteMarginPercent, quotePerPerson, quoteProfit, quoteTotal } from "./quote-money";
 
 const ROW = {
   sales_price: "2000.00",
@@ -197,5 +197,20 @@ describe("extras and the customer total", () => {
     const formTotal = 1000 - 50 + 20 + extrasCustomerTotal(extras);
     const cardTotal = quoteTotal({ sales_price: 1000, discounts: 50, service_charge: 20, extras_total: 75 });
     expect(formTotal).toBe(cardTotal);
+  });
+});
+
+describe("quotePerPerson", () => {
+  it("shares the full total (extras included) between adults and children", () => {
+    const total = quoteTotal({ sales_price: "2000", discounts: "0", service_charge: "0", extras_total: 200 });
+    expect(quotePerPerson(total, 2, 0)).toBe(1100);
+    expect(quotePerPerson(total, 2, 2)).toBe(550);
+  });
+  it("ignores infants (not passed) and returns 0 with no travellers", () => {
+    expect(quotePerPerson(1000, 0, 0)).toBe(0);
+    expect(quotePerPerson(1000, null, undefined)).toBe(0);
+  });
+  it("accepts string counts and rounds to pence", () => {
+    expect(quotePerPerson(1000, "3", "0")).toBe(333.33);
   });
 });

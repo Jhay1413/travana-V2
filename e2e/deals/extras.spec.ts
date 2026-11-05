@@ -42,18 +42,19 @@ test.describe("extras and the customer total", () => {
 
     const extras = await openExtras(drawer);
     await extras.getByRole("button", { name: "Transfer", exact: true }).click();
-    // New extras start as "Included in package": a cost typed there is zeroed and adds nothing.
+    // New extras start as "Included in package": a cost typed there adds nothing to the total.
     await extras.getByRole("switch").click();
     await extras.getByLabel("Cost (£)").fill("100");
     await expect(summary).toContainText("Final total £2500.00");
 
-    // Switching Included back on zeroes the cost, so the total returns to the package price.
+    // Switching Included back on takes it off the total but KEEPS the typed cost.
     await extras.getByRole("switch").click();
     await expect(summary).toContainText("Final total £2400.00");
+    await expect(extras.getByLabel("Cost (£)")).toHaveValue("100");
 
-    // Back to not included with a cost, then save.
+    // Back to not included: the cost is still there and the total includes it again; then save.
     await extras.getByRole("switch").click();
-    await extras.getByLabel("Cost (£)").fill("100");
+    await expect(extras.getByLabel("Cost (£)")).toHaveValue("100");
     await expect(summary).toContainText("Final total £2500.00");
     await drawer.getByTestId("form-drawer-submit").click();
     await expectToast(page, "Quote updated");
@@ -71,9 +72,13 @@ test.describe("extras and the customer total", () => {
     await openHoliday(page, w.clientId, "quote", deal.entityId);
     await page.getByTestId("holiday-trip-costings-tab-costings").click();
     await expect(page.getByTestId("holiday-money-card")).toContainText("£2,500.00");
+    // The price block at the top carries the extra too: total and per person (2 adults).
+    await expect(page.getByTestId("holiday-hero")).toContainText("£2,500.00");
+    await expect(page.getByTestId("holiday-hero-per-person")).toContainText("£1,250.00 per person");
     await openBoard(page);
     await expect(cardIn(page, "Quoted", deal.transactionId)).toContainText(`Cost ${gbp(2500)}`);
-    await expect(cardIn(page, "Quoted", deal.transactionId)).toContainText("Profit £240");
+    // Package £240 + the extra's auto commission (operator 10% of £100 = £10).
+    await expect(cardIn(page, "Quoted", deal.transactionId)).toContainText("Profit £250");
   });
 
   test("an extra left as Included in package does not change the Final total or the saved deal's value", async ({ page }) => {
@@ -91,6 +96,76 @@ test.describe("extras and the customer total", () => {
 
     await openBoard(page);
     await expect(cardIn(page, "Quoted", deal.transactionId)).toContainText(`Cost ${gbp(2400)}`);
+  });
+});
+
+test.describe("extras cost behaviour", () => {
+  test("typing a cost updates the Final total live, a hint explains an included extra adds nothing, and the cost survives a save", async ({ page }) => {
+    const w = await boardWorld(page);
+    const deal = await quoteDeal(page.request, w, { sales_price: "2400.00", package_commission: "240.00", travel_date: "2027-06-14" });
+
+    const drawer = await openEditDrawer(page, w, deal);
+    const summary = drawer.getByTestId("drawer-costing-summary");
+    const extras = await openExtras(drawer);
+    await extras.getByRole("button", { name: "Car Hire", exact: true }).click();
+
+    // Included (the default): the cost is accepted but explained, and the total does not move.
+    await extras.getByLabel("Cost (£)").fill("75");
+    await expect(extras.getByTestId("extra-cost-included-hint")).toBeVisible();
+    await expect(summary).toContainText("Final total £2400.00");
+
+    // Not included: the total moves on every change, character by character.
+    await extras.getByRole("switch").click();
+    await expect(extras.getByTestId("extra-cost-included-hint")).toHaveCount(0);
+    await expect(summary).toContainText("Final total £2475.00");
+    await extras.getByLabel("Cost (£)").fill("120.50");
+    await expect(summary).toContainText("Final total £2520.50");
+
+    await drawer.getByTestId("form-drawer-submit").click();
+    await expectToast(page, "Quote updated");
+    const [saved] = await queryRows<{ cost: string; inc: boolean | null }>(
+      `select c.cost, c.is_included_in_package as inc from quote_car_hire c where c.quote_id = $1`,
+      [deal.entityId],
+    );
+    expect(Number(saved.cost)).toBe(120.5);
+    expect(saved.inc).toBe(false);
+
+    // Re-opening the form shows the saved cost and the same total.
+    const reopened = await openEditDrawer(page, w, deal);
+    const reopenedExtras = await openExtras(reopened);
+    await expect(reopenedExtras.getByLabel("Cost (£)")).toHaveValue("120.5");
+    await expect(reopened.getByTestId("drawer-costing-summary")).toContainText("Final total £2520.50");
+  });
+});
+
+test.describe("extras commission and per person", () => {
+  test("a not-included extra shows its commission on the card, a hand-typed commission sticks, and an included extra shows none", async ({ page }) => {
+    const w = await boardWorld(page);
+    const deal = await quoteDeal(page.request, w, { sales_price: "2400.00", package_commission: "240.00", travel_date: "2027-06-14", adult: 2, child: 0 });
+
+    const drawer = await openEditDrawer(page, w, deal);
+    const extras = await openExtras(drawer);
+    await extras.getByRole("button", { name: "Transfer", exact: true }).click();
+
+    // Included (default): no commission of its own.
+    await expect(extras.getByTestId("extra-commission-summary")).toContainText("Included in package");
+
+    // Not included: the commission is calculated from the cost and shown on the card.
+    await extras.getByRole("switch").click();
+    await extras.getByLabel("Cost (£)").fill("200");
+    await expect(extras.getByTestId("extra-commission-summary")).toContainText(/Commission £\d+\.\d{2}/);
+
+    // A hand-typed commission is kept when the cost changes afterwards.
+    await extras.getByTestId("extra-commission-input").fill("7");
+    await extras.getByLabel("Cost (£)").fill("300");
+    await expect(extras.getByTestId("extra-commission-input")).toHaveValue("7");
+    await expect(extras.getByTestId("extra-commission-summary")).toContainText("Commission £7.00");
+
+    // Total Profit = package commission + the extra commission.
+    await expect(drawer.getByTestId("drawer-total-profit")).toContainText("£247.00");
+
+    // Per person includes the extra: (2400 + 300) / 2.
+    await expect(drawer.getByTestId("drawer-costing-summary")).toContainText("Per person £1350.00");
   });
 });
 

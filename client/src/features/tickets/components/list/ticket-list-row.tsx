@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { Phone, Pin } from "lucide-react";
+import { Phone } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/note-time";
@@ -9,6 +9,7 @@ import type { Ticket } from "../../types";
 import { BookingChip } from "../shared/booking-chip";
 import { DuePill } from "../shared/due-pill";
 import { KindInline } from "../shared/kind-tag";
+import { TicketPinButton } from "../shared/ticket-pin-button";
 import { PriorityBadge } from "../shared/priority-badge";
 import { StatusBadge } from "../shared/status-badge";
 import { Who } from "../shared/who";
@@ -43,15 +44,14 @@ export function TicketListRow({
       )}
       style={{ gridTemplateColumns: LIST_GRID_COLS }}
       data-testid={`ticket-row-${ticket.id}`}
+      data-pinned={pinned ? "true" : "false"}
     >
       <div className="relative z-10">
         <Checkbox checked={picked} onCheckedChange={onPick} aria-label={`Select ${ticket.subject}`} data-testid={`ticket-pick-${ticket.id}`} />
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
-          {pinned && (
-            <Pin className="h-3 w-3 shrink-0 fill-social-orange text-social-orange" aria-label="Pinned" data-testid={`ticket-row-pinned-${ticket.id}`} />
-          )}
+          <TicketPinButton ticket={ticket} />
           <Link
             href={`/tickets/${ticket.id}`}
             className="truncate text-[14px] font-semibold outline-none after:absolute after:inset-0 after:content-[''] focus-visible:underline"

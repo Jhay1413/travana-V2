@@ -167,7 +167,10 @@ const CHIP_LABEL: Record<QueueChip, string> = {
   closed: "Resolved and closed",
 };
 
-/** The open chip splits into "Needs attention" / "Open"; the others are one group. Pinned first within each. */
+/**
+ * The open chip splits into "Pinned" (only when something is pinned), "Needs attention" and "Open".
+ * Pinned tickets always sit above every unpinned one, so they leave the other groups. The other chips are one group, pinned first.
+ */
 export function groupRows(
   rows: Ticket[],
   chip: QueueChip,
@@ -176,12 +179,15 @@ export function groupRows(
   needs: NeedsAttention = makeNeedsAttention(now),
 ): QueueGroup[] {
   if (chip === "open") {
-    const urgent = rows.filter(needs);
-    const rest = rows.filter((t) => !needs(t));
-    return [
-      { key: "attention", label: "Needs attention", hint: "Overdue or due within 2 hours", rows: sortPinnedFirst(urgent, pinned) },
-      { key: "open", label: "Open", hint: "", rows: sortPinnedFirst(rest, pinned) },
-    ];
+    const pinnedRows = sortPinnedFirst(rows.filter((t) => pinned.has(t.id)), pinned);
+    const unpinned = rows.filter((t) => !pinned.has(t.id));
+    const groups: QueueGroup[] = [];
+    if (pinnedRows.length > 0) groups.push({ key: "pinned", label: "Pinned", hint: "", rows: pinnedRows });
+    groups.push(
+      { key: "attention", label: "Needs attention", hint: "Overdue or due within 2 hours", rows: unpinned.filter(needs) },
+      { key: "open", label: "Open", hint: "", rows: unpinned.filter((t) => !needs(t)) },
+    );
+    return groups;
   }
   return [{ key: chip, label: CHIP_LABEL[chip], hint: "", rows: sortPinnedFirst(rows, pinned) }];
 }
@@ -213,4 +219,18 @@ export function deriveQueue(input: DeriveQueueInput): QueueResult {
   const groups = groupRows(shown, chip, pinned, now, needs);
   const ordered = groups.flatMap((g) => g.rows);
   return { pills, groups, rows: ordered, orderIds: ordered.map((t) => t.id), counts };
+}
+
+export interface AgentOption {
+  id: string;
+  name: string;
+}
+
+/** The distinct assignees on the tickets the caller can already see, A to Z. */
+export function agentOptions(rows: Ticket[]): AgentOption[] {
+  const byId = new Map<string, string>();
+  for (const t of rows) {
+    if (t.assignedTo && !byId.has(t.assignedTo)) byId.set(t.assignedTo, t.assignedToName?.trim() || "Unknown");
+  }
+  return [...byId].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
 }

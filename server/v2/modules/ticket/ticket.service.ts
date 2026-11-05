@@ -281,11 +281,11 @@ async function assertClientInOrg(clientId: string, ticketOrgId: string | null): 
 }
 
 export const ticketService = {
-  async listTickets(scope: Scope, mode: TicketListMode = "mine"): Promise<TicketListItem[]> {
+  async listTickets(scope: Scope, mode: TicketListMode = "mine", filters: { assignedTo?: string } = {}): Promise<TicketListItem[]> {
     if (mode === "all" && !hasAnyRole(scope.orgRoles, ADMIN_TICKET_ROLES)) {
       throw new AppError("You do not have permission to view all tickets", 403);
     }
-    const rows = await ticketRepository.findAll(scope, scope.userId ?? null, mode);
+    const rows = await ticketRepository.findAll(scope, scope.userId ?? null, mode, filters.assignedTo);
 
     const transactionIds = Array.from(new Set(rows.map((r) => r.transactionId).filter((id): id is string => !!id)));
     if (transactionIds.length === 0) return rows.map((r) => ({ ...r, holiday: null }));

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useCurrentUser } from "@/hooks/queries";
 import { useTickets } from "../api/use-ticket-queries";
 import { usePinnedTicketIds } from "../api/use-ticket-pin";
-import { deriveQueue } from "../lib/ticket-queue";
+import { agentOptions, deriveQueue } from "../lib/ticket-queue";
 import { useNow } from "./use-now";
 import { useQueuePrefs } from "./use-queue-prefs";
 
@@ -14,7 +14,12 @@ import { useQueuePrefs } from "./use-queue-prefs";
 export function useTicketQueue({ boardAllowed = false }: { boardAllowed?: boolean } = {}) {
   const { prefs, patch, canViewAll } = useQueuePrefs();
   const { data: currentUser } = useCurrentUser();
-  const { data: rows, isLoading } = useTickets(prefs.scope);
+  // The unfiltered list feeds the Agent options; when an agent is picked the server narrows the rows.
+  const { data: allRows, isLoading: loadingAll } = useTickets(prefs.scope);
+  const { data: agentRows, isLoading: loadingAgent } = useTickets(prefs.scope, { enabled: !!prefs.agentId, assignedTo: prefs.agentId });
+  const rows = prefs.agentId ? agentRows : allRows;
+  const isLoading = prefs.agentId ? loadingAgent : loadingAll;
+  const agents = useMemo(() => agentOptions(allRows ?? []), [allRows]);
   const pinned = usePinnedTicketIds();
   const now = useNow();
 
@@ -35,5 +40,5 @@ export function useTicketQueue({ boardAllowed = false }: { boardAllowed?: boolea
     [rows, prefs, currentUser?.id, boardAllowed, pinned, now],
   );
 
-  return { prefs, patch, canViewAll, isLoading, result, now, userId: currentUser?.id };
+  return { prefs, patch, canViewAll, isLoading, result, agents, now, userId: currentUser?.id };
 }

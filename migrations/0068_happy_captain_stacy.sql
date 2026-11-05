@@ -1,0 +1,1 @@
+ALTER TABLE "client_passenger" ADD COLUMN "passport_non_uk" boolean DEFAULT false NOT NULL;

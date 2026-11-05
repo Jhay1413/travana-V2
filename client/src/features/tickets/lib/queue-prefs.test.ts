@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_PREFS, sanitizePrefs } from "./queue-prefs";
 
 describe("sanitizePrefs", () => {
+  it("drops a non-string agent id", () => {
+    expect(sanitizePrefs({ agentId: 4 }, true).agentId).toBe("");
+  });
   it("falls back to defaults for junk", () => {
     expect(sanitizePrefs(null, true)).toEqual(DEFAULT_PREFS);
     expect(sanitizePrefs("x", true)).toEqual(DEFAULT_PREFS);
     expect(sanitizePrefs({ scope: "nope", view: 3, chip: [], sort: {} }, true)).toEqual(DEFAULT_PREFS);
   });
   it("keeps valid values", () => {
-    const raw = { scope: "raised", view: "board", chip: "attention", sort: "client", filters: { priorities: ["High"], kinds: ["Sales"] }, search: "mia" };
+    const raw = { scope: "raised", view: "board", chip: "attention", sort: "client", filters: { priorities: ["High"], kinds: ["Sales"] }, agentId: "u9", search: "mia" };
     expect(sanitizePrefs(raw, false)).toEqual(raw);
   });
   it("keeps search text but caps its length and ignores non-strings", () => {

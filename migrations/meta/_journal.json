@@ -477,6 +477,13 @@
       "when": 1793783286825,
       "tag": "0067_windy_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1793875035609,
+      "tag": "0068_happy_captain_stacy",
+      "breakpoints": true
     }
   ]
 }

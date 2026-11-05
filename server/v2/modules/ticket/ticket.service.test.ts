@@ -563,6 +563,15 @@ describe("ticketService.listTickets", () => {
     bookingOperatorName: null, bookingOperatorLogoUrl: null, enquiryId: null, enquiryTitle: null, enquiryTravelDate: null, enquiryNights: null,
   };
 
+  it("passes the assignee filter through to the repository", async () => {
+    vi.mocked(ticketRepository.findAll).mockResolvedValue([] as never);
+
+    await ticketService.listTickets(SCOPE, "all", { assignedTo: "agent-9" }).catch(() => undefined);
+    await ticketService.listTickets(SCOPE, "mine", { assignedTo: "agent-9" });
+
+    expect(ticketRepository.findAll).toHaveBeenCalledWith(SCOPE, SCOPE.userId ?? null, "mine", "agent-9");
+  });
+
   it("makes no holiday query when no ticket has a transaction", async () => {
     vi.mocked(ticketRepository.findAll).mockResolvedValue([{ id: "t1", transactionId: null, orgId: "org1" }] as never);
 

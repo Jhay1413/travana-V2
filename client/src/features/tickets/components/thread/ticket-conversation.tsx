@@ -88,12 +88,13 @@ export function TicketConversation({ ticket, users, compact = false }: { ticket:
       />
       {/* Replies hang off one rail under the note they answer and can be folded away. */}
       {children.length > 0 && !collapsed.has(note.id) && (
-        <div className="ml-8 space-y-3 border-l-2 border-social-border pl-4 sm:ml-16" data-testid={`ticket-note-replies-${note.id}`}>
+        <div className="ml-8 space-y-3 border-l-[3px] border-social-muted/40 pl-4 sm:ml-16" data-testid={`ticket-note-replies-${note.id}`}>
           {children.map((child) => (
             <ThreadNoteCard
               key={child.id}
               note={child}
               nested
+              replyingToName={note.authorName}
               isMe={isMine(child.authorId)}
               actions={actionsFor(child, note.id)}
               attachments={attachmentsFor(child)}

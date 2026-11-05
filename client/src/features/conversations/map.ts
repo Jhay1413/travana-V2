@@ -2,7 +2,7 @@ import type { SsConversation, SsLastMessagePreview } from "./api/conversations.a
 import type { SsMessage, SsMessageAttachment } from "./api/messages.api";
 import { CHANNELS } from "./channels";
 import type { Conversation, ConversationChannel, ConversationMessage, ConversationStatus, MessageAttachment } from "./types";
-import { isValidPhoneNumber } from "@shared/phone";
+import { looksLikePhoneHandle } from "@shared/phone";
 
 // Routes attachment bytes through our server proxy so the browser never needs the
 // SendSeven workspace token (see server messages downloadAttachment).
@@ -210,7 +210,7 @@ export function toUiConversation(item: SsConversation): Conversation {
 
 /** True when the string looks like a real phone number rather than an opaque id. */
 export function looksLikePhone(value: string | null | undefined): boolean {
-  return isValidPhoneNumber(value);
+  return looksLikePhoneHandle(value);
 }
 
 /**

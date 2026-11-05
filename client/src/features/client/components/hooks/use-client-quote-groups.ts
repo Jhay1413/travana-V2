@@ -3,7 +3,7 @@ import type { DealImage } from "@/features/quote/types";
 import type { Transaction } from "@/features/quote/types";
 import type { QuoteWithJoins, BookingWithJoins } from "../client-types";
 import type { QuoteRowCardData } from "../tabs/QuoteRowCard";
-import { quoteTotal } from "@/features/quote/lib/quote-money";
+import { quotePerPerson, quoteTotal } from "@/features/quote/lib/quote-money";
 
 export type GroupRowItem =
   | { type: "quote"; row: QuoteRowCardData; isChild: boolean }
@@ -35,7 +35,8 @@ export function quoteToRow(q: QuoteWithJoins, fallbackStatus: string): QuoteRowC
     createdAtRaw: q.date_created || "",
     status: q.quote_status || fallbackStatus,
     totalCost: quoteTotal(q),
-    pricePerPerson: parseFloat(q.price_per_person || "0"),
+    // Live from the total (extras not in the package included), so older saved figures don't show.
+    pricePerPerson: quotePerPerson(quoteTotal(q), q.adult, q.child),
     imageUrl: PRIMARY_IMAGE(q.images),
     pax: PAX_LABEL(q.adult || 0, q.child || 0, q.infant || 0),
     nights: q.num_of_nights || 0,

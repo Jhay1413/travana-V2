@@ -5,6 +5,7 @@ import { getClientPhoneError, getRequestErrorMessage } from "./client-phone";
 describe("getClientPhoneError", () => {
   it("returns null for a valid number", () => {
     expect(getClientPhoneError("+44 7123 456789")).toBeNull();
+    expect(getClientPhoneError("07123 456789")).toBeNull();
   });
 
   it("flags an over-long number", () => {
@@ -13,6 +14,8 @@ describe("getClientPhoneError", () => {
 
   it("flags a too-short number and letters", () => {
     expect(getClientPhoneError("12345")).toBe(PHONE_ERROR_MESSAGE);
+    expect(getClientPhoneError("0712345678")).toBe(PHONE_ERROR_MESSAGE);
+    expect(getClientPhoneError("+1 415 555 2671")).toBe(PHONE_ERROR_MESSAGE);
     expect(getClientPhoneError("phone-number")).toBe(PHONE_ERROR_MESSAGE);
   });
 

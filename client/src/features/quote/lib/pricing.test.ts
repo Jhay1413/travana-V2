@@ -93,3 +93,13 @@ describe("commissionForOperator", () => {
     expect(commissionForOperator(10, "", undefined, null)).toBe(0);
   });
 });
+
+describe("price per person includes extras not in the package", () => {
+  it("adds the extras total to the per-person figure", () => {
+    expect(pricePerPersonFor(1000, 0, 0, 2, 0, 200)).toBe(600);
+    expect(pricePerPersonFor(1000, 100, 50, 2, 0, 100)).toBe(525);
+  });
+  it("recomputePricing carries the snapshot's extras total", () => {
+    expect(recomputePricing("price", 1000, { ...base, extrasTotal: 200 }).pricePerPerson).toBe(600);
+  });
+});

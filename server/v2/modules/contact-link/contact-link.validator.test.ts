@@ -16,9 +16,9 @@ async function run(phoneNumber: unknown) {
 }
 
 describe("createClientForContactValidator phone rule", () => {
-  it.each(["07123456789", "  +44 7123 456789  "])("accepts %j", async (p) => expect(await run(p)).toBeUndefined());
+  it.each(["07123456789", "07123 456789", "  +44 7123 456789  "])("accepts %j", async (p) => expect(await run(p)).toBeUndefined());
 
-  it.each(["", "   ", "12345", "1".repeat(30), "6f1c2f0e-8c3a-4a39-9d1e-2f6c5b9f7a11", "abc"])(
+  it.each(["", "   ", "12345", "+1 415 555 2671", "1".repeat(30), "6f1c2f0e-8c3a-4a39-9d1e-2f6c5b9f7a11", "abc"])(
     "rejects %j with 400 and the shared message",
     async (p) => {
       const err = await run(p);

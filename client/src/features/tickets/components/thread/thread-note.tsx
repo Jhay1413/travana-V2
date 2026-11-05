@@ -31,6 +31,7 @@ export function ThreadNoteCard({
   note,
   isMe,
   nested = false,
+  replyingToName,
   actions,
   footer,
   attachments,
@@ -41,6 +42,8 @@ export function ThreadNoteCard({
   isMe: boolean;
   /** Rendered under a parent note. */
   nested?: boolean;
+  /** Author of the note this one answers (nested replies only). */
+  replyingToName?: string;
   /** Absent for read-only rendering. */
   actions?: NoteActions;
   /** Rendered under the card, inside its column (for example the replies toggle). */
@@ -55,15 +58,20 @@ export function ThreadNoteCard({
   return (
     <div className={cn("group/note flex gap-3", nested && "max-w-[85%] text-[13px]")}>
       {note.authorImage ? (
-        <img src={note.authorImage} alt="" className={cn("shrink-0 rounded-full object-cover", nested ? "h-7 w-7" : "h-8 w-8")} />
+        <img src={note.authorImage} alt="" className={cn("shrink-0 rounded-full object-cover", nested ? "h-6 w-6" : "h-8 w-8")} />
       ) : (
-        <PersonAvatar name={note.authorName} size={nested ? 28 : 32} />
+        <PersonAvatar name={note.authorName} size={nested ? 24 : 32} />
       )}
       <div className="min-w-0 flex-1">
         <div
           className={cn("rounded-2xl border border-social-border", nested ? "px-3 py-2" : "px-4 py-3", isMe ? "bg-pipeline-task-bg" : "bg-card")}
           data-testid={`ticket-note-${note.id}`}
         >
+          {nested && replyingToName && (
+            <div className="mb-0.5 text-[11px] text-social-muted" data-testid={`ticket-note-replying-to-${note.id}`}>
+              Replying to <span className="font-semibold">{replyingToName}</span>
+            </div>
+          )}
           <div className="mb-1 flex flex-wrap items-center gap-x-2 text-[12px]">
             <span className="text-[13px] font-semibold">{note.authorName}</span>
             <span className="text-social-muted">

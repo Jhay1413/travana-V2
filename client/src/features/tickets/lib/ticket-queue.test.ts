@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_FILTERS,
+  agentOptions,
   activeFilterCount,
   applyChip,
   applyFilters,
@@ -209,9 +210,19 @@ describe("deriveQueue", () => {
     expect(result.counts.open).toBe(4);
   });
 
-  it("puts pinned tickets first within each group", () => {
-    const result = deriveQueue({ ...base, pinned: new Map([["nodue", 5]]) });
-    expect(result.groups[1].rows.map((t) => t.id)).toEqual(["nodue", "later"]);
+  it("lifts pinned tickets into a Pinned group above Needs attention", () => {
+    const result = deriveQueue({ ...base, pinned: new Map([["nodue", 5], ["soon", 9]]) });
+    expect(result.groups.map((g) => [g.label, g.rows.map((t) => t.id)])).toEqual([
+      ["Pinned", ["soon", "nodue"]],
+      ["Needs attention", ["overdue"]],
+      ["Open", ["later"]],
+    ]);
+    expect(result.orderIds).toEqual(["soon", "nodue", "overdue", "later"]);
+  });
+
+  it("keeps the chosen sort inside the unpinned groups", () => {
+    const result = deriveQueue({ ...base, pinned: new Map([["later", 1]]) });
+    expect(result.groups[1].rows.map((t) => t.id)).toEqual(["overdue", "soon"]);
   });
 
   it("uses a single group for the other chips", () => {
@@ -236,5 +247,20 @@ describe("deriveQueue", () => {
     const result = deriveQueue({ ...base, includeClosed: true });
     expect(result.rows.map((t) => t.id)).toContain("resolved");
     expect(result.rows.map((t) => t.id)).toContain("closed");
+  });
+});
+
+describe("agentOptions", () => {
+  it("lists each assignee once, A to Z, skipping unassigned tickets", () => {
+    const rows = [
+      ticket({ id: "1", assignedTo: "b", assignedToName: "Bea" }),
+      ticket({ id: "2", assignedTo: "a", assignedToName: "Ann" }),
+      ticket({ id: "3", assignedTo: "b", assignedToName: "Bea" }),
+      ticket({ id: "4", assignedTo: null }),
+    ];
+    expect(agentOptions(rows)).toEqual([
+      { id: "a", name: "Ann" },
+      { id: "b", name: "Bea" },
+    ]);
   });
 });
