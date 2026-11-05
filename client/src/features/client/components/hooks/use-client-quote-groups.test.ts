@@ -13,7 +13,8 @@ describe("quoteToRow totalCost", () => {
     expect(quoteToRow(base, "quoted").totalCost).toBe(950);
   });
 
-  it("keeps price per person holiday-only", () => {
-    expect(quoteToRow({ ...base, extras_total: 200, price_per_person: "475" } as unknown as QuoteWithJoins, "quoted").pricePerPerson).toBe(475);
+  it("works price per person out from the total incl. extras, ignoring a stale saved figure", () => {
+    // (1000 − 100 + 50 + 200) ÷ 2 adults
+    expect(quoteToRow({ ...base, extras_total: 200, price_per_person: "475" } as unknown as QuoteWithJoins, "quoted").pricePerPerson).toBe(575);
   });
 });

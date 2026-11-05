@@ -5,17 +5,18 @@ import type { Ticket, TicketListScope } from "../types";
 export const ticketKeys = {
   all: ["tickets"] as const,
   lists: () => [...ticketKeys.all, "list"] as const,
-  list: (scope: TicketListScope) => [...ticketKeys.lists(), scope] as const,
+  list: (scope: TicketListScope, assignedTo?: string) =>
+    assignedTo ? ([...ticketKeys.lists(), scope, assignedTo] as const) : ([...ticketKeys.lists(), scope] as const),
   details: () => [...ticketKeys.all, "detail"] as const,
   detail: (id: string) => [...ticketKeys.details(), id] as const,
   byClient: (clientId: string) => [...ticketKeys.all, "byClient", clientId] as const,
   byUser: (userId: string) => [...ticketKeys.all, "byUser", userId] as const,
 };
 
-export function useTickets(scope: TicketListScope = "mine", options?: { enabled?: boolean }) {
+export function useTickets(scope: TicketListScope = "mine", options?: { enabled?: boolean; assignedTo?: string }) {
   return useQuery<Ticket[]>({
-    queryKey: ticketKeys.list(scope),
-    queryFn: () => ticketApi.getAll(scope),
+    queryKey: ticketKeys.list(scope, options?.assignedTo),
+    queryFn: () => ticketApi.getAll(scope, options?.assignedTo),
     enabled: options?.enabled ?? true,
     // Always refetch on visit — overrides the global 30s staleTime so the
     // tickets list is never served stale from cache.

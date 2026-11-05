@@ -19,7 +19,7 @@ const cardOf = (page: import("@playwright/test").Page, id: string) => page.getBy
 
 /** The ids of the rows in one list group, top to bottom. */
 async function groupOrder(page: import("@playwright/test").Page, group: string): Promise<string[]> {
-  const rows = page.getByTestId(`ticket-group-${group}`).locator('[data-testid^="ticket-row-"]:not([data-testid^="ticket-row-subject-"]):not([data-testid^="ticket-row-pinned-"])');
+  const rows = page.getByTestId(`ticket-group-${group}`).locator('[data-testid^="ticket-row-"]:not([data-testid^="ticket-row-subject-"])');
   const ids = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-testid") ?? ""));
   return ids.map((t) => t.replace("ticket-row-", ""));
 }
@@ -397,3 +397,72 @@ test.describe("reply due", () => {
   });
 });
 
+
+test.describe("pinning from the queue", () => {
+  test("every row has a muted pin; clicking it pins without opening the ticket and floats the row above the rest, even Needs attention", async ({ page }) => {
+    const w = await workWorld(page);
+    await signIn(page, w.agent.email);
+    const base = { assignedTo: w.agent.id, type: "Build" };
+    const urgent = await apiCreateTicket(page.request, { ...base, subject: ticketSubject("Overdue"), dueDate: new Date(Date.now() - 5 * 3600_000).toISOString() });
+    const calm = await apiCreateTicket(page.request, { ...base, subject: ticketSubject("Calm") });
+
+    await openQueue(page, { view: "list" });
+    for (const t of [urgent, calm]) {
+      await expect(page.getByTestId(`ticket-pin-toggle-${t.id}`)).toHaveAttribute("data-pinned", "false");
+    }
+    await expect(page.getByTestId("ticket-group-pinned")).toHaveCount(0);
+
+    await page.getByTestId(`ticket-pin-toggle-${calm.id}`).click();
+    await expect(page).toHaveURL(new RegExp("/tickets$"));
+    await expect(page.getByTestId(`ticket-pin-toggle-${calm.id}`)).toHaveAttribute("data-pinned", "true");
+    await expect.poll(() => groupOrder(page, "pinned")).toEqual([calm.id]);
+    // The pinned group sits above Needs attention.
+    const pinnedY = (await page.getByTestId("ticket-group-pinned").boundingBox())!.y;
+    const attentionY = (await page.getByTestId("ticket-group-attention").boundingBox())!.y;
+    expect(pinnedY).toBeLessThan(attentionY);
+
+    await page.getByTestId(`ticket-pin-toggle-${calm.id}`).click();
+    await expect(page.getByTestId("ticket-group-pinned")).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp("/tickets$"));
+  });
+
+  test("the board cards carry the same pin toggle", async ({ page }) => {
+    const w = await workWorld(page);
+    await signIn(page, w.agent.email);
+    const t = await apiCreateTicket(page.request, { assignedTo: w.agent.id, type: "Build", subject: ticketSubject("Card pin") });
+    await openQueue(page, { view: "board" });
+    await page.getByTestId(`ticket-pin-toggle-${t.id}`).click();
+    await expect(page.getByTestId(`ticket-pin-toggle-${t.id}`)).toHaveAttribute("data-pinned", "true");
+    await expect(page).toHaveURL(new RegExp("/tickets$"));
+  });
+});
+
+test.describe("agent filter", () => {
+  test("a manager can narrow the queue to one assignee, and the server returns only that agent's tickets", async ({ page }) => {
+    const w = await workWorld(page);
+    await signIn(page, w.agent.email);
+    const mine = await apiCreateTicket(page.request, { subject: ticketSubject("For Ann"), type: "Build", assignedTo: w.agent.id });
+    const hers = await apiCreateTicket(page.request, { subject: ticketSubject("For Bea"), type: "Build", assignedTo: w.agentB.id });
+
+    // Raw API: the param is honoured and stays inside the caller's own scope.
+    const asAssignee = await page.request.get(`/api/v2/tickets?scope=mine&assignedTo=${w.agentB.id}`);
+    expect(asAssignee.ok()).toBe(true);
+    const ids = ((await asAssignee.json()) as { data: Array<{ id: string }> }).data.map((t) => t.id);
+    expect(ids).toContain(hers.id);
+    expect(ids).not.toContain(mine.id);
+    // An agent id nobody can see through this caller's scope returns nothing.
+    const nobody = await page.request.get("/api/v2/tickets?scope=mine&assignedTo=not-a-real-user");
+    expect(((await nobody.json()) as { data: unknown[] }).data).toEqual([]);
+
+    await openQueue(page, { view: "list" });
+    // "My tickets" (the default) leaves out Bea's ticket; "Raised by me" holds both.
+    await page.getByTestId("ticket-scope-raised").click();
+    await expect(rowOf(page, mine.id)).toBeVisible();
+    await expect(rowOf(page, hers.id)).toBeVisible();
+    await chooseOption(page, page.getByTestId("select-ticket-agent"), "Bea Agentb");
+    await expect(rowOf(page, hers.id)).toBeVisible();
+    await expect(rowOf(page, mine.id)).toHaveCount(0);
+    await chooseOption(page, page.getByTestId("select-ticket-agent"), "All agents");
+    await expect(rowOf(page, mine.id)).toBeVisible();
+  });
+});

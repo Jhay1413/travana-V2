@@ -54,6 +54,16 @@ export function quoteTotal(input: QuoteMoneyInput): number {
   return num(input.sales_price) - num(input.discounts) + num(input.service_charge) + num(input.extras_total);
 }
 
+/**
+ * Price per person from the full customer total (extras not in the package included),
+ * shared by adults + children. Infants don't count. 0 when there are no travellers.
+ */
+export function quotePerPerson(total: number, adults: unknown, children: unknown): number {
+  const travellers = (Number(adults) || 0) + (Number(children) || 0);
+  if (travellers <= 0) return 0;
+  return Math.round((total / travellers) * 100) / 100;
+}
+
 export function quoteProfit(input: QuoteMoneyInput): number {
   return num(input.package_commission) + num(input.service_commission);
 }

@@ -2,8 +2,8 @@ import axiosClient from "@/api/client/axios-client";
 import type { Ticket, CreateTicketData, TicketListScope } from "../types";
 
 export const ticketApi = {
-  getAll: async (scope: TicketListScope = "mine"): Promise<Ticket[]> => {
-    const { data } = await axiosClient.get<Ticket[]>("/api/v2/tickets", { params: { scope } });
+  getAll: async (scope: TicketListScope = "mine", assignedTo?: string): Promise<Ticket[]> => {
+    const { data } = await axiosClient.get<Ticket[]>("/api/v2/tickets", { params: { scope, ...(assignedTo ? { assignedTo } : {}) } });
     return data;
   },
 

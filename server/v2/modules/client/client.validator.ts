@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { insertClientTableSchema } from "@shared/schema";
-import { SYSTEM_MANAGED_CLIENT_FIELDS, phoneNumberSchema } from "../neon-client/neon-client.validator";
+import { SYSTEM_MANAGED_CLIENT_FIELDS, phoneNumberSchema, phoneNumberUpdateSchema } from "../neon-client/neon-client.validator";
 
 // System-managed columns (portal PIN, status, VIP, merge lineage) are not
 // writable here; the service strips them from any payload that carries them.
@@ -14,7 +14,7 @@ export const updateClientValidator = z.object({
   params: z.object({
     id: z.string(),
   }),
-  body: editableClientSchema.partial().extend({ phoneNumber: phoneNumberSchema.optional() }),
+  body: editableClientSchema.partial().extend({ phoneNumber: phoneNumberUpdateSchema.optional() }),
 });
 
 export const mergeClientValidator = z.object({

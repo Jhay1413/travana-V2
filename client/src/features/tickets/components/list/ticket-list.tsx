@@ -10,6 +10,7 @@ import { LIST_GRID_COLS, LIST_HEADERS } from "./list-columns";
 import { TicketListRow } from "./ticket-list-row";
 
 const GROUP_DOT: Record<string, string> = {
+  pinned: "bg-social-orange",
   attention: "bg-priority-urgent",
   open: "bg-stage-inplay-dot",
   unassigned: "bg-stage-lost-dot",

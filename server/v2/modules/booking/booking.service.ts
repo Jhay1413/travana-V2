@@ -3,6 +3,8 @@ import { withoutProtectedKeys } from "../quote/quote-child.validator";
 import { assertBookingWritable, assertBookingDealWritable } from "./booking-access";
 import type { BookingChildKind } from "./booking.types";
 import { newQuoteRepository } from "../quote/quote.repository";
+import { refreshBookingPricePerPerson } from "../quote/quote-price-per-person.service";
+import { pricePerPersonText } from "../../utils/customer-price";
 import { quoteImageRepository } from "../quote/quote-image.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
@@ -187,7 +189,8 @@ export const bookingService = {
       service_commission,
       extras_total,
       total_price: (calcTotalPrice(b.sales_price, b.discounts, b.service_charge) + extras_total).toFixed(2),
-      price_per_person: calcPricePerPerson(b.sales_price, b.adult, b.child, b.discounts, b.service_charge),
+      // Includes extras not in the package, matching total_price (computed live, so stale saved figures don't show).
+      price_per_person: pricePerPersonText({ salesPrice: b.sales_price, discounts: b.discounts, serviceCharge: b.service_charge, extrasTotal: extras_total, adults: b.adult, children: b.child }),
     };
   },
 
@@ -570,6 +573,9 @@ export const bookingService = {
     }
     if (extraAccommodations !== undefined) {
       await bookingRepository.replaceExtraAccommodations(id, extraAccommodations);
+    }
+    if ([transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations].some((x) => x !== undefined)) {
+      await refreshBookingPricePerPerson(id);
     }
     if (cruiseData) {
       await bookingRepository.upsertCruise(id, cruiseData);

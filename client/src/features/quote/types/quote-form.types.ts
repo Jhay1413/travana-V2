@@ -150,6 +150,8 @@ export const quoteFormSchema = z.object({
     cost: z.coerce.number().min(0).default(0),
     commission: z.coerce.number().min(0).default(0),
     isIncludedInPackage: z.boolean().default(true),
+    // Client-only: true once the agent typed this extra commission by hand (stops auto-calculation).
+    commissionManual: z.boolean().optional(),
   })).default([]),
 
   carHires: z.array(z.object({
@@ -166,6 +168,8 @@ export const quoteFormSchema = z.object({
     cost: z.coerce.number().min(0).default(0),
     commission: z.coerce.number().min(0).default(0),
     isIncludedInPackage: z.boolean().default(true),
+    // Client-only: true once the agent typed this extra commission by hand (stops auto-calculation).
+    commissionManual: z.boolean().optional(),
   })).default([]),
 
   attractionTickets: z.array(z.object({
@@ -177,6 +181,8 @@ export const quoteFormSchema = z.object({
     cost: z.coerce.number().min(0).default(0),
     commission: z.coerce.number().min(0).default(0),
     isIncludedInPackage: z.boolean().default(true),
+    // Client-only: true once the agent typed this extra commission by hand (stops auto-calculation).
+    commissionManual: z.boolean().optional(),
   })).default([]),
 
   loungePasses: z.array(z.object({
@@ -189,6 +195,8 @@ export const quoteFormSchema = z.object({
     cost: z.coerce.number().min(0).default(0),
     commission: z.coerce.number().min(0).default(0),
     isIncludedInPackage: z.boolean().default(true),
+    // Client-only: true once the agent typed this extra commission by hand (stops auto-calculation).
+    commissionManual: z.boolean().optional(),
   })).default([]),
 
   airportParkings: z.array(z.object({
@@ -205,6 +213,8 @@ export const quoteFormSchema = z.object({
     cost: z.coerce.number().min(0).default(0),
     commission: z.coerce.number().min(0).default(0),
     isIncludedInPackage: z.boolean().default(true),
+    // Client-only: true once the agent typed this extra commission by hand (stops auto-calculation).
+    commissionManual: z.boolean().optional(),
   })).default([]),
 
   extraAccommodations: z.array(z.object({
@@ -219,6 +229,8 @@ export const quoteFormSchema = z.object({
     cost: z.coerce.number().min(0).default(0),
     commission: z.coerce.number().min(0).default(0),
     isIncludedInPackage: z.boolean().default(true),
+    // Client-only: true once the agent typed this extra commission by hand (stops auto-calculation).
+    commissionManual: z.boolean().optional(),
     // Marks rows auto-created from pre/post-cruise stay so they can be
     // reconciled without touching manually-added accommodations.
     cruiseStay: z.enum(["pre", "post"]).optional(),

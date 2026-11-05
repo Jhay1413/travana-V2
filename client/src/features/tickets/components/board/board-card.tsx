@@ -1,6 +1,6 @@
 import type { DragEvent } from "react";
 import { useLocation } from "wouter";
-import { Phone, Pin, User } from "lucide-react";
+import { Phone, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DuePillModel } from "../../lib/ticket-due";
 import { cleanClientName, priorityMeta, shortId } from "../../lib/ticket-display";
@@ -9,6 +9,7 @@ import { BookingChip } from "../shared/booking-chip";
 import { DuePill } from "../shared/due-pill";
 import { KindTag } from "../shared/kind-tag";
 import { PriorityBadge } from "../shared/priority-badge";
+import { TicketPinButton } from "../shared/ticket-pin-button";
 import { Who } from "../shared/who";
 
 export function BoardCard({
@@ -53,11 +54,12 @@ export function BoardCard({
         dragging && "opacity-45",
       )}
       data-testid={`ticket-card-${ticket.id}`}
+      data-pinned={pinned ? "true" : "false"}
     >
       <div className="flex items-center gap-2">
         <span className="whitespace-nowrap text-[12px] font-semibold text-social-muted">#{shortId(ticket.id)}</span>
         <KindTag type={ticket.type} />
-        {pinned && <Pin className="h-3 w-3 fill-social-orange text-social-orange" aria-label="Pinned" />}
+        <TicketPinButton ticket={ticket} />
         <span className="flex-1" />
         {(tone === "high" || tone === "urgent") && <PriorityBadge priority={ticket.priority} />}
       </div>

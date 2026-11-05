@@ -19,6 +19,8 @@ export interface PricingSnapshot {
   children: number;
   /** Operator commission %, or null when the operator has none set. */
   operatorCommissionPct: number | null;
+  /** Cost of the extras NOT included in the package; counts towards price per person. Defaults to 0. */
+  extrasTotal?: number;
 }
 
 export interface PricingResult {
@@ -65,10 +67,12 @@ export function pricePerPersonFor(
   serviceCharge: unknown,
   adults: unknown,
   children: unknown,
+  /** Cost of the extras NOT included in the package; part of what each traveller pays. */
+  extrasTotal: unknown = 0,
 ): number {
   const total = num(adults) + num(children);
   if (total <= 0) return 0;
-  const netPrice = num(price) - num(discount) + num(serviceCharge);
+  const netPrice = num(price) - num(discount) + num(serviceCharge) + num(extrasTotal);
   return round2(netPrice / total);
 }
 
@@ -96,7 +100,7 @@ export function recomputePricing(
     commission = round2(prev.commission + delta);
   }
 
-  const pricePerPerson = pricePerPersonFor(nextPrice, nextDiscount, nextServiceCharge, prev.adults, prev.children);
+  const pricePerPerson = pricePerPersonFor(nextPrice, nextDiscount, nextServiceCharge, prev.adults, prev.children, prev.extrasTotal);
 
   return { commission, pricePerPerson };
 }

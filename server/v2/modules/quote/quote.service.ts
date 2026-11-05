@@ -9,6 +9,8 @@ import { enquiryTableRepository } from "../enquiry/enquiry.repository";
 import { destinationGuruService } from "../destination-guru/destination-guru.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { buildQuoteEmbeddingText, buildQuoteEmbeddingMetadata } from "./quote-embedding";
+import { refreshQuotePricePerPerson } from "./quote-price-per-person.service";
+import { pricePerPersonText } from "../../utils/customer-price";
 import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
 import { normalizeAcceptableImageUrls, partitionAcceptableImageUrls } from "../../utils/image-storage";
@@ -311,6 +313,9 @@ async function writeQuoteSections(quoteId: string, parts: QuoteSectionsInput): P
   }
 
   await Promise.all(writes);
+  if ([transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations].some((x) => x !== undefined)) {
+    await refreshQuotePricePerPerson(quoteId);
+  }
 }
 
 // The subset of a create payload passed straight through to newQuoteRepository.create —
@@ -427,7 +432,8 @@ export const newQuoteService = {
       service_commission,
       extras_total,
       total_price: (calcTotalPrice(q.sales_price, q.discounts, q.service_charge) + extras_total).toFixed(2),
-      price_per_person: calcPricePerPerson(q.sales_price, q.adult, q.child, q.discounts, q.service_charge),
+      // Includes extras not in the package, matching total_price (computed live, so stale saved figures don't show).
+      price_per_person: pricePerPersonText({ salesPrice: q.sales_price, discounts: q.discounts, serviceCharge: q.service_charge, extrasTotal: extras_total, adults: q.adult, children: q.child }),
     };
   },
 
@@ -801,6 +807,9 @@ export const newQuoteService = {
     }
 
     await Promise.all(writes);
+    if ([transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations].some((x) => x !== undefined)) {
+      await refreshQuotePricePerPerson(id);
+    }
 
     if (q.isFreeQuote) {
       const txn = await transactionRepository.findById(q.transaction_id);

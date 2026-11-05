@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { departureDatesForCheckIn } from "@/features/quote/lib/departure-dates";
 import { Loader2 } from "lucide-react";
 import { parseISO, isValid, addDays, format } from "date-fns";
+import { extrasCustomerTotal } from "@/features/quote/lib/quote-money";
 import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -111,6 +112,12 @@ export function QuoteRHFForm({
   const discount = useWatch({ control, name: "discount" });
   const serviceCharge = useWatch({ control, name: "serviceCharge" });
   const commission = useWatch({ control, name: "commission" });
+  // Extras not marked "Included in package" are part of what each traveller pays.
+  const [transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations] = useWatch({
+    control,
+    name: ["transfers", "carHires", "attractionTickets", "loungePasses", "airportParkings", "extraAccommodations"],
+  });
+  const extrasTotal = extrasCustomerTotal({ transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations });
   const checkInDate = useWatch({ control, name: "checkInDate" });
   const nights = useWatch({ control, name: "nights" });
 
@@ -188,9 +195,9 @@ export function QuoteRHFForm({
   useEffect(() => {
     setValue(
       "pricePerPerson",
-      pricePerPersonFor(price, discount, serviceCharge, passengersAdults, passengersChildren),
+      pricePerPersonFor(price, discount, serviceCharge, passengersAdults, passengersChildren, extrasTotal),
     );
-  }, [price, passengersAdults, passengersChildren, discount, serviceCharge, setValue]);
+  }, [price, passengersAdults, passengersChildren, discount, serviceCharge, extrasTotal, setValue]);
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   // Commission = price × operator % − discount + service charge. The discount is
