@@ -4,7 +4,7 @@ import type { Request, Response } from "express";
 vi.mock("./neon-client.service", () => ({
   neonClientService: {
     listNeonClientsPaginated: vi.fn(),
-    getNeonClientById: vi.fn(),
+    viewNeonClientById: vi.fn(),
     createNeonClient: vi.fn(),
     updateNeonClient: vi.fn(),
     mergeClients: vi.fn(),
@@ -32,7 +32,7 @@ beforeEach(() => vi.clearAllMocks());
 describe("neon-client responses never contain portalPin", () => {
   const cases: Array<[string, () => void, keyof typeof neonClientController]> = [
     ["list", () => vi.mocked(neonClientService.listNeonClientsPaginated).mockResolvedValue({ clients: [ROW], total: 1, page: 1, limit: 10, totalPages: 1 } as never), "listNeonClients"],
-    ["get", () => vi.mocked(neonClientService.getNeonClientById).mockResolvedValue(ROW as never), "getNeonClientById"],
+    ["get", () => vi.mocked(neonClientService.viewNeonClientById).mockResolvedValue(ROW as never), "getNeonClientById"],
     ["create", () => vi.mocked(neonClientService.createNeonClient).mockResolvedValue(ROW as never), "createNeonClient"],
     ["update", () => vi.mocked(neonClientService.updateNeonClient).mockResolvedValue(ROW as never), "updateNeonClient"],
     ["merge", () => vi.mocked(neonClientService.mergeClients).mockResolvedValue(ROW as never), "mergeNeonClient"],

@@ -22,17 +22,19 @@ import {
   PASSENGER_TITLES,
   draftFromPassenger,
   draftToInput,
-  passportExpiryFlagLabel,
-  isPassengerDraftComplete,
-  isPassengerDraftValid,
+  passengerDraftErrors,
   passengerFullName,
-  passportExpiryFlag,
-  passportNumberWarning,
+  passengerSaveBlockedReason,
+  passportExpiryDeadlineLabel,
   type PassengerDraft,
 } from "@/features/client/lib/client-passengers";
 
-const NO_TITLE = "__none__";
-const WARNING_CLASS = "w-fit rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[11px] font-semibold text-[#92400E]";
+function serverMessage(err: unknown): string | null {
+  const message = (err as { response?: { data?: { message?: unknown } } })?.response?.data?.message;
+  return typeof message === "string" && message ? message : null;
+}
+
+const ERROR_CLASS = "text-[12px] text-destructive";
 
 interface PassengerModalProps {
   clientId: string;
@@ -40,7 +42,7 @@ interface PassengerModalProps {
   onOpenChange: (open: boolean) => void;
   /** null = adding a new passenger. */
   passenger: ClientPassenger | null;
-  /** Earliest future travel date (YYYY-MM-DD); passport expiry is flagged against it, or today when null. */
+  /** Earliest future travel date (YYYY-MM-DD); the passport must be valid for more than 6 months after it (or after today when null). */
   nextDeparture?: string | null;
 }
 
@@ -56,10 +58,11 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
   const isLead = !!passenger?.isLead;
   const isEdit = !!passenger && !isLead;
   const pending = saveLead.isPending || create.isPending || update.isPending || remove.isPending;
-  // Adding needs all six fields; editing (and the lead passport) is never blocked by gaps.
-  const canSave = isLead || (passenger ? isPassengerDraftValid(draft) : isPassengerDraftComplete(draft));
-  const numberWarning = passportNumberWarning(draft.passportNumber);
-  const expiryFlagged = !!draft.passportExpiry && passportExpiryFlag(draft.passportExpiry, nextDeparture);
+  // Add and edit (lead passport included) need all six fields and a valid passport; the server enforces the same rules.
+  const errors = passengerDraftErrors(draft, { nextDeparture, isLead });
+  const blockedReason = passengerSaveBlockedReason(errors);
+  const canSave = blockedReason === null;
+  const deadline = passportExpiryDeadlineLabel(nextDeparture);
 
   useEffect(() => {
     if (open) {
@@ -80,7 +83,7 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
     const input = draftToInput(draft);
     try {
       if (isLead) {
-        await saveLead.mutateAsync({ passportNumber: input.passportNumber, passportExpiry: input.passportExpiry });
+        await saveLead.mutateAsync({ passportNumber: input.passportNumber, passportExpiry: input.passportExpiry, passportNonUk: input.passportNonUk });
         done("Passport details saved");
       } else if (passenger?.id) {
         await update.mutateAsync({ passengerId: passenger.id, input });
@@ -89,8 +92,8 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
         await create.mutateAsync(input);
         done("Passenger added");
       }
-    } catch {
-      failed("Failed to save passenger");
+    } catch (err) {
+      failed(serverMessage(err) ?? "Failed to save passenger");
     }
   };
 
@@ -133,12 +136,11 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
                 <>
                   <div className="grid gap-1.5">
                     <Label htmlFor="passenger-title">Title</Label>
-                    <Select value={draft.title || undefined} onValueChange={(v) => set({ title: v === NO_TITLE ? "" : v })}>
+                    <Select value={draft.title || undefined} onValueChange={(v) => set({ title: v })}>
                       <SelectTrigger id="passenger-title" data-testid="select-passenger-title">
                         <SelectValue placeholder="Select title" />
                       </SelectTrigger>
                       <SelectContent>
-                        {isEdit && <SelectItem value={NO_TITLE}>No title</SelectItem>}
                         {PASSENGER_TITLES.map((t) => (
                           <SelectItem key={t} value={t}>
                             {t}
@@ -171,9 +173,19 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
                   onChange={(e) => set({ passportNumber: e.target.value })}
                   data-testid="input-passenger-passport-number"
                 />
-                {numberWarning && (
-                  <p className="text-[12px] text-[#92400E]" data-testid="passenger-passport-number-warning">
-                    {numberWarning}
+                <label className="flex items-center gap-2 text-[12px] text-muted-foreground" htmlFor="passenger-non-uk">
+                  <input
+                    id="passenger-non-uk"
+                    type="checkbox"
+                    checked={draft.passportNonUk}
+                    onChange={(e) => set({ passportNonUk: e.target.checked })}
+                    data-testid="checkbox-passenger-non-uk"
+                  />
+                  Non-UK passport
+                </label>
+                {draft.passportNumber.trim() && errors.passportNumber && (
+                  <p className={ERROR_CLASS} data-testid="passenger-passport-number-error">
+                    {errors.passportNumber}
                   </p>
                 )}
               </div>
@@ -186,13 +198,22 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
                   onChange={(e) => set({ passportExpiry: e.target.value })}
                   data-testid="input-passenger-passport-expiry"
                 />
-                {expiryFlagged && (
-                  <span className={WARNING_CLASS} data-testid="passenger-passport-expiry-flag">
-                    {passportExpiryFlagLabel(nextDeparture)}
-                  </span>
+                {draft.passportExpiry && errors.passportExpiry ? (
+                  <p className={ERROR_CLASS} data-testid="passenger-passport-expiry-error">
+                    {errors.passportExpiry}
+                  </p>
+                ) : (
+                  <p className="text-[12px] text-muted-foreground" data-testid="passenger-passport-expiry-hint">
+                    Must expire after {deadline} (6 months past travel)
+                  </p>
                 )}
               </div>
             </div>
+            {blockedReason && (
+              <p className={ERROR_CLASS} data-testid="passenger-save-blocked-reason">
+                {blockedReason}
+              </p>
+            )}
             <DialogFooter className="gap-2 sm:justify-between">
               <div>
                 {isEdit && (

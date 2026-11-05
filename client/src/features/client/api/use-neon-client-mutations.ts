@@ -38,6 +38,17 @@ export function useImportNeonClients() {
   });
 }
 
+/** Soft-delete a client (admin only). Refetch everything: lists, search, pickers and counts all change. */
+export function useDeleteNeonClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => neonClientApi.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  });
+}
+
 export function useMergeNeonClients() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -20,4 +20,14 @@ describe("isDirtySnapshot", () => {
   it("ignores images until their baseline is taken", () => {
     expect(isDirtySnapshot({ ...base, images: null }, { ...base, images: "e1" })).toBe(false);
   });
+
+  it("detects a changed account selection once its baseline is taken", () => {
+    const withAccounts = { ...base, accounts: "1,7" };
+    expect(isDirtySnapshot(withAccounts, { ...withAccounts })).toBe(false);
+    expect(isDirtySnapshot(withAccounts, { ...withAccounts, accounts: "1" })).toBe(true);
+  });
+  it("ignores accounts until their baseline is taken", () => {
+    expect(isDirtySnapshot({ ...base, accounts: null }, { ...base, accounts: "1" })).toBe(false);
+    expect(isDirtySnapshot(base, { ...base, accounts: "1" })).toBe(false);
+  });
 });

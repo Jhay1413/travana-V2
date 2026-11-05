@@ -36,6 +36,7 @@ import { CreditsTab } from "@/features/platform-admin/components/platform-admin/
 import { UsageTab } from "@/features/platform-admin/components/platform-admin/usage-tab";
 import { RoleChipEditor } from "@/features/platform-admin/components/platform-admin/role-chip-editor";
 import { SendSevenIntegrationCard } from "@/features/conversations";
+import { OrgSocialAccountsCard } from "@/features/social";
 import type { AdminUserRow } from "@/features/platform-admin/api/platform-admin.api";
 
 const formatDate = (iso: string | null | undefined) => (iso ? new Date(iso).toISOString().slice(0, 10) : "");
@@ -195,6 +196,7 @@ export default function PlatformAdminOrgPage() {
         </TabsContent>
         <TabsContent value="integrations" className="mt-4">
           <SendSevenIntegrationCard orgId={org.id} />
+          <OrgSocialAccountsCard orgId={org.id} />
         </TabsContent>
       </Tabs>
 

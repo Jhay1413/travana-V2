@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { phoneNumberSchema } from "../neon-client/neon-client.validator";
 
 export const getContactLinkValidator = z.object({
   params: z.object({ contactId: z.string().min(1) }),
@@ -24,7 +25,7 @@ export const createClientForContactValidator = z.object({
     title: z.string().trim().optional().nullable(),
     firstName: z.string().trim().min(1, "First name is required"),
     surename: z.string().trim().min(1, "Surname is required"),
-    phoneNumber: z.string().trim().min(1, "Phone number is required"),
+    phoneNumber: phoneNumberSchema,
     email: z.string().trim().email().optional().or(z.literal("")).nullable(),
   }),
 });

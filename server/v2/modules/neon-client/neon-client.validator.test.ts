@@ -6,7 +6,7 @@ import {
 } from "./neon-client.validator";
 
 const ID = "6f1c2f0e-8c3a-4a39-9d1e-2f6c5b9f7a11";
-const FORBIDDEN = ["portalPin", "mustChangePin", "status", "mergedIntoId", "splitFromClientId", "vipEnrolledAt", "vipTier"];
+const FORBIDDEN = ["portalPin", "mustChangePin", "status", "mergedIntoId", "mergedAt", "mergedBy", "deletedAt", "deletedBy", "splitFromClientId", "vipEnrolledAt", "vipTier"];
 
 describe("updateNeonClientValidator", () => {
   it("accepts the editable fields the forms send", () => {

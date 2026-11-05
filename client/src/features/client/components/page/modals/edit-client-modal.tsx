@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ClientEditForm } from "@/features/client/components/hooks/use-client-edit-form";
 
+import { PHONE_INPUT_MAX_LENGTH } from "@shared/phone";
 import { PASSENGER_TITLES as TITLES } from "@/features/client/lib/client-passengers";
 
 interface FieldDef {
@@ -35,6 +36,8 @@ interface EditClientModalProps {
   setForm: (form: ClientEditForm) => void;
   onSave: () => void;
   isPending: boolean;
+  /** Inline error for the phone field (only set when the number was changed). */
+  phoneError?: string | null;
 }
 
 /**
@@ -42,8 +45,8 @@ interface EditClientModalProps {
  * PIN, status, merge/split links and VIP fields, and the shared edit hook never
  * includes them.
  */
-export function EditClientModal({ open, onOpenChange, form, setForm, onSave, isPending }: EditClientModalProps) {
-  const canSave = !!form.firstName.trim() && !!form.surename.trim() && !!form.phoneNumber.trim();
+export function EditClientModal({ open, onOpenChange, form, setForm, onSave, isPending, phoneError }: EditClientModalProps) {
+  const canSave = !!form.firstName.trim() && !!form.surename.trim() && !!form.phoneNumber.trim() && !phoneError;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -85,8 +88,13 @@ export function EditClientModal({ open, onOpenChange, form, setForm, onSave, isP
                   type={f.type}
                   value={form[f.key]}
                   onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                  maxLength={f.key === "phoneNumber" ? PHONE_INPUT_MAX_LENGTH : undefined}
+                  aria-invalid={f.key === "phoneNumber" && !!phoneError}
                   data-testid={`input-edit-${f.key}`}
                 />
+                {f.key === "phoneNumber" && phoneError && (
+                  <p className="text-xs text-destructive" data-testid="error-edit-phone">{phoneError}</p>
+                )}
               </div>
             ))}
           </div>

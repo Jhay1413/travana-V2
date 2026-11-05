@@ -9,6 +9,7 @@ import {
   fileImageItem,
   itemPreviewUrl,
   releaseItemPreview,
+  withoutFailedUrlItem,
   type FormImageItem,
 } from "@/features/quote/lib/form-images";
 import type { FormLayout } from "@/features/quote/types";
@@ -101,7 +102,11 @@ export function QuoteImagesSection({
             className="pointer-events-none h-full w-full object-cover"
             draggable={false}
             onError={(e) => {
-              (e.target as HTMLImageElement).alt = "Failed to load";
+              // An imported photo that won't load is dropped rather than shown
+              // as a broken tile. Saved images stay, flagged, so they can be
+              // deleted on purpose.
+              if (item.kind === "url") setItems((prev) => withoutFailedUrlItem(prev, item.key));
+              else (e.target as HTMLImageElement).alt = "Failed to load";
             }}
           />
           {/* Always visible — a hover-only control is easy to miss and

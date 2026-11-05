@@ -11,6 +11,10 @@ vi.mock("./ticket-reply.repository", () => ({
   },
 }));
 
+vi.mock("./ticket-attachment.service", () => ({
+  removeStoredAttachmentFile: vi.fn(),
+}));
+
 vi.mock("./ticket.repository", () => ({
   ticketRepository: {
     findByIdScoped: vi.fn(),
@@ -26,6 +30,7 @@ vi.mock("../notification/notification.repository", () => ({
 import { ticketReplyService } from "./ticket-reply.service";
 import { ticketReplyRepository } from "./ticket-reply.repository";
 import { ticketRepository } from "./ticket.repository";
+import { removeStoredAttachmentFile } from "./ticket-attachment.service";
 import { notificationRepository } from "../notification/notification.repository";
 
 const TRUSTED_SCOPE = { orgId: null } as never;
@@ -57,6 +62,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(ticketRepository.findByIdScoped).mockResolvedValue(TICKET as never);
   vi.mocked(notificationRepository.create).mockResolvedValue(undefined as never);
+  vi.mocked(ticketReplyRepository.remove).mockResolvedValue({ deletedReplyIds: ["r1"], attachmentFilenames: [] });
+  vi.mocked(removeStoredAttachmentFile).mockResolvedValue(undefined);
 });
 
 describe("ticketReplyService — ticket scope is enforced on every operation", () => {
@@ -149,6 +156,38 @@ describe("ticketReplyService.deleteReply", () => {
     vi.mocked(ticketReplyRepository.findById).mockResolvedValue(reply());
     await expect(ticketReplyService.deleteReply("r1", "author1", AGENT_SCOPE)).resolves.toBeUndefined();
     expect(ticketReplyRepository.remove).toHaveBeenCalledWith("r1");
+  });
+});
+
+describe("ticketReplyService.deleteReply — cascade", () => {
+  it("removes the stored files of the reply and every descendant after the rows are gone", async () => {
+    vi.mocked(ticketReplyRepository.findById).mockResolvedValue(reply());
+    vi.mocked(ticketReplyRepository.remove).mockResolvedValue({
+      deletedReplyIds: ["r1", "c1", "g1"],
+      attachmentFilenames: ["ticket-attachments/a.png", "ticket-attachments/b.pdf", "legacy.txt"],
+    });
+
+    await ticketReplyService.deleteReply("r1", "author1", AGENT_SCOPE);
+
+    expect(ticketReplyRepository.remove).toHaveBeenCalledTimes(1);
+    expect(ticketReplyRepository.remove).toHaveBeenCalledWith("r1");
+    expect(removeStoredAttachmentFile).toHaveBeenCalledTimes(3);
+    expect(removeStoredAttachmentFile).toHaveBeenCalledWith("ticket-attachments/a.png");
+    expect(removeStoredAttachmentFile).toHaveBeenCalledWith("ticket-attachments/b.pdf");
+    expect(removeStoredAttachmentFile).toHaveBeenCalledWith("legacy.txt");
+  });
+
+  it("does not touch storage when nothing was attached", async () => {
+    vi.mocked(ticketReplyRepository.findById).mockResolvedValue(reply());
+    await ticketReplyService.deleteReply("r1", "author1", AGENT_SCOPE);
+    expect(removeStoredAttachmentFile).not.toHaveBeenCalled();
+  });
+
+  it("a non-author cannot cascade-delete someone else's comment: nothing is removed", async () => {
+    vi.mocked(ticketReplyRepository.findById).mockResolvedValue(reply());
+    await expect(ticketReplyService.deleteReply("r1", "u1", AGENT_SCOPE)).rejects.toMatchObject({ statusCode: 403 });
+    expect(ticketReplyRepository.remove).not.toHaveBeenCalled();
+    expect(removeStoredAttachmentFile).not.toHaveBeenCalled();
   });
 });
 

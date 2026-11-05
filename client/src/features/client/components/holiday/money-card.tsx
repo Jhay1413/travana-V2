@@ -11,6 +11,7 @@ const SEGMENT_CLASS: Record<MoneyBarSegment["key"], string> = {
   package: "bg-qp-money-pkg",
   commission: "bg-qp-money-comm",
   service: "bg-qp-money-service",
+  extras: "bg-qp-money-extras",
 };
 
 function KeyRow({ swatch, label, value, negative }: { swatch: string; label: string; value: string; negative?: boolean }) {
@@ -47,7 +48,7 @@ function UpsellsBlock({ bookingId }: { bookingId: string }) {
 
 /**
  * Body of the "Costings" tab (team only). The figures match the pipeline card:
- * total = sales - discounts + service charge, profit = package + line-item
+ * total = sales - discounts + service charge + extras not included in the package, profit = package + line-item
  * commission. There is deliberately no balance due row.
  *
  * Props:
@@ -57,7 +58,7 @@ function UpsellsBlock({ bookingId }: { bookingId: string }) {
 export function MoneyBody({ raw, mode }: { raw: EnrichedQuote | EnrichedBooking; mode: "quote" | "booking" }) {
   const money = computeQuoteMoney(raw);
   const segments = moneyBarSegments(money);
-  const label = `Total package cost ${gbp2(money.total)}: package price ${gbp2(money.packagePrice)}, commission ${gbp2(money.profit)}, discount ${gbp2(money.discount)}, service charge ${gbp2(money.serviceCharge)}`;
+  const label = `Total package cost ${gbp2(money.total)}: package price ${gbp2(money.packagePrice)}, commission ${gbp2(money.profit)}, discount ${gbp2(money.discount)}, service charge ${gbp2(money.serviceCharge)}, extras ${gbp2(money.extras)}`;
 
   return (
     <div data-testid="holiday-money-card">
@@ -80,6 +81,7 @@ export function MoneyBody({ raw, mode }: { raw: EnrichedQuote | EnrichedBooking;
         <KeyRow swatch="bg-qp-money-comm" label="Commission" value={gbp2(money.profit)} />
         <KeyRow swatch="bg-status-failed-fg" label="Discount" value={minusGbp2(money.discount)} negative={money.discount > 0} />
         <KeyRow swatch="bg-qp-money-service" label="Service charge" value={plusGbp2(money.serviceCharge)} />
+        {money.extras > 0 && <KeyRow swatch="bg-qp-money-extras" label="Extras" value={plusGbp2(money.extras)} />}
       </div>
 
       <div className="mt-3.5 flex flex-col gap-2.5 border-t border-social-border pt-3.5 text-[13px]">

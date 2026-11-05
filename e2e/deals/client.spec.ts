@@ -1,3 +1,4 @@
+import { PHONE_ERROR_MESSAGE } from "../../shared/phone";
 import type { Page } from "@playwright/test";
 import { FAKE_POSTCODE } from "../helpers/browser-guard";
 import { apiCreateClient, apiCreateEnquiry, dataOf, dbClient, signIn, uniqueSurname } from "../helpers/deals";
@@ -21,6 +22,34 @@ async function fillRequired(page: Page, last: string, phone = "07700900222") {
 }
 
 test.describe("clients", () => {
+  test("the client header has no Pin or Share button, and shows Referred by on the name row with the address under it", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const referrer = await apiCreateClient(page.request);
+    const client = await apiCreateClient(page.request, { city: "Leeds" });
+
+    await page.goto(`/clients/${client.id}`);
+    await expect(page.getByTestId("client-center-header")).toContainText(client.surename);
+    await expect(page.getByTestId("client-index-pin")).toHaveCount(0);
+    await expect(page.getByTestId("client-index-share")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /pin client|share client/i })).toHaveCount(0);
+
+    await page.getByTestId("button-set-referrer").click();
+    await page.getByTestId("input-referrer-search").fill(referrer.surename);
+    await page.getByTestId(`referrer-option-${referrer.id}`).click();
+    const pill = page.getByTestId("client-index-referrer");
+    await expect(pill).toContainText(referrer.surename);
+
+    const name = (await page.getByTestId("client-center-header").boundingBox())!;
+    const phone = (await page.getByTestId("client-index-phone").boundingBox())!;
+    const badge = (await page.getByTestId("client-index-badge").boundingBox())!;
+    const ref = (await pill.boundingBox())!;
+    const address = (await page.getByTestId("client-center-header-contact").boundingBox())!;
+    const centre = (b: { y: number; height: number }) => b.y + b.height / 2;
+    for (const other of [phone, badge, ref]) expect(Math.abs(centre(other) - centre(name))).toBeLessThan(name.height);
+    expect(address.y).toBeGreaterThan(ref.y + ref.height - 2);
+  });
+
   test("creates a client through the New Client drawer and lands on their page with the saved details", async ({ page }) => {
     const agency = await seedDealsAgency();
     const agentId = await signIn(page, agency.agentEmail);
@@ -78,6 +107,69 @@ test.describe("clients", () => {
     await expect(hint).toBeVisible();
 
     expect(await queryRows(`select id from client_table where surename = $1`, [last])).toHaveLength(0);
+  });
+
+  test("an over-long or malformed phone number shows an inline error, keeps Create Client disabled and saves nothing", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const last = uniqueSurname();
+    await openNewClientDrawer(page);
+    await page.getByTestId("input-first-name").fill("Nina");
+    await page.getByTestId("input-last-name").fill(last);
+
+    const submit = page.getByTestId("form-drawer-submit");
+    const error = page.getByTestId("error-phone");
+    await page.getByTestId("input-phone").fill("1".repeat(30));
+    await expect(error).toHaveText(PHONE_ERROR_MESSAGE);
+    await expect(submit).toBeDisabled();
+
+    await page.getByTestId("input-phone").fill("12345");
+    await expect(error).toBeVisible();
+    await expect(submit).toBeDisabled();
+
+    // Typing is capped at 20 characters; 20 digits is still too long, so it stays blocked.
+    await page.getByTestId("input-phone").fill("");
+    await page.getByTestId("input-phone").pressSequentially("9".repeat(30));
+    await expect(page.getByTestId("input-phone")).toHaveValue("9".repeat(20));
+    await expect(error).toBeVisible();
+    await expect(submit).toBeDisabled();
+
+    await page.getByTestId("input-phone").fill("07700900222");
+    await expect(error).toHaveCount(0);
+    await expect(submit).toBeEnabled();
+
+    expect(await queryRows(`select id from client_table where surename = $1`, [last])).toHaveLength(0);
+  });
+
+  test("the API refuses an over-long phone on create and on update (400), but an update without a phone still works", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const last = uniqueSurname();
+    const bad = await page.request.post("/api/v2/neon-clients", { data: { firstName: "Nina", surename: last, phoneNumber: "1".repeat(40) } });
+    expect(bad.status()).toBe(400);
+    expect(await queryRows(`select id from client_table where surename = $1`, [last])).toHaveLength(0);
+
+    const client = await apiCreateClient(page.request);
+    expect((await page.request.patch(`/api/v2/neon-clients/${client.id}`, { data: { phoneNumber: "1".repeat(40) } })).status()).toBe(400);
+    expect((await page.request.patch(`/api/v2/neon-clients/${client.id}`, { data: { city: "Leeds" } })).status()).toBe(200);
+    expect(await dbClient(client.id)).toMatchObject({ phoneNumber: "07700900111", city: "Leeds" });
+  });
+
+  test("creating a client from an inbox contact uses the same phone rule: a bad number is a 400 and stores nothing, a padded valid one is saved trimmed", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const last = uniqueSurname();
+    const contact = unique("ss-contact");
+    for (const phoneNumber of ["1".repeat(30), "12345", "6f1c2f0e-8c3a-4a39-9d1e-2f6c5b9f7a11", ""]) {
+      const res = await page.request.post(`/api/v2/contact-links/${contact}/client`, { data: { firstName: "Nina", surename: last, phoneNumber } });
+      expect(res.status(), phoneNumber).toBe(400);
+    }
+    expect(await queryRows(`select id from client_table where surename = $1`, [last])).toHaveLength(0);
+
+    const ok = await page.request.post(`/api/v2/contact-links/${contact}/client`, { data: { firstName: "Nina", surename: last, phoneNumber: "  07700900222  " } });
+    expect(ok.status()).toBe(201);
+    const [row] = await queryRows<{ phoneNumber: string }>(`select "phoneNumber" from client_table where surename = $1`, [last]);
+    expect(row.phoneNumber).toBe("07700900222");
   });
 
   test("the API refuses a client with no first name, no surname or no phone number (400) and stores nothing", async ({ page }) => {
@@ -190,6 +282,25 @@ test.describe("clients", () => {
       city: "York",
       surename: client.surename,
     });
+  });
+
+  test("the edit dialog flags a changed over-long phone and will not save it; an unchanged stored number never blocks other edits", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+    await page.goto(`/clients/${client.id}`);
+    await page.getByTestId("client-index-more").click();
+    await page.getByTestId("client-index-menu-edit").click();
+    const dialog = page.getByTestId("dialog-edit-client");
+    const save = dialog.getByTestId("button-save-client");
+
+    await dialog.getByTestId("input-edit-phoneNumber").fill("1".repeat(30));
+    await expect(dialog.getByTestId("error-edit-phone")).toBeVisible();
+    await expect(save).toBeDisabled();
+    await dialog.getByTestId("input-edit-phoneNumber").fill("07700900111");
+    await expect(dialog.getByTestId("error-edit-phone")).toHaveCount(0);
+    await expect(save).toBeEnabled();
+    expect(await dbClient(client.id)).toMatchObject({ phoneNumber: "07700900111" });
   });
 
   test("the edit dialog will not save with the first name, surname or phone cleared", async ({ page }) => {

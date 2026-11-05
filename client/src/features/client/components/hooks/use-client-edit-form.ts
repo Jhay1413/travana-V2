@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useUpdateNeonClient } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
+import { getClientPhoneError } from "@/features/client/lib/client-phone";
 
 const EMPTY_FORM = {
   title: "",
@@ -63,12 +64,16 @@ export function useClientEditForm(clientId: string, clientData: ClientLike | nul
     setShowEditClient(true);
   }
 
+  // Only a changed number is checked, so a stored legacy number never blocks other edits.
+  const phoneError = getClientPhoneError(editForm.phoneNumber, clientData?.phoneNumber ?? "");
+
   function handleSaveClient() {
+    if (phoneError) return;
     const updates: Record<string, string | boolean | null> = {};
     if (editForm.title) updates.title = editForm.title;
     if (editForm.firstName) updates.firstName = editForm.firstName;
     if (editForm.surename) updates.surename = editForm.surename;
-    updates.phoneNumber = editForm.phoneNumber;
+    if (editForm.phoneNumber.trim() !== (clientData?.phoneNumber ?? "").trim()) updates.phoneNumber = editForm.phoneNumber.trim();
     updates.email = editForm.email || null;
     updates.DOB = editForm.DOB || null;
     updates.houseNumber = editForm.houseNumber || null;
@@ -96,6 +101,7 @@ export function useClientEditForm(clientId: string, clientData: ClientLike | nul
     showEditClient,
     setShowEditClient,
     editForm,
+    phoneError,
     setEditForm,
     openEditDialog,
     handleSaveClient,

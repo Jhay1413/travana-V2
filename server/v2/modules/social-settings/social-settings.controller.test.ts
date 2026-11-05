@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("./social-settings.service", () => ({
-  socialSettingsService: { get: vi.fn(), update: vi.fn(), getChannel: vi.fn() },
+  socialSettingsService: { get: vi.fn(), update: vi.fn(), getChannel: vi.fn(), listAccounts: vi.fn(), listAccountsFor: vi.fn() },
 }));
 
 import { socialSettingsController } from "./social-settings.controller";
@@ -10,6 +10,7 @@ import { socialSettingsService } from "./social-settings.service";
 function req(over: Record<string, unknown> = {}) {
   return {
     params: {},
+    query: {},
     body: {},
     orgId: "o1",
     branchId: "br1",
@@ -85,5 +86,30 @@ describe("socialSettingsController", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(next).toHaveBeenCalledWith(boom);
+  });
+});
+
+describe("socialSettingsController.listAccounts", () => {
+  it("lists accounts for the caller org and wraps them in a success envelope", async () => {
+    const result = { configured: true, accounts: [] };
+    vi.mocked(socialSettingsService.listAccountsFor).mockResolvedValue(result);
+    const res = mockRes();
+
+    await socialSettingsController.listAccounts(req(), res as never, vi.fn());
+
+    expect(socialSettingsService.listAccountsFor).toHaveBeenCalledWith(expect.objectContaining({ orgId: "o1" }), undefined);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json.mock.calls[0][0]).toMatchObject({ success: true, data: result });
+  });
+
+  it("forwards the 502 when OnlySocials is down", async () => {
+    const { AppError } = await import("../../utils/error-handler");
+    vi.mocked(socialSettingsService.listAccountsFor).mockRejectedValue(new AppError("Couldn't load connected accounts", 502));
+    const next = vi.fn();
+
+    await socialSettingsController.listAccounts(req(), mockRes() as never, next);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(next.mock.calls[0][0]).toMatchObject({ statusCode: 502 });
   });
 });

@@ -1,6 +1,6 @@
 import { sql, type SQL } from "drizzle-orm";
 import { transaction, enquiry_table, quote, booking, clientTable, notes, tasks } from "@shared/schema";
-import { totalBookingCommissionExpr, totalQuoteCommissionExpr } from "../../utils/commission-sql";
+import { totalBookingCommissionExpr, totalQuoteCommissionExpr, quoteExtrasTotalExpr, bookingExtrasTotalExpr } from "../../utils/commission-sql";
 import type { DealPriority, PipelineFilters, PipelineQuick, PipelineSqlSort } from "./transaction.types";
 
 // Pure Drizzle `sql` builders for the pipeline board's search / filter / sort /
@@ -117,17 +117,17 @@ export function tourOperatorCond(ids: string[]): SQL {
 
 /**
  * Deal value, same formula as the card (client getTransactionValue):
- * sales_price - discounts + service_charge. Booked deals read the booking row,
+ * sales_price - discounts + service_charge + extras not included in the package. Booked deals read the booking row,
  * quoted deals sum their primary quotes, enquiries have no value.
  */
 export function dealValueExpr(includeLost: boolean): SQL {
   return sql`(CASE ${transaction.status}
     WHEN 'on_booking' THEN (
-      SELECT COALESCE(SUM(${num(booking.sales_price)} - ${num(booking.discounts)} + ${num(booking.service_charge)}), 0)
+      SELECT COALESCE(SUM(${num(booking.sales_price)} - ${num(booking.discounts)} + ${num(booking.service_charge)} + ${bookingExtrasTotalExpr()}), 0)
       FROM ${booking} WHERE ${booking.transaction_id} = ${transaction.id}
     )
     WHEN 'on_quote' THEN (
-      SELECT COALESCE(SUM(${num(quote.sales_price)} - ${num(quote.discounts)} + ${num(quote.service_charge)}), 0)
+      SELECT COALESCE(SUM(${num(quote.sales_price)} - ${num(quote.discounts)} + ${num(quote.service_charge)} + ${quoteExtrasTotalExpr()}), 0)
       FROM ${quote} WHERE ${primaryQuoteConds(includeLost)}
     )
     ELSE 0

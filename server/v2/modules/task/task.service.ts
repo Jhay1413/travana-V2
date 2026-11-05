@@ -1,5 +1,6 @@
 import { taskRepository, entityLink, type TaskWithClient } from "./task.repository";
 import { notificationRepository } from "../notification/notification.repository";
+import { canReadDeletedClients } from "../../utils/client-delete-roles";
 import { AppError } from "../../utils/error-handler";
 import { refuseDealWrite } from "../../utils/deal-access";
 import { tasks } from "@shared/schema";
@@ -77,7 +78,9 @@ const branchExistsInOrg = async (branchId: string, orgId: string) => !!(await br
  * or null when the entity is out of scope / unknown.
  */
 async function resolveEntityInScope(entityType: string, entityId: string, scope: Scope, options: { forWrite?: boolean } = {}): Promise<string | null> {
-  const extra = options.forWrite ? ([{ forWrite: true }] as const) : ([] as const);
+  const extra = options.forWrite
+    ? ([{ forWrite: true }] as const)
+    : ([{ includeDeletedClient: canReadDeletedClients(scope) }] as const);
   if (await taskRepository.entityInScope(entityType, entityId, scope, ...extra)) return entityType;
   if (entityType === "quote" && (await taskRepository.entityInScope("booking", entityId, scope, ...extra))) return "booking";
   return null;
@@ -118,7 +121,7 @@ export const taskService = {
     // Fail closed: no org (e.g. platform admin not impersonating) means no cross-org list.
     if (scope && !scope.orgId) throw new AppError("Select an organisation first", 403);
     // Same gate as the client's own detail page; fail closed when out of scope.
-    if (scope && !(await taskRepository.entityInScope("client", clientId, scope))) {
+    if (scope && !(await taskRepository.entityInScope("client", clientId, scope, { includeDeletedClient: canReadDeletedClients(scope) }))) {
       throw new AppError("Not found", 404);
     }
     return await taskRepository.findByClient(clientId, scope);

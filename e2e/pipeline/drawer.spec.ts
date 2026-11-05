@@ -37,41 +37,47 @@ test.describe("deal drawer contents", () => {
     await expect(stepper.locator("div.flex-1:has(> div.bg-social-orange)")).toHaveText("Quoted");
     await expect(stepper.locator("div.flex-1:has(> div.bg-stage-booked-bg)")).toHaveText("Enquiry");
     await expect(stepper.locator("div.flex-1")).toHaveText(["Enquiry", "Quoted", "In-Play", "Booked"]);
-    await expect(drawer.getByTestId("button-drawer-primary")).toHaveText("Move to In-Play");
+    await expect(drawer.getByTestId("button-drawer-primary")).toHaveText("Open full deal");
     await expect(drawer.getByTestId("button-drawer-mark-lost")).toBeVisible();
 
     await page.getByTestId("button-close-panel").click();
     await expect(drawer).toBeHidden();
   });
 
-  test("the footer's main button names the next stage for each stage, and Booked and Lost differ", async ({ page }) => {
+  test("the footer's main button is Open full deal on every stage, there is no Move button, and it opens the deal page", async ({ page }) => {
     const w = await boardWorld(page);
     const enq = await enquiryDeal(page.request, w);
+    const quoted = await quoteDeal(page.request, w);
     const inPlay = await quoteDeal(page.request, w, { inPlay: true });
     const booked = await bookedDeal(page.request, w);
     const lost = await quoteDeal(page.request, w);
     await markLost(page.request, lost.transactionId);
     await openBoard(page);
+    await page.getByTestId("button-expand-lost").click();
 
-    let drawer = await openDrawer(page, enq.transactionId);
-    await expect(drawer.getByTestId("button-drawer-primary")).toHaveText("Move to Quoted");
-    await page.getByTestId("button-close-panel").click();
+    for (const deal of [enq, quoted, inPlay, booked, lost]) {
+      const drawer = await openDrawer(page, deal.transactionId);
+      await expect(drawer.getByTestId("button-drawer-primary")).toHaveText("Open full deal");
+      await expect(drawer.getByRole("button", { name: /^Move to / })).toHaveCount(0);
+      await expect(drawer.getByRole("button", { name: "Open full deal" })).toHaveCount(1); // one entry point, not a header link as well
+      await page.getByTestId("button-close-panel").click();
+      await expect(drawer).toBeHidden();
+    }
 
-    drawer = await openDrawer(page, inPlay.transactionId);
-    await expect(drawer.getByTestId("button-drawer-primary")).toHaveText("Move to Booked");
-    await page.getByTestId("button-close-panel").click();
-
-    drawer = await openDrawer(page, booked.transactionId);
-    await expect(drawer.getByTestId("button-drawer-primary")).toHaveText("Done"); // nothing after Booked
+    const drawer = await openDrawer(page, booked.transactionId);
     await expect(drawer.getByTestId("button-drawer-mark-lost")).toHaveCount(0); // bookings cannot be lost
     await expect(drawer.getByTestId("drawer-stage-stepper")).toBeVisible();
     await page.getByTestId("button-close-panel").click();
 
-    await page.getByTestId("button-expand-lost").click();
-    drawer = await openDrawer(page, lost.transactionId);
-    await expect(drawer.getByTestId("button-drawer-primary")).toHaveText("Reopen deal");
-    await expect(drawer.getByTestId("button-drawer-mark-lost")).toHaveCount(0);
-    await expect(drawer.getByTestId("drawer-stage-stepper")).toHaveCount(0); // not shown for Lost
+    const lostDrawer = await openDrawer(page, lost.transactionId);
+    await expect(lostDrawer.getByTestId("button-drawer-mark-lost")).toHaveCount(0);
+    await expect(lostDrawer.getByTestId("drawer-stage-stepper")).toHaveCount(0); // not shown for Lost
+    await page.getByTestId("button-close-panel").click();
+
+    const q = await openDrawer(page, quoted.transactionId);
+    await q.getByTestId("button-drawer-primary").click();
+    await expect(page).toHaveURL(/\/clients\/[^/]+\?holiday=quote:/);
+    await expect(page.getByTestId("holiday-top-bar")).toBeVisible();
   });
 });
 
@@ -135,21 +141,8 @@ test.describe("quote variants", () => {
   });
 });
 
-test.describe("drawer move buttons", () => {
-  test("Move to In-Play changes the quote, closes the drawer and survives a reload", async ({ page }) => {
-    const w = await boardWorld(page);
-    const deal = await quoteDeal(page.request, w);
-    await openBoard(page);
-    const drawer = await openDrawer(page, deal.transactionId);
-    await drawer.getByTestId("button-drawer-primary").click();
-    await expect(drawer).toBeHidden();
-    await expect(cardIn(page, "In Play", deal.transactionId)).toBeVisible();
-    await expect.poll(async () => (await queryRows<{ quote_status: string }>(`select quote_status from quote_table where id = $1`, [deal.entityId]))[0].quote_status).toBe("in_play");
-    await openBoard(page);
-    await expect(cardIn(page, "In Play", deal.transactionId)).toBeVisible();
-  });
-
-  test("Mark as lost from the drawer closes it, asks to confirm and then moves the deal to Lost; Reopen brings a lost quote back as Quoted", async ({ page }) => {
+test.describe("drawer lost actions", () => {
+  test("Mark as lost from the drawer closes it, asks to confirm and then moves the deal to Lost", async ({ page }) => {
     const w = await boardWorld(page);
     const deal = await quoteDeal(page.request, w);
     await openBoard(page);
@@ -162,23 +155,6 @@ test.describe("drawer move buttons", () => {
 
     await openBoard(page);
     await page.getByTestId("button-expand-lost").click();
-    const lostDrawer = await openDrawer(page, deal.transactionId);
-    await lostDrawer.getByTestId("button-drawer-primary").click(); // "Reopen deal"
-    await expectToast(page, "Deal restored");
-    await openBoard(page);
-    await expect(cardIn(page, "Quoted", deal.transactionId)).toBeVisible();
-  });
-
-  test("In-Play -> Move to Booked opens the HAYS dialog; the drawer is already closed", async ({ page }) => {
-    const w = await boardWorld(page);
-    const deal = await quoteDeal(page.request, w, { inPlay: true });
-    await openBoard(page);
-    const drawer = await openDrawer(page, deal.transactionId);
-    await drawer.getByTestId("button-drawer-primary").click();
-    await expect(drawer).toBeHidden();
-    await expect(page.getByTestId("dialog-convert-booking")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByTestId("dialog-convert-booking")).toBeHidden();
-    await expect(cardIn(page, "In Play", deal.transactionId)).toBeVisible();
+    await expect(cardIn(page, "Lost", deal.transactionId)).toBeVisible();
   });
 });

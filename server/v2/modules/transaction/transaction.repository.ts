@@ -9,6 +9,8 @@ import type { Scope } from "../../utils/scope";
 import { buildTransactionRecordScopeConds, buildTransactionScopeConds } from "../../utils/scope-conditions";
 import type { NextTask, PipelineCandidateItem, PipelineFilters, PipelineQuickCounts, PipelineSqlSort, PipelineTotals } from "./transaction.types";
 import { fetchServiceCommissionMaps } from "./service-commission.repository";
+import { fetchExtrasTotalMaps } from "./extras-total.repository";
+import { deletedClientIds } from "./client-deleted-flag";
 import { dealProfitExpr, dealValueExpr, pipelineFilterConds, quickCond, sortExpr } from "./transaction-pipeline.sql";
 
 interface ConnectingLeg extends Partial<InsertQuoteFlight> {}
@@ -236,10 +238,14 @@ async function enrichTransactions(txns: Transaction[]) {
   if (lodgeIds.length > 0) {
     fetchPromises.push(db.select({ id: lodge_images.id, lodge_id: lodge_images.lodge_id, image_url: lodge_images.image_url, isPrimary: lodge_images.isPrimary }).from(lodge_images).where(inArray(lodge_images.lodge_id, lodgeIds)).then(r => { allLodgeImages = r; }));
   }
-  const serviceCommissionsPromise = fetchServiceCommissionMaps(quoteIds, bookingIds);
-  await Promise.all(fetchPromises);
-  const { quoteMap: quoteServiceCommissionMap, bookingMap: bookingServiceCommissionMap } =
-    await serviceCommissionsPromise;
+  // All fetches settle together so a failure in one cannot leave another as an unhandled rejection.
+  const [serviceCommissions, extrasTotals] = await Promise.all([
+    fetchServiceCommissionMaps(quoteIds, bookingIds),
+    fetchExtrasTotalMaps(quoteIds, bookingIds),
+    ...fetchPromises,
+  ]);
+  const { quoteMap: quoteServiceCommissionMap, bookingMap: bookingServiceCommissionMap } = serviceCommissions;
+  const { quoteMap: quoteExtrasTotalMap, bookingMap: bookingExtrasTotalMap } = extrasTotals;
 
   const enquiryMap = new Map<string, any>();
   for (const enq of allEnquiries) {
@@ -259,6 +265,7 @@ async function enrichTransactions(txns: Transaction[]) {
       holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id,
       images,
       service_commission: quoteServiceCommissionMap.get(q.id) || 0,
+      extras_total: quoteExtrasTotalMap.get(q.id) || 0,
     };
     if (!quotesMap.has(q.transaction_id)) quotesMap.set(q.transaction_id, []);
     quotesMap.get(q.transaction_id)!.push(entry);
@@ -294,6 +301,7 @@ async function enrichTransactions(txns: Transaction[]) {
       holiday_type_name: packageTypeMap.get(b.holiday_type_id) || b.holiday_type_id,
       images,
       service_commission: bookingServiceCommissionMap.get(b.id) || 0,
+      extras_total: bookingExtrasTotalMap.get(b.id) || 0,
     });
   }
 
@@ -362,7 +370,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
     )` }).from(booking).where(inArray(booking.transaction_id, txnIds)),
     getPackageTypeMap(),
     userIds.length > 0 ? db.select({ id: user.id, firstName: user.firstName, lastName: user.lastName, name: user.name, email: user.email }).from(user).where(inArray(user.id, userIds)) : Promise.resolve([]),
-    clientIds.length > 0 ? db.select({ id: clientTable.id, title: clientTable.title, firstName: clientTable.firstName, surename: clientTable.surename, phoneNumber: clientTable.phoneNumber }).from(clientTable).where(inArray(clientTable.id, clientIds)) : Promise.resolve([]),
+    clientIds.length > 0 ? db.select({ id: clientTable.id, title: clientTable.title, firstName: clientTable.firstName, surename: clientTable.surename, phoneNumber: clientTable.phoneNumber, deletedAt: clientTable.deletedAt }).from(clientTable).where(inArray(clientTable.id, clientIds)) : Promise.resolve([]),
     // All active quotes (primary + copies) for the pipeline card duplicate badge/dropdown. Unlike allQuotes above, this does NOT exclude isQuoteCopy.
     db.select({ id: quote.id, transaction_id: quote.transaction_id, title: quote.title, isQuoteCopy: quote.isQuoteCopy, quote_status: quote.quote_status }).from(quote).where(and(inArray(quote.transaction_id, txnIds), sql`(${quote.isFreeQuote} IS NOT TRUE)`, quoteLostCond, isNull(quote.deleted_at))),
   ]);
@@ -374,6 +382,8 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
     return [c.id, name || null];
   }));
   const clientPhoneMap = new Map(allClients.map((c: any) => [c.id, c.phoneNumber || null]));
+  // Soft-deleted clients keep their deals on the board; the flag lets the drawer gate "Open full deal".
+  const clientDeletedSet = deletedClientIds(allClients);
   const packageTypeMap = allPackageTypes;
 
   const enquiryMap = new Map<string, any>();
@@ -385,6 +395,8 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
   const allBookingIds = allBookings.map(b => b.id);
   const { quoteMap: quoteServiceCommissionMap, bookingMap: bookingServiceCommissionMap } =
     await fetchServiceCommissionMaps(allQuoteIds, allBookingIds);
+  const { quoteMap: quoteExtrasTotalMap, bookingMap: bookingExtrasTotalMap } =
+    await fetchExtrasTotalMaps(allQuoteIds, allBookingIds);
 
   const quotesMap = new Map<string, any[]>();
   for (const q of allQuotes) {
@@ -392,6 +404,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
       ...q,
       holiday_type_name: packageTypeMap.get(q.holiday_type_id) || q.holiday_type_id,
       service_commission: quoteServiceCommissionMap.get(q.id) || 0,
+      extras_total: quoteExtrasTotalMap.get(q.id) || 0,
     };
     if (!quotesMap.has(q.transaction_id)) quotesMap.set(q.transaction_id, []);
     quotesMap.get(q.transaction_id)!.push(entry);
@@ -403,6 +416,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
       ...b,
       holiday_type_name: packageTypeMap.get(b.holiday_type_id) || b.holiday_type_id,
       service_commission: bookingServiceCommissionMap.get(b.id) || 0,
+      extras_total: bookingExtrasTotalMap.get(b.id) || 0,
     });
   }
 
@@ -527,6 +541,7 @@ async function enrichTransactionsLightweight(txns: Transaction[], options?: { in
       next_task,
       holiday_type_name,
       client_name,
+      client_deleted: txn.client_id ? clientDeletedSet.has(txn.client_id) : false,
       client_phone,
       enquiry,
       quotes,

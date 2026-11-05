@@ -16,7 +16,11 @@ interface PostEditorFooterProps {
   timeShortcuts: string[];
   timezoneLabel?: string;
   isScheduled: boolean;
+  /** Scheduled and not yet posted: the text button updates the scheduled post too. */
+  isPending?: boolean;
   isBusy: boolean;
+  /** True while the ticked accounts or images make a schedule impossible (reason shown in the picker). */
+  scheduleBlocked?: boolean;
   formatCount: number;
   onSaveDraft: () => void;
   onSchedule: () => void;
@@ -35,7 +39,9 @@ export function PostEditorFooter({
   timeShortcuts,
   timezoneLabel,
   isScheduled,
+  isPending = false,
   isBusy,
+  scheduleBlocked = false,
   formatCount,
   onSaveDraft,
   onSchedule,
@@ -82,12 +88,12 @@ export function PostEditorFooter({
           className="h-10 rounded-lg"
           data-testid="button-save-draft"
         >
-          Save as draft
+          {isPending ? "Save changes" : "Save text as draft"}
         </Button>
         <Button
           type="button"
           onClick={onSchedule}
-          disabled={isBusy || !scheduleOn || !date || !time}
+          disabled={isBusy || scheduleBlocked || !scheduleOn || !date || !time}
           className="h-10 gap-2 rounded-lg bg-amber-500 font-semibold text-slate-900 hover:bg-amber-600"
           data-testid="button-save-and-schedule"
         >

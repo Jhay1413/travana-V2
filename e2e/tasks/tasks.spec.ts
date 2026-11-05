@@ -205,6 +205,25 @@ test.describe("creating a task from a client page and from a deal", () => {
     await expect(page.getByTestId(`client-index-task-due-${t.id}`)).toHaveText("Tomorrow");
   });
 
+  test("Add Task on the client page has a Description box; what is typed is trimmed and saved, and a blank one saves as no description", async ({ page }) => {
+    const w = await boardWorld(page);
+    await page.goto(`/clients/${w.clientId}`);
+    const tomorrow = addDaysToKey(todayKey(), 1);
+    for (const description of ["  Ask about the transfer time  ", "   "]) {
+      await page.getByTestId("client-index-add-task").click();
+      const modal = page.getByTestId("add-task-modal");
+      await expect(modal).toBeVisible();
+      await chooseOption(page, modal.getByTestId("add-task-type"), "Enquiry call");
+      await modal.getByTestId("add-task-date").fill(tomorrow);
+      await modal.getByTestId("add-task-description").fill(description);
+      await modal.getByTestId("add-task-submit").click();
+      await expect(modal).toBeHidden();
+    }
+    await expect.poll(async () => (await queryRows(`select 1 from tasks where entity_id = $1`, [w.clientId])).length).toBe(2);
+    const rows = await queryRows<{ description: string | null }>(`select description from tasks where entity_id = $1 order by created_at`, [w.clientId]);
+    expect(rows.map((r) => r.description)).toEqual(["Ask about the transfer time", null]);
+  });
+
   test("New task on a quote's page attaches to that quote, and the quote page lists it with its priority", async ({ page }) => {
     const w = await boardWorld(page);
     const quote = await quoteDeal(page.request, w, { title: "Task from quote page" });

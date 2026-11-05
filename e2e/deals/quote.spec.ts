@@ -519,3 +519,23 @@ test.describe("several quotes on one deal", () => {
     expect((await dbQuote(deal.quoteId)).deleted_at).toBeNull();
   });
 });
+
+test.describe("quote room type select", () => {
+  test("the chosen room type is first in the list and ticked when the select is reopened", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+    const names = ["Apple room", "Banana room", "Cherry room"].map((n) => `${n} ${unique("r")}`);
+    for (const name of names) await queryRows(`insert into room_type (name) values ($1)`, [name]);
+
+    const drawer = await openQuoteDrawerFromClient(page, client.id);
+    const trigger = drawer.getByRole("combobox").filter({ hasText: "Select room type" });
+    await chooseSearchable(page, trigger, names[2]);
+
+    await drawer.getByRole("combobox").filter({ hasText: names[2] }).click();
+    const options = page.getByRole("listbox").last().getByRole("option");
+    await expect(options.first()).toContainText(names[2]);
+    await expect(options.first()).toHaveAttribute("aria-selected", "true");
+    await expect(options.nth(1)).toHaveAttribute("aria-selected", "false");
+  });
+});

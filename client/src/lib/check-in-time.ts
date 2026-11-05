@@ -49,3 +49,24 @@ export function deriveCheckIn(arrival: FlightArrival | undefined, fallbackDate?:
     time: `${pad(Math.floor(wrapped / 60))}:${pad(wrapped % 60)}`,
   };
 }
+
+interface OutboundArrivalValues {
+  outboundArriveDate?: string;
+  outboundArriveTime?: string;
+  outboundConnectingLegs?: Array<{ arriveDate?: string; arriveTime?: string }>;
+}
+
+/**
+ * Where the outbound journey ends: the last connecting leg when there is one
+ * with an arrival, otherwise the main outbound leg. Returns null when the form
+ * carries no arrival date or time at all (nothing to derive check-in from).
+ */
+export function outboundArrivalOf(values: OutboundArrivalValues): FlightArrival | null {
+  const legs = values.outboundConnectingLegs ?? [];
+  const lastLeg = legs[legs.length - 1];
+  const arrival: FlightArrival =
+    lastLeg?.arriveDate || lastLeg?.arriveTime
+      ? { date: lastLeg.arriveDate, time: lastLeg.arriveTime }
+      : { date: values.outboundArriveDate, time: values.outboundArriveTime };
+  return arrival.date || arrival.time ? arrival : null;
+}

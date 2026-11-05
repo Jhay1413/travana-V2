@@ -3,6 +3,8 @@ export interface EditorSnapshot {
   schedule: string;
   /** Image selection fingerprint; null until images have finished loading. */
   images: string | null;
+  /** Selected-accounts fingerprint; null until the account list has loaded. */
+  accounts?: string | null;
 }
 
 /**
@@ -14,6 +16,7 @@ export function isDirtySnapshot(prev: EditorSnapshot | null, next: EditorSnapsho
   return (
     next.post !== prev.post ||
     next.schedule !== prev.schedule ||
-    (prev.images !== null && next.images !== prev.images)
+    (prev.images !== null && next.images !== prev.images) ||
+    (prev.accounts != null && next.accounts !== prev.accounts)
   );
 }

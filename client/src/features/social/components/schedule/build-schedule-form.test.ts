@@ -28,4 +28,17 @@ describe("buildScheduleForm", () => {
     expect(fd.get("postContent")).toBe("x");
     expect(fd.get("postSchedule")).toBe(base.utcIso);
   });
+
+  it("sends accountIds as a JSON array when given, on schedule and reschedule", () => {
+    const first = buildScheduleForm({ ...base, kind: "schedule", imageUrls: [], accountIds: [81085, 7] });
+    expect(first.fields.accountIds).toBe("[81085,7]");
+    const re = buildScheduleForm({ ...base, kind: "reschedule", postContent: "x", existingImageIds: [], accountIds: [5] });
+    expect(re.fields.accountIds).toBe("[5]");
+    expect(toFormData(re).get("accountIds")).toBe("[5]");
+  });
+
+  it("omits accountIds when not given so the server keeps the saved accounts", () => {
+    const form = buildScheduleForm({ ...base, kind: "reschedule", postContent: "x", existingImageIds: [] });
+    expect("accountIds" in form.fields).toBe(false);
+  });
 });

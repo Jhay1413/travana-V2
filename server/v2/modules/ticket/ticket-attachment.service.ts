@@ -84,6 +84,20 @@ export function canDeleteAttachment(args: {
   return ticket.userId === s.userId;
 }
 
+/** Removes a stored file (S3 key or legacy local file). Never throws: the DB row is already gone. */
+export async function removeStoredAttachmentFile(filename: string): Promise<void> {
+  try {
+    if (isS3Key(filename)) {
+      await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: filename }));
+    } else {
+      const filePath = resolveLocalPath(filename);
+      if (filePath && fs.existsSync(filePath)) await fs.promises.unlink(filePath);
+    }
+  } catch (err) {
+    console.warn(`[tickets] file cleanup failed for ${filename}:`, err);
+  }
+}
+
 export const ticketAttachmentService = {
   async listByTicketId(ticketId: string, scope: ScopeOrTrusted): Promise<TicketAttachment[]> {
     await requireTicket(ticketId, scope);

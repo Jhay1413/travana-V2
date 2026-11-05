@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { notes, transaction, clientTable, user, type Note, type InsertNote } from "@shared/schema";
-import { and, eq, desc, or, sql } from "drizzle-orm";
+import { and, eq, desc, isNull, or, sql } from "drizzle-orm";
 import { buildPartitionCond, buildTransactionRecordScopeConds, buildTransactionScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 export type NoteWithAuthor = Note & { author_name: string | null };
@@ -125,12 +125,13 @@ export const noteRepository = {
     return !!row;
   },
 
-  async clientBelongsToOrg(clientId: string, orgId: string, scope?: ScopeOrTrusted): Promise<boolean> {
+  async clientBelongsToOrg(clientId: string, orgId: string, scope?: ScopeOrTrusted, opts?: { includeDeleted?: boolean }): Promise<boolean> {
     const [row] = await db
       .select({ id: clientTable.id })
       .from(clientTable)
       .where(and(
         eq(clientTable.id, clientId),
+        opts?.includeDeleted ? undefined : isNull(clientTable.deletedAt),
         eq(clientTable.orgId, orgId),
         scope ? buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy) : undefined,
       ))

@@ -157,9 +157,19 @@ export const ticketRepository = {
     const [row] = await db
       .select({ id: clientTable.id, orgId: clientTable.orgId })
       .from(clientTable)
-      .where(eq(clientTable.id, clientId))
+      .where(and(eq(clientTable.id, clientId), isNull(clientTable.deletedAt)))
       .limit(1);
     return row;
+  },
+
+  /** Whether a client is soft-deleted (false when it does not exist), for the read-only client tickets tab. */
+  async isClientDeleted(clientId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ deletedAt: clientTable.deletedAt })
+      .from(clientTable)
+      .where(eq(clientTable.id, clientId))
+      .limit(1);
+    return !!row?.deletedAt;
   },
 
   /** Org + client of a transaction, for validating a ticket -> holiday link. */

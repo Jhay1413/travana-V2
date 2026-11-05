@@ -9,7 +9,7 @@ import {
   quote as quoteTable,
   organization as organizationTable,
 } from '@shared/schema';
-import { and, desc, eq, getTableColumns, gte, isNotNull, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, getTableColumns, gte, isNotNull, isNull, inArray, sql } from 'drizzle-orm';
 
 let warnedMissingChecksTable = false;
 
@@ -227,8 +227,9 @@ export const smsRepository = {
     return scoped.orderBy(desc(smsMessagesTable.sentAt)).limit(limit);
   },
 
+  /** Soft-deleted clients read as not found, so no automatic text is ever sent to them. */
   async findClientById(id: string) {
-    const [row] = await db.select().from(clientTable).where(eq(clientTable.id, id)).limit(1);
+    const [row] = await db.select().from(clientTable).where(and(eq(clientTable.id, id), isNull(clientTable.deletedAt))).limit(1);
     return row || undefined;
   },
 
@@ -246,7 +247,7 @@ export const smsRepository = {
     const [row] = await db
       .select({ orgId: clientTable.orgId })
       .from(clientTable)
-      .where(eq(clientTable.id, clientId))
+      .where(and(eq(clientTable.id, clientId), isNull(clientTable.deletedAt)))
       .limit(1);
     return row?.orgId ?? null;
   },
@@ -380,7 +381,7 @@ export const smsRepository = {
     const [row] = await db
       .select()
       .from(clientTable)
-      .where(and(eq(clientTable.id, id), eq(clientTable.orgId, orgId)))
+      .where(and(eq(clientTable.id, id), eq(clientTable.orgId, orgId), isNull(clientTable.deletedAt)))
       .limit(1);
     return row || undefined;
   },
@@ -397,7 +398,8 @@ export const smsRepository = {
     badge?: string;
     orgId: string | null;
   }) {
-    const orgFilter = filter.orgId ? [eq(clientTable.orgId, filter.orgId)] : [];
+    // Soft-deleted clients never receive bulk/targeted messages.
+    const orgFilter = [isNull(clientTable.deletedAt), ...(filter.orgId ? [eq(clientTable.orgId, filter.orgId)] : [])];
 
     if (filter.mode === 'client' && filter.clientId) {
       const conditions = [eq(clientTable.id, filter.clientId), ...orgFilter];

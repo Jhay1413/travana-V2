@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ExternalLink, X } from "lucide-react";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NextTaskRow } from "@/components/shared/next-task-row";
 import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { useCurrentUser } from "@/hooks/queries";
+import { useRole } from "@/hooks/use-role";
+import { canDeleteClient } from "@/features/client/lib/client-access";
 import type { Transaction } from "@/features/quote/types";
 import {
   formatDate,
@@ -34,7 +36,6 @@ interface DealDrawerProps {
   stage: PipelineStage;
   clientName: string;
   onClose: () => void;
-  onMove: (to: PipelineStage) => void;
   onMarkLost: () => void;
   onAddQuote: () => void;
   /** Called after a task is created so the board can refresh its next-task line. */
@@ -42,7 +43,7 @@ interface DealDrawerProps {
 }
 
 /** Right-hand quick view of a deal: summary, customer, money, operator, tasks and notes. */
-export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove, onMarkLost, onAddQuote, onTaskCreated }: DealDrawerProps) {
+export function DealDrawer({ transaction: t, stage, clientName, onClose, onMarkLost, onAddQuote, onTaskCreated }: DealDrawerProps) {
   const [, setLocation] = useLocation();
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const { data: currentUser } = useCurrentUser();
@@ -55,7 +56,15 @@ export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove,
   // (see holiday-detail-view.tsx), so a Booked card must match that.
   const taskEntity = getTaskEntity(t, stage);
 
-  const openFull = () => { onClose(); setLocation(navUrl); };
+  // A deleted client's deal can only be opened by admins (read-only); everyone else sees it disabled.
+  const { orgRole } = useRole();
+  const clientDeleted = !!t.client_deleted;
+  const canOpenDeletedClient = canDeleteClient(orgRole);
+  const openFull = () => {
+    if (clientDeleted && !canOpenDeletedClient) return;
+    onClose();
+    setLocation(navUrl);
+  };
   const firstName = clientName.split(" ")[0] || clientName;
 
   return (
@@ -76,9 +85,6 @@ export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove,
           </div>
           <div className="flex flex-wrap items-center gap-3 pr-12">
             <h2 className="text-[20px] font-semibold xl:text-[22px]">{getTransactionTitle(t)}</h2>
-            <button type="button" onClick={openFull} className="inline-flex items-center gap-1 text-[13px] text-social-orange-text hover:underline" data-testid="button-open-full">
-              Open full deal<ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
           </div>
           <div className="mt-0.5 text-[12px] text-social-muted">{buildDealMeta(t, naturalStage)}</div>
         </div>
@@ -114,7 +120,7 @@ export function DealDrawer({ transaction: t, stage, clientName, onClose, onMove,
           <DrawerNotes transactionId={t.id} firstName={firstName} />
         </div>
 
-        <DrawerFooter stage={stage} naturalStage={naturalStage} onMarkLost={onMarkLost} onMove={onMove} onClose={onClose} />
+        <DrawerFooter stage={stage} onMarkLost={onMarkLost} onOpenFull={openFull} clientDeleted={clientDeleted} canOpenDeletedClient={canOpenDeletedClient} />
       </aside>
 
       <AddTaskModal

@@ -24,6 +24,7 @@ export { SocialCalendar } from "./components/calendar";
 export { SchedulePostDialog } from "./components/schedule/schedule-post-dialog";
 export { CreatePostMenu } from "./components/create";
 export { SocialSettingsPage } from "./components/settings";
+export { OrgSocialAccountsCard } from "./components/settings/org-social-accounts-card";
 export { SocialPostEditorDialog } from "./components/editor";
 export { usePostEditorState } from "./components/grid/use-post-editor-state";
 export { useScheduleDialogState } from "./components/schedule/use-schedule-dialog-state";

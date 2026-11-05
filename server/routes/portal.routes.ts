@@ -10,10 +10,12 @@ import { referralService } from "../services/referral.service";
 import { referralPayoutService } from "../services/referralPayout.service";
 import { referralWithdrawalService } from "../services/referralWithdrawal.service";
 import { walletService } from "../services/wallet.service";
-import { eq, and, desc, isNotNull, inArray, sql, asc, ilike, exists, notExists } from "drizzle-orm";
+import { eq, and, desc, isNotNull, isNull, inArray, sql, asc, ilike, exists, notExists } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { quoteExtrasTotalExpr } from "../v2/utils/commission-sql";
+import { customerPrice } from "../v2/utils/customer-price";
 import { quotePublicRepository } from "../repositories/quote-public.repository";
 import { portalLoginTokenRepository } from "../v2/modules/portal/portal-login-token.repository";
 import { bridgePortalMessageToChat } from "../services/portal-chat-bridge";
@@ -48,7 +50,7 @@ function verifyPortalToken(token: string): PortalTokenPayload | null {
   }
 }
 
-function portalAuth(req: Request, res: Response, next: NextFunction) {
+async function portalAuth(req: Request, res: Response, next: NextFunction) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Unauthorized" });
@@ -56,6 +58,18 @@ function portalAuth(req: Request, res: Response, next: NextFunction) {
   const payload = verifyPortalToken(auth.slice(7));
   if (!payload) {
     return res.status(401).json({ error: "Invalid token" });
+  }
+  // A soft-deleted client's existing sessions stop working immediately.
+  try {
+    const [live] = await db
+      .select({ id: clientTable.id })
+      .from(clientTable)
+      .where(and(eq(clientTable.id, payload.clientId), isNull(clientTable.deletedAt)))
+      .limit(1);
+    if (!live) return res.status(401).json({ error: "Account not available" });
+  } catch (err) {
+    console.error("Portal auth check error:", err);
+    return res.status(500).json({ error: "Authentication failed" });
   }
   (req as any).portalClient = payload;
   next();
@@ -71,7 +85,7 @@ portalRouter.post("/login", async (req: Request, res: Response) => {
     const [client] = await db
       .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName, portalPin: clientTable.portalPin, mustChangePin: clientTable.mustChangePin })
       .from(clientTable)
-      .where(eq(clientTable.email, email.toLowerCase().trim()))
+      .where(and(eq(clientTable.email, email.toLowerCase().trim()), isNull(clientTable.deletedAt)))
       // Several rows can share an email (a client duplicated into a homeworker branch has no PIN):
       // prefer the record that has portal access, then the oldest, so a PIN-less copy never shadows it.
       .orderBy(sql`(${clientTable.portalPin} IS NOT NULL) DESC`, asc(clientTable.createdAt))
@@ -133,7 +147,7 @@ portalRouter.post("/magic-login", async (req: Request, res: Response) => {
     const [client] = await db
       .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName, mustChangePin: clientTable.mustChangePin })
       .from(clientTable)
-      .where(eq(clientTable.id, redeemed.clientId))
+      .where(and(eq(clientTable.id, redeemed.clientId), isNull(clientTable.deletedAt)))
       .limit(1);
     if (!client) return res.status(401).json({ error: "Account not found" });
 
@@ -218,7 +232,7 @@ portalRouter.post("/webauthn/login", async (req: Request, res: Response) => {
     const [client] = await db
       .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName })
       .from(clientTable)
-      .where(eq(clientTable.id, clientId))
+      .where(and(eq(clientTable.id, clientId), isNull(clientTable.deletedAt)))
       .limit(1);
 
     if (!client) {
@@ -536,6 +550,7 @@ portalRouter.get("/quotes", portalAuth, async (req: Request, res: Response) => {
         salesPrice: quote.sales_price,
         discounts: quote.discounts,
         serviceCharge: quote.service_charge,
+        extrasTotal: quoteExtrasTotalExpr(),
         adult: quote.adult,
         child: quote.child,
         travelDate: quote.travel_date,
@@ -600,11 +615,8 @@ portalRouter.get("/quotes", portalAuth, async (req: Request, res: Response) => {
         token = await quotePublicRepository.setToken(r.quoteId);
       }
 
-      // Customer-facing total = sales price − discount + service charge; per person splits that total.
-      const totalPrice = (parseFloat(r.salesPrice || "0") || 0)
-        - (parseFloat(r.discounts || "0") || 0)
-        + (parseFloat(r.serviceCharge || "0") || 0);
-      const pax = (r.adult || 0) + (r.child || 0);
+      // Total includes extras not in the package; per person is the holiday price only.
+      const { total: totalPrice, pricePerPerson } = customerPrice({ ...r, adults: r.adult, children: r.child });
 
       return {
         id: r.quoteId,
@@ -612,7 +624,7 @@ portalRouter.get("/quotes", portalAuth, async (req: Request, res: Response) => {
         destination: dest,
         hotel: r.accommodationName || "",
         price: totalPrice,
-        price_per_person: pax > 0 ? parseFloat((totalPrice / pax).toFixed(2)) : 0,
+        price_per_person: parseFloat(pricePerPerson.toFixed(2)),
         travel_date: travelDate,
         return_date: returnDate,
         expiry_date: r.dateExpiry ? new Date(r.dateExpiry).toISOString() : new Date(Date.now() + 30 * 86400000).toISOString(),

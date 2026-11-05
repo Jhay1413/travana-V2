@@ -1,6 +1,6 @@
 import { db } from '../../config/database';
 import { clientTable, booking, transaction } from '@shared/schema';
-import { and, asc, eq, or, ilike, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, or, ilike, sql } from 'drizzle-orm';
 import { phoneDigitsCondition } from '../../utils/phone-search';
 import { clientNameCondition } from '../../utils/client-name-search';
 import type { Scope } from '../../utils/scope';
@@ -31,8 +31,8 @@ export const searchRepository = {
       ilike(clientTable.city, term),
     );
 
-    // Exclude merged (soft-archived) duplicates from search results.
-    const activeOnly = eq(clientTable.status, "active");
+    // Exclude merged (soft-archived) duplicates and soft-deleted clients from search results.
+    const activeOnly = and(eq(clientTable.status, "active"), isNull(clientTable.deletedAt));
     const partition = buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy);
     const whereClause = orgId
       ? and(matchCondition, eq(clientTable.orgId, orgId), activeOnly, partition)

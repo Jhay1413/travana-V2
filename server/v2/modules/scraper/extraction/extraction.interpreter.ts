@@ -129,9 +129,24 @@ function getByPath(obj: unknown, path: string): unknown {
   return cur;
 }
 
+// Map keys compare case-insensitively with whitespace collapsed: portals print
+// "Coach Transfers" / "COACH TRANSFERS" / "coach  transfers" for one thing, and a
+// spec author writes the key once.
+function mapKey(s: string): string {
+  return s.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 function finalize(raw: string, rule: FieldRule): string | number {
   let out = applyTransform(raw, rule.transform);
-  if (rule.map && typeof out === 'string' && out in rule.map) out = rule.map[out];
+  if (rule.map && typeof out === 'string') {
+    if (Object.prototype.hasOwnProperty.call(rule.map, out)) {
+      out = rule.map[out];
+    } else {
+      const wanted = mapKey(out);
+      const hit = Object.keys(rule.map).find((k) => mapKey(k) === wanted);
+      if (hit !== undefined) out = rule.map[hit];
+    }
+  }
   return out;
 }
 
@@ -183,7 +198,20 @@ function resolveField(
   } else source = ctx.text;
 
   let value = source;
-  if (rule.regex) {
+  if (rule.regex && rule.joinAll != null) {
+    // Every match, distinct, joined — several rooms in one booking.
+    const re = safeGlobalRegex(rule.regex);
+    const seen = new Set<string>();
+    const parts: string[] = [];
+    for (const m of re ? source.matchAll(re) : []) {
+      const part = (m[rule.group ?? 1] ?? '').trim();
+      if (part && !seen.has(part.toLowerCase())) {
+        seen.add(part.toLowerCase());
+        parts.push(part);
+      }
+    }
+    value = parts.join(rule.joinAll);
+  } else if (rule.regex) {
     const re = safeRegex(rule.regex);
     const m = re ? re.exec(source) : null;
     value = m ? (m[rule.group ?? 1] ?? '') : '';
@@ -540,23 +568,36 @@ function escapeRe(s: string): string {
 // the same chrome/off-site filters as the DOM images, so logos and map tiles
 // are rejected identically. SVGs are skipped: at this level they are brand
 // marks and airline logos, never photography.
-function imagesFromJson(apiJson: unknown): string[] {
-  const found: string[] = [];
+//
+// `heroPaths` (spec.imageJsonPaths) scopes the walk: a booking JSON also lists
+// every ROOM's photos and other offers, which — walked in document order —
+// crowd the hotel's hero gallery out of the 25-photo cap. When any path yields
+// images, only those are returned, in path order; otherwise the whole JSON is
+// walked as before.
+function imagesFromJson(apiJson: unknown, heroPaths?: string[]): string[] {
   const IMAGE_URL = /^https?:\/\/[^\s"']+\.(?:jpe?g|png|webp|avif)(?:\?|$)/i;
-  const visit = (node: unknown, depth: number): void => {
-    if (node == null || depth > 8 || found.length > 200) return;
-    if (typeof node === 'string') {
-      if (IMAGE_URL.test(node)) found.push(node);
-      return;
-    }
-    if (Array.isArray(node)) {
-      for (const v of node) visit(v, depth + 1);
-      return;
-    }
-    if (typeof node === 'object') for (const v of Object.values(node as Json)) visit(v, depth + 1);
+  const collect = (root: unknown): string[] => {
+    const found: string[] = [];
+    const visit = (node: unknown, depth: number): void => {
+      if (node == null || depth > 8 || found.length > 200) return;
+      if (typeof node === 'string') {
+        if (IMAGE_URL.test(node)) found.push(node);
+        return;
+      }
+      if (Array.isArray(node)) {
+        for (const v of node) visit(v, depth + 1);
+        return;
+      }
+      if (typeof node === 'object') for (const v of Object.values(node as Json)) visit(v, depth + 1);
+    };
+    visit(root, 0);
+    return found;
   };
-  visit(apiJson, 0);
-  return found;
+  if (heroPaths?.length && apiJson != null) {
+    const hero = heroPaths.flatMap((p) => collect(getByPath(apiJson, p)));
+    if (hero.length) return hero;
+  }
+  return collect(apiJson);
 }
 
 // How wide a resizer was asked to render this image, when the size rides in the
@@ -610,11 +651,34 @@ function imageOrigin(absSrc: string): string {
 // innerText, so they're captured separately (CapturedImage[]) and chosen here —
 // by the spec's imageUrlIncludes when set, else by the dominant image-CDN host.
 // Fully generic: no supplier names or filename formats are assumed.
-function selectGalleryImages(
-  images: { src: string; w?: number; h?: number; context?: string }[] | undefined,
-  spec: ExtractionSpec,
-  pageUrl: string,
-): string[] {
+type ImageInput = { src: string; w?: number; h?: number; context?: string };
+
+// One entry of spec.imageContainerIncludes, normalised: lower-cased substring
+// alternatives plus an optional cap on how many photos the group may contribute.
+interface ContainerGroup {
+  needles: string[];
+  max?: number;
+}
+
+function containerGroups(spec: ExtractionSpec): ContainerGroup[] {
+  const raw = spec.imageContainerIncludes;
+  if (!raw) return [];
+  const items = Array.isArray(raw) ? raw : [raw];
+  const groups: ContainerGroup[] = [];
+  for (const item of items) {
+    const match = typeof item === 'string' ? item : item.match;
+    const max = typeof item === 'string' ? undefined : item.max;
+    const needles = match
+      .toLowerCase()
+      .split('|')
+      .map((n) => n.trim())
+      .filter(Boolean);
+    if (needles.length) groups.push({ needles, max: max && max > 0 ? max : undefined });
+  }
+  return groups;
+}
+
+function selectGalleryImages(images: ImageInput[] | undefined, spec: ExtractionSpec, pageUrl: string): string[] {
   if (!images || images.length === 0) return [];
 
   // Narrow to a container FIRST, when the spec names one and the capture knows
@@ -623,24 +687,53 @@ function selectGalleryImages(
   // tell a bedroom shot from the hotel gallery, and room photos were landing in
   // the quote. Applied before everything below so the chrome filters and the
   // host heuristic only ever see the right container's images.
-  const container = spec.imageContainerIncludes?.toLowerCase();
-  if (container) {
-    // Only images captured FROM THE DOM carry a position. Ones harvested out of
-    // the booking JSON have none — they never sat anywhere on the page — so a
-    // rule about WHERE an image was must not be allowed to judge them.
-    //
-    // This matters more than it sounds: easyJet's slider is virtualised and
-    // holds three <img> at a time, so the bulk of its gallery arrives via the
-    // JSON. Filtering context-less images out alongside the room cards would
-    // have cut that supplier from ~20 photos to 3.
-    const positioned = images.filter((i) => i.context != null);
-    const unpositioned = images.filter((i) => i.context == null);
-    const inContainer = positioned.filter((i) => (i.context as string).toLowerCase().includes(container));
-    // Only honour it when it actually matched — a spec naming a container the
-    // page no longer uses (or a capture with no contexts at all) must not strip
-    // the DOM's contribution to the gallery.
-    if (inContainer.length) images = unpositioned.concat(inContainer);
+  const groups = containerGroups(spec);
+  if (groups.length === 0) return pickGallery(images, spec, pageUrl, GALLERY_CAP);
+
+  // Only images captured FROM THE DOM carry a position. Ones harvested out of
+  // the booking JSON have none — they never sat anywhere on the page — so a
+  // rule about WHERE an image was must not be allowed to judge them.
+  //
+  // This matters more than it sounds: easyJet's slider is virtualised and
+  // holds three <img> at a time, so the bulk of its gallery arrives via the
+  // JSON. Filtering context-less images out alongside the room cards would
+  // have cut that supplier from ~20 photos to 3.
+  const positioned = images.filter((i) => i.context != null);
+  const unpositioned = images.filter((i) => i.context == null);
+  // An image belongs to the FIRST group whose needle its context contains.
+  const perGroup: ImageInput[][] = groups.map(() => []);
+  for (const img of positioned) {
+    const ctx = (img.context as string).toLowerCase();
+    const idx = groups.findIndex((g) => g.needles.some((n) => ctx.includes(n)));
+    if (idx >= 0) perGroup[idx].push(img);
   }
+  // Only honour it when it actually matched — a spec naming a container the
+  // page no longer uses (or a capture with no contexts at all) must not strip
+  // the DOM's contribution to the gallery.
+  if (perGroup.every((g) => g.length === 0)) return pickGallery(images, spec, pageUrl, GALLERY_CAP);
+
+  // Group by group, in spec order, each capped on its own. Unpositioned (JSON)
+  // images lead the first group, exactly as they did with a single container.
+  const out: string[] = [];
+  const seen = new Set<string>();
+  groups.forEach((g, i) => {
+    const pool = i === 0 ? unpositioned.concat(perGroup[i]) : perGroup[i];
+    if (pool.length === 0) return;
+    for (const src of pickGallery(pool, spec, pageUrl, g.max ?? GALLERY_CAP)) {
+      const key = imageKey(imageOrigin(src));
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(src);
+    }
+  });
+  return out.slice(0, GALLERY_CAP);
+}
+
+const GALLERY_CAP = 25;
+
+// The container-agnostic gallery pick: chrome/off-site filters, host heuristic,
+// size-variant dedupe, then at most `limit` photos.
+function pickGallery(images: ImageInput[], spec: ExtractionSpec, pageUrl: string, limit: number): string[] {
   // Third-party widgets (reviews, maps, social, surveys) are never the property
   // gallery. These are matched by HOST because a widget's own filenames are
   // arbitrary — Qualtrics' survey prompt ships "wr-dialog-close-btn-black.png",
@@ -744,7 +837,7 @@ function selectGalleryImages(
     const chosen = byBase.get(base) as string;
     const rendered = imageBase(chosen);
     hotelImages.push(/\/is\/image\//i.test(rendered) ? `${rendered}?wid=1200` : chosen);
-    if (hotelImages.length >= 25) break;
+    if (hotelImages.length >= limit) break;
   }
   return hotelImages;
 }
@@ -2207,7 +2300,7 @@ export function runExtractionSpecDetailed(
   // Booking-JSON images first: they're the complete list, whereas the rendered
   // <img> set is whatever lazy-loading happened to have reached.
   const hotelImages = selectGalleryImages(
-    [...imagesFromJson(ctx.apiJson).map((src) => ({ src })), ...(ctx.images ?? [])],
+    [...imagesFromJson(ctx.apiJson, spec.imageJsonPaths).map((src) => ({ src })), ...(ctx.images ?? [])],
     spec,
     ctx.url,
   );

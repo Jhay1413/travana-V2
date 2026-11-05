@@ -38,6 +38,8 @@ export interface TravelDeal {
   departureAirport: string | null;
   postSchedule: string | null;
   onlySocialsId: string | null;
+  /** Accounts the post was scheduled to; null = legacy single Facebook Page. */
+  only_socials_targets: { accountId: number; platform: string }[] | null;
   luggageTransfers: string | null;
   price: string | null;
   quote_id: string;
@@ -90,6 +92,12 @@ export interface QuoteImageSource {
   isPrimary: boolean;
 }
 
+/** The only fields PATCH /social-posts/:id accepts. */
+export interface UpdatePostInput {
+  post?: string;
+  accountIds?: number[];
+}
+
 export const socialPostApi = {
   generate: async (data: GeneratePostParams): Promise<TravelDeal> => {
     const { data: res } = await axiosClient.post<TravelDeal>("/api/v2/social-posts/generate", data);
@@ -103,7 +111,7 @@ export const socialPostApi = {
     return res;
   },
 
-  update: async (id: string, data: Partial<TravelDeal>): Promise<TravelDeal> => {
+  update: async (id: string, data: UpdatePostInput): Promise<TravelDeal> => {
     const { data: res } = await axiosClient.patch<TravelDeal>(`/api/v2/social-posts/${id}`, data);
     return res;
   },

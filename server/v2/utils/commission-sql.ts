@@ -123,3 +123,34 @@ export function totalQuoteCommissionExpr(
     + COALESCE((SELECT SUM(CAST(${quote_airport_parking.commission} AS DECIMAL))   FROM ${quote_airport_parking}   WHERE ${quote_airport_parking.quote_id}   = ${quoteIdRef}), 0)
   )`;
 }
+
+/**
+ * Customer-facing total of the "extras" on a quote: SUM(cost) of every extra row
+ * explicitly marked NOT included in the package (is_included_in_package = FALSE;
+ * NULL counts as INCLUDED so old deals keep their totals). Extras are transfers, car hire, attraction tickets,
+ * lounge passes, airport parking and EXTRA accommodation (is_primary is not true).
+ * Flights and the primary stay are part of the package price and never counted.
+ * An extra's `cost` is the amount the customer pays on top of the package.
+ */
+export function quoteExtrasTotalExpr(quoteIdRef: SQL | unknown = quote.id): SQL<number> {
+  return sql<number>`(
+    COALESCE((SELECT SUM(CAST(${quote_accomodation.cost} AS DECIMAL))      FROM ${quote_accomodation}      WHERE ${quote_accomodation.quote_id}      = ${quoteIdRef} AND ${quote_accomodation.is_primary} IS NOT TRUE AND ${quote_accomodation.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${quote_transfers.cost} AS DECIMAL))         FROM ${quote_transfers}         WHERE ${quote_transfers.quote_id}         = ${quoteIdRef} AND ${quote_transfers.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${quote_car_hire.cost} AS DECIMAL))          FROM ${quote_car_hire}          WHERE ${quote_car_hire.quote_id}          = ${quoteIdRef} AND ${quote_car_hire.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${quote_attraction_ticket.cost} AS DECIMAL)) FROM ${quote_attraction_ticket} WHERE ${quote_attraction_ticket.quote_id} = ${quoteIdRef} AND ${quote_attraction_ticket.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${quote_lounge_pass.cost} AS DECIMAL))       FROM ${quote_lounge_pass}       WHERE ${quote_lounge_pass.quote_id}       = ${quoteIdRef} AND ${quote_lounge_pass.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${quote_airport_parking.cost} AS DECIMAL))   FROM ${quote_airport_parking}   WHERE ${quote_airport_parking.quote_id}   = ${quoteIdRef} AND ${quote_airport_parking.is_included_in_package} = FALSE), 0)
+  )`;
+}
+
+/** Booking twin of `quoteExtrasTotalExpr`. */
+export function bookingExtrasTotalExpr(bookingIdRef: SQL | unknown = booking.id): SQL<number> {
+  return sql<number>`(
+    COALESCE((SELECT SUM(CAST(${booking_accomodation.cost} AS DECIMAL))      FROM ${booking_accomodation}      WHERE ${booking_accomodation.booking_id}      = ${bookingIdRef} AND ${booking_accomodation.is_primary} IS NOT TRUE AND ${booking_accomodation.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${booking_transfers.cost} AS DECIMAL))         FROM ${booking_transfers}         WHERE ${booking_transfers.booking_id}         = ${bookingIdRef} AND ${booking_transfers.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${booking_car_hire.cost} AS DECIMAL))          FROM ${booking_car_hire}          WHERE ${booking_car_hire.booking_id}          = ${bookingIdRef} AND ${booking_car_hire.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${booking_attraction_ticket.cost} AS DECIMAL)) FROM ${booking_attraction_ticket} WHERE ${booking_attraction_ticket.booking_id} = ${bookingIdRef} AND ${booking_attraction_ticket.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${booking_lounge_pass.cost} AS DECIMAL))       FROM ${booking_lounge_pass}       WHERE ${booking_lounge_pass.booking_id}       = ${bookingIdRef} AND ${booking_lounge_pass.is_included_in_package} = FALSE), 0)
+    + COALESCE((SELECT SUM(CAST(${booking_airport_parking.cost} AS DECIMAL))   FROM ${booking_airport_parking}   WHERE ${booking_airport_parking.booking_id}   = ${bookingIdRef} AND ${booking_airport_parking.is_included_in_package} = FALSE), 0)
+  )`;
+}

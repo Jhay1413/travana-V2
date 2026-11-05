@@ -9,6 +9,8 @@ interface BaseInput {
   /** Local "YYYY-MM-DDTHH:mm" of the chosen time. */
   local: string;
   files?: File[];
+  /** Accounts to post to. Omit on a reschedule that keeps the saved accounts. */
+  accountIds?: number[];
 }
 
 export type ScheduleFormInput =
@@ -24,6 +26,7 @@ export function buildScheduleForm(input: ScheduleFormInput): BuiltScheduleForm {
     postSchedule: input.utcIso,
     postScheduleLocal: input.local,
   };
+  if (input.accountIds) fields.accountIds = JSON.stringify(input.accountIds);
   if (input.kind === "reschedule") {
     fields.postContent = input.postContent;
     fields.existingImageIds = JSON.stringify(input.existingImageIds);

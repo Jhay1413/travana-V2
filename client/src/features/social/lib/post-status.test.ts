@@ -46,9 +46,14 @@ describe("STATUS_META", () => {
   });
 });
 
-describe("STATUS_META not_generated", () => {
-  it("reads Not scheduled", () => {
+describe("STATUS_META draft vs not_generated", () => {
+  it("labels drafts as Draft / Drafts", () => {
+    expect(STATUS_META.draft.label).toBe("Draft");
+    expect(STATUS_META.draft.plural).toBe("Drafts");
+  });
+  it("keeps Not scheduled for not_generated, distinct from drafts", () => {
     expect(STATUS_META.not_generated.label).toBe("Not scheduled");
     expect(STATUS_META.not_generated.plural).toBe("Not scheduled");
+    expect(STATUS_META.draft.label).not.toBe(STATUS_META.not_generated.label);
   });
 });

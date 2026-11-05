@@ -1,10 +1,14 @@
+import { withTrimmedPhone } from "@shared/phone";
 import { clientRepository } from "./client.repository";
 import { AppError } from "../../utils/error-handler";
 import type { Client, InsertClient } from "./client.types";
+import { CLIENT_DELETE_ROLES } from "../../utils/client-delete-roles";
 import type { Scope } from "../../utils/scope";
 import { stripOwnershipFields } from "../../utils/ownership-fields";
 import { branchRepository } from "../branch/branch.repository";
 import { stripSystemManagedFields, assertValidReferrer } from "../neon-client/neon-client.guards";
+
+export { CLIENT_DELETE_ROLES };
 
 export const clientService = {
   async listClients(scope: Scope): Promise<Client[]> {
@@ -19,14 +23,28 @@ export const clientService = {
     return client;
   },
 
+  /**
+   * Read for the client page. Admins (CLIENT_DELETE_ROLES) may also open a soft-deleted
+   * client, read-only (the row carries deletedAt); everyone else gets 404 as before.
+   */
+  async viewClientById(id: string, scope: Scope): Promise<Client> {
+    const client = await clientRepository.findById(id, scope);
+    if (client) return client;
+    if (CLIENT_DELETE_ROLES.includes(scope.orgRole)) {
+      const deleted = await clientRepository.findByIdIncludingDeleted(id, scope);
+      if (deleted) return deleted;
+    }
+    throw new AppError("Client not found", 404);
+  },
+
   async createClient(data: InsertClient, scope: Scope): Promise<Client> {
-    const clean = stripSystemManagedFields(data);
+    const clean = withTrimmedPhone(stripSystemManagedFields(data));
     await assertValidReferrer(null, clean.referredByClientId, scope);
     return await clientRepository.create(clean, scope);
   },
 
   async updateClient(id: string, data: Partial<InsertClient>, scope: Scope): Promise<Client> {
-    const clean = stripSystemManagedFields(data);
+    const clean = withTrimmedPhone(stripSystemManagedFields(data));
     if (clean.referredByClientId) {
       const current = await clientRepository.findById(id, scope);
       if (!current) throw new AppError("Client not found", 404);
@@ -40,11 +58,23 @@ export const clientService = {
     return client;
   },
 
+  /**
+   * Soft delete (admin only): hides the client from lists, search and pickers and
+   * stops portal access; its deals stay. Never hard-deletes.
+   */
   async deleteClient(id: string, scope: Scope): Promise<void> {
-    const removed = await clientRepository.remove(id, scope);
-    if (!removed) {
-      throw new AppError("Client not found", 404);
+    if (!CLIENT_DELETE_ROLES.includes(scope.orgRole)) {
+      throw new AppError("You do not have permission to delete clients", 403);
     }
+    // Scope-enforced fetch: an out-of-scope client reads as 404.
+    const client = await clientRepository.findByIdIncludingDeleted(id, scope);
+    if (!client) throw new AppError("Client not found", 404);
+    if (client.deletedAt) throw new AppError("This client has already been deleted", 409);
+    if (client.status === "merged") {
+      throw new AppError("This client has been merged into another client and cannot be deleted", 400);
+    }
+    const done = await clientRepository.softDelete(id, scope, scope.userId);
+    if (!done) throw new AppError("Client not found", 404);
   },
 
   /**

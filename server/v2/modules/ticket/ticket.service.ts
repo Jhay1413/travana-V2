@@ -5,6 +5,7 @@ import { branchMemberRepository } from "../branch-member/branch-member.repositor
 import { branchRepository } from "../branch/branch.repository";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { AppError } from "../../utils/error-handler";
+import { canReadDeletedClients } from "../../utils/client-delete-roles";
 import { sanitizeRichText } from "../../utils/sanitize-rich-text";
 import type { Ticket, InsertTicket } from "@shared/schema";
 import { hasAnyRole, type OrgRole, type Scope } from "../../utils/scope";
@@ -302,6 +303,10 @@ export const ticketService = {
   },
 
   async listTicketsByClient(clientId: string, scope: Scope) {
+    // A soft-deleted client is readable by CLIENT_DELETE_ROLES only; everyone else gets a 404.
+    if (!canReadDeletedClients(scope) && (await ticketRepository.isClientDeleted(clientId))) {
+      throw new AppError("Client not found", 404);
+    }
     return await ticketRepository.findByClientId(clientId, scope, scope.userId ?? null);
   },
 

@@ -35,3 +35,41 @@ describe("mapOfferToScrapedQuote — sales_price", () => {
     expect(quote.sales_price).toBe(4583);
   });
 });
+
+// A booking with several rooms holds one accom unit per room. Reading only the
+// first unit under-counted the party and dropped every other room's name.
+describe("mapOfferToScrapedQuote — multiple rooms", () => {
+  const units = (list: unknown[]) => offersPayload({ accom: { unit: list } });
+
+  it("sums adults, children and infants across all units", () => {
+    const quote = mapOfferToScrapedQuote(
+      units([
+        { code: "DB01", occupation: { adults: 2, children: 1, infants: 0 } },
+        { code: "TW01", occupation: { adults: 2, children: 0, infants: 1 } },
+      ]),
+      "https://example.com/deal",
+    );
+    expect(quote.adults).toBe(4);
+    expect(quote.children).toBe(1);
+    expect(quote.infants).toBe(1);
+  });
+
+  it("joins distinct room names with ' + ' and drops repeats", () => {
+    const quote = mapOfferToScrapedQuote(
+      units([
+        { code: "DB01", roomType: { title: "Double Room" } },
+        { code: "TW01", roomType: { title: "Twin Room" } },
+        { code: "DB02", roomType: { title: "double room" } },
+      ]),
+      "https://example.com/deal",
+    );
+    expect(quote.room_type).toBe("Double Room + Twin Room");
+  });
+
+  it("keeps the single-room behaviour: code fallback and the default of 2 adults", () => {
+    const quote = mapOfferToScrapedQuote(units([{ code: "DB01" }]), "https://example.com/deal");
+    expect(quote.room_type).toBe("DB01");
+    expect(quote.adults).toBe(2);
+    expect(quote.children).toBe(0);
+  });
+});
