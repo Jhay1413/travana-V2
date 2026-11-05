@@ -33,8 +33,15 @@ export interface FieldRule {
   transform?: FieldTransform;
   // Map the extracted value onto a canonical one (e.g. {"Express transfers":
   // "Shared Transfer"}). Applied after transform, before fallback.
+  // Keys are matched case-insensitively (whitespace collapsed), so a page that
+  // prints "COACH TRANSFERS" still hits a "coach transfers" key.
   map?: Record<string, string>;
   fallback?: string | number; // used when nothing matches
+  // Text/deepText regex rules only: collect the capture group from EVERY match
+  // (not just the first), drop case-insensitive duplicates and join them with
+  // this separator, e.g. " + " for a booking with several rooms. The form has a
+  // single room-type field, so several rooms are carried as "Double + Twin".
+  joinAll?: string;
 
   // ─── Provenance (picker-spec.ts / EXTRACTION_AUDIT.md §4 Phase 3) ──────────
   // All four below are metadata ONLY — the interpreter never reads them when
@@ -67,6 +74,8 @@ export interface PickedSectionSpec {
 }
 // Kept for compatibility: the flights sections were the first users of this shape.
 export type FlightsSectionSpec = PickedSectionSpec;
+
+export type ImageContainerRule = string | { match: string; max?: number };
 
 export interface ExtractionSpec {
   version: number;
@@ -102,7 +111,21 @@ export interface ExtractionSpec {
   // host heuristic can separate them; only DOM position can. The capture sends
   // each image's surrounding class/data-tid names and this filters on them.
   // Ignored when the capture carries no such context (pre-v9 bookmarklet).
-  imageContainerIncludes?: string;
+  //
+  // Several galleries on one page (a lodge page with the lodge's own photos AND
+  // the park's): give an ordered list. Images are emitted group by group in list
+  // order, each item a string or { match, max } where `max` caps how many photos
+  // that group contributes. Pipe-separate alternatives inside one `match`
+  // ("gallery-a|gallery-b"). A plain string without a pipe keeps its original
+  // single-substring meaning.
+  imageContainerIncludes?: string | ImageContainerRule[];
+  // Optional: dot/bracket paths into the captured booking JSON whose subtrees
+  // hold the HERO / accommodation gallery (e.g. "packageData.accommodation.imageUrls").
+  // Images under these paths are emitted first and the rest of the JSON (room
+  // cards, offers, other products) is ignored when they yield anything, so room
+  // photos can't crowd the hero gallery out of the 25-photo cap. Falls back to
+  // the whole JSON when none of the paths hold an image.
+  imageJsonPaths?: string[];
   // Optional: a case-insensitive regex matching the visible text of a control
   // (button/link) that opens a "flight details / compare airports" modal holding
   // the real flight times + destination airport (e.g. "compare airport"). When

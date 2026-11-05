@@ -32,3 +32,24 @@ export function toOnlySocialsBody(post: string): string {
 
   return lines.join("<br>\n");
 }
+
+/**
+ * Length of a post as a reader sees it (and as Instagram counts a caption): the sent body with
+ * each `<br>` line break counted as one newline character, in code points.
+ */
+export function onlySocialsPlainLength(sentBody: string): number {
+  return Array.from(decodeEntities(sentBody.replace(/<br\s*\/?>\n?/gi, "\n"))).length;
+}
+
+const NAMED_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+
+/** Entities are stored escaped but published as the character they stand for ("&amp;" is one character). */
+function decodeEntities(text: string): string {
+  return text.replace(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi, (match, dec, hex, name) => {
+    if (dec !== undefined || hex !== undefined) {
+      const code = dec !== undefined ? Number(dec) : parseInt(hex, 16);
+      return Number.isInteger(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+    }
+    return NAMED_ENTITIES[String(name).toLowerCase()] ?? match;
+  });
+}

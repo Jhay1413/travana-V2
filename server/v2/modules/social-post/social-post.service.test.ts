@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   uploadOnlySocialsMedia: vi.fn(),
   scheduleOnlySocialsPost: vi.fn(),
   rescheduleOnlySocialsPost: vi.fn(),
+  fetchOnlySocialsPost: vi.fn(),
+  listAccounts: vi.fn(),
   repo: {
     findById: vi.fn(),
     update: vi.fn(),
@@ -32,7 +34,11 @@ vi.mock("../../utils/only-socials", () => ({
   uploadMultipleOnlySocialsMedia: vi.fn(),
   uploadOnlySocialsMedia: mocks.uploadOnlySocialsMedia,
   uploadMediaFromUrl: mocks.uploadMediaFromUrl,
-  fetchOnlySocialsPost: vi.fn(),
+  fetchOnlySocialsPost: mocks.fetchOnlySocialsPost,
+  LEGACY_DEFAULT_ACCOUNT_ID: 81085,
+}));
+vi.mock("../social-settings/social-settings.service", () => ({
+  socialSettingsService: { listAccounts: mocks.listAccounts },
 }));
 vi.mock("../../utils/image-storage", () => ({
   s3KeyFromStoredUrl: () => null,
@@ -292,6 +298,9 @@ describe("shortTourOperatorName", () => {
   });
 });
 
+const FB_TARGET = [{ accountId: 81085, platform: "facebook" }];
+const FB_ACCOUNT = { id: 81085, name: "Apple Travel", username: null, image: null, platform: "facebook", authorized: true, selectable: true };
+
 describe("socialPostService auto-upscale at schedule time", () => {
   const deal = { id: "deal-1", quote_id: "quote-1", post: "hello", onlySocialsId: "os-1" };
   const summary = {
@@ -316,6 +325,7 @@ describe("socialPostService auto-upscale at schedule time", () => {
     mocks.uploadMediaFromUrl.mockResolvedValueOnce({ id: "11" }).mockResolvedValueOnce({ id: "12" });
     mocks.scheduleOnlySocialsPost.mockResolvedValue({ uuid: "os-1" });
     mocks.rescheduleOnlySocialsPost.mockResolvedValue({ uuid: "os-1" });
+    mocks.listAccounts.mockReset().mockResolvedValue({ configured: true, accounts: [FB_ACCOUNT] });
   });
 
   it("schedulePost uploads the prepared files/urls and returns the auto-upscale summary", async () => {
@@ -331,7 +341,7 @@ describe("socialPostService auto-upscale at schedule time", () => {
     expect(mocks.uploadOnlySocialsMedia).toHaveBeenCalledWith(keptFile);
     expect(mocks.uploadMediaFromUrl).toHaveBeenNthCalledWith(1, "https://a/1-up.jpg");
     expect(mocks.uploadMediaFromUrl).toHaveBeenNthCalledWith(2, "https://a/2.jpg");
-    expect(mocks.scheduleOnlySocialsPost).toHaveBeenCalledWith("2026-01-01T10:00:00", "hello", [5, 10, 11, 12]);
+    expect(mocks.scheduleOnlySocialsPost).toHaveBeenCalledWith("2026-01-01T10:00:00", "hello", [5, 10, 11, 12], FB_TARGET);
     expect(result.autoUpscale).toEqual(summary);
   });
 
@@ -342,7 +352,7 @@ describe("socialPostService auto-upscale at schedule time", () => {
     );
 
     expect(mocks.uploadMediaFromUrl).toHaveBeenNthCalledWith(1, "https://a/1-up.jpg");
-    expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith("os-1", "2026-01-01T10:00:00", "new text", [10, 11, 12]);
+    expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith("os-1", "2026-01-01T10:00:00", "new text", [10, 11, 12], FB_TARGET);
     expect(result.autoUpscale).toEqual(summary);
   });
 
@@ -362,7 +372,7 @@ describe("socialPostService auto-upscale at schedule time", () => {
     );
 
     // url:1 uploads first (id 11), then the file (10), the existing id 5, then url:0 (12).
-    expect(mocks.scheduleOnlySocialsPost).toHaveBeenCalledWith("2026-01-01T10:00:00", "hello", [11, 10, 5, 12]);
+    expect(mocks.scheduleOnlySocialsPost).toHaveBeenCalledWith("2026-01-01T10:00:00", "hello", [11, 10, 5, 12], FB_TARGET);
     expect(mocks.uploadMediaFromUrl).toHaveBeenNthCalledWith(1, "https://a/2.jpg");
   });
 
@@ -374,7 +384,7 @@ describe("socialPostService auto-upscale at schedule time", () => {
       { orgId: null }, ["existing:5", "existing:3", "existing:4"],
     );
 
-    expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith("os-1", "2026-01-01T10:00:00", "text", [5, 3, 4]);
+    expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith("os-1", "2026-01-01T10:00:00", "text", [5, 3, 4], FB_TARGET);
   });
 
   it("rejects an imageOrder that refers to an unknown existing image", async () => {

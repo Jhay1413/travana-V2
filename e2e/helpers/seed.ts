@@ -29,6 +29,8 @@ import {
   resorts,
   tasks,
   tour_operator,
+  travel_deal,
+  quoteImages,
   user,
 } from "../../shared/schema";
 import {
@@ -551,4 +553,48 @@ export async function assertNoMessagingConfig(): Promise<void> {
   if (bad.length > 0) {
     throw new Error(`Messaging settings found in the test database (${bad.map(([t, n]) => `${t}: ${n}`).join(", ")}). Seeds must not add them.`);
   }
+}
+
+export interface SeededSocialPost {
+  quoteId: string;
+  dealId: string;
+  title: string;
+}
+
+/**
+ * A Social Posts card: a free quote plus its travel_deal row. `onlySocialsId` + `postSchedule` make it
+ * scheduled (the status is derived, never stored); `targets` is the saved platform snapshot (null = legacy).
+ * `withImage` adds one local quote image so Instagram has something to send.
+ */
+export async function seedSocialPost(input: {
+  userId: string;
+  orgId: string;
+  branchId: string;
+  title: string;
+  withImage?: boolean;
+  scheduledAt?: Date;
+  targets?: { accountId: number; platform: string }[] | null;
+}): Promise<SeededSocialPost> {
+  const txn = await makeTransaction({ user_id: input.userId, org_id: input.orgId, branch_id: input.branchId, status: "on_quote" });
+  const q = await makeQuote({ transaction_id: txn.id, isFreeQuote: true, title: input.title });
+  if (input.withImage) {
+    await db.insert(quoteImages).values({ id: randomUUID(), quoteId: q.id, url: "/images/default-hotel.jpg", isPrimary: true, position: 0 });
+  }
+  const [deal] = await db
+    .insert(travel_deal)
+    .values({
+      title: input.title,
+      post: "Sun, sea and a lovely hotel.<br>Book now.",
+      nights: 7,
+      quote_id: q.id,
+      only_socials_targets: input.targets ?? null,
+      ...(input.scheduledAt ? { onlySocialsId: `os-${unique("post")}`, postSchedule: input.scheduledAt } : {}),
+    })
+    .returning();
+  return { quoteId: q.id, dealId: deal.id, title: input.title };
+}
+
+export async function dbDeal(id: string) {
+  const [row] = await db.select().from(travel_deal).where(eq(travel_deal.id, id));
+  return row;
 }

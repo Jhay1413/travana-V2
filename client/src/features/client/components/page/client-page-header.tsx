@@ -1,4 +1,4 @@
-import { Bot, BotOff, ChevronDown, Ellipsis, Merge, Phone, Pin, Plus, Share2, ShieldUser, SquarePen } from "lucide-react";
+import { Bot, BotOff, ChevronDown, Ellipsis, Merge, Phone, Plus, ShieldUser, SquarePen, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,11 +17,11 @@ export const BADGE_OPTIONS = ["New Client", "Repeat Client", "VIP Client", "Fami
 
 const PILL = "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1 text-[13px] font-semibold";
 
-/** "Referred by {name}" under the client name; dashed "+ Add" when nobody referred them. */
+/** "Referred by {name}" beside the client name; dashed "+ Add" when nobody referred them. */
 function ReferredByPill({ referrerId, readOnly, onChange }: { referrerId: string | null; readOnly: boolean; onChange: () => void }) {
   const { data: referrer, isLoading } = useNeonClient(referrerId ?? "");
   const name = referrer ? `${referrer.firstName} ${referrer.surename}`.trim() : "";
-  const base = "mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border border-dashed border-ticket-dashed px-3 py-1 text-[12px] text-social-muted";
+  const base = "inline-flex max-w-full items-center gap-1.5 rounded-full border border-dashed border-ticket-dashed px-3 py-1 text-[12px] text-social-muted";
 
   if (!referrerId) {
     return (
@@ -57,38 +57,35 @@ interface ClientPageHeaderProps {
   name: string;
   phone: string;
   clientData: NeonClient | undefined;
-  isFavorited: boolean;
   readOnly: boolean;
   aiReplyEnabled: boolean;
   onEdit: () => void;
-  onShare: () => void;
-  onTogglePin: () => void;
   onChangeBadge: (badge: string | null) => void;
   clientId: string;
   onCreate: (kind: CreateKind) => void;
   onMerge: () => void;
+  /** Present only for roles allowed to delete a client; the menu item is hidden otherwise. */
+  onDelete?: () => void;
   onToggleAiReply: (enabled: boolean) => void;
   onChangeReferrer: () => void;
 }
 
 /**
  * Header: name, click-to-copy phone pill, client tier (the existing client
- * `badge`) and address on the left; Share / Pin / the "+" create menu and
- * the overflow menu on the right. Read-only roles lose every write control.
+ * `badge`) and "Referred by" on one wrapping row, address beneath; the "+"
+ * create menu and the overflow menu on the right. Read-only roles lose every write control.
  */
 export function ClientPageHeader({
   name,
   phone,
   clientData,
-  isFavorited,
   readOnly,
   aiReplyEnabled,
   onEdit,
-  onShare,
-  onTogglePin,
   onChangeBadge,
   onCreate,
   onMerge,
+  onDelete,
   onToggleAiReply,
   onChangeReferrer,
 }: ClientPageHeaderProps) {
@@ -163,10 +160,10 @@ export function ClientPageHeader({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          {(!readOnly || referrerId) && (
+            <ReferredByPill referrerId={referrerId} readOnly={readOnly} onChange={onChangeReferrer} />
+          )}
         </div>
-        {(!readOnly || referrerId) && (
-          <ReferredByPill referrerId={referrerId} readOnly={readOnly} onChange={onChangeReferrer} />
-        )}
         <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[13px] text-social-muted">
           <span className="truncate" data-testid="client-center-header-contact">
             {address || "No address on file"}
@@ -187,18 +184,6 @@ export function ClientPageHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5">
-        <RoundButton label="Share client" tone="sky" onClick={onShare} data-testid="client-index-share">
-          <Share2 className="h-[18px] w-[18px]" strokeWidth={1.8} />
-        </RoundButton>
-        <RoundButton
-          label={isFavorited ? "Unpin client" : "Pin client"}
-          tone="orange"
-          active={isFavorited}
-          onClick={onTogglePin}
-          data-testid="client-index-pin"
-        >
-          <Pin className="h-[18px] w-[18px]" strokeWidth={1.8} />
-        </RoundButton>
         {!readOnly && (
           <CreateMenu
             trigger={
@@ -235,6 +220,18 @@ export function ClientPageHeader({
               <DropdownMenuItem onClick={onMerge} className="gap-2" data-testid="client-index-button-merge">
                 <Merge className="h-4 w-4" /> Merge client
               </DropdownMenuItem>
+              {onDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={onDelete}
+                    className="gap-2 text-red-600 focus:text-red-600"
+                    data-testid="client-index-button-delete"
+                  >
+                    <Trash2 className="h-4 w-4" /> Delete client
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}

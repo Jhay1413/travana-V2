@@ -15,6 +15,7 @@ import type { QuoteView, InsertQuoteView, QuoteCustomerAction, InsertQuoteCustom
 import { eq, desc, sql, and, inArray, or, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import crypto from "crypto";
+import { fetchExtrasTotalMaps } from "../v2/modules/transaction/extras-total.repository";
 
 const departAirport = alias(airport, "depart_airport");
 const arriveAirport = alias(airport, "arrive_airport");
@@ -185,6 +186,10 @@ export const quotePublicRepository = {
       if (url && !seen.has(url)) { seen.add(url); allImages.push({ id: img.id, image_url: url, isPrimary: img.isPrimary }); }
     }
 
+    // Extras the customer pays for on top of the package (shared v2 SQL, so v1 and v2 agree).
+    const { quoteMap: extrasMap } = await fetchExtrasTotalMaps([q.quote.id], []);
+    const extrasTotal = extrasMap.get(q.quote.id) ?? 0;
+
     return {
       transactionId: q.quote.transaction_id,
       clientName: [q.client_first_name, q.client_last_name].filter(Boolean).join(" ") || null,
@@ -200,6 +205,7 @@ export const quotePublicRepository = {
       salesPrice: q.quote.sales_price || "0",
       discounts: q.quote.discounts || "0",
       serviceCharge: q.quote.service_charge || "0",
+      extrasTotal: String(extrasTotal),
       pricePerPerson: q.quote.price_per_person || "0",
       transferType: q.quote.transfer_type || "none",
       flightMeals: q.quote.flight_meals ?? false,

@@ -52,7 +52,7 @@ describe("noteService partition", () => {
   it("shop agent cannot list notes on a homeworker's client", async () => {
     vi.mocked(noteRepository.clientBelongsToOrg).mockResolvedValue(false);
     await expect(noteService.listByClientId("c1", SHOP_AGENT)).rejects.toMatchObject({ statusCode: 404 });
-    expect(noteRepository.clientBelongsToOrg).toHaveBeenCalledWith("c1", "org1", SHOP_AGENT);
+    expect(noteRepository.clientBelongsToOrg).toHaveBeenCalledWith("c1", "org1", SHOP_AGENT, { includeDeleted: false });
     expect(noteRepository.findByClientId).not.toHaveBeenCalled();
   });
 
@@ -194,5 +194,28 @@ describe("noteService - notes on a deal use the shop-pinned write scope", () => 
     await noteService.createNote({ client_id: "c1", content: "hi" } as never, SHOP_AGENT);
     expect(noteRepository.transactionInWriteScope).not.toHaveBeenCalled();
     expect(noteRepository.create).toHaveBeenCalled();
+  });
+});
+
+describe("noteService - soft-deleted client is read-only", () => {
+  const ADMIN: Scope = { ...SHOP_AGENT, orgRole: "org_admin", orgRoles: ["org_admin"] };
+
+  it("an org admin's list asks for deleted clients to be included", async () => {
+    vi.mocked(noteRepository.clientBelongsToOrg).mockResolvedValue(true);
+    vi.mocked(noteRepository.findByClientId).mockResolvedValue([]);
+    await noteService.listByClientId("c1", ADMIN);
+    expect(noteRepository.clientBelongsToOrg).toHaveBeenCalledWith("c1", "org1", ADMIN, { includeDeleted: true });
+  });
+
+  it("a non-admin's list keeps the strict lookup (404 on a deleted client)", async () => {
+    vi.mocked(noteRepository.clientBelongsToOrg).mockResolvedValue(false);
+    await expect(noteService.listByClientId("c1", SHOP_AGENT)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("an admin's create on a deleted client uses the strict lookup and 404s", async () => {
+    vi.mocked(noteRepository.clientBelongsToOrg).mockResolvedValue(false);
+    await expect(noteService.createNote({ client_id: "c1", content: "hi" } as never, ADMIN)).rejects.toMatchObject({ statusCode: 404 });
+    expect(noteRepository.clientBelongsToOrg).toHaveBeenCalledWith("c1", "org1", ADMIN, { includeDeleted: false });
+    expect(noteRepository.create).not.toHaveBeenCalled();
   });
 });

@@ -3,8 +3,6 @@ import {
   RIGHT_CARD_TABS,
   draftToInput,
   formatPassengerDate,
-  isPassengerDraftComplete,
-  isPassengerDraftValid,
   orDash,
   passengerCountLabel,
   passengerFullName,
@@ -12,7 +10,9 @@ import {
   passportExpiryFlag,
   passportExpiryFlagLabel,
   passportFootnote,
-  passportNumberWarning,
+  passengerDraftErrors,
+  passengerSaveBlockedReason,
+  passportExpiryDeadlineLabel,
 } from "./client-passengers";
 
 describe("formatPassengerDate", () => {
@@ -67,29 +67,36 @@ describe("passportFootnote", () => {
   });
 });
 
-describe("isPassengerDraftComplete", () => {
-  const full = { title: "Mr.", firstName: "A", surname: "B", dateOfBirth: "2000-01-31", passportNumber: "123456789", passportExpiry: "2030-05-01" };
-  it("is true only when all six fields are filled", () => {
-    expect(isPassengerDraftComplete(full)).toBe(true);
-    for (const key of Object.keys(full) as Array<keyof typeof full>) {
-      expect(isPassengerDraftComplete({ ...full, [key]: "" })).toBe(false);
-      expect(isPassengerDraftComplete({ ...full, [key]: "  " })).toBe(false);
+describe("passengerDraftErrors", () => {
+  const full = { title: "Mr.", firstName: "A", surname: "B", dateOfBirth: "2000-01-31", passportNumber: "123456789", passportExpiry: "2030-05-01", passportNonUk: false };
+  const opts = { nextDeparture: null, today: "2026-11-04" };
+  it("is empty only when all six fields are valid", () => {
+    expect(passengerDraftErrors(full, opts)).toEqual({});
+    for (const key of ["title", "firstName", "surname", "dateOfBirth", "passportNumber", "passportExpiry"] as const) {
+      expect(Object.keys(passengerDraftErrors({ ...full, [key]: "  " }, opts)), key).toEqual([key]);
     }
+  });
+  it("blocks a non-9-digit number unless Non-UK is ticked", () => {
+    expect(passengerDraftErrors({ ...full, passportNumber: "AB12345" }, opts).passportNumber).toMatch(/exactly 9 digits/);
+    expect(passengerDraftErrors({ ...full, passportNumber: "ab12345", passportNonUk: true }, opts)).toEqual({});
+  });
+  it("blocks an expiry within 6 months of the next departure", () => {
+    const e = passengerDraftErrors({ ...full, passportExpiry: "2027-04-15" }, { nextDeparture: "2026-10-15", today: "2026-10-01" });
+    expect(e.passportExpiry).toBe("Passport must be valid for more than 6 months after travel (until after 15/04/2027)");
+    expect(passengerDraftErrors({ ...full, passportExpiry: "2027-04-16" }, { nextDeparture: "2026-10-15", today: "2026-10-01" })).toEqual({});
+  });
+  it("lead: a gap in the client's title or date of birth becomes one clear message", () => {
+    const e = passengerDraftErrors({ ...full, title: "", dateOfBirth: "" }, { ...opts, isLead: true });
+    expect(e.title).toMatch(/title and date of birth on the client record/);
+    expect(e.dateOfBirth).toBeUndefined();
+    expect(passengerSaveBlockedReason(e)).toMatch(/client record/);
   });
 });
 
-describe("passportNumberWarning", () => {
-  it("is quiet for nine digits and for empty", () => {
-    expect(passportNumberWarning("123456789")).toBeNull();
-    expect(passportNumberWarning(" 123456789 ")).toBeNull();
-    expect(passportNumberWarning("")).toBeNull();
-    expect(passportNumberWarning("  ")).toBeNull();
-  });
-  it("warns for 8 or 10 digits and for letters", () => {
-    const msg = "UK passports have 9 numbers. Check this one if it's a UK passport.";
-    expect(passportNumberWarning("12345678")).toBe(msg);
-    expect(passportNumberWarning("1234567890")).toBe(msg);
-    expect(passportNumberWarning("AB1234567")).toBe(msg);
+describe("passportExpiryDeadlineLabel", () => {
+  it("is DD/MM/YYYY, 6 months after departure or today", () => {
+    expect(passportExpiryDeadlineLabel("2026-10-15")).toBe("15/04/2027");
+    expect(passportExpiryDeadlineLabel(null, "2026-11-04")).toBe("04/05/2027");
   });
 });
 
@@ -142,15 +149,10 @@ describe("passportExpiryFlag default day", () => {
 });
 
 describe("passenger draft", () => {
-  it("requires first name and surname", () => {
-    const base = { title: "", firstName: "A", surname: "B", dateOfBirth: "", passportNumber: "", passportExpiry: "" };
-    expect(isPassengerDraftValid(base)).toBe(true);
-    expect(isPassengerDraftValid({ ...base, surname: " " })).toBe(false);
-  });
-  it("nulls blanks and trims", () => {
-    expect(
-      draftToInput({ title: "", firstName: " A ", surname: "B", dateOfBirth: "", passportNumber: " 99 ", passportExpiry: "" }),
-    ).toEqual({ title: null, firstName: "A", surname: "B", dateOfBirth: null, passportNumber: "99", passportExpiry: null });
+  it("nulls blanks, trims, and upper-cases a Non-UK number", () => {
+    const base = { title: "", firstName: " A ", surname: "B", dateOfBirth: "", passportNumber: " 99 ", passportExpiry: "", passportNonUk: false };
+    expect(draftToInput(base)).toEqual({ title: null, firstName: "A", surname: "B", dateOfBirth: null, passportNumber: "99", passportExpiry: null, passportNonUk: false });
+    expect(draftToInput({ ...base, passportNumber: " ab123 ", passportNonUk: true }).passportNumber).toBe("AB123");
   });
 });
 

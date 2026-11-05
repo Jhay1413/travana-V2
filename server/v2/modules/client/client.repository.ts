@@ -21,7 +21,7 @@ import {
   type NeonClient as Client,
   type InsertClientTable as InsertClient,
 } from "@shared/schema";
-import { eq, desc, and, inArray, sql, type SQL } from "drizzle-orm";
+import { eq, desc, and, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { Scope } from "../../utils/scope";
 import { buildPartitionCond } from "../../utils/scope-conditions";
 
@@ -43,7 +43,16 @@ function buildScopeWhere(scope: Scope): SQL | undefined {
 }
 
 export const clientRepository = {
+  /** Soft-deleted clients read as not found. Use findByIdIncludingDeleted to see them. */
   async findById(id: string, scope: Scope): Promise<Client | undefined> {
+    const scopeWhere = buildScopeWhere(scope);
+    const base = and(eq(clientTable.id, id), isNull(clientTable.deletedAt));
+    const where = scopeWhere ? and(base, scopeWhere) : base;
+    const [result] = await db.select().from(clientTable).where(where).limit(1);
+    return result;
+  },
+
+  async findByIdIncludingDeleted(id: string, scope: Scope): Promise<Client | undefined> {
     const scopeWhere = buildScopeWhere(scope);
     const where = scopeWhere ? and(eq(clientTable.id, id), scopeWhere) : eq(clientTable.id, id);
     const [result] = await db.select().from(clientTable).where(where).limit(1);
@@ -52,7 +61,7 @@ export const clientRepository = {
 
   async findAll(scope: Scope, opts?: { includeMerged?: boolean }): Promise<Client[]> {
     const scopeWhere = buildScopeWhere(scope);
-    const conds: SQL[] = [];
+    const conds: SQL[] = [isNull(clientTable.deletedAt)];
     if (scopeWhere) conds.push(scopeWhere);
     if (!opts?.includeMerged) conds.push(eq(clientTable.status, "active"));
     const where = conds.length ? and(...conds) : undefined;
@@ -76,15 +85,25 @@ export const clientRepository = {
 
   async update(id: string, client: Partial<InsertClient>, scope: Scope): Promise<Client | undefined> {
     const scopeWhere = buildScopeWhere(scope);
-    const where = scopeWhere ? and(eq(clientTable.id, id), scopeWhere) : eq(clientTable.id, id);
+    const base = and(eq(clientTable.id, id), isNull(clientTable.deletedAt));
+    const where = scopeWhere ? and(base, scopeWhere) : base;
     const [result] = await db.update(clientTable).set(client).where(where).returning();
     return result;
   },
 
-  async remove(id: string, scope: Scope): Promise<boolean> {
+  /**
+   * Soft delete: stamps deleted_at/deleted_by on a not-yet-deleted client inside the
+   * caller's scope. Returns false when nothing matched. Clients are never hard-deleted.
+   */
+  async softDelete(id: string, scope: Scope, actorId: string | null): Promise<boolean> {
     const scopeWhere = buildScopeWhere(scope);
-    const where = scopeWhere ? and(eq(clientTable.id, id), scopeWhere) : eq(clientTable.id, id);
-    const result = await db.delete(clientTable).where(where).returning({ id: clientTable.id });
+    const base = and(eq(clientTable.id, id), isNull(clientTable.deletedAt));
+    const where = scopeWhere ? and(base, scopeWhere) : base;
+    const result = await db
+      .update(clientTable)
+      .set({ deletedAt: new Date(), deletedBy: actorId })
+      .where(where)
+      .returning({ id: clientTable.id });
     return result.length > 0;
   },
 

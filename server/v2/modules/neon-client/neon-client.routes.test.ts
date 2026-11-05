@@ -34,7 +34,6 @@ function runGuard(handlers: Handler[], orgRole: string) {
 
 const NEON_WRITES: Array<[string, string]> = [
   ["patch", "/:id"],
-  ["delete", "/:id"],
   ["post", "/"],
   ["post", "/import"],
   ["post", "/:id/merge"],
@@ -45,6 +44,17 @@ const FILE_WRITES: Array<[string, string]> = [
   ["post", "/client/:clientId"],
   ["delete", "/:id"],
 ];
+
+describe("DELETE /neon-clients/:id is admin only (soft delete)", () => {
+  it.each(["agent", "branch_manager", "homeworker", "social_media_manager"])("%s gets 403", (role) => {
+    const { res, next } = runGuard(handlersFor(neonRouter, "delete", "/:id"), role);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+  it.each(["org_admin", "platform_admin"])("%s passes", (role) => {
+    expect(runGuard(handlersFor(neonRouter, "delete", "/:id"), role).next).toHaveBeenCalledOnce();
+  });
+});
 
 describe("social_media_manager is read-only on clients", () => {
   it.each(NEON_WRITES)("neon-clients %s %s is refused", (method, path) => {

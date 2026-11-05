@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { FormDrawerSection, drawerInputClass, drawerLabelClass } from "@/components/shared/form-drawer";
 import { useTourOperators } from "@/hooks/queries";
 import { operatorCommissionPct, recomputePricing, type PricingField } from "@/features/quote/lib/pricing";
+import { extrasCustomerTotal, formTotalProfit } from "@/features/quote/lib/quote-money";
 import { cn } from "@/lib/utils";
 import type { SharedHolidayFormValues } from "@/features/quote/types";
 
@@ -44,11 +45,24 @@ export function QuoteDrawerCostingsSection() {
     name: ["price", "commission", "discount", "serviceCharge", "pricePerPerson"],
   });
 
+  const [transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations] = useWatch({
+    control,
+    name: ["transfers", "carHires", "attractionTickets", "loungePasses", "airportParkings", "extraAccommodations"],
+  });
+  // Profit = package commission + extras commission, matching the saved deal.
+  const totalProfit = formTotalProfit(commission, {
+    transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+  });
+
   const netCommission = Number(commission) || 0;
   const currentDiscount = Number(discount) || 0;
   const currentServiceCharge = Number(serviceCharge) || 0;
   const grossCommission = round2(netCommission + currentDiscount - currentServiceCharge);
-  const finalTotal = (Number(price) || 0) - currentDiscount + currentServiceCharge;
+  // Extras not marked "Included in package" add their cost to what the customer pays.
+  const extrasCost = extrasCustomerTotal({
+    transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+  });
+  const finalTotal = (Number(price) || 0) - currentDiscount + currentServiceCharge + extrasCost;
 
   // What the user is typing into the gross-commission box. Held as text while
   // the box has focus so a trailing "." or "0" isn't eaten by the re-render
@@ -136,7 +150,7 @@ export function QuoteDrawerCostingsSection() {
             className={cn(drawerInputClass, "flex items-center bg-[#eef0f3] text-black/75")}
             data-testid="drawer-total-profit"
           >
-            £{netCommission.toFixed(2)}
+            £{totalProfit.toFixed(2)}
           </div>
         </div>
       </div>

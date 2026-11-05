@@ -290,3 +290,23 @@ describe("titleExpr", () => {
     expect(render(titleExpr(true)).sql).not.toContain("'lost'");
   });
 });
+
+describe("dealValueExpr extras", () => {
+  it("adds the not-included extras sub-select to both the booking and quote branches", () => {
+    const { sql: text } = render(dealValueExpr(false));
+    expect(text.match(/"quote_transfers"\."is_included_in_package" = FALSE/g)).toHaveLength(1);
+    expect(text.match(/"booking_transfers"\."is_included_in_package" = FALSE/g)).toHaveLength(1);
+    for (const t of ["transfers", "car_hire", "attraction_ticket", "lounge_pass", "airport_parking", "accomodation"]) {
+      expect(text).toContain(`"quote_${t}"."cost"`);
+      expect(text).toContain(`"booking_${t}"."cost"`);
+    }
+  });
+
+  it("extra accommodation excludes the primary stay; flights are never counted", () => {
+    const { sql: text } = render(dealValueExpr(false));
+    expect(text).toContain('"quote_accomodation"."is_primary" IS NOT TRUE');
+    expect(text).toContain('"booking_accomodation"."is_primary" IS NOT TRUE');
+    expect(text).not.toContain('"quote_flights"."cost"');
+    expect(text).not.toContain('"booking_flights"."cost"');
+  });
+});

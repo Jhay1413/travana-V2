@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { DatePicker } from "@/components/ui/date-picker";
+import { DueDateTimeField } from "@/features/tickets/components/shared/due-date-time-field";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RichTextEditor } from "@/components/shared/rich-text-editor";
@@ -34,7 +34,7 @@ interface TicketForm {
   status: string;
   priority: string;
   description: string;
-  dueDate: string;
+  dueDate: string | null;
   userId: string;
 }
 
@@ -163,11 +163,11 @@ export function CreateTicketDialog({
   );
 
   const dueDateField = (
-    <DatePicker
-      id="ticket-due-date"
+    <DueDateTimeField
       value={ticketForm.dueDate}
       onChange={(dueDate) => setTicketForm((f) => ({ ...f, dueDate }))}
-      className={isDrawer ? drawerControlClass : "h-9 rounded-md"}
+      testIdPrefix="ticket-due"
+      triggerClassName={isDrawer ? drawerControlClass : undefined}
     />
   );
 
@@ -247,7 +247,7 @@ export function CreateTicketDialog({
             <DrawerField label="Type">{typeField}</DrawerField>
             <DrawerField label="Priority">{priorityField}</DrawerField>
             <DrawerField label="Status">{statusField}</DrawerField>
-            <DrawerField label="Due Date">{dueDateField}</DrawerField>
+            <DrawerField label="Due Date" className="col-span-2">{dueDateField}</DrawerField>
           </div>
         </div>
         <FormDrawerSection title="Description" data-testid="drawer-section-ticket-description">
@@ -303,7 +303,7 @@ export function CreateTicketDialog({
             {subjectField}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="ticket-due-date">Due Date</Label>
+            <Label>Due Date</Label>
             {dueDateField}
           </div>
           <div className="grid gap-2">

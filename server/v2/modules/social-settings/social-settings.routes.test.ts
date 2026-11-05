@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("./social-settings.controller", () => ({
-  socialSettingsController: { get: vi.fn(), getChannel: vi.fn(), update: vi.fn() },
+  socialSettingsController: { get: vi.fn(), getChannel: vi.fn(), listAccounts: vi.fn(), update: vi.fn() },
 }));
 
 import router from "./social-settings.routes";

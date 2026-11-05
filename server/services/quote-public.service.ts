@@ -1,27 +1,18 @@
 import { quotePublicRepository } from "../repositories/quote-public.repository";
 import { AppError } from "../utils/error-handler";
+import { customerPrice } from "../v2/utils/customer-price";
 import type { InsertQuoteView } from "@shared/schema";
-
-// Total price the customer pays = sales price − discount + service charge.
-function calcTotalPrice(salesPrice: unknown, discount: unknown = 0, serviceCharge: unknown = 0): number {
-  const price = parseFloat(String(salesPrice ?? 0)) || 0;
-  const disc = parseFloat(String(discount ?? 0)) || 0;
-  const sc = parseFloat(String(serviceCharge ?? 0)) || 0;
-  return price - disc + sc;
-}
 
 export const quotePublicService = {
   async getQuoteByToken(token: string) {
     const data = await quotePublicRepository.findByToken(token);
     if (!data) throw new AppError("Quote not found", 404);
-    // The customer-facing price is the calculated total (sales − discount + service charge),
-    // with the per-person figure derived from that same total.
-    const total = calcTotalPrice(data.salesPrice, data.discounts, data.serviceCharge);
-    const pax = (data.adults || 0) + (data.children || 0);
+    // Total = sales − discount + service charge + extras not in the package; per person is the holiday price only.
+    const price = customerPrice(data);
     return {
       ...data,
-      totalPrice: total.toFixed(2),
-      pricePerPerson: pax > 0 ? (total / pax).toFixed(2) : "0.00",
+      totalPrice: price.total.toFixed(2),
+      pricePerPerson: price.pricePerPerson.toFixed(2),
     };
   },
 

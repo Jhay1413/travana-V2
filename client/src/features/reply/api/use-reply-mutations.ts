@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { replyApi } from "./reply.api";
 import { replyKeys } from "./use-reply-queries";
+import { attachmentKeys } from "@/features/attachment";
 import type { CreateReplyData, TicketReply } from "../types";
 
 export function useCreateReply(ticketId: string) {
@@ -30,6 +31,8 @@ export function useDeleteReply(ticketId: string) {
     mutationFn: (id: string) => replyApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: replyKeys.byTicket(ticketId) });
+      // Files on the deleted reply and its replies are removed with them.
+      queryClient.invalidateQueries({ queryKey: attachmentKeys.byTicket(ticketId) });
     },
   });
 }

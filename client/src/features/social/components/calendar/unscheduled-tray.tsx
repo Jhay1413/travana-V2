@@ -28,7 +28,7 @@ export function UnscheduledTray({ drafts, isLoading, isError = false, onRetry, t
     <aside className="flex w-full flex-col rounded-2xl border border-social-border bg-card xl:w-[340px] xl:shrink-0">
       <div className="border-b border-social-border p-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-social-navy">Not scheduled</h2>
+          <h2 className="text-base font-semibold text-social-navy">Drafts</h2>
           <span className="rounded-full bg-status-draft-bg px-2 py-0.5 text-xs font-medium text-status-draft-fg">
             {totalCount ?? drafts.length}
           </span>

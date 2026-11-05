@@ -12,6 +12,7 @@ vi.mock("./ticket.repository", () => ({
     toggleLike: vi.fn(),
     findHolidayLinkTarget: vi.fn(),
     findClientRef: vi.fn(),
+    isClientDeleted: vi.fn(),
     findHolidaySummaries: vi.fn(),
   },
 }));
@@ -715,5 +716,31 @@ describe("holiday link must be visible to the caller (transaction scope)", () =>
 
     vi.mocked(transactionRepository.findByIdScopedForWrite).mockResolvedValue({ id: "x1" } as never);
     await expect(ticketService.updateTicket("t1", { transactionId: "x1" }, SCOPE)).resolves.toBeDefined();
+  });
+});
+
+describe("ticketService.listTicketsByClient (deleted client)", () => {
+  it("lists for a live client", async () => {
+    vi.mocked(ticketRepository.isClientDeleted).mockResolvedValue(false);
+    vi.mocked(ticketRepository.findByClientId).mockResolvedValue([]);
+    await expect(ticketService.listTicketsByClient("c1", SCOPE)).resolves.toEqual([]);
+  });
+
+  it("lets an org admin read a deleted client's tickets", async () => {
+    vi.mocked(ticketRepository.isClientDeleted).mockResolvedValue(true);
+    vi.mocked(ticketRepository.findByClientId).mockResolvedValue([]);
+    const admin: Scope = { ...SCOPE, orgRole: "org_admin", orgRoles: ["org_admin"] };
+    await expect(ticketService.listTicketsByClient("c1", admin)).resolves.toEqual([]);
+  });
+
+  it("404s a non-admin on a deleted client", async () => {
+    vi.mocked(ticketRepository.isClientDeleted).mockResolvedValue(true);
+    await expect(ticketService.listTicketsByClient("c1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(ticketRepository.findByClientId).not.toHaveBeenCalled();
+  });
+
+  it("still blocks creating a ticket against a deleted client (strict lookup)", async () => {
+    vi.mocked(ticketRepository.findClientRef).mockResolvedValue(undefined);
+    await expect(ticketService.createTicket({ clientId: "c1", title: "x" } as never, SCOPE)).rejects.toBeDefined();
   });
 });

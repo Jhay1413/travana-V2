@@ -35,6 +35,16 @@ export function urlImageItem(url: string): FormImageItem {
   return { key: nextKey("url"), kind: "url", url };
 }
 
+/**
+ * Drops an imported-URL item whose image failed to load (404, hotlink-blocked,
+ * not an image) so it never becomes a broken tile in the quote. Only
+ * `kind: "url"` items qualify: a saved image that fails stays in the grid so the
+ * agent can see and delete it deliberately, and a picked file always previews.
+ */
+export function withoutFailedUrlItem(items: FormImageItem[], key: string): FormImageItem[] {
+  return items.filter((i) => !(i.key === key && i.kind === "url"));
+}
+
 /** What to render in a thumbnail, whichever kind the item is. */
 export function itemPreviewUrl(item: FormImageItem): string {
   return item.kind === "file" ? item.previewUrl : item.url;

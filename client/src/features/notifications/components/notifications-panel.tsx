@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Bell, Check, CheckCheck, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -22,6 +22,7 @@ import {
 } from "@/hooks/mutations";
 import type { Notification } from "@/features/notifications/types";
 import { setNotificationsPanelOpen } from "@/features/notifications/lib/panel-open-store";
+import { partitionNotifications, type NotificationTab } from "@/features/notifications/lib/notification-tabs";
 import { useLocation } from "wouter";
 
 interface NotificationsPanelProps {
@@ -55,7 +56,10 @@ export function NotificationsPanel({ userId }: NotificationsPanelProps) {
   // "important" concept, so the bell badge is the unread count. Derived from
   // the same list the panel renders (rather than a second query against
   // /unread) so the badge can never disagree with what's shown inside.
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const { unread, read } = useMemo(() => partitionNotifications(notifications), [notifications]);
+  const unreadCount = unread.length;
+  const [tab, setTab] = useState<NotificationTab>("unread");
+  const visible = tab === "unread" ? unread : read;
 
   // --- Auto-open on new notifications ------------------------------------
   // Product decision reversed an earlier "never auto-open" rule: every
@@ -206,18 +210,43 @@ export function NotificationsPanel({ userId }: NotificationsPanelProps) {
             </div>
           </div>
 
+          <div role="tablist" aria-label="Notification filter" className="flex shrink-0 gap-1 border-b border-black/5 px-4 pt-2 dark:border-white/10">
+            {(["unread", "read"] as const).map((t) => {
+              const active = tab === t;
+              const count = t === "unread" ? unread.length : read.length;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTab(t)}
+                  className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "border-black text-black dark:border-white dark:text-white"
+                      : "border-transparent text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80"
+                  }`}
+                  data-testid={`notifications-tab-${t}`}
+                >
+                  {t === "unread" ? "Unread" : "Read"}
+                  {count > 0 && <span className="ml-1.5 text-xs text-black/40 dark:text-white/40">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto scrollbar-none">
             {isLoading ? (
               <div className="flex justify-center py-8">
                 <Spinner className="h-5 w-5" />
               </div>
-            ) : notifications.length === 0 ? (
-              <div className="py-8 text-center text-black/50 dark:text-white/50">
+            ) : visible.length === 0 ? (
+              <div className="py-8 text-center text-black/50 dark:text-white/50" data-testid={`notifications-empty-${tab}`}>
                 <Bell className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No notifications yet</p>
+                <p className="text-sm">{tab === "unread" ? "You're all caught up" : "No read notifications"}</p>
               </div>
             ) : (
-              notifications.map((notification) => (
+              visible.map((notification) => (
                 <div
                   key={notification.id}
                   className={`flex items-start gap-3 px-4 py-3 border-b border-black/5 dark:border-white/10 hover:bg-black/[0.02] dark:hover:bg-white/[0.04] cursor-pointer transition-colors ${
@@ -246,6 +275,8 @@ export function NotificationsPanel({ userId }: NotificationsPanelProps) {
                         variant="ghost"
                         size="sm"
                         className="h-7 w-7 p-0"
+                        aria-label="Mark as read"
+                        data-testid={`button-notification-read-${notification.id}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           markReadMutation.mutate(notification.id);
@@ -258,6 +289,8 @@ export function NotificationsPanel({ userId }: NotificationsPanelProps) {
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                      aria-label="Delete notification"
+                      data-testid={`button-notification-delete-${notification.id}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteMutation.mutate(notification.id);

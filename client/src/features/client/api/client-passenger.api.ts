@@ -13,6 +13,7 @@ export interface ClientPassenger {
   passportNumber: string | null;
   /** YYYY-MM-DD */
   passportExpiry: string | null;
+  passportNonUk: boolean;
   passportWarning: boolean;
 }
 
@@ -25,6 +26,7 @@ export interface ClientPassengersResponse {
 export interface LeadPassportInput {
   passportNumber: string | null;
   passportExpiry: string | null;
+  passportNonUk: boolean;
 }
 
 export interface PassengerInput {
@@ -34,6 +36,7 @@ export interface PassengerInput {
   dateOfBirth?: string | null;
   passportNumber?: string | null;
   passportExpiry?: string | null;
+  passportNonUk?: boolean;
 }
 
 export const clientPassengerApi = {

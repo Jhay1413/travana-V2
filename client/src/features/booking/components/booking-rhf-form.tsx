@@ -5,9 +5,14 @@ import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import type { UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, Upload, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2, type LucideIcon } from "lucide-react";
+import { Anchor, Hotel, Plane, Plus, X, PawPrint, FileText, DollarSign, MapPin, Users, BookOpen, ImagePlus, Tag, Wallet, Ship, Trash2, type LucideIcon } from "lucide-react";
 import { walletApi } from "@/features/wallet/api/wallet.api";
-import { handleJsonUpload as handleJsonUploadUtil } from "@/lib/json-import-handler";
+import { Loader2 } from "lucide-react";
+import type { JsonImportDeps } from "@/lib/json-import-handler";
+import { useDealCaptureImport } from "@/features/quote/api/use-deal-capture-import";
+import { QuoteImportRow } from "@/features/quote/components/sections/QuoteImportRow";
+import { DealImportFeedback } from "@/features/quote/components/sections/DealImportFeedback";
+import { deriveCheckIn, outboundArrivalOf } from "@/lib/check-in-time";
 import { QuoteImagesSection } from "@/features/quote/components/sections/QuoteImagesSection";
 import {
   existingImageItem,
@@ -33,6 +38,8 @@ import {
 } from "@/features/quote/components/drawer-sections";
 import { FormDrawerSection, FormDrawerFooter, drawerLabelClass, drawerInputClass } from "@/components/shared/form-drawer";
 import { countExtras } from "@/features/quote/lib/form-extras";
+import { formFinalTotal } from "@/features/quote/lib/quote-money";
+import { departureDatesForCheckIn } from "@/features/quote/lib/departure-dates";
 
 export { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/types";
 export type { BookingFormValues, FlightLegValue, BookingRHFFormProps } from "@/features/booking/types";
@@ -391,6 +398,11 @@ export function BookingRHFForm({
   const serviceCharge = useWatch({ control, name: "serviceCharge" });
   const commission = useWatch({ control, name: "commission" });
   const walletCreditAmount = useWatch({ control, name: "walletCreditAmount" });
+  // Extras not marked "Included in package" add their cost to the Final Total.
+  const [transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations] = useWatch({
+    control,
+    name: ["transfers", "carHires", "attractionTickets", "loungePasses", "airportParkings", "extraAccommodations"],
+  });
   const checkInDate = useWatch({ control, name: "checkInDate" });
   const nights = useWatch({ control, name: "nights" });
 
@@ -502,15 +514,22 @@ export function BookingRHFForm({
   }, [tourOperatorId, price, discount, serviceCharge, tourOperatorsData, form, setValue]);
 
   // ── Flight date sync from check-in date ──────────────────────────────────
+  // The first run is skipped so merely opening a saved booking never rewrites its stored flight dates.
+  const isDepartureFirstRun = useRef(true);
   useEffect(() => {
-    if (!checkInDate) return;
-    const date = parseISO(checkInDate);
-    if (!isValid(date)) return;
-    setValue("outboundDepartDate", checkInDate, { shouldDirty: true });
-    const nightCount = Number(nights) || 0;
-    if (nightCount > 0) {
-      setValue("inboundDepartDate", format(addDays(date, nightCount), "yyyy-MM-dd"), { shouldDirty: true });
+    if (isDepartureFirstRun.current) {
+      isDepartureFirstRun.current = false;
+      return;
     }
+    const arrival = outboundArrivalOf(form.getValues());
+    const update = departureDatesForCheckIn({
+      checkInDate,
+      nights,
+      currentOutboundDepart: form.getValues("outboundDepartDate"),
+      checkInIsDerived: !!arrival && deriveCheckIn(arrival, form.getValues("travelDate")).date === checkInDate,
+    });
+    if (update.outboundDepartDate) setValue("outboundDepartDate", update.outboundDepartDate, { shouldDirty: true });
+    if (update.inboundDepartDate) setValue("inboundDepartDate", update.inboundDepartDate, { shouldDirty: true });
   }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Pricing breakdown (memoized to avoid recompute on every render) ────────
@@ -521,8 +540,10 @@ export function BookingRHFForm({
     const currentCommission = Number(commission) || 0;
     const currentWalletCredit = Number(walletCreditAmount) || 0;
     const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0 || currentWalletCredit > 0;
-    // Total price = price − discount + service charge.
-    const finalTotal = currentPrice - currentDiscount + currentServiceCharge;
+    // Total price = price − discount + service charge + extras not included in the package.
+    const finalTotal = formFinalTotal(price, discount, serviceCharge, {
+      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+    });
     // The commission field already holds the total (operator % − discount + service charge);
     // recover the raw operator portion for the breakdown line.
     const operatorCommission = currentCommission + currentDiscount - currentServiceCharge;
@@ -555,7 +576,7 @@ export function BookingRHFForm({
         )}
       </>
     );
-  }, [price, discount, serviceCharge, commission, walletCreditAmount]);
+  }, [price, discount, serviceCharge, commission, walletCreditAmount, transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations]);
 
   // ── Options ───────────────────────────────────────────────────────────────
   const airportOptions = useMemo(
@@ -662,21 +683,23 @@ export function BookingRHFForm({
     [cruiseItineraries]
   );
 
-  const handleJsonUpload = (file: File) => {
-    handleJsonUploadUtil(file, {
-      form,
-      airportsData,
-      packageTypesData,
-      queryClient,
-      lookupKeys,
-      toast,
-      setImageUrls: setImageUrlsFromJson,
-      fallbackFieldMapper: (data, setIfPresent) => {
-        setIfPresent("haysRef", data.haysRef || data.hays_ref);
-        setIfPresent("supplierRef", data.supplierRef || data.supplier_ref);
-      },
-    });
-  };
+  // ── Import Deal ───────────────────────────────────────────────────────────
+  // Same bookmarklet-capture flow as the quote form (useDealCaptureImport).
+  const prepareJsonImport = (): JsonImportDeps => ({
+    form,
+    airportsData,
+    packageTypesData,
+    queryClient,
+    lookupKeys,
+    toast,
+    setImageUrls: setImageUrlsFromJson,
+    skipLodgeResetRef,
+    fallbackFieldMapper: (data, setIfPresent) => {
+      setIfPresent("haysRef", data.haysRef || data.hays_ref);
+      setIfPresent("supplierRef", data.supplierRef || data.supplier_ref);
+    },
+  });
+  const dealImport = useDealCaptureImport(prepareJsonImport);
 
   const {
     fields: outboundLegs,
@@ -732,26 +755,37 @@ export function BookingRHFForm({
           });
           scrollToFirstFormError();
         },
-      )} className={isDrawer ? "relative" : "space-y-4"} data-form-layout={layout}>
+      )} className={isDrawer ? "relative" : "relative space-y-4"} data-form-layout={layout}>
+
+        {dealImport.isImporting && (
+          <div
+            className="absolute inset-0 z-50 rounded-xl bg-background/60 backdrop-blur-sm"
+            aria-busy="true"
+            aria-live="polite"
+          >
+            <div className="sticky top-[40vh] mx-auto flex w-fit flex-col items-center gap-3">
+              <Loader2 className="h-9 w-9 animate-spin text-primary" />
+              <p className="text-sm font-medium text-foreground">Importing your deal…</p>
+            </div>
+          </div>
+        )}
 
         {isDrawer ? (
           <>
             {/* ── DRAWER LAYOUT: teal section bars, full-bleed ─────────────── */}
-            <div className="flex items-center justify-end px-7 pt-5">
-              <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
-                <Upload className="h-3.5 w-3.5" />
-                Import JSON
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleJsonUpload(file);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+            <div className="px-7 pt-5">
+              <QuoteImportRow
+                hideNotForSocial
+                onPageCaptureImport={dealImport.importCapture}
+                pageCapturePending={dealImport.isPending}
+              />
+              <DealImportFeedback
+                spaced
+                validation={dealImport.validation}
+                picks={dealImport.picks}
+                onDismissValidation={dealImport.dismissValidation}
+                onDismissPicks={dealImport.dismissPicks}
+              />
             </div>
             <div className="grid grid-cols-2 gap-x-6 px-7 pt-4" data-testid="drawer-booking-refs">
               <FormField
@@ -860,22 +894,17 @@ export function BookingRHFForm({
           </>
         ) : (
           <>
-        <div className="flex items-center justify-end">
-          <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-black/10 bg-white/70 px-3 py-1.5 text-xs font-medium text-black/60 transition hover:bg-black/[0.05]">
-            <Upload className="h-3.5 w-3.5" />
-            Import JSON
-            <input
-              type="file"
-              accept=".json,application/json"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleJsonUpload(file);
-                e.target.value = "";
-              }}
-            />
-          </label>
-        </div>
+        <QuoteImportRow
+          hideNotForSocial
+          onPageCaptureImport={dealImport.importCapture}
+          pageCapturePending={dealImport.isPending}
+        />
+        <DealImportFeedback
+          validation={dealImport.validation}
+          picks={dealImport.picks}
+          onDismissValidation={dealImport.dismissValidation}
+          onDismissPicks={dealImport.dismissPicks}
+        />
 
         <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
           <SectionHeader icon={BookOpen} title="Booking References" />

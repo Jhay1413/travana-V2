@@ -2,6 +2,7 @@ import type { SsConversation, SsLastMessagePreview } from "./api/conversations.a
 import type { SsMessage, SsMessageAttachment } from "./api/messages.api";
 import { CHANNELS } from "./channels";
 import type { Conversation, ConversationChannel, ConversationMessage, ConversationStatus, MessageAttachment } from "./types";
+import { isValidPhoneNumber } from "@shared/phone";
 
 // Routes attachment bytes through our server proxy so the browser never needs the
 // SendSeven workspace token (see server messages downloadAttachment).
@@ -207,18 +208,9 @@ export function toUiConversation(item: SsConversation): Conversation {
   };
 }
 
-// Phone numbers: only dial characters, 7-15 digits (E.164 max). Opaque ids
-// (UUIDs, hex, long numeric platform ids) fail one of the two checks.
-const PHONE_SHAPE = /^\+?[\d\s().-]+$/;
-const PHONE_MIN_DIGITS = 7;
-const PHONE_MAX_DIGITS = 15;
-
 /** True when the string looks like a real phone number rather than an opaque id. */
 export function looksLikePhone(value: string | null | undefined): boolean {
-  const v = (value ?? "").trim();
-  if (!PHONE_SHAPE.test(v)) return false;
-  const digits = v.replace(/\D/g, "").length;
-  return digits >= PHONE_MIN_DIGITS && digits <= PHONE_MAX_DIGITS;
+  return isValidPhoneNumber(value);
 }
 
 /**

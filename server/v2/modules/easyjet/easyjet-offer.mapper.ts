@@ -20,6 +20,31 @@ function mapTransferType(type: string): string {
   return type ? 'Shared Transfer' : 'None';
 }
 
+type OfferUnit = OffersResponse['offers'][number]['accom']['unit'][number];
+
+// A booking can hold several rooms (one accom unit each). Party size is the sum
+// across rooms; when no room states an adult count the old default of 2 holds.
+function sumOccupation(units: OfferUnit[]): { adults: number; children: number; infants: number } {
+  const total = (pick: (u: OfferUnit) => number | undefined): number =>
+    units.reduce((acc, u) => acc + (pick(u) ?? 0), 0);
+  return {
+    adults: total((u) => u.occupation?.adults) || 2,
+    children: total((u) => u.occupation?.children),
+    infants: total((u) => u.occupation?.infants),
+  };
+}
+
+// The quote form has ONE room-type field, so several rooms are carried as
+// "Double Room + Twin Room" (distinct names, booking order).
+function joinRoomTypes(units: OfferUnit[]): string {
+  const names: string[] = [];
+  for (const u of units) {
+    const name = (u.roomType?.title || u.code || '').trim();
+    if (name && !names.some((n) => n.toLowerCase() === name.toLowerCase())) names.push(name);
+  }
+  return names.join(' + ');
+}
+
 function bestImage(img: { large?: string; medium?: string; small?: string }): string {
   return img.large || img.medium || img.small || '';
 }
@@ -31,6 +56,7 @@ function bestImage(img: { large?: string; medium?: string; small?: string }): st
 export function mapOfferToScrapedQuote(data: OffersResponse, sourceUrl: string): ScrapedQuoteJson {
   const offer = data.offers[0];
   const unit = offer.accom.unit[0];
+  const party = sumOccupation(offer.accom.unit);
   const routes = offer.transport?.routes ?? [];
   const outbound = routes.find((r) => r.direction === 'outbound');
   const inbound = routes.find((r) => r.direction === 'inbound');
@@ -93,9 +119,9 @@ export function mapOfferToScrapedQuote(data: OffersResponse, sourceUrl: string):
     tour_operator: TOUR_OPERATOR,
     travel_date: toDateOnly(offer.date),
     no_of_nights: offer.stay,
-    adults: unit.occupation?.adults ?? 2,
-    children: unit.occupation?.children ?? 0,
-    infants: unit.occupation?.infants ?? 0,
+    adults: party.adults,
+    children: party.children,
+    infants: party.infants,
     // Tourist tax is paid locally by the client, so the selling price excludes
     // it when the API breaks it out; `price` (tax-inclusive) is the fallback
     // for older payloads that don't.
@@ -111,7 +137,7 @@ export function mapOfferToScrapedQuote(data: OffersResponse, sourceUrl: string):
     resort: data.hotel.resort?.name || '',
     accommodation: data.hotel.name,
     board_basis: unit.boardType?.title || '',
-    room_type: unit.roomType?.title || unit.code,
+    room_type: joinRoomTypes(offer.accom.unit),
     check_in_date_time: toDateOnly(offer.date),
     transfer_type: mapTransferType(transfer?.type || ''),
     hotel_description: data.hotel.description,

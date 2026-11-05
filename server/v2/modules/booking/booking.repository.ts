@@ -20,6 +20,7 @@ import { alias } from "drizzle-orm/pg-core";
 import type { BookingChildKind } from "./booking.types";
 import { upsellWithOperatorColumns } from "./booking-upsell.repository";
 import { fetchServiceCommissionMaps } from "../transaction/service-commission.repository";
+import { fetchExtrasTotalMaps } from "../transaction/extras-total.repository";
 import { buildTransactionScopeConds, buildTransactionWriteScopeConds, buildTransactionRecordScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -233,6 +234,12 @@ export const bookingRepository = {
   /** Sum of the line-item commissions for one booking (same maps as the transaction list). */
   async getServiceCommission(id: string): Promise<number> {
     const { bookingMap } = await fetchServiceCommissionMaps([], [id]);
+    return bookingMap.get(id) ?? 0;
+  },
+
+  /** Cost of the extras NOT marked "Included in package" (what the customer pays on top of the package). */
+  async getExtrasTotal(id: string): Promise<number> {
+    const { bookingMap } = await fetchExtrasTotalMaps([], [id]);
     return bookingMap.get(id) ?? 0;
   },
 

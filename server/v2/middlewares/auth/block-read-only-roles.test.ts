@@ -111,6 +111,25 @@ describe("social routes stay open to social_media_manager", () => {
     expect(stackOf(router).some((l) => l.handle === blockReadOnlyClientWrites || l.handle === blockReadOnlyClientRoles)).toBe(false);
   });
 
+  it("social-settings GET /accounts is reachable by social_media_manager with no role gate", () => {
+    const get = stackOf(socialSettings).find((l) => l.route?.path === "/accounts" && l.route.methods.get) as unknown as {
+      route: { stack: { handle: Handler }[] };
+    };
+    expect(get).toBeDefined();
+    // Query validation then the controller: no role middleware that could refuse the role.
+    expect(get.route.stack).toHaveLength(2);
+  });
+
+  it("social-settings GET /accounts stays reachable for every social role", () => {
+    for (const role of ["social_media_manager", "agent", "branch_manager", "org_admin"]) {
+      for (const layer of stackOf(socialSettings).filter((l) => !l.route)) {
+        const { res, next } = call(layer.handle, "GET", role);
+        expect(res.status).not.toHaveBeenCalled();
+        expect(next).toHaveBeenCalled();
+      }
+    }
+  });
+
   it("social-settings PUT still allows the role", () => {
     const put = stackOf(socialSettings).find((l) => l.route?.path === "/" && l.route.methods.put) as unknown as {
       route: { stack: { handle: Handler }[] };

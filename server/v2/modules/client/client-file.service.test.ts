@@ -5,7 +5,7 @@ vi.mock("@aws-sdk/s3-request-presigner", () => ({ getSignedUrl: vi.fn().mockReso
 vi.mock("./client-file.repository", () => ({
   clientFileRepository: { findById: vi.fn(), findByClientId: vi.fn(), create: vi.fn(), remove: vi.fn() },
 }));
-vi.mock("../neon-client/neon-client.repository", () => ({ neonClientRepository: { findById: vi.fn() } }));
+vi.mock("../neon-client/neon-client.repository", () => ({ neonClientRepository: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn() } }));
 
 import { clientFileService } from "./client-file.service";
 import { clientFileRepository } from "./client-file.repository";
@@ -81,5 +81,29 @@ describe("clientFileService in scope", () => {
     await clientFileService.delete("f1", SCOPE);
     expect(s3Client.send).toHaveBeenCalledOnce();
     expect(clientFileRepository.remove).toHaveBeenCalledWith("f1");
+  });
+});
+
+describe("clientFileService - soft-deleted client is read-only", () => {
+  const ADMIN: Scope = { ...SCOPE, orgRole: "org_admin", orgRoles: ["org_admin"] };
+
+  beforeEach(() => {
+    vi.mocked(neonClientRepository.findById).mockResolvedValue(undefined);
+    vi.mocked(neonClientRepository.findByIdIncludingDeleted).mockResolvedValue({ id: "c1" } as never);
+    vi.mocked(clientFileRepository.findByClientId).mockResolvedValue([]);
+  });
+
+  it("an admin can list a deleted client's files", async () => {
+    await expect(clientFileService.listByClientId("c1", ADMIN)).resolves.toEqual([]);
+  });
+
+  it("a non-admin gets 404 listing them", async () => {
+    await expect(clientFileService.listByClientId("c1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(neonClientRepository.findByIdIncludingDeleted).not.toHaveBeenCalled();
+  });
+
+  it("an admin's upload is still blocked", async () => {
+    await expect(clientFileService.upload("c1", MULTER, {}, ADMIN)).rejects.toMatchObject({ statusCode: 404 });
+    expect(clientFileRepository.create).not.toHaveBeenCalled();
   });
 });

@@ -36,6 +36,11 @@ export function fillEmptyAssignee(current: string, defaultAssignedToId: string |
   return current || defaultAssignedToId || "";
 }
 
+/** Trimmed free-text description, or null when blank. */
+export function descriptionOrNull(value: string): string | null {
+  return value.trim() || null;
+}
+
 /** The instant of a London wall-clock `dateKey` (YYYY-MM-DD) + `time` (HH:mm). DST-safe; null if either is malformed. */
 export function londonDueDate(dateKey: string, time: string): Date | null {
   const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);

@@ -11,6 +11,7 @@ import {
 } from './platform-admin.service';
 import { platformAdminCreditsService } from './platform-admin-credits.service';
 import { platformAdminUsageService, type UsageLimitsPatch, type ModelPricingPatch } from './platform-admin-usage.service';
+import { socialSettingsService } from '../social-settings/social-settings.service';
 import { userOrgRolesService } from '../user-org-roles/user-org-roles.service';
 
 function getStrParam(req: Request, key: string): string {
@@ -233,6 +234,17 @@ export const platformAdminController = {
     const patch = req.body as UsageLimitsPatch;
     const data = await platformAdminUsageService.updateUsageLimits(orgId, patch, actor);
     successResponse(res, data, 'Usage limits updated');
+  }),
+
+  getSocialAccounts: asyncHandler(async (req: Request, res: Response) => {
+    const data = await socialSettingsService.getAllowList(getStrParam(req, 'id'));
+    successResponse(res, data);
+  }),
+
+  setSocialAccounts: asyncHandler(async (req: Request, res: Response) => {
+    const { accountIds } = req.body as { accountIds: number[] };
+    const data = await socialSettingsService.setAllowList(getStrParam(req, 'id'), accountIds, getUserId(req));
+    successResponse(res, data, 'OnlySocials accounts updated');
   }),
 
   getUsageOverview: asyncHandler(async (req: Request, res: Response) => {

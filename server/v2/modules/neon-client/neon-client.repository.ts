@@ -36,8 +36,9 @@ function buildClientScopeConds(scope?: Scope): SQL[] {
   return conds;
 }
 
-// Merged (soft-archived) duplicates are hidden from list/search views.
-const activeOnly = eq(clientTable.status, "active");
+// Merged (soft-archived) duplicates and soft-deleted clients are hidden from
+// list/search views.
+const activeOnly = and(eq(clientTable.status, "active"), isNull(clientTable.deletedAt)) as SQL;
 
 // Name matching is shared with the global header search (see clientNameCondition)
 // — previously findPaginated OR-ed each word across firstName and surename
@@ -96,14 +97,22 @@ export const neonClientRepository = {
   async findByIdForDealCreate(id: string, scope: Scope): Promise<NeonClient | undefined> {
     const widened = scope.orgRole !== "platform_admin" && ((scope.orgRole === "branch_manager" && !!scope.branchId) || holdsHomeworkerRole(scope));
     const conds: SQL[] = widened
-      ? [eq(clientTable.id, id), eq(clientTable.orgId, scope.orgId), or(isNull(clientTable.branchId), and(...buildClientScopeConds(scope))) as SQL]
-      : [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
+      ? [eq(clientTable.id, id), isNull(clientTable.deletedAt), eq(clientTable.orgId, scope.orgId), or(isNull(clientTable.branchId), and(...buildClientScopeConds(scope))) as SQL]
+      : [eq(clientTable.id, id), isNull(clientTable.deletedAt), ...buildClientScopeConds(scope)];
     const [result] = await db.select().from(clientTable).where(and(...conds)).limit(1);
     return result;
   },
 
-  async findById(id: string, scope?: Scope): Promise<NeonClient | undefined> {
+  /** Read-only lookup that also returns a soft-deleted client (callers gate on CLIENT_DELETE_ROLES). */
+  async findByIdIncludingDeleted(id: string, scope?: Scope): Promise<NeonClient | undefined> {
     const conds: SQL[] = [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
+    const [result] = await db.select().from(clientTable).where(and(...conds)).limit(1);
+    return result;
+  },
+
+  /** Soft-deleted clients read as not found. */
+  async findById(id: string, scope?: Scope): Promise<NeonClient | undefined> {
+    const conds: SQL[] = [eq(clientTable.id, id), isNull(clientTable.deletedAt), ...buildClientScopeConds(scope)];
     const [result] = await db.select().from(clientTable).where(and(...conds)).limit(1);
     return result;
   },
@@ -383,15 +392,9 @@ export const neonClientRepository = {
   },
 
   async update(id: string, client: Partial<InsertClientTable>, scope?: Scope): Promise<NeonClient | undefined> {
-    const conds: SQL[] = [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
+    const conds: SQL[] = [eq(clientTable.id, id), isNull(clientTable.deletedAt), ...buildClientScopeConds(scope)];
     const [result] = await db.update(clientTable).set(client).where(and(...conds)).returning();
     return result;
-  },
-
-  async remove(id: string, scope?: Scope): Promise<boolean> {
-    const conds: SQL[] = [eq(clientTable.id, id), ...buildClientScopeConds(scope)];
-    const result = await db.delete(clientTable).where(and(...conds)).returning({ id: clientTable.id });
-    return result.length > 0;
   },
 
   async bulkInsert(clients: NeonClientImport[], scope?: Scope): Promise<{ imported: number; errors: Array<{ row: number; id: string; error: string }> }> {

@@ -748,7 +748,7 @@ describe("gallery scoped to a container", () => {
     expect(out.some((s) => /DB01|FM01/.test(s))).toBe(false);
   });
 
-  it("without the container rule, the room photos come through — the bug", () => {
+  it("without a container rule room photos come through, which is why the easyjet seed sets hotel-main-view (see the seed-based test below)", () => {
     expect(gallery({ imageUrlIncludes: "ejh-web-prod-images" })).toHaveLength(5);
   });
 
@@ -2211,5 +2211,332 @@ describe("runExtractionSpecDetailed with a flights section", () => {
     const missing = runExtractionSpecDetailed(picked, { title: "", text: DECOY, url: "https://x.test/d" }, "x");
     expect(missing.flightsSection).toMatchObject({ found: false, text: null, multiLeg: false, parsedFromSection: false });
     expect(runExtractionSpecDetailed(base, { title: "", text: PAGE, url: "https://x.test/d" }, "x").flightsSection).toBeNull();
+  });
+});
+
+// ─── Image / room / transfer fixes ───────────────────────────────────────────
+//
+// Container selectors marked INFERRED below were not verified against a live
+// capture: only easyJet's "hotel-main-view" comes from a verbatim page capture.
+const seedSpec = (key: string): ExtractionSpec => {
+  const entry = supplierScraperSeed.find((s) => s.supplierKey === key);
+  if (!entry?.config.extraction) throw new Error(`${key} seed spec is missing`);
+  return entry.config.extraction as ExtractionSpec;
+};
+const PAD = "x".repeat(300);
+
+describe("EasyJet seed: rooms", () => {
+  const spec = seedSpec("easyjet");
+  const run = (text: string) =>
+    runExtractionSpec(
+      spec,
+      { title: "", text: `${PAD}\n${text}`, url: "https://www.easyjet.com/en/holidays/spain/costa-del-sol/torremolinos/hotel" },
+      "x",
+    );
+
+  it("reads the room name, not the 'Hurry' banner", () => {
+    expect(run("ROOM 1\nHurry, only 2 left!\nDouble Room with Sea View\nSleeps 2").room_type).toBe("Double Room with Sea View");
+  });
+
+  it.each(["Selected", "Popular", "Most popular choice", "Best value", "Only 3 left", "Great value"])(
+    "skips a %s banner",
+    (banner) => {
+      expect(run(`ROOM 1\n${banner}\nFamily Suite\nSleeps 4`).room_type).toBe("Family Suite");
+    },
+  );
+
+  it("skips several stacked banners", () => {
+    expect(run("ROOM 1\nSelected\nHurry, only 1 left\nTwin Room\n").room_type).toBe("Twin Room");
+  });
+
+  it("joins every room with ' + ' and drops repeats", () => {
+    const text = "ROOM 1\nSelected\nDouble Room\nROOM 2\nHurry, only 2 left\nTwin Room\nROOM 3\nDouble Room\n";
+    expect(run(text).room_type).toBe("Double Room + Twin Room");
+  });
+
+  it("still reads a plain single room", () => {
+    expect(run("ROOM 1\nStudio Apartment\n").room_type).toBe("Studio Apartment");
+  });
+});
+
+describe("EasyJet seed: gallery excludes room-card photos", () => {
+  const spec = seedSpec("easyjet");
+  const PAGE = "https://www.easyjet.com/en/holidays/turkey/marmaris/a-hotel";
+  const P = "https://www.easyjet.com/holidays/_next/image?url=";
+  const S3 = "https%3A%2F%2Fejh-web-prod-images.s3-eu-west-1.amazonaws.com%2FHotel%2F";
+  const photo = (folder: string, file: string) => `${P}${S3}${folder}%2F${file}.jpg&w=3840&q=75`;
+  const HOTEL_CTX = "image-gallery-slide center HotelImageCarousel_wrapper__DxsZe hotel-main-view img-slider-box";
+  const ROOM_CTX = "image-gallery-slide center OfferCardSlider_container__ZOmt_ room-card-img room-section";
+
+  it("keeps only hotel-main-view photos", () => {
+    const images = [
+      { src: photo("Large", "H_00"), context: HOTEL_CTX },
+      { src: photo("Large", "H_11"), context: HOTEL_CTX },
+      { src: photo("Medium", "DB01_03"), context: ROOM_CTX },
+      { src: photo("Medium", "FM01_01"), context: ROOM_CTX },
+    ];
+    const out = runExtractionSpec(spec, { title: "", text: PAD, url: PAGE, images }, "x").hotel_images;
+    expect(out).toHaveLength(2);
+    expect(out.some((s) => /DB01|FM01/.test(s))).toBe(false);
+  });
+});
+
+describe("imageContainerIncludes: ordered groups with caps", () => {
+  const PAGE = "https://www.hoseasons.co.uk/lodge";
+  const CDN = "https://images.example-cdn.com/";
+  const lodge = Array.from({ length: 8 }, (_, i) => ({ src: `${CDN}lodge-${i}.jpg`, context: "lodge-gallery slide" }));
+  const park = Array.from({ length: 9 }, (_, i) => ({ src: `${CDN}park-${i}.jpg`, context: "park-gallery slide" }));
+  const other = [{ src: `${CDN}related-0.jpg`, context: "related-lodges card" }];
+  // Park photos come FIRST in the DOM, to prove spec order wins over page order.
+  const images = [...park, ...other, ...lodge];
+  const run = (imageContainerIncludes: ExtractionSpec["imageContainerIncludes"], imgs = images) =>
+    runExtractionSpec(
+      { version: 1, fields: {}, imageContainerIncludes } as ExtractionSpec,
+      { title: "", text: PAD, url: PAGE, images: imgs },
+      "x",
+    ).hotel_images;
+
+  it("emits the lodge gallery in full, then at most 5 park photos", () => {
+    const out = run(["lodge-gallery", { match: "park-gallery", max: 5 }]);
+    expect(out).toHaveLength(13);
+    expect(out.slice(0, 8).every((s) => s.includes("lodge-"))).toBe(true);
+    expect(out.slice(8).every((s) => s.includes("park-"))).toBe(true);
+    expect(out.some((s) => s.includes("related-"))).toBe(false);
+  });
+
+  it("treats pipes inside one entry as alternatives", () => {
+    expect(run("nothing-here|lodge-gallery")).toHaveLength(8);
+  });
+
+  it("still honours a plain single substring", () => {
+    expect(run("park-gallery")).toHaveLength(9);
+  });
+
+  it("falls back to every photo when no group matches anything", () => {
+    expect(run(["missing-a", { match: "missing-b", max: 2 }])).toHaveLength(18);
+  });
+
+  it("is ignored when the capture has no contexts", () => {
+    const bare = images.map((i) => ({ src: i.src }));
+    expect(run(["lodge-gallery", { match: "park-gallery", max: 5 }], bare)).toHaveLength(18);
+  });
+
+  it("applies the seeded Hoseasons config (INFERRED selectors): lodge all + 5 park", () => {
+    const out = runExtractionSpec(seedSpec("hoseasons"), { title: "", text: PAD, url: PAGE, images }, "x").hotel_images;
+    expect(out).toHaveLength(13);
+  });
+});
+
+describe("map lookup is case-insensitive", () => {
+  const withMap = (map: Record<string, string>, regex: string, text: string) =>
+    runExtractionSpec(
+      { version: 1, fields: { transfer_type: { from: "text", regex, group: 1, map } } } as unknown as ExtractionSpec,
+      { title: "", text: `${PAD}\n${text}`, url: "https://x.test/a" },
+      "x",
+    ).transfer_type;
+
+  it("maps 'COACH TRANSFERS' and 'coach  transfers' onto a differently-cased key", () => {
+    const map = { "Coach Transfers": "Shared Transfer" };
+    expect(withMap(map, "(coach\\s+transfers)", "Includes COACH TRANSFERS")).toBe("Shared Transfer");
+    expect(withMap(map, "(coach\\s+transfers)", "includes coach  transfers")).toBe("Shared Transfer");
+  });
+
+  it("leaves an unmapped value untouched", () => {
+    expect(withMap({ "full board": "Full Board" }, "(Half Board)", "Half Board")).toBe("Half Board");
+  });
+});
+
+describe("Jet2holidays seed: transfers and room type", () => {
+  const spec = seedSpec("jet2holidays");
+  const run = (text: string) =>
+    runExtractionSpec(
+      spec,
+      { title: "Hotel | Jet2holidays", text: `${PAD}\n${text}`, url: "https://trade.jet2holidays.com/beach/spain/salou/hotel" },
+      "x",
+    );
+
+  it.each([
+    ["Coach transfers included", "Shared Transfer"],
+    ["Free express transfers", "Shared Transfer"],
+    ["Return transfers included", "Shared Transfer"],
+    ["Transfers included", "Shared Transfer"],
+    ["SHARED TRANSFER", "Shared Transfer"],
+    ["Private transfer included", "Private Transfer"],
+    ["Free return private transfers", "Private Transfer"],
+  ])("%s -> %s", (line, expected) => {
+    expect(run(`Included in your holiday\n${line}`).transfer_type).toBe(expected);
+  });
+
+  it("ignores private-transfer upsell banners", () => {
+    const banners = "Upgrade to a private transfer\nAdd private transfers from £25 per person\nPrivate transfers available";
+    expect(run(banners).transfer_type).toBe("None");
+  });
+
+  it("does not let an upsell hide the included transfer", () => {
+    expect(run("Add private transfers from £25\nCoach transfers included").transfer_type).toBe("Shared Transfer");
+  });
+
+  it("does not default to a transfer when none is stated", () => {
+    expect(run("Nothing about the journey here").transfer_type).toBe("None");
+  });
+
+  it.each([
+    ["Rooms\nRoom 1: 2 Adults\nSuperior room with Mountain View\nYour room\nSleeps:", "Superior room with Mountain View"],
+    ["Room 1: 2 Adults\nFamily Bungalow\nOnly 5 left", "Family Bungalow"],
+    ["Your room (1) One Bedroom apartment (2 Adults)", "One Bedroom apartment"],
+    ["(1) Standard Twin Room\nSleeps 2", "Standard Twin Room"],
+  ])("room type from %j", (text, expected) => {
+    expect(run(text).room_type).toBe(expected);
+  });
+});
+
+describe("Hoseasons seed: country and destination work for any park", () => {
+  const spec = seedSpec("hoseasons");
+  const run = (text: string) =>
+    runExtractionSpec(
+      spec,
+      {
+        title: "Pine Lodge - Woodland Retreat Park - Holiday Parks",
+        text: `${PAD}\n${text}`,
+        url: "https://www.hoseasons.co.uk/holiday-parks/x/pine-lodge-lp1",
+      },
+      "x",
+    );
+
+  it("reads a park that is not Seven Lakes", () => {
+    const q = run("Woodland Retreat Park in Pickering, North Yorkshire\nAbout the lodge");
+    expect(q.destination).toBe("Pickering");
+    expect(q.country).toBe("North Yorkshire");
+  });
+
+  it("still reads Seven Lakes", () => {
+    const q = run("Seven Lakes Country Park in Crowle, Worcestershire");
+    expect(q.destination).toBe("Crowle");
+    expect(q.country).toBe("Worcestershire");
+  });
+});
+
+describe("TUI seed: hero gallery first", () => {
+  const spec = seedSpec("tui");
+  const CDN = "https://cdn.images.tui/tui-images/";
+  const PAGE = "https://retailagents.tui.co.uk/retail/bookaccommodation?productCode=1";
+  const hero = Array.from({ length: 6 }, (_, i) => `${CDN}hero${i}.jpg?w=1080`);
+  const rooms = Array.from({ length: 40 }, (_, i) => `${CDN}room${i}.jpg?w=1080`);
+  // Room cards sit BEFORE the hero in document order: walking the whole JSON
+  // would have let them fill the 25 cap first.
+  const apiJson = { packageData: { accommodation: { rooms: [{ images: rooms }], imageUrls: hero } } };
+
+  it("keeps the accommodation gallery and leaves room photos out of the cap", () => {
+    const out = runExtractionSpec(spec, { title: "", text: PAD, url: PAGE, apiJson }, "x").hotel_images;
+    expect(out).toHaveLength(6);
+    expect(out.every((s) => s.includes("hero"))).toBe(true);
+  });
+
+  it("falls back to the whole JSON when the hero paths hold nothing", () => {
+    const json = { packageData: { other: rooms.slice(0, 3) } };
+    const out = runExtractionSpec(spec, { title: "", text: PAD, url: PAGE, apiJson: json }, "x").hotel_images;
+    expect(out).toHaveLength(3);
+  });
+});
+
+describe("joinAll", () => {
+  it("collects every distinct match, in order", () => {
+    const q = runExtractionSpec(
+      { version: 1, fields: { room_type: { from: "text", regex: "Room: ([^\\n]+)", group: 1, joinAll: " + " } } } as unknown as ExtractionSpec,
+      { title: "", text: `${PAD}\nRoom: A\nRoom: B\nRoom: a`, url: "https://x.test/a" },
+      "x",
+    );
+    expect(q.room_type).toBe("A + B");
+  });
+});
+
+describe("review follow-ups: Jet2 negations, Jet2 room header lines, Hoseasons heading anchoring", () => {
+  const jet2 = (text: string) =>
+    runExtractionSpec(
+      seedSpec("jet2holidays"),
+      { title: "Hotel | Jet2holidays", text: `${PAD}\n${text}`, url: "https://trade.jet2holidays.com/beach/spain/salou/hotel" },
+      "x",
+    );
+
+  it.each(["No transfers included", "Return transfers not included", "Transfers excluded", "Holiday without coach transfers"])(
+    "Jet2 %s -> None",
+    (line) => {
+      expect(jet2(`Included in your holiday\n${line}`).transfer_type).toBe("None");
+    },
+  );
+
+  it("Jet2 still finds an included transfer after a negated line", () => {
+    expect(jet2("No private transfers included\nCoach transfers included").transfer_type).toBe("Shared Transfer");
+  });
+
+  it.each([
+    ["Room 1: 2 Adults\nYour room\nTwin Room\nSleeps 2", "Twin Room"],
+    ["Room 1:\n\nSleeps 4\nFamily Room", "Family Room"],
+    ["Room 1: 2 Adults\nSelect a room\nYour room\nSleeps 2\nDouble Room", "Double Room"],
+  ])("Jet2 room type skips header lines: %j", (text, expected) => {
+    expect(jet2(text).room_type).toBe(expected);
+  });
+
+  const hoseasons = (text: string) =>
+    runExtractionSpec(
+      seedSpec("hoseasons"),
+      {
+        title: "Pine Lodge - Woodland Retreat Park - Holiday Parks",
+        text: `${PAD}\n${text}`,
+        url: "https://www.hoseasons.co.uk/holiday-parks/x/pine-lodge-lp1",
+      },
+      "x",
+    );
+
+  it("Hoseasons ignores a nav 'Lodges in Scotland' line and reads the real heading for both fields", () => {
+    const q = hoseasons("Lodges in Scotland\nHot tub lodges\nWoodland Retreat Park in Pickering, North Yorkshire\nAbout");
+    expect(q.destination).toBe("Pickering");
+    expect(q.country).toBe("North Yorkshire");
+  });
+
+  it("Hoseasons ignores 'Free car park in front of each lodge'", () => {
+    const q = hoseasons("Free car park in front of each lodge\nFacilities");
+    expect(q.destination).toBe("");
+    expect(q.country).toBe("");
+  });
+
+  it("Hoseasons ignores a comma line that is about a car park", () => {
+    const q = hoseasons("Free car park in front, near the lodge\nWoodland Retreat Park in Pickering, North Yorkshire");
+    expect(q.destination).toBe("Pickering");
+    expect(q.country).toBe("North Yorkshire");
+  });
+
+  it("Hoseasons reads Seven Lakes", () => {
+    const q = hoseasons("Seven Lakes Country Park in Crowle, Worcestershire\nAbout");
+    expect(q.destination).toBe("Crowle");
+    expect(q.country).toBe("Worcestershire");
+  });
+});
+
+describe("seed: every regex rule's group index exists in its pattern", () => {
+  const rules = supplierScraperSeed.flatMap((s) => {
+    const fields = (s.config.extraction as ExtractionSpec | undefined)?.fields ?? {};
+    return Object.entries(fields)
+      .filter(([, r]) => r.regex)
+      .map(([field, r]) => ({ id: `${s.supplierKey}.${field}`, regex: r.regex as string, group: r.group ?? 1 }));
+  });
+
+  it("has rules to check", () => {
+    expect(rules.length).toBeGreaterThan(100);
+  });
+
+  it.each(rules.map((r) => [r.id, r] as const))("%s", (_id, r) => {
+    const captureGroups = new RegExp(`${r.regex}|`).exec("")!.length - 1;
+    expect(r.group).toBeLessThanOrEqual(captureGroups);
+  });
+
+  it("whole-match map rules produce the mapped value, and fall back when absent", () => {
+    const run = (key: string, text: string, title = "") =>
+      runExtractionSpec(seedSpec(key), { title, text: `${PAD}\n${text}`, url: "https://x.test/a/b/c/d/e/f" }, "x");
+    expect(run("easyjet", "Transfer included").transfer_type).toBe("Shared Transfer");
+    expect(run("easyjet", "nothing").transfer_type).toBe("None");
+    expect(run("tui", "Transfers available").transfer_type).toBe("Shared Transfer");
+    expect(run("tui", "nothing").transfer_type).toBe("None");
+    expect(run("cunard", "", "Voyage | Cunard").cruise_line).toBe("Cunard");
   });
 });

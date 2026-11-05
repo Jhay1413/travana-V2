@@ -69,9 +69,10 @@ const num = (raw: string | number | null | undefined): number => {
 
 type WithServiceCommission = { package_commission?: string | number | null; service_commission?: string | number | null };
 
-/** Customer total of one quote/booking row: sales price − discounts + service charge. */
-function rowValue(r: { sales_price?: string | null; discounts?: string | null; service_charge?: string | null }): number {
-  return num(r.sales_price) - num(r.discounts) + num(r.service_charge);
+/** Customer total of one quote/booking row: sales price − discounts + service charge + extras
+ *  not marked "Included in package" (`extras_total`, summed by the server). */
+function rowValue(r: { sales_price?: string | null; discounts?: string | null; service_charge?: string | null; extras_total?: string | number | null }): number {
+  return num(r.sales_price) - num(r.discounts) + num(r.service_charge) + num(r.extras_total);
 }
 
 /** Commission of one quote/booking row: package commission + line-item service commission. */
@@ -80,7 +81,7 @@ function rowProfit(r: object): number {
   return num(c.package_commission) + num(c.service_commission);
 }
 
-/** Total customer value: sales price − discounts + service charge. Stage-aware to
+/** Total customer value: sales price − discounts + service charge + extras not included. Stage-aware to
  *  match the server's column totals: bookings read the booking row, quoted deals
  *  sum their quotes, enquiries have no value. */
 export function getTransactionValue(t: Transaction): number {

@@ -24,7 +24,7 @@
  * then write those rows into scripts/seed-data/supplier-scrapers.ts.
  */
 import { eq } from "drizzle-orm";
-import { db } from "../server/v2/config/database";
+import { db, warmPool } from "../server/v2/config/database";
 import { supplier_scraper } from "../shared/schema";
 import { supplierScraperSeed } from "./seed-data/supplier-scrapers";
 
@@ -32,6 +32,9 @@ const OVERWRITE = process.argv.includes("--overwrite");
 const DRY_RUN = process.argv.includes("--dry-run");
 
 async function main() {
+  // Land one connection on a reachable pooler IP first (see database.ts) so a
+  // single stalled connect doesn't fail the whole run.
+  await warmPool(1);
   const existing = await db
     .select({ id: supplier_scraper.id, supplier_key: supplier_scraper.supplier_key })
     .from(supplier_scraper);

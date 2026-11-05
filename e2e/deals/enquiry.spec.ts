@@ -258,3 +258,49 @@ test.describe("enquiry drawer", () => {
     expect(await queryRows(`select 1 from transaction where client_id = $1`, [client.id])).toHaveLength(0);
   });
 });
+
+/** A calendar day relative to today in London time (the browser under test runs in Europe/London). */
+function isoDay(offsetDays: number): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [y, m, d] = today.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + offsetDays)).toISOString().slice(0, 10);
+}
+
+test.describe("enquiry travel date", () => {
+  test("past days are greyed out in the Travel Date picker and today is selectable", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+    const drawer = await openEnquiryDrawer(page, client.id);
+
+    await drawer.getByTestId("input-travel-date").click();
+    await expect(page.getByTestId("date-picker-today")).toBeEnabled();
+    await expect(page.locator(`td[data-day="${isoDay(0)}"] button`)).toBeEnabled();
+    // Show the previous month so a past day is always on screen (yesterday may be hidden on the 1st).
+    const [ty, tm] = isoDay(0).split("-").map(Number);
+    const prevDate = new Date(Date.UTC(ty, tm - 2, 15));
+    await page.locator('select[aria-label*="Year" i]').last().selectOption(String(prevDate.getUTCFullYear()));
+    await page.locator('select[aria-label*="Month" i]').last().selectOption(String(prevDate.getUTCMonth()));
+    await expect(page.locator(`td[data-day="${prevDate.toISOString().slice(0, 10)}"]:not([data-outside="true"]) button`)).toBeDisabled();
+    // And back to this month.
+    await page.locator('select[aria-label*="Year" i]').last().selectOption(String(ty));
+    await page.locator('select[aria-label*="Month" i]').last().selectOption(String(tm - 1));
+    await page.locator(`td[data-day="${isoDay(0)}"]:not([data-outside="true"]) button`).click();
+    const [y, m, d] = isoDay(0).split("-");
+    await expect(drawer.getByTestId("input-travel-date")).toContainText(`${d}/${m}/${y}`);
+  });
+
+  test("editing an enquiry whose travel date is already in the past still shows that date", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    const userId = await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+    const title = `Past date ${unique("p")}`;
+    const deal = await apiCreateEnquiry(page.request, agency, client.id, userId, { title, travel_date: "2020-01-15" });
+
+    await page.goto(`/clients/${client.id}?holiday=enquiry:${deal.enquiryId}`);
+    await expect(page.getByTestId("holidays-rail").getByText(title)).toBeVisible();
+    await openActionsMenu(page);
+    await page.getByRole("menuitem", { name: "Edit Enquiry" }).click();
+    await expect(page.getByTestId("enquiry-drawer").getByTestId("input-travel-date")).toContainText("15/01/2020");
+  });
+});

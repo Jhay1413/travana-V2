@@ -2,10 +2,11 @@ import { db } from '../../config/database';
 import {
   ticketReplies,
   ticketReplyLikes,
+  ticketAttachments,
   type TicketReply,
   type InsertTicketReply,
 } from '@shared/schema';
-import { and, eq, asc, sql } from 'drizzle-orm';
+import { and, eq, asc, inArray, sql } from 'drizzle-orm';
 import type { TicketReplyWithLikes } from './ticket.types';
 
 export const ticketReplyRepository = {
@@ -54,14 +55,32 @@ export const ticketReplyRepository = {
   },
 
   /**
-   * Deletes a reply and promotes its children to top level. parent_reply_id
-   * has no FK, so without this the children would point at a dead id and
-   * drop out of any UI that filters on parentReplyId.
+   * Deletes a reply and every reply beneath it, in one transaction. parent_reply_id
+   * has no FK, so descendants are collected by walking the tree level by level
+   * (threads are one level deep today, but older rows may nest further). Likes
+   * and attachment rows go with them via FK cascade; the attachment files are
+   * returned so the caller can remove them from storage.
    */
-  async remove(id: string): Promise<void> {
-    await db.transaction(async (tx) => {
-      await tx.update(ticketReplies).set({ parentReplyId: null }).where(eq(ticketReplies.parentReplyId, id));
-      await tx.delete(ticketReplies).where(eq(ticketReplies.id, id));
+  async remove(id: string): Promise<{ deletedReplyIds: string[]; attachmentFilenames: string[] }> {
+    return db.transaction(async (tx) => {
+      const deletedReplyIds: string[] = [id];
+      let frontier: string[] = [id];
+      while (frontier.length > 0) {
+        const children = await tx
+          .select({ id: ticketReplies.id })
+          .from(ticketReplies)
+          .where(inArray(ticketReplies.parentReplyId, frontier));
+        frontier = children.map((c) => c.id).filter((cid) => !deletedReplyIds.includes(cid));
+        deletedReplyIds.push(...frontier);
+      }
+
+      const files = await tx
+        .select({ filename: ticketAttachments.filename })
+        .from(ticketAttachments)
+        .where(inArray(ticketAttachments.replyId, deletedReplyIds));
+
+      await tx.delete(ticketReplies).where(inArray(ticketReplies.id, deletedReplyIds));
+      return { deletedReplyIds, attachmentFilenames: files.map((f) => f.filename) };
     });
   },
 

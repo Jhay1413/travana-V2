@@ -1,4 +1,12 @@
 import { addMonths, format, isValid, parse } from "date-fns";
+import {
+  LEAD_IDENTITY_MESSAGE,
+  normalisePassportNumber,
+  passportExpiryDeadline,
+  validatePassenger,
+  ymdToDmy,
+  type PassengerErrors,
+} from "@shared/passenger-rules";
 import { londonDayKey } from "@/lib/london-day";
 import type { ClientPassenger } from "@/features/client/api/client-passenger.api";
 
@@ -60,6 +68,7 @@ export interface PassengerDraft {
   dateOfBirth: string;
   passportNumber: string;
   passportExpiry: string;
+  passportNonUk: boolean;
 }
 
 export const EMPTY_PASSENGER_DRAFT: PassengerDraft = {
@@ -69,6 +78,7 @@ export const EMPTY_PASSENGER_DRAFT: PassengerDraft = {
   dateOfBirth: "",
   passportNumber: "",
   passportExpiry: "",
+  passportNonUk: false,
 };
 
 export function draftFromPassenger(p: ClientPassenger | null): PassengerDraft {
@@ -80,28 +90,33 @@ export function draftFromPassenger(p: ClientPassenger | null): PassengerDraft {
     dateOfBirth: p.dateOfBirth ?? "",
     passportNumber: p.passportNumber ?? "",
     passportExpiry: p.passportExpiry ?? "",
+    passportNonUk: p.passportNonUk,
   };
 }
 
-/** Edit rule: names only. Editing is never blocked by gaps in old records. */
-export function isPassengerDraftValid(draft: PassengerDraft): boolean {
-  return !!draft.firstName.trim() && !!draft.surname.trim();
+/**
+ * Inline errors for a draft, from the shared rules (the server enforces the same ones). For the lead, name, title and
+ * date of birth come from the client record, so a gap there is reported as one message on `title`.
+ */
+export function passengerDraftErrors(
+  draft: PassengerDraft,
+  opts: { nextDeparture: string | null; isLead?: boolean; today?: string },
+): PassengerErrors {
+  const errors = validatePassenger(draft, { nextDeparture: opts.nextDeparture, today: opts.today ?? londonDayKey(new Date()), isLead: opts.isLead });
+  if (opts.isLead && (errors.title || errors.firstName || errors.surname || errors.dateOfBirth)) {
+    return { title: LEAD_IDENTITY_MESSAGE, passportNumber: errors.passportNumber, passportExpiry: errors.passportExpiry };
+  }
+  return errors;
 }
 
-/** Add rule: all six fields are mandatory. */
-export function isPassengerDraftComplete(draft: PassengerDraft): boolean {
-  return [draft.title, draft.firstName, draft.surname, draft.dateOfBirth, draft.passportNumber, draft.passportExpiry].every(
-    (v) => !!v.trim(),
-  );
+/** Why Save is disabled: the first error in field order, or null when the draft can be saved. */
+export function passengerSaveBlockedReason(errors: PassengerErrors): string | null {
+  return errors.title ?? errors.firstName ?? errors.surname ?? errors.dateOfBirth ?? errors.passportNumber ?? errors.passportExpiry ?? null;
 }
 
-export const PASSPORT_NUMBER_WARNING = "UK passports have 9 numbers. Check this one if it's a UK passport.";
-
-/** Soft warning (never blocks saving): null when empty or exactly 9 digits. */
-export function passportNumberWarning(value: string): string | null {
-  const v = value.trim();
-  if (!v) return null;
-  return /^\d{9}$/.test(v) ? null : PASSPORT_NUMBER_WARNING;
+/** "04/05/2027": the last day the passport is NOT acceptable (it must expire after this). */
+export function passportExpiryDeadlineLabel(nextDeparture: string | null, today: string = londonDayKey(new Date())): string {
+  return ymdToDmy(passportExpiryDeadline(nextDeparture, today));
 }
 
 /** Badge wording: measured at travel when there is a next departure, otherwise from today. */
@@ -131,7 +146,8 @@ export function draftToInput(draft: PassengerDraft) {
     firstName: draft.firstName.trim(),
     surname: draft.surname.trim(),
     dateOfBirth: blank(draft.dateOfBirth),
-    passportNumber: blank(draft.passportNumber),
+    passportNumber: blank(normalisePassportNumber(draft.passportNumber, draft.passportNonUk)),
     passportExpiry: blank(draft.passportExpiry),
+    passportNonUk: draft.passportNonUk,
   };
 }

@@ -4,6 +4,7 @@ export {
   useUpdateNeonClient,
   useImportNeonClients,
   useMergeNeonClients,
+  useDeleteNeonClient,
   useMergeDuplicateClients,
 } from "@/features/client/api/use-neon-client-mutations";
 export { useCreateTransaction, useUpdateTransaction, useDeleteTransaction, useUpdateDealPriority, useSetFutureDeal, useSetDealLost } from "@/features/transaction/api/use-transaction-mutations";

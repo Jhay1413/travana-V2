@@ -44,23 +44,45 @@ describe("mapScraperJsonToFormFields — multi-leg flights", () => {
   });
 });
 
-describe("mapScraperJsonToFormFields — social check-in", () => {
-  const data = {
-    travel_date: "2027-05-12",
-    flights: [
-      flight("outbound", "MAN", "AMS", "2027-05-12T06:00", "2027-05-12T08:00", "KL1"),
-      flight("outbound", "AMS", "MBJ", "2027-05-12T20:00", "2027-05-12T23:30", "KL2"),
-    ],
-  } as unknown as ScraperJson;
+describe("mapScraperJsonToFormFields — check-in rule for every import", () => {
+  const trip = (outbound: Array<ReturnType<typeof flight>>, extra: Record<string, unknown> = {}) =>
+    ({ travel_date: "2027-05-12", flights: outbound, ...extra }) as unknown as ScraperJson;
 
-  it("uses the last outbound leg arrival +1h (rolling the date) for social posts", () => {
-    const out = mapScraperJsonToFormFields(data, { socialCheckIn: true });
+  it("uses 15:00 when the outbound lands before 15:00 (departure time is ignored)", () => {
+    const out = mapScraperJsonToFormFields(trip([flight("outbound", "MAN", "MBJ", "2027-05-12T06:00", "2027-05-12T14:50")]));
+    expect(out.fields.checkInDate).toBe("2027-05-12");
+    expect(out.fields.checkInTime).toBe("15:00");
+  });
+
+  it("uses landing +1h when the outbound lands after 15:00", () => {
+    const out = mapScraperJsonToFormFields(trip([flight("outbound", "MAN", "MBJ", "2027-05-12T09:00", "2027-05-12T17:30")]));
+    expect(out.fields.checkInDate).toBe("2027-05-12");
+    expect(out.fields.checkInTime).toBe("18:30");
+  });
+
+  it("uses the last outbound leg and rolls past midnight into the next day", () => {
+    const out = mapScraperJsonToFormFields(
+      trip([
+        flight("outbound", "MAN", "AMS", "2027-05-12T06:00", "2027-05-12T08:00", "KL1"),
+        flight("outbound", "AMS", "MBJ", "2027-05-12T20:00", "2027-05-12T23:30", "KL2"),
+      ]),
+    );
     expect(out.fields.checkInDate).toBe("2027-05-13");
     expect(out.fields.checkInTime).toBe("00:30");
   });
 
-  it("keeps the old behaviour (outbound departure) otherwise", () => {
-    const out = mapScraperJsonToFormFields(data);
-    expect(out.fields.checkInTime).toBe("06:00");
+  it("keeps the default 15:00 when the outbound arrival time is missing", () => {
+    const out = mapScraperJsonToFormFields(trip([flight("outbound", "MAN", "MBJ", "2027-05-12T06:00", "")]));
+    expect(out.fields.checkInTime).toBe("15:00");
+    expect(out.fields.checkInDate).toBe("2027-05-12");
+  });
+
+  it("applies the rule over an explicit hotel check-in time from the supplier", () => {
+    const out = mapScraperJsonToFormFields(
+      trip([flight("outbound", "MAN", "MBJ", "2027-05-12T06:00", "2027-05-12T10:00")], {
+        hotels: [{ check_in_date_time: "2027-05-12T12:00" }],
+      }),
+    );
+    expect(out.fields.checkInTime).toBe("15:00");
   });
 });

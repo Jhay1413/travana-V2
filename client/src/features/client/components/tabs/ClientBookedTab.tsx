@@ -13,6 +13,7 @@ import type { Favorite } from "@/features/favorite/api/favorite.api";
 import { dealTypeHref } from "@/lib/deal-links";
 import { currency, formatUKDate, type BookingWithJoins, type QuoteWithJoins, type Client } from "../client-types";
 import { QuoteRowCard } from "./QuoteRowCard";
+import { quoteTotal } from "@/features/quote/lib/quote-money";
 import { quoteToRow } from "../hooks/use-client-quote-groups";
 
 interface ClientBookedTabProps {
@@ -153,11 +154,8 @@ export function ClientBookedTab({
                       <div className="shrink-0 text-right">
                         <div className="text-xs font-semibold text-black/85" data-testid={`text-booking-total-${b.id}`}>
                           {(() => {
-                            // Final price the customer pays: sales − discount + service charge (matches booking detail).
-                            const net =
-                              (parseFloat(b.sales_price || "0") || 0) -
-                              (parseFloat(b.discounts || "0") || 0) +
-                              (parseFloat(b.service_charge || "0") || 0);
+                            // Final price the customer pays: sales − discount + service charge + extras not included in the package.
+                            const net = quoteTotal(b);
                             return net > 0 ? currency.format(net) : "—";
                           })()}
                         </div>

@@ -140,6 +140,7 @@
   --color-qp-money-pkg: hsl(var(--qp-money-pkg));
   --color-qp-money-comm: hsl(var(--qp-money-comm));
   --color-qp-money-service: hsl(var(--qp-money-service));
+  --color-qp-money-extras: hsl(var(--qp-money-extras));
   --color-qp-live: hsl(var(--qp-live));
   --color-qp-now-ring: hsl(var(--qp-now-ring));
   --color-qp-step-done-bg: hsl(var(--qp-step-done-bg));
@@ -297,6 +298,7 @@
   --qp-money-pkg: 217 30% 28%;
   --qp-money-comm: 218 24% 47%;
   --qp-money-service: 215 20% 65%;
+  --qp-money-extras: 199 45% 58%;
   --qp-live: 160 84% 39%;
   --qp-now-ring: 38 92% 50%;
   --qp-step-done-bg: 160 84% 39%;
@@ -443,6 +445,7 @@
   --qp-money-pkg: 217 30% 62%;
   --qp-money-comm: 218 30% 45%;
   --qp-money-service: 215 14% 38%;
+  --qp-money-extras: 199 30% 42%;
   --qp-live: 160 84% 55%;
   --qp-now-ring: 38 92% 56%;
   --qp-step-done-bg: 160 84% 39%;
@@ -503,8 +506,15 @@
     height: 0;
   }
 
+  /* Native controls (date/time pickers, selects, scrollbars) follow the APP theme,
+     not the OS theme. The dark class may sit on a wrapper rather than <html>, and
+     color-scheme inherits, so .dark flips it for everything inside. */
   html {
-    color-scheme: light dark;
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
   }
 
   body {
@@ -675,30 +685,12 @@
   & a { color: inherit; text-decoration: underline; }
 }
 
-/* Native date/time inputs — the browser's calendar/clock picker glyph is very
-   faint by default. Boost its contrast so it's clearly clickable, and invert
-   it in dark mode so it doesn't disappear against dark fields. */
+/* Native date/time inputs — make the picker glyph clearly clickable. Its colour
+   comes from color-scheme (light on :root, dark under .dark), so no filter hack. */
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator,
 input[type="month"]::-webkit-calendar-picker-indicator,
 input[type="week"]::-webkit-calendar-picker-indicator {
-  opacity: 0.85;
   cursor: pointer;
-  transition: opacity 0.15s ease;
-}
-input[type="date"]::-webkit-calendar-picker-indicator:hover,
-input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
-input[type="time"]::-webkit-calendar-picker-indicator:hover,
-input[type="month"]::-webkit-calendar-picker-indicator:hover,
-input[type="week"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-}
-.dark input[type="date"]::-webkit-calendar-picker-indicator,
-.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
-.dark input[type="time"]::-webkit-calendar-picker-indicator,
-.dark input[type="month"]::-webkit-calendar-picker-indicator,
-.dark input[type="week"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-  opacity: 0.9;
 }

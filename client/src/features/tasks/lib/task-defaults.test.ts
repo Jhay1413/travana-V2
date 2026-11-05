@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillEmptyAssignee, isOpening, resolveTaskFormDefaults, tomorrowLondonKey, londonDueDate } from "./task-defaults";
+import { fillEmptyAssignee, isOpening, resolveTaskFormDefaults, tomorrowLondonKey, londonDueDate, descriptionOrNull } from "./task-defaults";
 
 describe("tomorrowLondonKey", () => {
   it("rolls over on the London calendar, not UTC", () => {
@@ -53,5 +53,13 @@ describe("londonDueDate", () => {
   it("rejects malformed input", () => {
     expect(londonDueDate("", "10:00")).toBeNull();
     expect(londonDueDate("2026-07-01", "")).toBeNull();
+  });
+});
+
+describe("descriptionOrNull", () => {
+  it("trims text and maps blank to null", () => {
+    expect(descriptionOrNull("  call back  ")).toBe("call back");
+    expect(descriptionOrNull("   ")).toBeNull();
+    expect(descriptionOrNull("")).toBeNull();
   });
 });

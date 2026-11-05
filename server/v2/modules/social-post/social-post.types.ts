@@ -62,3 +62,30 @@ export interface OrganizationBranding {
   name: string;
   settings: Record<string, unknown>;
 }
+
+export type SocialPlatform = "facebook" | "instagram" | "other";
+
+/** One connected account from OnlySocials' GET /{workspace}/accounts. */
+export interface OnlySocialsAccount {
+  id: number;
+  uuid: string;
+  name: string;
+  username: string | null;
+  image: string | null;
+  /** Raw provider string from OnlySocials (e.g. "facebook_page"). */
+  provider: string;
+  platform: SocialPlatform;
+  authorized: boolean;
+}
+
+/** An account a post is published to. */
+export interface OnlySocialsPublishTarget {
+  accountId: number;
+  platform: SocialPlatform;
+}
+
+/** Whitelisted fields of PATCH /social-posts/:id. */
+export interface UpdateSocialPostInput {
+  post?: string;
+  accountIds?: number[];
+}

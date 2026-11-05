@@ -1,5 +1,6 @@
 import { ticketReplyRepository } from './ticket-reply.repository';
 import { ticketRepository } from './ticket.repository';
+import { removeStoredAttachmentFile } from './ticket-attachment.service';
 import { notificationRepository } from '../notification/notification.repository';
 import { AppError } from '../../utils/error-handler';
 import { sanitizeRichText } from '../../utils/sanitize-rich-text';
@@ -128,7 +129,10 @@ export const ticketReplyService = {
     if (existing.userId !== userId && !isPlatformAdmin(scope)) {
       throw new AppError('You can only delete your own reply', 403);
     }
-    await ticketReplyRepository.remove(id);
+    // Replies beneath it go too; their rows and likes cascade in the repository,
+    // then the stored files are removed (row first, as for a single attachment).
+    const { attachmentFilenames } = await ticketReplyRepository.remove(id);
+    await Promise.all(attachmentFilenames.map((f) => removeStoredAttachmentFile(f)));
   },
 
   async toggleLike(id: string, userId: string, scope: ScopeOrTrusted): Promise<{ liked: boolean; likeCount: number }> {

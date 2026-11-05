@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Transaction } from "@/features/quote/types";
 import { getTransactionProfit, getTransactionValue } from "@/features/pipeline/lib/pipeline-helpers";
-import { computeQuoteMoney, moneyBarSegments, quoteMarginPercent, quoteProfit, quoteTotal } from "./quote-money";
+import { computeQuoteMoney, extrasCommission, extrasCustomerTotal, formFinalTotal, formTotalProfit, moneyBarSegments, quoteMarginPercent, quoteProfit, quoteTotal } from "./quote-money";
 
 const ROW = {
   sales_price: "2000.00",
@@ -105,5 +105,97 @@ describe("moneyBarSegments", () => {
 
   it("draws nothing without a positive total", () => {
     expect(moneyBarSegments(computeQuoteMoney({}))).toEqual([]);
+  });
+});
+
+describe("extrasCommission / formTotalProfit", () => {
+  it("sums commission across every extras group, tolerating strings and blanks", () => {
+    expect(
+      extrasCommission({
+        transfers: [{ commission: 10 }, { commission: "5.5" }],
+        carHires: [{ commission: 20 }],
+        attractionTickets: [{ commission: "" }],
+        loungePasses: [{ commission: 1 }],
+        airportParkings: [{ commission: 2 }],
+        extraAccommodations: [{ commission: 3 }],
+      }),
+    ).toBeCloseTo(41.5);
+  });
+
+  it("is 0 for missing or empty groups", () => {
+    expect(extrasCommission({})).toBe(0);
+    expect(extrasCommission({ transfers: null, carHires: [] })).toBe(0);
+  });
+
+  it("zeroed included-in-package rows add nothing", () => {
+    expect(extrasCommission({ transfers: [{ commission: 0 }] })).toBe(0);
+  });
+
+  it("total profit = package commission + extras commission, same as quoteProfit", () => {
+    const extras = { transfers: [{ commission: 25 }], carHires: [{ commission: 15 }] };
+    expect(formTotalProfit(200, extras)).toBe(240);
+    expect(formTotalProfit("200", extras)).toBe(
+      quoteProfit({ package_commission: "200", service_commission: 40 }),
+    );
+  });
+
+  it("with no extras equals the package commission", () => {
+    expect(formTotalProfit(150, {})).toBe(150);
+  });
+});
+
+describe("extras and the customer total", () => {
+  it("formFinalTotal = price - discount + service charge + not-included extras", () => {
+    const extras = { transfers: [{ cost: 100, isIncludedInPackage: false }, { cost: 50, isIncludedInPackage: true }] };
+    expect(formFinalTotal("1000", 50, "20", extras)).toBe(1070);
+    expect(formFinalTotal(1000, 50, 20, {})).toBe(970);
+  });
+
+  it("extrasCustomerTotal counts the cost of not-included extras only", () => {
+    expect(extrasCustomerTotal({ transfers: [{ cost: 80, isIncludedInPackage: false }] })).toBe(80);
+    expect(extrasCustomerTotal({ transfers: [{ cost: 80, isIncludedInPackage: true }] })).toBe(0);
+  });
+
+  it("mixed included and not-included rows across all six types", () => {
+    const total = extrasCustomerTotal({
+      transfers: [{ cost: 50, isIncludedInPackage: false }, { cost: 999, isIncludedInPackage: true }],
+      carHires: [{ cost: "120.50", isIncludedInPackage: false }],
+      attractionTickets: [{ cost: 30, isIncludedInPackage: false }],
+      loungePasses: [{ cost: 25, isIncludedInPackage: true }],
+      airportParkings: [{ cost: 60, isIncludedInPackage: false }],
+      extraAccommodations: [{ cost: 200, isIncludedInPackage: false }],
+    });
+    expect(total).toBe(460.5);
+  });
+
+  it("null / undefined included flag counts as included (old deals keep their totals), matching the server", () => {
+    expect(extrasCustomerTotal({ loungePasses: [{ cost: 10 }, { cost: 5, isIncludedInPackage: null }] })).toBe(0);
+    expect(extrasCustomerTotal({ loungePasses: [{ cost: 10 }, { cost: 5, isIncludedInPackage: false }] })).toBe(5);
+  });
+
+  it("handles missing groups and junk amounts", () => {
+    expect(extrasCustomerTotal({})).toBe(0);
+    expect(extrasCustomerTotal({ transfers: [{ cost: "abc", isIncludedInPackage: false }] })).toBe(0);
+  });
+
+  it("quoteTotal / computeQuoteMoney add extras_total on top of sales - discounts + service charge", () => {
+    const input = { sales_price: "2000", discounts: "100", service_charge: "50", extras_total: "150" };
+    expect(quoteTotal(input)).toBe(2100);
+    expect(computeQuoteMoney(input).extras).toBe(150);
+    expect(quoteTotal({ ...input, extras_total: undefined })).toBe(1950);
+  });
+
+  it("the money bar segments still add up to the total with extras", () => {
+    const money = computeQuoteMoney({ sales_price: 1000, package_commission: 100, extras_total: 200 });
+    const sum = moneyBarSegments(money).reduce((s, x) => s + x.amount, 0);
+    expect(sum).toBe(money.total);
+    expect(moneyBarSegments(money).some((s) => s.key === "extras")).toBe(true);
+  });
+
+  it("form total (price - discount + service + extras) equals the card sum for the same data", () => {
+    const extras = { transfers: [{ cost: 75, isIncludedInPackage: false }, { cost: 40, isIncludedInPackage: true }] };
+    const formTotal = 1000 - 50 + 20 + extrasCustomerTotal(extras);
+    const cardTotal = quoteTotal({ sales_price: 1000, discounts: 50, service_charge: 20, extras_total: 75 });
+    expect(formTotal).toBe(cardTotal);
   });
 });

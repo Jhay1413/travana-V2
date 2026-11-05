@@ -1,8 +1,8 @@
 import type { SocialStatusFilter } from "@/features/quote/api/quote.api";
 import type { SocialPostStatus } from "@/features/social/lib/post-status";
 
-/** "draft" covers both server statuses draft and not_generated (the server filters one at a time). */
-export type StatusFilter = "all" | Exclude<SocialStatusFilter, "not_generated">;
+/** Each chip maps to one server status; "draft" (saved text) and "not_generated" (no post yet) are separate. */
+export type StatusFilter = "all" | SocialStatusFilter;
 export type WhenFilter = "all" | "today" | "week" | "month" | "custom";
 export type TagFilter = "any" | "portal" | "featured";
 
@@ -16,7 +16,7 @@ export interface GridFilters {
   q: string;
 }
 
-export const STATUS_FILTERS: readonly StatusFilter[] = ["all", "scheduled", "draft", "posted"];
+export const STATUS_FILTERS: readonly StatusFilter[] = ["all", "scheduled", "draft", "posted", "not_generated"];
 export const WHEN_FILTERS: readonly WhenFilter[] = ["all", "today", "week", "month", "custom"];
 export const TAG_FILTERS: readonly TagFilter[] = ["any", "portal", "featured"];
 
@@ -52,8 +52,7 @@ export function isWhenActive(filters: Pick<GridFilters, "when" | "from" | "to">)
 export function parseGridFilters(search: string): GridFilters {
   const params = new URLSearchParams(search);
   const raw = params.get("status");
-  // Old links to the Not generated chip land on Drafts, which now includes them.
-  const status = pick(raw === "not_generated" ? "draft" : raw, STATUS_FILTERS, "all");
+  const status = pick(raw, STATUS_FILTERS, "all");
   return {
     status,
     when: pick(params.get("when"), WHEN_FILTERS, "all"),
@@ -161,26 +160,21 @@ export interface StatusCounts {
 export function buildCountsLine(counts: StatusCounts | undefined): string {
   if (!counts) return "";
   const posts = `${counts.total} ${counts.total === 1 ? "post" : "posts"}`;
-  const draftTotal = counts.draft + counts.not_generated;
-  const drafts = `${draftTotal} ${draftTotal === 1 ? "draft" : "drafts"}`;
+  const drafts = `${counts.draft} ${counts.draft === 1 ? "draft" : "drafts"}`;
   return [posts, `${counts.scheduled} scheduled`, drafts, `${counts.posted} posted`].join(" · ");
 }
 
-/** Status sent to the server. Drafts cannot be sent (they span two server statuses), so they load unfiltered and are narrowed on the client. */
+/** Status sent to the server; every chip except "all" is a single server status. */
 export function serverSocialStatus(filter: StatusFilter): SocialStatusFilter | undefined {
-  return filter === "all" || filter === "draft" ? undefined : filter;
+  return filter === "all" ? undefined : filter;
 }
 
-/** Whether a post with this derived status belongs under the chosen chip. Drafts include not-generated posts. */
+/** Whether a post with this derived status belongs under the chosen chip. */
 export function matchesStatusFilter(status: SocialPostStatus, filter: StatusFilter): boolean {
-  if (filter === "all") return true;
-  if (filter === "draft") return status === "draft" || status === "not_generated";
-  return status === filter;
+  return filter === "all" || status === filter;
 }
 
-/** Count shown on a chip; Drafts adds the not-generated posts. */
+/** Count shown on a chip. */
 export function statusChipCount(filter: StatusFilter, counts: StatusCounts): number {
-  if (filter === "all") return counts.total;
-  if (filter === "draft") return counts.draft + counts.not_generated;
-  return counts[filter];
+  return filter === "all" ? counts.total : counts[filter];
 }

@@ -412,6 +412,7 @@ export const newQuoteService = {
     const q = await newQuoteRepository.findWithDetails(id);
     if (!q) throw new AppError("Quote not found", 404);
     const service_commission = await newQuoteRepository.getServiceCommission(id);
+    const extras_total = await newQuoteRepository.getExtrasTotal(id);
     // Surface the customer-facing total (sales − discount + service charge) and a per-person
     // figure derived from it, so the detail page displays consistent values regardless of any
     // previously-stored price_per_person.
@@ -424,7 +425,8 @@ export const newQuoteService = {
       ...q,
       can_edit,
       service_commission,
-      total_price: calcTotalPrice(q.sales_price, q.discounts, q.service_charge).toFixed(2),
+      extras_total,
+      total_price: (calcTotalPrice(q.sales_price, q.discounts, q.service_charge) + extras_total).toFixed(2),
       price_per_person: calcPricePerPerson(q.sales_price, q.adult, q.child, q.discounts, q.service_charge),
     };
   },

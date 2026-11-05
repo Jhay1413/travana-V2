@@ -470,6 +470,13 @@
       "when": 1793338537983,
       "tag": "0066_absent_pixie",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1793783286825,
+      "tag": "0067_windy_madame_masque",
+      "breakpoints": true
     }
   ]
 }

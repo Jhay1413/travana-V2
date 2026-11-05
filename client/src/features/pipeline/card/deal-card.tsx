@@ -97,8 +97,8 @@ export function DealCard({
       }}
       data-testid={`pipeline-card-${t.id}`}
     >
-      {/* Hover actions float over the top-right corner so the layout never shifts. */}
-      <div className="absolute right-2 top-2 z-10 hidden items-center gap-0.5 rounded-md bg-card/95 p-0.5 shadow-sm group-hover:flex">
+      {/* Hover actions float over the top-right corner so the layout never shifts. They stay rendered while the overflow menu is open (the portalled menu steals hover, and a display:none trigger has no rect to anchor to). */}
+      <div className="absolute right-2 top-2 z-10 hidden items-center gap-0.5 rounded-md bg-card/95 p-0.5 shadow-sm group-hover:flex has-[[data-state=open]]:flex">
         {pinTarget && !pinned && (
           <PinToggleButton
             pinned={pinned}
@@ -152,6 +152,11 @@ export function DealCard({
         <div className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium">
           <User className="h-3.5 w-3.5 shrink-0 text-social-muted" strokeWidth={2} />
           <span className="truncate">{clientName}</span>
+          {t.client_deleted && (
+            <span className="shrink-0 rounded-full bg-red-50 px-1.5 py-px text-[10px] font-semibold text-red-700" data-testid={`pipeline-card-client-deleted-${t.id}`}>
+              Client deleted
+            </span>
+          )}
         </div>
         {phone && (
           <span className="inline-flex items-center gap-[5px] whitespace-nowrap text-[12px] text-social-muted">

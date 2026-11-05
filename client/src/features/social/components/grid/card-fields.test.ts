@@ -67,3 +67,26 @@ describe("postPlatforms", () => {
     expect(postPlatforms({}, undefined)).toEqual([]);
   });
 });
+
+describe("postPlatforms from saved targets", () => {
+  const channel = { provider: "onlysocials", accountId: 1, workspaceConfigured: true, apiKeyConfigured: true, label: "x" } as const;
+  it("reads the saved targets, ordered Facebook then Instagram, de-duplicated", () => {
+    const targets = [
+      { accountId: 7, platform: "instagram" },
+      { accountId: 1, platform: "facebook" },
+      { accountId: 2, platform: "facebook" },
+    ];
+    expect(postPlatforms({ onlySocialsTargets: targets }, channel)).toEqual(["facebook", "instagram"]);
+  });
+  it("shows an Instagram-only post as Instagram only, even without a connected channel", () => {
+    expect(postPlatforms({ onlySocialsTargets: [{ accountId: 7, platform: "instagram" }] }, undefined)).toEqual(["instagram"]);
+  });
+  it("ignores platforms it cannot draw", () => {
+    expect(postPlatforms({ onlySocialsTargets: [{ accountId: 3, platform: "other" }] }, channel)).toEqual([]);
+  });
+  it("treats null or empty targets as the legacy Facebook post", () => {
+    expect(postPlatforms({ onlySocialsTargets: null }, channel)).toEqual(["facebook"]);
+    expect(postPlatforms({ onlySocialsTargets: [] }, channel)).toEqual(["facebook"]);
+    expect(postPlatforms({ onlySocialsTargets: null }, undefined)).toEqual([]);
+  });
+});

@@ -7,11 +7,13 @@ function formatClientName(title: string | null, firstName: string | null, surnam
 
 // Price the customer actually pays: sales price − discount + service charge.
 // Mirrors the quote/booking detail page so list and detail totals agree.
-function netTotalPrice(salesPrice: unknown, discounts: unknown, serviceCharge: unknown): number {
+// Plus the extras the customer pays for on top (those not "Included in package").
+function netTotalPrice(salesPrice: unknown, discounts: unknown, serviceCharge: unknown, extrasTotal: unknown = 0): number {
   const sales = parseFloat(salesPrice as string) || 0;
   const disc = parseFloat(discounts as string) || 0;
   const svc = parseFloat(serviceCharge as string) || 0;
-  return sales - disc + svc;
+  const extras = parseFloat(String(extrasTotal ?? 0)) || 0;
+  return sales - disc + svc + extras;
 }
 
 export const opportunitiesService = {
@@ -37,7 +39,7 @@ export const opportunitiesService = {
       title: r.title || 'Untitled', status: r.status || 'DRAFT',
       travelDate: r.travelDate, dateCreated: r.dateCreated,
       salesPrice: parseFloat(r.salesPrice as string) || 0,
-      totalPrice: netTotalPrice(r.salesPrice, r.discounts, r.serviceCharge),
+      totalPrice: netTotalPrice(r.salesPrice, r.discounts, r.serviceCharge, r.extrasTotal),
       commission: parseFloat(r.commission as string) || 0,
       nights: r.nights || 0, adults: r.adults || 0, children: r.children || 0,
     }));
@@ -53,7 +55,7 @@ export const opportunitiesService = {
       title: r.title || 'Untitled', status: r.status || 'BOOKED',
       travelDate: r.travelDate, dateCreated: r.dateCreated,
       salesPrice: parseFloat(r.salesPrice as string) || 0,
-      totalPrice: netTotalPrice(r.salesPrice, r.discounts, r.serviceCharge),
+      totalPrice: netTotalPrice(r.salesPrice, r.discounts, r.serviceCharge, r.extrasTotal),
       commission: parseFloat(r.commission as string) || 0,
       nights: r.nights || 0, adults: r.adults || 0, children: r.children || 0,
       haysRef: r.haysRef || '', supplierRef: r.supplierRef || '',

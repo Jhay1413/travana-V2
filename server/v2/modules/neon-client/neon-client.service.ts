@@ -4,12 +4,15 @@ import {
   type DuplicatePhoneGroupRow,
 } from './neon-client.repository';
 import { clientRepository } from '../client/client.repository';
+import { clientService } from '../client/client.service';
 import { AppError } from '../../utils/error-handler';
+import { canReadDeletedClients } from '../../utils/client-delete-roles';
 import type { NeonClient, InsertClientTable } from '@shared/schema';
 import type { Scope } from '../../utils/scope';
 import { stripOwnershipFields } from '../../utils/ownership-fields';
 import { branchRepository } from '../branch/branch.repository';
 import { fireAutoTriggerForClient } from '../sms/sms.service';
+import { withTrimmedPhone } from '@shared/phone';
 import { stripSystemManagedFields, assertValidReferrer } from './neon-client.guards';
 import bcrypt from 'bcryptjs';
 
@@ -54,8 +57,20 @@ export const neonClientService = {
     return client;
   },
 
+  /** Client page read: admins can also open a soft-deleted client (read-only, row carries deletedAt). */
+  async viewNeonClientById(id: string, scope: Scope): Promise<NeonClient> {
+    // Same org-wide client scope as getNeonClientById; only deals are shop-scoped.
+    const client = await neonClientRepository.findById(id, scope);
+    if (client) return client;
+    if (canReadDeletedClients(scope)) {
+      const deleted = await neonClientRepository.findByIdIncludingDeleted(id, scope);
+      if (deleted) return deleted;
+    }
+    throw new AppError('Client not found', 404);
+  },
+
   async createNeonClient(data: InsertClientTable, scope: Scope): Promise<NeonClient> {
-    const clean = stripSystemManagedFields(data);
+    const clean = withTrimmedPhone(stripSystemManagedFields(data));
     await assertValidReferrer(null, clean.referredByClientId, scope);
     const safe = await stripOwnershipFields(clean, scope, async (b, o) => !!(await branchRepository.findById(b, o)));
     return neonClientRepository.create(safe as InsertClientTable, scope);
@@ -71,7 +86,7 @@ export const neonClientService = {
   },
 
   async updateNeonClient(id: string, data: Partial<InsertClientTable>, scope: Scope): Promise<NeonClient> {
-    const clean = stripSystemManagedFields(data);
+    const clean = withTrimmedPhone(stripSystemManagedFields(data));
     // Scope-enforced fetch: an out-of-scope client reads as 404. A merged client is an
     // archived duplicate, so it is read-only (the merge itself goes through mergeAtomic).
     const current = await neonClientRepository.findById(id, scope);
@@ -113,9 +128,9 @@ export const neonClientService = {
     await neonClientRepository.setPortalPin(id, null);
   },
 
+  /** Soft delete (admin only) — same rules as DELETE /clients/:id. */
   async deleteNeonClient(id: string, scope: Scope): Promise<void> {
-    const removed = await neonClientRepository.remove(id, scope);
-    if (!removed) throw new AppError('Client not found', 404);
+    await clientService.deleteClient(id, scope);
   },
 
   async bulkImportClients(clients: NeonClientImport[], scope: Scope) {

@@ -3,6 +3,7 @@ import type { DealImage } from "@/features/quote/types";
 import type { Transaction } from "@/features/quote/types";
 import type { QuoteWithJoins, BookingWithJoins } from "../client-types";
 import type { QuoteRowCardData } from "../tabs/QuoteRowCard";
+import { quoteTotal } from "@/features/quote/lib/quote-money";
 
 export type GroupRowItem =
   | { type: "quote"; row: QuoteRowCardData; isChild: boolean }
@@ -17,9 +18,6 @@ export interface QuoteGroup {
 
 const PAX_LABEL = (a: number, c: number, i: number) =>
   `${a}A${c > 0 ? ` ${c}C` : ""}${i > 0 ? ` ${i}I` : ""}`;
-
-const NET_PRICE = (sales: string | null | undefined, disc: string | null | undefined, svc: string | null | undefined) =>
-  parseFloat(sales || "0") - parseFloat(disc || "0") + parseFloat(svc || "0");
 
 const PRIMARY_IMAGE = (images: DealImage[] | undefined | null): string | null =>
   images?.find((img: DealImage) => img.isPrimary)?.image_url || images?.[0]?.image_url || null;
@@ -36,7 +34,7 @@ export function quoteToRow(q: QuoteWithJoins, fallbackStatus: string): QuoteRowC
     createdAt: q.date_created ? new Date(q.date_created).toLocaleDateString("en-GB") : "—",
     createdAtRaw: q.date_created || "",
     status: q.quote_status || fallbackStatus,
-    totalCost: NET_PRICE(q.sales_price, q.discounts, q.service_charge),
+    totalCost: quoteTotal(q),
     pricePerPerson: parseFloat(q.price_per_person || "0"),
     imageUrl: PRIMARY_IMAGE(q.images),
     pax: PAX_LABEL(q.adult || 0, q.child || 0, q.infant || 0),
@@ -55,7 +53,7 @@ function bookingToRow(b: BookingWithJoins): QuoteRowCardData {
     createdAt: b.date_created ? new Date(b.date_created).toLocaleDateString("en-GB") : "—",
     createdAtRaw: b.date_created || "",
     status: b.booking_status || "BOOKED",
-    totalCost: NET_PRICE(b.sales_price, b.discounts, b.service_charge),
+    totalCost: quoteTotal(b),
     pricePerPerson: 0,
     imageUrl: PRIMARY_IMAGE(b.images),
     pax: PAX_LABEL(b.adult || 0, b.child || 0, b.infant || 0),

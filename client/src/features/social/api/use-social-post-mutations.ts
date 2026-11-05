@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { socialPostApi, type GeneratePostParams, type SchedulePostResult, type TravelDeal } from "./social-post.api";
+import { socialPostApi, type GeneratePostParams, type SchedulePostResult, type TravelDeal, type UpdatePostInput } from "./social-post.api";
 import { socialPostKeys } from "./use-social-post-queries";
 import { quoteKeys } from "@/features/quote/api/use-quote-queries";
 
@@ -24,7 +24,7 @@ export function useGeneratePost() {
 export function useSavePost() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<TravelDeal> }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdatePostInput }) =>
       socialPostApi.update(id, data),
     onSuccess: (deal) => {
       queryClient.setQueryData(socialPostKeys.byQuote(deal.quote_id), deal);

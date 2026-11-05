@@ -238,6 +238,10 @@ export const clientTable = pgTable("client_table", {
   mergedIntoId: uuid("merged_into_id").references((): AnyPgColumn => clientTable.id, { onDelete: "set null" }),
   mergedAt: timestamp("merged_at"),
   mergedBy: text("merged_by").references(() => user.id, { onDelete: "set null" }),
+  // Soft delete (admin only): a deleted client is hidden from every list, search
+  // and picker and its portal access stops; its deals stay. Restore = clear both.
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: text("deleted_by").references(() => user.id, { onDelete: "set null" }),
   // Audit link: set on a copy of a client duplicated into a homeworker branch.
   splitFromClientId: uuid("split_from_client_id").references((): AnyPgColumn => clientTable.id, { onDelete: "set null" }),
 });
@@ -275,6 +279,7 @@ export const clientPassenger = pgTable("client_passenger", {
   dateOfBirth: date("date_of_birth", { mode: "string" }),
   passportNumber: varchar("passport_number", { length: 20 }),
   passportExpiry: date("passport_expiry", { mode: "string" }),
+  passportNonUk: boolean("passport_non_uk").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [
@@ -1164,6 +1169,9 @@ export const passengers = pgTable('passengers', {
 export type Passenger = typeof passengers.$inferSelect;
 export type InsertPassenger = typeof passengers.$inferInsert;
 
+/** Snapshot of the OnlySocials accounts a post was scheduled to. Null on a deal = legacy single Facebook account. */
+export type OnlySocialsTarget = { accountId: number; platform: string };
+
 export const travel_deal = pgTable('travel_deal', {
   id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
   title: varchar().notNull(),
@@ -1177,6 +1185,7 @@ export const travel_deal = pgTable('travel_deal', {
   departureAirport: varchar(),
   postSchedule: timestamp({ withTimezone: true }),
   onlySocialsId: varchar(),
+  only_socials_targets: jsonb("only_socials_targets").$type<OnlySocialsTarget[]>(),
   luggageTransfers: varchar(),
   price: numeric({ precision: 10, scale: 2 }),
   quote_id: uuid().notNull().references(() => quote.id, { onDelete: "cascade" }),
@@ -2278,6 +2287,9 @@ export const orgSocialSettings = pgTable("org_social_settings", {
   defaultPriceBadge: boolean("default_price_badge").notNull().default(true),
   timeShortcuts: text("time_shortcuts").array().notNull().default(sql`ARRAY['09:00','12:30','19:00']::text[]`),
   timezone: text("timezone").notNull().default("Europe/London"),
+  // OnlySocials account ids this agency may publish to. Null/empty = legacy single account (81085).
+  // Written by platform admins only.
+  allowedAccountIds: integer("allowed_account_ids").array(),
   updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),

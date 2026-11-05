@@ -30,6 +30,13 @@ export const neonClientApi = {
     return data;
   },
 
+  // Soft delete (admin only): the client is hidden everywhere, its deals stay.
+  remove: async (id: string): Promise<{ id: string }> => {
+    // The response interceptor unwraps the { data } envelope, so the body is already { id }.
+    const { data } = await axiosClient.delete<{ id: string }>(`/api/v2/neon-clients/${id}`);
+    return data;
+  },
+
   importClients: async (clients: NeonClientImportRow[]): Promise<ImportResult> => {
     const { data } = await axiosClient.post<ImportResult>("/api/v2/neon-clients/import", { clients });
     return data;

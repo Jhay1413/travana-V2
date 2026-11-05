@@ -26,7 +26,8 @@ import {
   tags,
   clientTags,
 } from '@shared/schema';
-import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, notExists, sql, type SQL } from 'drizzle-orm';
+import { quoteExtrasTotalExpr, bookingExtrasTotalExpr } from '../../utils/commission-sql';
+import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, notExists, sql, type SQL } from 'drizzle-orm';
 
 const portalDealActiveWhere = () =>
   and(
@@ -66,6 +67,8 @@ export interface PortalQuoteRow {
   salesPrice: string | null;
   discounts: string | null;
   serviceCharge: string | null;
+  /** Cost of extras not included in the package (added to the customer total). */
+  extrasTotal: string | number | null;
   adult: number | null;
   child: number | null;
   pricePerPerson: string | null;
@@ -88,6 +91,8 @@ export interface PortalBookingRow {
   salesPrice: string | null;
   discounts: string | null;
   serviceCharge: string | null;
+  /** Cost of extras not included in the package (added to the customer total). */
+  extrasTotal: string | number | null;
   adult: number | null;
   child: number | null;
   travelDate: string | Date;
@@ -229,7 +234,7 @@ export const portalRepository = {
       // Case-insensitive match: stored emails may be mixed-case, so compare both
       // sides lower-cased rather than relying on the stored value already being
       // normalised. Otherwise a real account returns "email does not exist".
-      .where(sql`lower(${clientTable.email}) = ${email.toLowerCase().trim()}`)
+      .where(and(sql`lower(${clientTable.email}) = ${email.toLowerCase().trim()}`, isNull(clientTable.deletedAt)))
       .limit(1);
     return row;
   },
@@ -242,7 +247,7 @@ export const portalRepository = {
     const [row] = await db
       .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName })
       .from(clientTable)
-      .where(eq(clientTable.id, clientId))
+      .where(and(eq(clientTable.id, clientId), isNull(clientTable.deletedAt)))
       .limit(1);
     return row;
   },
@@ -274,9 +279,19 @@ export const portalRepository = {
         mustChangePin: clientTable.mustChangePin,
       })
       .from(clientTable)
-      .where(eq(clientTable.id, clientId))
+      .where(and(eq(clientTable.id, clientId), isNull(clientTable.deletedAt)))
       .limit(1);
     return row;
+  },
+
+  /** True when the client exists and is not soft-deleted. Used by the portal session check. */
+  async isClientActive(clientId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: clientTable.id })
+      .from(clientTable)
+      .where(and(eq(clientTable.id, clientId), isNull(clientTable.deletedAt)))
+      .limit(1);
+    return !!row;
   },
 
   async findVipSummary(clientId: string): Promise<{
@@ -536,6 +551,7 @@ export const portalRepository = {
         salesPrice: quote.sales_price,
         discounts: quote.discounts,
         serviceCharge: quote.service_charge,
+        extrasTotal: quoteExtrasTotalExpr(),
         adult: quote.adult,
         child: quote.child,
         pricePerPerson: quote.price_per_person,
@@ -590,6 +606,7 @@ export const portalRepository = {
         salesPrice: booking.sales_price,
         discounts: booking.discounts,
         serviceCharge: booking.service_charge,
+        extrasTotal: bookingExtrasTotalExpr(),
         adult: booking.adult,
         child: booking.child,
         travelDate: booking.travel_date,

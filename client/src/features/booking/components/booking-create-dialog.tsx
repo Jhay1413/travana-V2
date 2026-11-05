@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { requestErrorMessage } from "@/lib/request-error";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,8 @@ import {
 } from "@/features/booking/api/use-booking-image-mutations";
 import { orderedImageUrls, type FormImageItem } from "@/features/quote/lib/form-images";
 import { usePackageTypes, useCurrentUser } from "@/hooks/queries";
+import { useReconcileUpsells } from "@/features/booking/api/use-booking-upsell-mutations";
+import { saveUpsellsAfterCreate } from "@/features/booking/lib/save-upsells-after-create";
 import { BookingRHFForm } from "./booking-rhf-form";
 import type { BookingFormValues, BookingCreateDialogProps } from "@/features/booking/types";
 import { defaultBookingFormValues } from "@/features/booking/types";
@@ -235,6 +238,9 @@ export function BookingCreateDialog({
   const uploadImages = useUploadBookingImages();
   const addImageUrls = useAddBookingImageUrls();
   const reorderImages = useReorderBookingImages();
+  const { reconcile: reconcileUpsells } = useReconcileUpsells();
+  // The create call resolves before upsells/images are saved; keep the form locked until all of it is done.
+  const [isFinalizing, setIsFinalizing] = useState(false);
   const { data: packageTypesData } = usePackageTypes();
   const { data: currentUser } = useCurrentUser();
 
@@ -258,8 +264,10 @@ export function BookingCreateDialog({
     }
 
     const payload = buildCreatePayload(values, clientId, currentUser.id, packageTypesData);
+    setIsFinalizing(true);
     createTransaction.mutate(payload, {
       onSuccess: async (result) => {
+       try {
         const bookingId = result?.booking?.id;
 
         // Images are attached after the booking exists, since they need its id.
@@ -270,6 +278,9 @@ export function BookingCreateDialog({
           ? images.items.flatMap((i) => (i.kind === "url" ? [i.url] : []))
           : images?.urls ?? [];
         let imagesFailed = false;
+        // The booking create endpoint ignores upsells; they are saved through
+        // their own endpoints once the booking id exists (same as edit).
+        const upsellResult = await saveUpsellsAfterCreate(reconcileUpsells, bookingId, values.upsells);
 
         if (bookingId && (imageFiles.length > 0 || importedUrls.length > 0)) {
           const urlByFile = new Map<File, string>();
@@ -306,17 +317,28 @@ export function BookingCreateDialog({
           }
         }
 
+        const problems = [
+          !upsellResult.ok
+            ? `some upsells may not have saved (${requestErrorMessage(upsellResult.error, "please check")}) - check the booking before adding any again`
+            : null,
+          imagesFailed ? "some images failed to save" : null,
+        ].filter(Boolean);
         toast({
           title: "Booking created",
-          description: imagesFailed
-            ? "Booking saved, but some images failed to save."
-            : "New booking has been created.",
-          variant: imagesFailed ? "destructive" : "default",
+          description:
+            problems.length > 0
+              ? `Booking was created, but ${problems.join(" and ")}.`
+              : "New booking has been created.",
+          variant: problems.length > 0 ? "destructive" : "default",
         });
         onOpenChange(false);
         onSuccess?.(bookingId || "");
+       } finally {
+        setIsFinalizing(false);
+       }
       },
       onError: (err) => {
+        setIsFinalizing(false);
         toast({
           title: "Failed to create booking",
           description: err instanceof Error ? err.message : "Something went wrong.",
@@ -335,7 +357,7 @@ export function BookingCreateDialog({
       layout={isDrawer ? "drawer" : "card"}
       defaultValues={defaultValues}
       onSubmit={handleSubmit}
-      isLoading={createTransaction.isPending}
+      isLoading={createTransaction.isPending || isFinalizing}
       submitLabel="Create Booking"
       onCancel={isDrawer ? undefined : () => onOpenChange(false)}
       clientId={clientId}

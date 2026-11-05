@@ -14,6 +14,7 @@ const CHIPS: { value: StatusFilter; label: string; count: (c: FreeQuoteStatusCou
   { value: "scheduled", label: STATUS_META.scheduled.plural, count: (c) => statusChipCount("scheduled", c) },
   { value: "draft", label: STATUS_META.draft.plural, count: (c) => statusChipCount("draft", c) },
   { value: "posted", label: STATUS_META.posted.plural, count: (c) => statusChipCount("posted", c) },
+  { value: "not_generated", label: STATUS_META.not_generated.plural, count: (c) => statusChipCount("not_generated", c) },
 ];
 
 /** Pill buttons that filter by post status, each showing its count. */

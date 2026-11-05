@@ -189,7 +189,7 @@ test.describe("pipeline money matches /pipeline", () => {
     });
     const q2 = await quoteDeal(page.request, w, { title: "Dash quote two", sales_price: "1500.00", package_commission: "90.00", inPlay: true });
     const enq = await enquiryDeal(page.request, w, "Dash enquiry", { budget: "1800" });
-    // Expected from the formulas, by hand: quote one = value 3000 - 100 + 40 = 2940, profit 240 + 4 = 244; quote two = 1500 / 90; enquiry = no profit, budget 1800.
+    // Expected from the formulas, by hand: quote one = value 3000 - 100 + 40 + 40 (not-included transfer) = 2980, profit 240 + 4 = 244; quote two = 1500 / 90; enquiry = no profit, budget 1800.
     await page.goto("/agent-overview");
     await expect(page.getByTestId("card-dashboard-pipeline")).toBeVisible();
     const row = (id: string) => page.getByTestId(`row-dashboard-pipeline-${id}`);
@@ -197,17 +197,17 @@ test.describe("pipeline money matches /pipeline", () => {
     await expect(row(q1.transactionId)).toContainText("£244");
     await expect(row(q2.transactionId)).toContainText("£90");
     await expect(row(enq.transactionId)).toContainText("£0");
-    await expect(row(q1.transactionId)).not.toContainText("£2,940");
+    await expect(row(q1.transactionId)).not.toContainText("£2,980");
 
     // Pipeline Live: the quote tab shows value, the enquiry tab shows "Budget".
-    await expect(page.getByTestId(`text-pipeline-live-value-${q1.transactionId}`)).toHaveText("£2,940");
+    await expect(page.getByTestId(`text-pipeline-live-value-${q1.transactionId}`)).toHaveText("£2,980");
     await expect(page.getByTestId(`text-pipeline-live-value-${q2.transactionId}`)).toHaveText("£1,500");
     await page.getByTestId("pipeline-live-tab-enquiry").click();
     await expect(page.getByTestId(`text-pipeline-live-value-${enq.transactionId}`)).toHaveText("Budget £1,800");
 
     // The /pipeline cards carry the same money.
     await openBoard(page);
-    await expect(column(page, "Quoted").getByTestId(`pipeline-card-${q1.transactionId}`)).toContainText("Cost £2,940");
+    await expect(column(page, "Quoted").getByTestId(`pipeline-card-${q1.transactionId}`)).toContainText("Cost £2,980");
     await expect(column(page, "Quoted").getByTestId(`pipeline-card-${q1.transactionId}`)).toContainText("Profit £244");
     await expect(column(page, "In Play").getByTestId(`pipeline-card-${q2.transactionId}`)).toContainText("Profit £90");
   });

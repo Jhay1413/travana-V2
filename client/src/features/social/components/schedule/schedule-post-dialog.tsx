@@ -9,11 +9,12 @@ import type { EnrichedQuote } from "@/features/quote/types";
 import type { TravelDeal } from "@/features/social/api/social-post.api";
 import { useRescheduleOnOnlySocials, useScheduleOnOnlySocials } from "@/features/social/api/use-social-post-mutations";
 import { useFetchPostMedia, useFetchQuoteImages, useFetchTravelDeal } from "@/features/social/api/use-social-post-queries";
-import { useSocialSettings } from "@/features/social/api/use-social-settings-queries";
+import { useSocialAccounts, useSocialSettings } from "@/features/social/api/use-social-settings-queries";
 import { DEFAULT_SOCIAL_SETTINGS } from "@/features/social/api/social-settings.api";
 import { getFirstImage, pricePerPersonLabel } from "@/features/social/lib/quote-card-fields";
 import { errorMessage } from "@/features/social/lib/error-message";
 import { browserTimezoneLabel, goesOutLabel } from "@/features/social/lib/schedule-time";
+import { quickScheduleAccountIds } from "../editor/platform-selection";
 import { TimeShortcutChips } from "./time-shortcut-chips";
 import { validateSchedule } from "./schedule-form";
 import { buildScheduleToast } from "./schedule-toasts";
@@ -50,6 +51,7 @@ export function SchedulePostDialog({ quote, deal, initialDate, mode, open, onOpe
   const fetchTravelDeal = useFetchTravelDeal();
   const fetchPostMedia = useFetchPostMedia();
   const fetchQuoteImages = useFetchQuoteImages();
+  const accountsQuery = useSocialAccounts(open, deal.id);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +66,15 @@ export function SchedulePostDialog({ quote, deal, initialDate, mode, open, onOpe
   }, [open, quote, mode, initialDate]);
 
   const isChange = mode === "change-time";
+  // A first schedule with no saved accounts needs the account list to pick its defaults.
+  const needsAccounts = !isChange && !(deal.only_socials_targets && deal.only_socials_targets.length > 0);
+  const accountsReason = !needsAccounts
+    ? null
+    : accountsQuery.isError
+      ? "Couldn't load connected accounts. Close this and try again."
+      : accountsQuery.data
+        ? null
+        : "Loading connected accounts…";
   const today = format(new Date(), "yyyy-MM-dd");
   const goesOut = date && time ? goesOutLabel(`${date}T${time}`) : "";
   const image = getFirstImage(quote) ?? "/images/default-hotel.jpg";
@@ -95,7 +106,13 @@ export function SchedulePostDialog({ quote, deal, initialDate, mode, open, onOpe
         // A never-scheduled post auto-selects every quote image in the editor; mirror that.
         const images = await fetchQuoteImages(quote.id);
         const formData = toFormData(
-          buildScheduleForm({ kind: "schedule", utcIso: result.utcIso, local: result.local, imageUrls: images.map((i) => i.url) }),
+          buildScheduleForm({
+            kind: "schedule",
+            utcIso: result.utcIso,
+            local: result.local,
+            imageUrls: images.map((i) => i.url),
+            accountIds: quickScheduleAccountIds(deal.only_socials_targets, accountsQuery.data?.accounts, images.length),
+          }),
         );
         const saved = await schedule.mutateAsync({ id: deal.id, formData });
         toast(buildScheduleToast(saved, false));
@@ -148,6 +165,11 @@ export function SchedulePostDialog({ quote, deal, initialDate, mode, open, onOpe
             <span className="text-xs text-social-muted">{browserTimezoneLabel(timezone)}</span>
           </div>
           <TimeShortcutChips times={timeShortcuts} value={time} onPick={setTime} disabled={busy} />
+          {accountsReason && (
+            <p role="status" className="text-xs font-medium text-social-muted" data-testid="text-schedule-dialog-accounts">
+              {accountsReason}
+            </p>
+          )}
           {goesOut && <p className="text-xs font-medium text-social-muted">{goesOut}.</p>}
           {error && (
             <p role="alert" className="text-xs font-medium text-red-600">
@@ -163,7 +185,7 @@ export function SchedulePostDialog({ quote, deal, initialDate, mode, open, onOpe
           <Button
             type="button"
             onClick={submit}
-            disabled={busy || !date || !time}
+            disabled={busy || !date || !time || !!accountsReason}
             className="gap-2 bg-social-orange text-slate-900 hover:bg-amber-600"
             data-testid="button-schedule-dialog-submit"
           >

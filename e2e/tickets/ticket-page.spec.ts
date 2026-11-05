@@ -3,11 +3,11 @@
  * (only real replies nest), the Message button rules, linking a holiday, deleting, and walking the queue order.
  * Nothing here sends a message: the Message button is only followed as far as the New message dialog, never sent.
  */
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { addDaysToKey, londonDayKey } from "../../client/src/lib/london-day";
 import { londonDateTimeToIso } from "../../client/src/features/tickets/lib/london-datetime";
 import { OUTBOUND_LOG } from "../helpers/env";
-import { apiCreateClient, dataOf, signIn } from "../helpers/deals";
+import { apiCreateClient, apiCreateEnquiry, dataOf, openHoliday, signIn } from "../helpers/deals";
 import { expect, test } from "../helpers/fixtures";
 import { pinLondonHelpers } from "../helpers/london";
 import { readOutboundAttempts } from "../helpers/outbound-report";
@@ -347,5 +347,120 @@ test.describe("deleting and walking the queue", () => {
     await expect(page.getByTestId(`ticket-row-pinned-${older.id}`)).toBeVisible();
     await expect(rows.first()).toHaveAttribute("data-testid", `ticket-row-${older.id}`);
     await expect(page.getByTestId(`ticket-row-pinned-${newer.id}`)).toHaveCount(0);
+  });
+});
+
+test.describe("client page ticket due time", () => {
+  test("Create Ticket from the client page takes a due date and a 15-minute London time, and saves that exact instant", async ({ page }) => {
+    const w = await workWorld(page);
+    await signIn(page, w.agent.email);
+    const client = await apiCreateClient(page.request);
+    await page.goto(`/clients/${client.id}`);
+    await page.getByTestId("client-index-create").click();
+    await page.getByTestId("client-index-create-ticket").click();
+    const drawer = page.getByTestId("create-ticket-drawer");
+    await expect(drawer).toBeVisible();
+    await drawer.locator("#ticket-subject").fill(ticketSubject("Client due"));
+    await chooseOption(page, drawer.locator("#ticket-user"), "Bea Agentb");
+    const dueDay = addDaysToKey(londonDayKey(new Date()), 6);
+    // Same default as the Tickets centre dialog: no due date, so the time box is disabled until a day is chosen.
+    await expect(drawer.getByTestId("ticket-due-time")).toBeDisabled();
+    await pickDate(page, drawer.getByTestId("ticket-due-date"), dueDay);
+    await chooseOption(page, drawer.getByTestId("ticket-due-time"), "14:45");
+    await drawer.getByTestId("drawer-footer").getByRole("button", { name: "Create Ticket" }).click();
+    await expect(drawer).toBeHidden();
+
+    await expect.poll(async () => (await queryRows(`select 1 from tickets where client_id = $1`, [client.id])).length).toBe(1);
+    const [row] = await queryRows<{ id: string }>(`select id from tickets where client_id = $1`, [client.id]);
+    const due = (await dbTicket(row.id)).due_date!;
+    expect(new Date(`${due.replace(" ", "T")}Z`).toISOString()).toBe(londonDateTimeToIso(dueDay, "14:45"));
+  });
+});
+
+test.describe("holiday Tickets tab list", () => {
+  test("starts with every ticket collapsed, lists five, and Show more / Show less reveals and hides the rest", async ({ page }) => {
+    const w = await workWorld(page);
+    await signIn(page, w.agent.email);
+    const client = await apiCreateClient(page.request);
+    const enquiry = await apiCreateEnquiry(page.request, w.agency, client.id, w.agent.id);
+    const tickets = [];
+    for (let i = 1; i <= 7; i++) {
+      tickets.push(await apiCreateTicket(page.request, { subject: ticketSubject(`List ${i}`), clientId: client.id, assignedTo: w.agent.id }));
+    }
+    await openHoliday(page, client.id, "enquiry", enquiry.enquiryId);
+    await page.getByTestId("holiday-activity-tab-tickets").click();
+    const list = page.getByTestId("holiday-detail-tickets");
+    const cards = list.locator('[data-testid^="holiday-ticket-"]:not([data-testid^="holiday-ticket-pin-"]):not([data-testid^="holiday-ticket-toggle-"])');
+    await expect(cards).toHaveCount(5);
+    await expect(list.getByTestId("holiday-tickets-show-more")).toHaveText("Show more (2)");
+    // Nothing is open by default: no ticket thread (and so no reply composer) is rendered.
+    await expect(list.locator('[data-testid^="ticket-reply-composer-"]')).toHaveCount(0);
+
+    await list.getByTestId("holiday-tickets-show-more").click();
+    await expect(cards).toHaveCount(7);
+    await expect(list.getByTestId("holiday-tickets-show-more")).toHaveText("Show less");
+    await list.getByTestId("holiday-tickets-show-more").click();
+    await expect(cards).toHaveCount(5);
+
+    // A pinned ticket from beyond the first five jumps to the top of the list.
+    const oldest = tickets[0];
+    await list.getByTestId("holiday-tickets-show-more").click();
+    await clickPin(page, page.getByTestId(`holiday-ticket-pin-${oldest.id}`));
+    await expect(page.getByTestId(`holiday-ticket-${oldest.id}`)).toHaveAttribute("data-pinned", "true");
+    await expect(cards.first()).toHaveAttribute("data-testid", `holiday-ticket-${oldest.id}`);
+
+    // Opening a card shows its thread.
+    await page.getByTestId(`holiday-ticket-toggle-${oldest.id}`).click();
+    await expect(list.locator('[data-testid^="ticket-reply-composer-"]')).toHaveCount(1);
+  });
+});
+
+/** Clicks a pin button and waits for its favourites toggle request to finish (the UI flips optimistically before it lands). */
+async function clickPin(page: Page, button: Locator) {
+  await Promise.all([
+    page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/favorites/toggle") && r.ok()),
+    button.click(),
+  ]);
+}
+
+test.describe("pin and unpin", () => {
+  test("the ticket page button and the enquiry Tickets tab card both pin, then unpin, and show amber while pinned", async ({ page }) => {
+    const w = await workWorld(page);
+    await signIn(page, w.agent.email);
+    const client = await apiCreateClient(page.request);
+    const t = await apiCreateTicket(page.request, { subject: ticketSubject("Pin toggle"), clientId: client.id, assignedTo: w.agent.id });
+    const enquiry = await apiCreateEnquiry(page.request, w.agency, client.id, w.agent.id);
+
+    // Ticket page: Pin -> Pinned -> Pin again (the bug left it on "Pinned" after the unpin).
+    await openTicket(page, t.id);
+    const pageButton = page.getByTestId("ticket-pin");
+    await expect(pageButton).toHaveText("Pin");
+    await clickPin(page, pageButton);
+    await expect(pageButton).toHaveText("Pinned");
+    await clickPin(page, pageButton);
+    await expect(pageButton).toHaveText("Pin");
+    await expect.poll(async () => (await queryRows(`select 1 from favorites where user_id = $1 and item_type = 'ticket' and item_id = $2`, [w.agent.id, t.id])).length).toBe(0);
+
+    // Enquiry Tickets tab: same toggle, with the card highlighted while pinned.
+    await openHoliday(page, client.id, "enquiry", enquiry.enquiryId);
+    await page.getByTestId("holiday-activity-tab-tickets").click();
+    const card = page.getByTestId(`holiday-ticket-${t.id}`);
+    const cardButton = page.getByTestId(`holiday-ticket-pin-${t.id}`);
+    await expect(card).toHaveAttribute("data-pinned", "false");
+    await expect(cardButton).toHaveText("Pin");
+    await clickPin(page, cardButton);
+    await expect(cardButton).toHaveText("Pinned");
+    await expect(card).toHaveAttribute("data-pinned", "true");
+    await expect(card).toHaveClass(/border-social-orange/);
+    await clickPin(page, cardButton);
+    await expect(cardButton).toHaveText("Pin");
+    await expect(card).toHaveAttribute("data-pinned", "false");
+    await expect.poll(async () => (await queryRows(`select 1 from favorites where user_id = $1 and item_type = 'ticket' and item_id = $2`, [w.agent.id, t.id])).length).toBe(0);
+
+    // Pinned from the tab, the ticket page agrees.
+    await clickPin(page, cardButton);
+    await expect(cardButton).toHaveText("Pinned");
+    await openTicket(page, t.id);
+    await expect(page.getByTestId("ticket-pin")).toHaveText("Pinned");
   });
 });

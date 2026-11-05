@@ -6,13 +6,22 @@ import { useCreateTicket } from "@/hooks/mutations";
 import { useToast } from "@/hooks/use-toast";
 import { ticketErrorMessage } from "@/features/tickets/lib/error-message";
 
-const EMPTY_TICKET_FORM = {
+/** Reply-due is an ISO instant (London date + 15-min time) or null, same default as the Tickets centre dialog. */
+const EMPTY_TICKET_FORM: {
+  subject: string;
+  type: string;
+  status: string;
+  priority: string;
+  description: string;
+  dueDate: string | null;
+  userId: string;
+} = {
   subject: "",
   type: "Sales",
   status: "Open",
   priority: "Medium",
   description: "",
-  dueDate: "",
+  dueDate: null,
   userId: "",
 };
 
@@ -94,7 +103,7 @@ export function useClientTicketCreate(clientId: string, currentUserId: string | 
         priority: ticketForm.priority,
         subject: ticketForm.subject.trim(),
         description: ticketForm.description || null,
-        dueDate: ticketForm.dueDate ? new Date(ticketForm.dueDate).toISOString() : null,
+        dueDate: ticketForm.dueDate,
         transactionId: link?.transactionId ?? null,
       },
       {

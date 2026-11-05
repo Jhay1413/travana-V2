@@ -17,6 +17,7 @@ vi.mock("./booking.repository", () => ({
     findByTransactionId: vi.fn(),
     findWithDetails: vi.fn(),
     getServiceCommission: vi.fn(),
+    getExtrasTotal: vi.fn(),
     findAllWithImages: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -101,6 +102,7 @@ const TRUSTED = { orgId: null } as const;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(bookingRepository.getServiceCommission).mockResolvedValue(0 as never);
+  vi.mocked(bookingRepository.getExtrasTotal).mockResolvedValue(0 as never);
 });
 
 describe("bookingService.getBookingWithDetails — price math", () => {
@@ -125,6 +127,17 @@ describe("bookingService.getBookingWithDetails — price math", () => {
 
     expect(bookingRepository.getServiceCommission).toHaveBeenCalledWith("b1");
     expect(result.service_commission).toBe(31.25);
+  });
+
+  it("adds the not-included extras total to total_price and exposes it as extras_total", async () => {
+    vi.mocked(bookingRepository.findWithDetails).mockResolvedValue({ id: "b1", sales_price: "1000", discounts: "100", service_charge: "20", adult: 1, child: 0 } as never);
+    vi.mocked(bookingRepository.getExtrasTotal).mockResolvedValue(150 as never);
+
+    const result = await bookingService.getBookingWithDetails("b1", TRUSTED);
+
+    expect(bookingRepository.getExtrasTotal).toHaveBeenCalledWith("b1");
+    expect(result.extras_total).toBe(150);
+    expect(result.total_price).toBe("1070.00");
   });
 
   it("computes total_price as sales − discount + service charge", async () => {

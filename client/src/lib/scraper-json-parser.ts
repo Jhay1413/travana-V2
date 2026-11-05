@@ -158,12 +158,7 @@ function mapToConnectingLeg(flight: ScraperFlight): ParsedConnectingLeg {
   };
 }
 
-export interface MapScraperOptions {
-  /** Social post quotes derive hotel check-in from the outbound arrival (see deriveCheckIn). */
-  socialCheckIn?: boolean;
-}
-
-export function mapScraperJsonToFormFields(data: ScraperJson, options: MapScraperOptions = {}) {
+export function mapScraperJsonToFormFields(data: ScraperJson) {
   const flights = Array.isArray(data.flights) ? data.flights : [];
   const outboundFlights = flights.filter((f) => isOutboundFlightType(f.flight_type));
   const inboundFlights = flights.filter((f) => isInboundFlightType(f.flight_type));
@@ -182,9 +177,6 @@ export function mapScraperJsonToFormFields(data: ScraperJson, options: MapScrape
   const inDep = parseDateTimePart(inbound?.departure_date_time);
   const inArr = parseDateTimePart(inbound?.arrival_date_time);
 
-  let checkInDate = hotelCheckIn.date || outDep.date;
-  let checkInTime = hotelCheckIn.time || outDep.time;
-
   if (!outDep.date && data.check_in_date_time) {
     const fallback = parseDateTimePart(data.check_in_date_time);
     outDep.date = outDep.date || fallback.date;
@@ -196,13 +188,19 @@ export function mapScraperJsonToFormFields(data: ScraperJson, options: MapScrape
     outArr.time = outArr.time || fallback.time;
   }
 
-  if (options.socialCheckIn) {
-    const lastLeg = outboundConnectingLegs[outboundConnectingLegs.length - 1];
-    const arrival = lastLeg ? { date: lastLeg.arriveDate, time: lastLeg.arriveTime } : outArr;
-    const derived = deriveCheckIn(arrival, convertToIsoDate(data.travel_date || "") || outDep.date);
-    checkInDate = derived.date;
-    checkInTime = derived.time;
-  }
+  // Hotel check-in for EVERY import follows the house rule (see deriveCheckIn):
+  // 15:00, or an hour after the outbound journey lands when that is later. Any
+  // check-in time the supplier page gives is deliberately ignored.
+  const lastOutboundLeg = outboundConnectingLegs[outboundConnectingLegs.length - 1];
+  const outboundArrival = lastOutboundLeg
+    ? { date: lastOutboundLeg.arriveDate, time: lastOutboundLeg.arriveTime }
+    : outArr;
+  const derivedCheckIn = deriveCheckIn(
+    outboundArrival,
+    hotelCheckIn.date || convertToIsoDate(data.travel_date || "") || outDep.date,
+  );
+  const checkInDate = derivedCheckIn.date;
+  const checkInTime = derivedCheckIn.time;
 
   const allImages: string[] = [];
   for (const src of [data.hotel_images, hotel?.hotel_images, data.room_images, hotel?.room_images, data.lodge_images]) {

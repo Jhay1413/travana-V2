@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveCheckIn } from "@/lib/check-in-time";
+import { deriveCheckIn, outboundArrivalOf } from "@/lib/check-in-time";
 
 describe("deriveCheckIn", () => {
   it("14:50 -> 15:00", () => {
@@ -25,5 +25,24 @@ describe("deriveCheckIn", () => {
   });
   it("overnight arrival uses the arrival (next) day", () => {
     expect(deriveCheckIn({ date: "2027-05-13", time: "06:10" }, "2027-05-12")).toEqual({ date: "2027-05-13", time: "15:00" });
+  });
+});
+
+describe("outboundArrivalOf", () => {
+  it("returns null when there is no arrival data", () => {
+    expect(outboundArrivalOf({})).toBeNull();
+    expect(outboundArrivalOf({ outboundConnectingLegs: [{}] })).toBeNull();
+  });
+  it("uses the main outbound arrival", () => {
+    expect(outboundArrivalOf({ outboundArriveDate: "2027-05-12", outboundArriveTime: "16:00" })).toEqual({ date: "2027-05-12", time: "16:00" });
+  });
+  it("prefers the last connecting leg", () => {
+    expect(
+      outboundArrivalOf({
+        outboundArriveDate: "2027-05-12",
+        outboundArriveTime: "08:00",
+        outboundConnectingLegs: [{ arriveDate: "2027-05-12", arriveTime: "12:00" }, { arriveDate: "2027-05-13", arriveTime: "01:00" }],
+      }),
+    ).toEqual({ date: "2027-05-13", time: "01:00" });
   });
 });

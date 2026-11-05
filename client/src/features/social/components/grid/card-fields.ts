@@ -81,12 +81,20 @@ export function deleteCopy(status: SocialPostStatus, postSchedule: string | null
 
 export type PostPlatform = "facebook" | "instagram";
 
+const PLATFORM_ORDER: PostPlatform[] = ["facebook", "instagram"];
+
 /**
- * Platforms a post goes out to. Posts carry no per-post platform and the settings
- * hold no platform flags, so the only per-org source is the connected channel.
- * Social Posts are Facebook-only for now, so a connected channel means Facebook;
- * nothing connected means no dots.
+ * Platforms a post goes out to, read from the targets saved when it was scheduled.
+ * A post with no saved targets predates the picker and is Facebook-only, which still
+ * needs the connected channel; nothing connected means no dots.
  */
-export function postPlatforms(_post: unknown, channel: SocialChannelInfo | null | undefined): PostPlatform[] {
+export function postPlatforms(
+  post: { onlySocialsTargets?: { accountId: number; platform: string }[] | null } | null | undefined,
+  channel: SocialChannelInfo | null | undefined,
+): PostPlatform[] {
+  const targets = post?.onlySocialsTargets;
+  if (targets && targets.length > 0) {
+    return PLATFORM_ORDER.filter((platform) => targets.some((t) => t.platform === platform));
+  }
   return channel && channel.workspaceConfigured && channel.apiKeyConfigured ? ["facebook"] : [];
 }

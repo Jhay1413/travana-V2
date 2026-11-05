@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { favoriteApi, type Favorite, type ToggleFavoritePayload } from "./favorite.api";
 import { favoriteKeys } from "./use-favorite-queries";
 import { transactionKeys } from "@/features/transaction/api/use-transaction-queries";
@@ -8,14 +8,20 @@ import { transactionKeys } from "@/features/transaction/api/use-transaction-quer
 // queries are refetched afterwards.
 const PIPELINE_PIN_TYPES: ReadonlySet<string> = new Set(["enquiry", "quote", "booking"]);
 
-export function useToggleFavorite() {
-  const queryClient = useQueryClient();
-  return useMutation({
+/**
+ * Mutation options for the pin toggle. This is the ONE place that flips the
+ * favourites cache optimistically (and rolls it back on error) - callers must
+ * not touch the cache themselves, or the pin is flipped twice and lands back
+ * where it started. Exported separately from the hook so it can be unit tested
+ * without a React renderer.
+ */
+export function toggleFavoriteMutationOptions(queryClient: QueryClient) {
+  return {
     mutationFn: (data: ToggleFavoritePayload) => favoriteApi.toggle(data),
     // Optimistic: flip the pin in the cached favourites list immediately so every
     // pin indicator (cards, list view, detail pages) responds without waiting
     // for the round trip.
-    onMutate: async (data) => {
+    onMutate: async (data: ToggleFavoritePayload) => {
       await queryClient.cancelQueries({ queryKey: favoriteKeys.all, exact: true });
       const previous = queryClient.getQueryData<Favorite[]>(favoriteKeys.all);
       if (previous) {
@@ -39,10 +45,10 @@ export function useToggleFavorite() {
       }
       return { previous };
     },
-    onError: (_err, _data, context) => {
+    onError: (_err: unknown, _data: ToggleFavoritePayload, context: { previous?: Favorite[] } | undefined) => {
       if (context?.previous) queryClient.setQueryData<Favorite[]>(favoriteKeys.all, context.previous);
     },
-    onSettled: (_result, _err, data) => {
+    onSettled: (_result: unknown, _err: unknown, data: ToggleFavoritePayload) => {
       queryClient.invalidateQueries({ queryKey: favoriteKeys.all });
       if (PIPELINE_PIN_TYPES.has(data.itemType)) {
         // Prefix match on ["transactions","pipeline",...]: every column re-sorts
@@ -50,7 +56,12 @@ export function useToggleFavorite() {
         queryClient.invalidateQueries({ queryKey: [...transactionKeys.all, "pipeline"] });
       }
     },
-  });
+  };
+}
+
+export function useToggleFavorite() {
+  const queryClient = useQueryClient();
+  return useMutation(toggleFavoriteMutationOptions(queryClient));
 }
 
 export function useRemoveFavorite() {

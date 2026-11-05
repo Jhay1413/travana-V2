@@ -1,5 +1,7 @@
 export interface NeonClient {
   id: string;
+  /** Set when an admin soft-deleted the client; only admins can still open the page (read-only). */
+  deletedAt?: string | null;
   title: string | null;
   firstName: string;
   surename: string;

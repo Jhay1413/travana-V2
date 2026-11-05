@@ -12,8 +12,6 @@ import {
   useClientTasks,
   transactionKeys,
 } from "@/hooks/queries";
-import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
-import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import type { Transaction, EnquiryTable } from "@/features/quote/types";
 import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
 import { enquiryApi } from "@/api";
@@ -25,6 +23,7 @@ import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
 
 import { transformNeonClientData } from "@/features/client/components/client-types";
 import { MergeClientDialog } from "@/features/client/components/modals/MergeClientDialog";
+import { DeleteClientDialog } from "@/features/client/components/modals/DeleteClientDialog";
 import { UploadFileDialog } from "@/features/client/components/modals/UploadFileDialog";
 import { HolidayDetailPage } from "@/features/client/components/holiday/holiday-detail-page";
 import { useQuoteExpiry } from "@/features/quote/components/hooks";
@@ -38,9 +37,8 @@ import { useLiveDealsState } from "@/features/client/components/page/use-live-de
 import { EditClientModal } from "@/features/client/components/page/modals/edit-client-modal";
 import { ReferrerModal } from "@/features/client/components/page/modals/referrer-modal";
 import { PortalPinModal } from "@/features/client/components/page/modals/portal-pin-modal";
-import { ShareClientModal } from "@/features/client/components/page/modals/share-client-modal";
 import { computeClientStats } from "@/features/client/lib/client-stats";
-import { isClientReadOnly } from "@/features/client/lib/client-access";
+import { canDeleteClient, isClientReadOnly } from "@/features/client/lib/client-access";
 import { buildDealLabels, buildTaskHolidays } from "@/features/client/lib/deal-labels";
 import { resolveSelectionTransactionId } from "@/features/client/lib/holiday-transaction";
 import type { HolidaySelection } from "@/features/client/types";
@@ -64,10 +62,8 @@ export default function ClientPage() {
   const { toast } = useToast();
 
   const { role, orgRole } = useRole();
-  const readOnly = isClientReadOnly(orgRole);
   const [showReferrerModal, setShowReferrerModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
   // Rail view state lives here so it survives opening a deal and coming back.
   const liveDealsState = useLiveDealsState();
   const [showQuoteCreateDialog, setShowQuoteCreateDialog] = useState(false);
@@ -76,6 +72,7 @@ export default function ClientPage() {
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
   const [convertingEnquiryInitialValues, setConvertingEnquiryInitialValues] = useState<Partial<QuoteFormValues> | undefined>(undefined);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [holidaySelection, setHolidaySelection] = useState<HolidaySelection | null>(null);
   const clientId = params?.clientId ?? "";
 
@@ -88,6 +85,9 @@ export default function ClientPage() {
   const quoteExpiry = useQuoteExpiry(holidaySelection?.type === "quote" ? holidaySelection.id : "");
 
   const { data: clientData, isLoading: isLoadingClient } = useNeonClient(clientId);
+  // A soft-deleted client (admins only can open it) is fully read-only: no edit, create, merge or delete.
+  const isDeleted = !!clientData?.deletedAt;
+  const readOnly = isClientReadOnly(orgRole) || isDeleted;
   // The overview stats and Live Deals list come from this query, so it must
   // reflect a deal created moments ago — even when the page was left and
   // re-entered inside the 30s default stale window.
@@ -97,8 +97,6 @@ export default function ClientPage() {
   const { data: usersData } = useUsers();
   const { data: currentUser } = useCurrentUser();
 
-  const { data: userFavorites } = useFavorites();
-  const toggleFavoriteMutation = useToggleFavorite();
   const queryClient = useQueryClient();
 
   const editForm = useClientEditForm(clientId, clientData);
@@ -169,23 +167,6 @@ export default function ClientPage() {
     if (!clientData) return null;
     return transformNeonClientData(clientData);
   }, [clientData]);
-
-  const isFavorited = useMemo(
-    () => userFavorites?.some((f) => f.itemId === clientId && f.itemType === "client") ?? false,
-    [userFavorites, clientId],
-  );
-
-  function handleToggleClientPin() {
-    if (!client) return;
-    toggleFavoriteMutation.mutate(
-      { itemType: "client", itemId: clientId, label: client.name, subtitle: client.email || undefined },
-      {
-        onSuccess: () =>
-          toast({ title: isFavorited ? "Client unpinned" : "Client pinned" }),
-        onError: () => toast({ title: "Failed to update pin", variant: "destructive" }),
-      },
-    );
-  }
 
   function handleChangeClientBadge(badge: string | null) {
     editForm.updateNeonClientMutation.mutate(
@@ -280,20 +261,27 @@ export default function ClientPage() {
       data-testid="section-client-profile"
     >
       <div className="flex min-w-0 flex-1 flex-col xl:min-h-0 xl:overflow-y-auto">
+        {isDeleted && (
+          <div
+            role="status"
+            className="border-b border-red-200 bg-red-50 px-4 py-2.5 text-[13px] font-medium text-red-700 md:px-8"
+            data-testid="client-deleted-banner"
+          >
+            Deleted client. This page is read-only. Their deals are still in the Pipeline and the portal link no longer works.
+          </div>
+        )}
         <ClientPageHeader
           name={client.name}
           phone={client.phone}
           clientData={clientData}
-          isFavorited={isFavorited}
           readOnly={readOnly}
           aiReplyEnabled={!!clientData?.aiReplyEnabled}
           onEdit={editForm.openEditDialog}
-          onShare={() => setShowShareModal(true)}
-          onTogglePin={handleToggleClientPin}
           onChangeBadge={handleChangeClientBadge}
           clientId={clientId}
           onCreate={handleCreate}
           onMerge={() => setShowMergeDialog(true)}
+          onDelete={canDeleteClient(orgRole) ? () => setShowDeleteDialog(true) : undefined}
           onToggleAiReply={handleToggleAiReply}
           onChangeReferrer={() => setShowReferrerModal(true)}
         />
@@ -457,6 +445,7 @@ export default function ClientPage() {
         open={editForm.showEditClient}
         onOpenChange={editForm.setShowEditClient}
         form={editForm.editForm}
+        phoneError={editForm.phoneError}
         setForm={editForm.setEditForm}
         onSave={editForm.handleSaveClient}
         isPending={editForm.isPending}
@@ -472,7 +461,6 @@ export default function ClientPage() {
         onClear={() => saveReferrer(null)}
       />
       <PortalPinModal clientId={clientId} open={showPinModal} onOpenChange={setShowPinModal} />
-      <ShareClientModal open={showShareModal} onOpenChange={setShowShareModal} />
 
       <EnquiryWizard
         presentation="drawer"
@@ -489,6 +477,14 @@ export default function ClientPage() {
         sourceClientId={clientId}
         sourceClientName={client?.name || "this client"}
         onMerged={(survivingClientId) => navigate(`/clients/${survivingClientId}`)}
+      />
+
+      <DeleteClientDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        clientId={clientId}
+        clientName={client?.name || "this client"}
+        onDeleted={() => navigate("/clients")}
       />
 
       <QuoteExpiryDialog

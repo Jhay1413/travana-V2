@@ -1,8 +1,10 @@
-import { CheckCircle2, Clock } from "lucide-react";
+import { CheckCircle2, Clock, Facebook, Instagram } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { EnrichedQuote } from "@/features/quote/types";
 import { derivePostStatus } from "../../lib/post-status";
 import { getFirstImage } from "../../lib/quote-card-fields";
+import { useSocialChannel } from "../../api/use-social-settings-queries";
+import { postPlatforms } from "../grid/card-fields";
 import { chipTime } from "./calendar-range";
 
 interface CalendarPostChipProps {
@@ -20,6 +22,8 @@ export function CalendarPostChip({ quote, large = false, onOpen, onDragStart, on
   const size = large ? 30 : 22;
   const StatusIcon = posted ? CheckCircle2 : Clock;
   const time = quote.postSchedule ? chipTime(quote.postSchedule) : "";
+  const { data: channel } = useSocialChannel();
+  const platforms = postPlatforms(quote, channel);
 
   return (
     <button
@@ -64,6 +68,17 @@ export function CalendarPostChip({ quote, large = false, onOpen, onDragStart, on
         >
           <StatusIcon className="h-3 w-3" aria-hidden="true" />
           {time}
+          {platforms.length > 0 && (
+            <span className="ml-auto flex items-center gap-0.5" data-testid="chip-platforms">
+              {platforms.map((p) =>
+                p === "instagram" ? (
+                  <Instagram key={p} role="img" aria-label="Instagram" className="h-3 w-3 text-pink-600" />
+                ) : (
+                  <Facebook key={p} role="img" aria-label="Facebook" className="h-3 w-3 text-blue-600" />
+                ),
+              )}
+            </span>
+          )}
         </span>
       </span>
     </button>

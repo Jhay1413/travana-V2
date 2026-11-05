@@ -37,6 +37,7 @@ import {
   useAccommodationSearch,
   useRoomTypes,
 } from "@/hooks/queries";
+import { withExtraDateDefaults, type ExtrasDateContext } from "@/features/quote/lib/extras-date-defaults";
 import { orderBoardBasisRows } from "@/features/lookups";
 import { operatorSelectOptions, useOperatorNames } from "@/features/tour-operator";
 
@@ -601,6 +602,7 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
                 onAddNew={() => setShowAddRoomType(true)}
                 addNewLabel="Add Room Type"
                 placeholder="Select room type..."
+                selectedFirst
               />
             </FormControl>
           </FormItem>
@@ -673,12 +675,18 @@ export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourO
   const totalExtras = transfers.length + carHires.length + attractionTickets.length + loungePasses.length + airportParkings.length + extraAccommodations.length;
 
   const handleAdd = (type: ExtraType) => {
-    if (type === "transfer") addTransfer({ bookingRef: "", tourOperatorId: "", pickUpLocation: "", dropOffLocation: "", pickUpDate: "", pickUpTime: "", dropOffDate: "", dropOffTime: "", note: "", cost: 0, commission: 0, isIncludedInPackage: true });
-    else if (type === "carHire") addCarHire({ bookingRef: "", tourOperatorId: "", pickUpLocation: "", dropOffLocation: "", pickUpDate: "", pickUpTime: "", dropOffDate: "", dropOffTime: "", noOfDays: 1, driverAge: 25, cost: 0, commission: 0, isIncludedInPackage: true });
-    else if (type === "attractionTicket") addAttractionTicket({ bookingRef: "", tourOperatorId: "", ticketType: "", dateOfVisit: "", numberOfTickets: 1, cost: 0, commission: 0, isIncludedInPackage: true });
-    else if (type === "loungePass") addLoungePass({ bookingRef: "", tourOperatorId: "", airportId: "", terminal: "", dateOfUsage: "", note: "", cost: 0, commission: 0, isIncludedInPackage: true });
-    else if (type === "airportParking") addAirportParking({ bookingRef: "", tourOperatorId: "", airportId: "", parkingType: "", parkingDate: "", carMake: "", carModel: "", colour: "", carRegNumber: "", duration: "", cost: 0, commission: 0, isIncludedInPackage: true });
-    else if (type === "extraAccommodation") addExtraAccommodation({ bookingRef: "", tourOperatorId: "", accommodationId: "", boardBasisId: "", roomType: "", checkInDate: "", checkInTime: "", noOfNights: 0, cost: 0, commission: 0, isIncludedInPackage: true });
+    // New rows pick up the quote travel / return dates (empty fields only).
+    const v = formMethods.getValues();
+    const dates: ExtrasDateContext = {
+      travelDate: v.travelDate, checkInDate: v.checkInDate, cruiseDate: v.cruiseDate,
+      inboundDepartDate: v.inboundDepartDate, nights: v.nights,
+    };
+    if (type === "transfer") addTransfer(withExtraDateDefaults(type, { bookingRef: "", tourOperatorId: "", pickUpLocation: "", dropOffLocation: "", pickUpDate: "", pickUpTime: "", dropOffDate: "", dropOffTime: "", note: "", cost: 0, commission: 0, isIncludedInPackage: true }, dates));
+    else if (type === "carHire") addCarHire(withExtraDateDefaults(type, { bookingRef: "", tourOperatorId: "", pickUpLocation: "", dropOffLocation: "", pickUpDate: "", pickUpTime: "", dropOffDate: "", dropOffTime: "", noOfDays: 1, driverAge: 25, cost: 0, commission: 0, isIncludedInPackage: true }, dates));
+    else if (type === "attractionTicket") addAttractionTicket(withExtraDateDefaults(type, { bookingRef: "", tourOperatorId: "", ticketType: "", dateOfVisit: "", numberOfTickets: 1, cost: 0, commission: 0, isIncludedInPackage: true }, dates));
+    else if (type === "loungePass") addLoungePass(withExtraDateDefaults(type, { bookingRef: "", tourOperatorId: "", airportId: "", terminal: "", dateOfUsage: "", note: "", cost: 0, commission: 0, isIncludedInPackage: true }, dates));
+    else if (type === "airportParking") addAirportParking(withExtraDateDefaults(type, { bookingRef: "", tourOperatorId: "", airportId: "", parkingType: "", parkingDate: "", carMake: "", carModel: "", colour: "", carRegNumber: "", duration: "", cost: 0, commission: 0, isIncludedInPackage: true }, dates));
+    else if (type === "extraAccommodation") addExtraAccommodation(withExtraDateDefaults(type, { bookingRef: "", tourOperatorId: "", accommodationId: "", boardBasisId: "", roomType: "", checkInDate: "", checkInTime: "", noOfNights: 0, cost: 0, commission: 0, isIncludedInPackage: true }, dates));
   };
 
   return (

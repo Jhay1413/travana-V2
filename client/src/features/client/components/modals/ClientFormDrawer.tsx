@@ -33,6 +33,8 @@ import {
   drawerControlClass,
   drawerInputClass,
 } from "@/components/shared/form-drawer";
+import { PHONE_INPUT_MAX_LENGTH } from "@shared/phone";
+import { getClientPhoneError } from "@/features/client/lib/client-phone";
 import type { FormPresentation } from "@/features/quote/types";
 import type { ClientCreateForm } from "@/features/client/components/hooks/use-client-create-form";
 import type { ClientEditForm } from "@/features/client/components/hooks/use-client-edit-form";
@@ -64,6 +66,8 @@ interface ClientFormDrawerEditProps {
   setEditForm: (form: ClientEditForm) => void;
   onSave: () => void;
   isPending: boolean;
+  /** Inline error for the phone field (only set when the number was changed). */
+  phoneError?: string | null;
   /** "drawer" renders the right-hand Create / Edit drawer used on the client dashboard. */
   presentation?: FormPresentation;
 }
@@ -94,7 +98,8 @@ function ClientAddForm({
   presentation = "dialog",
 }: ClientFormDrawerAddProps) {
   const isDrawer = presentation === "drawer";
-  const canSubmit = !!form.firstName && !!form.lastName && !!form.phone;
+  const phoneError = getClientPhoneError(form.phone);
+  const canSubmit = !!form.firstName && !!form.lastName && !!form.phone && !phoneError;
   const triggerCls = isDrawer ? drawerControlClass : "rounded-xl";
   const inputCls = isDrawer ? drawerInputClass : "rounded-xl";
 
@@ -149,13 +154,18 @@ function ClientAddForm({
   );
 
   const phoneField = (
+    <>
     <Input
       id="phone"
       value={form.phone}
       onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
       className={inputCls}
+      maxLength={PHONE_INPUT_MAX_LENGTH}
+      aria-invalid={!!phoneError}
       data-testid="input-phone"
     />
+    {phoneError && <p className="mt-1 text-xs text-destructive" data-testid="error-phone">{phoneError}</p>}
+    </>
   );
 
   const emailField = (
@@ -409,6 +419,7 @@ function ClientEditFormView({
   setEditForm,
   onSave,
   isPending,
+  phoneError,
   presentation = "dialog",
 }: ClientFormDrawerEditProps) {
   const isDrawer = presentation === "drawer";
@@ -472,13 +483,18 @@ function ClientEditFormView({
   );
 
   const phoneField = (
+    <>
     <Input
       id="edit-phone"
       value={editForm.phoneNumber}
       onChange={(e) => setEditForm({ ...editForm, phoneNumber: e.target.value })}
       className={inputCls}
+      maxLength={PHONE_INPUT_MAX_LENGTH}
+      aria-invalid={!!phoneError}
       data-testid="input-edit-phone"
     />
+    {phoneError && <p className="mt-1 text-xs text-destructive" data-testid="error-edit-phone">{phoneError}</p>}
+    </>
   );
 
   const emailField = (
@@ -582,6 +598,7 @@ function ClientEditFormView({
         <FormDrawerFooter
           submitLabel="Save Changes"
           isLoading={isPending}
+          disabled={!!phoneError}
           onSubmit={onSave}
           data-testid="drawer-footer"
         />
@@ -670,7 +687,7 @@ function ClientEditFormView({
             <Button
               className="rounded-2xl bg-[#3b82f6] text-white hover:bg-[#2563eb]"
               onClick={onSave}
-              disabled={isPending}
+              disabled={isPending || !!phoneError}
               data-testid="button-edit-save"
             >
               {isPending ? "Saving..." : "Save Changes"}

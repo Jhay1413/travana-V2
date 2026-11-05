@@ -62,6 +62,7 @@ export const fieldRuleSchema = z.object({
   transform: z.preprocess(nullToUndef, z.enum(['number', 'date', 'titleCase', 'trim', 'lower', 'upper']).optional()),
   map: z.preprocess(nullToUndef, z.record(z.string(), z.string()).optional()),
   fallback: z.preprocess(nullToUndef, z.union([z.string(), z.number()]).optional()),
+  joinAll: z.preprocess(nullToUndef, z.string().optional()),
   // Provenance metadata only (extraction.types.ts) — the interpreter never
   // reads these when running a rule. The AI never emits them (they're not in
   // SYSTEM_PROMPT); they're written by deriveSpecFromPicks (picker-spec.ts)
@@ -113,7 +114,21 @@ export const specSchema = z.object({
   // every spec that set it silently lost it before it ever reached the
   // interpreter. Keep specSchema and ExtractionSpec in lockstep; the round-trip
   // test in spec-sources.test.ts exists to catch the next one of these.
-  imageContainerIncludes: z.preprocess(nullToUndef, z.string().optional()),
+  imageContainerIncludes: z.preprocess(
+    nullToUndef,
+    z
+      .union([
+        z.string(),
+        z.array(
+          z.union([
+            z.string(),
+            z.object({ match: z.string(), max: z.preprocess(nullToUndef, z.number().int().min(1).optional()) }),
+          ]),
+        ),
+      ])
+      .optional(),
+  ),
+  imageJsonPaths: z.preprocess(nullToUndef, z.array(z.string()).optional()),
   flightModalTrigger: z.preprocess(nullToUndef, z.string().optional()),
   // Set only by the field picker (picker-spec.ts) — kept here so a spec that
   // carries them is never stripped by a round-trip through this schema.

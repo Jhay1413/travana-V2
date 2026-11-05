@@ -1,20 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, X } from "lucide-react";
+import { departureDatesForCheckIn } from "@/features/quote/lib/departure-dates";
+import { Loader2 } from "lucide-react";
 import { parseISO, isValid, addDays, format } from "date-fns";
 import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { handleJsonUpload as handleJsonUploadUtil, handleJsonData, type JsonImportDeps } from "@/lib/json-import-handler";
-import {
-  usePageCaptureImport,
-  type CapturedPage,
-  type ImportValidation,
-} from "@/features/quote/api/use-page-capture-import";
-import { withMoneyFieldsQuarantined } from "@/features/quote/lib/import-validation";
+import type { JsonImportDeps } from "@/lib/json-import-handler";
+import { useDealCaptureImport } from "@/features/quote/api/use-deal-capture-import";
 import { pricePerPersonFor } from "@/features/quote/lib/pricing";
-import { deriveCheckIn } from "@/lib/check-in-time";
-import { ImportValidationPanel } from "@/features/quote/components/sections/ImportValidationPanel";
-import { SupplierScraperPicksResultView, type SupplierScraperPicksResult } from "@/features/supplier-scraper";
+import { deriveCheckIn, outboundArrivalOf } from "@/lib/check-in-time";
+import { DealImportFeedback } from "@/features/quote/components/sections/DealImportFeedback";
 import {
   existingImageItem,
   pendingFiles,
@@ -220,36 +215,45 @@ export function QuoteRHFForm({
   }, [tourOperatorId, price, discount, serviceCharge, tourOperatorsData, form, setValue]);
 
   // ── Flight date sync from check-in date ──────────────────────────────────
-  useEffect(() => {
-    if (!checkInDate) return;
-    const date = parseISO(checkInDate);
-    if (!isValid(date)) return;
-    // Social posts derive check-in FROM the flights (it can be the day after an
-    // overnight arrival), so it must not overwrite an already-set departure date.
-    if (!socialPost || !form.getValues("outboundDepartDate")) {
-      setValue("outboundDepartDate", checkInDate, { shouldDirty: true });
-    }
-    const nightCount = Number(nights) || 0;
-    if (nightCount > 0) {
-      setValue("inboundDepartDate", format(addDays(date, nightCount), "yyyy-MM-dd"), { shouldDirty: true });
-    }
-  }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Social post: auto-fill check-in from the outbound arrival ─────────────
-  // Applies only while the user hasn't hand-edited the value (it is empty, the
-  // form default, or still what we last filled in).
   const outboundArriveDate = useWatch({ control, name: "outboundArriveDate" });
   const outboundArriveTime = useWatch({ control, name: "outboundArriveTime" });
   const outboundConnectingLegs = useWatch({ control, name: "outboundConnectingLegs" });
   const travelDate = useWatch({ control, name: "travelDate" });
-  const lastAutoCheckIn = useRef<{ date: string; time: string } | null>(null);
+  // The first run is skipped so merely opening a saved quote (non-social) never rewrites its stored flight dates.
+  const isDepartureFirstRun = useRef(true);
   useEffect(() => {
-    if (!socialPost) return;
-    const lastLeg = outboundConnectingLegs?.[outboundConnectingLegs.length - 1];
-    const arrival = lastLeg?.arriveDate || lastLeg?.arriveTime
-      ? { date: lastLeg.arriveDate, time: lastLeg.arriveTime }
-      : { date: outboundArriveDate, time: outboundArriveTime };
-    if (!arrival.date && !arrival.time) return;
+    if (isDepartureFirstRun.current) {
+      isDepartureFirstRun.current = false;
+      if (!socialPost) return;
+    }
+    const arrival = outboundArrivalOf(form.getValues());
+    const update = departureDatesForCheckIn({
+      checkInDate,
+      nights,
+      currentOutboundDepart: form.getValues("outboundDepartDate"),
+      checkInIsDerived: !!arrival && deriveCheckIn(arrival, form.getValues("travelDate")).date === checkInDate,
+      socialPost,
+    });
+    if (update.outboundDepartDate) setValue("outboundDepartDate", update.outboundDepartDate, { shouldDirty: true });
+    if (update.inboundDepartDate) setValue("inboundDepartDate", update.inboundDepartDate, { shouldDirty: true });
+  }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Auto-fill check-in from the outbound arrival (every quote) ────────────
+  // House rule (see deriveCheckIn): 15:00, or an hour after landing when later.
+  // Applies only while the user hasn't hand-edited the value (it is empty, the
+  // 15:00 default, or still what we last filled in). The first run is skipped
+  // so merely opening a saved (non-social) quote never rewrites its stored check-in.
+  const lastAutoCheckIn = useRef<{ date: string; time: string } | null>(null);
+  const isCheckInFirstRun = useRef(true);
+  useEffect(() => {
+    if (isCheckInFirstRun.current) {
+      isCheckInFirstRun.current = false;
+      // Social posts have always derived on mount (their defaults carry the
+      // flights but not the check-in); saved normal quotes must be left alone.
+      if (!socialPost) return;
+    }
+    const arrival = outboundArrivalOf({ outboundArriveDate, outboundArriveTime, outboundConnectingLegs });
+    if (!arrival) return;
     const derived = deriveCheckIn(arrival, travelDate);
     const last = lastAutoCheckIn.current;
     const currentDate = form.getValues("checkInDate") ?? "";
@@ -264,8 +268,8 @@ export function QuoteRHFForm({
   }, [socialPost, outboundArriveDate, outboundArriveTime, outboundConnectingLegs, travelDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── JSON upload ───────────────────────────────────────────────────────────
-  // Shared by the file-based JSON import and the easyJet URL import: stage the
-  // current images for deletion and build the deps object the importer needs.
+  // Used by the Import Deal flow: stage the current images for deletion and
+  // build the deps object the importer needs.
   const prepareJsonImport = (): JsonImportDeps => {
     // Clear all existing images and stage them for deletion before importing new ones
     setDeletedImageIds((prev) => [
@@ -284,80 +288,15 @@ export function QuoteRHFForm({
       toast,
       setImageUrls: setImageUrlsFromJson,
       skipLodgeResetRef,
-      socialPost,
       fallbackFieldMapper: (data, setIfPresent) => {
         setIfPresent("quoteLink", data.quoteLink || data.quote_link || data.link || data.source_url);
       },
     };
   };
 
-  // True while a JSON file or supplier-URL import is running — drives the
-  // blurred loading overlay over the whole form.
-  const [isImporting, setIsImporting] = useState(false);
-
-  const handleJsonUpload = async (file: File) => {
-    setIsImporting(true);
-    try {
-      await handleJsonUploadUtil(file, prepareJsonImport());
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
   // ── Captured-page import ──────────────────────────────────────────────────
-  // For credentialed suppliers the agent captures the deal page in their own
-  // (already logged-in) browser via the bookmarklet; the server only interprets
-  // it. No stored credentials, no headless browser, no bot protection to clear.
-  const pageCaptureImport = usePageCaptureImport();
-  // The API validates the extracted quote (EXTRACTION_AUDIT.md §4 Phase 1) but
-  // never blocks on it — the deal always lands in the form. What's shown here
-  // is purely "double-check these before saving".
-  const [importValidation, setImportValidation] = useState<ImportValidation | null>(null);
-  // Present only when the pasted/clipboard capture carried field-picker picks
-  // (see use-page-capture-import.ts's PickedField/picks) — i.e. an agent had
-  // already told the picker where a field lived on THIS supplier's page.
-  // Rendered below via the same SupplierScraperPicksResultView the standalone
-  // "Apply field picks" screen uses, so an agent gets the same
-  // applied/couldn't-map/preserved breakdown right here instead of having to
-  // know that other screen exists.
-  const [importPicks, setImportPicks] = useState<SupplierScraperPicksResult | null>(null);
-  const handlePageCaptureImport = (capture: CapturedPage, supplierKey: string) => {
-    setIsImporting(true);
-    setImportValidation(null);
-    setImportPicks(null);
-    pageCaptureImport.mutate(
-      // Omit the key entirely when auto-detecting, rather than sending "".
-      supplierKey ? { ...capture, supplierKey } : capture,
-      {
-        onSuccess: async (result) => {
-          try {
-            // Money fields (sales_price, price_per_person) that failed
-            // validation are dropped here rather than auto-filled — the
-            // agent types the number instead of trusting one that may be
-            // wrong. Fields with only a warning still populate.
-            const quoteForImport = withMoneyFieldsQuarantined(result.quote, result.validation);
-            await handleJsonData(quoteForImport as Record<string, any>, prepareJsonImport());
-            setImportValidation(result.validation ?? null);
-            setImportPicks(result.picks ?? null);
-            // Surfaces "created supplier X / learned its spec — review it", so a
-            // newly auto-configured supplier doesn't go unnoticed.
-            if (result.message) toast({ title: "Imported", description: result.message });
-          } finally {
-            setIsImporting(false);
-          }
-        },
-        onError: (error) => {
-          setIsImporting(false);
-          toast({
-            title: "Import failed",
-            description:
-              error instanceof Error ? error.message : "Could not read the captured page.",
-            variant: "destructive",
-          });
-        },
-      },
-    );
-  };
+  // Shared with the booking form — see useDealCaptureImport.
+  const dealImport = useDealCaptureImport(prepareJsonImport);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -383,7 +322,7 @@ export function QuoteRHFForm({
       )} className={isDrawer ? "relative" : "relative space-y-4"} data-form-layout={layout}>
 
         {/* ── IMPORT LOADER (blurs the form while a JSON/URL import runs) ───── */}
-        {isImporting && (
+        {dealImport.isImporting && (
           <div
             className="absolute inset-0 z-50 rounded-xl bg-background/60 backdrop-blur-sm"
             aria-busy="true"
@@ -402,36 +341,16 @@ export function QuoteRHFForm({
             <div className="px-7 pt-5">
               <QuoteImportRow
                 hideNotForSocial
-                onJsonUpload={handleJsonUpload}
-                onPageCaptureImport={handlePageCaptureImport}
-                pageCapturePending={pageCaptureImport.isPending}
+                onPageCaptureImport={dealImport.importCapture}
+                pageCapturePending={dealImport.isPending}
               />
-
-              {/* ── IMPORT VALIDATION (errors/warnings from the last capture import) */}
-              {importValidation && (
-                <div className="mt-3">
-                  <ImportValidationPanel validation={importValidation} onDismiss={() => setImportValidation(null)} />
-                </div>
-              )}
-
-              {/* ── FIELD PICKS APPLIED — same feedback the card/dialog layout
-                   shows, so a drawer import doesn't silently drop it. */}
-              {importPicks && (
-                <div className="mt-3 space-y-2 rounded-xl border border-black/10 bg-white/70 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-semibold text-black/70">Field picks applied to this supplier's spec</p>
-                    <button
-                      type="button"
-                      onClick={() => setImportPicks(null)}
-                      aria-label="Dismiss field-pick results"
-                      className="text-black/40 transition hover:text-black/70"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <SupplierScraperPicksResultView result={importPicks} />
-                </div>
-              )}
+              <DealImportFeedback
+                spaced
+                validation={dealImport.validation}
+                picks={dealImport.picks}
+                onDismissValidation={dealImport.dismissValidation}
+                onDismissPicks={dealImport.dismissPicks}
+              />
             </div>
             <QuoteDrawerOverview />
             <QuoteDrawerTravelSection showCruiseStay={isCruise} showFlightExtras={!isHotTubBreak} />
@@ -507,38 +426,17 @@ export function QuoteRHFForm({
         {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
         <QuoteImportRow
           hideNotForSocial={socialPost}
-          onJsonUpload={handleJsonUpload}
-          onPageCaptureImport={handlePageCaptureImport}
-          pageCapturePending={pageCaptureImport.isPending}
+          onPageCaptureImport={dealImport.importCapture}
+          pageCapturePending={dealImport.isPending}
         />
 
-        {/* ── IMPORT VALIDATION (errors/warnings from the last capture import) */}
-        {importValidation && (
-          <ImportValidationPanel validation={importValidation} onDismiss={() => setImportValidation(null)} />
-        )}
-
-        {/* ── FIELD PICKS APPLIED (only present when this capture carried
-             field-picker picks — see use-page-capture-import.ts) — tells the
-             agent what got mapped into the supplier's spec and what couldn't
-             be, right where the import happened, instead of only being
-             visible on the separate supplier-scrapers "Apply field picks"
-             screen an agent has no reason to know about. */}
-        {importPicks && (
-          <div className="space-y-2 rounded-xl border border-black/10 bg-white/70 p-3">
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-xs font-semibold text-black/70">Field picks applied to this supplier's spec</p>
-              <button
-                type="button"
-                onClick={() => setImportPicks(null)}
-                aria-label="Dismiss field-pick results"
-                className="text-black/40 transition hover:text-black/70"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <SupplierScraperPicksResultView result={importPicks} />
-          </div>
-        )}
+        {/* ── IMPORT FEEDBACK (validation warnings + field picks applied) ───── */}
+        <DealImportFeedback
+          validation={dealImport.validation}
+          picks={dealImport.picks}
+          onDismissValidation={dealImport.dismissValidation}
+          onDismissPicks={dealImport.dismissPicks}
+        />
 
         {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
         <QuoteOverviewSection />

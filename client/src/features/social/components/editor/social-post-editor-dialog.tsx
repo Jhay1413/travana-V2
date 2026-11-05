@@ -16,11 +16,23 @@ import {
   useRescheduleOnOnlySocials,
 } from "@/features/social/api/use-social-post-mutations";
 import { useToast } from "@/hooks/use-toast";
+import { errorMessage } from "@/features/social/lib/error-message";
+import { toOnlySocialsBody, onlySocialsPlainLength } from "@shared/social-post-body";
+import { useSocialAccounts } from "@/features/social/api/use-social-settings-queries";
 import { Clock, Send, Sparkles } from "lucide-react";
 import { editorHtmlToPost, postToEditorHtml } from "@/lib/post-editor-html";
 import { browserTimezoneLabel, combineLocal, splitLocal } from "@/features/social/lib/schedule-time";
 import { PostContentForm } from "./post-content-form";
 import { FacebookOptionsCard } from "./facebook-options-card";
+import { PlatformPicker } from "./platform-picker";
+import {
+  platformsSentence,
+  scheduleBlockReason,
+  seedSelection,
+  selectedPlatforms,
+  selectionSignature,
+  toggleAccount,
+} from "./platform-selection";
 import { PostImagesGrid } from "./post-images-grid";
 import { PostPreviewPanel } from "./post-preview-panel";
 import { PostEditorFooter } from "./post-editor-footer";
@@ -73,11 +85,31 @@ export function SocialPostEditorDialog({
   // What was loaded, for the unsaved-changes guard.
   const baseline = useRef<Pick<EditorSnapshot, "post" | "schedule"> | null>(null);
   const baselineImages = useRef<string | null>(null);
+  const accountsQuery = useSocialAccounts(open && !!travelDeal, travelDeal?.id);
+  const accounts = accountsQuery.data?.accounts ?? [];
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  // Which deal the selection was seeded for, so a later account-list refresh never overwrites the user's ticks.
+  const seededFor = useRef<string | null>(null);
+  const baselineAccounts = useRef<string | null>(null);
 
   const isScheduled = !!travelDeal?.onlySocialsId;
+  // Still waiting to go out: saving the text also updates the post on OnlySocials. Once posted it is local only.
+  const isPending = isScheduled && !!travelDeal?.postSchedule && new Date(travelDeal.postSchedule).getTime() > Date.now();
   const isBusy = savePost.isPending || scheduleOnOnlySocials.isPending || rescheduleOnOnlySocials.isPending;
   const images = usePostImages({ open, travelDeal, quoteId, quoteImageUrl, isScheduled });
   const { imageOrder, formatCount, signature, imagesLoaded } = images;
+
+  const platforms = selectedPlatforms(accounts, selectedIds);
+  const blockReason = accountsQuery.data
+    ? scheduleBlockReason({
+        accounts,
+        ids: selectedIds,
+        imageCount: imageOrder.length,
+        captionLength: onlySocialsPlainLength(toOnlySocialsBody(previewHtml)),
+      })
+    : accountsQuery.isError
+      ? "Couldn't load connected accounts."
+      : "Loading connected accounts…";
 
   const scheduleValue = () => (scheduleDate ? `${scheduleDate}T${scheduleTime}` : "");
   const currentPost = () => editorHtmlToPost(postRef.current?.innerHTML ?? "");
@@ -108,6 +140,8 @@ export function SocialPostEditorDialog({
     } else {
       baseline.current = null;
       baselineImages.current = null;
+      baselineAccounts.current = null;
+      seededFor.current = null;
       setScheduleOn(true);
     }
   }, [open, initialViewLink, initialPriceBadge]);
@@ -123,6 +157,20 @@ export function SocialPostEditorDialog({
     if (open && imagesLoaded && baselineImages.current === null) baselineImages.current = signature;
   }, [open, imagesLoaded, signature]);
 
+  // Seed the ticked accounts once per deal, as soon as both the deal and the account list are known.
+  useEffect(() => {
+    if (!open || !travelDeal || isGenerating || !accountsQuery.data) return;
+    if (seededFor.current === travelDeal.id) return;
+    seededFor.current = travelDeal.id;
+    const ids = seedSelection({
+      accounts: accountsQuery.data.accounts,
+      stored: travelDeal.only_socials_targets,
+      hasOnlySocialsPost: !!travelDeal.onlySocialsId,
+    });
+    setSelectedIds(ids);
+    baselineAccounts.current = selectionSignature(ids);
+  }, [open, travelDeal, isGenerating, accountsQuery.data]);
+
   useEffect(() => () => cancelAnimationFrame(previewFrame.current), []);
 
   const handleEditorInput = () => {
@@ -136,8 +184,8 @@ export function SocialPostEditorDialog({
   const isDirty = () => {
     if (!travelDeal || !baseline.current) return false;
     return isDirtySnapshot(
-      { ...baseline.current, images: baselineImages.current },
-      { post: currentPost(), schedule: scheduleValue(), images: signature },
+      { ...baseline.current, images: baselineImages.current, accounts: baselineAccounts.current },
+      { post: currentPost(), schedule: scheduleValue(), images: signature, accounts: selectionSignature(selectedIds) },
     );
   };
 
@@ -152,13 +200,23 @@ export function SocialPostEditorDialog({
   const handleSaveDraft = async () => {
     if (!travelDeal) return;
     try {
-      await savePost.mutateAsync({ id: travelDeal.id, data: { post: currentPost() } });
+      // A scheduled post keeps its accounts until it is rescheduled; only a draft remembers the ticks.
+      const accountIds = !isScheduled && accountsQuery.data && selectedIds.length > 0 ? { accountIds: selectedIds } : {};
+      await savePost.mutateAsync({ id: travelDeal.id, data: { post: currentPost(), ...accountIds } });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to save post";
-      toast({ title: "Save failed", description: msg, variant: "destructive" });
+      const msg = errorMessage(err, isPending ? "Couldn't update the scheduled post on Facebook/Instagram — nothing was changed" : "Failed to save post");
+      // The server saves the text before it checks the accounts, and says so in its message.
+      const textKept = msg.startsWith("Your text was saved");
+      toast({ title: textKept ? "Text saved, accounts not saved" : "Save failed", description: msg, variant: "destructive" });
       return;
     }
-    toast({ title: "Draft saved" });
+    if (isPending) {
+      toast({ title: "Scheduled post updated", description: "The new text is saved here and on the scheduled post. Its date, time, accounts and images are unchanged." });
+    } else if (isScheduled) {
+      toast({ title: "Text saved", description: "This post has already gone out, so only the text kept here was changed." });
+    } else {
+      toast({ title: "Draft saved", description: "Find it under Drafts." });
+    }
     onSavedDraft?.();
     onOpenChange(false);
   };
@@ -167,6 +225,10 @@ export function SocialPostEditorDialog({
     if (!travelDeal) return;
     if (!scheduleOn || !scheduleDate || !scheduleTime) {
       toast({ title: "Please select a schedule date and time", variant: "destructive" });
+      return;
+    }
+    if (blockReason) {
+      toast({ title: "Can not schedule yet", description: blockReason, variant: "destructive" });
       return;
     }
 
@@ -201,6 +263,7 @@ export function SocialPostEditorDialog({
       formData.append("existingImageIds", JSON.stringify(upload.existingIds));
       formData.append("imageUrls", JSON.stringify(upload.urls));
       formData.append("imageOrder", JSON.stringify(upload.tokens));
+      formData.append("accountIds", JSON.stringify(selectedIds));
       upload.files.forEach((file) => formData.append("files", file));
 
       let result;
@@ -267,7 +330,7 @@ export function SocialPostEditorDialog({
                 {isGenerating ? "Generating Post..." : "Social Post Editor"}
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                One post for both channels. Check each preview, pick a time, then schedule or save a draft.
+                {platformsSentence(platforms)} Check the preview, pick a time, then schedule or save the text as a draft.
               </DialogDescription>
             </div>
             <div className="ml-auto flex items-center gap-2">
@@ -305,6 +368,8 @@ export function SocialPostEditorDialog({
                     priceLabel={priceLabel}
                     showViewLink={viewLink}
                     showPriceBadge={priceBadge}
+                    platforms={platforms}
+                    instagramName={accounts.find((a) => selectedIds.includes(a.id) && a.platform === "instagram")?.name}
                   />
                 </div>
                 <div className="flex flex-1 flex-col gap-4 p-6 md:overflow-y-auto">
@@ -314,12 +379,24 @@ export function SocialPostEditorDialog({
                     previewHtml={previewHtml}
                     onRegenerate={onRegenerate}
                   />
-                  <FacebookOptionsCard
-                    viewLink={viewLink}
-                    onViewLinkChange={setViewLink}
-                    priceBadge={priceBadge}
-                    onPriceBadgeChange={setPriceBadge}
+                  <PlatformPicker
+                    accounts={accounts}
+                    selectedIds={selectedIds}
+                    onToggle={(id) => setSelectedIds((prev) => toggleAccount(prev, id))}
+                    isLoading={accountsQuery.isLoading}
+                    loadError={accountsQuery.isError}
+                    onRetry={() => void accountsQuery.refetch()}
+                    configured={accountsQuery.data?.configured ?? true}
+                    blockReason={accountsQuery.data ? blockReason : null}
                   />
+                  {platforms.includes("facebook") && (
+                    <FacebookOptionsCard
+                      viewLink={viewLink}
+                      onViewLinkChange={setViewLink}
+                      priceBadge={priceBadge}
+                      onPriceBadgeChange={setPriceBadge}
+                    />
+                  )}
                   <PostImagesGrid
                     urlImages={images.urlImages}
                     pendingFileCount={images.pendingFiles.length}
@@ -347,7 +424,9 @@ export function SocialPostEditorDialog({
                 timeShortcuts={timeShortcuts}
                 timezoneLabel={browserTimezoneLabel(timezoneLabel)}
                 isScheduled={isScheduled}
+                isPending={isPending}
                 isBusy={isBusy}
+                scheduleBlocked={!!blockReason}
                 formatCount={formatCount}
                 onSaveDraft={handleSaveDraft}
                 onSchedule={handleSaveAndSchedule}

@@ -22,7 +22,7 @@ export const STATUS_META: Record<SocialPostStatus, { label: string; plural: stri
     plural: "Not scheduled",
     badgeClass: "bg-status-draft-bg text-status-draft-fg",
   },
-  draft: { label: "Not scheduled", plural: "Not scheduled", badgeClass: "bg-status-draft-bg text-status-draft-fg" },
+  draft: { label: "Draft", plural: "Drafts", badgeClass: "bg-status-draft-bg text-status-draft-fg" },
   scheduled: {
     label: "Scheduled",
     plural: "Scheduled",

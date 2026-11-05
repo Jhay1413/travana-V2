@@ -228,7 +228,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
   // backend-computed value and fall back to computing it locally for older API responses.
   const totalPrice = (apiData as any).total_price != null
     ? parseFloat(String((apiData as any).total_price)) || 0
-    : salesPrice - discounts + serviceCharge;
+    : salesPrice - discounts + serviceCharge + (parseFloat(String(apiData.extras_total ?? "0")) || 0);
 
   const money = computeQuoteMoney({
     sales_price: apiData.sales_price,
@@ -236,6 +236,7 @@ export function transformQuoteData(apiData: EnrichedQuote | EnrichedBooking): Qu
     service_charge: apiData.service_charge,
     package_commission: apiData.package_commission,
     service_commission: apiData.service_commission,
+    extras_total: apiData.extras_total,
   });
 
   const childPassengers = (apiData.passengers || []).filter((p: Passenger) => p.type === "child");

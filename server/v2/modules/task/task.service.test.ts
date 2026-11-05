@@ -429,7 +429,7 @@ describe("taskService.listByEntity verifies the entity first (Q1)", () => {
   it("404s without listing when the entity is outside the caller's partition", async () => {
     vi.mocked(taskRepository.entityInScope).mockResolvedValue(false);
     await expect(taskService.listByEntity("enquiry", "e1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
-    expect(taskRepository.entityInScope).toHaveBeenCalledWith("enquiry", "e1", SCOPE);
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("enquiry", "e1", SCOPE, { includeDeletedClient: false });
     expect(taskRepository.findByEntity).not.toHaveBeenCalled();
   });
 
@@ -450,7 +450,7 @@ describe("taskService.listByClient", () => {
   it("404s without listing when the client is outside the caller's scope", async () => {
     vi.mocked(taskRepository.entityInScope).mockResolvedValue(false);
     await expect(taskService.listByClient("c1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
-    expect(taskRepository.entityInScope).toHaveBeenCalledWith("client", "c1", SCOPE);
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("client", "c1", SCOPE, { includeDeletedClient: false });
     expect(taskRepository.findByClient).not.toHaveBeenCalled();
   });
 
@@ -482,5 +482,29 @@ describe("task writes refused by the write scope (S5): 403 for a readable deal i
     vi.mocked(taskRepository.entityInScope).mockResolvedValue(true as never);
     vi.mocked(taskRepository.findByIdInOrg).mockResolvedValue({ id: "t1", entityType: "client", entityId: "c1" } as never);
     await expect(taskService.remove("t1", scope)).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe("taskService - soft-deleted client is read-only", () => {
+  const ADMIN = { ...SCOPE, orgRole: "org_admin", orgRoles: ["org_admin"] } as typeof SCOPE;
+
+  it("an org admin's client task list includes a deleted client", async () => {
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(true);
+    vi.mocked(taskRepository.findByClient).mockResolvedValue([]);
+    await taskService.listByClient("c1", ADMIN);
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("client", "c1", ADMIN, { includeDeletedClient: true });
+  });
+
+  it("a non-admin's list does not include deleted clients", async () => {
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(false);
+    await expect(taskService.listByClient("c1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("client", "c1", SCOPE, { includeDeletedClient: false });
+  });
+
+  it("create on a client stays on the strict write lookup even for an admin", async () => {
+    vi.mocked(taskRepository.entityInScope).mockResolvedValue(false);
+    await expect(taskService.create({ entityType: "client", entityId: "c1", userId: "u1", title: "T" } as never, ADMIN)).rejects.toMatchObject({ statusCode: 404 });
+    expect(taskRepository.entityInScope).toHaveBeenCalledWith("client", "c1", ADMIN, { forWrite: true });
+    expect(taskRepository.create).not.toHaveBeenCalled();
   });
 });

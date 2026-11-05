@@ -1,6 +1,6 @@
 import { db } from "../../config/database";
 import { tasks, quote, booking, enquiry_table, transaction, clientTable } from "@shared/schema";
-import { eq, and, or, desc, gte, lte, inArray, sql, type SQL } from "drizzle-orm";
+import { eq, and, or, desc, gte, lte, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import type { Scope } from "../../utils/scope";
 import { buildPartitionCond, buildTransactionRecordScopeConds, buildTransactionScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
@@ -503,10 +503,12 @@ export const taskRepository = {
    * client)? Uses the same partitioned record-level conditions as the entity's
    * own detail page. Unknown entity types are not in scope.
    */
-  async entityInScope(entityType: string, entityId: string, scope: ScopeOrTrusted, options: { forWrite?: boolean } = {}): Promise<boolean> {
+  async entityInScope(entityType: string, entityId: string, scope: ScopeOrTrusted, options: { forWrite?: boolean; includeDeletedClient?: boolean } = {}): Promise<boolean> {
     if (entityType === "client") {
       const s = scope as Scope;
       const conds: SQL[] = [eq(clientTable.id, entityId)];
+      // Reads only: admins may open a soft-deleted client's tasks (the service decides who).
+      if (!options.includeDeletedClient) conds.push(isNull(clientTable.deletedAt));
       if (scope.orgId !== null && s.orgRole !== "platform_admin") conds.push(eq(clientTable.orgId, s.orgId));
       const partition = buildPartitionCond(scope, clientTable.branchId, clientTable.createdBy);
       if (partition) conds.push(partition);
