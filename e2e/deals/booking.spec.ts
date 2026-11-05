@@ -387,7 +387,8 @@ test.describe("what carries from the quote to the booking", () => {
     for (const col of ["sales_price", "package_commission", "discounts", "service_charge", "price_per_person"] as const) {
       expect(Number(b[col]), col).toBe(Number(qBefore[col]));
     }
-    expect([Number(b.sales_price), Number(b.discounts), Number(b.service_charge), Number(b.package_commission), Number(b.price_per_person)]).toEqual([3000, 100, 40, 240, 980]);
+    expect([Number(b.sales_price), Number(b.discounts), Number(b.service_charge), Number(b.package_commission), Number(b.price_per_person)]).toEqual([3000, 100, 40, 240, 1183.33]);
+    // Per person includes the extras not in the package: (3000 − 100 + 40 + 610) ÷ 3 travellers (infants don't count).
 
     const bRows = async (table: string, order: string) =>
       queryRows<Record<string, any>>(`select * from ${table} where booking_id = $1 order by ${order}`, [b.id]);

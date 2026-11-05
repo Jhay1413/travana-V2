@@ -83,6 +83,7 @@ vi.mock("../wallet/wallet.service", () => ({
   walletService: { applyBookingCredit: vi.fn(), adjustBookingCredit: vi.fn() },
 }));
 vi.mock("../sms/sms.service", () => ({ fireAutoTriggerForClient: vi.fn() }));
+vi.mock("../quote/quote-price-per-person.service", () => ({ refreshBookingPricePerPerson: vi.fn(), refreshQuotePricePerPerson: vi.fn() }));
 
 import { bookingService } from "./booking.service";
 import { bookingRepository } from "./booking.repository";
@@ -94,6 +95,7 @@ import { referralService } from "../referral/referral.service";
 import { walletService } from "../wallet/wallet.service";
 import { orgTourOperatorRepository } from "../tour-operator/org-tour-operator.repository";
 import { AppError } from "../../utils/error-handler";
+import { refreshBookingPricePerPerson } from "../quote/quote-price-per-person.service";
 
 // A "trusted" scope (orgId: null) short-circuits the in-scope assertions, so
 // these tests exercise business logic without also wiring up scope checks.
@@ -317,6 +319,15 @@ describe("bookingService.convertQuoteToBooking", () => {
     expect(bookingRepository.update).toHaveBeenCalledWith(expect.any(String), { quote_id: "q1" });
     expect(transactionRepository.update).toHaveBeenCalledWith("t1", { status: "on_booking" });
     expect(result).toMatchObject({ id: "b1", client_id: null });
+  });
+
+  it("recomputes the booking per person after the extras are copied (extras not in the package count)", async () => {
+    happyPath();
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
+    expect(refreshBookingPricePerPerson).toHaveBeenCalledWith("b1");
+    const refreshOrder = vi.mocked(refreshBookingPricePerPerson).mock.invocationCallOrder[0];
+    const createOrder = vi.mocked(bookingRepository.create).mock.invocationCallOrder[0];
+    expect(refreshOrder).toBeGreaterThan(createOrder);
   });
 
   it("normalises the HAYS ref before saving", async () => {
