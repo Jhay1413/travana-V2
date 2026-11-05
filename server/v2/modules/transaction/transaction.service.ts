@@ -2,6 +2,7 @@ import { transactionRepository } from "./transaction.repository";
 import { enquiryTableRepository } from "../enquiry/enquiry.repository";
 import { newQuoteRepository } from "../quote/quote.repository";
 import { bookingRepository } from "../booking/booking.repository";
+import { refreshBookingPricePerPerson, refreshQuotePricePerPerson } from "../quote/quote-price-per-person.service";
 import { noteRepository } from "../note/note.repository";
 import { taskService } from "../task/task.service";
 import { newQuoteService } from "../quote/quote.service";
@@ -495,6 +496,9 @@ export const transactionService = {
     if (loungePasses !== undefined) await newQuoteRepository.replaceLoungePasses(mainQuoteId, loungePasses);
     if (airportParkings !== undefined) await newQuoteRepository.replaceAirportParkings(mainQuoteId, airportParkings);
     if (extraAccommodations !== undefined) await newQuoteRepository.replaceExtraAccommodations(mainQuoteId, extraAccommodations);
+    if ([transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations].some((x) => x !== undefined)) {
+      await refreshQuotePricePerPerson(mainQuoteId);
+    }
     const cruiseDataQ = buildCruiseData(quoteDataRecord);
     if (cruiseDataQ) await newQuoteRepository.upsertCruise(mainQuoteId, cruiseDataQ);
     // Same child-passenger write as the add-quote-to-existing-deal / enquiry-to-quote paths.
@@ -674,6 +678,9 @@ export const transactionService = {
       }
     }
 
+    if ([transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations].some((x) => x?.length)) {
+      await refreshBookingPricePerPerson(bookingId);
+    }
     const cruiseDataB = buildCruiseData(bookingDataRecord);
     if (cruiseDataB) await bookingRepository.upsertCruise(bookingId, cruiseDataB);
 

@@ -25,9 +25,13 @@ export const SYSTEM_MANAGED_CLIENT_FIELDS = {
   vipTier: true,
 } as const;
 
-// One phone rule for create and update (shared with the client forms). validate() does not
-// write parsed values back, so the services trim the stored value with withTrimmedPhone.
+// Create rule: an 11-digit UK number (shared with the client forms). validate() does not
+// write parsed values back, so the services store withNormalizedPhone's form.
 export const phoneNumberSchema = z.string().trim().refine(isValidPhoneNumber, PHONE_ERROR_MESSAGE);
+
+// Update: only shape-limited here. The UK rule is applied by the services when the phone
+// is new or changed, so a stored legacy number can still be re-sent untouched.
+export const phoneNumberUpdateSchema = z.string().trim().max(40);
 
 const editableClientSchema = insertClientTableSchema.omit(SYSTEM_MANAGED_CLIENT_FIELDS);
 
@@ -39,9 +43,8 @@ export const updateNeonClientValidator = z.object({
   params: z.object({ id: z.string().uuid() }),
   // strict(): a payload carrying a system-managed field is rejected with 400
   // rather than silently dropped, so a bad caller finds out.
-  // phoneNumber is only checked when present, so a client with a bad stored
-  // number can still have other fields edited.
-  body: editableClientSchema.partial().extend({ badge: badgeEnum, phoneNumber: phoneNumberSchema.optional() }).strict(),
+  // phoneNumber is only rule-checked (by the service) when it differs from the stored number.
+  body: editableClientSchema.partial().extend({ badge: badgeEnum, phoneNumber: phoneNumberUpdateSchema.optional() }).strict(),
 });
 
 export const portalPinParamsValidator = z.object({

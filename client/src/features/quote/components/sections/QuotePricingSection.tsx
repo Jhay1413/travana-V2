@@ -81,6 +81,7 @@ export function QuotePricingSection() {
                         adults: Number(getValues("passengersAdults")) || 0,
                         children: Number(getValues("passengersChildren")) || 0,
                         operatorCommissionPct: operatorCommissionPct(op),
+                        extrasTotal: extrasCustomerTotal(getValues()),
                       });
                       field.onChange(e);
                       if (result.commission != null) {
@@ -98,7 +99,7 @@ export function QuotePricingSection() {
           />
         ))}
       </div>
-      {currentPrice > 0 && (
+      {(currentPrice > 0 || extrasCost > 0) && (
         <div className="mt-3 flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2">
           <span className="text-xs font-semibold text-black/65">Final Total</span>
           <span className="text-sm font-semibold text-black">£{finalTotal.toFixed(2)}</span>

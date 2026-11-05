@@ -329,7 +329,7 @@ test.describe("deleting and walking the queue", () => {
     await expect(page.getByTestId("ticket-prev")).toBeDisabled();
   });
 
-  test("pinning a ticket floats it to the top of its group in the queue", async ({ page }) => {
+  test("pinning a ticket floats it to the top of the queue, above Needs attention", async ({ page }) => {
     const w = await workWorld(page);
     await signIn(page, w.agent.email);
     const older = await apiCreateTicket(page.request, { subject: ticketSubject("Pin older"), type: "Build", assignedTo: w.agent.id });
@@ -342,11 +342,11 @@ test.describe("deleting and walking the queue", () => {
 
     await page.goto("/tickets");
     await page.getByTestId("ticket-view-list").click();
-    const rows = page.getByTestId("ticket-group-open").locator('[data-testid^="ticket-row-"]:not([data-testid^="ticket-row-subject-"]):not([data-testid^="ticket-row-pinned-"])');
-    await expect(rows).toHaveCount(2);
-    await expect(page.getByTestId(`ticket-row-pinned-${older.id}`)).toBeVisible();
+    const rows = page.getByTestId("ticket-group-pinned").locator('[data-testid^="ticket-row-"]:not([data-testid^="ticket-row-subject-"])');
+    await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveAttribute("data-testid", `ticket-row-${older.id}`);
-    await expect(page.getByTestId(`ticket-row-pinned-${newer.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`ticket-pin-toggle-${older.id}`)).toHaveAttribute("data-pinned", "true");
+    await expect(page.getByTestId(`ticket-pin-toggle-${newer.id}`)).toHaveAttribute("data-pinned", "false");
   });
 });
 

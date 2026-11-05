@@ -127,6 +127,13 @@ test.describe("clients", () => {
     await expect(error).toBeVisible();
     await expect(submit).toBeDisabled();
 
+    // Not 11 digits, or a foreign country code: refused with the same plain message.
+    for (const bad of ["0712345678", "071234567890", "+1 415 555 2671"]) {
+      await page.getByTestId("input-phone").fill(bad);
+      await expect(error).toHaveText(PHONE_ERROR_MESSAGE);
+      await expect(submit).toBeDisabled();
+    }
+
     // Typing is capped at 20 characters; 20 digits is still too long, so it stays blocked.
     await page.getByTestId("input-phone").fill("");
     await page.getByTestId("input-phone").pressSequentially("9".repeat(30));
@@ -134,14 +141,17 @@ test.describe("clients", () => {
     await expect(error).toBeVisible();
     await expect(submit).toBeDisabled();
 
-    await page.getByTestId("input-phone").fill("07700900222");
-    await expect(error).toHaveCount(0);
-    await expect(submit).toBeEnabled();
+    // A space after the 5th digit, and +44, are both fine.
+    for (const good of ["07700 900222", "+44 7700 900222"]) {
+      await page.getByTestId("input-phone").fill(good);
+      await expect(error).toHaveCount(0);
+      await expect(submit).toBeEnabled();
+    }
 
     expect(await queryRows(`select id from client_table where surename = $1`, [last])).toHaveLength(0);
   });
 
-  test("the API refuses an over-long phone on create and on update (400), but an update without a phone still works", async ({ page }) => {
+  test("the API refuses a non-UK or non-11-digit phone on create and on update (400), stores +44 as 0..., and an update that leaves a legacy-format phone alone still works", async ({ page }) => {
     const agency = await seedDealsAgency();
     await signIn(page, agency.agentEmail);
     const last = uniqueSurname();
@@ -151,22 +161,33 @@ test.describe("clients", () => {
 
     const client = await apiCreateClient(page.request);
     expect((await page.request.patch(`/api/v2/neon-clients/${client.id}`, { data: { phoneNumber: "1".repeat(40) } })).status()).toBe(400);
+    expect((await page.request.patch(`/api/v2/neon-clients/${client.id}`, { data: { phoneNumber: "+34 612 345 678" } })).status()).toBe(400);
     expect((await page.request.patch(`/api/v2/neon-clients/${client.id}`, { data: { city: "Leeds" } })).status()).toBe(200);
     expect(await dbClient(client.id)).toMatchObject({ phoneNumber: "07700900111", city: "Leeds" });
+
+    // A changed phone is stored in the 0... form.
+    expect((await page.request.patch(`/api/v2/neon-clients/${client.id}`, { data: { phoneNumber: "+44 7700 900333" } })).status()).toBe(200);
+    expect(await dbClient(client.id)).toMatchObject({ phoneNumber: "07700900333" });
+
+    // An old-format number already on the client is not re-checked when the phone is sent back unchanged.
+    await queryRows(`update client_table set "phoneNumber" = $1 where id = $2`, ["+1 415 555 2671", client.id]);
+    const keep = await page.request.patch(`/api/v2/neon-clients/${client.id}`, { data: { phoneNumber: "+1 415 555 2671", city: "York" } });
+    expect(keep.status()).toBe(200);
+    expect(await dbClient(client.id)).toMatchObject({ phoneNumber: "+1 415 555 2671", city: "York" });
   });
 
-  test("creating a client from an inbox contact uses the same phone rule: a bad number is a 400 and stores nothing, a padded valid one is saved trimmed", async ({ page }) => {
+  test("creating a client from an inbox contact uses the same phone rule: a bad number is a 400 and stores nothing, a padded +44 one is saved as 11 digits", async ({ page }) => {
     const agency = await seedDealsAgency();
     await signIn(page, agency.agentEmail);
     const last = uniqueSurname();
     const contact = unique("ss-contact");
-    for (const phoneNumber of ["1".repeat(30), "12345", "6f1c2f0e-8c3a-4a39-9d1e-2f6c5b9f7a11", ""]) {
+    for (const phoneNumber of ["1".repeat(30), "12345", "+1 415 555 2671", "6f1c2f0e-8c3a-4a39-9d1e-2f6c5b9f7a11", ""]) {
       const res = await page.request.post(`/api/v2/contact-links/${contact}/client`, { data: { firstName: "Nina", surename: last, phoneNumber } });
       expect(res.status(), phoneNumber).toBe(400);
     }
     expect(await queryRows(`select id from client_table where surename = $1`, [last])).toHaveLength(0);
 
-    const ok = await page.request.post(`/api/v2/contact-links/${contact}/client`, { data: { firstName: "Nina", surename: last, phoneNumber: "  07700900222  " } });
+    const ok = await page.request.post(`/api/v2/contact-links/${contact}/client`, { data: { firstName: "Nina", surename: last, phoneNumber: "  +44 7700 900222  " } });
     expect(ok.status()).toBe(201);
     const [row] = await queryRows<{ phoneNumber: string }>(`select "phoneNumber" from client_table where surename = $1`, [last]);
     expect(row.phoneNumber).toBe("07700900222");
@@ -284,7 +305,7 @@ test.describe("clients", () => {
     });
   });
 
-  test("the edit dialog flags a changed over-long phone and will not save it; an unchanged stored number never blocks other edits", async ({ page }) => {
+  test("the edit dialog flags a changed phone that breaks the rule and will not save it; an unchanged stored number never blocks other edits", async ({ page }) => {
     const agency = await seedDealsAgency();
     await signIn(page, agency.agentEmail);
     const client = await apiCreateClient(page.request);

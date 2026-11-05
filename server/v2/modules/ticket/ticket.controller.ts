@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { ticketService } from "./ticket.service";
-import { ticketListModeSchema } from "./ticket.validator";
+import { listTicketsValidator, ticketListModeSchema } from "./ticket.validator";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getScope } from "../../utils/scope";
@@ -13,7 +13,8 @@ export const ticketController = {
     // here (cheap — it's just an enum + default) narrows req.query.scope's
     // `unknown`/string type to TicketListMode without an `as` cast.
     const mode = ticketListModeSchema.parse(req.query.scope);
-    const tickets = await ticketService.listTickets(getScope(req), mode);
+    const { assignedTo } = listTicketsValidator.shape.query.parse({ scope: mode, assignedTo: req.query.assignedTo });
+    const tickets = await ticketService.listTickets(getScope(req), mode, { assignedTo });
     return successResponse(res, tickets, "Tickets retrieved successfully");
   }),
 

@@ -200,4 +200,13 @@ describe("ticket scope fails closed for roles without wider reach", () => {
     await ticketRepository.findAll({ ...AGENT, orgRole: "org_admin", orgRoles: ["org_admin"] }, "u1", "all");
     expect(renderWhere(2).text).not.toContain('"tickets"."assigned_to"');
   });
+
+  it("assignedTo filter is ANDed with the org scope and the personal narrowing", async () => {
+    const admin = { ...AGENT, orgRole: "org_admin" as const, orgRoles: ["org_admin" as const] };
+    await ticketRepository.findAll(admin, "u1", "all", "agent-9");
+    const w = renderWhere(0);
+    expect(w.text).toContain('"tickets"."assigned_to"');
+    expect(w.text).toContain('"tickets"."org_id"');
+    expect(w.params).toEqual(expect.arrayContaining(["agent-9"]));
+  });
 });

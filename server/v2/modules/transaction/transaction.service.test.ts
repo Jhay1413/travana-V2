@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+vi.mock("../quote/quote-price-per-person.service", () => ({
+  refreshQuotePricePerPerson: vi.fn().mockResolvedValue(undefined),
+  refreshBookingPricePerPerson: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("./transaction.repository", () => ({
   transactionRepository: {
     findById: vi.fn(),

@@ -23,7 +23,7 @@ describe.each([
     expect(await run(create, { body: { ...NEW_CLIENT, phoneNumber: "+44 7123 456789" } })).toBeUndefined();
   });
 
-  it.each(["1234567890123456789012345678", "123", "abcdefghij", ""])("create rejects %j with 400", async (phoneNumber) => {
+  it.each(["1234567890123456789012345678", "123", "abcdefghij", "", "+1 415 555 2671", "0712345678"])("create rejects %j with 400", async (phoneNumber) => {
     const err = await run(create, { body: { ...NEW_CLIENT, phoneNumber } });
     expect(err?.statusCode).toBe(400);
     expect(err?.message).toBe(PHONE_ERROR_MESSAGE);
@@ -37,9 +37,12 @@ describe.each([
     expect(await run(update, { params, body: { phoneNumber: "07123456789" } })).toBeUndefined();
   });
 
-  it("update with a bad phone is a 400", async () => {
-    const err = await run(update, { params, body: { phoneNumber: "9".repeat(40) } });
+  it("update with an old-format phone passes validation (the service checks it only when changed)", async () => {
+    expect(await run(update, { params, body: { phoneNumber: "+1 415 555 2671" } })).toBeUndefined();
+  });
+
+  it("update with an absurdly long phone is a 400", async () => {
+    const err = await run(update, { params, body: { phoneNumber: "9".repeat(41) } });
     expect(err?.statusCode).toBe(400);
-    expect(err?.message).toBe(PHONE_ERROR_MESSAGE);
   });
 });

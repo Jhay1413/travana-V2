@@ -38,7 +38,7 @@ import {
 } from "@/features/quote/components/drawer-sections";
 import { FormDrawerSection, FormDrawerFooter, drawerLabelClass, drawerInputClass } from "@/components/shared/form-drawer";
 import { countExtras } from "@/features/quote/lib/form-extras";
-import { formFinalTotal } from "@/features/quote/lib/quote-money";
+import { extrasCustomerTotal, formFinalTotal, formTotalProfit } from "@/features/quote/lib/quote-money";
 import { departureDatesForCheckIn } from "@/features/quote/lib/departure-dates";
 
 export { bookingFormSchema, defaultBookingFormValues } from "@/features/booking/types";
@@ -403,6 +403,7 @@ export function BookingRHFForm({
     control,
     name: ["transfers", "carHires", "attractionTickets", "loungePasses", "airportParkings", "extraAccommodations"],
   });
+  const extrasTotal = extrasCustomerTotal({ transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations });
   const checkInDate = useWatch({ control, name: "checkInDate" });
   const nights = useWatch({ control, name: "nights" });
 
@@ -487,9 +488,9 @@ export function BookingRHFForm({
   useEffect(() => {
     setValue(
       "pricePerPerson",
-      pricePerPersonFor(price, discount, serviceCharge, passengersAdults, passengersChildren),
+      pricePerPersonFor(price, discount, serviceCharge, passengersAdults, passengersChildren, extrasTotal),
     );
-  }, [price, passengersAdults, passengersChildren, discount, serviceCharge, setValue]);
+  }, [price, passengersAdults, passengersChildren, discount, serviceCharge, extrasTotal, setValue]);
 
   // ── Commission auto-calculation ───────────────────────────────────────────
   // Commission = price × operator % − discount + service charge. The discount is
@@ -547,24 +548,30 @@ export function BookingRHFForm({
     // The commission field already holds the total (operator % − discount + service charge);
     // recover the raw operator portion for the breakdown line.
     const operatorCommission = currentCommission + currentDiscount - currentServiceCharge;
+    // Total commission = package commission + the commission on each extra.
+    const totalProfit = formTotalProfit(commission, {
+      transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+    });
+    const extrasCommissionTotal = totalProfit - currentCommission;
 
     return (
       <>
-        {currentPrice > 0 && (
+        {(currentPrice > 0 || finalTotal > 0) && (
           <div className="mt-3 flex items-center justify-between rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2">
             <span className="text-xs font-semibold text-black/65">Final Total</span>
             <span className="text-sm font-semibold text-black">£{finalTotal.toFixed(2)}</span>
           </div>
         )}
-        {hasAdjustments && (
+        {(hasAdjustments || extrasCommissionTotal > 0) && (
           <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
             <div className="text-xs font-medium text-blue-900">
-              Total Commission: £{currentCommission.toFixed(2)}
+              Total Commission: £{totalProfit.toFixed(2)}
             </div>
             <div className="mt-1 text-[10px] text-blue-700/70">
               Commission: £{operatorCommission.toFixed(2)}{" "}
               {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
               {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)} `}
+              {extrasCommissionTotal > 0 && `Extras: +£${extrasCommissionTotal.toFixed(2)} `}
               {currentWalletCredit > 0 && <span className="text-emerald-700">Wallet Credit: -£{currentWalletCredit.toFixed(2)}</span>}
             </div>
             {currentWalletCredit > 0 && (
@@ -2177,6 +2184,7 @@ export function BookingRHFForm({
                             adults: Number(form.getValues("passengersAdults")) || 0,
                             children: Number(form.getValues("passengersChildren")) || 0,
                             operatorCommissionPct: operatorCommissionPct(op),
+                            extrasTotal: extrasCustomerTotal(form.getValues()),
                           });
                           field.onChange(e);
                           if (result.commission != null) {

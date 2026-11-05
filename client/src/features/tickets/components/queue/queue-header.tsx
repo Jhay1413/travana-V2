@@ -1,8 +1,9 @@
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PRIMARY_ACTION } from "@/features/pipeline/shared/button-styles";
-import type { QueueCounts, QueueFilters, QueueSort } from "../../lib/ticket-queue";
+import type { AgentOption, QueueCounts, QueueFilters, QueueSort } from "../../lib/ticket-queue";
 import { FiltersPopover } from "./filters-popover";
+import { AgentFilter } from "./agent-filter";
 import { QueueSearch } from "./queue-search";
 import { SortMenu } from "./sort-menu";
 
@@ -14,11 +15,14 @@ interface QueueHeaderProps {
   onFiltersChange: (next: QueueFilters) => void;
   sort: QueueSort;
   onSortChange: (value: QueueSort) => void;
+  agents: AgentOption[];
+  agentId: string;
+  onAgentChange: (id: string) => void;
   onNewTicket: () => void;
 }
 
 /** Title + "n open · n need attention · n unassigned" on the left; search, filters, sort and New ticket on the right. No box. */
-export function QueueHeader({ counts, search, onSearchChange, filters, onFiltersChange, sort, onSortChange, onNewTicket }: QueueHeaderProps) {
+export function QueueHeader({ counts, search, onSearchChange, filters, onFiltersChange, sort, onSortChange, agents, agentId, onAgentChange, onNewTicket }: QueueHeaderProps) {
   return (
     <div className="flex flex-none flex-wrap items-center gap-3">
       <div className="min-w-[220px] flex-1">
@@ -33,6 +37,7 @@ export function QueueHeader({ counts, search, onSearchChange, filters, onFilters
       </div>
       <QueueSearch value={search} onChange={onSearchChange} />
       <FiltersPopover filters={filters} onChange={onFiltersChange} />
+      <AgentFilter agents={agents} value={agentId} onChange={onAgentChange} />
       <SortMenu value={sort} onChange={onSortChange} />
       <Button type="button" className={PRIMARY_ACTION} onClick={onNewTicket} data-testid="ticket-compose">
         <Plus className="h-4 w-4" />

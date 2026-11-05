@@ -8,11 +8,13 @@ export interface QueuePrefs {
   chip: QueueChip;
   sort: QueueSort;
   filters: QueueFilters;
+  /** Assignee to show, "" for all agents. Applied by the server. */
+  agentId: string;
   /** Search text, kept for the session so the ticket page walks the same order. */
   search: string;
 }
 
-export const DEFAULT_PREFS: QueuePrefs = { scope: "mine", view: "board", chip: "open", sort: "newest", filters: EMPTY_FILTERS, search: "" };
+export const DEFAULT_PREFS: QueuePrefs = { scope: "mine", view: "board", chip: "open", sort: "newest", filters: EMPTY_FILTERS, agentId: "", search: "" };
 
 const SCOPES: readonly QueueScope[] = ["mine", "raised", "all"];
 const VIEWS: readonly QueueView[] = ["list", "board"];
@@ -39,6 +41,7 @@ export function sanitizePrefs(raw: unknown, canViewAll: boolean): QueuePrefs {
     chip: pick(CHIPS, r.chip, DEFAULT_PREFS.chip),
     sort: pick(SORTS, r.sort, DEFAULT_PREFS.sort),
     filters: { priorities: strings(filters.priorities), kinds: strings(filters.kinds) },
+    agentId: typeof r.agentId === "string" ? r.agentId.slice(0, 100) : "",
     search: typeof r.search === "string" ? r.search.slice(0, 100) : "",
   };
 }

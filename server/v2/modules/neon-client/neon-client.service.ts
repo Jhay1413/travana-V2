@@ -12,7 +12,7 @@ import type { Scope } from '../../utils/scope';
 import { stripOwnershipFields } from '../../utils/ownership-fields';
 import { branchRepository } from '../branch/branch.repository';
 import { fireAutoTriggerForClient } from '../sms/sms.service';
-import { withTrimmedPhone } from '@shared/phone';
+import { isPhoneChanged, isValidPhoneNumber, PHONE_ERROR_MESSAGE, withNormalizedPhone } from '@shared/phone';
 import { stripSystemManagedFields, assertValidReferrer } from './neon-client.guards';
 import bcrypt from 'bcryptjs';
 
@@ -70,7 +70,7 @@ export const neonClientService = {
   },
 
   async createNeonClient(data: InsertClientTable, scope: Scope): Promise<NeonClient> {
-    const clean = withTrimmedPhone(stripSystemManagedFields(data));
+    const clean = withNormalizedPhone(stripSystemManagedFields(data));
     await assertValidReferrer(null, clean.referredByClientId, scope);
     const safe = await stripOwnershipFields(clean, scope, async (b, o) => !!(await branchRepository.findById(b, o)));
     return neonClientRepository.create(safe as InsertClientTable, scope);
@@ -86,7 +86,7 @@ export const neonClientService = {
   },
 
   async updateNeonClient(id: string, data: Partial<InsertClientTable>, scope: Scope): Promise<NeonClient> {
-    const clean = withTrimmedPhone(stripSystemManagedFields(data));
+    const stripped = stripSystemManagedFields(data);
     // Scope-enforced fetch: an out-of-scope client reads as 404. A merged client is an
     // archived duplicate, so it is read-only (the merge itself goes through mergeAtomic).
     const current = await neonClientRepository.findById(id, scope);
@@ -94,6 +94,10 @@ export const neonClientService = {
     if (current.status === 'merged') {
       throw new AppError('This client has already been merged into another client', 400);
     }
+    // The UK phone rule applies only when the phone is new or changed (legacy numbers stay saveable).
+    const phoneChanged = isPhoneChanged(stripped.phoneNumber, current.phoneNumber);
+    if (phoneChanged && !isValidPhoneNumber(stripped.phoneNumber)) throw new AppError(PHONE_ERROR_MESSAGE, 400);
+    const clean = phoneChanged ? withNormalizedPhone(stripped) : stripped;
     if (clean.referredByClientId) {
       await assertValidReferrer(id, clean.referredByClientId, scope, current.referredByClientId);
     }

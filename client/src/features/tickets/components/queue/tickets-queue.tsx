@@ -17,7 +17,7 @@ export function TicketsQueue() {
   const [, navigate] = useLocation();
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const mobile = useMediaQuery("(max-width: 900px)");
-  const { prefs, patch, canViewAll, isLoading, result, now } = useTicketQueue({ boardAllowed: !mobile });
+  const { prefs, patch, canViewAll, isLoading, result, now, agents } = useTicketQueue({ boardAllowed: !mobile });
   const search = prefs.search;
   const setSearch = (value: string) => patch({ search: value });
   const pinned = usePinnedTicketIds();
@@ -88,6 +88,9 @@ export function TicketsQueue() {
         onFiltersChange={(filters) => patch({ filters })}
         sort={prefs.sort}
         onSortChange={(sort) => patch({ sort })}
+        agents={agents}
+        agentId={prefs.agentId}
+        onAgentChange={(agentId) => patch({ agentId })}
         onNewTicket={() => openNew()}
       />
       <QueueToolbar
