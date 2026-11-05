@@ -5,6 +5,7 @@ import { s3Client, S3_BUCKET } from "../../config/s3";
 import { noteAttachmentRepository } from "./note-attachment.repository";
 import { noteRepository } from "./note.repository";
 import { AppError } from "../../utils/error-handler";
+import { canReadDeletedClients } from "../../utils/client-delete-roles";
 import { refuseDealWrite } from "../../utils/deal-access";
 import type { NoteAttachment } from "@shared/schema";
 import type { Scope } from "../../utils/scope";
@@ -56,10 +57,11 @@ async function assertTransactionInScope(transactionId: string, scope: ScopeOrTru
   if (!ok) throw new AppError("Attachments not found", 404);
 }
 
+// Only used by the read (list) path, so admins may list a soft-deleted client's attachments.
 async function assertClientInScope(clientId: string, scope: ScopeOrTrusted): Promise<void> {
   const orgId = effectiveOrgId(scope);
   if (!orgId) return;
-  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId, scope);
+  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId, scope, { includeDeleted: canReadDeletedClients(scope as Scope) });
   if (!ok) throw new AppError("Attachments not found", 404);
 }
 

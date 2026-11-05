@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useCreateNeonClient } from "@/features/client/api/use-neon-client-mutations";
+import { useToast } from "@/hooks/use-toast";
+import { getClientPhoneError, getRequestErrorMessage } from "@/features/client/lib/client-phone";
 import type { NeonClient } from "@/features/client/types/neon-client";
 
 const EMPTY_FORM = {
@@ -31,6 +33,7 @@ export function useClientCreateForm(onCreated?: (client: NeonClient) => void) {
   const [postcodeSearch, setPostcodeSearch] = useState("");
   const [postcodeLoading, setPostcodeLoading] = useState(false);
   const [postcodeError, setPostcodeError] = useState("");
+  const { toast } = useToast();
   const createNeonClientMutation = useCreateNeonClient();
 
   function openCreateDialog() {
@@ -71,11 +74,12 @@ export function useClientCreateForm(onCreated?: (client: NeonClient) => void) {
 
   function handleCreateClient() {
     if (!form.firstName || !form.lastName || !form.phone) return;
+    if (getClientPhoneError(form.phone)) return;
     createNeonClientMutation.mutate(
       {
         firstName: form.firstName,
         surename: form.lastName,
-        phoneNumber: form.phone,
+        phoneNumber: form.phone.trim(),
         title: form.title || undefined,
         email: form.email || undefined,
         badge: form.clientType || undefined,
@@ -86,6 +90,9 @@ export function useClientCreateForm(onCreated?: (client: NeonClient) => void) {
         post_code: form.postcode || undefined,
       },
       {
+        onError: (error) => {
+          toast({ title: getRequestErrorMessage(error, "Failed to create client"), variant: "destructive" });
+        },
         onSuccess: (newClient) => {
           setShowNewClient(false);
           setForm(EMPTY_FORM);

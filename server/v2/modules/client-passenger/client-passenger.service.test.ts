@@ -12,9 +12,11 @@ vi.mock("./client-passenger.repository", () => ({
     findNextDepartureDate: vi.fn(),
   },
 }));
-vi.mock("../neon-client/neon-client.service", () => ({
-  neonClientService: { getNeonClientById: vi.fn() },
-}));
+vi.mock("../neon-client/neon-client.service", () => {
+  // list() reads through viewNeonClientById; share one mock so both lookups behave the same here.
+  const lookup = vi.fn();
+  return { neonClientService: { getNeonClientById: lookup, viewNeonClientById: lookup } };
+});
 
 import {
   clientPassengerService,
@@ -36,7 +38,7 @@ const CLIENT = { id: "c1", title: "Mr", firstName: "Jo", surename: "Bloggs", DOB
 function row(over: Record<string, unknown> = {}) {
   return {
     id: "p1", clientId: "c1", isLead: false, title: null, firstName: "A", surname: "B",
-    dateOfBirth: null, passportNumber: null, passportExpiry: null,
+    dateOfBirth: null, passportNumber: null, passportExpiry: null, passportNonUk: false,
     createdAt: new Date(), updatedAt: new Date(), ...over,
   };
 }
@@ -95,7 +97,7 @@ describe("list", () => {
     const res = await clientPassengerService.list("c1", SCOPE);
     expect(res.passengers[0]).toEqual({
       id: null, isLead: true, title: "Mr", firstName: "Jo", surname: "Bloggs",
-      dateOfBirth: "1980-02-03", passportNumber: null, passportExpiry: null, passportWarning: false,
+      dateOfBirth: "1980-02-03", passportNumber: null, passportExpiry: null, passportNonUk: false, passportWarning: false,
     });
     expect(res.passengers.map((p) => p.id)).toEqual([null, "p1", "p2"]);
     expect(res.nextDeparture).toBeNull();
@@ -125,42 +127,128 @@ describe("list", () => {
 });
 
 describe("writes", () => {
-  it("create trims and turns empty strings into null", async () => {
+  const FULL = { title: "Mr.", firstName: "Ann", surname: "Lee", dateOfBirth: "1990-01-01", passportNumber: "123456789", passportExpiry: "2040-01-01" };
+
+  it("create trims and stores the six fields plus the Non-UK flag", async () => {
     vi.mocked(repo.create).mockResolvedValue(row() as never);
-    await clientPassengerService.create(
-      "c1",
-      { title: "", firstName: " Ann ", surname: " Lee ", dateOfBirth: "", passportNumber: "  ", passportExpiry: "" },
-      SCOPE,
-    );
-    expect(repo.create).toHaveBeenCalledWith("c1", {
-      title: null, firstName: "Ann", surname: "Lee", dateOfBirth: null, passportNumber: null, passportExpiry: null,
+    await clientPassengerService.create("c1", { ...FULL, title: " Mr. ", firstName: " Ann ", surname: " Lee ", passportNumber: " 123456789 " }, SCOPE);
+    expect(repo.create).toHaveBeenCalledWith("c1", { ...FULL, passportNonUk: false });
+  });
+
+  it("create upper-cases a Non-UK passport number", async () => {
+    vi.mocked(repo.create).mockResolvedValue(row() as never);
+    await clientPassengerService.create("c1", { ...FULL, passportNumber: " ab12345 ", passportNonUk: true }, SCOPE);
+    expect(repo.create).toHaveBeenCalledWith("c1", { ...FULL, passportNumber: "AB12345", passportNonUk: true });
+  });
+
+  it.each([
+    ["title", { title: " " }, "Title is required"],
+    ["first name", { firstName: " " }, "First name is required"],
+    ["surname", { surname: "" }, "Surname is required"],
+    ["date of birth", { dateOfBirth: "" }, "Date of birth is required"],
+    ["passport number", { passportNumber: "" }, "Passport number is required"],
+    ["non-9-digit UK number", { passportNumber: "12345678" }, "Passport number must be exactly 9 digits (tick Non-UK passport for other formats)"],
+    ["Non-UK number with a space", { passportNumber: "AB 1234", passportNonUk: true }, "Non-UK passport number must be 5 to 20 letters or digits, with no spaces"],
+    ["passport expiry", { passportExpiry: "" }, "Passport expiry is required"],
+  ])("create is refused (400) for a bad %s", async (_n, patch, message) => {
+    await expect(clientPassengerService.create("c1", { ...FULL, ...patch }, SCOPE)).rejects.toMatchObject({ statusCode: 400, message });
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("create blocks an expiry within 6 months of the next departure and allows the day after", async () => {
+    vi.mocked(repo.findNextDepartureDate).mockResolvedValue("2026-10-15");
+    vi.mocked(repo.create).mockResolvedValue(row() as never);
+    await expect(clientPassengerService.create("c1", { ...FULL, passportExpiry: "2027-04-15" }, SCOPE)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Passport must be valid for more than 6 months after travel (until after 15/04/2027)",
     });
+    expect(repo.create).not.toHaveBeenCalled();
+    await clientPassengerService.create("c1", { ...FULL, passportExpiry: "2027-04-16" }, SCOPE);
+    expect(repo.create).toHaveBeenCalledTimes(1);
   });
 
   it("create is refused for an out-of-scope client", async () => {
     vi.mocked(neonClientService.getNeonClientById).mockRejectedValue(new AppError("Client not found", 404));
-    await expect(clientPassengerService.create("c1", { firstName: "A", surname: "B" }, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+    await expect(clientPassengerService.create("c1", FULL, SCOPE)).rejects.toMatchObject({ statusCode: 404 });
     expect(repo.create).not.toHaveBeenCalled();
   });
 
   it("setLeadPassport upserts and returns the synthesised lead", async () => {
-    vi.mocked(repo.upsertLead).mockResolvedValue(row({ id: "L", isLead: true, passportNumber: "9", passportExpiry: "2030-01-01" }) as never);
-    const lead = await clientPassengerService.setLeadPassport("c1", { passportNumber: " 9 ", passportExpiry: "2030-01-01" }, SCOPE);
-    expect(repo.upsertLead).toHaveBeenCalledWith("c1", { passportNumber: "9", passportExpiry: "2030-01-01" });
-    expect(lead).toMatchObject({ id: "L", isLead: true, firstName: "Jo", passportNumber: "9" });
+    vi.mocked(repo.upsertLead).mockResolvedValue(row({ id: "L", isLead: true, passportNumber: "123456789", passportExpiry: "2040-01-01" }) as never);
+    const lead = await clientPassengerService.setLeadPassport("c1", { passportNumber: " 123456789 ", passportExpiry: "2040-01-01" }, SCOPE);
+    expect(repo.upsertLead).toHaveBeenCalledWith("c1", { passportNumber: "123456789", passportExpiry: "2040-01-01", passportNonUk: false });
+    expect(lead).toMatchObject({ id: "L", isLead: true, firstName: "Jo", passportNumber: "123456789" });
   });
 
-  it("setLeadPassport maps empty strings to null", async () => {
+  it("setLeadPassport accepts a Non-UK number, upper-cased", async () => {
     vi.mocked(repo.upsertLead).mockResolvedValue(row({ id: "L", isLead: true }) as never);
-    await clientPassengerService.setLeadPassport("c1", { passportNumber: "", passportExpiry: "" }, SCOPE);
-    expect(repo.upsertLead).toHaveBeenCalledWith("c1", { passportNumber: null, passportExpiry: null });
+    await clientPassengerService.setLeadPassport("c1", { passportNumber: "ab12345", passportExpiry: "2040-01-01", passportNonUk: true }, SCOPE);
+    expect(repo.upsertLead).toHaveBeenCalledWith("c1", { passportNumber: "AB12345", passportExpiry: "2040-01-01", passportNonUk: true });
   });
 
-  it("update only sends provided fields, normalised", async () => {
-    vi.mocked(repo.findOne).mockResolvedValue(row() as never);
-    vi.mocked(repo.update).mockResolvedValue(row({ passportNumber: null }) as never);
-    await clientPassengerService.update("c1", "p1", { passportNumber: "", firstName: " Bo " }, SCOPE);
-    expect(repo.update).toHaveBeenCalledWith("c1", "p1", { passportNumber: null, firstName: "Bo" });
+  it.each([
+    ["empty fields", { passportNumber: "", passportExpiry: "" }, "Passport number is required"],
+    ["bad number", { passportNumber: "9", passportExpiry: "2040-01-01" }, "Passport number must be exactly 9 digits (tick Non-UK passport for other formats)"],
+    ["missing expiry", { passportNumber: "123456789", passportExpiry: null }, "Passport expiry is required"],
+  ])("setLeadPassport is refused (400) for %s", async (_n, input, message) => {
+    await expect(clientPassengerService.setLeadPassport("c1", input, SCOPE)).rejects.toMatchObject({ statusCode: 400, message });
+    expect(repo.upsertLead).not.toHaveBeenCalled();
+  });
+
+  it("setLeadPassport blocks an expiry within 6 months of the next departure", async () => {
+    vi.mocked(repo.findNextDepartureDate).mockResolvedValue("2026-10-15");
+    await expect(
+      clientPassengerService.setLeadPassport("c1", { passportNumber: "123456789", passportExpiry: "2027-04-15" }, SCOPE),
+    ).rejects.toMatchObject({ statusCode: 400, message: "Passport must be valid for more than 6 months after travel (until after 15/04/2027)" });
+    expect(repo.upsertLead).not.toHaveBeenCalled();
+  });
+
+  it.each([{ title: null }, { DOB: null }, { title: "  " }])("setLeadPassport is blocked when the client record lacks title or date of birth (%o)", async (gap) => {
+    vi.mocked(neonClientService.getNeonClientById).mockResolvedValue({ ...CLIENT, ...gap } as never);
+    await expect(
+      clientPassengerService.setLeadPassport("c1", { passportNumber: "123456789", passportExpiry: "2040-01-01" }, SCOPE),
+    ).rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining("title and date of birth") });
+    expect(repo.upsertLead).not.toHaveBeenCalled();
+  });
+
+  it("update validates the MERGED passenger and stores the full normalised fields", async () => {
+    vi.mocked(repo.findOne).mockResolvedValue(row({ ...FULL, passportNonUk: false }) as never);
+    vi.mocked(repo.update).mockResolvedValue(row() as never);
+    await clientPassengerService.update("c1", "p1", { firstName: " Bo " }, SCOPE);
+    expect(repo.update).toHaveBeenCalledWith("c1", "p1", { ...FULL, firstName: "Bo", passportNonUk: false });
+  });
+
+  it("update uses the stored Non-UK flag when the patch only changes the number", async () => {
+    vi.mocked(repo.findOne).mockResolvedValue(row({ ...FULL, passportNumber: "AB12345", passportNonUk: true }) as never);
+    vi.mocked(repo.update).mockResolvedValue(row() as never);
+    await clientPassengerService.update("c1", "p1", { passportNumber: "cd67890" }, SCOPE);
+    expect(repo.update).toHaveBeenCalledWith("c1", "p1", expect.objectContaining({ passportNumber: "CD67890", passportNonUk: true }));
+  });
+
+  it("update blocks switching Non-UK off while the stored number is not 9 digits", async () => {
+    vi.mocked(repo.findOne).mockResolvedValue(row({ ...FULL, passportNumber: "AB12345", passportNonUk: true }) as never);
+    await expect(clientPassengerService.update("c1", "p1", { passportNonUk: false }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+
+  it("update of an old record with gaps is refused until completed, even for an unrelated patch", async () => {
+    vi.mocked(repo.findOne).mockResolvedValue(row() as never); // names only
+    await expect(clientPassengerService.update("c1", "p1", { firstName: "Z" }, SCOPE)).rejects.toMatchObject({ statusCode: 400, message: "Title is required" });
+    expect(repo.update).not.toHaveBeenCalled();
+    vi.mocked(repo.update).mockResolvedValue(row() as never);
+    await clientPassengerService.update("c1", "p1", FULL, SCOPE);
+    expect(repo.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("update blocks a patch that clears a mandatory field or breaks the expiry rule", async () => {
+    vi.mocked(repo.findOne).mockResolvedValue(row({ ...FULL, passportNonUk: false }) as never);
+    await expect(clientPassengerService.update("c1", "p1", { passportNumber: "" }, SCOPE)).rejects.toMatchObject({ message: "Passport number is required" });
+    vi.mocked(repo.findNextDepartureDate).mockResolvedValue("2039-08-01");
+    await expect(clientPassengerService.update("c1", "p1", {}, SCOPE)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Passport must be valid for more than 6 months after travel (until after 01/02/2040)",
+    });
+    expect(repo.update).not.toHaveBeenCalled();
   });
 
   it("update of the lead row is 400", async () => {

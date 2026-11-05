@@ -23,6 +23,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, buildTransactionRecordScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 import type { QuoteEmbeddingDetails } from "./quote-embedding";
 import { fetchServiceCommissionMaps } from "../transaction/service-commission.repository";
+import { fetchExtrasTotalMaps } from "../transaction/extras-total.repository";
 import { PORTAL_ACTIVE_WINDOW_DAYS, type QuoteChildKind, type PortalStatus, type SocialStatus, type SocialStatusCounts } from "./quote.types";
 
 function toDateOrNull(value: unknown): Date | null {
@@ -572,6 +573,7 @@ export const newQuoteRepository = {
         // Travel deal data
         deal_id: travel_deal.id,
         only_socials_id: travel_deal.onlySocialsId,
+        only_socials_targets: travel_deal.only_socials_targets,
         post_schedule: travel_deal.postSchedule,
 
         // Image data — the quote's own gallery. Preferred over the shared
@@ -701,6 +703,7 @@ export const newQuoteRepository = {
           departing_airport_name: row.departing_airport_name,
           dealId: row.deal_id ?? null,
           onlySocialsId: row.only_socials_id ?? null,
+          onlySocialsTargets: row.only_socials_targets ?? null,
           postSchedule: row.post_schedule ? row.post_schedule.toISOString() : null,
           lodge_name: row.lodge_name ?? null,
           park_name: row.park_name ?? null,
@@ -888,6 +891,12 @@ export const newQuoteRepository = {
   /** Sum of the line-item commissions for one quote (same maps as the transaction list). */
   async getServiceCommission(id: string): Promise<number> {
     const { quoteMap } = await fetchServiceCommissionMaps([id], []);
+    return quoteMap.get(id) ?? 0;
+  },
+
+  /** Cost of the extras NOT marked "Included in package" (what the customer pays on top of the package). */
+  async getExtrasTotal(id: string): Promise<number> {
+    const { quoteMap } = await fetchExtrasTotalMaps([id], []);
     return quoteMap.get(id) ?? 0;
   },
 

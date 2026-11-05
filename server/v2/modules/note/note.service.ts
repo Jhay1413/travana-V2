@@ -1,5 +1,6 @@
 import { noteRepository, type NoteWithAuthor } from "./note.repository";
 import { AppError } from "../../utils/error-handler";
+import { canReadDeletedClients } from "../../utils/client-delete-roles";
 import { refuseDealWrite } from "../../utils/deal-access";
 import type { Note, InsertNote } from "@shared/schema";
 import type { Scope } from "../../utils/scope";
@@ -20,10 +21,12 @@ async function assertTransactionInScope(transactionId: string, scope: ScopeOrTru
   if (!ok) throw new AppError("Notes not found", 404);
 }
 
-async function assertClientInScope(clientId: string, scope: ScopeOrTrusted) {
+async function assertClientInScope(clientId: string, scope: ScopeOrTrusted, opts?: { forRead?: boolean }) {
   const orgId = effectiveOrgId(scope);
   if (!orgId) return;
-  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId, scope);
+  // Reads of a soft-deleted client are allowed for admins only; writes always use the strict lookup.
+  const includeDeleted = !!opts?.forRead && canReadDeletedClients(scope as Scope);
+  const ok = await noteRepository.clientBelongsToOrg(clientId, orgId, scope, { includeDeleted });
   if (!ok) throw new AppError("Notes not found", 404);
 }
 
@@ -80,7 +83,7 @@ export const noteService = {
     scope: ScopeOrTrusted,
     options?: { includeDeals?: boolean },
   ): Promise<NoteWithAuthor[]> {
-    await assertClientInScope(clientId, scope);
+    await assertClientInScope(clientId, scope, { forRead: true });
     return (await noteRepository.findByClientId(clientId, scope, options)).map(cleanContent);
   },
 

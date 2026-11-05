@@ -916,6 +916,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
               <DatePicker
                 value={form.travelDate}
                 onChange={(v) => set("travelDate", v)}
+                disablePast
                 placeholder="Pick a date"
                 className={pickerCls}
                 data-testid="input-travel-date"
@@ -1393,6 +1394,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
           <DatePicker
             value={form.travelDate}
             onChange={(v) => set("travelDate", v)}
+            disablePast
             placeholder="Pick a date"
             className={pickerCls}
             data-testid="input-travel-date"
@@ -1547,6 +1549,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
         <DatePicker
           value={form.travelDate}
           onChange={(v) => set("travelDate", v)}
+          disablePast
           placeholder="Pick a date"
           className={pickerCls}
           data-testid="input-travel-date"

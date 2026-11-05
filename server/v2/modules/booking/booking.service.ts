@@ -173,6 +173,7 @@ export const bookingService = {
     const b = await bookingRepository.findWithDetails(id);
     if (!b) throw new AppError("Booking not found", 404);
     const service_commission = await bookingRepository.getServiceCommission(id);
+    const extras_total = await bookingRepository.getExtrasTotal(id);
     // Surface the customer-facing total (sales − discount + service charge) and a per-person
     // figure derived from it, so the detail page displays consistent values regardless of any
     // previously-stored price_per_person.
@@ -184,7 +185,8 @@ export const bookingService = {
       ...b,
       can_edit,
       service_commission,
-      total_price: calcTotalPrice(b.sales_price, b.discounts, b.service_charge).toFixed(2),
+      extras_total,
+      total_price: (calcTotalPrice(b.sales_price, b.discounts, b.service_charge) + extras_total).toFixed(2),
       price_per_person: calcPricePerPerson(b.sales_price, b.adult, b.child, b.discounts, b.service_charge),
     };
   },

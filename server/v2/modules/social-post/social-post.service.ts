@@ -11,17 +11,21 @@ import {
   uploadOnlySocialsMedia,
   uploadMediaFromUrl,
   fetchOnlySocialsPost,
+  LEGACY_DEFAULT_ACCOUNT_ID,
 } from "../../utils/only-socials";
+import { socialSettingsService } from "../social-settings/social-settings.service";
 import { isStoredProxyUrl, publicImageKeyFromStoredUrl, presignImageKey } from "../../utils/image-storage";
 import { autoUpscaleService } from "../image-upscale/auto-upscale.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { buildDealEmbeddingText, buildDealEmbeddingMetadata } from "./deal-embedding";
-import type { TravelDeal } from "@shared/schema";
-import { toOnlySocialsBody } from "@shared/social-post-body";
+import type { OnlySocialsTarget, TravelDeal } from "@shared/schema";
+import { onlySocialsPlainLength, toOnlySocialsBody } from "@shared/social-post-body";
 import type { AutoUpscaleItem, AutoUpscaleSkip } from "../image-upscale/image-upscale.types";
 import type {
   OnlySocialsMediaUploadResponse,
   OnlySocialsMediaContent,
+  OnlySocialsPublishTarget,
+  UpdateSocialPostInput,
   OrgSocialContact,
   OrganizationBranding,
 } from "./social-post.types";
@@ -177,6 +181,131 @@ async function resolveMediaIds(slots: MediaSlot[]): Promise<{ ids: number[]; fai
   const ids = resolved.filter((id): id is number => id !== null);
   console.log(`[SocialPost][timing] resolveMediaIds done: ${ids.length}/${slots.length} in ${Date.now() - startedAt}ms total`);
   return { ids, failedUrls };
+}
+
+const INSTAGRAM_MAX_IMAGES = 10;
+const INSTAGRAM_MAX_CAPTION = 2200;
+
+function legacyTargets(): OnlySocialsPublishTarget[] {
+  return [{ accountId: LEGACY_DEFAULT_ACCOUNT_ID, platform: "facebook" }];
+}
+
+/** Stored snapshot -> publish targets; a deal with no snapshot predates the picker (single Facebook Page). */
+function storedTargets(deal: TravelDeal): OnlySocialsPublishTarget[] {
+  const stored = deal.only_socials_targets;
+  if (!stored || stored.length === 0) return legacyTargets();
+  return stored.map((t) => ({
+    accountId: t.accountId,
+    platform: t.platform === "instagram" ? "instagram" : t.platform === "facebook" ? "facebook" : "other",
+  }));
+}
+
+function toStoredTargets(targets: OnlySocialsPublishTarget[]): OnlySocialsTarget[] {
+  return targets.map((t) => ({ accountId: t.accountId, platform: t.platform }));
+}
+
+/**
+ * Turns the requested account ids (or, when absent, the post's stored targets, then the legacy
+ * account) into publish targets. Uses a fresh account list and refuses anything the agency may not
+ * post to right now (not allowed, disconnected, platform switched off). Runs before any media upload
+ * so a bad selection never half-schedules.
+ */
+async function resolveTargets(
+  requested: number[] | undefined,
+  deal: TravelDeal,
+  orgId: string | null,
+): Promise<OnlySocialsPublishTarget[]> {
+  if (requested !== undefined && requested.length === 0) throw new AppError("Choose at least one account to post to", 400);
+  const wanted = requested ?? storedTargets(deal).map((t) => t.accountId);
+  const unique = Array.from(new Set(wanted));
+
+  const { configured, accounts } = await socialSettingsService.listAccounts(orgId, { force: true });
+  if (!configured) throw new AppError("OnlySocials is not set up for this workspace", 503);
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+
+  return unique.map((id) => {
+    const account = byId.get(id);
+    if (!account || !account.selectable) {
+      const name = account?.name ?? `Account ${id}`;
+      if (requested === undefined) {
+        // Saved accounts reused without a picker (Change time, calendar drag and drop): say why, and where to fix it.
+        const why = account ? account.unavailableReason ?? "not available" : "not enabled for this agency";
+        throw new AppError(`${name}: ${why}. Open the post to change its accounts.`, 422);
+      }
+      throw new AppError(`${name} is disconnected or not available — reconnect it in OnlySocials or untick it`, 422);
+    }
+    return { accountId: id, platform: account.platform === "instagram" ? "instagram" : "facebook" };
+  });
+}
+
+/** Scheduled on OnlySocials with a publish time that has not passed yet. */
+function isStillScheduled(deal: TravelDeal): boolean {
+  return Boolean(deal.onlySocialsId && deal.postSchedule && new Date(deal.postSchedule).getTime() > Date.now());
+}
+
+const SCHEDULED_TEXT_UPDATE_FAILED = "Couldn't update the scheduled post on Facebook/Instagram — nothing was changed";
+
+/**
+ * Replaces the text of a scheduled post on OnlySocials, keeping the date/time it already has there, its saved
+ * accounts (stored targets, else the legacy account, re-checked against the allow-list) and its current media.
+ * Any failure becomes one clear error; the caller has not saved anything locally yet.
+ */
+async function pushTextToScheduledPost(
+  deal: TravelDeal,
+  body: string,
+  orgId: string | null,
+): Promise<{ uuid: string; targets: OnlySocialsPublishTarget[] }> {
+  const onlySocialsId = deal.onlySocialsId;
+  if (!onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
+  // Rules the user can act on (account disconnected, caption too long) keep their own message.
+  const refused = (err: AppError) => new AppError(`${SCHEDULED_TEXT_UPDATE_FAILED}. ${err.message}`, err.statusCode);
+  const targets = await resolveTargets(undefined, deal, orgId).catch((err: unknown) => {
+    throw err instanceof AppError ? refused(err) : err;
+  });
+  const sentBody = toOnlySocialsBody(body);
+  try {
+    const remote = await fetchOnlySocialsPost(onlySocialsId);
+    const version = remote.versions?.find((v) => v.is_original) ?? remote.versions?.[0];
+    const mediaIds = (version?.content?.[0]?.media ?? []).map((m) => m.id);
+    const date = remote.date?.split("T")[0];
+    const time = remote.time;
+    if (!date || !time) throw new Error("OnlySocials did not return the post date and time");
+    try {
+      assertInstagramRules(targets, mediaIds.length, sentBody);
+    } catch (err) {
+      throw err instanceof AppError ? refused(err) : err;
+    }
+    const result = await rescheduleOnlySocialsPost(onlySocialsId, `${date}T${time}`, sentBody, mediaIds, targets);
+    return { uuid: result.uuid, targets };
+  } catch (err) {
+    if (err instanceof AppError && err.message.startsWith(SCHEDULED_TEXT_UPDATE_FAILED)) throw err;
+    console.error("[SocialPost] scheduled text update failed:", err);
+    throw new AppError(SCHEDULED_TEXT_UPDATE_FAILED, 502);
+  }
+}
+
+/** Instagram needs images and has a caption cap; checked after media resolution because URL uploads can drop silently. */
+function assertInstagramRules(targets: OnlySocialsPublishTarget[], imageCount: number, sentBody: string): void {
+  if (!targets.some((t) => t.platform === "instagram")) return;
+  if (imageCount < 1) throw new AppError("Instagram posts need at least one image", 400);
+  if (imageCount > INSTAGRAM_MAX_IMAGES) {
+    throw new AppError(`Instagram allows up to ${INSTAGRAM_MAX_IMAGES} images; remove ${imageCount - INSTAGRAM_MAX_IMAGES}`, 400);
+  }
+  const length = onlySocialsPlainLength(sentBody);
+  if (length > INSTAGRAM_MAX_CAPTION) {
+    throw new AppError(`Instagram captions are limited to ${INSTAGRAM_MAX_CAPTION} characters (this one is ${length})`, 400);
+  }
+}
+
+/**
+ * The org whose allow-list governs a deal's accounts: the deal's own org, never the caller's active org
+ * (a platform admin passes the scope check for any agency). Null for trusted internal calls.
+ */
+async function dealOrgId(dealId: string, scope: ScopeOrTrusted): Promise<string | null> {
+  if (scope.orgId === null) return null;
+  const scoped = effectiveOrgId(scope);
+  if (scoped) return scoped;
+  return (await socialPostRepository.findByIdWithOrg(dealId))?.orgId ?? null;
 }
 
 async function assertQuoteInScope(quoteId: string, scope: ScopeOrTrusted) {
@@ -551,10 +680,45 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     return deal ?? null;
   },
 
-  async updateTravelDeal(id: string, data: Partial<TravelDeal>, scope: ScopeOrTrusted): Promise<TravelDeal> {
-    await assertDealInScope(id, scope);
-    const payload = typeof data.post === "string" ? { ...data, post: toOnlySocialsBody(data.post) } : data;
-    const updated = await socialPostRepository.update(id, payload);
+  async updateTravelDeal(id: string, data: UpdateSocialPostInput, scope: ScopeOrTrusted): Promise<TravelDeal> {
+    const deal = await assertDealInScope(id, scope);
+    // Explicit allow-list: never forward request keys (onlySocialsId, quote_id, postSchedule...) to the repository.
+    const payload: Partial<Pick<TravelDeal, "post" | "only_socials_targets" | "onlySocialsId">> = {};
+    if (typeof data.post === "string") payload.post = toOnlySocialsBody(data.post);
+    // A post still waiting to go out is changed on OnlySocials FIRST (same date/time, accounts and media); the
+    // local text is only saved once that succeeded, so the two never disagree. Posted/draft deals stay local-only.
+    const pushedToOnlySocials =
+      payload.post !== undefined && isStillScheduled(deal)
+        ? await pushTextToScheduledPost(deal, payload.post, await dealOrgId(id, scope))
+        : null;
+    if (pushedToOnlySocials) {
+      payload.onlySocialsId = pushedToOnlySocials.uuid;
+      payload.only_socials_targets = toStoredTargets(pushedToOnlySocials.targets);
+    }
+    // The text is always saved. The accounts part is checked against the agency allow-list only (no live OnlySocials
+    // call, no connection check: that strict check belongs to schedule/reschedule), so an outage or one disconnected
+    // account can never lose a text edit. If the accounts are refused, the text is saved first, then the error is raised.
+    let accountError: AppError | null = null;
+    if (data.accountIds !== undefined) {
+      try {
+        // A scheduled post's accounts live on OnlySocials; only a reschedule can change them.
+        if (deal.onlySocialsId) throw new AppError("Reschedule the post to change the accounts it posts to", 400);
+        payload.only_socials_targets = toStoredTargets(
+          await socialSettingsService.resolveDraftTargets(await dealOrgId(id, scope), data.accountIds),
+        );
+      } catch (err) {
+        if (!(err instanceof AppError)) throw err;
+        accountError = err;
+      }
+    }
+    const updated = Object.keys(payload).length === 0 ? deal : await socialPostRepository.update(id, payload);
+    if (accountError) {
+      const savedText = payload.post !== undefined;
+      throw new AppError(
+        `${savedText ? "Your text was saved, but the accounts were not: " : "The accounts were not saved: "}${accountError.message}`,
+        accountError.statusCode,
+      );
+    }
     // Only posted deals live in the vector store; keep the row fresh on edits.
     if (updated.onlySocialsId) syncDealEmbedding(updated);
     return updated;
@@ -569,12 +733,17 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     imageUrls: string[] = [],
     scope: ScopeOrTrusted = { orgId: null },
     imageOrder?: string[],
+    accountIds?: number[],
   ): Promise<SchedulePostResult> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] schedulePost START id=${id}`);
     const deal = await assertDealInScope(id, scope);
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
     if (imageOrder) assertOrderTokens(imageOrder, { existingIds: existingImageIds, fileCount: newFiles.length, urlCount: imageUrls.length });
+    const targets = await resolveTargets(accountIds, deal, await dealOrgId(id, scope));
+    const sentBody = toOnlySocialsBody(deal.post);
+    // Cheap Instagram checks BEFORE any paid upscale or upload; the post-check below still catches dropped uploads.
+    assertInstagramRules(targets, existingImageIds.length + newFiles.length + imageUrls.length, sentBody);
 
     // Never blocks or fails the schedule: unusable images fall back to the original.
     const tUpscale = Date.now();
@@ -595,12 +764,14 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     // OnlySocials stores the date/time verbatim (no timezone), so give it the
     // user's local wall-clock value; the DB keeps the absolute UTC instant.
     const tSchedule = Date.now();
-    const result = await scheduleOnlySocialsPost(postScheduleLocal, toOnlySocialsBody(deal.post), allImageIds);
+    assertInstagramRules(targets, allImageIds.length, sentBody);
+    const result = await scheduleOnlySocialsPost(postScheduleLocal, sentBody, allImageIds, targets);
     console.log(`[SocialPost][timing] scheduleOnlySocialsPost: ${Date.now() - tSchedule}ms`);
 
     const tDb = Date.now();
     const updated = await socialPostRepository.update(id, {
       onlySocialsId: result.uuid,
+      only_socials_targets: toStoredTargets(targets),
       postSchedule: new Date(postSchedule),
     });
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
@@ -623,6 +794,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     imageUrls: string[] = [],
     scope: ScopeOrTrusted = { orgId: null },
     imageOrder?: string[],
+    accountIds?: number[],
   ): Promise<SchedulePostResult> {
     const t0 = Date.now();
     console.log(`[SocialPost][timing] reschedulePost START id=${id}`);
@@ -630,6 +802,10 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     if (!deal.onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
     console.log(`[SocialPost][timing] assertDealInScope: ${Date.now() - t0}ms`);
     if (imageOrder) assertOrderTokens(imageOrder, { existingIds: existingImageIds, fileCount: newFiles.length, urlCount: imageUrls.length });
+    // Missing accountIds falls back to the stored targets, then the legacy account.
+    const targets = await resolveTargets(accountIds, deal, await dealOrgId(id, scope));
+    const sentBody = toOnlySocialsBody(postContent);
+    assertInstagramRules(targets, existingImageIds.length + newFiles.length + imageUrls.length, sentBody);
 
     // Never blocks or fails the schedule: unusable images fall back to the original.
     const tUpscale = Date.now();
@@ -649,17 +825,20 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
 
     // OnlySocials gets the local wall-clock value; the DB keeps the UTC instant.
     const tSchedule = Date.now();
+    assertInstagramRules(targets, allImageIds.length, sentBody);
     const result = await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
       newPostScheduleLocal,
-      toOnlySocialsBody(postContent),
-      allImageIds
+      sentBody,
+      allImageIds,
+      targets
     );
     console.log(`[SocialPost][timing] rescheduleOnlySocialsPost: ${Date.now() - tSchedule}ms`);
 
     const tDb = Date.now();
     const updated = await socialPostRepository.update(id, {
       onlySocialsId: result.uuid,
+      only_socials_targets: toStoredTargets(targets),
       postSchedule: new Date(newPostSchedule),
     });
     console.log(`[SocialPost][timing] db update: ${Date.now() - tDb}ms`);
@@ -706,7 +885,8 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     const deal = await assertDealInScope(id, scope);
     if (!deal.onlySocialsId) return { media: [], postContent: "" };
     const post = await fetchOnlySocialsPost(deal.onlySocialsId);
-    const firstContent = post.versions?.[0]?.content?.[0];
+    const version = post.versions?.find((v) => v.is_original) ?? post.versions?.[0];
+    const firstContent = version?.content?.[0];
     return {
       media: firstContent?.media ?? [],
       postContent: firstContent?.body ?? "",

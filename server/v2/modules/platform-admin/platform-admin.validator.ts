@@ -189,3 +189,10 @@ export const upsertModelPricingSchema = z.object({
     outputMicrosPerMtok:      z.number().int().min(0).default(0),
   }),
 });
+
+export const setSocialAccountsSchema = z.object({
+  params: z.object({ id: z.string().uuid() }),
+  body: z.object({
+    accountIds: z.array(z.number().int().positive()).max(100),
+  }).strict(),
+});

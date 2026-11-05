@@ -3,15 +3,32 @@ import FormData from "form-data";
 import fs from "fs";
 import path from "path";
 import axios from "axios";
-import type { OnlySocialsPost, OnlySocialsMediaUploadResponse } from "../modules/social-post/social-post.types";
+import type {
+  OnlySocialsPost,
+  OnlySocialsMediaUploadResponse,
+  OnlySocialsAccount,
+  OnlySocialsPublishTarget,
+  SocialPlatform,
+} from "../modules/social-post/social-post.types";
 import type { SocialChannelInfo } from "../modules/social-settings/social-settings.types";
 
-const ACCOUNT_ID = 81085;
+/** The one Facebook Page every agency used before accounts became selectable. Legacy fallback only. */
+export const LEGACY_DEFAULT_ACCOUNT_ID = 81085;
+
+/** Server flag: Instagram publishing is on only when SOCIAL_INSTAGRAM_ENABLED is exactly "true". */
+export function isInstagramEnabled(): boolean {
+  return process.env.SOCIAL_INSTAGRAM_ENABLED === "true";
+}
+
+/** True when both the workspace and API key are set, so OnlySocials can be called at all. */
+export function isOnlySocialsConfigured(): boolean {
+  return !!process.env.ONLY_SOCIALS_WORKSPACE && !!process.env.ONLYSOCIAL_API_KEY;
+}
 
 export function getOnlySocialsChannelInfo(): SocialChannelInfo {
   return {
     provider: "onlysocials",
-    accountId: ACCOUNT_ID,
+    accountId: LEGACY_DEFAULT_ACCOUNT_ID,
     workspaceConfigured: !!process.env.ONLY_SOCIALS_WORKSPACE,
     apiKeyConfigured: !!process.env.ONLYSOCIAL_API_KEY,
     label: "Facebook Page via OnlySocials",
@@ -58,6 +75,105 @@ async function withUploadRetry<T>(label: string, fn: () => Promise<T>): Promise<
   throw lastError;
 }
 
+const ACCOUNTS_CACHE_TTL_MS = 5 * 60 * 1000;
+let accountsCache: { at: number; accounts: OnlySocialsAccount[] } | null = null;
+
+/** Test hook: forget the cached account list. */
+export function clearOnlySocialsAccountsCache(): void {
+  accountsCache = null;
+}
+
+/** Provider strings are unconfirmed, so match loosely: contains "instagram" / "facebook", else other. */
+export function mapProviderToPlatform(provider: string | null | undefined): SocialPlatform {
+  const p = (provider ?? "").toLowerCase();
+  if (p.includes("instagram")) return "instagram";
+  if (p.includes("facebook")) return "facebook";
+  return "other";
+}
+
+interface RawOnlySocialsAccount {
+  id?: number | string;
+  uuid?: string;
+  name?: string;
+  username?: string | null;
+  image?: string | null;
+  provider?: string;
+  authorized?: boolean;
+}
+
+/**
+ * Every account connected to the shared OnlySocials workspace. Cached for ~5 minutes;
+ * pass { force: true } before scheduling so a just-disconnected account is caught.
+ */
+export const listOnlySocialsAccounts = async (opts: { force?: boolean } = {}): Promise<OnlySocialsAccount[]> => {
+  if (!opts.force && accountsCache && Date.now() - accountsCache.at < ACCOUNTS_CACHE_TTL_MS) {
+    return accountsCache.accounts;
+  }
+  try {
+    const response = await axios.get(`${getApiBase()}/accounts`, {
+      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+      timeout: 15000,
+    });
+    const rows = (response.data as { data?: RawOnlySocialsAccount[] } | null)?.data;
+    if (!Array.isArray(rows)) throw new Error("Unexpected accounts response");
+    const accounts: OnlySocialsAccount[] = rows.map((row) => ({
+      id: Number(row.id),
+      uuid: row.uuid ?? "",
+      name: row.name ?? row.username ?? `Account ${row.id}`,
+      username: row.username ?? null,
+      image: row.image ?? null,
+      provider: row.provider ?? "",
+      platform: mapProviderToPlatform(row.provider),
+      authorized: row.authorized !== false,
+    }));
+    accountsCache = { at: Date.now(), accounts };
+    return accounts;
+  } catch (error) {
+    console.error("[OnlySocials] list accounts failed:", error instanceof Error ? error.message : error);
+    throw new AppError("Couldn't load connected accounts", 502);
+  }
+};
+
+interface PostPayloadInput {
+  targets: OnlySocialsPublishTarget[];
+  postContent: string;
+  images: number[];
+  date: string;
+  time: string;
+}
+
+/**
+ * Body for POST /posts and PUT /posts/:id. One shared (original) version for every target.
+ * Instagram options are undocumented, so an instagram options key is NEVER sent; the
+ * facebook_page options are sent only when a Facebook account is among the targets.
+ */
+export function buildPostPayload({ targets, postContent, images, date, time }: PostPayloadInput) {
+  if (targets.length === 0) throw new AppError("Choose at least one account to post to", 400);
+  const options: Record<string, { type: string }> = {};
+  if (targets.some((t) => t.platform === "facebook")) options.facebook_page = { type: "post" };
+  return {
+    accounts: targets.map((t) => t.accountId),
+    versions: [
+      {
+        // TODO(owner Phase 0 check): the docs say account_id 0 = original version, but today's working
+        // payload uses a real account id. Keep a real id (the first selected) until a real post confirms 0.
+        account_id: targets[0].accountId,
+        is_original: true,
+        content: [{ body: postContent, media: images, url: "" }],
+        options,
+      },
+    ],
+    tags: [],
+    date,
+    time,
+    until_date: null,
+    until_time: "",
+    repeat_frequency: null,
+    short_link_provider: null,
+    short_link_provider_id: null,
+  };
+}
+
 export const deleteOnlySocialsPost = async (onlySocialsPostId: string): Promise<void> => {
   const url = `${getApiBase()}/posts/${onlySocialsPostId}`;
   try {
@@ -99,7 +215,8 @@ export const fetchOnlySocialsPost = async (onlySocialsPostId: string): Promise<O
 export const scheduleOnlySocialsPost = async (
   postSchedule: string,
   postContent: string,
-  images: number[]
+  images: number[],
+  targets: OnlySocialsPublishTarget[]
 ): Promise<{ id: string; uuid: string; name: string; hexColor: string }> => {
   // Split directly to avoid server-timezone conversion from parseISO + format.
   // postSchedule is the user's local datetime string e.g. "2026-04-15T14:30".
@@ -113,24 +230,8 @@ export const scheduleOnlySocialsPost = async (
       method: "POST",
       headers: { ...getAuthHeader(), "Content-Type": "application/json" },
       body: JSON.stringify({
-        accounts: [ACCOUNT_ID],
-        versions: [
-          {
-            account_id: ACCOUNT_ID,
-            is_original: true,
-            content: [{ body: postContent, media: images, url: "" }],
-            options: { facebook_page: { type: "post" } },
-          },
-        ],
-        tags: [],
-        date: scheduleDate,
-        time: scheduleTime,
+        ...buildPostPayload({ targets, postContent, images, date: scheduleDate, time: scheduleTime }),
         status: "scheduled",
-        until_date: null,
-        until_time: "",
-        repeat_frequency: null,
-        short_link_provider: null,
-        short_link_provider_id: null,
       }),
     });
 
@@ -174,7 +275,8 @@ export const rescheduleOnlySocialsPost = async (
   onlySocialsPostId: string,
   newPostSchedule: string,
   postContent: string,
-  images: number[]
+  images: number[],
+  targets: OnlySocialsPublishTarget[]
 ): Promise<{ id: string; uuid: string; name: string; hexColor: string }> => {
   const [scheduleDate, rawTime = "00:00"] = newPostSchedule.split("T");
   const scheduleTime = rawTime.substring(0, 5);
@@ -186,25 +288,9 @@ export const rescheduleOnlySocialsPost = async (
       method: "PUT",
       headers: { ...getAuthHeader(), "Content-Type": "application/json" },
       redirect: "follow",
-      body: JSON.stringify({
-        accounts: [ACCOUNT_ID],
-        versions: [
-          {
-            account_id: ACCOUNT_ID,
-            is_original: true,
-            content: [{ body: postContent, media: images, url: "" }],
-            options: { facebook_page: { type: "post" } },
-          },
-        ],
-        tags: [],
-        date: scheduleDate,
-        time: scheduleTime,
-        until_date: null,
-        until_time: "",
-        repeat_frequency: null,
-        short_link_provider: null,
-        short_link_provider_id: null,
-      }),
+      body: JSON.stringify(
+        buildPostPayload({ targets, postContent, images, date: scheduleDate, time: scheduleTime })
+      ),
     });
 
     const data = (await response.json()) as { id: string; uuid: string; name: string; hexColor: string };
@@ -222,46 +308,6 @@ export const rescheduleOnlySocialsPost = async (
     if (error instanceof AppError) throw error;
     throw new AppError(
       `Failed to reschedule post on OnlySocials: ${error instanceof Error ? error.message : String(error)}`,
-      500
-    );
-  }
-};
-
-export const updateOnlySocialsPostMedia = async (
-  onlySocialsPostId: string,
-  mediaIds: number[]
-): Promise<void> => {
-  const url = `${getApiBase()}/posts/${onlySocialsPostId}`;
-
-  try {
-    const response = await fetch(url, {
-      method: "PUT",
-      headers: { ...getAuthHeader(), "Content-Type": "application/json" },
-      redirect: "follow",
-      body: JSON.stringify({
-        accounts: [ACCOUNT_ID],
-        versions: [
-          {
-            account_id: ACCOUNT_ID,
-            is_original: true,
-            content: [{ media: mediaIds, url: "" }],
-            options: { facebook_page: { type: "post" } },
-          },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      console.error("[OnlySocials] update media failed:", JSON.stringify(data));
-      throw new AppError(`OnlySocials update media error: ${JSON.stringify(data)}`, response.status);
-    }
-
-    console.log("[OnlySocials] post media updated successfully");
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw new AppError(
-      `Failed to update post media on OnlySocials: ${error instanceof Error ? error.message : String(error)}`,
       500
     );
   }

@@ -45,7 +45,8 @@ router.post(
   neonClientController.mergeDuplicateGroup,
 );
 router.patch('/:id', blockReadOnlyClientRoles, validate(updateNeonClientValidator), neonClientController.updateNeonClient);
-router.delete('/:id', blockReadOnlyClientRoles, neonClientController.deleteNeonClient);
+// Soft delete, admin only (org_admin / platform_admin).
+router.delete('/:id', adminOnly, neonClientController.deleteNeonClient);
 
 // Portal PIN: read is open to anyone who can see the client; writes are blocked
 // for read-only roles. All scoped through the client lookup in the service.

@@ -82,7 +82,7 @@ export function PostCardStatusBar({ status, postSchedule, isGenerating, onSchedu
       <div className={DASHED}>
         <span className="flex items-center gap-2">
           <Pencil className="h-[15px] w-[15px]" />
-          Not scheduled
+          Draft, not scheduled
         </span>
         <button
           type="button"

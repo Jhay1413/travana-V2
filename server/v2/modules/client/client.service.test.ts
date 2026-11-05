@@ -6,16 +6,14 @@ vi.mock("./client.repository", () => ({
     findById: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
-    remove: vi.fn(),
+    findByIdIncludingDeleted: vi.fn(),
+    softDelete: vi.fn(),
   },
 }));
 
 vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
 
-vi.mock("../branch/branch.repository", () => ({ branchRepository: { findById: vi.fn() } }));
-
 import { clientService } from "./client.service";
-import { branchRepository } from "../branch/branch.repository";
 import { branchRepository } from "../branch/branch.repository";
 import { clientRepository } from "./client.repository";
 
@@ -59,17 +57,49 @@ describe("clientService.updateClient", () => {
   });
 });
 
-describe("clientService.deleteClient", () => {
-  it("throws 404 when nothing was removed", async () => {
-    vi.mocked(clientRepository.remove).mockResolvedValue(false as never);
+describe("clientService.deleteClient (soft delete)", () => {
+  const ADMIN = { orgId: "o1", orgRole: "org_admin", userId: "admin1" } as never;
+  const live = { id: "c1", status: "active", deletedAt: null };
 
-    await expect(clientService.deleteClient("c1", SCOPE)).rejects.toMatchObject({ statusCode: 404 });
+  it("soft-deletes in scope, stamping the acting user", async () => {
+    vi.mocked(clientRepository.findByIdIncludingDeleted).mockResolvedValue(live as never);
+    vi.mocked(clientRepository.softDelete).mockResolvedValue(true);
+    await expect(clientService.deleteClient("c1", ADMIN)).resolves.toBeUndefined();
+    expect(clientRepository.softDelete).toHaveBeenCalledWith("c1", ADMIN, "admin1");
   });
 
-  it("resolves when the client is removed", async () => {
-    vi.mocked(clientRepository.remove).mockResolvedValue(true as never);
+  it.each(["agent", "branch_manager", "homeworker", "social_media_manager"])("refuses %s with 403", async (orgRole) => {
+    await expect(clientService.deleteClient("c1", { orgId: "o1", orgRole } as never)).rejects.toMatchObject({ statusCode: 403 });
+    expect(clientRepository.softDelete).not.toHaveBeenCalled();
+  });
 
-    await expect(clientService.deleteClient("c1", SCOPE)).resolves.toBeUndefined();
+  it("allows platform_admin", async () => {
+    vi.mocked(clientRepository.findByIdIncludingDeleted).mockResolvedValue(live as never);
+    vi.mocked(clientRepository.softDelete).mockResolvedValue(true);
+    await expect(clientService.deleteClient("c1", { orgId: "o1", orgRole: "platform_admin", userId: "p" } as never)).resolves.toBeUndefined();
+  });
+
+  it("404s for an out-of-scope client", async () => {
+    vi.mocked(clientRepository.findByIdIncludingDeleted).mockResolvedValue(undefined);
+    await expect(clientService.deleteClient("c9", ADMIN)).rejects.toMatchObject({ statusCode: 404 });
+    expect(clientRepository.softDelete).not.toHaveBeenCalled();
+  });
+
+  it("409s when already deleted", async () => {
+    vi.mocked(clientRepository.findByIdIncludingDeleted).mockResolvedValue({ ...live, deletedAt: new Date() } as never);
+    await expect(clientService.deleteClient("c1", ADMIN)).rejects.toMatchObject({ statusCode: 409 });
+    expect(clientRepository.softDelete).not.toHaveBeenCalled();
+  });
+
+  it("400s for a merged client", async () => {
+    vi.mocked(clientRepository.findByIdIncludingDeleted).mockResolvedValue({ ...live, status: "merged" } as never);
+    await expect(clientService.deleteClient("c1", ADMIN)).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it("404s if the row vanished between check and update", async () => {
+    vi.mocked(clientRepository.findByIdIncludingDeleted).mockResolvedValue(live as never);
+    vi.mocked(clientRepository.softDelete).mockResolvedValue(false);
+    await expect(clientService.deleteClient("c1", ADMIN)).rejects.toMatchObject({ statusCode: 404 });
   });
 });
 
@@ -89,5 +119,39 @@ describe("clientService.updateClient ownership fields (S3)", () => {
 
     vi.mocked(branchRepository.findById).mockResolvedValueOnce(null);
     await expect(clientService.updateClient("c1", { branchId: "foreign" } as never, admin)).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+describe("clientService.viewClientById (client page read)", () => {
+  const deleted = { id: "c1", deletedAt: new Date() };
+
+  it("returns a live client for anyone in scope", async () => {
+    vi.mocked(clientRepository.findById).mockResolvedValue({ id: "c1", deletedAt: null } as never);
+    await expect(clientService.viewClientById("c1", SCOPE)).resolves.toMatchObject({ id: "c1" });
+    expect(clientRepository.findByIdIncludingDeleted).not.toHaveBeenCalled();
+  });
+
+  it.each(["org_admin", "platform_admin"])("lets %s open a deleted client (row carries deletedAt)", async (orgRole) => {
+    vi.mocked(clientRepository.findById).mockResolvedValue(undefined);
+    vi.mocked(clientRepository.findByIdIncludingDeleted).mockResolvedValue(deleted as never);
+    const res = await clientService.viewClientById("c1", { orgId: "o1", orgRole } as never);
+    expect(res.deletedAt).toBeTruthy();
+  });
+
+  it.each(["agent", "branch_manager", "homeworker", "social_media_manager"])("%s gets 404 for a deleted client", async (orgRole) => {
+    vi.mocked(clientRepository.findById).mockResolvedValue(undefined);
+    await expect(clientService.viewClientById("c1", { orgId: "o1", orgRole } as never)).rejects.toMatchObject({ statusCode: 404 });
+    expect(clientRepository.findByIdIncludingDeleted).not.toHaveBeenCalled();
+  });
+
+  it("404s for an admin when the client is out of scope", async () => {
+    vi.mocked(clientRepository.findById).mockResolvedValue(undefined);
+    vi.mocked(clientRepository.findByIdIncludingDeleted).mockResolvedValue(undefined);
+    await expect(clientService.viewClientById("c9", { orgId: "o1", orgRole: "org_admin" } as never)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it("writes on a deleted client stay blocked: update 404s because the strict lookup hides it", async () => {
+    vi.mocked(clientRepository.update).mockResolvedValue(undefined);
+    await expect(clientService.updateClient("c1", { firstName: "X" }, { orgId: "o1", orgRole: "org_admin" } as never)).rejects.toMatchObject({ statusCode: 404 });
   });
 });

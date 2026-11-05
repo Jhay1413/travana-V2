@@ -13,7 +13,7 @@ export const clientController = {
 
   getClientById: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
-    const client = await clientService.getClientById(id, getScope(req));
+    const client = await clientService.viewClientById(id, getScope(req));
     return successResponse(res, toPublicClient(client), "Client retrieved successfully");
   }),
 
@@ -31,7 +31,7 @@ export const clientController = {
   deleteClient: asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id as string;
     await clientService.deleteClient(id, getScope(req));
-    res.status(204).send();
+    return successResponse(res, { id: req.params.id as string }, "Client deleted");
   }),
 
   mergeClient: asyncHandler(async (req: Request, res: Response) => {

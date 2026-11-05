@@ -15,8 +15,6 @@ export interface JsonImportDeps {
   toast: (opts: { title: string; description?: string; variant?: "default" | "destructive" }) => void;
   setImageUrls?: (updater: (prev: string[]) => string[]) => void;
   skipLodgeResetRef?: React.MutableRefObject<boolean>;
-  /** True when importing into a social post quote (derives hotel check-in from the outbound arrival). */
-  socialPost?: boolean;
   fallbackFieldMapper?: (data: Record<string, any>, setIfPresent: (key: string, val: unknown) => void, toIsoDate: (d: string | undefined) => string) => void;
 }
 
@@ -351,7 +349,7 @@ async function handleScraperJson(data: Record<string, any>, deps: JsonImportDeps
   const { mapScraperJsonToFormFields } = await import("@/lib/scraper-json-parser");
   const { jsonMapperApi } = await import("@/features/json-mapper/api/json-mapper.api");
 
-  const result = mapScraperJsonToFormFields(data, { socialCheckIn: deps.socialPost });
+  const result = mapScraperJsonToFormFields(data);
 
   const hasLodgeFieldsInJson = !!(
     data.lodge_type ||
@@ -898,73 +896,4 @@ export async function handleJsonData(record: Record<string, any>, deps: JsonImpo
   }
 
   handleFallbackJson(record, deps);
-}
-
-// Returns a Promise that resolves once the import finishes (or fails), so the
-// caller can show a loading state for the whole file-import flow.
-export function handleJsonUpload(file: File, deps: JsonImportDeps): Promise<void> {
-  const { toast } = deps;
-
-  if (file.size === 0) {
-    toast({ title: "Empty file", description: "The selected file is empty.", variant: "destructive" });
-    return Promise.resolve();
-  }
-
-  const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
-  if (file.size > MAX_SIZE) {
-    toast({ title: "File too large", description: "JSON file must be under 5 MB.", variant: "destructive" });
-    return Promise.resolve();
-  }
-
-  return new Promise<void>((resolve) => {
-    const reader = new FileReader();
-
-    reader.onload = async (ev) => {
-      try {
-        const content = ev.target?.result;
-
-        if (typeof content !== "string" || content.trim() === "") {
-          toast({ title: "Empty file", description: "The file appears to be empty.", variant: "destructive" });
-          return;
-        }
-
-        let data: unknown;
-        try {
-          data = JSON.parse(content);
-        } catch (err) {
-          toast({
-            title: "Invalid JSON",
-            description: err instanceof Error ? err.message : "Could not parse the file as JSON.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        if (data === null || typeof data !== "object" || Array.isArray(data)) {
-          toast({
-            title: "Invalid JSON format",
-            description: "JSON must be an object (e.g. { ... }), not an array or plain value.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        await handleJsonData(data as Record<string, any>, deps);
-      } finally {
-        resolve();
-      }
-    };
-
-    reader.onerror = () => {
-      toast({ title: "Error reading file", description: "Could not read the file.", variant: "destructive" });
-      resolve();
-    };
-
-    reader.onabort = () => {
-      toast({ title: "File read cancelled", description: "The file read was aborted.", variant: "destructive" });
-      resolve();
-    };
-
-    reader.readAsText(file);
-  });
 }

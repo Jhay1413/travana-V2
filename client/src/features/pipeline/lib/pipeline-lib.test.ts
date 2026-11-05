@@ -176,3 +176,27 @@ describe("stage-aware value and profit", () => {
     expect(hasQuoteOrBooking(tx({ status: "on_booking", quotes: [quote("1", "0", "0", "0", 0)] }))).toBe(false);
   });
 });
+
+describe("extras_total on the card value", () => {
+  const row = (extras: number | string | undefined) => ({
+    sales_price: "1000",
+    discounts: "100",
+    service_charge: "20",
+    package_commission: "80",
+    service_commission: 5,
+    extras_total: extras,
+  });
+
+  it("adds extras not included in the package to quote and booking values; profit unchanged", () => {
+    const q = tx({ status: "on_quote", quotes: [row(150), row("50.50")] });
+    expect(getTransactionValue(q)).toBe(920 + 150 + 920 + 50.5);
+    expect(getTransactionProfit(q)).toBe(170);
+    const b = tx({ status: "on_booking", booking: row(75) });
+    expect(getTransactionValue(b)).toBe(995);
+    expect(getTransactionProfit(b)).toBe(85);
+  });
+
+  it("a row without extras_total keeps the old value", () => {
+    expect(getTransactionValue(tx({ status: "on_quote", quotes: [row(undefined)] }))).toBe(920);
+  });
+});

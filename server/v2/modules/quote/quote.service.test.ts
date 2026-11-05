@@ -36,6 +36,7 @@ vi.mock("./quote.repository", () => ({
     countFreeQuotesBySocialStatus: vi.fn(),
     findRecentClientEngagement: vi.fn(),
     getServiceCommission: vi.fn(),
+    getExtrasTotal: vi.fn(),
     setAccepted: vi.fn(),
     findTourOperatorIds: vi.fn(),
     findFlightTourOperatorId: vi.fn(),
@@ -83,6 +84,7 @@ const TRUSTED = { orgId: null } as const;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(newQuoteRepository.getServiceCommission).mockResolvedValue(0 as never);
+  vi.mocked(newQuoteRepository.getExtrasTotal).mockResolvedValue(0 as never);
   // Default: scope assertions pass.
   vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(true as never);
   vi.mocked(newQuoteRepository.transactionInScope).mockResolvedValue(true as never);
@@ -135,6 +137,17 @@ describe("newQuoteService.getQuoteWithDetails — price math", () => {
 
     expect(newQuoteRepository.getServiceCommission).toHaveBeenCalledWith("q1");
     expect(result.service_commission).toBe(42.5);
+  });
+
+  it("adds the not-included extras total to total_price and exposes it as extras_total", async () => {
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ id: "q1", sales_price: "1000", discounts: "100", service_charge: "20", adult: 1, child: 0 } as never);
+    vi.mocked(newQuoteRepository.getExtrasTotal).mockResolvedValue(150 as never);
+
+    const result = await newQuoteService.getQuoteWithDetails("q1", TRUSTED);
+
+    expect(newQuoteRepository.getExtrasTotal).toHaveBeenCalledWith("q1");
+    expect(result.extras_total).toBe(150);
+    expect(result.total_price).toBe("1070.00");
   });
 
   it("throws 404 when the quote does not exist", async () => {

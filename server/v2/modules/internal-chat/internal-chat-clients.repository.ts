@@ -187,7 +187,7 @@ const IDENTITY_COLUMNS = {
 // have already denied via resolveClientAccess). Merged (soft-archived)
 // duplicates are always excluded.
 function buildClientVisibilityConds(resolved: ResolvedClientScope): SQL[] {
-  const conds: SQL[] = [eq(clientTable.status, "active")];
+  const conds: SQL[] = [eq(clientTable.status, "active"), isNull(clientTable.deletedAt)];
   if (resolved.level === "all") return conds;
 
   if (resolved.orgId) conds.push(eq(clientTable.orgId, resolved.orgId));

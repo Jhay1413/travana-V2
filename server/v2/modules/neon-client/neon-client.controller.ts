@@ -15,7 +15,7 @@ export const neonClientController = {
   }),
 
   getNeonClientById: asyncHandler(async (req: Request, res: Response) => {
-    const client = await neonClientService.getNeonClientById(req.params.id as string, getScope(req));
+    const client = await neonClientService.viewNeonClientById(req.params.id as string, getScope(req));
     return successResponse(res, toPublicClient(client), 'Neon client retrieved successfully');
   }),
 
@@ -31,7 +31,7 @@ export const neonClientController = {
 
   deleteNeonClient: asyncHandler(async (req: Request, res: Response) => {
     await neonClientService.deleteNeonClient(req.params.id as string, getScope(req));
-    res.status(204).send();
+    return successResponse(res, { id: req.params.id as string }, "Client deleted");
   }),
 
   getPortalPin: asyncHandler(async (req: Request, res: Response) => {

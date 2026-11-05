@@ -210,7 +210,7 @@ describe("noteAttachmentService.listByClientId", () => {
   it("404s for a client outside the caller's org without querying", async () => {
     vi.mocked(noteRepository.clientBelongsToOrg).mockResolvedValue(false);
     await expect(noteAttachmentService.listByClientId("c1", true, ORG_SCOPE)).rejects.toMatchObject({ statusCode: 404 });
-    expect(noteRepository.clientBelongsToOrg).toHaveBeenCalledWith("c1", "org1", ORG_SCOPE);
+    expect(noteRepository.clientBelongsToOrg).toHaveBeenCalledWith("c1", "org1", ORG_SCOPE, { includeDeleted: false });
     expect(noteAttachmentRepository.findByClientId).not.toHaveBeenCalled();
   });
 

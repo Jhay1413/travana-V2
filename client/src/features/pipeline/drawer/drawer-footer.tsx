@@ -1,50 +1,38 @@
+import { ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PipelineStage } from "@/features/pipeline/lib/pipeline-helpers";
-import { STAGE_STYLE, nextStage } from "@/features/pipeline/lib/pipeline-stage-style";
 import { DANGER_GHOST, PRIMARY_ACTION } from "@/features/pipeline/shared/button-styles";
+import { drawerFooterModel } from "./drawer-footer-model";
 
-/** Sticky drawer footer: Mark as lost on the left; the primary move on the right. */
+/** Sticky drawer footer: Mark as lost on the left; Open full deal on the right. */
 export function DrawerFooter({
   stage,
-  naturalStage,
   onMarkLost,
-  onMove,
-  onClose,
+  onOpenFull,
+  clientDeleted = false,
+  canOpenDeletedClient = false,
 }: {
   stage: PipelineStage;
-  /** The stepper stage — equals `stage` except for Future deals. */
-  naturalStage: PipelineStage;
   onMarkLost: () => void;
-  onMove: (to: PipelineStage) => void;
-  onClose: () => void;
+  onOpenFull: () => void;
+  clientDeleted?: boolean;
+  canOpenDeletedClient?: boolean;
 }) {
-  const next = nextStage(naturalStage);
-  const canLose = stage !== "Lost" && stage !== "Booked";
+  const model = drawerFooterModel(stage, { clientDeleted, canOpenDeletedClient });
 
   return (
     <div className="flex flex-none items-center justify-between gap-3 border-t border-pipeline-card-border bg-card px-7 py-4">
-      {canLose ? (
+      {model.canMarkLost ? (
         <Button type="button" variant="outline" className={DANGER_GHOST} onClick={onMarkLost} data-testid="button-drawer-mark-lost">
           Mark as lost
         </Button>
       ) : (
         <span />
       )}
-      <div className="flex gap-2">
-        {stage === "Lost" ? (
-          <Button type="button" className={PRIMARY_ACTION} onClick={() => onMove("Enquiry")} data-testid="button-drawer-primary">
-            Reopen deal
-          </Button>
-        ) : next ? (
-          <Button type="button" className={PRIMARY_ACTION} onClick={() => onMove(next)} data-testid="button-drawer-primary">
-            Move to {STAGE_STYLE[next].pill}
-          </Button>
-        ) : (
-          <Button type="button" className={PRIMARY_ACTION} onClick={onClose} data-testid="button-drawer-primary">
-            Done
-          </Button>
-        )}
-      </div>
+      <Button type="button" className={PRIMARY_ACTION} onClick={onOpenFull} disabled={model.openDisabled} title={model.disabledLabel ?? undefined} data-testid="button-drawer-primary">
+        {model.disabledLabel ?? model.primaryLabel}
+        <ExternalLink className="ml-1.5 h-3.5 w-3.5" strokeWidth={2} />
+      </Button>
     </div>
   );
 }

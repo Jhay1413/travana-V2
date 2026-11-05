@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { insertClientTableSchema } from '@shared/schema';
+import { isValidPhoneNumber, PHONE_ERROR_MESSAGE } from '@shared/phone';
 
 const badgeEnum = z
   .enum(['New Client', 'Repeat Client', 'VIP Client', 'Family Member', 'Time Waster', 'Banned'])
@@ -15,22 +16,32 @@ export const SYSTEM_MANAGED_CLIENT_FIELDS = {
   mustChangePin: true,
   status: true,
   mergedIntoId: true,
+  mergedAt: true,
+  mergedBy: true,
+  deletedAt: true,
+  deletedBy: true,
   splitFromClientId: true,
   vipEnrolledAt: true,
   vipTier: true,
 } as const;
 
+// One phone rule for create and update (shared with the client forms). validate() does not
+// write parsed values back, so the services trim the stored value with withTrimmedPhone.
+export const phoneNumberSchema = z.string().trim().refine(isValidPhoneNumber, PHONE_ERROR_MESSAGE);
+
 const editableClientSchema = insertClientTableSchema.omit(SYSTEM_MANAGED_CLIENT_FIELDS);
 
 export const createNeonClientValidator = z.object({
-  body: editableClientSchema.extend({ badge: badgeEnum }),
+  body: editableClientSchema.extend({ badge: badgeEnum, phoneNumber: phoneNumberSchema }),
 });
 
 export const updateNeonClientValidator = z.object({
   params: z.object({ id: z.string().uuid() }),
   // strict(): a payload carrying a system-managed field is rejected with 400
   // rather than silently dropped, so a bad caller finds out.
-  body: editableClientSchema.partial().extend({ badge: badgeEnum }).strict(),
+  // phoneNumber is only checked when present, so a client with a bad stored
+  // number can still have other fields edited.
+  body: editableClientSchema.partial().extend({ badge: badgeEnum, phoneNumber: phoneNumberSchema.optional() }).strict(),
 });
 
 export const portalPinParamsValidator = z.object({

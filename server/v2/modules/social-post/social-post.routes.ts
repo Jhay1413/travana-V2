@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { socialPostController } from "./social-post.controller";
 import { validate } from "../../middlewares/validation.middleware";
-import { scheduleMediaSchema } from "./social-post.validator";
+import { scheduleMediaSchema, updateSocialPostSchema } from "./social-post.validator";
 
 const router = Router();
 
@@ -22,7 +22,7 @@ const upload = multer({
 router.post("/generate", socialPostController.generatePost);
 router.get("/quote/:quoteId/images", socialPostController.getQuoteImages);
 router.get("/quote/:quoteId", socialPostController.getByQuoteId);
-router.patch("/:id", socialPostController.update);
+router.patch("/:id", validate(updateSocialPostSchema), socialPostController.update);
 
 router.post("/media/upload", upload.array("files", 10), socialPostController.uploadMedia);
 router.post("/:id/schedule", upload.array("files", 10), validate(scheduleMediaSchema), socialPostController.schedulePost);

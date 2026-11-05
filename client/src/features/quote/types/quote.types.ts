@@ -120,6 +120,8 @@ export interface Transaction {
   agent?: { id: string; name?: string } | null;
   /** Joined client name, populated server-side on the pipeline endpoints. */
   client_name?: string | null;
+  /** True when the deal's client was soft-deleted (pipeline endpoints). */
+  client_deleted?: boolean;
   /** Joined deal owner, populated server-side on the pipeline endpoints. */
   assignedUser?: { id: string; firstName: string | null; lastName: string | null; name?: string | null } | null;
   /** Pipeline card priority (server-managed via PATCH /transactions/:id/priority). */
@@ -530,10 +532,12 @@ export interface EnrichedQuoteCruise extends QuoteCruise {
 export interface EnrichedQuote extends Quote {
   /** False when the deal is readable but belongs to another shop (writes would be refused with 403). Absent = editable. */
   can_edit?: boolean;
-  // Backend-computed customer total = sales_price − discounts + service_charge.
+  // Backend-computed customer total = sales_price − discounts + service_charge + extras not included in the package.
   total_price?: string | null;
   /** Sum of the line-item commissions (flights, accommodation, transfers, …); add package_commission for profit. */
   service_commission?: number | string | null;
+  /** Cost of the extras not marked "Included in package" (added to total_price). */
+  extras_total?: number | string | null;
   /** Name of the agent who manually marked the quote accepted. */
   accepted_by_name?: string | null;
   holiday_type_name?: string;
@@ -566,16 +570,20 @@ export interface EnrichedQuote extends Quote {
   // Travel deal fields (joined from travel_deal table)
   dealId?: string | null;
   onlySocialsId?: string | null;
+  /** Accounts the post was scheduled to; null = legacy single Facebook Page. */
+  onlySocialsTargets?: { accountId: number; platform: string }[] | null;
   postSchedule?: string | null;
 }
 
 export interface EnrichedBooking extends Booking {
   /** False when the deal is readable but belongs to another shop (writes would be refused with 403). Absent = editable. */
   can_edit?: boolean;
-  // Backend-computed customer total = sales_price − discounts + service_charge.
+  // Backend-computed customer total = sales_price − discounts + service_charge + extras not included in the package.
   total_price?: string | null;
   /** Sum of the line-item commissions (flights, accommodation, transfers, …); add package_commission for profit. */
   service_commission?: number | string | null;
+  /** Cost of the extras not marked "Included in package" (added to total_price). */
+  extras_total?: number | string | null;
   /** Name of the deal owner (the agent who owns the transaction). */
   owner_name?: string | null;
   holiday_type_name?: string;

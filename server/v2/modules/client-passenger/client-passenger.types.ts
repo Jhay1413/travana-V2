@@ -9,6 +9,7 @@ export interface ClientPassenger {
   dateOfBirth: string | null;
   passportNumber: string | null;
   passportExpiry: string | null;
+  passportNonUk: boolean;
   passportWarning: boolean;
 }
 
@@ -25,11 +26,13 @@ export interface PassengerFields {
   dateOfBirth: string | null;
   passportNumber: string | null;
   passportExpiry: string | null;
+  passportNonUk: boolean;
 }
 
 export interface LeadPassportFields {
   passportNumber: string | null;
   passportExpiry: string | null;
+  passportNonUk: boolean;
 }
 
 export interface CreatePassengerInput {
@@ -39,6 +42,7 @@ export interface CreatePassengerInput {
   dateOfBirth?: string | null;
   passportNumber?: string | null;
   passportExpiry?: string | null;
+  passportNonUk?: boolean;
 }
 
 export type UpdatePassengerInput = Partial<CreatePassengerInput>;

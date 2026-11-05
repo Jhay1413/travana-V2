@@ -24,10 +24,11 @@ async function expandRail(page: import("@playwright/test").Page, stage: "Future"
   await expect(column(page, stage)).toBeVisible();
 }
 
-/** The card shows the money the code computes: value = sales - discounts + service charge, profit = package + line-item commission. */
+/** The card shows the money the code computes: value = sales - discounts + service charge + extras not included in the package, profit = package + line-item commission. */
 async function expectedMoney(transactionId: string): Promise<{ value: number; profit: number }> {
   const [row] = await queryRows<{ value: string; profit: string }>(
-    `select coalesce(sum(coalesce(q.sales_price,0) - coalesce(q.discounts,0) + coalesce(q.service_charge,0)),0) as value,
+    `select coalesce(sum(coalesce(q.sales_price,0) - coalesce(q.discounts,0) + coalesce(q.service_charge,0)
+              + coalesce((select sum(coalesce(cost,0)) from quote_transfers t where t.quote_id = q.id and t.is_included_in_package is not true),0)),0) as value,
             coalesce(sum(coalesce(q.package_commission,0)
               + coalesce((select sum(coalesce(commission,0)) from quote_transfers t where t.quote_id = q.id),0)
               + coalesce((select sum(coalesce(commission,0)) from quote_accomodation a where a.quote_id = q.id),0)
@@ -105,8 +106,8 @@ test.describe("board loading", () => {
     });
     await openBoard(page);
     const money = await expectedMoney(deal.transactionId);
-    expect(money).toEqual({ value: 2940, profit: 244 }); // 3000 - 100 + 40, and 240 + the 4 line-item commission
-    expect(gbp(money.value)).toBe("£2,940");
+    expect(money).toEqual({ value: 2980, profit: 244 }); // 3000 - 100 + 40 + the 40 not-included transfer, and 240 + the 4 line-item commission
+    expect(gbp(money.value)).toBe("£2,980");
     expect(gbp(money.profit)).toBe("£244");
 
     const c = cardIn(page, "Quoted", deal.transactionId);
@@ -272,6 +273,34 @@ test.describe("empty states, paging and collapsing", () => {
     await expect(page.getByTestId("pipeline-column-enquiry-collapsed")).toBeVisible();
     await page.getByTestId("button-expand-enquiry").click();
     await expect(page.getByTestId(columnTestId("Enquiry"))).toBeVisible();
+  });
+
+  test("the 3-dots menu opens next to its card and the hover toolbar stays up while it is open", async ({ page }) => {
+    const w = await boardWorld(page);
+    const e = await enquiryDeal(page.request, w);
+    await openBoard(page);
+
+    const c = card(page, e.transactionId);
+    await c.hover();
+    const trigger = c.getByTestId("button-deal-menu");
+    await trigger.click();
+    const menu = page.getByTestId("menu-open-deal");
+    await expect(menu).toBeVisible();
+
+    // Moving the mouse onto the menu drops the card's :hover; the toolbar must stay rendered.
+    await menu.hover();
+    await expect(trigger).toBeVisible();
+
+    const t = await trigger.boundingBox();
+    const m = await menu.boundingBox();
+    const cardBox = await c.boundingBox();
+    expect(t && m && cardBox).toBeTruthy();
+    expect(t!.x, "trigger is on the card, not at the left edge").toBeGreaterThan(50);
+    // The menu is right-aligned under the trigger: its right edge sits near the trigger's right edge.
+    expect(Math.abs(m!.x + m!.width - (t!.x + t!.width))).toBeLessThan(40);
+    expect(m!.x).toBeGreaterThan(cardBox!.x - 200);
+    expect(m!.y).toBeGreaterThan(t!.y - 10);
+    expect(m!.y).toBeLessThan(t!.y + 120);
   });
 
   test("the List view shows the same deals as rows, grouped by stage", async ({ page }) => {

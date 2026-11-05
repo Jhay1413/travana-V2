@@ -18,6 +18,12 @@ export const socialSettingsController = {
     return successResponse(res, view, "Social settings saved");
   }),
 
+  // GET /api/v2/social-settings/accounts
+  listAccounts: asyncHandler(async (req: Request, res: Response) => {
+    const dealId = typeof req.query.dealId === "string" ? req.query.dealId : undefined;
+    return successResponse(res, await socialSettingsService.listAccountsFor(getScope(req), dealId), "Social accounts retrieved successfully");
+  }),
+
   // GET /api/v2/social-settings/channel
   getChannel: asyncHandler(async (_req: Request, res: Response) => {
     return successResponse(res, socialSettingsService.getChannel(), "Social channel retrieved successfully");

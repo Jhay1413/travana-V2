@@ -30,7 +30,7 @@
   // Bump on every change. Shown in the capture alert so it's obvious which
   // version is actually installed in the bookmarks bar — an old bookmarklet
   // silently producing old-shaped captures is otherwise impossible to spot.
-  var VERSION = 'v16';
+  var VERSION = 'v18';
   var MAX_TEXT = 400000;
   // deepText() walks hidden nodes and pierces shadow roots, so on a large page
   // it can be far bigger than `text` once every collapsed panel, inactive tab
@@ -452,6 +452,17 @@
     }, 200);
   }
 
+  // An <img> that finished loading with no pixels is BROKEN (404, blocked,
+  // wrong type) and would only import as a "failed to load" tile. One that
+  // loaded as a pixel or two is a tracking/spacer placeholder, not a photo.
+  // Images still loading (complete === false) are left alone: lazy galleries
+  // are mid-flight when we capture, and the server drops placeholders by URL.
+  function isBrokenOrPlaceholder(img) {
+    if (!img.complete) return false;
+    if (img.naturalWidth === 0) return true;
+    return img.naturalWidth <= 10 && img.naturalHeight <= 10;
+  }
+
   function collectImages() {
     var images = [];
     var imageContexts = [];
@@ -459,6 +470,17 @@
     var imgs = document.images;
     for (var k = 0; k < imgs.length && images.length < MAX_IMAGES; k++) {
       var src = widestSrc(imgs[k]);
+      // A broken/tiny image is dropped only when it has nothing better to offer.
+      // Lazy galleries park the real URL in data-src while the <img> shows a
+      // 1x1 placeholder (complete === true, naturalWidth 0/1), so look for a
+      // parked URL first and skip only when there is none.
+      if (isBrokenOrPlaceholder(imgs[k])) {
+        var parked = '';
+        for (var pa = 0; pa < LAZY_ATTRS.length && !parked; pa++) parked = imgs[k].getAttribute(LAZY_ATTRS[pa]) || '';
+        var loaded = imgs[k].currentSrc || imgs[k].src || imgs[k].getAttribute('src') || '';
+        if (parked && parked !== loaded) src = parked;
+        else if (src === loaded) continue;
+      }
       if (!src || src.indexOf('data:') === 0) continue;
       // Some galleries yield root-relative srcs; send absolute URLs so the server
       // never has to guess what they were relative to.

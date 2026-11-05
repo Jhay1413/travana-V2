@@ -250,10 +250,6 @@ export function PipelineBoard({
           stage={selected.stage}
           clientName={getName(selected.tx.client_id)}
           onClose={closeDrawer}
-          onMove={(to) => {
-            moves.moveDealTo(selected.tx, selected.stage, to);
-            closeDrawer();
-          }}
           onMarkLost={() => {
             // Close the drawer first: the confirm dialog would otherwise sit underneath it.
             closeDrawer();

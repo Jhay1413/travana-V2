@@ -15,10 +15,11 @@ import { portalLoginTokenRepository } from './portal-login-token.repository';
 import { validate } from '../../middlewares/validation.middleware';
 import { listPortalDealsValidator } from './portal.validator';
 import bcrypt from 'bcryptjs';
+import { customerPrice } from '../../utils/customer-price';
 
 const portalRouter = Router();
 
-function portalAuth(req: Request, res: Response, next: NextFunction) {
+async function portalAuth(req: Request, res: Response, next: NextFunction) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -26,6 +27,15 @@ function portalAuth(req: Request, res: Response, next: NextFunction) {
   const payload = verifyPortalToken(auth.slice(7));
   if (!payload) {
     return res.status(401).json({ error: 'Invalid token' });
+  }
+  // A soft-deleted client's existing sessions stop working immediately.
+  try {
+    if (!(await portalRepository.isClientActive(payload.clientId))) {
+      return res.status(401).json({ error: 'Account not available' });
+    }
+  } catch (err) {
+    console.error('Portal auth check error:', err);
+    return res.status(500).json({ error: 'Authentication failed' });
   }
   (req as any).portalClient = payload;
   next();
@@ -374,11 +384,8 @@ portalRouter.get('/quotes', portalAuth, async (req: Request, res: Response) => {
         token = await quotePublicRepository.setToken(r.quoteId);
       }
 
-      // Customer-facing total = sales price − discount + service charge; per person splits that total.
-      const totalPrice = (parseFloat(r.salesPrice || '0') || 0)
-        - (parseFloat(r.discounts || '0') || 0)
-        + (parseFloat(r.serviceCharge || '0') || 0);
-      const pax = (r.adult || 0) + (r.child || 0);
+      // Total includes extras not in the package; per person is the holiday price only.
+      const { total: totalPrice, pricePerPerson } = customerPrice({ ...r, adults: r.adult, children: r.child });
 
       return {
         id: r.quoteId,
@@ -386,7 +393,7 @@ portalRouter.get('/quotes', portalAuth, async (req: Request, res: Response) => {
         destination: dest,
         hotel: r.accommodationName || '',
         price: totalPrice,
-        price_per_person: pax > 0 ? parseFloat((totalPrice / pax).toFixed(2)) : 0,
+        price_per_person: parseFloat(pricePerPerson.toFixed(2)),
         travel_date: r.travelDate,
         return_date: returnDate,
         expiry_date: r.dateExpiry
@@ -457,11 +464,8 @@ portalRouter.get('/bookings', portalAuth, async (req: Request, res: Response) =>
       const travelMs = new Date(r.travelDate).getTime();
       const returnDate = new Date(travelMs + nights * 86400000).toISOString().split('T')[0];
 
-      // Customer-facing total = sales price − discount + service charge; per person splits that total.
-      const totalPrice = (parseFloat(r.salesPrice || '0') || 0)
-        - (parseFloat(r.discounts || '0') || 0)
-        + (parseFloat(r.serviceCharge || '0') || 0);
-      const pax = (r.adult || 0) + (r.child || 0);
+      // Total includes extras not in the package; per person is the holiday price only.
+      const { total: totalPrice, pricePerPerson } = customerPrice({ ...r, adults: r.adult, children: r.child });
 
       return {
         id: r.bookingId,
@@ -469,7 +473,7 @@ portalRouter.get('/bookings', portalAuth, async (req: Request, res: Response) =>
         destination: dest,
         hotel: r.accommodationName || r.title || '',
         price: totalPrice,
-        price_per_person: pax > 0 ? parseFloat((totalPrice / pax).toFixed(2)) : 0,
+        price_per_person: parseFloat(pricePerPerson.toFixed(2)),
         travel_date: r.travelDate,
         return_date: returnDate,
         booking_reference: r.haysRef || r.supplierRef || '',

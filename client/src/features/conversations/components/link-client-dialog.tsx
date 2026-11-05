@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { PHONE_INPUT_MAX_LENGTH } from "@shared/phone";
+import { getClientPhoneError } from "@/features/client/lib/client-phone";
 import { neonClientApi } from "@/features/client/api/neon-client.api";
 import { useLinkContact, useCreateAndLinkContact } from "../api/use-contact-link";
 
@@ -72,7 +74,11 @@ export function LinkClientDialog({
     }
   };
 
+  const phoneError = getClientPhoneError(form.phoneNumber);
+  const phoneValid = !!form.phoneNumber.trim() && !phoneError;
+
   const doCreate = async () => {
+    if (phoneError) return;
     if (!form.firstName.trim() || !form.surename.trim() || !form.phoneNumber.trim()) {
       toast({ title: "Missing details", description: "First name, surname and phone are required.", variant: "destructive" });
       return;
@@ -176,7 +182,15 @@ export function LinkClientDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="lc-phone" className="text-xs flex items-center gap-1"><Phone className="h-3 w-3" /> Phone</Label>
-              <Input id="lc-phone" value={form.phoneNumber} onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))} />
+              <Input
+                id="lc-phone"
+                value={form.phoneNumber}
+                onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
+                maxLength={PHONE_INPUT_MAX_LENGTH}
+                aria-invalid={!!phoneError}
+                data-testid="input-link-phone"
+              />
+              {phoneError && <p className="text-xs text-destructive" data-testid="error-link-phone">{phoneError}</p>}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="lc-email" className="text-xs flex items-center gap-1"><Mail className="h-3 w-3" /> Email <span className="text-black/40 dark:text-white/40">(optional)</span></Label>
@@ -184,7 +198,7 @@ export function LinkClientDialog({
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button size="sm" className="gap-1.5" disabled={createAndLink.isPending} onClick={doCreate}>
+              <Button size="sm" className="gap-1.5" disabled={createAndLink.isPending || !phoneValid} onClick={doCreate}>
                 {createAndLink.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5" />}
                 Create & link
               </Button>

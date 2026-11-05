@@ -69,28 +69,22 @@ const clientHolidayDialog: ConvertDialogDriver = {
   supplierError: (dialog) => dialog.locator("#convert-supplier-err"),
 };
 
+// The drawer no longer moves deals: its main button opens the full deal page, where the same convert dialog lives.
 const pipelineDialog: ConvertDialogDriver = {
-  name: "pipeline dialog",
-  async open(page, { transactionId, quoteId }) {
-    // The drawer's primary button moves a deal one step: Quoted -> In-Play -> Booked. Start from In-Play.
-    const inPlay = await page.request.patch(`/api/v2/quotes/${quoteId}`, { data: { quote_status: "in_play" } });
-    expect(inPlay.status(), await inPlay.text()).toBe(200);
+  ...clientHolidayDialog,
+  name: "pipeline drawer to full deal page",
+  async open(page, { transactionId }) {
     await page.goto("/pipeline");
     await page.getByTestId(`pipeline-card-${transactionId}`).click();
     await expect(page.getByTestId("transaction-detail-panel")).toBeVisible();
-    await expect(page.getByTestId("button-drawer-primary")).toHaveText("Move to Booked");
+    await expect(page.getByTestId("button-drawer-primary")).toHaveText("Open full deal");
     await page.getByTestId("button-drawer-primary").click();
+    await expect(page.getByTestId("holiday-top-bar")).toBeVisible();
+    await page.getByTestId("holiday-top-convert").click();
     const dialog = page.getByTestId("dialog-convert-booking");
     await expect(dialog).toBeVisible();
     return dialog;
   },
-  async fill(dialog, hays, supplier) {
-    await dialog.getByTestId("input-convert-hays-ref").fill(hays);
-    await dialog.getByTestId("input-convert-tour-ref").fill(supplier);
-  },
-  submit: (dialog) => dialog.getByTestId("button-convert-to-booking").click(),
-  hysError: (dialog) => dialog.getByTestId("error-convert-hays-ref"),
-  supplierError: (dialog) => dialog.getByTestId("error-convert-tour-ref"),
 };
 
 const olderQuotePageDialog: ConvertDialogDriver = {
@@ -439,8 +433,9 @@ test.describe("what carries from the quote to the booking", () => {
     await expect(main).toContainText("Majorca");
     await expect(main).toContainText("E2E Sun Holidays");
     await expect(main).toContainText("2 Adults");
-    // The customer total is price - discount + service charge: 3000 - 100 + 40.
-    await expect(page.getByTestId("holiday-hero")).toContainText("£2,940");
+    // The customer total is price - discount + service charge + the extras not included in the package:
+    // 3000 - 100 + 40 + (transfer 40 + lounge 25 + car hire 150 + tickets 120 + parking 95 + extra hotel 180).
+    await expect(page.getByTestId("holiday-hero")).toContainText("£3,550");
   });
 
   test("the booking shows on the client page under Bookings and in the pipeline's Booked column", async ({ page }) => {

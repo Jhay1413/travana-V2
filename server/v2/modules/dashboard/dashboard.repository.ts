@@ -11,8 +11,8 @@ export const dashboardRepository = {
     const orgFilter = orgId ? [eq(clientTable.orgId, orgId)] : [];
 
     const clientCountQuery = orgId
-      ? db.select({ count: sql<number>`count(*)` }).from(clientTable).where(eq(clientTable.orgId, orgId))
-      : db.select({ count: sql<number>`count(*)` }).from(clientTable);
+      ? db.select({ count: sql<number>`count(*)` }).from(clientTable).where(and(eq(clientTable.orgId, orgId), isNull(clientTable.deletedAt)))
+      : db.select({ count: sql<number>`count(*)` }).from(clientTable).where(isNull(clientTable.deletedAt));
 
     const transactionStatsBase = db
       .select({

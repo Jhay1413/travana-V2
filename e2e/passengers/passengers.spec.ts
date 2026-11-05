@@ -1,10 +1,9 @@
 /**
  * Client passengers (the Passengers block on the client page).
- * Owner rules: passengers are saved on the client and the client is the lead (name, title and date of birth come from
- * the client record; only the lead's passport is stored). Add Passenger needs all six fields; a passport number that is
- * not 9 digits only warns; a passport expiring in 6 months or less (against the next booking's departure, else
- * today in UK time) is flagged but never blocks; editing and the lead's passport are never blocked; everyone who can
- * open the client sees the passport numbers in full, read-only roles cannot edit, another agency sees nothing.
+ * Owner rules (reversed 4 Nov, enforced on the server and in the UI, on add and edit, lead passport included): all six fields are
+ * mandatory; a passport number is exactly 9 digits unless the Non-UK tick is set (then 5-20 letters/digits); the passport must
+ * be valid for MORE than 6 months after the next booking departure (today in UK time when there is none). Passengers are saved
+ * on the client and the client is the lead (name, title and date of birth come from the client record). Everyone who can open the client sees the passport numbers in full, read-only roles cannot edit, another agency sees nothing.
  *
  * Owner decision (3 Nov): agents may see and add passengers, including passport numbers, for ANY client in the agency, so
  * an agent of another shop is allowed. A branch manager stays pinned to their own shop.
@@ -32,6 +31,7 @@ interface PassengerApi {
   dateOfBirth: string | null;
   passportNumber: string | null;
   passportExpiry: string | null;
+  passportNonUk: boolean;
   passportWarning: boolean;
 }
 
@@ -144,68 +144,103 @@ test.describe("Add Passenger needs all six fields", () => {
   });
 });
 
-test.describe("UK passport number length warns but never blocks", () => {
-  test("anything but 9 digits shows the warning and still saves; exactly 9 digits shows none", async ({ page }) => {
+const dmy = (ymd: string) => ymd.split("-").reverse().join("/");
+const expiryMessage = (deadline: string) => `Passport must be valid for more than 6 months after travel (until after ${dmy(deadline)})`;
+const UK_NUMBER_MESSAGE = "Passport number must be exactly 9 digits (tick Non-UK passport for other formats)";
+
+test.describe("passport number: 9 digits, or Non-UK passport 5-20 letters/digits", () => {
+  test("a bad number blocks Save with the message; 9 digits clears it; the Non-UK tick allows AB12345 and it is stored upper case", async ({ page }) => {
     const { client } = await agentWithClient(page);
     await openClient(page, client.id);
     const dialog = await openAddModal(page);
-    const warning = dialog.getByTestId("passenger-passport-number-warning");
+    const error = dialog.getByTestId("passenger-passport-number-error");
     const number = dialog.getByTestId("input-passenger-passport-number");
-
-    await expect(warning).toHaveCount(0); // empty: nothing to warn about yet
-    await number.fill("12345678"); // 8 digits
-    await expect(warning).toHaveText("UK passports have 9 numbers. Check this one if it's a UK passport.");
-    await number.fill("1234567890"); // 10 digits
-    await expect(warning).toBeVisible();
-    await number.fill("12345678A"); // a letter
-    await expect(warning).toBeVisible();
-    await number.fill("123456789");
-    await expect(warning).toHaveCount(0);
-    await number.fill("X9876543"); // a non-UK style number
-    await expect(warning).toBeVisible();
-
-    // The warned number still saves.
+    const save = dialog.getByTestId("button-save-passenger");
     await fillPassenger(page, dialog, { title: "Ms", first: "Ola", last: "Overseas", dob: "1992-02-02", expiry: FAR_EXPIRY() });
-    await expect(dialog.getByTestId("button-save-passenger")).toBeEnabled();
-    await dialog.getByTestId("button-save-passenger").click();
+
+    await expect(error).toHaveCount(0); // empty: nothing to complain about yet, but Save is still off
+    await expect(save).toBeDisabled();
+    await number.fill("12345678"); // 8 digits
+    await expect(error).toHaveText(UK_NUMBER_MESSAGE);
+    await expect(save).toBeDisabled();
+    await expect(dialog.getByTestId("passenger-save-blocked-reason")).toHaveText(UK_NUMBER_MESSAGE);
+    await number.fill("1234567890"); // 10 digits
+    await expect(save).toBeDisabled();
+    await number.fill("AB1234567"); // letters without the tick
+    await expect(error).toBeVisible();
+    await expect(save).toBeDisabled();
+    await number.fill("123456789");
+    await expect(error).toHaveCount(0);
+    await expect(save).toBeEnabled();
+
+    // Non-UK tick: 5-20 letters/digits, no spaces.
+    await number.fill("ab12345");
+    await expect(save).toBeDisabled();
+    await dialog.getByTestId("checkbox-passenger-non-uk").check();
+    await expect(error).toHaveCount(0);
+    await expect(save).toBeEnabled();
+    await number.fill("AB12"); // too short even for Non-UK
+    await expect(error).toHaveText("Non-UK passport number must be 5 to 20 letters or digits, with no spaces");
+    await expect(save).toBeDisabled();
+    await number.fill("AB 12345"); // space
+    await expect(save).toBeDisabled();
+    await number.fill("ab12345");
+    await expect(save).toBeEnabled();
+    await save.click();
     await expect(dialog).toBeHidden();
     const saved = (await listPassengers(page, client.id)).passengers.find((p) => p.firstName === "Ola");
-    expect(saved?.passportNumber).toBe("X9876543");
+    expect(saved).toMatchObject({ passportNumber: "AB12345", passportNonUk: true });
+  });
+
+  test("the server refuses a bad number and accepts the Non-UK format", async ({ page }) => {
+    const { client } = await agentWithClient(page);
+    const url = `/api/v2/neon-clients/${client.id}/passengers`;
+    const body = { title: "Ms", firstName: "Pia", surname: "Partner", dateOfBirth: "1991-01-02", passportNumber: "987654321", passportExpiry: FAR_EXPIRY() };
+    const bad = await page.request.post(url, { data: { ...body, passportNumber: "AB12345" } });
+    expect(bad.status()).toBe(400);
+    expect(await bad.text()).toContain(UK_NUMBER_MESSAGE);
+    expect((await page.request.post(url, { data: { ...body, passportNumber: "AB 123", passportNonUk: true } })).status()).toBe(400);
+    expect((await page.request.post(url, { data: { ...body, passportNumber: "AB12", passportNonUk: true } })).status()).toBe(400);
+    const ok = await page.request.post(url, { data: { ...body, passportNumber: "ab12345", passportNonUk: true } });
+    expect(ok.status(), await ok.text()).toBe(201);
+    expect((await listPassengers(page, client.id)).passengers.filter((p) => !p.isLead)).toHaveLength(1);
   });
 });
 
-test.describe("passport expiry flags (6 months or less) never block", () => {
-  test("with no booking to travel on, the expiry is checked against today (UK): exactly 6 months and earlier are flagged, a day later is not", async ({ page }) => {
+test.describe("passport expiry must be MORE than 6 months after the next departure", () => {
+  test("with no booking to travel on, the expiry is checked against today (UK): expired and exactly 6 months are blocked, a day later saves", async ({ page }) => {
     const { client } = await agentWithClient(page);
     await openClient(page, client.id);
     await expect(page.getByTestId("passenger-footnote")).toContainText("No upcoming bookings yet, so passport expiry is checked against today");
 
     const sixMonths = plusMonths(today(), 6);
-    const cases: Array<{ name: string; expiry: string; flagged: boolean }> = [
-      { name: "Expired", expiry: addDaysToKey(today(), -30), flagged: true },
-      { name: "Exactly", expiry: sixMonths, flagged: true },
-      { name: "Later", expiry: addDaysToKey(sixMonths, 1), flagged: false },
+    const url = `/api/v2/neon-clients/${client.id}/passengers`;
+    const blocked = [
+      { name: "Expired", expiry: addDaysToKey(today(), -30) },
+      { name: "Exactly", expiry: sixMonths },
     ];
-    for (const c of cases) {
+    for (const c of blocked) {
       const dialog = await openAddModal(page);
       await fillPassenger(page, dialog, { title: "Miss", first: c.name, last: "Flag", dob: "2000-01-01", number: "123456789", expiry: c.expiry });
-      // The flag shows inside the form before saving...
-      if (c.flagged) await expect(dialog.getByTestId("passenger-passport-expiry-flag"), c.name).toHaveText("6 months or less left");
-      else await expect(dialog.getByTestId("passenger-passport-expiry-flag"), c.name).toHaveCount(0);
-      // ...and never stops the save.
-      await expect(dialog.getByTestId("button-save-passenger")).toBeEnabled();
-      await dialog.getByTestId("button-save-passenger").click();
+      await expect(dialog.getByTestId("passenger-passport-expiry-error"), c.name).toHaveText(expiryMessage(sixMonths));
+      await expect(dialog.getByTestId("button-save-passenger"), c.name).toBeDisabled();
+      await dialog.getByRole("button", { name: "Cancel" }).click();
       await expect(dialog).toBeHidden();
+      const res = await page.request.post(url, { data: { title: "Miss", firstName: c.name, surname: "Flag", dateOfBirth: "2000-01-01", passportNumber: "123456789", passportExpiry: c.expiry } });
+      expect(res.status(), c.name).toBe(400);
+      expect(await res.text()).toContain(expiryMessage(sixMonths));
     }
-    const list = (await listPassengers(page, client.id)).passengers;
-    for (const c of cases) expect(list.find((p) => p.firstName === c.name)?.passportWarning, c.name).toBe(c.flagged);
-    // On the cards: exactly two warnings.
-    await page.reload();
-    await expect(page.getByTestId("passenger-card-lead")).toBeVisible();
-    await expect(page.getByTestId("passenger-passport-warning")).toHaveCount(2);
+    const dialog = await openAddModal(page);
+    await expect(dialog.getByTestId("passenger-passport-expiry-hint")).toHaveText(`Must expire after ${dmy(sixMonths)} (6 months past travel)`);
+    await fillPassenger(page, dialog, { title: "Miss", first: "Later", last: "Flag", dob: "2000-01-01", number: "123456789", expiry: addDaysToKey(sixMonths, 1) });
+    await expect(dialog.getByTestId("passenger-passport-expiry-error")).toHaveCount(0);
+    await expect(dialog.getByTestId("button-save-passenger")).toBeEnabled();
+    await dialog.getByTestId("button-save-passenger").click();
+    await expect(dialog).toBeHidden();
+    expect((await listPassengers(page, client.id)).passengers.map((p) => p.firstName)).toEqual([client.firstName, "Later"]);
   });
 
-  test("with a booking to come, the expiry is checked against the next departure: 6 months after it is flagged, a day later is not; quotes, lost and past bookings do not set the departure", async ({ page }) => {
+  test("with a booking to come, the expiry is checked against the next departure; quotes, lost and past bookings do not set the departure", async ({ page }) => {
     const { w, client } = await agentWithClient(page);
     const world = { agency: w.agency, userId: w.agent.id, clientId: client.id, clientSurname: "" };
     const next = addDaysToKey(today(), 90);
@@ -218,67 +253,105 @@ test.describe("passport expiry flags (6 months or less) never block", () => {
     // A plain quote with an earlier travel date does not count: only bookings do.
     await quoteDeal(page.request, world, { title: "Sooner quote only", travel_date: addDaysToKey(today(), 30) });
 
-    const sixAfter = plusMonths(next, 6);
-    await page.request.post(`/api/v2/neon-clients/${client.id}/passengers`, { data: { title: "Mr.", firstName: "Edge", surname: "Exact", dateOfBirth: "1980-01-01", passportNumber: "111111111", passportExpiry: sixAfter } });
-    await page.request.post(`/api/v2/neon-clients/${client.id}/passengers`, { data: { title: "Mr.", firstName: "Edge", surname: "Later", dateOfBirth: "1980-01-01", passportNumber: "222222222", passportExpiry: addDaysToKey(sixAfter, 1) } });
-    // Seven months from today: fine against today, but inside 6 months of a departure 90 days away.
-    await page.request.post(`/api/v2/neon-clients/${client.id}/passengers`, { data: { title: "Mr.", firstName: "Edge", surname: "Between", dateOfBirth: "1980-01-01", passportNumber: "333333333", passportExpiry: plusMonths(today(), 7) } });
+    const deadline = plusMonths(next, 6);
+    const url = `/api/v2/neon-clients/${client.id}/passengers`;
+    const make = (surname: string, expiry: string) =>
+      page.request.post(url, { data: { title: "Mr.", firstName: "Edge", surname, dateOfBirth: "1980-01-01", passportNumber: "111111111", passportExpiry: expiry } });
+    const exact = await make("Exact", deadline);
+    expect(exact.status()).toBe(400);
+    expect(await exact.text()).toContain(expiryMessage(deadline));
+    // Seven months from today is fine against today but inside 6 months of a departure 90 days away.
+    expect((await make("Between", plusMonths(today(), 7))).status()).toBe(400);
+    expect((await make("Later", addDaysToKey(deadline, 1))).status()).toBe(201);
 
     const api = await listPassengers(page, client.id);
     expect(api.nextDeparture).toBe(next);
-    const byName = (s: string) => api.passengers.find((p) => p.surname === s)!;
-    expect(byName("Exact").passportWarning).toBe(true);
-    expect(byName("Later").passportWarning).toBe(false);
-    // 7 months from today is not within 6 months of today, but IS within 6 months of a departure 90 days away.
-    expect(byName("Between").passportWarning).toBe(true);
+    expect(api.passengers.filter((p) => !p.isLead).map((p) => p.surname)).toEqual(["Later"]);
 
     await openClient(page, client.id);
-    const longDate = shortLongDate(next);
-    await expect(page.getByTestId("passenger-footnote")).toContainText(`checked against the next departure, ${longDate}`);
-    const card = page.getByTestId(`passenger-card-${byName("Exact").id}`);
-    await expect(card.getByTestId("passenger-passport-warning")).toHaveText("6 months or less at travel");
-    await expect(page.getByTestId(`passenger-card-${byName("Later").id}`).getByTestId("passenger-passport-warning")).toHaveCount(0);
+    await expect(page.getByTestId("passenger-footnote")).toContainText(`checked against the next departure, ${shortLongDate(next)}`);
+    // On screen: the hint shows the deadline, the exact day is blocked with the message, the day after saves.
+    const dialog = await openAddModal(page);
+    await expect(dialog.getByTestId("passenger-passport-expiry-hint")).toHaveText(`Must expire after ${dmy(deadline)} (6 months past travel)`);
+    await fillPassenger(page, dialog, { title: "Mr.", first: "Screen", last: "Edge", dob: "1980-01-01", number: "222222222", expiry: deadline });
+    await expect(dialog.getByTestId("passenger-passport-expiry-error")).toHaveText(expiryMessage(deadline));
+    await expect(dialog.getByTestId("button-save-passenger")).toBeDisabled();
+    await dialog.getByTestId("input-passenger-passport-expiry").fill(addDaysToKey(deadline, 1));
+    await expect(dialog.getByTestId("button-save-passenger")).toBeEnabled();
+    await dialog.getByTestId("button-save-passenger").click();
+    await expect(dialog).toBeHidden();
+    expect((await listPassengers(page, client.id)).passengers.filter((p) => !p.isLead)).toHaveLength(2);
+  });
+
+  test("a legacy passenger already saved with a short-dated passport still shows the card warning", async ({ page }) => {
+    const { client } = await agentWithClient(page);
+    await queryRows(
+      `insert into client_passenger (client_id, is_lead, title, first_name, surname, date_of_birth, passport_number, passport_expiry) values ($1, false, 'Mr.', 'Legacy', 'Short', '1970-01-01', '123456789', $2)`,
+      [client.id, addDaysToKey(today(), 30)],
+    );
+    await openClient(page, client.id);
+    await expect(page.getByTestId("passenger-passport-warning")).toHaveCount(1);
   });
 });
 
-test.describe("editing is never blocked", () => {
-  test("an older passenger with gaps can be edited with only names, fields can be cleared, and the passenger can be deleted", async ({ page }) => {
+test.describe("editing is held to the same rules", () => {
+  test("an older passenger with gaps cannot be saved until every field is valid; once valid it saves, and editing it to an invalid value is blocked", async ({ page }) => {
     const { client } = await agentWithClient(page);
     // A record from before all six were mandatory: names only.
     const [row] = await queryRows<{ id: string }>(
       `insert into client_passenger (client_id, is_lead, first_name, surname) values ($1, false, 'Old', 'Record') returning id`,
       [client.id],
     );
+    const patchUrl = `/api/v2/neon-clients/${client.id}/passengers/${row.id}`;
+    // Even an unrelated change is refused while the record has gaps.
+    const gap = await page.request.patch(patchUrl, { data: { firstName: "Older" } });
+    expect(gap.status()).toBe(400);
+    expect(await gap.text()).toContain("Title is required");
+
     await openClient(page, client.id);
     const card = page.getByTestId(`passenger-card-${row.id}`);
     await expect(card).toContainText("Old Record");
     await card.getByTestId(`passenger-edit-${row.id}`).click();
     const dialog = page.getByTestId("dialog-passenger");
+    const save = dialog.getByTestId("button-save-passenger");
     await expect(dialog.getByRole("heading", { name: "Edit passenger" })).toBeVisible();
-    // With nothing but the names the Save button is enabled (adding would need all six).
-    await expect(dialog.getByTestId("button-save-passenger")).toBeEnabled();
-    await dialog.getByTestId("input-passenger-passport-number").fill("12345");
-    await expect(dialog.getByTestId("passenger-passport-number-warning")).toBeVisible();
-    await dialog.getByTestId("input-passenger-passport-expiry").fill(addDaysToKey(today(), 30)); // soon: flagged, still allowed
-    await expect(dialog.getByTestId("passenger-passport-expiry-flag")).toBeVisible();
-    await dialog.getByTestId("button-save-passenger").click();
+    await expect(save).toBeDisabled();
+    await expect(dialog.getByTestId("passenger-save-blocked-reason")).toHaveText("Title is required");
+    await fillPassenger(page, dialog, { title: "Mr.", dob: "1960-04-04", number: "12345" });
+    await expect(dialog.getByTestId("passenger-passport-number-error")).toHaveText(UK_NUMBER_MESSAGE);
+    await fillPassenger(page, dialog, { number: "123456789", expiry: addDaysToKey(today(), 30) });
+    await expect(dialog.getByTestId("passenger-passport-expiry-error")).toBeVisible();
+    await expect(save).toBeDisabled();
+    await dialog.getByTestId("input-passenger-passport-expiry").fill(FAR_EXPIRY());
+    await expect(save).toBeEnabled();
+    await save.click();
     await expect(dialog).toBeHidden();
     const saved = (await listPassengers(page, client.id)).passengers.find((p) => p.id === row.id)!;
-    expect(saved).toMatchObject({ firstName: "Old", surname: "Record", passportNumber: "12345", passportWarning: true, title: null, dateOfBirth: null });
+    expect(saved).toMatchObject({ firstName: "Old", title: "Mr.", dateOfBirth: "1960-04-04", passportNumber: "123456789", passportExpiry: FAR_EXPIRY(), passportWarning: false });
 
-    // Clearing the passport number and expiry again is allowed, and only a missing name blocks an edit.
+    // Now valid: an ordinary edit saves.
+    expect((await page.request.patch(patchUrl, { data: { firstName: "Older" } })).status()).toBe(200);
+
+    // Editing a valid passenger to an invalid value is blocked on screen and at the server.
     await page.getByTestId(`passenger-edit-${row.id}`).click();
-    await dialog.getByTestId("input-passenger-passport-number").fill("");
+    await dialog.getByTestId("input-passenger-passport-number").fill("1234");
+    await expect(save).toBeDisabled();
+    await dialog.getByTestId("input-passenger-passport-number").fill("123456789");
     await dialog.getByTestId("input-passenger-passport-expiry").fill("");
+    await expect(save).toBeDisabled();
+    await dialog.getByTestId("input-passenger-passport-expiry").fill(addDaysToKey(today(), 10));
+    await expect(save).toBeDisabled();
     await dialog.getByTestId("input-passenger-first-name").fill("");
-    await expect(dialog.getByTestId("button-save-passenger")).toBeDisabled();
-    await dialog.getByTestId("input-passenger-first-name").fill("Older");
-    await dialog.getByTestId("button-save-passenger").click();
+    await expect(save).toBeDisabled();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
-    const cleared = (await listPassengers(page, client.id)).passengers.find((p) => p.id === row.id)!;
-    expect(cleared).toMatchObject({ firstName: "Older", passportNumber: null, passportExpiry: null, passportWarning: false });
+    expect((await page.request.patch(patchUrl, { data: { passportNumber: "1234" } })).status()).toBe(400);
+    expect((await page.request.patch(patchUrl, { data: { passportExpiry: addDaysToKey(today(), 10) } })).status()).toBe(400);
+    expect((await page.request.patch(patchUrl, { data: { passportNumber: "" } })).status()).toBe(400);
+    const unchanged = (await listPassengers(page, client.id)).passengers.find((p) => p.id === row.id)!;
+    expect(unchanged).toMatchObject({ firstName: "Older", passportNumber: "123456789", passportExpiry: FAR_EXPIRY() });
 
-    // Delete it.
+    // Delete is never blocked.
     await page.getByTestId(`passenger-edit-${row.id}`).click();
     await dialog.getByTestId("button-delete-passenger").click();
     await page.getByTestId("button-confirm-delete-passenger").click();
@@ -286,7 +359,7 @@ test.describe("editing is never blocked", () => {
     expect(await queryRows(`select 1 from client_passenger where id = $1`, [row.id])).toHaveLength(0);
   });
 
-  test("the lead's passport can be saved with any value (warned, never blocked) while name and date of birth come from the client", async ({ page }) => {
+  test("the lead's passport follows the same rules (number, Non-UK tick, expiry) while name and date of birth come from the client", async ({ page }) => {
     const { client } = await agentWithClient(page, { title: "Dr", firstName: "Lena", DOB: "1985-03-09" });
     await openClient(page, client.id);
     // The lead is always the first card (its test id changes from "lead" to its row id once a passport has been saved).
@@ -297,20 +370,37 @@ test.describe("editing is never blocked", () => {
 
     await page.getByTestId("passenger-edit-lead").click();
     const dialog = page.getByTestId("dialog-passenger");
+    const save = dialog.getByTestId("button-save-passenger");
     await expect(dialog.getByRole("heading", { name: "Lead passenger passport" })).toBeVisible();
     // Only the passport fields are editable for the lead.
     await expect(dialog.getByTestId("input-passenger-first-name")).toHaveCount(0);
     await expect(dialog.getByTestId("input-passenger-dob")).toHaveCount(0);
-    await expect(dialog.getByTestId("button-save-passenger")).toBeEnabled(); // even with nothing filled in
+    await expect(save).toBeDisabled(); // nothing filled in yet
+    await expect(dialog.getByTestId("passenger-save-blocked-reason")).toHaveText("Passport number is required");
     await dialog.getByTestId("input-passenger-passport-number").fill("AB12");
-    await expect(dialog.getByTestId("passenger-passport-number-warning")).toBeVisible();
+    await expect(dialog.getByTestId("passenger-passport-number-error")).toBeVisible();
+    await dialog.getByTestId("checkbox-passenger-non-uk").check();
+    await dialog.getByTestId("input-passenger-passport-number").fill("ab12345");
     await dialog.getByTestId("input-passenger-passport-expiry").fill(addDaysToKey(today(), 10));
-    await dialog.getByTestId("button-save-passenger").click();
+    await expect(dialog.getByTestId("passenger-passport-expiry-error")).toBeVisible();
+    await expect(save).toBeDisabled();
+    await dialog.getByTestId("input-passenger-passport-expiry").fill(FAR_EXPIRY());
+    await expect(save).toBeEnabled();
+    await save.click();
     await expect(dialog).toBeHidden();
-    await expect(lead).toContainText("AB12");
-    await expect(lead.getByTestId("passenger-passport-warning")).toBeVisible();
-    const stored = await queryRows<{ is_lead: boolean; passport_number: string }>(`select is_lead, passport_number from client_passenger where client_id = $1`, [client.id]);
-    expect(stored).toEqual([{ is_lead: true, passport_number: "AB12" }]);
+    await expect(lead).toContainText("AB12345");
+    const stored = await queryRows<{ is_lead: boolean; passport_number: string; passport_non_uk: boolean }>(
+      `select is_lead, passport_number, passport_non_uk from client_passenger where client_id = $1`,
+      [client.id],
+    );
+    expect(stored).toEqual([{ is_lead: true, passport_number: "AB12345", passport_non_uk: true }]);
+
+    // The server enforces it for the lead too.
+    const put = (data: Record<string, unknown>) => page.request.put(`/api/v2/neon-clients/${client.id}/passengers/lead`, { data });
+    expect((await put({ passportNumber: "1234", passportExpiry: FAR_EXPIRY() })).status()).toBe(400);
+    expect((await put({ passportNumber: "123456789", passportExpiry: addDaysToKey(today(), 10) })).status()).toBe(400);
+    expect((await put({ passportNumber: null, passportExpiry: null })).status()).toBe(400);
+    expect((await put({ passportNumber: "123456789", passportExpiry: FAR_EXPIRY() })).status()).toBe(200);
 
     // The lead's name is the client's: change the client and the lead card follows (nothing is copied).
     expect((await page.request.patch(`/api/v2/neon-clients/${client.id}`, { data: { firstName: "Leona" } })).status()).toBe(200);
@@ -320,6 +410,22 @@ test.describe("editing is never blocked", () => {
     const leadRow = (await listPassengers(page, client.id)).passengers[0];
     expect((await page.request.delete(`/api/v2/neon-clients/${client.id}/passengers/${leadRow.id}`)).status()).toBe(400);
     expect((await page.request.patch(`/api/v2/neon-clients/${client.id}/passengers/${leadRow.id}`, { data: { firstName: "Hack" } })).status()).toBe(400);
+  });
+
+  test("a lead whose client record has no date of birth or title cannot save a passport: Save is off with a clear message and the server refuses", async ({ page }) => {
+    const { client } = await agentWithClient(page);
+    await queryRows(`update client_table set "DOB" = null, title = null where id = $1`, [client.id]);
+    await openClient(page, client.id);
+    await page.getByTestId("passenger-edit-lead").click();
+    const dialog = page.getByTestId("dialog-passenger");
+    await dialog.getByTestId("input-passenger-passport-number").fill("123456789");
+    await dialog.getByTestId("input-passenger-passport-expiry").fill(FAR_EXPIRY());
+    await expect(dialog.getByTestId("button-save-passenger")).toBeDisabled();
+    await expect(dialog.getByTestId("passenger-save-blocked-reason")).toContainText("title and date of birth on the client record");
+    const res = await page.request.put(`/api/v2/neon-clients/${client.id}/passengers/lead`, { data: { passportNumber: "123456789", passportExpiry: FAR_EXPIRY() } });
+    expect(res.status()).toBe(400);
+    expect(await res.text()).toContain("title and date of birth");
+    expect(await queryRows(`select 1 from client_passenger where client_id = $1`, [client.id])).toHaveLength(0);
   });
 });
 

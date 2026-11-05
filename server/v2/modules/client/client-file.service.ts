@@ -6,6 +6,7 @@ import { s3Client, S3_BUCKET } from "../../config/s3";
 import { clientFileRepository, type ClientFileWithUploader } from "./client-file.repository";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { AppError } from "../../utils/error-handler";
+import { canReadDeletedClients } from "../../utils/client-delete-roles";
 import type { Scope } from "../../utils/scope";
 import type { ClientFile } from "@shared/schema";
 
@@ -26,22 +27,27 @@ export type DownloadTarget =
 
 // Out-of-scope clients and files read as 404 so existence is never leaked
 // across tenants.
-async function assertClientInScope(clientId: string, scope: Scope): Promise<void> {
-  const client = await neonClientRepository.findById(clientId, scope);
+async function assertClientInScope(clientId: string, scope: Scope, opts?: { forRead?: boolean }): Promise<void> {
+  // Reads of a soft-deleted client are allowed for admins only; uploads keep the strict lookup.
+  const client = opts?.forRead && canReadDeletedClients(scope)
+    ? await neonClientRepository.findByIdIncludingDeleted(clientId, scope)
+    : await neonClientRepository.findById(clientId, scope);
   if (!client) throw new AppError("Client not found", 404);
 }
 
-async function loadScopedFile(id: string, scope: Scope): Promise<ClientFile> {
+async function loadScopedFile(id: string, scope: Scope, opts?: { forRead?: boolean }): Promise<ClientFile> {
   const file = await clientFileRepository.findById(id);
   if (!file) throw new AppError("File not found", 404);
-  const client = await neonClientRepository.findById(file.clientId, scope);
+  const client = opts?.forRead && canReadDeletedClients(scope)
+    ? await neonClientRepository.findByIdIncludingDeleted(file.clientId, scope)
+    : await neonClientRepository.findById(file.clientId, scope);
   if (!client) throw new AppError("File not found", 404);
   return file;
 }
 
 export const clientFileService = {
   async listByClientId(clientId: string, scope: Scope): Promise<ClientFileWithUploader[]> {
-    await assertClientInScope(clientId, scope);
+    await assertClientInScope(clientId, scope, { forRead: true });
     return clientFileRepository.findByClientId(clientId);
   },
 
@@ -87,7 +93,7 @@ export const clientFileService = {
   },
 
   async getDownloadTarget(id: string, scope: Scope, opts?: { inline?: boolean }): Promise<DownloadTarget> {
-    const file = await loadScopedFile(id, scope);
+    const file = await loadScopedFile(id, scope, { forRead: true });
 
     // "inline" lets the browser render the file in a preview (e.g. a PDF in an
     // iframe); "attachment" forces a download.

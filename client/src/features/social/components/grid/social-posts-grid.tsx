@@ -10,7 +10,7 @@ import { SocialPostEditorDialog } from "../editor";
 import { CreatePostMenu } from "../create/create-post-menu";
 import { SchedulePostDialog } from "../schedule/schedule-post-dialog";
 import { useScheduleDialogState } from "../schedule/use-schedule-dialog-state";
-import { buildCountsLine, buildGridQueryArgs, DEFAULT_GRID_FILTERS, hasActiveFilters, matchesStatusFilter, parseGridFilters, serialiseGridFilters, type GridFilters } from "./grid-filters";
+import { buildCountsLine, buildGridQueryArgs, DEFAULT_GRID_FILTERS, hasActiveFilters, parseGridFilters, serialiseGridFilters, type GridFilters } from "./grid-filters";
 import { GridToolbar } from "./grid-toolbar";
 import { SocialPostCard } from "./social-post-card";
 import { usePostEditorState } from "./use-post-editor-state";
@@ -65,14 +65,13 @@ export function SocialPostsGrid({ createOpen, onCreateOpenChange, onCountsChange
   const countsLine = buildCountsLine(counts);
   useEffect(() => onCountsChange?.(countsLine), [countsLine, onCountsChange]);
 
-  // "Featured" and the Drafts chip (drafts + not-generated, two server statuses) are filtered client-side,
-  // so they only cover the posts loaded so far.
+  // "Featured" is filtered client-side, so it only covers the posts loaded so far.
   const quotes = useMemo<EnrichedQuote[]>(() => {
     const all = data?.pages.flatMap((page) => page.quotes) ?? [];
     return all.filter(
-      (q) => (filters.tag !== "featured" || !!q.is_featured) && (filters.status !== "draft" || matchesStatusFilter(derivePostStatus(q), "draft")),
+      (q) => (filters.tag !== "featured" || !!q.is_featured),
     );
-  }, [data, filters.tag, filters.status]);
+  }, [data, filters.tag]);
 
   // Featured is filtered client-side, so a page can come back with no matches: keep pulling pages
   // (bounded) until something shows up or the list ends, otherwise the sentinel would never appear.
@@ -125,8 +124,8 @@ export function SocialPostsGrid({ createOpen, onCreateOpenChange, onCountsChange
         tagNames={tagNames}
         onTagNamesChange={setTagNames}
       />
-      {(filters.tag === "featured" || filters.status === "draft") && (
-        <p className="text-[12px] text-social-muted">{filters.tag === "featured" ? "Featured deals are filtered from the posts loaded so far. Scroll to load more." : "Drafts are filtered from the posts loaded so far. Scroll to load more."}</p>
+      {filters.tag === "featured" && (
+        <p className="text-[12px] text-social-muted">Featured deals are filtered from the posts loaded so far. Scroll to load more.</p>
       )}
 
       {isLoading ? (

@@ -71,7 +71,8 @@ const OPTIONAL_SPEC_SAMPLES: Record<OptionalSpecKey, unknown> = {
   constants: { tour_operator: "Acme Travel", currency: "GBP" },
   luggageRegex: "\\((\\d+)\\)\\s*(\\d+kg)",
   imageUrlIncludes: "cdn.example.com/gallery",
-  imageContainerIncludes: "hotel-main-view",
+  imageContainerIncludes: [{ match: "lodge-gallery|property-gallery" }, { match: "park-gallery", max: 5 }],
+  imageJsonPaths: ["packageData.accommodation.imageUrls"],
   flightModalTrigger: "compare airport",
   itineraryRegex: "Day\\s*(\\d+)[:\\s]+([^\\n]+)",
   packageType: "cruise",
@@ -113,6 +114,7 @@ const FIELD_RULE_SAMPLES: Record<FieldRuleKey, unknown> = {
   transform: "number",
   map: { "Express transfers": "Shared Transfer" },
   fallback: "None",
+  joinAll: " + ",
   // Provenance (§4 Phase 3) — written by deriveSpecFromPicks (picker-spec.ts)
   // when a human verifies a field, never by the AI generator.
   origin: "picked",

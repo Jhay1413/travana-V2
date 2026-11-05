@@ -25,6 +25,7 @@ import {
   updateUsageLimitsSchema,
   usageOverviewQuerySchema,
   upsertModelPricingSchema,
+  setSocialAccountsSchema,
 } from './platform-admin.validator';
 
 const router = Router();
@@ -79,6 +80,10 @@ router.patch( '/organizations/:id/usage-limits',      requirePlatformAdmin, vali
 router.get(   '/usage/overview',                      requirePlatformAdmin, validate(usageOverviewQuerySchema),    platformAdminController.getUsageOverview);
 router.get(   '/model-pricing',                       requirePlatformAdmin,                                          platformAdminController.listModelPricing);
 router.put(   '/model-pricing/:model',                requirePlatformAdmin, validate(upsertModelPricingSchema),    platformAdminController.upsertModelPricing);
+
+// Social Posts: which OnlySocials accounts this agency may publish to
+router.get(   '/organizations/:id/social-accounts',   requirePlatformAdmin, validate(orgIdParamSchema),            platformAdminController.getSocialAccounts);
+router.put(   '/organizations/:id/social-accounts',   requirePlatformAdmin, validate(setSocialAccountsSchema),     platformAdminController.setSocialAccounts);
 
 // Audit log
 router.get(   '/audit-log',                    requirePlatformAdmin, validate(auditLogQuerySchema),           platformAdminController.listAudit);

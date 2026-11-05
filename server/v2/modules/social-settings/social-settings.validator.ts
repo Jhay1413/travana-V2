@@ -12,3 +12,7 @@ export const updateSocialSettingsValidator = z.object({
     timezone: z.string().min(1).max(64).optional(),
   }).strict(),
 });
+
+export const listAccountsValidator = z.object({
+  query: z.object({ dealId: z.string().uuid().optional() }).passthrough(),
+});

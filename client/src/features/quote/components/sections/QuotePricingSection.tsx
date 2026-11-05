@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useTourOperators } from "@/hooks/queries";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import { operatorCommissionPct, recomputePricing } from "@/features/quote/lib/pricing";
+import { extrasCustomerTotal, formTotalProfit } from "@/features/quote/lib/quote-money";
 import type { QuoteFormValues } from "@/features/quote/types";
 
 const FIELDS = [
@@ -23,13 +24,25 @@ export function QuotePricingSection() {
   const discount = useWatch({ control, name: "discount" });
   const serviceCharge = useWatch({ control, name: "serviceCharge" });
 
+  const [transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations] = useWatch({
+    control,
+    name: ["transfers", "carHires", "attractionTickets", "loungePasses", "airportParkings", "extraAccommodations"],
+  });
+  const totalProfit = formTotalProfit(commission, {
+    transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+  });
+
   const currentPrice = Number(price) || 0;
   const currentDiscount = Number(discount) || 0;
   const currentServiceCharge = Number(serviceCharge) || 0;
   const currentCommission = Number(commission) || 0;
+  const extrasCommission = totalProfit - currentCommission;
   const hasAdjustments = currentDiscount > 0 || currentServiceCharge > 0;
-  // Total price = price − discount + service charge.
-  const finalTotal = currentPrice - currentDiscount + currentServiceCharge;
+  // Total price = price − discount + service charge + extras not marked "Included in package".
+  const extrasCost = extrasCustomerTotal({
+    transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
+  });
+  const finalTotal = currentPrice - currentDiscount + currentServiceCharge + extrasCost;
   // The commission field already holds the total (operator % − discount + service charge);
   // recover the raw operator portion for the breakdown line.
   const operatorCommission = currentCommission + currentDiscount - currentServiceCharge;
@@ -91,13 +104,14 @@ export function QuotePricingSection() {
           <span className="text-sm font-semibold text-black">£{finalTotal.toFixed(2)}</span>
         </div>
       )}
-      {hasAdjustments && currentPrice > 0 && (
+      {(hasAdjustments || extrasCommission > 0) && currentPrice > 0 && (
         <div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-50/50 p-3">
-          <div className="text-xs font-medium text-blue-900">Total Commission: £{currentCommission.toFixed(2)}</div>
+          <div className="text-xs font-medium text-blue-900">Total Commission: £{totalProfit.toFixed(2)}</div>
           <div className="mt-1 text-[10px] text-blue-700/70">
             Commission: £{operatorCommission.toFixed(2)}{" "}
             {currentDiscount > 0 && `Discount: -£${currentDiscount.toFixed(2)} `}
-            {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)}`}
+            {currentServiceCharge > 0 && `Service Charge: +£${currentServiceCharge.toFixed(2)} `}
+            {extrasCommission > 0 && `Extras: +£${extrasCommission.toFixed(2)}`}
           </div>
         </div>
       )}

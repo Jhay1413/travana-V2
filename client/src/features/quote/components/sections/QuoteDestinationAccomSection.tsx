@@ -394,6 +394,7 @@ export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: For
                   onAddNew={() => setShowAddRoomTypeModal(true)}
                   addNewLabel="Add Room Type"
                   placeholder="Select room type..."
+                  selectedFirst
                 />
               </FormControl>
               <FormMessage />

@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { visibleTickets } from "@/features/client/lib/visible-tickets";
+import { cleanClientName } from "@/features/tickets/lib/ticket-display";
 import { ChevronDown, Heart, Paperclip, Pencil, Pin, Plus, Reply as ReplyIcon, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -15,6 +17,7 @@ import {
   useToggleTicketLike,
   useUpdateTicket,
   usePinnedTicketIds,
+  useTicketPin,
   sortPinnedFirst,
   ReplyThreadToggle,
   TicketAttachmentList,
@@ -108,6 +111,7 @@ function PostBubble({
   onCancelEdit,
   isSavingEdit,
   isConfirmingDelete,
+  deleteReplyCount = 0,
   onConfirmDelete,
   onCancelDelete,
   isLiking = false,
@@ -133,6 +137,8 @@ function PostBubble({
   onCancelEdit?: () => void;
   isSavingEdit?: boolean;
   isConfirmingDelete?: boolean;
+  /** Replies beneath this comment that are deleted with it. */
+  deleteReplyCount?: number;
   onConfirmDelete?: () => void;
   onCancelDelete?: () => void;
   /** Files posted with this post (ticket-level or reply-level). */
@@ -190,6 +196,11 @@ function PostBubble({
               {isConfirmingDelete ? (
                 <span className="flex items-center gap-1.5 text-[11px]">
                   Confirm delete?
+                  {deleteReplyCount > 0 && (
+                    <span data-testid={`ticket-reply-delete-warning-${post.id}`}>
+                      This will also delete {deleteReplyCount} {deleteReplyCount === 1 ? "reply" : "replies"}.
+                    </span>
+                  )}
                   <button type="button" onClick={onConfirmDelete} className="font-semibold text-rose-600 hover:underline" data-testid={`ticket-reply-delete-confirm-${post.id}`}>
                     Yes
                   </button>
@@ -306,8 +317,8 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
     likedByMe: reply.likedByMe,
   });
 
-  // One level of threading. A reply whose parent is missing (deleted, or
-  // from before parents were tracked) is promoted to top level rather than
+  // One level of threading. A reply whose parent is missing (from before
+  // parents were tracked) is promoted to top level rather than
   // hidden. The server already flattens deeper replies onto the top-level
   // parent, so children never have children of their own.
   const { topLevel, topLevelIds, childrenByParent } = useMemo(() => {
@@ -464,6 +475,7 @@ function HolidayTicketThread({ ticket }: { ticket: Ticket }) {
         onCancelEdit={() => setEditingId(null)}
         isSavingEdit={isSavingPost(post)}
         isConfirmingDelete={confirmDeleteId === post.id}
+        deleteReplyCount={post.reply ? (childrenByParent.get(post.reply.id) ?? []).length : 0}
         onConfirmDelete={() => handleDelete(post.id)}
         onCancelDelete={() => setConfirmDeleteId(null)}
       />
@@ -596,18 +608,24 @@ function TicketCard({
   users: ApiUser[];
 }) {
   const assigneeName = ticket.assignedToName || users.find((u) => u.id === ticket.assignedTo)?.name || "Unassigned";
+  const { togglePin } = useTicketPin(ticket.id, { label: ticket.subject, subtitle: cleanClientName(ticket.clientName) ?? ticket.type });
   return (
-    <div className="rounded-2xl border border-black/10 bg-white" data-testid={`holiday-ticket-${ticket.id}`}>
+    <div
+      className={cn("rounded-2xl border", pinned ? "border-social-orange bg-ticket-amber-bg" : "border-black/10 bg-white")}
+      data-testid={`holiday-ticket-${ticket.id}`}
+      data-pinned={pinned ? "true" : "false"}
+    >
+      <div className="flex items-center">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left"
+        className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-4 text-left"
         data-testid={`holiday-ticket-toggle-${ticket.id}`}
       >
         <ChevronDown className={cn("h-4 w-4 shrink-0 text-black/40 transition-transform", isOpen && "rotate-180")} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            {pinned && <Pin className="h-3 w-3 shrink-0 text-black/35" aria-label="Pinned" />}
+            {pinned && <Pin className="h-3 w-3 shrink-0 fill-social-orange text-social-orange" aria-label="Pinned" />}
             <span className="truncate text-[13px] font-medium text-black/85">{ticket.subject}</span>
             {scopedLabel && (
               <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{scopedLabel}</span>
@@ -630,10 +648,29 @@ function TicketCard({
           </div>
         </div>
       </button>
+      <button
+        type="button"
+        onClick={togglePin}
+        aria-pressed={pinned}
+        title={pinned ? "Unpin ticket" : "Pin ticket"}
+        className={cn(
+          "ml-1 mr-3 inline-flex h-7 shrink-0 items-center gap-1 rounded-[10px] border px-2 text-[11px] font-semibold transition",
+          pinned
+            ? "border-social-orange bg-ticket-amber-bg text-ticket-amber-fg"
+            : "border-black/10 text-black/50 hover:bg-black/5 hover:text-black",
+        )}
+        data-testid={`holiday-ticket-pin-${ticket.id}`}
+      >
+        <Pin className={cn("h-3.5 w-3.5", pinned && "fill-social-orange text-social-orange")} />
+        {pinned ? "Pinned" : "Pin"}
+      </button>
+      </div>
       {isOpen && <HolidayTicketThread ticket={ticket} />}
     </div>
   );
 }
+
+const TICKETS_PREVIEW_LIMIT = 5;
 
 export function HolidayTicketsTab({
   clientId,
@@ -670,12 +707,10 @@ export function HolidayTicketsTab({
     return sortPinnedFirst([...scoped, ...rest], pinnedTicketIds);
   }, [ticketsData, isScoped, pinnedTicketIds]);
 
-  // The newest ticket starts open. Pinned to its id (not its index) so a
-  // re-sort doesn't silently swap which card is expanded.
-  const [defaultOpenId, setDefaultOpenId] = useState<string | null>(null);
-  const firstId = sortedTickets[0]?.id ?? null;
-  if (defaultOpenId === null && firstId !== null) setDefaultOpenId(firstId);
-  const isTicketOpen = (id: string) => openOverrides[id] ?? id === defaultOpenId;
+  // Every ticket starts collapsed; only the first few are listed until "Show more".
+  const [showAll, setShowAll] = useState(false);
+  const isTicketOpen = (id: string) => openOverrides[id] ?? false;
+  const { shown: shownTickets, hidden: hiddenCount } = visibleTickets(sortedTickets, showAll, TICKETS_PREVIEW_LIMIT, isTicketOpen);
 
   if (isLoading) {
     return (
@@ -721,14 +756,14 @@ export function HolidayTicketsTab({
 
   return (
     <div className="space-y-3" data-testid="holiday-detail-tickets">
-      {sortedTickets.map((ticket) => {
+      {shownTickets.map((ticket) => {
         return (
           <TicketCard
             key={ticket.id}
             ticket={ticket}
             isOpen={isTicketOpen(ticket.id)}
             onToggle={() =>
-              setOpenOverrides((prev) => ({ ...prev, [ticket.id]: !(prev[ticket.id] ?? ticket.id === defaultOpenId) }))
+              setOpenOverrides((prev) => ({ ...prev, [ticket.id]: !(prev[ticket.id] ?? false) }))
             }
             pinned={pinnedTicketIds.has(ticket.id)}
             scopedLabel={
@@ -744,6 +779,16 @@ export function HolidayTicketsTab({
           />
         );
       })}
+      {sortedTickets.length > TICKETS_PREVIEW_LIMIT && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="text-[13px] font-semibold text-social-orange-text transition hover:underline"
+          data-testid="holiday-tickets-show-more"
+        >
+          {showAll ? "Show less" : `Show more (${hiddenCount})`}
+        </button>
+      )}
     </div>
   );
 }

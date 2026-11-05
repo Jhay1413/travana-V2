@@ -2,8 +2,10 @@ import { Request, Response } from "express";
 import { socialPostService } from "./social-post.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
+import type { UpdateSocialPostInput } from "./social-post.types";
 import { getScope } from "../../utils/scope";
 import { parseImageOrderField, sanitizeUrlInput } from "./media-order";
+import { parseAccountIdsField } from "./social-post.validator";
 
 export const socialPostController = {
   generatePost: asyncHandler(async (req: Request, res: Response) => {
@@ -19,7 +21,7 @@ export const socialPostController = {
 
   update: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params as { id: string };
-    const deal = await socialPostService.updateTravelDeal(id, req.body, getScope(req));
+    const deal = await socialPostService.updateTravelDeal(id, req.body as UpdateSocialPostInput, getScope(req));
     return successResponse(res, deal, "Travel deal updated successfully");
   }),
 
@@ -37,7 +39,7 @@ export const socialPostController = {
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const { urls, dropped, order } = sanitizeUrlInput(imageUrls, parseImageOrderField(req.body.imageOrder));
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const { deal, failedImageUrls: failedUploads, autoUpscale } = await socialPostService.schedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, urls, getScope(req), order);
+    const { deal, failedImageUrls: failedUploads, autoUpscale } = await socialPostService.schedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, urls, getScope(req), order, parseAccountIdsField(req.body.accountIds));
     // Dropped (unacceptable) entries are reported with the ones that failed to upload.
     const failedImageUrls = [...dropped, ...failedUploads];
     const message = failedImageUrls.length
@@ -61,7 +63,7 @@ export const socialPostController = {
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const { urls, dropped, order } = sanitizeUrlInput(imageUrls, parseImageOrderField(req.body.imageOrder));
     const newFiles = (req.files as Express.Multer.File[]) || [];
-    const { deal, failedImageUrls: failedUploads, autoUpscale } = await socialPostService.reschedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, postContent, urls, getScope(req), order);
+    const { deal, failedImageUrls: failedUploads, autoUpscale } = await socialPostService.reschedulePost(id, postSchedule, postScheduleLocal, existingImageIds, newFiles, postContent, urls, getScope(req), order, parseAccountIdsField(req.body.accountIds));
     // Dropped (unacceptable) entries are reported with the ones that failed to upload.
     const failedImageUrls = [...dropped, ...failedUploads];
     const message = failedImageUrls.length

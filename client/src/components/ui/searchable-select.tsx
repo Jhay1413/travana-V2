@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useFixedDropdownPosition } from "@/hooks/use-fixed-dropdown-position";
 import { useCloseOnOutsideOrEscape } from "@/hooks/use-close-on-outside-or-escape";
+import { orderOptions } from "@/components/ui/searchable-select-options";
 
 interface SearchableSelectOption {
   value: string;
@@ -33,6 +34,8 @@ interface SearchableSelectProps {
   addNewLabel?: string;
   /** Disable the trigger (e.g. while loading or until an upstream value is chosen) */
   disabled?: boolean;
+  /** Opt-in: with no search text, show the selected option at the top (so it is the highlighted first row on open) */
+  selectedFirst?: boolean;
 }
 
 /**
@@ -72,6 +75,7 @@ export function SearchableSelect({
   onAddNew,
   addNewLabel = "Add new",
   disabled,
+  selectedFirst = false,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -89,10 +93,10 @@ export function SearchableSelect({
   const resolvedLabel = selectedLabel || options.find((opt) => opt.value === value)?.label;
 
   const filteredOptions = useMemo(() => {
-    if (onSearch || !search) return options;
+    if (onSearch || !search) return orderOptions(options, value, search, selectedFirst);
     const term = search.toLowerCase();
     return options.filter((opt) => opt.label.toLowerCase().includes(term));
-  }, [options, search, onSearch]);
+  }, [options, search, onSearch, value, selectedFirst]);
 
   const position = useFixedDropdownPosition(triggerRef, open);
 

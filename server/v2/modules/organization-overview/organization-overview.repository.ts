@@ -625,7 +625,7 @@ export const organizationOverviewRepository = {
       db
         .select({ count: sql<number>`COUNT(*)` })
         .from(clientTable)
-        .where(eq(clientTable.orgId, orgId)),
+        .where(and(eq(clientTable.orgId, orgId), isNull(clientTable.deletedAt))),
     ]);
 
     return {

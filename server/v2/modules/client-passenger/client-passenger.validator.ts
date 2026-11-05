@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { passportNumberError } from '@shared/passenger-rules';
 
 const ymd = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD').refine((v) => {
   const d = new Date(`${v}T00:00:00Z`);
@@ -19,6 +20,7 @@ const passengerBody = z.object({
   dateOfBirth: optionalDate.optional(),
   passportNumber: optionalText(20).optional(),
   passportExpiry: optionalDate.optional(),
+  passportNonUk: z.boolean().optional(),
 });
 
 export const clientParamsValidator = z.object({ params: clientParams });
@@ -30,10 +32,12 @@ export const setLeadPassportValidator = z.object({
   body: z.object({
     passportNumber: optionalText(20),
     passportExpiry: optionalDate,
+    passportNonUk: z.boolean().optional(),
   }),
 });
 
-// Adding a passenger requires all six fields. Updates stay partial so old records with gaps remain editable.
+// Adding a passenger requires all six fields. Updates stay partial in shape; the service validates the merged
+// (stored + patch) passenger against the shared rules, so old records with gaps must be completed to be saved.
 const createPassengerBody = z.object({
   title: z.string().trim().min(1, 'Title is required').max(50),
   firstName: z.string().trim().min(1, 'First name is required').max(100),
@@ -41,6 +45,10 @@ const createPassengerBody = z.object({
   dateOfBirth: ymd,
   passportNumber: z.string().trim().min(1, 'Passport number is required').max(20),
   passportExpiry: ymd,
+  passportNonUk: z.boolean().optional(),
+}).superRefine((b, ctx) => {
+  const message = passportNumberError(b.passportNumber, !!b.passportNonUk);
+  if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['passportNumber'], message });
 });
 
 export const createPassengerValidator = z.object({
