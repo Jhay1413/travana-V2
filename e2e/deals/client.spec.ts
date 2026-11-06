@@ -176,6 +176,21 @@ test.describe("clients", () => {
     expect(await dbClient(client.id)).toMatchObject({ phoneNumber: "+1 415 555 2671", city: "York" });
   });
 
+  test("a client holding an older badge outside today's list can still be edited on the client page (the unchanged badge isn't re-sent)", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+    await queryRows(`update client_table set badge = $1 where id = $2`, ["Returning Client", client.id]);
+
+    await page.goto(`/clients/${client.id}`);
+    await page.getByTestId("client-index-button-edit").click();
+    const dialog = page.getByTestId("dialog-edit-client");
+    await dialog.getByTestId("input-edit-city").fill("Durham");
+    await dialog.getByTestId("button-save-client").click();
+    await expectToast(page, "Client updated successfully");
+    expect(await dbClient(client.id)).toMatchObject({ city: "Durham", badge: "Returning Client" });
+  });
+
   test("creating a client from an inbox contact uses the same phone rule: a bad number is a 400 and stores nothing, a padded +44 one is saved as 11 digits", async ({ page }) => {
     const agency = await seedDealsAgency();
     await signIn(page, agency.agentEmail);
