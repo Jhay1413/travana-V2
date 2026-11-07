@@ -611,3 +611,23 @@ test.describe("manual booking creation", () => {
     expect(await queryRows(`select 1 from booking_table where title = $1`, [`${tag} HAY-12`])).toHaveLength(0);
   });
 });
+
+test.describe("Supplier page button", () => {
+  test("shows on the quote page and on the booking made from it, opening the quote's supplier link", async ({ page }) => {
+    const url = "https://supplier.example.test/quote/123";
+    const d = await agentWithQuote(page, { extra: { quote_ref: url } });
+
+    await openQuotePage(page, d.client.id, d.quoteId);
+    const quoteLink = page.getByTestId("holiday-facts-card").getByTestId("holiday-facts-supplier-link");
+    await expect(quoteLink).toHaveText("Supplier page");
+    await expect(quoteLink).toHaveAttribute("href", url);
+    await expect(quoteLink).toHaveAttribute("target", "_blank");
+
+    const ok = await page.request.post(`/api/v2/bookings/convert/${d.quoteId}`, { data: { haysRef: "HAY-1234567", supplierRef: SUPPLIER_REF } });
+    expect(ok.status(), await ok.text()).toBe(201);
+    const booking = await dbBookingFor(d.transactionId);
+    await page.goto(`/clients/${d.client.id}?holiday=booking:${booking.id}`);
+    await expect(page.getByTestId("holiday-top-bar")).toBeVisible();
+    await expect(page.getByTestId("holiday-facts-card").getByTestId("holiday-facts-supplier-link")).toHaveAttribute("href", url);
+  });
+});

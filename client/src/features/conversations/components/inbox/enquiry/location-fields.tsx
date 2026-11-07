@@ -9,7 +9,8 @@ import {
 } from "@/hooks/queries";
 import { FieldBox } from "./field-box";
 import { airportLabel, destinationLabel } from "./lib/resolve-intent";
-import { findUkCountry, withPinnedAirportsFirst } from "./lib/uk-airports";
+import { buildDepartureAirportOptions, useMostUsedDepartureAirportIds } from "@/features/airport";
+import { findUkCountry } from "./lib/uk-airports";
 import type { EnquiryFormApi } from "./use-enquiry-form";
 
 interface LocationFieldProps {
@@ -97,10 +98,8 @@ export function AirportField({ api, error }: LocationFieldProps) {
   const { data: airports = [] } = useAirportsByCountries(
     ukCountry ? [ukCountry.id] : [],
   );
-  const options = withPinnedAirportsFirst(airports).map((a) => ({
-    value: a.id,
-    label: airportLabel(a),
-  }));
+  const { data: mostUsedIds } = useMostUsedDepartureAirportIds();
+  const options = buildDepartureAirportOptions(airports, mostUsedIds ?? []);
   const labels: Record<string, string> = { ...form.labels };
   for (const a of airports) labels[a.id] = airportLabel(a);
   return (

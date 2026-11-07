@@ -16,7 +16,7 @@ import {
   useBoardBasis,
   useRoomTypes,
 } from "@/hooks/queries";
-import { orderBoardBasisRows } from "@/features/lookups";
+import { countryToSetForDestination, orderBoardBasisRows } from "@/features/lookups";
 import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
 import { AddDestinationModal } from "@/features/lookups/components/lookups/add-destination-modal";
 import { AddResortModal } from "@/features/lookups/components/lookups/add-resort-modal";
@@ -145,6 +145,8 @@ export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: For
                     const label = (destinationsData || []).find((d) => d.id === value)?.name || "";
                     setDestLabel(label);
                     field.onChange(value);
+                    const nextCountry = countryToSetForDestination(destinationsData || [], value, country);
+                    if (nextCountry) setValue("country", nextCountry);
                     setValue("resort", "");
                     setValue("accommodationId", "");
                     setResortLabel("");

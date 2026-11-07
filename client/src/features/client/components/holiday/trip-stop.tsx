@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TruncateTip } from "@/features/client/components/holiday/truncate-tip";
 import type { TripIcon, TripStop as TripStopData, TripTone } from "@/features/client/lib/trip-timeline";
 
 const ICONS: Record<TripIcon, LucideIcon> = {
@@ -55,35 +56,37 @@ export function TripStop({ stop, isLast }: { stop: TripStopData; isLast: boolean
   return (
     <li
       className={cn(
-        "relative grid grid-cols-[36px_minmax(0,1fr)] gap-3 pb-[18px]",
+        "relative grid grid-cols-[28px_minmax(0,1fr)] gap-2.5 pb-3",
         isLast && "pb-0",
-        !isLast && "before:absolute before:bottom-0.5 before:left-[17px] before:top-[38px] before:border-l-2 before:border-dashed before:border-social-border before:content-['']",
+        !isLast && "before:absolute before:bottom-0.5 before:left-[13px] before:top-[30px] before:border-l-2 before:border-dashed before:border-social-border before:content-['']",
       )}
       data-testid={`trip-stop-${stop.kind}`}
     >
-      <span className={cn("grid size-9 place-items-center rounded-[10px]", TONE_CHIP[stop.tone])} aria-hidden>
-        <Icon className="size-[17px]" />
+      <span className={cn("grid size-7 place-items-center rounded-lg", TONE_CHIP[stop.tone])} aria-hidden>
+        <Icon className="size-3.5" />
       </span>
       <div className="min-w-0">
-        <span className={cn("text-[11.5px] font-semibold uppercase tracking-[.04em]", TONE_LABEL[stop.tone])}>{stop.label}</span>
-        <h3 className="mt-px text-sm font-semibold leading-snug">{stop.title}</h3>
-        <div className="mt-1 flex flex-col gap-0.5 text-[12.5px] text-qp-muted">
+        <span className={cn("text-[10.5px] font-semibold uppercase tracking-[.04em]", TONE_LABEL[stop.tone])}>{stop.label}</span>
+        <h3 className="mt-px min-w-0">
+          <TruncateTip text={stop.title} className="text-[13px] font-semibold leading-snug" />
+        </h3>
+        <div className="mt-0.5 flex min-w-0 flex-col gap-0.5 text-xs text-qp-muted">
           {stop.route && (
             <span className="flex items-center gap-2 tabular-nums">
-              <b className="text-base font-semibold text-foreground">{stop.route.depart || "--:--"}</b>
+              <b className="text-sm font-semibold text-foreground">{stop.route.depart || "--:--"}</b>
               <i className="relative h-0 min-w-4 flex-1 border-t-2 border-social-border" aria-hidden />
-              <b className="text-base font-semibold text-foreground">{stop.route.arrive || "--:--"}</b>
+              <b className="text-sm font-semibold text-foreground">{stop.route.arrive || "--:--"}</b>
             </span>
           )}
           {stop.lines.map((line, i) => (
-            <span key={`${i}-${line}`}>{line}</span>
+            <TruncateTip key={`${i}-${line}`} text={line} />
           ))}
           {stop.landsNextDay && <span className="font-medium text-qp-trip-return-fg">Lands the next morning</span>}
         </div>
         {stop.pills.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <div className="mt-1 flex flex-wrap gap-1">
             {stop.pills.map((p) => (
-              <span key={p} className="rounded-full bg-muted px-2.5 py-[3px] text-xs font-semibold text-qp-muted">
+              <span key={p} className="max-w-full truncate rounded-full bg-muted px-2 py-px text-[11px] font-semibold text-qp-muted">
                 {p}
               </span>
             ))}

@@ -1207,7 +1207,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "room_type": {
             "from": "text",
             "group": 1,
-            "regex": "ROOM\\s*\\d+\\s*\\n+(?:[ \\t]*(?:Hurry|Selected|Popular|Most popular|Best (?:seller|value|choice)|Recommended|Great value|Last (?:room|few)|Only \\d+|Limited|Sold out|Price drop)[^\\n]*\\n+|[ \\t]*[^\\n]*(?:!|\\b\\d+ (?:rooms? )?left\\b)[^\\n]*\\n+)*[ \\t]*([^\\n]+)",
+            "regex": "ROOM\\s*\\d+\\s*\\n+(?:[ \\t]*(?:Hurry|Selected|Popular|Most popular|Best (?:seller|value|choice)|Recommended|Great value|Last (?:room|few|chance)|Only \\d+|Limited|(?:Almost |Nearly )?Sold out|Selling fast|Few (?:rooms? )?left|Low availability|In (?:high )?demand|Price drop)[^\\n]*\\n+|[ \\t]*[^\\n]*(?:!|\\b\\d+ (?:rooms? )?left\\b)[^\\n]*\\n+|[ \\t]*[^\\n]*\\.[ \\t]*\\n+)*[ \\t]*([^\\n]+)",
             "joinAll": " + "
           },
           "board_basis": {

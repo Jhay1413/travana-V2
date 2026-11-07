@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Check, ChevronsUpDown, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { useCloseOnOutsideOrEscape } from "@/hooks/use-close-on-outside-or-escap
 interface MultiSearchableSelectOption {
   value: string;
   label: string;
+  /** Optional heading shown above the first option of each run of the same group. */
+  group?: string;
 }
 
 interface MultiSearchableSelectProps {
@@ -253,8 +255,17 @@ export function MultiSearchableSelect({
               </div>
             ) : (
               filteredOptions.map((opt, index) => (
+                <Fragment key={opt.value}>
+                  {opt.group && opt.group !== filteredOptions[index - 1]?.group && (
+                    <div
+                      role="presentation"
+                      className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                      data-testid="option-group-heading"
+                    >
+                      {opt.group}
+                    </div>
+                  )}
                 <div
-                  key={opt.value}
                   id={getOptionId(index)}
                   ref={(el) => {
                     optionRefs.current[index] = el;
@@ -279,6 +290,7 @@ export function MultiSearchableSelect({
                   />
                   {opt.label}
                 </div>
+                </Fragment>
               ))
             )}
           </div>

@@ -1,6 +1,7 @@
 import { StatusPill } from "@/components/shared/status-pill";
 import { cn } from "@/lib/utils";
 import type { HolidayRowData } from "@/features/client/lib/live-deal-rows";
+import { TruncateTip } from "@/features/client/components/holiday/truncate-tip";
 
 /**
  * Plain row for the Enquiry tab of the All holidays rail, as in the reference design:
@@ -23,8 +24,8 @@ export function EnquiryRow({ row, current, onSelect }: { row: HolidayRowData; cu
       data-testid={`holiday-link-${row.id}`}
     >
       <span className="min-w-0">
-        <b className={cn("block truncate font-semibold", row.expired && "text-status-failed-fg")}>{row.title}</b>
-        {note && <span className="block truncate text-qp-muted">{note}</span>}
+        <TruncateTip text={row.title} className={cn("font-semibold", row.expired && "text-status-failed-fg")} />
+        {note && <TruncateTip text={note} className="text-qp-muted" />}
       </span>
       <StatusPill tone="info" className="px-2 py-0 text-[11px] xl:text-[11px]">
         Enquiry

@@ -31,18 +31,23 @@ export function useCloseOnOutsideOrEscape(
       onClose();
     };
 
+    // Escape closes only this dropdown. Radix dialogs/sheets (e.g. the quote drawer) listen
+    // for Escape on the document in the capture phase, so a document listener here ran too
+    // late and the same key press also closed the whole drawer, losing unsaved form work.
+    // A window capture listener runs first and stops the event there.
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
+      e.stopImmediatePropagation();
       onClose();
       focusRefOnEscape?.current?.focus();
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mirrors the original
     // effects this replaces: subscribe once per open/close cycle, not per render.

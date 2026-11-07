@@ -34,6 +34,7 @@ export function statusBadgeClass(s: string): string {
     case "ARCHIVED":
     case "INACTIVE":
     case "EXPIRED":           return "bg-gray-500/10 text-gray-500 border-gray-500/20";
+    case "Converted":         return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
     case "ACTIVE":            return "bg-blue-500/10 text-blue-600 border-blue-500/20";
     default:                  return "";
   }

@@ -49,6 +49,7 @@ import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { buildDepartureAirportOptions } from "@/features/airport/lib/departure-options";
 import { operatorSelectOptions, OperatorRateHint, useOperatorNames } from "@/features/tour-operator";
 import {
   Form,
@@ -60,6 +61,7 @@ import {
 } from "@/components/ui/form";
 import {
   useAirports,
+  useMostUsedDepartureAirportIds,
   useTourOperators,
   useBoardBasis,
   useAccommodationSearch,
@@ -81,7 +83,7 @@ import { summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
 import { AddAccommodationModal } from "@/features/lookups/components/lookups/add-accommodation-modal";
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
 import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
-import { orderBoardBasisRows } from "@/features/lookups";
+import { countryToSetForDestination, orderBoardBasisRows } from "@/features/lookups";
 import { HAYS_REF_MESSAGE, normaliseHaysRef } from "@shared/booking-refs";
 
 const emptyFlightLeg: FlightLegValue = {
@@ -410,6 +412,7 @@ export function BookingRHFForm({
   // ── Lookup data ──────────────────────────────────────────────────────────
   const { data: packageTypesData } = usePackageTypes();
   const { data: airportsData } = useAirports();
+  const { data: mostUsedAirportIds } = useMostUsedDepartureAirportIds();
   const { data: tourOperatorsData } = useTourOperators();
   const operatorNames = useOperatorNames();
   const { data: boardBasisData } = useBoardBasis();
@@ -595,6 +598,11 @@ export function BookingRHFForm({
         })
       ),
     [airportsData]
+  );
+
+  const departureAirportOptions = useMemo(
+    () => buildDepartureAirportOptions(airportsData || [], mostUsedAirportIds || []),
+    [airportsData, mostUsedAirportIds]
   );
 
   const countryOptions = useMemo(
@@ -1658,6 +1666,8 @@ export function BookingRHFForm({
                           const label = (destinationsData || []).find((d) => d.id === value)?.name || "";
                           setDestLabel(label);
                           field.onChange(value);
+                          const nextCountry = countryToSetForDestination(destinationsData || [], value, country);
+                          if (nextCountry) setValue("country", nextCountry);
                           setValue("resort", "");
                           setValue("accommodationId", "");
                           setResortLabel("");
@@ -1888,7 +1898,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={airportOptions}
+                        options={departureAirportOptions}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                         placeholder="Select airport..."
@@ -1990,6 +2000,7 @@ export function BookingRHFForm({
                 direction="outbound"
                 index={idx}
                 airportOptions={airportOptions}
+                departureAirportOptions={departureAirportOptions}
                 onRemove={() => removeOutbound(idx)}
               />
             ))}
@@ -2015,7 +2026,7 @@ export function BookingRHFForm({
                     <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
                     <FormControl>
                       <SearchableSelect
-                        options={airportOptions}
+                        options={departureAirportOptions}
                         value={field.value ?? ""}
                         onValueChange={field.onChange}
                         placeholder="Select airport..."
@@ -2117,6 +2128,7 @@ export function BookingRHFForm({
                 direction="inbound"
                 index={idx}
                 airportOptions={airportOptions}
+                departureAirportOptions={departureAirportOptions}
                 onRemove={() => removeInbound(idx)}
               />
             ))}
@@ -2252,6 +2264,7 @@ interface BookingConnectingLegFieldsProps {
   direction: "outbound" | "inbound";
   index: number;
   airportOptions: { value: string; label: string }[];
+  departureAirportOptions: { value: string; label: string; group?: string }[];
   onRemove: () => void;
 }
 
@@ -2260,6 +2273,7 @@ function BookingConnectingLegFields({
   direction,
   index,
   airportOptions,
+  departureAirportOptions,
   onRemove,
 }: BookingConnectingLegFieldsProps) {
   const prefix = direction === "outbound"
@@ -2285,7 +2299,7 @@ function BookingConnectingLegFields({
               <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
               <FormControl>
                 <SearchableSelect
-                  options={airportOptions}
+                  options={departureAirportOptions}
                   value={field.value ?? ""}
                   onValueChange={field.onChange}
                   placeholder="Select airport..."

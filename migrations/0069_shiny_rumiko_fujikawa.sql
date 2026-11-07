@@ -1,0 +1,1 @@
+ALTER TYPE "public"."enquiry_status_enum" ADD VALUE 'Converted';

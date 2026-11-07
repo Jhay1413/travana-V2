@@ -2254,6 +2254,20 @@ describe("EasyJet seed: rooms", () => {
     expect(run(text).room_type).toBe("Double Room + Twin Room");
   });
 
+  it("skips the 'Almost sold out. Other room types may be available…' banner (Nov 2026 import bug)", () => {
+    const banner =
+      "Almost sold out. Other room types may be available, but the cost of these might be higher. We may occasionally put more on sale at a later date.";
+    const text = `ROOM 1\n${banner}\nDouble room with sea view\nROOM 2\nDouble room with sea view\nROOM 3\nFamily Room\n`;
+    expect(run(text).room_type).toBe("Double room with sea view + Family Room");
+  });
+
+  it.each(["Nearly sold out", "Selling fast", "Few rooms left", "Low availability", "In high demand", "Prices may rise soon."])(
+    "skips a %s banner too",
+    (banner) => {
+      expect(run(`ROOM 1\n${banner}\nFamily Suite\nSleeps 4`).room_type).toBe("Family Suite");
+    },
+  );
+
   it("still reads a plain single room", () => {
     expect(run("ROOM 1\nStudio Apartment\n").room_type).toBe("Studio Apartment");
   });

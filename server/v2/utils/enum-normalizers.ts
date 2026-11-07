@@ -20,6 +20,9 @@ const ENQUIRY_STATUS_MAP: Record<string, string> = {
   "INACTIVE": "INACTIVE",
   "Expired": "EXPIRED",
   "EXPIRED": "EXPIRED",
+  "Converted": "Converted",
+  "converted": "Converted",
+  "CONVERTED": "Converted",
 };
 
 /**

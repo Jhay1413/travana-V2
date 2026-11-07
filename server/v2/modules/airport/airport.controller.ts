@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { airportService } from './airport.service';
 import { asyncHandler } from '../../utils/async-handler';
 import { successResponse } from '../../utils/response';
+import { getScope } from '../../utils/scope';
 
 export const airportController = {
   listAirports: asyncHandler(async (req: Request, res: Response) => {
@@ -11,6 +12,11 @@ export const airportController = {
       : undefined;
     const airports = await airportService.listAirports({ countryIds });
     return successResponse(res, airports, 'Airports retrieved successfully');
+  }),
+
+  mostUsedDeparture: asyncHandler(async (req: Request, res: Response) => {
+    const ids = await airportService.mostUsedDepartureAirportIds(getScope(req).orgId);
+    return successResponse(res, ids, 'Most-used departure airports retrieved');
   }),
 
   createAirport: asyncHandler(async (req: Request, res: Response) => {
