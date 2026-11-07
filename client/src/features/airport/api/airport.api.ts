@@ -9,6 +9,11 @@ export const airportApi = {
     return data;
   },
 
+  getMostUsedDepartureIds: async (): Promise<string[]> => {
+    const { data } = await axiosClient.get<string[]>("/api/v2/airports/most-used-departure");
+    return data;
+  },
+
   create: async (airportData: { airport_name: string; airport_code: string; country_id?: string }): Promise<Airport> => {
     const { data } = await axiosClient.post<Airport>("/api/v2/airports", airportData);
     return data;

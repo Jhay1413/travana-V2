@@ -18,8 +18,8 @@ function KeyRow({ swatch, label, value, negative }: { swatch: string; label: str
   return (
     <div className="flex items-center gap-2">
       <i className={cn("size-3 shrink-0 rounded-[3px]", swatch)} aria-hidden />
-      {label}
-      <b className={cn("ml-auto font-semibold tabular-nums", negative && "text-status-failed-fg")}>{value}</b>
+      <span className="min-w-0 truncate">{label}</span>
+      <b className={cn("ml-auto shrink-0 font-semibold tabular-nums", negative && "text-status-failed-fg")}>{value}</b>
     </div>
   );
 }
@@ -29,9 +29,9 @@ function UpsellsBlock({ bookingId }: { bookingId: string }) {
   if (!upsells || upsells.length === 0) return null;
   const { price, commission } = sumUpsells(upsells);
   return (
-    <div className="mt-4 border-t border-social-border pt-4" data-testid="money-upsells">
+    <div className="mt-3 border-t border-social-border pt-3" data-testid="money-upsells">
       <h3 className="text-[13px] font-semibold">Upsells</h3>
-      <div className="mt-2 flex flex-col gap-2 text-[13px]">
+      <div className="mt-1.5 flex flex-col gap-1.5 text-xs">
         <div className="flex justify-between gap-2">
           <span className="text-qp-muted">Upsell sales</span>
           <b className="font-semibold tabular-nums">{gbp2(price)}</b>
@@ -70,13 +70,13 @@ export function MoneyBody({ raw, mode }: { raw: EnrichedQuote | EnrichedBooking;
         {money.marginPercent !== null && <StatusPill tone="good">{money.marginPercent.toFixed(1)}% margin</StatusPill>}
       </div>
 
-      <div className="my-3 flex h-[14px] gap-0.5 overflow-hidden rounded-[7px] bg-muted" role="img" aria-label={label}>
+      <div className="my-2.5 flex h-2.5 gap-0.5 overflow-hidden rounded-[7px] bg-muted" role="img" aria-label={label}>
         {segments.map((s) => (
           <i key={s.key} className={cn("block h-full", SEGMENT_CLASS[s.key])} style={{ width: `${s.widthPercent}%` }} />
         ))}
       </div>
 
-      <div className="flex flex-col gap-2 text-[13px]">
+      <div className="flex flex-col gap-1.5 text-xs">
         <KeyRow swatch="bg-qp-money-pkg" label="Package price" value={gbp2(money.packagePrice)} />
         <KeyRow swatch="bg-qp-money-comm" label="Commission" value={gbp2(money.profit)} />
         <KeyRow swatch="bg-status-failed-fg" label="Discount" value={minusGbp2(money.discount)} negative={money.discount > 0} />
@@ -84,12 +84,12 @@ export function MoneyBody({ raw, mode }: { raw: EnrichedQuote | EnrichedBooking;
         {money.extras > 0 && <KeyRow swatch="bg-qp-money-extras" label="Extras" value={plusGbp2(money.extras)} />}
       </div>
 
-      <div className="mt-3.5 flex flex-col gap-2.5 border-t border-social-border pt-3.5 text-[13px]">
+      <div className="mt-3 flex flex-col gap-2 border-t border-social-border pt-3 text-xs">
         <div className="flex justify-between gap-2.5">
           <span className="text-qp-muted">Total package cost</span>
           <b className="font-semibold tabular-nums">{gbp2(money.total)}</b>
         </div>
-        <div className="-mx-2.5 flex justify-between gap-2.5 rounded-[10px] bg-qp-profit-bg px-2.5 py-2 text-[15px] text-qp-profit-fg">
+        <div className="-mx-2.5 flex justify-between gap-2.5 rounded-[10px] bg-qp-profit-bg px-2.5 py-1.5 text-sm text-qp-profit-fg">
           <b className="font-bold">Your profit</b>
           <b className="font-bold tabular-nums">{gbp2(money.profit)}</b>
         </div>

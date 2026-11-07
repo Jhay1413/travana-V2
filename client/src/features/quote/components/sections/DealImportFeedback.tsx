@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import type { ImportValidation } from "@/features/quote/api/use-page-capture-import";
 import { ImportValidationPanel } from "@/features/quote/components/sections/ImportValidationPanel";
+import { hasImportErrors } from "@/features/quote/lib/import-validation";
 import { SupplierScraperPicksResultView, type SupplierScraperPicksResult } from "@/features/supplier-scraper";
 
 interface DealImportFeedbackProps {
@@ -13,7 +14,7 @@ interface DealImportFeedbackProps {
 }
 
 /**
- * What the last "Import Deal" produced: validation warnings to double-check
+ * What the last "Import Deal" produced: validation errors to double-check (warnings are not shown)
  * and, when the capture carried field-picker picks, what got mapped into the
  * supplier's spec. Shared by the quote and booking forms.
  */
@@ -27,7 +28,7 @@ export function DealImportFeedback({
   const gap = spaced ? "mt-3" : "";
   return (
     <>
-      {validation && (
+      {validation && hasImportErrors(validation) && (
         <div className={gap}>
           <ImportValidationPanel validation={validation} onDismiss={onDismissValidation} />
         </div>

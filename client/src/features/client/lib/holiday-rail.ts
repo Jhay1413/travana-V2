@@ -48,20 +48,30 @@ export interface RailPillState {
 }
 
 /**
- * Pills under a rail row, in display order: Copy, Pinned, Viewed N×, Expires in Nd.
- * Views and expiry only apply to live quotes (not expired, lost, bookings or enquiries),
- * and the expiry pill only appears inside the near-expiry window, as in the reference design.
+ * Small pills under a rail row, in display order: Pinned, Viewed N×.
+ * Copy sits next to the title and expiry is an icon (see railExpiryLabel), so neither is a pill.
+ * Views only apply to live quotes (not expired, lost, bookings or enquiries).
  */
 export function railPills(row: HolidayRowData, state: RailPillState): RailPill[] {
   const pills: RailPill[] = [];
-  if (row.isCopy) pills.push({ tone: "info", label: "Copy" });
   if (state.pinned) pills.push({ tone: "plain", label: "Pinned" });
-  const live = row.type === "quote" && !row.expired && !row.lost;
-  if (live && (state.viewCount ?? 0) > 0) pills.push({ tone: "good", label: `Viewed ${state.viewCount}×` });
-  if (live && state.expiresInDays != null && state.expiresInDays >= 0 && state.expiresInDays <= NEAR_EXPIRY_WINDOW_DAYS) {
-    pills.push({ tone: "warn", label: state.expiresInDays === 0 ? "Expires today" : `Expires in ${state.expiresInDays}d` });
-  }
+  if (isLiveQuote(row) && (state.viewCount ?? 0) > 0) pills.push({ tone: "good", label: `Viewed ${state.viewCount}×` });
   return pills;
+}
+
+/**
+ * Tooltip text for the expiry icon on a live quote inside the near-expiry window
+ * ("Expires today" / "Expires in 1 day" / "Expires in N days"); null when no icon applies.
+ */
+export function railExpiryLabel(row: HolidayRowData, state: RailPillState): string | null {
+  const days = state.expiresInDays;
+  if (!isLiveQuote(row) || days == null || days < 0 || days > NEAR_EXPIRY_WINDOW_DAYS) return null;
+  if (days === 0) return "Expires today";
+  return `Expires in ${days} ${days === 1 ? "day" : "days"}`;
+}
+
+function isLiveQuote(row: HolidayRowData): boolean {
+  return row.type === "quote" && !row.expired && !row.lost;
 }
 
 /**

@@ -15,7 +15,7 @@
 
 <!-- AUTO:START -->
 <!-- Run `npm run docs:arch` to regenerate this block from the live codebase. -->
-**Last refreshed:** 2026-11-05 (auto-generated — do not edit by hand)
+**Last refreshed:** 2026-11-07 (auto-generated — do not edit by hand)
 
 | Fact | Value |
 |------|-------|
@@ -23,7 +23,7 @@
 | Tables defined (`pgTable`) in schema.ts | 170 |
 | Enums (`pgEnum`) in schema.ts | 31 |
 | `orgId`/`org_id` references in schema.ts | 111 |
-| Migrations (`migrations/*.sql`) | 70 (latest: `0068_happy_captain_stacy.sql`) |
+| Migrations (`migrations/*.sql`) | 71 (latest: `0069_shiny_rumiko_fujikawa.sql`) |
 | Client pages (`client/src/pages`) | ~51 |
 | Automated test runner | ✅ present |
 | Legacy v1 backend (`server/`) present | ⚠️ yes (alongside v2) |

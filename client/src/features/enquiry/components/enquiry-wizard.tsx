@@ -18,7 +18,7 @@ import type { EnquiryIntent } from "@/features/conversations/api/ai-enquiry.api"
 import { usePackageTypes, useCountries, useDestinations, useAllDestinations, useResortSearch, useAccommodationSearch, useBoardBasis, useAirportsByCountries, useAccommodationTypes } from "@/hooks/queries";
 import type { LookupCountry } from "@/features/lookups/api/lookup.api";
 import { orderBoardBasisRows } from "@/features/lookups";
-import type { Airport } from "@/features/airport/types";
+import { buildDepartureAirportOptions, useMostUsedDepartureAirportIds } from "@/features/airport";
 import { useEnquiry } from "@/features/enquiry/api/use-enquiry-queries";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MultiSearchableSelect } from "@/components/ui/multi-searchable-select";
@@ -209,22 +209,6 @@ function findUkCountry(countries: LookupCountry[] | undefined): LookupCountry | 
     const code = normLower(c.country_code);
     return name === "united kingdom" || name === "uk" || code === "gb" || code === "uk";
   });
-}
-
-// Airport codes pinned to the top of the departure-airport list, in priority
-// order. Matched by `airport_code` (case-insensitive) rather than a hardcoded
-// id, so it keeps working across environments/seeds. A pinned code that isn't
-// present is simply skipped — never breaks the remaining list.
-const PINNED_AIRPORT_CODES = ["NCL"];
-
-function withPinnedAirportsFirst(airports: Airport[]): Airport[] {
-  const rest = [...airports];
-  const pinned: Airport[] = [];
-  for (const code of PINNED_AIRPORT_CODES) {
-    const idx = rest.findIndex((a) => normLower(a.airport_code) === code.toLowerCase());
-    if (idx !== -1) pinned.push(...rest.splice(idx, 1));
-  }
-  return [...pinned, ...rest];
 }
 
 // Maps an AI-extracted enquiry intent onto the wizard form: resolves country /
@@ -514,6 +498,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
   // data), the query stays disabled and this list is simply empty — no crash.
   const ukCountry = useMemo(() => findUkCountry(countriesData), [countriesData]);
   const { data: airportsData } = useAirportsByCountries(ukCountry ? [ukCountry.id] : []);
+  const { data: mostUsedAirportIds } = useMostUsedDepartureAirportIds();
   const { data: packageTypesData } = usePackageTypes();
   const { data: accommodationTypesData } = useAccommodationTypes();
 
@@ -702,10 +687,7 @@ export function EnquiryWizard({ open, onOpenChange, enquiry, onSubmit, isSaving,
   // records in `formFromEnquiry`/`resolveIntentToForm`, so a previously
   // selected non-UK airport (e.g. on an older enquiry) still renders its label
   // as a selected chip even though it's excluded from the selectable options.
-  const airportOptions = withPinnedAirportsFirst(airportsData || []).map((a) => ({
-    value: a.id,
-    label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
-  }));
+  const airportOptions = buildDepartureAirportOptions(airportsData || [], mostUsedAirportIds || []);
   const airportLabels = (airportsData || []).reduce<Record<string, string>>((acc, a) => {
     acc[a.id] = `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`;
     return acc;

@@ -5,6 +5,7 @@
 export { lookupApi } from "./api/lookup.api";
 export * from "./api/use-lookup-queries";
 export { orderBoardBasisRows, PINNED_BOARD_BASIS_TYPES } from "./lib/board-basis-order";
+export { countryToSetForDestination } from "./lib/destination-country";
 export type {
   LookupBoardBasis,
   LookupCountry,

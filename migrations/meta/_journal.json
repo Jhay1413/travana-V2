@@ -484,6 +484,13 @@
       "when": 1793875035609,
       "tag": "0068_happy_captain_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1794016663614,
+      "tag": "0069_shiny_rumiko_fujikawa",
+      "breakpoints": true
     }
   ]
 }

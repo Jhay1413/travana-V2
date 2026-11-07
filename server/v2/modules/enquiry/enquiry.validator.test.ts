@@ -23,6 +23,7 @@ describe("updateEnquiryValidator", () => {
       }).success,
     ).toBe(true);
     expect(parse({ status: "LOST" }).success).toBe(true);
+    expect(parse({ status: "Converted" }).success).toBe(true);
   });
 
   it.each([...ENQUIRY_FORBIDDEN_KEYS])("refuses %s", (key) => {

@@ -12,7 +12,8 @@ import {
   drawerLabelClass,
   drawerSubheadingClass,
 } from "@/components/shared/form-drawer";
-import { useAirports } from "@/hooks/queries";
+import { useAirports, useMostUsedDepartureAirportIds } from "@/hooks/queries";
+import { buildDepartureAirportOptions } from "@/features/airport/lib/departure-options";
 import {
   AirportSelectField,
   ConnectingLegFields,
@@ -59,7 +60,23 @@ function TimeInput({ value, onChange, name, onBlur }: { value: string; onChange:
   );
 }
 
-function FlightLegFields({ direction, airportOptions, countryId }: { direction: Direction; airportOptions: { value: string; label: string }[]; countryId?: string }) {
+interface AirportOption {
+  value: string;
+  label: string;
+  group?: string;
+}
+
+function FlightLegFields({
+  direction,
+  airportOptions,
+  departureAirportOptions,
+  countryId,
+}: {
+  direction: Direction;
+  airportOptions: AirportOption[];
+  departureAirportOptions: AirportOption[];
+  countryId?: string;
+}) {
   const { control } = useFormContext<SharedHolidayFormValues>();
   const Icon = direction === "outbound" ? PlaneTakeoff : PlaneLanding;
   const label = direction === "outbound" ? "Outbound" : "Inbound";
@@ -86,7 +103,7 @@ function FlightLegFields({ direction, airportOptions, countryId }: { direction: 
               <FormControl>
                 <AirportSelectField
                   className={drawerControlClass}
-                  options={airportOptions}
+                  options={departureAirportOptions}
                   value={field.value ?? ""}
                   onValueChange={field.onChange}
                   defaultCountryId={countryId}
@@ -190,6 +207,7 @@ function FlightLegFields({ direction, airportOptions, countryId }: { direction: 
             direction={direction}
             index={idx}
             airportOptions={airportOptions}
+            departureAirportOptions={departureAirportOptions}
             onRemove={() => remove(idx)}
           />
         ))}
@@ -230,6 +248,8 @@ export function QuoteDrawerFlightsSection() {
     value: a.id,
     label: `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`,
   }));
+  const { data: mostUsedIds } = useMostUsedDepartureAirportIds();
+  const departureAirportOptions = buildDepartureAirportOptions(airportsData || [], mostUsedIds ?? []);
   const airportName = (id: string | undefined) => airports.find((a) => a.id === id)?.airport_name ?? "";
 
   const title = buildFlightsTitle(
@@ -240,8 +260,8 @@ export function QuoteDrawerFlightsSection() {
   return (
     <FormDrawerSection title={title} data-testid="drawer-section-flights">
       <div className="space-y-6">
-        <FlightLegFields direction="outbound" airportOptions={airportOptions} countryId={countryId} />
-        <FlightLegFields direction="inbound" airportOptions={airportOptions} countryId={countryId} />
+        <FlightLegFields direction="outbound" airportOptions={airportOptions} departureAirportOptions={departureAirportOptions} countryId={countryId} />
+        <FlightLegFields direction="inbound" airportOptions={airportOptions} departureAirportOptions={departureAirportOptions} countryId={countryId} />
       </div>
     </FormDrawerSection>
   );

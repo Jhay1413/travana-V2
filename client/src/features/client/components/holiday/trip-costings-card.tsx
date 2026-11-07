@@ -3,7 +3,7 @@ import { Plane, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { QuoteDisplay } from "@/features/quote/components/quote-types";
 import type { EnrichedBooking, EnrichedQuote } from "@/features/quote/types";
-import { HOLIDAY_CARD } from "@/features/client/components/holiday/holiday-styles";
+import { HOLIDAY_SIDE_CARD } from "@/features/client/components/holiday/holiday-styles";
 import { MoneyBody } from "@/features/client/components/holiday/money-card";
 import { TripBody } from "@/features/client/components/holiday/trip-card";
 
@@ -26,8 +26,8 @@ export interface TripCostingsCardProps {
 export function TripCostingsCard({ display, raw, mode, onEdit }: TripCostingsCardProps) {
   const [tab, setTab] = useState<Tab>("trip");
   return (
-    <section className={HOLIDAY_CARD} aria-label="The trip and costings" data-testid="holiday-trip-costings-card">
-      <div role="tablist" aria-label="Trip and costings" className="-mt-1 mb-4 flex border-b border-social-border">
+    <section className={HOLIDAY_SIDE_CARD} aria-label="The trip and costings" data-testid="holiday-trip-costings-card">
+      <div role="tablist" aria-label="Trip and costings" className="-mt-1 mb-3 flex border-b border-social-border">
         {TABS.map(({ value, label, Icon }) => {
           const selected = tab === value;
           return (
@@ -38,12 +38,12 @@ export function TripCostingsCard({ display, raw, mode, onEdit }: TripCostingsCar
               aria-selected={selected}
               onClick={() => setTab(value)}
               className={cn(
-                "-mb-px inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-t-[10px] border-b-[3px] px-3.5 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                "-mb-px inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-t-[10px] border-b-[3px] px-2.5 py-2 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                 selected ? "border-social-navy text-social-navy" : "border-transparent text-qp-muted hover:text-foreground",
               )}
               data-testid={`holiday-trip-costings-tab-${value}`}
             >
-              <Icon className="size-4" aria-hidden />
+              <Icon className="size-3.5" aria-hidden />
               {label}
             </button>
           );

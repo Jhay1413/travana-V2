@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { AddAirportModal } from "@/features/lookups/components/lookups/add-airport-modal";
-import { useAirports } from "@/hooks/queries";
+import { useAirports, useMostUsedDepartureAirportIds } from "@/hooks/queries";
+import { buildDepartureAirportOptions } from "@/features/airport/lib/departure-options";
 import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
 import type { QuoteFormValues, FlightLegValue } from "@/features/quote/types";
 
@@ -24,7 +25,7 @@ export function AirportSelectField({
 }: {
   value: string;
   onValueChange: (v: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; group?: string }[];
   defaultCountryId?: string;
   className?: string;
 }) {
@@ -82,10 +83,12 @@ interface ConnectingLegFieldsProps {
   direction: "outbound" | "inbound";
   index: number;
   airportOptions: { value: string; label: string }[];
+  /** Ordered (Popular / Most used / All) options for the Departing field; falls back to airportOptions. */
+  departureAirportOptions?: { value: string; label: string; group?: string }[];
   onRemove: () => void;
 }
 
-export function ConnectingLegFields({ control, direction, index, airportOptions, onRemove }: ConnectingLegFieldsProps) {
+export function ConnectingLegFields({ control, direction, index, airportOptions, departureAirportOptions, onRemove }: ConnectingLegFieldsProps) {
   const prefix =
     direction === "outbound"
       ? (`outboundConnectingLegs.${index}` as const)
@@ -109,7 +112,7 @@ export function ConnectingLegFields({ control, direction, index, airportOptions,
             <FormItem>
               <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
               <FormControl>
-                <SearchableSelect options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport..." />
+                <SearchableSelect options={departureAirportOptions ?? airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport..." />
               </FormControl>
             </FormItem>
           )}
@@ -202,6 +205,9 @@ export function QuoteFlightsSection() {
     }),
   );
 
+  const { data: mostUsedIds } = useMostUsedDepartureAirportIds();
+  const departureAirportOptions = buildDepartureAirportOptions(airportsData || [], mostUsedIds ?? []);
+
   const { fields: outboundLegs, append: appendOutbound, remove: removeOutbound } = useFieldArray({
     control,
     name: "outboundConnectingLegs",
@@ -224,7 +230,7 @@ export function QuoteFlightsSection() {
             <FormItem>
               <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
               <FormControl>
-                <AirportSelectField options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} defaultCountryId={countryId} />
+                <AirportSelectField options={departureAirportOptions} value={field.value ?? ""} onValueChange={field.onChange} defaultCountryId={countryId} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -317,6 +323,7 @@ export function QuoteFlightsSection() {
           direction="outbound"
           index={idx}
           airportOptions={airportOptions}
+          departureAirportOptions={departureAirportOptions}
           onRemove={() => removeOutbound(idx)}
         />
       ))}
@@ -341,7 +348,7 @@ export function QuoteFlightsSection() {
             <FormItem>
               <FormLabel className="text-xs font-medium text-black/60">Departing Airport</FormLabel>
               <FormControl>
-                <AirportSelectField options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} defaultCountryId={countryId} />
+                <AirportSelectField options={departureAirportOptions} value={field.value ?? ""} onValueChange={field.onChange} defaultCountryId={countryId} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -434,6 +441,7 @@ export function QuoteFlightsSection() {
           direction="inbound"
           index={idx}
           airportOptions={airportOptions}
+          departureAirportOptions={departureAirportOptions}
           onRemove={() => removeInbound(idx)}
         />
       ))}

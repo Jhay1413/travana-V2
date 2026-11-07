@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Quote } from "@/features/quote/types";
 import type { DealRowGroups, HolidayRowData } from "./live-deal-rows";
-import { airportCode, defaultRailTab, quoteRailMeta, railCounts, railPills } from "./holiday-rail";
+import { airportCode, defaultRailTab, quoteRailMeta, railCounts, railExpiryLabel, railPills } from "./holiday-rail";
 
 function row(parts: Partial<HolidayRowData>): HolidayRowData {
   return {
@@ -62,14 +62,9 @@ describe("railPills", () => {
   it("returns nothing for a plain row", () => {
     expect(railPills(row({}), { pinned: false })).toEqual([]);
   });
-  it("orders Copy, Pinned, Viewed, Expires", () => {
+  it("orders Pinned, Viewed and leaves Copy and expiry out (title badge and icon instead)", () => {
     const pills = railPills(row({ isCopy: true }), { pinned: true, viewCount: 3, expiresInDays: 5 });
-    expect(pills.map((p) => p.label)).toEqual(["Copy", "Pinned", "Viewed 3×", "Expires in 5d"]);
-    expect(pills[3]?.tone).toBe("warn");
-  });
-  it("shows no expiry pill when expiry is more than 7 days away", () => {
-    expect(railPills(row({}), { pinned: false, expiresInDays: 12 })).toEqual([]);
-    expect(railPills(row({}), { pinned: false, expiresInDays: 7 })).toEqual([{ tone: "warn", label: "Expires in 7d" }]);
+    expect(pills.map((p) => p.label)).toEqual(["Pinned", "Viewed 3×"]);
   });
   it("hides views and expiry on expired, lost, booking and enquiry rows", () => {
     const state = { pinned: false, viewCount: 2, expiresInDays: 3 };
@@ -81,8 +76,28 @@ describe("railPills", () => {
   it("skips Viewed when the count is zero", () => {
     expect(railPills(row({}), { pinned: false, viewCount: 0 })).toEqual([]);
   });
-  it("says 'Expires today' at zero days", () => {
-    expect(railPills(row({}), { pinned: false, expiresInDays: 0 })[0]?.label).toBe("Expires today");
+});
+
+describe("railExpiryLabel", () => {
+  it("labels live quotes inside the 7-day window", () => {
+    expect(railExpiryLabel(row({}), { pinned: false, expiresInDays: 0 })).toBe("Expires today");
+    expect(railExpiryLabel(row({}), { pinned: false, expiresInDays: 1 })).toBe("Expires in 1 day");
+    expect(railExpiryLabel(row({}), { pinned: false, expiresInDays: 7 })).toBe("Expires in 7 days");
+  });
+  it("is null outside the window or when no countdown applies", () => {
+    expect(railExpiryLabel(row({}), { pinned: false, expiresInDays: 8 })).toBeNull();
+    expect(railExpiryLabel(row({}), { pinned: false, expiresInDays: -1 })).toBeNull();
+    expect(railExpiryLabel(row({}), { pinned: false, expiresInDays: null })).toBeNull();
+  });
+  it("is null on expired, lost, booking and enquiry rows", () => {
+    const state = { pinned: false, expiresInDays: 3 };
+    expect(railExpiryLabel(row({ expired: true }), state)).toBeNull();
+    expect(railExpiryLabel(row({ lost: true }), state)).toBeNull();
+    expect(railExpiryLabel(row({ type: "booking" }), state)).toBeNull();
+    expect(railExpiryLabel(row({ type: "enquiry" }), state)).toBeNull();
+  });
+  it("never returns an expiry pill (it is an icon now)", () => {
+    expect(railPills(row({}), { pinned: false, expiresInDays: 0 })).toEqual([]);
   });
 });
 

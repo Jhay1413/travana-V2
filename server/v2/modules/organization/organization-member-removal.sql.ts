@@ -20,6 +20,7 @@ export function openDealCond(orgId: string, userId: string): SQL {
         isNull(enquiry_table.deleted_at),
         sql`${enquiry_table.is_active} IS NOT FALSE`,
         sql`${enquiry_table.status} IS DISTINCT FROM 'LOST'`,
+        sql`${enquiry_table.status} IS DISTINCT FROM 'Converted'`,
       )),
   );
   const liveQuote = exists(

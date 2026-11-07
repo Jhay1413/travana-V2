@@ -3,6 +3,8 @@
 
 /** White rounded-[10px] card; padding drops to 16px on small phones. */
 export const HOLIDAY_CARD = "rounded-2xl border border-social-border bg-card p-[22px] max-[620px]:p-4";
+/** Slimmer card for the right-hand column (trip/costings, views, enquiry places). */
+export const HOLIDAY_SIDE_CARD = "rounded-2xl border border-social-border bg-card p-4";
 
 const BTN_BASE =
   "inline-flex min-h-10 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border px-4 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50";

@@ -1,4 +1,3 @@
-import type { Airport } from "@/features/airport/types";
 import type { LookupCountry } from "@/features/lookups";
 
 const norm = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
@@ -15,15 +14,3 @@ export function findUkCountry(countries: LookupCountry[] | undefined): LookupCou
   });
 }
 
-const PINNED_AIRPORT_CODES = ["NCL"];
-
-/** Pinned airport codes first (when present), everything else in its existing order. */
-export function withPinnedAirportsFirst(airports: Airport[]): Airport[] {
-  const rest = [...airports];
-  const pinned: Airport[] = [];
-  for (const code of PINNED_AIRPORT_CODES) {
-    const idx = rest.findIndex((a) => norm(a.airport_code) === code.toLowerCase());
-    if (idx !== -1) pinned.push(...rest.splice(idx, 1));
-  }
-  return [...pinned, ...rest];
-}
