@@ -3,7 +3,9 @@ import type { ImportValidation } from "@/features/quote/api/use-page-capture-imp
 import {
   describeImportIssue,
   fieldLabel,
+  getImportErrors,
   getMoneyFieldsNeedingAttention,
+  hasImportErrors,
   withMoneyFieldsQuarantined,
 } from "./import-validation";
 
@@ -103,5 +105,26 @@ describe("describeImportIssue", () => {
 
   it("leaves the field label undefined when the issue carries no field", () => {
     expect(fieldLabel(undefined)).toBeUndefined();
+  });
+});
+
+describe("import panel visibility (errors only)", () => {
+  const warn = { level: "warn" as const, code: "NIGHTS_SOURCE_CONFLICT", message: "w", field: "no_of_nights" };
+  const err = { level: "error" as const, code: "PRICE_ZERO", message: "e", field: "sales_price" };
+
+  it("shows nothing for no validation, no issues, or warnings only", () => {
+    expect(hasImportErrors(null)).toBe(false);
+    expect(hasImportErrors(undefined)).toBe(false);
+    expect(hasImportErrors(validation([]))).toBe(false);
+    expect(hasImportErrors(validation([warn]))).toBe(false);
+    expect(getImportErrors(validation([warn, warn]))).toEqual([]);
+  });
+
+  it("shows only the errors when errors and warnings are mixed", () => {
+    const shown = getImportErrors(validation([warn, err]));
+    expect(hasImportErrors(validation([warn, err]))).toBe(true);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].level).toBe("error");
+    expect(shown[0].fieldLabel).toBe("Sales price");
   });
 });

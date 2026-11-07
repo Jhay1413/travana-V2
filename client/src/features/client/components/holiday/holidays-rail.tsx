@@ -18,7 +18,7 @@ import {
   sortDealRows,
   type HolidayRowData,
 } from "@/features/client/lib/live-deal-rows";
-import { defaultRailTab, quoteRailMeta, railCounts, railPills, type RailTab } from "@/features/client/lib/holiday-rail";
+import { defaultRailTab, quoteRailMeta, railCounts, railExpiryLabel, railPills, type RailTab } from "@/features/client/lib/holiday-rail";
 import { EnquiryRow } from "@/features/client/components/holiday/enquiry-row";
 import { HolidayLink } from "@/features/client/components/holiday/holiday-link";
 import { CreateMenu, type CreateKind } from "@/components/shared/create-menu";
@@ -120,7 +120,8 @@ export function HolidaysRail({ enquiries, quotes, bookings, selection, onSelect,
         </li>
       );
     }
-    const pills = railPills(row, { pinned, viewCount: viewCounts.get(row.id), expiresInDays: expiry.get(row.id)?.expiresInDays ?? null });
+    const pillState = { pinned, viewCount: viewCounts.get(row.id), expiresInDays: expiry.get(row.id)?.expiresInDays ?? null };
+    const pills = railPills(row, pillState);
     if (row.type === "booking") pills.push({ tone: "good", label: "Booked" });
     return (
       <li key={row.id}>
@@ -128,6 +129,7 @@ export function HolidaysRail({ enquiries, quotes, bookings, selection, onSelect,
           row={row}
           nested={nested}
           pills={pills}
+          expiryLabel={railExpiryLabel(row, pillState)}
           refText={row.type === "booking" ? hays.get(row.id) : null}
           current={current}
           onSelect={select}

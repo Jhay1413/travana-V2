@@ -30,6 +30,16 @@ function InfoRow({ label, children, testId }: { label: string; children: ReactNo
   );
 }
 
+/** A label over its value, so two of them fit side by side in the narrow passenger card. */
+function PassportCell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0 text-[13px]">
+      <div className="text-social-muted">{label}</div>
+      <div className="break-words font-medium">{children}</div>
+    </div>
+  );
+}
+
 function PassengerCard({ passenger, index, readOnly, nextDeparture, onEdit }: { passenger: ClientPassenger; index: number; readOnly: boolean; nextDeparture: string | null; onEdit: () => void }) {
   return (
     <div className="rounded-xl border border-social-border bg-card p-4" data-testid={`passenger-card-${passenger.id ?? "lead"}`}>
@@ -55,17 +65,19 @@ function PassengerCard({ passenger, index, readOnly, nextDeparture, onEdit }: { 
       </div>
       <div className="mt-3 grid gap-1.5">
         <InfoRow label="D.O.B">{formatPassengerDate(passenger.dateOfBirth)}</InfoRow>
-        <InfoRow label="Passport number">{orDash(passenger.passportNumber)}</InfoRow>
-        <InfoRow label="Passport expiry">
-          <span className="flex flex-wrap items-center gap-2">
-            {formatPassengerDate(passenger.passportExpiry)}
-            {passenger.passportWarning && (
-              <span className="rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[11px] font-semibold text-[#92400E]" data-testid="passenger-passport-warning">
-                {passportExpiryFlagLabel(nextDeparture)}
-              </span>
-            )}
-          </span>
-        </InfoRow>
+        <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2" data-testid="passenger-passport-row">
+          <PassportCell label="Passport number">{orDash(passenger.passportNumber)}</PassportCell>
+          <PassportCell label="Passport expiry">
+            <span className="flex flex-wrap items-center gap-2">
+              {formatPassengerDate(passenger.passportExpiry)}
+              {passenger.passportWarning && (
+                <span className="rounded-full bg-[#FEF3C7] px-2 py-0.5 text-[11px] font-semibold text-[#92400E]" data-testid="passenger-passport-warning">
+                  {passportExpiryFlagLabel(nextDeparture)}
+                </span>
+              )}
+            </span>
+          </PassportCell>
+        </div>
       </div>
     </div>
   );

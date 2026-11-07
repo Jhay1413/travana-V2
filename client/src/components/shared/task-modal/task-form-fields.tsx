@@ -99,6 +99,7 @@ export function TaskAssigneeField({ id, testId, value, onChange }: SimpleFieldPr
   return (
     <TaskFieldRow id={id} label="Assign to">
       <UserReassignSelect
+        id={id}
         value={value}
         onValueChange={onChange}
         zClassName="z-[650]"

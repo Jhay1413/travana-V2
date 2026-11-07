@@ -18,6 +18,8 @@ interface UserReassignSelectProps {
   value: string;
   onValueChange: (userId: string) => void;
   className?: string;
+  /** Id for the trigger so a surrounding <label htmlFor> focuses/opens it. */
+  id?: string;
   "data-testid"?: string;
   /** If true, prepends an "All Agents" option (value = "all") */
   allowAll?: boolean;
@@ -31,6 +33,7 @@ export function UserReassignSelect({
   value,
   onValueChange,
   className,
+  id,
   "data-testid": dataTestId,
   allowAll = false,
   allLabel = "All Agents",
@@ -49,6 +52,7 @@ export function UserReassignSelect({
       <PopoverTrigger asChild>
         <button
           type="button"
+          id={id}
           role="combobox"
           aria-expanded={open}
           className={cn(

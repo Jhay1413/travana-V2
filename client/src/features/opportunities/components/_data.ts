@@ -30,6 +30,6 @@ export const sortByOptions: { value: SortBy; label: string }[] = [
   { value: "price-low",  label: "Price: Low to High" },
 ];
 
-export const enquiryStatuses = ["all", "NEW_LEAD", "ACTIVE", "LOST", "INACTIVE", "EXPIRED"];
+export const enquiryStatuses = ["all", "NEW_LEAD", "ACTIVE", "LOST", "INACTIVE", "EXPIRED", "Converted"];
 export const quoteStatuses   = ["all", "NEW_LEAD", "QUOTE_IN_PROGRESS", "QUOTE_CALL", "QUOTE_READY", "AWAITING_DECISION", "REQUOTE", "WON", "ARCHIVED", "LOST", "INACTIVE", "EXPIRED"];
 export const bookingStatuses = ["all", "BOOKED", "LOST"];

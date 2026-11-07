@@ -1,4 +1,5 @@
 import { ExternalLink, Pencil } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { FIELD_ICONS } from "@/features/client/components/holiday-field-icons";
 import type { FactRow } from "@/features/client/lib/holiday-facts";
 import { HOLIDAY_BTN_GHOST, HOLIDAY_CARD } from "@/features/client/components/holiday/holiday-styles";
@@ -10,7 +11,8 @@ import { HOLIDAY_BTN_GHOST, HOLIDAY_CARD } from "@/features/client/components/ho
  * - fields: rows to show; build them with factRows(buildQuoteLikeFields(display)) (rows without a value are already dropped).
  * - readOnly: hides the Edit button.
  * - onEdit: opens the edit drawer (the page sets TopBar's editOpen). Without it the button is hidden too.
- * - supplierUrl: when set, a small "Supplier page" link opens it in a new tab (quote_ref).
+ * - supplierUrl: when set (http/https only), a light-blue "Supplier page" button opens it in a new tab
+ *   (the quote's quote_ref; bookings pass their source quote's).
  * - title: card heading, "Holiday details" by default.
  */
 export interface FactsCardProps {
@@ -30,7 +32,13 @@ export function FactsCard({ fields, readOnly, onEdit, supplierUrl, title = "Holi
         </h2>
         <div className="flex items-center gap-1">
           {supplierUrl && /^https?:\/\//i.test(supplierUrl) && (
-            <a href={supplierUrl} target="_blank" rel="noopener noreferrer" className={HOLIDAY_BTN_GHOST} data-testid="holiday-facts-supplier-link">
+            <a
+              href={supplierUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(HOLIDAY_BTN_GHOST, "mr-1 bg-status-posted-bg px-3.5 hover:bg-status-posted-bg/70")}
+              data-testid="holiday-facts-supplier-link"
+            >
               Supplier page
               <ExternalLink className="size-3.5" aria-hidden />
             </a>

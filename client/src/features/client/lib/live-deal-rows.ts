@@ -17,11 +17,16 @@ type QuoteRow = Quote & {
   extras_total?: string | number | null;
 };
 
+/** Enquiry plus its departure airport codes ("NCL, MAN") from the transactions payload. */
+type EnquiryRowSource = EnquiryTable & { departing_airport_code?: string | null };
+
 // Bookings get the same operator joins from the transactions API.
 type BookingRow = HolidayBooking & {
   main_tour_operator_name?: string | null;
   main_tour_operator_logo_url?: string | null;
   extras_total?: string | number | null;
+  /** First flight's departure airport code. */
+  departing_airport_code?: string | null;
 };
 
 
@@ -143,7 +148,7 @@ export function buildEnquiryRows(enquiries: EnquiryTable[]): HolidayRowData[] {
     operatorName: null,
     operatorLogoUrl: null,
     destinationName: e.destinations?.[0]?.name ?? null,
-    dateLine: buildDateLine(null, e.travel_date, e.no_of_nights),
+    dateLine: buildDateLine((e as EnquiryRowSource).departing_airport_code ?? null, e.travel_date, e.no_of_nights),
     createdAt: e.date_created,
     expired: isEnquiryExpired(e),
     lost: isEnquiryLost(e),
@@ -165,7 +170,7 @@ export function buildBookingRows(bookings: HolidayBooking[], options: { markLost
       operatorLogoUrl: br.main_tour_operator_logo_url ?? null,
       // Bookings carry no destination join in the transactions payload.
       destinationName: null,
-      dateLine: buildDateLine(null, b.travel_date, b.num_of_nights),
+      dateLine: buildDateLine(br.departing_airport_code ?? null, b.travel_date, b.num_of_nights),
       createdAt: b.date_created,
       expired: isBookingExpired(b),
       lost: options.markLostBookings === true && isLostBooking(b),

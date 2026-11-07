@@ -121,7 +121,16 @@ async function enrichTransactions(txns: Transaction[]) {
   const clientIds = Array.from(new Set(txns.map(t => t.client_id).filter((id): id is string => !!id)));
 
   const [allEnquiries, allQuotes, allBookings, allPackageTypes, allClients] = await Promise.all([
-    db.select().from(enquiry_table).where(and(inArray(enquiry_table.transaction_id, txnIds), isNull(enquiry_table.deleted_at))),
+    // Enquiry rows plus their departure airport codes ("NCL, MAN") for the client page holidays rail.
+    db.select({
+      ...getTableColumns(enquiry_table),
+      departing_airport_code: sql<string | null>`(
+      SELECT STRING_AGG(airport_table.airport_code, ', ' ORDER BY airport_table.airport_code)
+      FROM enquiry_departure_airport
+      JOIN airport_table ON enquiry_departure_airport.airport_id = airport_table.id
+      WHERE enquiry_departure_airport.enquiry_id = enquiry_table.id
+    )`,
+    }).from(enquiry_table).where(and(inArray(enquiry_table.transaction_id, txnIds), isNull(enquiry_table.deleted_at))),
     // Full quote rows plus the display joins the client-details panels need
     // (destination / operator / departing airport) — same scalar-subquery
     // pattern as enrichTransactionsLightweight below.
@@ -172,6 +181,14 @@ async function enrichTransactions(txns: Transaction[]) {
       main_tour_operator_logo_url: sql<string | null>`(
       SELECT tour_operator_table.logo_url FROM tour_operator_table
       WHERE tour_operator_table.id = booking_table.main_tour_operator_id
+    )`,
+      departing_airport_code: sql<string | null>`(
+      SELECT airport_table.airport_code
+      FROM booking_flights
+      LEFT JOIN airport_table ON booking_flights.departing_airport_id = airport_table.id
+      WHERE booking_flights.booking_id = booking_table.id
+      ORDER BY booking_flights.departure_date_time ASC
+      LIMIT 1
     )`,
     }).from(booking).where(inArray(booking.transaction_id, txnIds)),
     getPackageTypeMap(),
@@ -607,6 +624,7 @@ function buildPipelineConditions(scope: Scope | undefined, column: string, agent
         AND e.deleted_at IS NULL
         AND e.is_active IS NOT FALSE
         AND e.status <> 'LOST'
+        AND e.status <> 'Converted'
         AND e.is_future_deal IS NOT TRUE
         AND ${enquiryVisible}
     )`);

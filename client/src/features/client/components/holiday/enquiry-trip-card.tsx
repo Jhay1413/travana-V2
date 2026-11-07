@@ -1,6 +1,7 @@
 import { MapPin } from "lucide-react";
 import type { EnquiryTable } from "@/features/quote/types";
-import { HOLIDAY_CARD } from "@/features/client/components/holiday/holiday-styles";
+import { HOLIDAY_SIDE_CARD } from "@/features/client/components/holiday/holiday-styles";
+import { TruncateTip } from "@/features/client/components/holiday/truncate-tip";
 
 function names(items: ReadonlyArray<string | null | undefined> | undefined): string[] {
   return (items ?? []).filter((n): n is string => !!n);
@@ -20,24 +21,24 @@ export function EnquiryTripCard({ enquiry }: { enquiry: EnquiryTable }) {
   ].filter((g) => g.items.length > 0);
 
   return (
-    <section className={HOLIDAY_CARD} aria-labelledby="holiday-enquiry-trip-h" data-testid="holiday-enquiry-trip-card">
-      <h2 id="holiday-enquiry-trip-h" className="mb-3.5 text-base font-semibold leading-snug">
+    <section className={HOLIDAY_SIDE_CARD} aria-labelledby="holiday-enquiry-trip-h" data-testid="holiday-enquiry-trip-card">
+      <h2 id="holiday-enquiry-trip-h" className="mb-2.5 text-[15px] font-semibold leading-snug">
         Where they want to go
       </h2>
       {groups.length === 0 ? (
-        <p className="py-4 text-center text-[13px] text-qp-muted">No destinations added yet.</p>
+        <p className="py-3 text-center text-xs text-qp-muted">No destinations added yet.</p>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {groups.map((g) => (
             <div key={g.label}>
-              <span className="text-xs font-semibold uppercase tracking-[.04em] text-qp-muted">{g.label}</span>
-              <ul className="mt-1.5 flex flex-col gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[.04em] text-qp-muted">{g.label}</span>
+              <ul className="mt-1 flex flex-col gap-1">
                 {g.items.map((item) => (
-                  <li key={item} className="flex items-center gap-2 text-sm font-semibold">
-                    <span className="grid size-7 place-items-center rounded-[10px] bg-qp-trip-hotel-bg text-qp-trip-hotel-fg" aria-hidden>
-                      <MapPin className="size-3.5" />
+                  <li key={item} className="flex min-w-0 items-center gap-2 text-[13px] font-semibold">
+                    <span className="grid size-6 shrink-0 place-items-center rounded-md bg-qp-trip-hotel-bg text-qp-trip-hotel-fg" aria-hidden>
+                      <MapPin className="size-3" />
                     </span>
-                    {item}
+                    <TruncateTip text={item} />
                   </li>
                 ))}
               </ul>

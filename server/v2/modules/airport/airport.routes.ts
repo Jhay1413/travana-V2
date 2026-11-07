@@ -11,6 +11,7 @@ const router = Router();
 // follows the same rules: the quote and enquiry forms quick-add an airport (POST,
 // everyday staff roles), but removing one is an admin job.
 router.get('/', airportController.listAirports);
+router.get('/most-used-departure', airportController.mostUsedDeparture);
 router.post('/', requireAnyOrgRole(EVERYDAY_WRITER_ROLES), validate(createAirportSchema), airportController.createAirport);
 router.delete('/:id', requireAnyOrgRole(ADMIN_ROLES), validate(deleteAirportSchema), airportController.deleteAirport);
 

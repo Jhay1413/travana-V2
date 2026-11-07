@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Check, Eye } from "lucide-react";
 import { bookingKeys, enquiryKeys } from "@/hooks/queries";
@@ -11,6 +11,7 @@ import { BookingActionsMenu } from "@/features/client/components/booking-actions
 import { EnquiryActionsMenu } from "@/features/client/components/enquiry-actions-menu";
 import { TopBarIconButton, TopBarPinButton, TopBarStatusPill } from "@/features/client/components/holiday/top-bar-parts";
 import { useQuotePreview } from "@/features/client/components/holiday/use-quote-preview";
+import { canConvertEnquiry, CONVERT_TO_QUOTE_BUTTON_CLASS } from "@/features/client/lib/enquiry-convert";
 
 interface CommonProps {
   clientId: string;
@@ -81,10 +82,11 @@ export interface EnquiryTopActionsProps extends CommonProps {
   enquiryData: EnquiryTable;
 }
 
-/** Action row for an enquiry: Pin, Enquiry pill, assigned agent, overflow menu. */
+/** Action row for an enquiry: Pin, Enquiry pill, assigned agent, Convert to Quote, overflow menu. */
 export function EnquiryTopActions({ enquiryId, clientId, clientName, enquiryData, readOnly, editOpen, onEditOpenChange, onDeleted }: EnquiryTopActionsProps) {
   const queryClient = useQueryClient();
   const destinationName = enquiryData.destinations?.[0]?.name ?? null;
+  const [convertOpen, setConvertOpen] = useState(false);
   const { isFavorited, togglePin } = useEnquiryPin(enquiryId, {
     label: enquiryData.title || "Enquiry",
     subtitle: `${clientName}${destinationName ? " · " + destinationName : ""}`,
@@ -101,6 +103,16 @@ export function EnquiryTopActions({ enquiryId, clientId, clientName, enquiryData
             userId={enquiryData.user_id}
             onReallocated={() => queryClient.invalidateQueries({ queryKey: enquiryKeys.all })}
           />
+          {canConvertEnquiry(enquiryData) && (
+            <button
+              type="button"
+              className={CONVERT_TO_QUOTE_BUTTON_CLASS}
+              onClick={() => setConvertOpen(true)}
+              data-testid="button-enquiry-header-convert"
+            >
+              Convert to Quote
+            </button>
+          )}
           <EnquiryActionsMenu
             enquiryId={enquiryId}
             clientId={clientId}
@@ -112,6 +124,8 @@ export function EnquiryTopActions({ enquiryId, clientId, clientName, enquiryData
             hideItems={["pin"]}
             editOpen={editOpen}
             onEditOpenChange={onEditOpenChange}
+            convertOpen={convertOpen}
+            onConvertOpenChange={setConvertOpen}
           />
         </>
       )}

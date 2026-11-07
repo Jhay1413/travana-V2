@@ -57,6 +57,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Enquiry } from "@/features/enquiry/types";
 import type { TransactionNote } from "@/features/quote/types";
 import { groupNotesByParent } from "@/features/note/lib/group-notes";
+import { canConvertEnquiry, CONVERT_TO_QUOTE_BUTTON_CLASS } from "@/features/client/lib/enquiry-convert";
 
 const currency = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -694,6 +695,16 @@ export default function EnquiryPage() {
                               data-testid="select-enquiry-itinerary-owner"
                             />
 
+                            {canConvertEnquiry(enquiry) && (
+                              <button
+                                type="button"
+                                className={CONVERT_TO_QUOTE_BUTTON_CLASS}
+                                onClick={handleConvertToQuote}
+                                data-testid="button-enquiry-header-convert"
+                              >
+                                Convert to Quote
+                              </button>
+                            )}
                             <div className="relative" ref={ellipsisRef}>
                               <button
                                 type="button"

@@ -72,6 +72,15 @@ describe("row builders", () => {
     expect(buildBookingRows(bookings)[0].lost).toBe(false);
     expect(buildBookingRows(bookings, { markLostBookings: true })[0].lost).toBe(true);
   });
+
+  it("starts enquiry and booking date lines with the departure airport code", () => {
+    const e = buildEnquiryRows([{ id: "e", title: "Spain", departing_airport_code: "MAN, NCL" } as unknown as EnquiryTable]);
+    expect(e[0].dateLine).toBe("MAN, NCL");
+    const b = buildBookingRows([{ id: "b", sales_price: "500", departing_airport_code: "LGW" } as unknown as HolidayBooking]);
+    expect(b[0].dateLine).toBe("LGW");
+    const noAirport = buildBookingRows([{ id: "b2", sales_price: "500" } as unknown as HolidayBooking]);
+    expect(noAirport[0].dateLine).toBeNull();
+  });
 });
 
 describe("sortDealRows", () => {

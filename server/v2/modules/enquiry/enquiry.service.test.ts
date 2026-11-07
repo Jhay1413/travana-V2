@@ -110,6 +110,16 @@ describe("newEnquiryService.updateEnquiry — status change", () => {
     expect(transactionRepository.update).toHaveBeenCalledWith("t1", { is_active: false });
   });
 
+  it("accepts the Converted status written after a convert-to-quote, without touching the transaction", async () => {
+    vi.mocked(enquiryTableRepository.update).mockResolvedValue({ id: "e1", transaction_id: "t1", status: "Converted" } as never);
+    vi.mocked(enquiryTableRepository.findWithRelations).mockResolvedValue({ id: "e1" } as never);
+
+    await newEnquiryService.updateEnquiry("e1", { status: "Converted" } as never, null, TRUSTED);
+
+    expect(enquiryTableRepository.update).toHaveBeenCalledWith("e1", expect.objectContaining({ status: "Converted" }));
+    expect(transactionRepository.update).not.toHaveBeenCalled();
+  });
+
   it("does not touch the transaction for a non-LOST status", async () => {
     vi.mocked(enquiryTableRepository.update).mockResolvedValue({ id: "e1", transaction_id: "t1", status: "NEW" } as never);
     vi.mocked(enquiryTableRepository.findWithRelations).mockResolvedValue({ id: "e1" } as never);

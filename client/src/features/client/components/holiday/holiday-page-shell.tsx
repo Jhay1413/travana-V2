@@ -10,12 +10,12 @@ interface Slots {
 const SlotsContext = createContext<Slots>({ topBar: null, main: null, side: null });
 
 /**
- * Persistent page frame: 290px rail | fluid centre | 320px right column, 24px gap.
+ * Persistent page frame: 300px rail | fluid centre | 320px right column, 24px gap.
  * The rail lives here so it survives picking another holiday; the keyed
  * quote / booking / enquiry compositions render into the three slots through
  * HolidayPageShell (portals), so only the slot content remounts.
  *
- * - up to 1480px wide: two columns (rail 270 + centre); the right column drops under the centre as a 2-up grid.
+ * - up to 1480px wide: two columns (rail 280 + centre); the right column drops under the centre as a 2-up grid.
  * - up to 1180px: one column. Up to 860px: the right column stacks too.
  * The page scrolls with the window like every other redesigned page (no inner
  * fixed-height scroller, so there is never a second scroll context or dead
@@ -32,7 +32,7 @@ export function HolidayShellFrame({ rail, children }: { rail: ReactNode; childre
       className="text-compact -m-4 min-h-full bg-social-page p-4 md:-m-6 md:p-6"
       data-testid="section-client-profile"
     >
-      <div className="grid grid-cols-[290px_minmax(0,1fr)_320px] items-start gap-6 max-[1480px]:grid-cols-[270px_minmax(0,1fr)] max-[1180px]:grid-cols-1">
+      <div className="grid grid-cols-[300px_minmax(0,1fr)_320px] items-start gap-6 max-[1480px]:grid-cols-[280px_minmax(0,1fr)] max-[1180px]:grid-cols-1">
         <div className="col-span-full" ref={setTopBar} />
         <div className="min-w-0 min-[1181px]:sticky min-[1181px]:top-[4.5rem] min-[1181px]:max-h-[calc(100vh-5.5rem)] min-[1181px]:overflow-y-auto">
           {rail}

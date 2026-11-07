@@ -93,3 +93,14 @@ export function describeImportIssue(issue: ImportValidationIssue): ImportIssueDi
     text: ISSUE_COPY[issue.code] ?? issue.message,
   };
 }
+
+// Only real errors are shown to the agent. Warnings are dropped entirely —
+// they never render anywhere (stakeholder decision, Nov 2026).
+export function getImportErrors(validation: ImportValidation | null | undefined): ImportIssueDisplay[] {
+  if (!validation) return [];
+  return validation.issues.filter((i) => i.level === "error").map(describeImportIssue);
+}
+
+export function hasImportErrors(validation: ImportValidation | null | undefined): boolean {
+  return getImportErrors(validation).length > 0;
+}

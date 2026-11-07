@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { Request, Response, NextFunction } from "express";
 
 vi.mock("./airport.controller", () => ({
-  airportController: { listAirports: vi.fn(), createAirport: vi.fn(), deleteAirport: vi.fn() },
+  airportController: { listAirports: vi.fn(), mostUsedDeparture: vi.fn(), createAirport: vi.fn(), deleteAirport: vi.fn() },
 }));
 
 import router from "./airport.routes";
@@ -66,6 +66,10 @@ describe("airport routes - write guard", () => {
 
   it("GET / stays open (no guard before the controller)", () => {
     expect(handlersFor("get", "/")).toHaveLength(1);
+  });
+
+  it("GET /most-used-departure goes straight to the controller", () => {
+    expect(handlersFor("get", "/most-used-departure")).toEqual([airportController.mostUsedDeparture]);
   });
 });
 

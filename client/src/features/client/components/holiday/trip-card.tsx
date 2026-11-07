@@ -3,6 +3,7 @@ import { formatUKDate, type QuoteDisplay } from "@/features/quote/components/quo
 import { buildTripExtras, buildTripStops } from "@/features/client/lib/trip-timeline";
 import { TripStop } from "@/features/client/components/holiday/trip-stop";
 import { HOLIDAY_BTN_GHOST } from "@/features/client/components/holiday/holiday-styles";
+import { TruncateTip } from "@/features/client/components/holiday/truncate-tip";
 
 export interface TripBodyProps {
   display: QuoteDisplay;
@@ -26,7 +27,7 @@ export function TripBody({ display, onEdit }: TripBodyProps) {
 
   return (
     <div data-testid="holiday-trip-card">
-      <p className="mb-3.5 text-[13px] text-qp-muted">{subtitle}</p>
+      <TruncateTip as="div" text={subtitle} className="mb-3 text-xs text-qp-muted" />
       {all.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-5 text-center text-[13px] text-qp-muted" data-testid="trip-empty">
           <p>No itinerary lines yet.</p>

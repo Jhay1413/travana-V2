@@ -5,7 +5,7 @@ import { z } from "zod";
 
 export const transaction_status_enum = pgEnum('transaction_status_enum', ['on_enquiry', 'on_quote', 'on_booking']);
 export const lead_source_enum = pgEnum('lead_source_enum', ['SHOP', 'FACEBOOK', 'WHATSAPP', 'INSTAGRAM', 'PHONE_ENQUIRY']);
-export const enquiry_status_enum = pgEnum('enquiry_status_enum', ['NEW_LEAD', 'ACTIVE', 'LOST', 'INACTIVE', 'EXPIRED']);
+export const enquiry_status_enum = pgEnum('enquiry_status_enum', ['NEW_LEAD', 'ACTIVE', 'LOST', 'INACTIVE', 'EXPIRED', 'Converted']);
 export const budget_type_enum = pgEnum('budget_type_enum', ['PER_PERSON', 'PACKAGE']);
 export const quote_status_enum = pgEnum('quote_status_enum', ['quoted', 'in_play', 'lost', 'archived']);
 export const booking_status_enum = pgEnum('booking_status_enum', ['BOOKED', 'LOST']);

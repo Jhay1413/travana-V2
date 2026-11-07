@@ -94,7 +94,13 @@ export function BookingDetail(props: HolidayDetailBaseProps) {
         main={
           <>
             <Hero display={display} raw={raw} mode="booking" photos={photos} readOnly={readOnly} onOpenPhoto={setViewerIndex} />
-            <FactsCard fields={factRows(buildQuoteLikeFields(display))} readOnly={readOnly} onEdit={openEdit} />
+            {/* Bookings have no supplier link of their own; use the one on the quote it came from. */}
+            <FactsCard
+              fields={factRows(buildQuoteLikeFields(display))}
+              readOnly={readOnly}
+              onEdit={openEdit}
+              supplierUrl={sourceQuote?.quote_ref}
+            />
             {hasCruise && display.cruise && <CruiseItinerary itinerary={display.cruise.itinerary} />}
             <ActivityCard
               transactionId={raw.transaction_id}

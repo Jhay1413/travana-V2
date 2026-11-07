@@ -89,3 +89,41 @@ test.describe("Import Deal on the quote and booking forms", () => {
     await expect(checkIn).toHaveValue("20:15");
   });
 });
+
+test.describe("Import Deal validation panel (errors only)", () => {
+  const warn = { level: "warn", code: "NIGHTS_SOURCE_CONFLICT", message: "Nights disagree", field: "no_of_nights" };
+  const err = { level: "error", code: "PRICE_ZERO", message: "Price missing", field: "sales_price" };
+
+  async function importWith(page: Page, issues: Array<{ level: string }>): Promise<Locator> {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    await fakeCapture(page);
+    // Registered after fakeCapture, so this route wins: the response now carries a validation block.
+    await page.route("**/api/v2/scrapers/import-page", (route) =>
+      route.fulfill({
+        json: {
+          success: true,
+          message: "",
+          data: { ...DEAL, validation: { level: issues.some((i) => i.level === "error") ? "error" : "warn", issues } },
+        },
+      }));
+    const drawer = await openDrawer(page, "quote");
+    await drawer.getByRole("button", { name: "Import Deal" }).click();
+    await expect(drawer.getByTestId("input-drawer-title")).toHaveValue("Imported Sunny Break");
+    return drawer;
+  }
+
+  test("warnings only: no 'Check this import before saving' panel", async ({ page }) => {
+    const drawer = await importWith(page, [warn]);
+    await expect(drawer.getByTestId("import-validation-panel")).toHaveCount(0);
+    await expect(drawer.getByText("Check this import before saving")).toHaveCount(0);
+  });
+
+  test("an error shows the panel with the error and none of the warnings", async ({ page }) => {
+    const drawer = await importWith(page, [warn, err]);
+    const panel = drawer.getByTestId("import-validation-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText("Sales price");
+    await expect(panel).not.toContainText("Nights");
+  });
+});
