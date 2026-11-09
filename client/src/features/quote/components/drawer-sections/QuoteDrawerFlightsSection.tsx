@@ -1,6 +1,6 @@
 import { useFormContext, useFieldArray, useWatch, type Control } from "react-hook-form";
 import { Clock, Plane, PlaneLanding, PlaneTakeoff, Plus } from "lucide-react";
-import { format, isValid, parseISO } from "date-fns";
+import { addDays, format, isValid, parseISO } from "date-fns";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -85,11 +85,11 @@ function FlightLegFields({
 
   return (
     <div className="fm-leg" data-testid={`drawer-flight-${direction}`}>
-      <div className={fmSubheadingClass}>
+      <div className={fmSubheadingClass} style={{ color: direction === "outbound" ? "#1D4ED8" : "#6D28D9" }}>
         <Icon className="h-4 w-4" />
-        {label}
+        {label.toUpperCase()}
       </div>
-      <div className="fm-grid fm-g3 mt-3">
+      <div className="fm-grid fm-g4 mt-3">
         <FormField
           control={control}
           name={f("DepartAirportId")}
@@ -104,32 +104,6 @@ function FlightLegFields({
                   onValueChange={field.onChange}
                   defaultCountryId={countryId}
                 />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={control}
-          name={f("DepartDate")}
-          render={({ field }) => (
-            <FormItem className="space-y-0">
-              <FormLabel className={fmLabelClass}>Departure Date</FormLabel>
-              <FormControl>
-                <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={control}
-          name={f("DepartTime")}
-          render={({ field }) => (
-            <FormItem className="space-y-0">
-              <FormLabel className={fmLabelClass}>Departure Time</FormLabel>
-              <FormControl>
-                <TimeInput name={field.name} value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -156,10 +130,49 @@ function FlightLegFields({
         />
         <FormField
           control={control}
+          name={f("FlightNumber")}
+          render={({ field }) => (
+            <FormItem className="fm-span2 space-y-0">
+              <FormLabel className={fmLabelClass}>Flight number</FormLabel>
+              <FormControl>
+                <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="e.g. BA2490" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={f("DepartDate")}
+          render={({ field }) => (
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Departure date</FormLabel>
+              <FormControl>
+                <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={f("DepartTime")}
+          render={({ field }) => (
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Departure time</FormLabel>
+              <FormControl>
+                <TimeInput name={field.name} value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
           name={f("ArriveDate")}
           render={({ field }) => (
             <FormItem className="space-y-0">
-              <FormLabel className={fmLabelClass}>Arrival Date</FormLabel>
+              <FormLabel className={fmLabelClass}>Arrival date</FormLabel>
               <FormControl>
                 <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
               </FormControl>
@@ -172,22 +185,9 @@ function FlightLegFields({
           name={f("ArriveTime")}
           render={({ field }) => (
             <FormItem className="space-y-0">
-              <FormLabel className={fmLabelClass}>Arrival Time</FormLabel>
+              <FormLabel className={fmLabelClass}>Arrival time</FormLabel>
               <FormControl>
                 <TimeInput name={field.name} value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={control}
-          name={f("FlightNumber")}
-          render={({ field }) => (
-            <FormItem className="space-y-0">
-              <FormLabel className={fmLabelClass}>Flight Number</FormLabel>
-              <FormControl>
-                <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="e.g. BA2490" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -248,13 +248,32 @@ export function QuoteDrawerFlightsSection() {
   const departureAirportOptions = buildDepartureAirportOptions(airportsData || [], mostUsedIds ?? []);
   const airportName = (id: string | undefined) => airports.find((a) => a.id === id)?.airport_name ?? "";
 
+  const { setValue, getValues } = useFormContext<SharedHolidayFormValues>();
+  // Inbound departs where outbound lands and vice versa; the inbound date is travel date + nights.
+  const fillReturnFromOutbound = () => {
+    const opts = { shouldDirty: true, shouldValidate: true };
+    const out = getValues();
+    if (out.outboundArriveAirportId) setValue("inboundDepartAirportId", out.outboundArriveAirportId, opts);
+    if (out.outboundDepartAirportId) setValue("inboundArriveAirportId", out.outboundDepartAirportId, opts);
+    const nights = Number(out.nights);
+    const start = out.travelDate ? parseISO(out.travelDate) : null;
+    if (start && isValid(start) && nights >= 1) setValue("inboundDepartDate", format(addDays(start, nights), "yyyy-MM-dd"), opts);
+  };
+
   const title = buildFlightsTitle(
     { departDate, departAirportId, departTime, arriveDate, arriveAirportId, arriveTime },
     airportName,
   );
 
   return (
-    <FormSection id={formSectionDomId("flights")} title={title} icon={<Plane size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-section-flights">
+    <FormSection id={formSectionDomId("flights")} title={title} icon={<Plane size={16} color="#D97706" aria-hidden="true" />}
+      right={
+        <button type="button" className="fm-btn fm-btn--sm" onClick={fillReturnFromOutbound} data-testid="button-fill-return-flight">
+          Fill return from outbound
+        </button>
+      }
+      data-testid="drawer-section-flights"
+    >
       <div>
         <FlightLegFields direction="outbound" airportOptions={airportOptions} departureAirportOptions={departureAirportOptions} countryId={countryId} />
         <FlightLegFields direction="inbound" airportOptions={airportOptions} departureAirportOptions={departureAirportOptions} countryId={countryId} />

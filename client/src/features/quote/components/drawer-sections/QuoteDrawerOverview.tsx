@@ -27,20 +27,20 @@ interface QuoteDrawerOverviewProps {
  * then Holiday Type / Tour Operator / Lead Source in one row. Shared by the
  * quote and booking forms — both carry these fields under the same names.
  */
-export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink = true }: QuoteDrawerOverviewProps) {
+export function QuoteDrawerOverview({ titleLabel = "Quote title", showQuoteLink = true }: QuoteDrawerOverviewProps) {
   const { control, setValue, getValues } = useFormContext<SharedHolidayFormValues>();
   const { data: packageTypesData } = usePackageTypes();
   const { data: tourOperatorsData } = useTourOperators();
   const operatorNames = useOperatorNames();
 
   return (
-    <FormSection id={formSectionDomId("overview")} title={`${titleLabel.replace(/ Title$/, "")} details`} icon={<Tag size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-overview">
-    <div className="fm-grid fm-g3">
+    <FormSection id={formSectionDomId("overview")} title={`${titleLabel.replace(/ title$/i, "")} details`} icon={<Tag size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-overview">
+    <div className="fm-grid fm-g2">
       <FormField
         control={control}
         name="quoteTitle"
         render={({ field }) => (
-          <FormItem className="fm-span-all space-y-0">
+          <FormItem className="fm-span2 space-y-0">
             <FormLabel className={fmLabelClass}>{titleLabel}</FormLabel>
             <div className="relative">
               <FormControl>
@@ -48,7 +48,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
                   {...field}
                   value={field.value ?? ""}
                   className={cn(fmInputClass, "pr-9")}
-                  placeholder="Enter title..."
+                  placeholder="e.g. Bahia Principe Explore Punta Cana"
                   data-testid="input-drawer-title"
                 />
               </FormControl>
@@ -73,7 +73,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
           name="packageType"
           render={({ field }) => (
             <FormItem className="space-y-0">
-              <FormLabelTooltip className={fmLabelClass} tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Holiday Type</FormLabelTooltip>
+              <FormLabelTooltip className={fmLabelClass} tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Holiday type</FormLabelTooltip>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={fmControlClass}>
@@ -95,7 +95,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
           name="tourOperatorId"
           render={({ field }) => (
             <FormItem className="space-y-0">
-              <FormLabel className={fmLabelClass}>Tour Operator</FormLabel>
+              <FormLabel className={fmLabelClass}>Tour operator</FormLabel>
               <FormControl>
                 <SearchableSelect
                   className={fmControlClass}
@@ -126,7 +126,7 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
           name="leadSource"
           render={({ field }) => (
             <FormItem className="space-y-0">
-              <FormLabelTooltip className={fmLabelClass} tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead Source</FormLabelTooltip>
+              <FormLabelTooltip className={fmLabelClass} tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead source</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
                   <SelectTrigger className={fmControlClass}>
@@ -157,8 +157,8 @@ function QuoteLinkField() {
       control={control}
       name="quoteLink"
       render={({ field }) => (
-        <FormItem className="fm-span-all space-y-0">
-          <FormLabel className={fmLabelClass}>Quote Link</FormLabel>
+        <FormItem className="space-y-0">
+          <FormLabel className={fmLabelClass}>Quote link</FormLabel>
           <div className="flex items-center gap-2">
             <FormControl>
               <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="https://..." />
@@ -172,7 +172,7 @@ function QuoteLinkField() {
                 data-testid="link-view-quote-link"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
-                View Link
+                View link
               </a>
             )}
           </div>

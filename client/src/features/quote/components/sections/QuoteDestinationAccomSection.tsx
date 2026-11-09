@@ -93,7 +93,7 @@ export function QuoteDestinationAccomSection() {
   const hotelTitle = `Hotel${accomName ? ` - ${accomName}` : ""}${destName ? `, ${destName}` : ""}`;
 
   const body = (
-      <div className="grid grid-cols-3 gap-x-4 gap-y-3.5">
+      <div className="fm-grid fm-g3">
         <FormField
           control={control}
           name="country"
@@ -210,7 +210,7 @@ export function QuoteDestinationAccomSection() {
           control={control}
           name="accommodationId"
           render={({ field }) => (
-            <FormItem className={itemCls}>
+            <FormItem className={`${itemCls} fm-span2`}>
               <FormLabel className={labelCls}>Accommodation</FormLabel>
               <FormControl>
                 <SearchableSelect
@@ -351,7 +351,7 @@ export function QuoteDestinationAccomSection() {
           name="boardBasisId"
           render={({ field }) => (
             <FormItem className={itemCls}>
-              <FormLabel className={labelCls}>Board Type</FormLabel>
+              <FormLabel className={labelCls}>Board type</FormLabel>
               <FormControl>
                 <SearchableSelect
                   className={controlCls}
@@ -377,7 +377,7 @@ export function QuoteDestinationAccomSection() {
           name="roomType"
           render={({ field }) => (
             <FormItem className={itemCls}>
-              <FormLabel className={labelCls}>Room Type</FormLabel>
+              <FormLabel className={labelCls}>Room type</FormLabel>
               <FormControl>
                 <SearchableSelect
                   className={controlCls}
@@ -404,7 +404,7 @@ export function QuoteDestinationAccomSection() {
           name="checkInDate"
           render={({ field }) => (
             <FormItem className={itemCls}>
-              <FormLabel className={labelCls}>Check-in Date</FormLabel>
+              <FormLabel className={labelCls}>Check-in date</FormLabel>
               <FormControl>
                 <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
               </FormControl>
@@ -418,7 +418,7 @@ export function QuoteDestinationAccomSection() {
           name="checkInTime"
           render={({ field }) => (
             <FormItem className={itemCls}>
-              <FormLabel className={labelCls}>Check-in Time</FormLabel>
+              <FormLabel className={labelCls}>Check-in time</FormLabel>
               <FormControl>
                 <Input type="time" {...field} value={field.value ?? ""} className={inputCls} />
               </FormControl>

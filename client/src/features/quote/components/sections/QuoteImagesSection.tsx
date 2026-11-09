@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { GripVertical, ImagePlus, Star, X } from "lucide-react";
+import { ImagePlus, Plus, X } from "lucide-react";
 import { FormSection } from "@/components/shared/form-shell";
 import { formSectionDomId } from "@/features/quote/lib/quote-section-ids";
 import { useDragReorder } from "@/hooks/use-drag-reorder";
@@ -67,34 +67,31 @@ export function QuoteImagesSection({
   );
 
   const hint = (
-    <p className="text-[10px] text-black/45">
-      Drag to arrange. The first image is used as the main photo.
+    <p className="mt-2.5 text-xs text-[#6B7686]">
+      Drag to arrange. The cover photo (the first one) leads the quote.
     </p>
   );
 
   const grid = (
-    <div className="flex flex-wrap gap-2" data-testid="grid-quote-form-images">
+    <div className="fm-photos" data-testid="grid-quote-form-images">
       {items.map((item, idx) => (
         <div
           key={item.key}
           {...itemProps(idx)}
           className={cn(
-            "group relative h-20 w-20 cursor-grab overflow-hidden rounded-xl border transition active:cursor-grabbing",
-            draggingIndex === idx ? "border-black/10 opacity-40" : "border-black/10",
+            "fm-photo cursor-grab transition active:cursor-grabbing",
+            draggingIndex === idx && "opacity-40",
             // Ring marks where the dragged image will land.
-            overIndex === idx && draggingIndex !== idx
-              ? "ring-2 ring-blue-500 ring-offset-1"
-              : "",
+            overIndex === idx && draggingIndex !== idx && "ring-2 ring-blue-500 ring-offset-1",
           )}
           data-testid={`quote-form-image-${item.key}`}
         >
-          {/* pointer-events-none keeps the drag events on the tile — a
-              child image would otherwise fire its own dragleave as the
-              cursor crosses it, flickering the drop target. */}
+          {/* pointer-events-none keeps the drag events on the tile: a child image would
+              otherwise fire its own dragleave as the cursor crosses it. */}
           <img
             src={itemPreviewUrl(item)}
             alt=""
-            className="pointer-events-none h-full w-full object-cover"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
             draggable={false}
             onError={(e) => {
               // An imported photo that won't load is dropped rather than shown
@@ -104,8 +101,29 @@ export function QuoteImagesSection({
               else (e.target as HTMLImageElement).alt = "Failed to load";
             }}
           />
-          {/* Always visible — a hover-only control is easy to miss and
-              awkward on touch. */}
+          <span className="fm-photo__shade" />
+          <span className="fm-photo__n pointer-events-none" aria-hidden="true">Photo {idx + 1}</span>
+          {idx === 0 ? (
+            <span className="fm-photo__cover pointer-events-none">Cover</span>
+          ) : (
+            <button
+              type="button"
+              // The tile is draggable, so stop the pointer/drag here, otherwise
+              // clicking this starts a drag instead of firing.
+              onPointerDown={(e) => e.stopPropagation()}
+              onDragStart={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.stopPropagation();
+                makePrimary(item);
+              }}
+              className="fm-photo__make"
+              title="Set as main photo"
+              data-testid={`button-set-primary-${item.key}`}
+            >
+              Make cover
+            </button>
+          )}
+          {/* Always visible: a hover-only control is easy to miss and awkward on touch. */}
           <button
             type="button"
             onPointerDown={(e) => e.stopPropagation()}
@@ -114,56 +132,23 @@ export function QuoteImagesSection({
               e.stopPropagation();
               removeItem(item);
             }}
-            // Inside the tile, not overhanging it: the tile needs
-            // overflow-hidden to clip the image to its rounded corners,
-            // which would also clip a negatively-positioned button.
-            className="absolute right-1 top-1 z-10 grid h-5 w-5 place-items-center rounded-full bg-red-500/90 text-white shadow-sm transition hover:bg-red-600"
+            className="fm-photo__x"
             title="Remove image"
             data-testid={`button-remove-image-${item.key}`}
           >
             <X className="h-3 w-3" />
           </button>
-          {idx !== 0 && (
-            <button
-              type="button"
-              // The tile is draggable, so stop the pointer/drag here —
-              // otherwise clicking this starts a drag instead of firing.
-              onPointerDown={(e) => e.stopPropagation()}
-              onDragStart={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.stopPropagation();
-                makePrimary(item);
-              }}
-              className="absolute left-1 top-1 z-10 grid h-5 w-5 place-items-center rounded-full bg-black/55 text-white transition hover:bg-black/80"
-              title="Set as main photo"
-              data-testid={`button-set-primary-${item.key}`}
-            >
-              <Star className="h-2.5 w-2.5" />
-            </button>
-          )}
-          <span className="pointer-events-none absolute bottom-5 right-1 text-white opacity-0 drop-shadow transition group-hover:opacity-100">
-            <GripVertical className="h-3 w-3" />
-          </span>
-          <div
-            className={cn(
-              "pointer-events-none absolute bottom-0 left-0 right-0 truncate px-1 py-0.5 text-[9px] text-white",
-              idx === 0 ? "bg-emerald-600/85 font-semibold" : "bg-black/50",
-            )}
-          >
-            {idx === 0 ? (
-              <span className="flex items-center gap-1">
-                <Star className="h-2.5 w-2.5 fill-current" /> Main
-              </span>
-            ) : item.kind === "existing" ? (
-              "Saved"
-            ) : item.kind === "file" ? (
-              item.file.name
-            ) : (
-              "From JSON"
-            )}
-          </div>
         </div>
       ))}
+      <button
+        type="button"
+        onClick={() => imageInputRef.current?.click()}
+        className="fm-photo-add"
+        data-testid="button-add-images"
+      >
+        <Plus className="h-5 w-5" aria-hidden="true" />
+        Add photos
+      </button>
     </div>
   );
 
@@ -174,26 +159,15 @@ export function QuoteImagesSection({
         icon={<ImagePlus size={16} color="#D97706" aria-hidden="true" />}
         right={
           <span className="whitespace-nowrap rounded-full bg-[#D1FAE5] px-3 py-1 text-xs font-semibold text-[#047857]">
-            {items.length} {items.length === 1 ? "image" : "images"}
+            {items.length} {items.length === 1 ? "photo" : "photos"}
           </span>
         }
         data-testid="drawer-section-images"
       >
         <div>
           {fileInput}
+          {grid}
           {hint}
-          {items.length > 0 && <div className="mt-3">{grid}</div>}
-          <div className="mt-3 flex justify-end">
-            <button
-              type="button"
-              onClick={() => imageInputRef.current?.click()}
-              className="fm-btn fm-btn--sm"
-              data-testid="button-add-images"
-            >
-              <ImagePlus className="h-4 w-4" />
-              Add images
-            </button>
-          </div>
         </div>
       </FormSection>
     );

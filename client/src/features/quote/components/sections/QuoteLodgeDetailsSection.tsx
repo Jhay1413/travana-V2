@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
-import { PawPrint } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Stepper } from "@/components/shared/form-shell";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useParks, useLodges } from "@/hooks/queries";
@@ -30,7 +30,7 @@ export function QuoteLodgeDetailsSection() {
 
   return (
     <div>
-      <div className="grid gap-x-4 gap-y-3.5 md:grid-cols-3">
+      <div className="fm-grid fm-g3">
         <FormField
           control={control}
           name="parkId"
@@ -106,7 +106,7 @@ export function QuoteLodgeDetailsSection() {
           name="checkInDate"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={fmLabelClass}>Check-in Date</FormLabel>
+              <FormLabel className={fmLabelClass}>Check-in date</FormLabel>
               <FormControl>
                 <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
               </FormControl>
@@ -120,22 +120,16 @@ export function QuoteLodgeDetailsSection() {
           name="pets"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={fmLabelClass}>
-                <div className="flex items-center gap-1.5">
-                  <PawPrint className="h-3.5 w-3.5" />
-                  No. of Pets
-                </div>
-              </FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={0}
-                  className={fmInputClass}
-                  {...field}
-                  value={field.value ?? 0}
-                  onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
-                />
-              </FormControl>
+              <span className={fmLabelClass}>Pets</span>
+              {/* Never clamp a saved value that is already above the usual limit. */}
+              <Stepper
+                variant="box"
+                label="Pets"
+                min={0}
+                max={Math.max(6, Number(field.value) || 0)}
+                value={Number(field.value) || 0}
+                onChange={field.onChange}
+              />
               <FormMessage />
             </FormItem>
           )}

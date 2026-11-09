@@ -437,7 +437,7 @@ export function BookingRHFForm({
                   />
                 </div>
               </FormSection>
-              <QuoteDrawerOverview titleLabel="Booking Title" showQuoteLink={false} />
+              <QuoteDrawerOverview titleLabel="Booking title" showQuoteLink={false} />
               <QuoteDrawerTravelSection showCruiseStay={isCruise} />
               {has("lodge") && (
                 <FormSection id={formSectionDomId("lodge")} title="Lodge details" icon={<Hotel size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-section-lodge">
