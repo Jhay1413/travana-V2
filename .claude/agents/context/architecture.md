@@ -15,22 +15,22 @@
 
 <!-- AUTO:START -->
 <!-- Run `npm run docs:arch` to regenerate this block from the live codebase. -->
-**Last refreshed:** 2026-10-21 (auto-generated — do not edit by hand)
+**Last refreshed:** 2026-11-07 (auto-generated — do not edit by hand)
 
 | Fact | Value |
 |------|-------|
-| Backend modules (`server/v2/modules/`) | **74** |
-| Tables defined (`pgTable`) in schema.ts | 167 |
-| Enums (`pgEnum`) in schema.ts | 30 |
-| `orgId`/`org_id` references in schema.ts | 106 |
-| Migrations (`migrations/*.sql`) | 63 (latest: `0061_confused_puma.sql`) |
-| Client pages (`client/src/pages`) | ~52 |
+| Backend modules (`server/v2/modules/`) | **77** |
+| Tables defined (`pgTable`) in schema.ts | 170 |
+| Enums (`pgEnum`) in schema.ts | 31 |
+| `orgId`/`org_id` references in schema.ts | 111 |
+| Migrations (`migrations/*.sql`) | 71 (latest: `0069_shiny_rumiko_fujikawa.sql`) |
+| Client pages (`client/src/pages`) | ~51 |
 | Automated test runner | ✅ present |
 | Legacy v1 backend (`server/`) present | ⚠️ yes (alongside v2) |
 
 **Key versions:** React 19.2.0 · TypeScript 5.6.3 · Vite 7.1.9 · Express 5.0.1 · Drizzle ORM 0.39.3 · Zod 3.25.76 · React Query 5.60.5
 
-**Backend modules:** admin-import, agent-profile, ai-ask, ai-conversation, ai-embeddings, ai-enquiry, airport, announcement, audit, booking, bot-config, branch, branch-member, branch-overview, channels, chat, client, comments, contact-link, conversation-integration, conversations, dashboard, departures, destination-guru, easyjet, email, enquiry, facebook, favorite, feedback, files, homeworker, hr, hub-post, image-upscale, inboxes, internal-chat, invite, json-mapper, knowledge-base, messages, neon-client, note, notification, onboarding, opportunities, organization, organization-overview, plan, platform-admin, portal, quote, quote-share, referral, reports, revenue, scraper, search, sendseven-webhook, sms, social-post, social-settings, tag, targets, task, ticket, tour-operator, training, transaction, usage, user, user-org-roles, wallet, website-public
+**Backend modules:** admin-import, agent-profile, ai-ask, ai-conversation, ai-embeddings, ai-enquiry, airport, announcement, audit, booking, bot-config, branch, branch-member, branch-overview, channels, chat, client, client-passenger, comments, contact-link, conversation-integration, conversations, dashboard, departures, destination-guru, easyjet, email, enquiry, facebook, favorite, feedback, files, homeworker, hr, hub-post, image-upscale, inboxes, internal-chat, invite, json-mapper, knowledge-base, messages, neon-client, note, notification, onboarding, opportunities, organization, organization-overview, plan, platform-admin, portal, quote, quote-share, referral, reports, revenue, scraper, search, sendseven-webhook, sms, social-post, social-settings, tag, targets, task, ticket, tour-operator, training, transaction, usage, user, user-org-roles, wallet, website-public, whatsapp-templates, whatsapp-updates
 <!-- AUTO:END -->
 
 ---
