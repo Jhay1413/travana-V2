@@ -13,17 +13,19 @@ import { cn } from "@/lib/utils";
 import type { SharedHolidayFormValues } from "@/features/quote/types";
 
 const PRICE_FIELDS: { name: PricingField; label: string }[] = [
-  { name: "price", label: "Total Price" },
+  { name: "price", label: "Total price" },
   { name: "discount", label: "Discount" },
-  { name: "serviceCharge", label: "Serv Charge" },
+  { name: "serviceCharge", label: "Service charge" },
 ];
 
 const round2 = (n: number) => parseFloat(n.toFixed(2));
 
-function PoundInput({ className, ...props }: React.ComponentProps<typeof Input>) {
+const PREFIX: Partial<Record<PricingField, string>> = { discount: "−", serviceCharge: "+" };
+
+function PoundInput({ className, prefix = "£", ...props }: React.ComponentProps<typeof Input> & { prefix?: string }) {
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#6B7686]">£</span>
+      <span aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[#6B7686]">{prefix}</span>
       <Input type="number" step="0.01" min={0} className={cn(fmInputClass, "pl-7", className)} {...props} />
     </div>
   );
@@ -66,6 +68,8 @@ export function QuoteDrawerCostingsSection() {
     transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations,
   });
   const finalTotal = (Number(price) || 0) - currentDiscount + currentServiceCharge + extrasCost;
+
+  const perPerson = Number(pricePerPerson) || 0;
 
   // What the user is typing into the gross-commission box. Held as text while
   // the box has focus so a trailing "." or "0" isn't eaten by the re-render
@@ -116,6 +120,7 @@ export function QuoteDrawerCostingsSection() {
           <FormControl>
             <PoundInput
               {...field}
+              prefix={PREFIX[name]}
               onChange={(e) => handlePriceFieldChange(name, e.target.value, field.onChange)}
               data-testid={`drawer-costing-${name}`}
             />
@@ -129,7 +134,7 @@ export function QuoteDrawerCostingsSection() {
   return (
     <FormSection
       id={formSectionDomId("costings")}
-      title="Costings"
+      title="Costing"
       icon={<PoundSterling size={16} color="#D97706" aria-hidden="true" />}
       right={
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6B7686]">
@@ -159,7 +164,7 @@ export function QuoteDrawerCostingsSection() {
         {renderPriceField(serviceChargeField)}
 
         <div>
-          <span className={cn("block", fmLabelClass)}>Total Profit</span>
+          <span className={cn("block", fmLabelClass)}>Total profit</span>
           <div
             className={cn(fmInputClass, "flex items-center border-[#A7F3D0] bg-[#ECFDF5] font-semibold text-[#047857]")}
             data-testid="drawer-total-profit"
@@ -169,12 +174,16 @@ export function QuoteDrawerCostingsSection() {
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-[#6B7686]" data-testid="drawer-costing-summary">
+      <p className="mt-2.5 text-xs text-[#6B7686]">
+        Total profit = commission − discount + service charge.
+        {perPerson > 0 ? ` £${perPerson.toFixed(2)} per person.` : ""}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-[#6B7686]" data-testid="drawer-costing-summary">
         <span>
           Final total <span className="font-semibold text-[#1F2937]">£{finalTotal.toFixed(2)}</span>
         </span>
         <span>
-          Per person <span className="font-semibold text-[#1F2937]">£{(Number(pricePerPerson) || 0).toFixed(2)}</span>
+          Per person <span className="font-semibold text-[#1F2937]">£{perPerson.toFixed(2)}</span>
         </span>
       </div>
     </FormSection>

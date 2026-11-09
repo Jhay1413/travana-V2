@@ -104,14 +104,14 @@ export function ConnectingLegFields({ control, direction, index, airportOptions,
       >
         <X className="h-3.5 w-3.5" />
       </button>
-      <p className="mb-2 text-xs font-semibold text-black/50">Connecting Leg {index + 1}</p>
+      <p className="mb-2 text-xs font-semibold text-black/50">Connecting leg {index + 1}</p>
       <div className="grid gap-2 md:grid-cols-2">
         <FormField
           control={control}
           name={legField("departAirportId")}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Departing Airport</FormLabel>
+              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Departing airport</FormLabel>
               <FormControl>
                 <SearchableSelect className={fmControlClass} options={departureAirportOptions ?? airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport..." />
               </FormControl>
@@ -123,7 +123,7 @@ export function ConnectingLegFields({ control, direction, index, airportOptions,
           name={legField("arriveAirportId")}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Arriving Airport</FormLabel>
+              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Arriving airport</FormLabel>
               <FormControl>
                 <SearchableSelect className={fmControlClass} options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport..." />
               </FormControl>
@@ -135,7 +135,7 @@ export function ConnectingLegFields({ control, direction, index, airportOptions,
           name={legField("departDate")}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Depart Date</FormLabel>
+              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Depart date</FormLabel>
               <FormControl>
                 <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
               </FormControl>
@@ -147,7 +147,7 @@ export function ConnectingLegFields({ control, direction, index, airportOptions,
           name={legField("departTime")}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Depart Time</FormLabel>
+              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Depart time</FormLabel>
               <FormControl>
                 <Input type="time" {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
@@ -159,7 +159,7 @@ export function ConnectingLegFields({ control, direction, index, airportOptions,
           name={legField("arriveDate")}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Arrive Date</FormLabel>
+              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Arrive date</FormLabel>
               <FormControl>
                 <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
               </FormControl>
@@ -171,7 +171,7 @@ export function ConnectingLegFields({ control, direction, index, airportOptions,
           name={legField("arriveTime")}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Arrive Time</FormLabel>
+              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Arrive time</FormLabel>
               <FormControl>
                 <Input type="time" {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
@@ -183,7 +183,7 @@ export function ConnectingLegFields({ control, direction, index, airportOptions,
           name={legField("flightNumber")}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Flight Number</FormLabel>
+              <FormLabel className="mb-1.5 block text-xs font-medium text-[#6B7686]">Flight number</FormLabel>
               <FormControl>
                 <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="e.g. BA123" />
               </FormControl>
