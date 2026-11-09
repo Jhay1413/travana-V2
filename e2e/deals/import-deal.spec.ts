@@ -59,7 +59,9 @@ test.describe("Import Deal on the quote and booking forms", () => {
     const agency = await seedDealsAgency();
     await signIn(page, agency.agentEmail);
     const drawer = await openDrawer(page, "quote");
+    await expect(drawer.getByTestId("button-import-deal")).toBeVisible();
     await expect(drawer.getByRole("button", { name: "Import Deal" })).toBeVisible();
+    await expect(drawer.getByTestId("quote-import-bar")).toHaveCount(0); // the paste bar only opens when the clipboard fails
     await expect(drawer.getByText("Import JSON")).toHaveCount(0);
     await expect(drawer.locator('input[type="file"][accept*="json"]')).toHaveCount(0);
   });
@@ -87,6 +89,37 @@ test.describe("Import Deal on the quote and booking forms", () => {
     await expect(checkIn).toHaveValue("18:30");
     await checkIn.fill("20:15");
     await expect(checkIn).toHaveValue("20:15");
+  });
+});
+
+test.describe("Import Deal inline paste bar (clipboard unavailable)", () => {
+  test("when the clipboard cannot be read, the head button opens the paste bar and a pasted capture imports the deal", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    // Same server fakes as fakeCapture, but the clipboard read is refused.
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "clipboard", { value: { readText: async () => { throw new Error("denied"); } }, configurable: true });
+    });
+    await page.route("**/api/v2/scrapers/import-page", (route) => route.fulfill({ json: { success: true, message: "", data: DEAL } }));
+    await page.route("**/api/v2/json-mapper/map-to-ids", (route) => route.fulfill({ json: { success: true, data: EMPTY_MAPPING } }));
+    const drawer = await openDrawer(page, "quote");
+
+    await drawer.getByTestId("button-import-deal").click();
+    const bar = drawer.getByTestId("quote-import-bar");
+    await expect(bar).toBeVisible();
+    await expect(bar.getByLabel("Supplier", { exact: true })).toBeVisible();
+
+    // Junk is refused with a message and the bar stays open.
+    await bar.locator("#qf-import-paste").fill("not a capture");
+    await bar.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(bar.getByRole("alert")).toBeVisible();
+    await expect(drawer.getByTestId("input-drawer-title")).not.toHaveValue("Imported Sunny Break");
+
+    await bar.locator("#qf-import-paste").fill(JSON.stringify({ url: "https://supplier.example/deal/1", text: "captured page text" }));
+    await bar.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(drawer.getByTestId("input-drawer-title")).toHaveValue("Imported Sunny Break");
+    await expect(drawer.getByTestId("drawer-costing-price")).toHaveValue("2400");
+    await expect(bar).toBeHidden();
   });
 });
 

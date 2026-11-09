@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { ClientFormDrawer, isClientReadOnly, useClientCreateForm } from "@/features/client";
 import { CreateFlow, type AfterCreate } from "./create-flows";
 import { CREATE_MENU_ITEMS, resolveCreateRoute, type CreateKind } from "./create-kind";
+import { skipFocusReturnWhenFormOpens } from "@/components/shared/form-shell";
 
 /** The round blue "+" used on every create entry point (same look as the holiday rail). */
 const BLUE_TRIGGER =
@@ -84,7 +85,7 @@ export function CreateMenu({ clientId, transactionId, afterCreate = "stay", onCr
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>{triggerNode}</DropdownMenuTrigger>
-        <DropdownMenuContent align={align} sideOffset={trigger === "header" ? 12 : 4} className="z-[200] w-48 rounded-[10px]">
+        <DropdownMenuContent onCloseAutoFocus={skipFocusReturnWhenFormOpens} align={align} sideOffset={trigger === "header" ? 12 : 4} className="z-[200] w-48 rounded-[10px]">
           {CREATE_MENU_ITEMS.map(({ kind, label, icon: Icon, groupStart }) => (
             <Fragment key={kind}>
               {groupStart && <DropdownMenuSeparator />}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
-import { MapPin } from "lucide-react";
+import { BedDouble } from "lucide-react";
+import { formSectionDomId } from "@/features/quote/lib/quote-section-ids";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -22,16 +23,11 @@ import { AddDestinationModal } from "@/features/lookups/components/lookups/add-d
 import { AddResortModal } from "@/features/lookups/components/lookups/add-resort-modal";
 import { AddBoardBasisModal } from "@/features/lookups/components/lookups/add-board-basis-modal";
 import { AddRoomTypeModal } from "@/features/lookups/components/lookups/add-room-type-modal";
-import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
-import {
-  FormDrawerSection,
-  drawerControlClass,
-  drawerInputClass,
-  drawerLabelClass,
-} from "@/components/shared/form-drawer";
-import type { QuoteFormValues, FormLayout } from "@/features/quote/types";
+import { FormSection } from "@/components/shared/form-shell";
+import { fmControlClass, fmInputClass, fmLabelClass } from "@/features/quote/components/fm-classes";
+import type { QuoteFormValues } from "@/features/quote/types";
 
-export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: FormLayout } = {}) {
+export function QuoteDestinationAccomSection() {
   const { control, setValue } = useFormContext<QuoteFormValues>();
   const country = useWatch({ control, name: "country" });
   const destination = useWatch({ control, name: "destination" });
@@ -85,11 +81,10 @@ export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: For
   const { data: boardBasisData } = useBoardBasis();
   const { data: roomTypeData } = useRoomTypes();
 
-  const isDrawer = layout === "drawer";
-  const labelCls = isDrawer ? drawerLabelClass : "text-xs font-medium text-black/60";
-  const inputCls = isDrawer ? drawerInputClass : "h-9 rounded-xl border-black/10 bg-white/70";
-  const controlCls = isDrawer ? drawerControlClass : undefined;
-  const itemCls = isDrawer ? "space-y-1.5" : undefined;
+  const labelCls = fmLabelClass;
+  const inputCls = fmInputClass;
+  const controlCls = fmControlClass;
+  const itemCls = "space-y-0";
 
   // Drawer bar reads "Hotel - <accommodation>, <destination>" from the current
   // selection; the by-id lookups cover values loaded with the record.
@@ -98,7 +93,7 @@ export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: For
   const hotelTitle = `Hotel${accomName ? ` - ${accomName}` : ""}${destName ? `, ${destName}` : ""}`;
 
   const body = (
-      <div className={isDrawer ? "grid grid-cols-3 gap-x-6 gap-y-4" : "grid gap-3 md:grid-cols-2"}>
+      <div className="grid grid-cols-3 gap-x-4 gap-y-3.5">
         <FormField
           control={control}
           name="country"
@@ -356,7 +351,7 @@ export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: For
           name="boardBasisId"
           render={({ field }) => (
             <FormItem className={itemCls}>
-              <FormLabel className={labelCls}>{isDrawer ? "Board Type" : "Board Basis"}</FormLabel>
+              <FormLabel className={labelCls}>Board Type</FormLabel>
               <FormControl>
                 <SearchableSelect
                   className={controlCls}
@@ -411,7 +406,7 @@ export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: For
             <FormItem className={itemCls}>
               <FormLabel className={labelCls}>Check-in Date</FormLabel>
               <FormControl>
-                <DatePicker value={field.value ?? ""} onChange={field.onChange} className={controlCls} />
+                <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -434,18 +429,9 @@ export function QuoteDestinationAccomSection({ layout = "card" }: { layout?: For
       </div>
   );
 
-  if (isDrawer) {
-    return (
-      <FormDrawerSection title={hotelTitle} data-testid="drawer-section-hotel">
-        {body}
-      </FormDrawerSection>
-    );
-  }
-
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-      <SectionHeader icon={MapPin} title="Destination & Accommodation" />
+    <FormSection id={formSectionDomId("hotel")} title={hotelTitle} icon={<BedDouble size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-section-hotel">
       {body}
-    </div>
+    </FormSection>
   );
 }

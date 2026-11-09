@@ -1,5 +1,6 @@
 import { CheckSquare, Copy, FileText, MoreHorizontal, Pencil, RefreshCw, Ticket, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { skipFocusReturnWhenFormOpens } from "@/components/shared/form-shell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,7 +48,7 @@ export function QuoteActionsRow({
             Actions
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44 rounded-xl">
+        <DropdownMenuContent onCloseAutoFocus={skipFocusReturnWhenFormOpens} align="end" className="w-44 rounded-xl">
           <DropdownMenuItem onClick={onEdit} data-testid="button-quote-edit">
             <Pencil className="mr-2 h-4 w-4" />
             Edit {pageLabel}

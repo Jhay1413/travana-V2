@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ConvertEnquiryQuoteDialog } from "@/features/quote/components/convert-enquiry-quote-dialog";
 import { useLocation, useRoute } from "wouter";
 import {
   ArrowRight,
@@ -31,10 +32,10 @@ import {
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { NoteEditor } from "@/components/shared/note-editor";
-import { useEnquiry, useClient, useTasks, useNotes, noteKeys, usePackageTypes, enquiryKeys } from "@/hooks/queries";
+import { useEnquiry, useClient, useTasks, useNotes, noteKeys, enquiryKeys } from "@/hooks/queries";
 import { useUpdateNote, useDeleteNote } from "@/features/note/api/use-note-mutations";
 import { useCreateNoteWithAttachments, NoteAttachments } from "@/features/note";
-import { useCreateQuote, useUpdateEnquiry, useDeleteEnquiry, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
+import { useUpdateEnquiry, useDeleteEnquiry, useToggleTask, useDeleteTask, useUpdateTransaction } from "@/hooks/mutations";
 import { UserReassignSelect } from "@/components/ui/user-reassign-select";
 import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { EditTaskDialog, type EditableTask } from "@/features/tasks/components/tasks/EditTaskDialog";
@@ -44,15 +45,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
-import type { CreateQuoteData } from "@/features/quote/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatFullDateTime } from "@/lib/note-time";
-import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
-import { FormDrawer } from "@/components/shared/form-drawer";
-import { QuoteRHFForm } from "@/features/quote/components/quote-rhf-form";
-import { buildQuotePayload } from "@/features/quote/components/quote-create-dialog";
-import type { QuoteFormValues } from "@/features/quote/types";
-import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
+import { EnquiryFormDialog } from "@/features/enquiry";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Enquiry } from "@/features/enquiry/types";
 import type { TransactionNote } from "@/features/quote/types";
@@ -465,7 +460,6 @@ export default function EnquiryPage() {
   const clientId = (urlClientId && urlClientId !== "_") ? urlClientId : ((enquiry as any)?.client_id || "");
   const { data: clientData } = useClient(clientId);
   const { data: currentUser } = useCurrentUser();
-  const createQuoteMutation = useCreateQuote();
   const updateEnquiryMutation = useUpdateEnquiry();
   const deleteEnquiryMutation = useDeleteEnquiry();
   const updateTransactionMutation = useUpdateTransaction();
@@ -495,56 +489,9 @@ export default function EnquiryPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showEllipsisMenu]);
 
-  const { data: packageTypesData } = usePackageTypes();
-
-  const convertDefaultValues = useMemo<Partial<QuoteFormValues>>(() => {
-    if (!enquiry) return {};
-    return buildQuoteInitialValuesFromEnquiry(enquiry);
-  }, [enquiry]);
-
   const handleConvertToQuote = () => {
     if (!enquiry) return;
     setShowConvertModal(true);
-  };
-
-  const handleConvertSubmit = async (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
-    if (!enquiry) return;
-    
-    if (!enquiry.transaction_id) {
-      toast({
-        title: "Conversion Error",
-        description: "This enquiry is missing a transaction ID and cannot be converted.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const quotePayload = buildQuotePayload(values, packageTypesData);
-    const imageUrls = images?.urls || [];
-
-    const convertPayload: CreateQuoteData = {
-      ...quotePayload,
-      transaction_id: enquiry.transaction_id,
-    } as CreateQuoteData;
-
-    if (imageUrls.length > 0) {
-      (convertPayload as any).images = imageUrls;
-    }
-
-    createQuoteMutation.mutate(
-      convertPayload,
-      {
-        onSuccess: (newQuote: { id: string }) => {
-          updateEnquiryMutation.mutate({ id: enquiry.id, data: { status: "Converted" } });
-          setShowConvertModal(false);
-          toast({ title: "Enquiry converted to quote!" });
-          navigate(`/clients/${clientId}/quotes/${newQuote.id}`);
-        },
-        onError: () => {
-          toast({ title: "Failed to convert enquiry to quote", variant: "destructive" });
-        },
-      }
-    );
   };
 
   const handleEditSubmit = (data: any) => {
@@ -870,31 +817,22 @@ export default function EnquiryPage() {
         </div>
       </div>
 
-      <EnquiryWizard
-        presentation="drawer"
+      <EnquiryFormDialog
         open={showEditWizard}
         onOpenChange={setShowEditWizard}
-        enquiry={enquiry as any}
+        enquiry={enquiry}
         onSubmit={handleEditSubmit}
         isSaving={updateEnquiryMutation.isPending}
       />
 
-      <FormDrawer
+      <ConvertEnquiryQuoteDialog
         open={showConvertModal}
         onOpenChange={setShowConvertModal}
-        title="Convert Enquiry to Quote"
-        description="Review and adjust the details from the enquiry, then create the quote."
-        data-testid="convert-enquiry-drawer"
-      >
-        <QuoteRHFForm
-          key={enquiryId + showConvertModal}
-          layout="drawer"
-          defaultValues={convertDefaultValues}
-          onSubmit={handleConvertSubmit}
-          isLoading={createQuoteMutation.isPending}
-          submitLabel="Convert to Quote"
-        />
-      </FormDrawer>
+        enquiryId={enquiryId}
+        transactionId={enquiry.transaction_id}
+        clientId={clientId}
+        onConverted={(quoteId) => navigate(`/clients/${clientId}/quotes/${quoteId}`)}
+      />
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <AlertDialogContent>

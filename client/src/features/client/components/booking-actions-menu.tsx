@@ -12,6 +12,7 @@ import { BookingUpsellsDialog } from "@/features/booking/components/BookingUpsel
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import { useClientTicketCreate, useControllableOpen } from "@/features/client/components/hooks";
 import { HEADER_ELLIPSIS_BUTTON_CLASS } from "@/features/client/components/holiday-header-classes";
+import { skipFocusReturnWhenFormOpens } from "@/components/shared/form-shell";
 
 /** Items of the booking "···" menu that a caller can hide via `hideItems`. */
 export type BookingMenuItem = "pin" | "edit" | "upsells" | "ticket" | "delete";
@@ -108,7 +109,7 @@ export function BookingActionsMenu({
             </Button>
           )}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48 rounded-xl">
+        <DropdownMenuContent onCloseAutoFocus={skipFocusReturnWhenFormOpens} align="end" className="w-48 rounded-xl">
           {!hidden("pin") && (
             <DropdownMenuItem onClick={togglePin} className="gap-2 rounded-lg text-sm">
               {isFavorited ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
@@ -142,7 +143,6 @@ export function BookingActionsMenu({
       </DropdownMenu>
 
       <BookingEditDialog
-        presentation="drawer"
         bookingId={bookingId}
         open={showEditDialog}
         onOpenChange={setShowEditDialog}

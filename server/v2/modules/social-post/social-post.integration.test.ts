@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { socialPostRepository } from "./social-post.repository";
-import { quoteRepository } from "../quote/quote.repository";
+import { newQuoteRepository as quoteRepository } from "../quote/quote.repository";
 import { socialSettingsRepository } from "../social-settings/social-settings.repository";
 import { truncateAll, makeOrg, makeUser, makeTransaction, makeQuote } from "../../test/factories";
 

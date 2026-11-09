@@ -1,7 +1,7 @@
 /**
  * QuoteEditDialog
  *
- * A Dialog that wraps QuoteRHFForm for editing an existing quote.
+ * A centred pop-up (FormOverlay) that wraps QuoteRHFForm for editing an existing quote.
  * Fetches quote data internally by quoteId, pre-populates the form,
  * then calls useUpdateQuote on submit.
  *
@@ -16,16 +16,8 @@
 
 import { OperatorNamesProvider } from "@/features/tour-operator";
 import { useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
-import { FormDrawer } from "@/components/shared/form-drawer";
+import { FormCloseButton, FormHead, FormOverlay } from "@/components/shared/form-shell";
 import { useToast } from "@/hooks/use-toast";
 import { useUpdateQuote, useUpdateTransaction } from "@/hooks/mutations";
 import { useReorderQuoteImages } from "@/features/quote/api/use-quote-image-mutations";
@@ -500,7 +492,6 @@ export function QuoteEditDialog({
   open,
   onOpenChange,
   onSuccess,
-  presentation = "dialog",
 }: QuoteEditDialogProps) {
   const { toast } = useToast();
   const updateQuote = useUpdateQuote();
@@ -603,71 +594,40 @@ export function QuoteEditDialog({
       setIsUploadingImages(false);
     }
   };
-  const isDrawer = presentation === "drawer";
-  const description = "Update quote details, accommodation, flights, and pricing.";
-
-  const status = (
-    <>
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <Spinner className="h-6 w-6" />
-        </div>
-      )}
-      {isError && (
-        <div className="py-12 text-center text-sm text-red-500">
-          Failed to load quote data.
-        </div>
-      )}
-    </>
-  );
-
-  const form = !isLoading && !isError && quoteData && (
-    <OperatorNamesProvider record={quoteData}>
-    <QuoteRHFForm
-      key={quoteId + open}
-      quoteId={quoteId}
-      layout={isDrawer ? "drawer" : "card"}
-      defaultValues={defaultValues}
-      existingImages={existingImages}
-      initialExtraAccomLabels={initialExtraAccomLabels}
-      onSubmit={handleSubmit}
-      isLoading={isUploadingImages || updateQuote.isPending}
-      submitLabel="Save Changes"
-      onCancel={isDrawer ? undefined : () => onOpenChange(false)}
-    />
-    </OperatorNamesProvider>
-  );
-
-  if (isDrawer) {
-    return (
-      <FormDrawer
-        open={open}
-        onOpenChange={onOpenChange}
-        title="Edit Quote"
-        description={description}
-        data-testid="quote-edit-drawer"
-      >
-        {status}
-        {form}
-      </FormDrawer>
-    );
-  }
+  if (!open) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl rounded-3xl border-black/10 bg-white/95 p-0 backdrop-blur-xl">
-        <DialogHeader className="px-6 pt-6">
-          <DialogTitle className="text-lg font-semibold">Edit Quote</DialogTitle>
-          <DialogDescription className="text-sm text-black/55">{description}</DialogDescription>
-        </DialogHeader>
-
-        <ScrollArea className="max-h-[calc(90vh-100px)]">
-          <div className="px-6 pb-6">
-            {status}
-            {form}
+    <FormOverlay label="Edit quote" onClose={() => onOpenChange(false)} preventClose={isUploadingImages || updateQuote.isPending} variant="popup" data-testid="quote-edit-drawer">
+      {isLoading && (
+        <>
+          <FormHead title="Edit quote" right={<FormCloseButton onClick={() => onOpenChange(false)} />} />
+          <div className="flex flex-1 items-center justify-center py-24">
+            <Spinner className="h-6 w-6" />
           </div>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
+        </>
+      )}
+      {isError && (
+        <>
+          <FormHead title="Edit quote" right={<FormCloseButton onClick={() => onOpenChange(false)} />} />
+          <div className="py-24 text-center text-sm text-red-500">Failed to load quote data.</div>
+        </>
+      )}
+      {!isLoading && !isError && quoteData && (
+        <OperatorNamesProvider record={quoteData}>
+          <QuoteRHFForm
+            key={quoteId + open}
+            quoteId={quoteId}
+            title="Edit quote"
+            defaultValues={defaultValues}
+            existingImages={existingImages}
+            initialExtraAccomLabels={initialExtraAccomLabels}
+            onSubmit={handleSubmit}
+            isLoading={isUploadingImages || updateQuote.isPending}
+            submitLabel="Save Changes"
+            onCancel={() => onOpenChange(false)}
+          />
+        </OperatorNamesProvider>
+      )}
+    </FormOverlay>
   );
 }

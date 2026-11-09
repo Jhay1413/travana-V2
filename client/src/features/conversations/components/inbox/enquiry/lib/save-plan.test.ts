@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_FORM } from "./enquiry-form";
+import { DEFAULT_FORM } from "@/features/enquiry/lib/enquiry-form";
 import { planSaveSteps } from "./save-plan";
 
 const form = { ...DEFAULT_FORM, title: "  Lanzarote week " };

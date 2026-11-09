@@ -471,7 +471,6 @@ export default function QuotePage() {
       />
       {quoteData && (
         <QuoteCreateDialog
-          presentation="drawer"
           transactionId={quoteData.transaction_id}
           open={showCreateDialog}
           onOpenChange={setShowCreateDialog}
@@ -479,7 +478,6 @@ export default function QuotePage() {
       )}
       {quoteData && (
         <QuoteCreateDialog
-          presentation="drawer"
           transactionId={quoteData.transaction_id}
           clientId={clientId}
           userId={currentUser?.id}

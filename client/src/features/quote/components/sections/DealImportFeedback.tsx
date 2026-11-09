@@ -34,9 +34,9 @@ export function DealImportFeedback({
         </div>
       )}
       {picks && (
-        <div className={`${gap} space-y-2 rounded-xl border border-black/10 bg-white/70 p-3`}>
+        <div className={`${gap} space-y-2 rounded-xl border border-[#E3E8EF] bg-white p-3`}>
           <div className="flex items-start justify-between gap-2">
-            <p className="text-xs font-semibold text-black/70">Field picks applied to this supplier's spec</p>
+            <p className="text-[13px] font-semibold text-[#1F2937]">Field picks applied to this supplier's spec</p>
             <button
               type="button"
               onClick={onDismissPicks}

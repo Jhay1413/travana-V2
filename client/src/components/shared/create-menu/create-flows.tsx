@@ -5,9 +5,9 @@ import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser, transactionKeys, quoteKeys } from "@/hooks/queries";
 import { dealTypeHref } from "@/lib/deal-links";
-import { QuoteCreateDialog } from "@/features/quote";
+import { ConvertEnquiryQuoteDialog, QuoteCreateDialog } from "@/features/quote";
 import { BookingCreateDialog } from "@/features/booking";
-import { EnquiryWizard, buildEnquiryTransaction } from "@/features/enquiry";
+import { EnquiryFormDialog, buildEnquiryTransaction, toSaveResult, type EnquirySaveResult } from "@/features/enquiry";
 import { useCreateTransaction } from "@/features/transaction";
 import { CreateTicketDialog } from "@/features/tickets";
 import { ClientPickDialog } from "./client-pick-dialog";
@@ -42,6 +42,8 @@ function DealFlow({ kind, open, clientId, afterCreate, onOpenChange }: DealFlowP
   const { data: currentUser } = useCurrentUser();
   const createTransaction = useCreateTransaction();
   const [pickedId, setPickedId] = useState<string | null>(null);
+  // Set by "Save & start quote": the saved enquiry to open the quote form for.
+  const [quoteFor, setQuoteFor] = useState<EnquirySaveResult | null>(null);
   const activeClientId = clientId ?? pickedId;
 
   const refresh = () => {
@@ -61,27 +63,44 @@ function DealFlow({ kind, open, clientId, afterCreate, onOpenChange }: DealFlowP
       <ClientPickDialog open={open && !activeClientId} noun={kind} onCancel={() => onOpenChange(false)} onPick={(c) => setPickedId(c.id)} />
 
       {activeClientId && kind === "enquiry" && (
-        <EnquiryWizard
-          presentation="drawer"
+        <EnquiryFormDialog
           open={open}
           onOpenChange={close}
-          onSubmit={(formData) => {
+          onStartQuote={setQuoteFor}
+          onSubmit={async (formData, { startQuote }) => {
             if (!currentUser?.id) return;
-            createTransaction.mutate(buildEnquiryTransaction(formData, { clientId: activeClientId, userId: currentUser.id }), {
-              onSuccess: (txn) => {
-                toast({ title: "Deal created" });
-                created(txn.enquiry?.id);
-              },
-              onError: () => toast({ title: "Failed to create deal", variant: "destructive" }),
-            });
+            try {
+              const txn = await createTransaction.mutateAsync(buildEnquiryTransaction(formData, { clientId: activeClientId, userId: currentUser.id }));
+              toast({ title: "Deal created" });
+              // Starting a quote keeps the agent here: close without navigating to the enquiry.
+              created(startQuote ? null : txn.enquiry?.id);
+              return toSaveResult(txn.enquiry, activeClientId);
+            } catch {
+              toast({ title: "Failed to create deal", variant: "destructive" });
+            }
           }}
           isSaving={createTransaction.isPending}
         />
       )}
 
+      {quoteFor && (
+        <ConvertEnquiryQuoteDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setQuoteFor(null);
+          }}
+          enquiryId={quoteFor.enquiryId}
+          transactionId={quoteFor.transactionId}
+          clientId={quoteFor.clientId}
+          onConverted={(quoteId) => {
+            refresh();
+            if (afterCreate === "navigate" && quoteFor.clientId) navigate(dealTypeHref("quote", quoteId, quoteFor.clientId));
+          }}
+        />
+      )}
+
       {activeClientId && kind === "quote" && currentUser?.id && (
         <QuoteCreateDialog
-          presentation="drawer"
           clientId={activeClientId}
           userId={currentUser.id}
           open={open}
@@ -95,7 +114,6 @@ function DealFlow({ kind, open, clientId, afterCreate, onOpenChange }: DealFlowP
 
       {activeClientId && kind === "booking" && (
         <BookingCreateDialog
-          presentation="drawer"
           clientId={activeClientId}
           open={open}
           onOpenChange={close}

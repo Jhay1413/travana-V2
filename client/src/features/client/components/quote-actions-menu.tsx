@@ -22,6 +22,7 @@ import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
 import { useClientTicketCreate, useControllableOpen, useSetAsMainQuote } from "@/features/client/components/hooks";
 import { HEADER_ELLIPSIS_BUTTON_CLASS } from "@/features/client/components/holiday-header-classes";
+import { skipFocusReturnWhenFormOpens } from "@/components/shared/form-shell";
 
 /** Items of the quote "···" menu that a caller can hide via `hideItems`. */
 export type QuoteMenuItem = "edit" | "convert" | "duplicate" | "expiry" | "ticket" | "task" | "setPrimary" | "lost" | "delete";
@@ -205,7 +206,7 @@ export function QuoteActionsMenu({
             </Button>
           )}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48 rounded-xl">
+        <DropdownMenuContent onCloseAutoFocus={skipFocusReturnWhenFormOpens} align="end" className="w-48 rounded-xl">
           {!hidden("edit") && (
             <DropdownMenuItem onClick={() => setShowEditDialog(true)} className="gap-2 rounded-lg text-sm">
               <Pencil className="h-3.5 w-3.5" /> Edit Quote
@@ -273,7 +274,6 @@ export function QuoteActionsMenu({
       </DropdownMenu>
 
       <QuoteEditDialog
-        presentation="drawer"
         quoteId={quoteId}
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
@@ -282,7 +282,6 @@ export function QuoteActionsMenu({
 
       {quoteData && (
         <QuoteCreateDialog
-          presentation="drawer"
           transactionId={quoteData.transaction_id}
           clientId={clientId}
           userId={currentUser?.id}

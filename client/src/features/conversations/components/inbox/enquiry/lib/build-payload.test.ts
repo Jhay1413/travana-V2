@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildInboxEnquiryPayload } from "./build-payload";
-import { DEFAULT_FORM, type EnquiryForm } from "./enquiry-form";
+import { DEFAULT_FORM, type EnquiryForm } from "@/features/enquiry/lib/enquiry-form";
 
 const opts = { clientId: "client1", userId: "agent2", leadSource: "WHATSAPP" } as const;
 
@@ -14,7 +14,7 @@ const full: EnquiryForm = {
   airports: ["a1"],
   travelDate: "2026-07-01",
   flexibility: "+/- 3 Days",
-  nights: 7,
+  flexibleNights: ["7"],
   adults: 2,
   children: 1,
   childAges: [6],
@@ -33,7 +33,7 @@ describe("buildInboxEnquiryPayload", () => {
     expect(p).toMatchObject({ client_id: "client1", user_id: "agent2", lead_source: "WHATSAPP", is_test: false });
   });
 
-  it("submits the wizard's key set for a package holiday", () => {
+  it("submits the form's key set for a package holiday", () => {
     const e = buildInboxEnquiryPayload(full, opts).enquiry ?? {};
     expect(keysOf(e)).toEqual(
       [
@@ -54,7 +54,7 @@ describe("buildInboxEnquiryPayload", () => {
     });
   });
 
-  it("submits the wizard's key set for a hot tub break", () => {
+  it("submits the form's key set for a hot tub break", () => {
     const hot: EnquiryForm = {
       ...full,
       holidayTypeName: "Hot Tub Break",
@@ -74,12 +74,12 @@ describe("buildInboxEnquiryPayload", () => {
     expect(e).toMatchObject({ no_of_guests: 4, weekend_lodge: "Yes", flexible_date: "Yes", accomodation_type_id: "at1" });
   });
 
-  it("sends no_of_pets 1 for a hot tub when pets is Yes", () => {
-    const hot: EnquiryForm = { ...full, holidayTypeName: "Hot Tub Break", pets: "Yes" };
-    expect(buildInboxEnquiryPayload(hot, opts).enquiry?.no_of_pets).toBe(1);
+  it("sends the pet count for a hot tub", () => {
+    const hot: EnquiryForm = { ...full, holidayTypeName: "Hot Tub Break", pets: 2 };
+    expect(buildInboxEnquiryPayload(hot, opts).enquiry?.no_of_pets).toBe(2);
   });
 
-  it("submits the wizard's key set for a cruise package", () => {
+  it("submits the form's key set for a cruise package", () => {
     const cruise: EnquiryForm = {
       ...full,
       holidayTypeName: "Cruise Package",
@@ -95,7 +95,7 @@ describe("buildInboxEnquiryPayload", () => {
         "destinations", "departureAirports", "passengers", "flexibility_date", "status",
       ].sort(),
     );
-    expect(e).toMatchObject({ cabin_type: "Balcony", pre_cruise_stay: 2, post_cruise_stay: 3 });
+    expect(e).toMatchObject({ cabin_type: "Balcony", pre_cruise_stay: 2, post_cruise_stay: 3, flexibility_date: "+/- 3 Days" });
   });
 
   it("omits empty optional values", () => {

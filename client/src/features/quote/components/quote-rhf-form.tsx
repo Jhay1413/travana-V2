@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { departureDatesForCheckIn } from "@/features/quote/lib/departure-dates";
-import { Loader2 } from "lucide-react";
-import { parseISO, isValid, addDays, format } from "date-fns";
-import { extrasCustomerTotal } from "@/features/quote/lib/quote-money";
+import { Anchor, Check, FileText, Hotel, Loader2, PackagePlus, Tag } from "lucide-react";
+import { extrasCustomerTotal, formFinalTotal, formTotalProfit, quoteMarginPercent } from "@/features/quote/lib/quote-money";
 import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,17 +18,19 @@ import {
   type FormImageItem,
 } from "@/features/quote/lib/form-images";
 import { QuoteExtrasSection } from "@/features/quote/components/quote-extras-section";
-import { QuoteTestToggleSection } from "@/features/quote/components/sections/QuoteTestToggleSection";
-import { QuoteImportRow } from "@/features/quote/components/sections/QuoteImportRow";
-import { QuoteOverviewSection } from "@/features/quote/components/sections/QuoteOverviewSection";
+import { useQuoteImportBar } from "@/features/quote/components/sections/quote-import-bar";
+import { hasImportErrors } from "@/features/quote/lib/import-validation";
+import {
+  holidayKindFromName,
+  quoteSectionState,
+  type QuoteSectionInputs,
+  type QuoteSectionKey,
+} from "@/features/quote/lib/quote-form-sections";
+import { formSectionDomId } from "@/features/quote/lib/quote-section-ids";
 import { QuoteImagesSection } from "@/features/quote/components/sections/QuoteImagesSection";
-import { QuoteTravelDetailsSection } from "@/features/quote/components/sections/QuoteTravelDetailsSection";
 import { QuoteLodgeDetailsSection } from "@/features/quote/components/sections/QuoteLodgeDetailsSection";
 import { QuoteCruiseDetailsSection } from "@/features/quote/components/sections/QuoteCruiseDetailsSection";
 import { QuoteDestinationAccomSection } from "@/features/quote/components/sections/QuoteDestinationAccomSection";
-import { QuoteFlightsSection } from "@/features/quote/components/sections/QuoteFlightsSection";
-import { QuotePricingSection } from "@/features/quote/components/sections/QuotePricingSection";
-import { QuoteFormActions } from "@/features/quote/components/sections/QuoteFormActions";
 import { QuoteTagsSection } from "@/features/quote/components/sections/QuoteTagsSection";
 import type { ExtrasFormValues } from "@/features/booking/types";
 import { quoteFormSchema, defaultQuoteFormValues } from "@/features/quote/types";
@@ -38,7 +39,18 @@ import type { QuoteFormValues, QuoteRHFFormProps } from "@/features/quote/types"
 export { quoteFormSchema, defaultQuoteFormValues } from "@/features/quote/types";
 export type { QuoteFormValues, FlightLegValue, QuoteRHFFormProps } from "@/features/quote/types";
 import { Form, FormField } from "@/components/ui/form";
-import { FormDrawerSection, FormDrawerFooter, FormDrawerCheckbox } from "@/components/shared/form-drawer";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  FormButton,
+  FormCloseButton,
+  FormFooter,
+  FormHead,
+  FormSection,
+  FormSideNav,
+  countDone,
+  footerStatus,
+  useScrollSpy,
+} from "@/components/shared/form-shell";
 import {
   QuoteDrawerOverview,
   QuoteDrawerTravelSection,
@@ -48,7 +60,10 @@ import {
 import { countExtras } from "@/features/quote/lib/form-extras";
 import { useAirports, useTourOperators, usePackageTypes, lookupKeys } from "@/hooks/queries";
 import { useToast } from "@/hooks/use-toast";
-import { summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
+import { collectFormErrorFields, summarizeFormErrors, scrollToFirstFormError } from "@/lib/form-errors";
+
+const formatGbp = (n: number): string =>
+  `${n < 0 ? "−" : ""}£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
@@ -62,19 +77,15 @@ export function QuoteRHFForm({
   existingImages = [],
   initialImageUrls = [],
   initialExtraAccomLabels = [],
-  layout = "card",
+  title = "Add quote",
+  subtitle,
+  note,
   socialPost = false,
 }: QuoteRHFFormProps) {
-  const isDrawer = layout === "drawer";
   const form = useForm<QuoteFormValues>({
     resolver: zodResolver(quoteFormSchema),
     defaultValues: { ...defaultQuoteFormValues, ...defaultValues },
   });
-
-  // Optional drawer sections start collapsed when the record has nothing in
-  // them. Read once at mount — it only seeds the initial open state.
-  const [initialExtrasCount] = useState(() => countExtras(form.getValues()));
-  const [initialTagsCount] = useState(() => (form.getValues("tags") ?? []).length);
 
   // Saved images first, then anything pre-seeded from a JSON import. One
   // ordered list — see features/quote/lib/form-images.
@@ -100,9 +111,6 @@ export function QuoteRHFForm({
   const queryClient = useQueryClient();
 
   const packageType = useWatch({ control, name: "packageType" });
-  const country = useWatch({ control, name: "country" });
-  const destination = useWatch({ control, name: "destination" });
-  const resort = useWatch({ control, name: "resort" });
   const parkId = useWatch({ control, name: "parkId" });
   const passengersAdults = useWatch({ control, name: "passengersAdults" });
   const passengersChildren = useWatch({ control, name: "passengersChildren" });
@@ -120,6 +128,17 @@ export function QuoteRHFForm({
   const extrasTotal = extrasCustomerTotal({ transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations });
   const checkInDate = useWatch({ control, name: "checkInDate" });
   const nights = useWatch({ control, name: "nights" });
+  // Watched for the side-menu ticks.
+  const quoteTitle = useWatch({ control, name: "quoteTitle" });
+  const travelDate = useWatch({ control, name: "travelDate" });
+  const accommodationId = useWatch({ control, name: "accommodationId" });
+  const lodgeId = useWatch({ control, name: "lodgeId" });
+  const cruiseLine = useWatch({ control, name: "cruiseLine" });
+  const shipName = useWatch({ control, name: "shipName" });
+  const [outboundDepartAirportId, outboundArriveAirportId, outboundDepartDate, inboundDepartAirportId, inboundDepartDate] = useWatch({
+    control,
+    name: ["outboundDepartAirportId", "outboundArriveAirportId", "outboundDepartDate", "inboundDepartAirportId", "inboundDepartDate"],
+  });
 
   // ── Lookup data ──────────────────────────────────────────────────────────
   const { data: packageTypesData } = usePackageTypes();
@@ -225,7 +244,6 @@ export function QuoteRHFForm({
   const outboundArriveDate = useWatch({ control, name: "outboundArriveDate" });
   const outboundArriveTime = useWatch({ control, name: "outboundArriveTime" });
   const outboundConnectingLegs = useWatch({ control, name: "outboundConnectingLegs" });
-  const travelDate = useWatch({ control, name: "travelDate" });
   // The first run is skipped so merely opening a saved quote (non-social) never rewrites its stored flight dates.
   const isDepartureFirstRun = useRef(true);
   useEffect(() => {
@@ -305,189 +323,210 @@ export function QuoteRHFForm({
   // Shared with the booking form — see useDealCaptureImport.
   const dealImport = useDealCaptureImport(prepareJsonImport);
 
+  // ── Side menu + footer state ──────────────────────────────────────────────
+  const tags = useWatch({ control, name: "tags" });
+  const holidayKind = holidayKindFromName(packageTypeName);
+  const sectionInputs: QuoteSectionInputs = {
+    packageType,
+    quoteTitle,
+    tourOperatorId,
+    travelDate,
+    nights,
+    passengersAdults,
+    accommodationId,
+    parkId,
+    lodgeId,
+    cruiseLine,
+    shipName,
+    outboundDepartAirportId,
+    outboundArriveAirportId,
+    outboundDepartDate,
+    inboundDepartAirportId,
+    inboundDepartDate,
+    price,
+    imageCount: imageItems.length,
+    extrasCount: countExtras({ transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations }),
+    tagCount: (tags ?? []).length,
+  };
+  const sectionState = quoteSectionState(holidayKind, { cruiseOnly }, sectionInputs);
+  const navItems = sectionState.map((s) => ({ key: formSectionDomId(s.key), label: s.label, done: s.done, optional: s.optional }));
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const { current, jump } = useScrollSpy(bodyRef, navItems.map((n) => n.key));
+
+  const extrasForMoney = { transfers, carHires, attractionTickets, loungePasses, airportParkings, extraAccommodations };
+  const profit = formTotalProfit(commission, extrasForMoney);
+  const margin = quoteMarginPercent(profit, formFinalTotal(price, discount, serviceCharge, extrasForMoney));
+
+  const { done: doneCount, total: totalCount } = countDone(sectionState);
+  const errorCount = collectFormErrorFields(form.formState.errors).length;
+
+  const importBar = useQuoteImportBar({ onPageCaptureImport: dealImport.importCapture, pending: dealImport.isPending });
+  const hasImportFeedback = (dealImport.validation && hasImportErrors(dealImport.validation)) || !!dealImport.picks;
+  const has = (key: QuoteSectionKey) => sectionState.some((s) => s.key === key);
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(
-        (values) => onSubmit(values, {
-          files: pendingFiles(imageItems),
-          urls: resolvedUrls(imageItems),
-          deletedImageIds,
-          items: imageItems,
-        }),
-        // Without this, a failed validation makes the Save button appear to do
-        // nothing — the inline message can be scrolled out of view in this
-        // long dialog.
-        (errors) => {
-          toast({
-            title: "Can't save yet",
-            description: summarizeFormErrors(errors),
-            variant: "destructive",
-          });
-          scrollToFirstFormError();
-        },
-      )} className={isDrawer ? "relative" : "relative space-y-4"} data-form-layout={layout}>
+      <form
+        // The head, side menu, body and footer are direct flex children of the pop-up.
+        style={{ display: "contents" }}
+        onSubmit={form.handleSubmit(
+          (values) => onSubmit(values, {
+            files: pendingFiles(imageItems),
+            urls: resolvedUrls(imageItems),
+            deletedImageIds,
+            items: imageItems,
+          }),
+          // Without this, a failed validation makes the Save button appear to do
+          // nothing — the inline message can be scrolled out of view in this
+          // long dialog.
+          (errors) => {
+            toast({
+              title: "Can't save yet",
+              description: summarizeFormErrors(errors),
+              variant: "destructive",
+            });
+            scrollToFirstFormError();
+          },
+        )}
+      >
+        <FormHead
+          icon={<FileText size={22} color="#D97706" strokeWidth={1.8} aria-hidden="true" />}
+          title={title}
+          subtitle={subtitle}
+          right={
+            <>
+              {importBar.button}
+              {onCancel ? <FormCloseButton onClick={onCancel} disabled={isLoading} /> : null}
+            </>
+          }
+        />
 
-        {/* ── IMPORT LOADER (blurs the form while a JSON/URL import runs) ───── */}
-        {dealImport.isImporting && (
-          <div
-            className="absolute inset-0 z-50 rounded-xl bg-background/60 backdrop-blur-sm"
-            aria-busy="true"
-            aria-live="polite"
-          >
-            <div className="sticky top-[40vh] mx-auto flex w-fit flex-col items-center gap-3">
-              <Loader2 className="h-9 w-9 animate-spin text-primary" />
-              <p className="text-sm font-medium text-foreground">Importing your deal…</p>
-            </div>
+        {importBar.bar}
+        {note ? (
+          <div className="fm-q__imported" role="status" data-testid="quote-form-note">
+            <Check size={16} color="#047857" strokeWidth={2.2} aria-hidden="true" /> {note}
           </div>
-        )}
-
-        {isDrawer ? (
-          <>
-            {/* ── DRAWER LAYOUT: teal section bars, full-bleed ─────────────── */}
-            <div className="px-7 pt-5">
-              <QuoteImportRow
-                hideNotForSocial
-                onPageCaptureImport={dealImport.importCapture}
-                pageCapturePending={dealImport.isPending}
-              />
-              <DealImportFeedback
-                spaced
-                validation={dealImport.validation}
-                picks={dealImport.picks}
-                onDismissValidation={dealImport.dismissValidation}
-                onDismissPicks={dealImport.dismissPicks}
-              />
-            </div>
-            <QuoteDrawerOverview />
-            <QuoteDrawerTravelSection showCruiseStay={isCruise} showFlightExtras={!isHotTubBreak} />
-            {isHotTubBreak && (
-              <FormDrawerSection title="Lodge Details" data-testid="drawer-section-lodge">
-                <QuoteLodgeDetailsSection bare />
-              </FormDrawerSection>
-            )}
-            {isCruise && (
-              <FormDrawerSection title="Cruise Details" data-testid="drawer-section-cruise">
-                <QuoteCruiseDetailsSection bare />
-              </FormDrawerSection>
-            )}
-            {!isHotTubBreak && !isCruise && <QuoteDestinationAccomSection layout="drawer" />}
-            {showFlights && <QuoteDrawerFlightsSection />}
-            {/* Cruise pre/post-stay rows are managed by an effect inside the
-                extras section, so it must stay mounted for cruises. */}
-            <FormDrawerSection
-              title="Extras"
-              defaultOpen={initialExtrasCount > 0 || isCruise}
-              collapsible={!isCruise}
-              data-testid="drawer-section-extras"
-            >
-              <QuoteExtrasSection
-                bare
-                control={control as unknown as Control<ExtrasFormValues>}
-                initialAccomLabels={initialExtraAccomLabels}
-                mainTourOperatorId={tourOperatorId ?? ""}
-                isCruise={isCruise}
-              />
-            </FormDrawerSection>
-            <QuoteImagesSection
-              layout="drawer"
-              items={imageItems}
-              setItems={setImageItems}
-              setDeletedImageIds={setDeletedImageIds}
+        ) : null}
+        {hasImportFeedback ? (
+          <div style={{ padding: "12px 28px", borderBottom: "1px solid #E3E8EF", background: "#fff", flex: "none" }}>
+            <DealImportFeedback
+              validation={dealImport.validation}
+              picks={dealImport.picks}
+              onDismissValidation={dealImport.dismissValidation}
+              onDismissPicks={dealImport.dismissPicks}
             />
-            <QuoteDrawerCostingsSection />
-            <FormDrawerSection title="Tags" defaultOpen={initialTagsCount > 0} data-testid="drawer-section-tags">
-              <QuoteTagsSection bare quoteId={quoteId} />
-            </FormDrawerSection>
-            <FormField
-              control={control}
-              name="is_test"
-              render={({ field }) => (
-                <FormDrawerFooter
-                  isTest={field.value}
-                  onTestChange={field.onChange}
-                  isLoading={isLoading}
-                  submitLabel={submitLabel}
-                  data-testid="drawer-footer"
-                >
-                  {!socialPost && (
-                    <FormField
-                      control={control}
-                      name="not_for_social"
-                      render={({ field: social }) => (
-                        <FormDrawerCheckbox
-                          label="Not for social"
-                          checked={!!social.value}
-                          onCheckedChange={social.onChange}
-                          data-testid="form-drawer-not-for-social"
-                        />
-                      )}
-                    />
-                  )}
-                </FormDrawerFooter>
+          </div>
+        ) : null}
+
+        <div className="fm-q__main">
+          <FormSideNav
+            items={navItems}
+            current={current}
+            onJump={jump}
+            footer={
+              <>
+                <div style={{ fontSize: 12, color: "#6B7686" }}>Your profit</div>
+                <div style={{ fontSize: 24, fontWeight: 600, color: profit < 0 ? "#B91C1C" : "#047857" }} data-testid="form-profit">
+                  {formatGbp(profit)}
+                </div>
+                <div style={{ fontSize: 12, color: "#6B7686" }} data-testid="form-margin">
+                  {margin === null ? "Add the total price" : `${margin.toFixed(1)}% margin`}
+                </div>
+              </>
+            }
+          />
+
+          <div style={{ position: "relative", flex: 1, minWidth: 0, display: "flex" }}>
+            <div className="fm-q__body" ref={bodyRef}>
+              <QuoteDrawerOverview />
+              <QuoteDrawerTravelSection showCruiseStay={isCruise} showFlightExtras={!isHotTubBreak} />
+              {has("lodge") && (
+                <FormSection id={formSectionDomId("lodge")} title="Lodge details" icon={<Hotel size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-section-lodge">
+                  <QuoteLodgeDetailsSection />
+                </FormSection>
               )}
-            />
-          </>
-        ) : (
-          <>
-        {/* ── JSON IMPORT + NOT FOR SOCIAL ─────────────────────────────────── */}
-        <QuoteImportRow
-          hideNotForSocial={socialPost}
-          onPageCaptureImport={dealImport.importCapture}
-          pageCapturePending={dealImport.isPending}
-        />
+              {has("cruise") && (
+                <FormSection id={formSectionDomId("cruise")} title="Cruise details" icon={<Anchor size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-section-cruise">
+                  <QuoteCruiseDetailsSection />
+                </FormSection>
+              )}
+              {has("hotel") && <QuoteDestinationAccomSection />}
+              {showFlights && <QuoteDrawerFlightsSection />}
+              {/* Cruise pre/post-stay rows are managed by an effect inside the
+                  extras section, so it must stay mounted for cruises. */}
+              <FormSection id={formSectionDomId("extras")} title="Extras" icon={<PackagePlus size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-section-extras">
+                <QuoteExtrasSection
+                  control={control as unknown as Control<ExtrasFormValues>}
+                  initialAccomLabels={initialExtraAccomLabels}
+                  mainTourOperatorId={tourOperatorId ?? ""}
+                  isCruise={isCruise}
+                />
+              </FormSection>
+              <QuoteImagesSection
+                items={imageItems}
+                setItems={setImageItems}
+                setDeletedImageIds={setDeletedImageIds}
+              />
+              <QuoteDrawerCostingsSection />
+              <FormSection id={formSectionDomId("tags")} title="Tags" icon={<Tag size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-section-tags">
+                <QuoteTagsSection quoteId={quoteId} />
+              </FormSection>
+            </div>
 
-        {/* ── IMPORT FEEDBACK (validation warnings + field picks applied) ───── */}
-        <DealImportFeedback
-          validation={dealImport.validation}
-          picks={dealImport.picks}
-          onDismissValidation={dealImport.dismissValidation}
-          onDismissPicks={dealImport.dismissPicks}
-        />
+            {/* ── IMPORT LOADER (covers the body while a JSON/URL import runs) ─ */}
+            {dealImport.isImporting && (
+              <div
+                className="absolute inset-0 z-50 bg-white/60 backdrop-blur-sm"
+                aria-busy="true"
+                aria-live="polite"
+              >
+                <div className="mx-auto flex w-fit flex-col items-center gap-3 pt-[20vh]">
+                  <Loader2 className="h-9 w-9 animate-spin text-primary" />
+                  <p className="text-sm font-medium text-foreground">Importing your deal…</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
 
-        {/* ── OVERVIEW ─────────────────────────────────────────────────────── */}
-        <QuoteOverviewSection />
-
-        {/* ── QUOTE IMAGES ─────────────────────────────────────────────────── */}
-        <QuoteImagesSection
-          items={imageItems}
-          setItems={setImageItems}
-          setDeletedImageIds={setDeletedImageIds}
-        />
-
-        {/* ── TRAVEL DETAILS ────────────────────────────────────────────────── */}
-        <QuoteTravelDetailsSection showCruiseStay={isCruise} showFlightExtras={!isHotTubBreak} />
-
-        {/* ── HOT TUB BREAK: LODGE DETAILS ─────────────────────────────────── */}
-        {isHotTubBreak && <QuoteLodgeDetailsSection />}
-
-        {/* ── CRUISE DETAILS ────────────────────────────────────────────────── */}
-        {isCruise && <QuoteCruiseDetailsSection />}
-
-        {/* ── DESTINATION & ACCOMMODATION (non-lodge, non-cruise) ────────────── */}
-        {!isHotTubBreak && !isCruise && <QuoteDestinationAccomSection />}
-
-        {/* ── FLIGHTS ───────────────────────────────────────────────────────── */}
-        {showFlights && <QuoteFlightsSection />}
-
-        {/* ── EXTRAS ────────────────────────────────────────────────────────── */}
-        <QuoteExtrasSection control={control as unknown as Control<ExtrasFormValues>} initialAccomLabels={initialExtraAccomLabels} mainTourOperatorId={tourOperatorId ?? ""} isCruise={isCruise} />
-
-        {/* ── PRICING ───────────────────────────────────────────────────────── */}
-        <QuotePricingSection />
-
-        {/* ── TAGS ──────────────────────────────────────────────────────────── */}
-        <QuoteTagsSection quoteId={quoteId} />
-
-        {/* ── TEST TRANSACTION ──────────────────────────────────────────────── */}
-        <QuoteTestToggleSection />
-
-        {/* ── ACTIONS ───────────────────────────────────────────────────────── */}
-        <QuoteFormActions isLoading={isLoading} submitLabel={submitLabel} onCancel={onCancel} />
-          </>
-        )}
+        <FormFooter
+          status={
+            <>
+              <span data-testid="form-footer-status" style={{ color: errorCount > 0 ? "#B91C1C" : "#6B7686", fontWeight: 500 }}>
+                {footerStatus(doneCount, totalCount, errorCount)}
+              </span>
+              <FormField
+                control={control}
+                name="is_test"
+                render={({ field }) => (
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] font-medium text-[#6B7686]">
+                    <Checkbox checked={!!field.value} onCheckedChange={(v) => field.onChange(v === true)} data-testid="form-drawer-test-checkbox" />
+                    Test
+                  </label>
+                )}
+              />
+              {!socialPost && (
+                <FormField
+                  control={control}
+                  name="not_for_social"
+                  render={({ field }) => (
+                    <label className="inline-flex cursor-pointer items-center gap-2 text-[13px] font-medium text-[#6B7686]">
+                      <Checkbox checked={!!field.value} onCheckedChange={(v) => field.onChange(v === true)} data-testid="form-drawer-not-for-social" />
+                      Not for social
+                    </label>
+                  )}
+                />
+              )}
+            </>
+          }
+        >
+          {onCancel ? <FormButton onClick={onCancel} disabled={isLoading}>Cancel</FormButton> : null}
+          <FormButton type="submit" tone="primary" disabled={isLoading} data-testid="form-drawer-submit">
+            {isLoading ? "Saving..." : submitLabel}
+          </FormButton>
+        </FormFooter>
       </form>
     </Form>
   );
 }
-

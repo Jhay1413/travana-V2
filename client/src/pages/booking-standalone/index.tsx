@@ -351,7 +351,6 @@ export default function BookingPage() {
         </div>
       </div>
       <BookingEditDialog
-        presentation="drawer"
         bookingId={bookingId}
         open={showEditDialog}
         onOpenChange={setShowEditDialog}

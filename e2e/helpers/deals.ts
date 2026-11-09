@@ -50,7 +50,9 @@ export interface EnquiryInput {
   infants?: number;
   no_of_nights?: number;
   budget?: string;
+  budget_type?: string;
   destinations?: string[];
+  resorts?: string[];
   boardBases?: string[];
   departureAirports?: string[];
   /** Child passengers, e.g. [{ type: "child", age: 6 }]. */
@@ -79,8 +81,10 @@ export async function apiCreateEnquiry(
         infants: input.infants ?? 0,
         no_of_nights: input.no_of_nights ?? 7,
         budget: input.budget,
+        budget_type: input.budget_type,
         status: "ACTIVE",
         destinations: input.destinations,
+        resorts: input.resorts,
         boardBases: input.boardBases,
         departureAirports: input.departureAirports,
         passengers: input.passengers,

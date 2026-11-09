@@ -1,6 +1,6 @@
 /**
- * Stakeholder items (Nov 2026), written but NOT run (test database on localhost:55432 was down):
- *  1. Departure airports are ordered: pinned (NCL, LBA, MME, MAN, EDI, LGW, LHR, GLA), then the agency's most-used, then A-Z.
+ * Stakeholder items (Nov 2026):
+ *  1. Departure airports in the enquiry pop-up: pinned (NCL, LBA, MME, MAN, EDI, LGW, LHR, GLA) then the agency's most-used show as chips, the rest A-Z behind a search.
  *  2. The enquiry header has an orange "Convert to Quote" button that opens the same convert drawer, and is hidden once
  *     the enquiry is converted or lost.
  */
@@ -8,6 +8,7 @@ import type { Page } from "@playwright/test";
 import { apiCreateClient, apiCreateEnquiry, openHoliday, signIn } from "../helpers/deals";
 import { expect, test } from "../helpers/fixtures";
 import { queryRows, seedDealsAgency } from "../helpers/seed";
+import { expectChip } from "../helpers/ui";
 
 const EXTRA_AIRPORTS = [
   { name: "Manchester", code: "MAN" },
@@ -40,7 +41,7 @@ async function openEnquiryDrawer(page: Page, clientId: string) {
   await page.getByTestId("client-index-create-enquiry").click();
   const drawer = page.getByTestId("enquiry-drawer");
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByTestId("select-holiday-type")).toContainText("Package Holiday");
+  await expectChip(drawer.getByTestId("select-holiday-type"), "Package Holiday");
   return drawer;
 }
 
@@ -55,19 +56,22 @@ test.describe("enquiry departure airport order", () => {
     await apiCreateEnquiry(page.request, agency, client.id, userId, { departureAirports: [ids.BRS, ids.ABZ] });
 
     const drawer = await openEnquiryDrawer(page, client.id);
+    // Popular and most-used airports are chips (pinned order first, then the agency's most used); everything else is behind a search.
+    const chips = drawer.getByTestId("chips-departure-airport");
+    const labels = (await chips.getByRole("button").allInnerTexts()).map((t) => t.trim());
+    // Only NCL, MAN and LHR exist among the pinned codes in the test data, in pinned order.
+    expect(labels.slice(0, 3)).toEqual(["Newcastle International (NCL)", "Manchester (MAN)", "London Heathrow (LHR)"]);
+    expect(labels.slice(3, 5)).toEqual(["Bristol (BRS)", "Aberdeen (ABZ)"]);
+    expect(labels).toHaveLength(5);
+
+    // The remaining airports are in the search box, A-Z, and the popular ones are not repeated there.
     await drawer.getByTestId("input-departure-airport").click();
     const listbox = page.getByRole("listbox").last();
     await expect(listbox).toBeVisible();
-
-    const options = (await listbox.getByRole("option").allInnerTexts()).map((t) => t.trim());
-    // Only NCL, MAN and LHR exist among the pinned codes in the test data, in pinned order.
-    expect(options.slice(0, 3)).toEqual(["Newcastle International (NCL)", "Manchester (MAN)", "London Heathrow (LHR)"]);
-    expect(options.slice(3, 5)).toEqual(["Bristol (BRS)", "Aberdeen (ABZ)"]);
-    const rest = options.slice(5);
+    const rest = (await listbox.getByRole("option").allInnerTexts()).map((t) => t.trim());
     expect([...rest].sort((a, b) => a.localeCompare(b))).toEqual(rest);
-
-    const headings = await listbox.getByTestId("option-group-heading").allInnerTexts();
-    expect(headings.map((h) => h.trim().toLowerCase())).toEqual(["popular", "most used by your agency", "all airports"]);
+    for (const l of labels) expect(rest).not.toContain(l);
+    expect(rest).toContain("Zeta Field (ZZF)");
 
     // Search still reaches every airport.
     await listbox.getByRole("textbox").fill("Zeta");

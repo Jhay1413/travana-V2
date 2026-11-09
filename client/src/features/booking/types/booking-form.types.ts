@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FormImageItem } from "@/features/quote/lib/form-images";
-import type { FormLayout, FormPresentation, SharedHolidayFormValues } from "@/features/quote/types/quote-form.types";
+import type { SharedHolidayFormValues } from "@/features/quote/types/quote-form.types";
 
 export const flightLegSchema = z.object({
   departAirportId: z.string().default(""),
@@ -309,7 +309,10 @@ export interface BookingRHFFormProps {
   existingImages?: Array<{ id: string; url: string }>;
   initialImageUrls?: string[];
   clientId?: string;
-  layout?: FormLayout;
+  /** Pop-up heading, e.g. "Add booking" / "Edit booking". */
+  title?: string;
+  /** Muted line under the heading. */
+  subtitle?: string;
 }
 
 export interface BookingCreateDialogProps {
@@ -318,7 +321,6 @@ export interface BookingCreateDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: (bookingId: string) => void;
   initialValues?: Partial<BookingFormValues>;
-  presentation?: FormPresentation;
 }
 
 export interface BookingUpdateDialogProps {
@@ -327,5 +329,4 @@ export interface BookingUpdateDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   clientId?: string;
-  presentation?: FormPresentation;
 }

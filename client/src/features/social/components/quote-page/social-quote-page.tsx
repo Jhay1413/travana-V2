@@ -145,7 +145,6 @@ export function SocialQuotePageView({ quoteId }: { quoteId: string }) {
         quoteId={quoteId}
         open={editOpen}
         onOpenChange={setEditOpen}
-        presentation="drawer"
         onSuccess={() => {
           setEditOpen(false);
           queryClient.invalidateQueries({ queryKey: quoteKeys.detail(quoteId) });

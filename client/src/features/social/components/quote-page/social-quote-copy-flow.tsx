@@ -92,7 +92,6 @@ export function SocialQuoteCopyFlow({ quote, quoteImageUrls, open, onOpenChange 
 
       {selected && (
         <QuoteCreateDialog
-          presentation="drawer"
           open
           onOpenChange={(next) => {
             if (!next) setSelected(null);

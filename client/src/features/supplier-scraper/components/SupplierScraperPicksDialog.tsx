@@ -22,7 +22,7 @@ interface SupplierScraperPicksDialogProps {
 // The picker itself runs in the bookmarklet — an agent arms a field, clicks
 // it on the real supplier page, and copies the result. This dialog only
 // carries that payload to the server and shows what happened, mirroring the
-// existing capture-import paste flow (QuotePageCaptureDialog).
+// existing capture-import paste flow (QuoteImportBar).
 export function SupplierScraperPicksDialog({ open, onOpenChange }: SupplierScraperPicksDialogProps) {
   const [raw, setRaw] = useState("");
   const [error, setError] = useState<string | null>(null);

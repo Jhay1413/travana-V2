@@ -60,7 +60,7 @@ export interface CapturedPage {
   // through is the actual fix for the bug this file's own test warns about:
   // parseCapture used to rebuild the payload from a whitelist that OMITTED
   // pickerVersion/packageType/picked, so pasting a picker payload into this
-  // normal capture dialog (QuotePageCaptureDialog, "Capture from supplier
+  // normal capture dialog (QuoteImportBar, "Capture from supplier
   // page") silently stripped the picks, imported an ordinary deal, and showed
   // a success toast — with `origin: 'picked'` never once appearing on a
   // stored rule across all 13 stored specs, despite the picker having been

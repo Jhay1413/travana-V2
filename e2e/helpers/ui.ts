@@ -45,3 +45,16 @@ export async function setNumber(input: Locator, value: number): Promise<void> {
   await input.fill(String(value));
   await expect(input).toHaveValue(String(value));
 }
+
+/** Chips / Seg groups of the form pop-ups: clicks the option with this text and checks it is now pressed (aria-pressed). */
+export async function pressChip(group: Locator, name: string | RegExp): Promise<void> {
+  const chip = group.getByRole("button", { name, exact: typeof name === "string" });
+  await centre(chip);
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
+}
+
+/** Expects the option with this text in a chip group to be pressed (or not). */
+export async function expectChip(group: Locator, name: string, pressed = true): Promise<void> {
+  await expect(group.getByRole("button", { name, exact: true })).toHaveAttribute("aria-pressed", String(pressed));
+}

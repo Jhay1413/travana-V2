@@ -11,3 +11,5 @@ export * from "./api/use-quote-mutations";
 export * from "./api/use-quote-image-mutations";
 export { buildQuoteInitialValuesFromEnquiry } from "./lib/enquiry-to-quote";
 export { QuoteCreateDialog } from "./components/quote-create-dialog";
+export { ConvertEnquiryQuoteDialog } from "./components/convert-enquiry-quote-dialog";
+export type { ConvertEnquiryQuoteDialogProps } from "./components/convert-enquiry-quote-dialog";

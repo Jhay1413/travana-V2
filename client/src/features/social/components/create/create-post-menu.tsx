@@ -86,7 +86,6 @@ export function CreatePostMenu({ open, onOpenChange, onGenerate }: CreatePostMen
         open={quoteDialogOpen}
         onOpenChange={setQuoteDialogOpen}
         socialPost
-        presentation="drawer"
         onSuccess={() => {
           setQuoteDialogOpen(false);
           // Don't open the generator: the agent generates from the new card when ready.
