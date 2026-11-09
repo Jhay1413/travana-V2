@@ -148,7 +148,10 @@ export interface EnquiryDestination {
 export interface EnquiryResort {
   id: string;
   enquiry_id: string;
-  resort_id: string;
+  /** The server returns `resorts_id` (enquiry_resorts column). */
+  resorts_id: string;
+  /** Legacy alias, not returned by the server. */
+  resort_id?: string;
   name?: string;
   /** Joined name as returned by GET /enquiries/:id (the `name` alias is not populated there). */
   resort_name?: string | null;

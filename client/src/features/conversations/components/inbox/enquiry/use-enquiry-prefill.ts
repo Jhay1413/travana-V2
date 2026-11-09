@@ -7,7 +7,7 @@ import {
   usePackageTypes,
 } from "@/hooks/queries";
 import type { EnquiryIntent } from "../../../api/ai-enquiry.api";
-import { leadSourceForChannel } from "./lib/enquiry-form";
+import { leadSourceForChannel } from "@/features/enquiry/lib/enquiry-form";
 import { resolveIntent, type ResolvedIntent } from "./lib/resolve-intent";
 import { findUkCountry } from "./lib/uk-airports";
 

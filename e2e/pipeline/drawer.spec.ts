@@ -97,7 +97,7 @@ test.describe("Add quote", () => {
     await expect(qd).toBeVisible();
     await expect(qd.getByTestId("input-drawer-title")).toHaveValue(enq.title);
     await expect(qd.getByLabel("Adults")).toHaveValue("4");
-    await page.getByTestId("form-drawer-close").click();
+    await qd.getByRole("button", { name: "Close" }).click();
     await expect(qd).toBeHidden();
 
     // From the drawer: it shows "No quote yet" and an Add quote button for the same deal.
@@ -110,7 +110,7 @@ test.describe("Add quote", () => {
     expect(await queryRows(`select 1 from quote_table where transaction_id = $1`, [enq.transactionId])).toHaveLength(0);
 
     // The quoted deal's drawer has Cost/Profit/Margin tiles instead.
-    await page.getByTestId("form-drawer-close").click();
+    await qd.getByRole("button", { name: "Close" }).click();
     const qdrawer = await openDrawer(page, quoted.transactionId);
     await expect(qdrawer).not.toContainText("No quote yet");
     await expect(qdrawer).toContainText("Margin");

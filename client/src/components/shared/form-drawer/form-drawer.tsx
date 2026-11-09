@@ -138,7 +138,7 @@ function pollUntilPointerEventsSettle(): void {
  * timing, so it also covers the create-and-navigate-away path without
  * depending on that callback ordering.
  */
-function startPointerEventsWatchdog(): void {
+export function startPointerEventsWatchdog(): void {
   if (pointerEventsWatchdogStarted) return;
   if (typeof document === "undefined" || typeof MutationObserver === "undefined") return;
   pointerEventsWatchdogStarted = true;

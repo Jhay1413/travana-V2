@@ -1,5 +1,7 @@
 import { useFormContext } from "react-hook-form";
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, Tag, X } from "lucide-react";
+import { FormSection } from "@/components/shared/form-shell";
+import { formSectionDomId } from "@/features/quote/lib/quote-section-ids";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { FormLabelTooltip } from "@/components/shared/label-tooltip";
 import { Input } from "@/components/ui/input";
@@ -7,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { usePackageTypes, useTourOperators } from "@/hooks/queries";
 import { findOperator, operatorSelectOptions, OperatorRateHint, useOperatorNames } from "@/features/tour-operator";
-import { drawerControlClass, drawerInputClass, drawerLabelClass } from "@/components/shared/form-drawer";
+import { fmControlClass, fmInputClass, fmLabelClass } from "@/features/quote/components/fm-classes";
 import { commissionForOperator, operatorCommissionPct } from "@/features/quote/lib/pricing";
 import { formatLeadSource } from "@/features/quote/components/quote-types";
 import { cn } from "@/lib/utils";
@@ -32,19 +34,20 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
   const operatorNames = useOperatorNames();
 
   return (
-    <div className="space-y-5 px-7 pb-6 pt-6" data-testid="drawer-overview">
+    <FormSection id={formSectionDomId("overview")} title={`${titleLabel.replace(/ Title$/, "")} details`} icon={<Tag size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-overview">
+    <div className="fm-grid fm-g3">
       <FormField
         control={control}
         name="quoteTitle"
         render={({ field }) => (
-          <FormItem className="space-y-1.5">
-            <FormLabel className={drawerLabelClass}>{titleLabel}</FormLabel>
-            <div className="relative max-w-[340px]">
+          <FormItem className="fm-span-all space-y-0">
+            <FormLabel className={fmLabelClass}>{titleLabel}</FormLabel>
+            <div className="relative">
               <FormControl>
                 <Input
                   {...field}
                   value={field.value ?? ""}
-                  className={cn(drawerInputClass, "pr-9")}
+                  className={cn(fmInputClass, "pr-9")}
                   placeholder="Enter title..."
                   data-testid="input-drawer-title"
                 />
@@ -65,16 +68,15 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
         )}
       />
 
-      <div className="grid grid-cols-3 gap-x-6 gap-y-4">
         <FormField
           control={control}
           name="packageType"
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabelTooltip className={drawerLabelClass} tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Holiday Type</FormLabelTooltip>
+            <FormItem className="space-y-0">
+              <FormLabelTooltip className={fmLabelClass} tip="The kind of holiday being quoted. It decides which sections appear, such as cruise or lodge details.">Holiday Type</FormLabelTooltip>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger className={drawerControlClass}>
+                  <SelectTrigger className={fmControlClass}>
                     <SelectValue placeholder="Select holiday type..." />
                   </SelectTrigger>
                 </FormControl>
@@ -92,11 +94,11 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
           control={control}
           name="tourOperatorId"
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Tour Operator</FormLabel>
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Tour Operator</FormLabel>
               <FormControl>
                 <SearchableSelect
-                  className={drawerControlClass}
+                  className={fmControlClass}
                   options={operatorSelectOptions(tourOperatorsData, field.value, operatorNames[field.value ?? ""])}
                   value={field.value ?? ""}
                   onValueChange={(value) => {
@@ -123,11 +125,11 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
           control={control}
           name="leadSource"
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabelTooltip className={drawerLabelClass} tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead Source</FormLabelTooltip>
+            <FormItem className="space-y-0">
+              <FormLabelTooltip className={fmLabelClass} tip="Where the customer first got in touch: Shop, Facebook, WhatsApp, Instagram or Phone Enquiry. Used for source reporting.">Lead Source</FormLabelTooltip>
               <Select value={field.value ?? ""} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger className={drawerControlClass}>
+                  <SelectTrigger className={fmControlClass}>
                     <SelectValue placeholder="Select lead source..." />
                   </SelectTrigger>
                 </FormControl>
@@ -141,10 +143,9 @@ export function QuoteDrawerOverview({ titleLabel = "Quote Title", showQuoteLink 
             </FormItem>
           )}
         />
-      </div>
-
       {showQuoteLink && <QuoteLinkField />}
     </div>
+    </FormSection>
   );
 }
 
@@ -156,18 +157,18 @@ function QuoteLinkField() {
       control={control}
       name="quoteLink"
       render={({ field }) => (
-        <FormItem className="space-y-1.5">
-          <FormLabel className={drawerLabelClass}>Quote Link</FormLabel>
+        <FormItem className="fm-span-all space-y-0">
+          <FormLabel className={fmLabelClass}>Quote Link</FormLabel>
           <div className="flex items-center gap-2">
             <FormControl>
-              <Input {...field} value={field.value ?? ""} className={drawerInputClass} placeholder="https://..." />
+              <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="https://..." />
             </FormControl>
             {field.value && (
               <a
                 href={field.value}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-11 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-blue-200 bg-blue-50 px-3 text-xs font-medium text-blue-600 transition hover:bg-blue-100"
+                className="inline-flex h-[42px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[10px] border border-[#E3E8EF] bg-white px-3.5 text-[13px] font-semibold text-[#B45309] transition hover:border-[#F59E0B]"
                 data-testid="link-view-quote-link"
               >
                 <ExternalLink className="h-3.5 w-3.5" />

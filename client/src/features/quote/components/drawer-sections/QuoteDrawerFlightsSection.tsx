@@ -1,24 +1,20 @@
 import { useFormContext, useFieldArray, useWatch, type Control } from "react-hook-form";
-import { Clock, PlaneLanding, PlaneTakeoff, Plus } from "lucide-react";
+import { Clock, Plane, PlaneLanding, PlaneTakeoff, Plus } from "lucide-react";
 import { format, isValid, parseISO } from "date-fns";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import {
-  FormDrawerSection,
-  drawerControlClass,
-  drawerInputClass,
-  drawerLabelClass,
-  drawerSubheadingClass,
-} from "@/components/shared/form-drawer";
+import { FormSection } from "@/components/shared/form-shell";
+import { formSectionDomId } from "@/features/quote/lib/quote-section-ids";
+import { fmControlClass, fmInputClass, fmLabelClass, fmSubheadingClass, fmSmallButtonClass } from "@/features/quote/components/fm-classes";
 import { useAirports, useMostUsedDepartureAirportIds } from "@/hooks/queries";
 import { buildDepartureAirportOptions } from "@/features/airport/lib/departure-options";
 import {
   AirportSelectField,
   ConnectingLegFields,
   emptyFlightLeg,
-} from "@/features/quote/components/sections/QuoteFlightsSection";
+} from "@/features/quote/components/sections/quote-flight-leg-fields";
 import { cn } from "@/lib/utils";
 import type { QuoteFormValues, SharedHolidayFormValues } from "@/features/quote/types";
 
@@ -47,14 +43,14 @@ function buildFlightsTitle(
 function TimeInput({ value, onChange, name, onBlur }: { value: string; onChange: (v: string) => void; name: string; onBlur: () => void }) {
   return (
     <div className="relative">
-      <Clock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/45" />
+      <Clock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6B7686]" />
       <Input
         type="time"
         name={name}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
-        className={cn(drawerInputClass, "pl-9")}
+        className={cn(fmInputClass, "pl-9")}
       />
     </div>
   );
@@ -88,21 +84,21 @@ function FlightLegFields({
   });
 
   return (
-    <div data-testid={`drawer-flight-${direction}`}>
-      <div className={drawerSubheadingClass}>
-        <Icon className="h-4 w-4 text-black/60" />
+    <div className="fm-leg" data-testid={`drawer-flight-${direction}`}>
+      <div className={fmSubheadingClass}>
+        <Icon className="h-4 w-4" />
         {label}
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-x-6 gap-y-4 pl-3">
+      <div className="fm-grid fm-g3 mt-3">
         <FormField
           control={control}
           name={f("DepartAirportId")}
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Departing</FormLabel>
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Departing</FormLabel>
               <FormControl>
                 <AirportSelectField
-                  className={drawerControlClass}
+                  className={fmControlClass}
                   options={departureAirportOptions}
                   value={field.value ?? ""}
                   onValueChange={field.onChange}
@@ -117,10 +113,10 @@ function FlightLegFields({
           control={control}
           name={f("DepartDate")}
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Departure Date</FormLabel>
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Departure Date</FormLabel>
               <FormControl>
-                <DatePicker value={field.value ?? ""} onChange={field.onChange} className={drawerControlClass} />
+                <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -130,8 +126,8 @@ function FlightLegFields({
           control={control}
           name={f("DepartTime")}
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Departure Time</FormLabel>
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Departure Time</FormLabel>
               <FormControl>
                 <TimeInput name={field.name} value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} />
               </FormControl>
@@ -143,11 +139,11 @@ function FlightLegFields({
           control={control}
           name={f("ArriveAirportId")}
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Arriving</FormLabel>
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Arriving</FormLabel>
               <FormControl>
                 <AirportSelectField
-                  className={drawerControlClass}
+                  className={fmControlClass}
                   options={airportOptions}
                   value={field.value ?? ""}
                   onValueChange={field.onChange}
@@ -162,10 +158,10 @@ function FlightLegFields({
           control={control}
           name={f("ArriveDate")}
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Arrival Date</FormLabel>
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Arrival Date</FormLabel>
               <FormControl>
-                <DatePicker value={field.value ?? ""} onChange={field.onChange} className={drawerControlClass} />
+                <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -175,8 +171,8 @@ function FlightLegFields({
           control={control}
           name={f("ArriveTime")}
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Arrival Time</FormLabel>
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Arrival Time</FormLabel>
               <FormControl>
                 <TimeInput name={field.name} value={field.value ?? ""} onChange={field.onChange} onBlur={field.onBlur} />
               </FormControl>
@@ -188,10 +184,10 @@ function FlightLegFields({
           control={control}
           name={f("FlightNumber")}
           render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className={drawerLabelClass}>Flight Number</FormLabel>
+            <FormItem className="space-y-0">
+              <FormLabel className={fmLabelClass}>Flight Number</FormLabel>
               <FormControl>
-                <Input {...field} value={field.value ?? ""} className={drawerInputClass} placeholder="e.g. BA2490" />
+                <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="e.g. BA2490" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -199,7 +195,7 @@ function FlightLegFields({
         />
       </div>
 
-      <div className="pl-3">
+      <div>
         {legs.map((leg, idx) => (
           <ConnectingLegFields
             key={leg.id}
@@ -216,7 +212,7 @@ function FlightLegFields({
             type="button"
             variant="outline"
             size="sm"
-            className="mt-3 h-8 rounded-md border-black/10 bg-[#f4f5f7] text-xs font-normal text-black/70 shadow-none hover:bg-[#eef0f3]"
+            className={cn("mt-3", fmSmallButtonClass)}
             onClick={() => append({ ...emptyFlightLeg })}
           >
             <Plus className="mr-1 h-3 w-3" /> Add connecting leg
@@ -258,11 +254,11 @@ export function QuoteDrawerFlightsSection() {
   );
 
   return (
-    <FormDrawerSection title={title} data-testid="drawer-section-flights">
-      <div className="space-y-6">
+    <FormSection id={formSectionDomId("flights")} title={title} icon={<Plane size={16} color="#D97706" aria-hidden="true" />} data-testid="drawer-section-flights">
+      <div>
         <FlightLegFields direction="outbound" airportOptions={airportOptions} departureAirportOptions={departureAirportOptions} countryId={countryId} />
         <FlightLegFields direction="inbound" airportOptions={airportOptions} departureAirportOptions={departureAirportOptions} countryId={countryId} />
       </div>
-    </FormDrawerSection>
+    </FormSection>
   );
 }

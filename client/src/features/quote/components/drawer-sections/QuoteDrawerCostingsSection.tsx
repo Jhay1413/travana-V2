@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { PoundSterling, Lock } from "lucide-react";
+import { formSectionDomId } from "@/features/quote/lib/quote-section-ids";
 import { Input } from "@/components/ui/input";
-import { FormDrawerSection, drawerInputClass, drawerLabelClass } from "@/components/shared/form-drawer";
+import { FormSection } from "@/components/shared/form-shell";
+import { fmInputClass, fmLabelClass } from "@/features/quote/components/fm-classes";
 import { useTourOperators } from "@/hooks/queries";
 import { operatorCommissionPct, recomputePricing, type PricingField } from "@/features/quote/lib/pricing";
 import { extrasCustomerTotal, formTotalProfit } from "@/features/quote/lib/quote-money";
@@ -20,8 +23,8 @@ const round2 = (n: number) => parseFloat(n.toFixed(2));
 function PoundInput({ className, ...props }: React.ComponentProps<typeof Input>) {
   return (
     <div className="relative">
-      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-black/70">£</span>
-      <Input type="number" step="0.01" min={0} className={cn(drawerInputClass, "pl-7", className)} {...props} />
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[#6B7686]">£</span>
+      <Input type="number" step="0.01" min={0} className={cn(fmInputClass, "pl-7", className)} {...props} />
     </div>
   );
 }
@@ -108,8 +111,8 @@ export function QuoteDrawerCostingsSection() {
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem className="space-y-1.5">
-          <FormLabel className={drawerLabelClass}>{label}</FormLabel>
+        <FormItem className="space-y-0">
+          <FormLabel className={fmLabelClass}>{label}</FormLabel>
           <FormControl>
             <PoundInput
               {...field}
@@ -124,12 +127,22 @@ export function QuoteDrawerCostingsSection() {
   );
 
   return (
-    <FormDrawerSection title="Costings" data-testid="drawer-section-costings">
-      <div className="grid grid-cols-5 gap-x-5 gap-y-4">
+    <FormSection
+      id={formSectionDomId("costings")}
+      title="Costings"
+      icon={<PoundSterling size={16} color="#D97706" aria-hidden="true" />}
+      right={
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6B7686]">
+          <Lock size={13} aria-hidden="true" /> Only your team sees this
+        </span>
+      }
+      data-testid="drawer-section-costings"
+    >
+      <div className="fm-grid fm-g5">
         {renderPriceField(priceField)}
 
-        <div className="space-y-1.5">
-          <label htmlFor="drawer-costing-gross-commission" className={cn("block", drawerLabelClass)}>
+        <div>
+          <label htmlFor="drawer-costing-gross-commission" className={cn("block", fmLabelClass)}>
             Commission
           </label>
           <PoundInput
@@ -145,10 +158,10 @@ export function QuoteDrawerCostingsSection() {
         {renderPriceField(discountField)}
         {renderPriceField(serviceChargeField)}
 
-        <div className="space-y-1.5">
-          <span className={cn("block", drawerLabelClass)}>Total Profit</span>
+        <div>
+          <span className={cn("block", fmLabelClass)}>Total Profit</span>
           <div
-            className={cn(drawerInputClass, "flex items-center bg-[#eef0f3] text-black/75")}
+            className={cn(fmInputClass, "flex items-center border-[#A7F3D0] bg-[#ECFDF5] font-semibold text-[#047857]")}
             data-testid="drawer-total-profit"
           >
             £{totalProfit.toFixed(2)}
@@ -156,14 +169,14 @@ export function QuoteDrawerCostingsSection() {
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-black/55" data-testid="drawer-costing-summary">
+      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-[#6B7686]" data-testid="drawer-costing-summary">
         <span>
-          Final total <span className="font-semibold text-black/80">£{finalTotal.toFixed(2)}</span>
+          Final total <span className="font-semibold text-[#1F2937]">£{finalTotal.toFixed(2)}</span>
         </span>
         <span>
-          Per person <span className="font-semibold text-black/80">£{(Number(pricePerPerson) || 0).toFixed(2)}</span>
+          Per person <span className="font-semibold text-[#1F2937]">£{(Number(pricePerPerson) || 0).toFixed(2)}</span>
         </span>
       </div>
-    </FormDrawerSection>
+    </FormSection>
   );
 }

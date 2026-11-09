@@ -22,7 +22,8 @@ import {
   type FieldKey,
   type LeadSource,
   type Sources,
-} from "./enquiry-form";
+} from "@/features/enquiry/lib/enquiry-form";
+import { destinationLabel } from "@/features/enquiry/lib/enquiry-form-reducers";
 
 export interface IntentLookups {
   packageTypes: LookupPackageType[];
@@ -47,10 +48,6 @@ export function airportLabel(a: Airport): string {
   return `${a.airport_name}${a.airport_code ? ` (${a.airport_code})` : ""}`;
 }
 
-export function destinationLabel(d: LookupDestination, countries: LookupCountry[]): string {
-  const country = countries.find((c) => c.id === d.country_id)?.country_name;
-  return country ? `${d.name}, ${country}` : d.name;
-}
 
 function findBy<T>(rows: T[], q: string, exact: (r: T) => boolean, loose: (r: T) => boolean): T | undefined {
   if (!q) return undefined;
@@ -236,7 +233,7 @@ export function resolveIntent(
     airports,
     travelDate: travelDateOk ? (intent.travelDate ?? "") : "",
     flexibility,
-    nights: nights ?? DEFAULT_NIGHTS,
+    flexibleNights: [String(nights ?? DEFAULT_NIGHTS)],
     adults,
     children,
     infants,

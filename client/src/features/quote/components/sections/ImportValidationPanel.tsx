@@ -16,9 +16,9 @@ export function ImportValidationPanel({ validation, onDismiss }: ImportValidatio
   if (errors.length === 0) return null;
 
   return (
-    <div className="space-y-2 rounded-xl border border-black/10 bg-white/70 p-3" data-testid="import-validation-panel">
+    <div className="space-y-2 rounded-xl border border-[#E3E8EF] bg-white p-3" data-testid="import-validation-panel">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold text-black/70">Check this import before saving</p>
+        <p className="text-[13px] font-semibold text-[#1F2937]">Check this import before saving</p>
         <button
           type="button"
           onClick={onDismiss}
@@ -29,9 +29,9 @@ export function ImportValidationPanel({ validation, onDismiss }: ImportValidatio
         </button>
       </div>
 
-      <div className="flex gap-2 rounded-lg border border-red-500/30 bg-red-500/5 p-2.5">
+      <div className="flex gap-2 rounded-lg border border-[#FECACA] bg-[#FEF2F2] p-2.5">
         <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-        <ul className="space-y-1.5 text-xs text-black/70">
+        <ul className="space-y-1.5 text-[13px] text-[#1F2937]">
           {errors.map((issue, i) => (
             <li key={i}>
               {issue.fieldLabel && <span className="font-medium text-red-700">{issue.fieldLabel}: </span>}

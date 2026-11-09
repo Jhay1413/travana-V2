@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useLocation } from "wouter";
 import { Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -7,12 +8,14 @@ import { useMessages } from "../api/use-messages";
 import { useGenerateEnquiryFromConversation } from "../api/use-ai-enquiry";
 import { useContactLink } from "../api/use-contact-link";
 import { contactLinkMatch } from "./client-link-section";
-import { CreateEnquiryDrawer, isBadGateway, lastInbound, type CreatedEnquiry } from "./inbox/enquiry";
+import { ConvertEnquiryQuoteDialog } from "@/features/quote";
+import type { EnquirySaveResult } from "@/features/enquiry";
+import { InboxEnquiryDialog, isBadGateway, lastInbound, type CreatedEnquiry } from "./inbox/enquiry";
 import type { EnquiryIntent } from "../api/ai-enquiry.api";
 import type { Conversation } from "../types";
 
 // Composer button that reads the conversation with AI and opens the "Create
-// enquiry from this chat" drawer pre-filled. Requires the contact to be linked
+// enquiry from this chat" pop-up pre-filled. Requires the contact to be linked
 // to a client (which is auto-attached); when unlinked it nudges the agent to link first.
 export function GenerateEnquiryButton({
   conversation,
@@ -38,6 +41,9 @@ export function GenerateEnquiryButton({
   const generate = useGenerateEnquiryFromConversation();
   const [open, setOpen] = useState(false);
   const [intent, setIntent] = useState<EnquiryIntent | null>(null);
+  // Set by "Save & start quote": the saved enquiry to open the quote form for.
+  const [quoteFor, setQuoteFor] = useState<EnquirySaveResult | null>(null);
+  const [, navigate] = useLocation();
   // Tracks the drawer's open state so a result arriving after close is ignored.
   const openRef = useRef(false);
   openRef.current = open;
@@ -107,7 +113,7 @@ export function GenerateEnquiryButton({
         {generate.isPending ? "Drafting…" : "Generate enquiry"}
       </button>
       {client && (
-        <CreateEnquiryDrawer
+        <InboxEnquiryDialog
           open={open}
           onOpenChange={setOpen}
           conversation={conversation}
@@ -117,6 +123,19 @@ export function GenerateEnquiryButton({
           quote={lastInbound(messagesData?.items ?? [])}
           onAskClient={(text) => onAskClient?.(text)}
           onCreated={(created) => onCreated?.(created)}
+          onStartQuote={setQuoteFor}
+        />
+      )}
+      {client && quoteFor && (
+        <ConvertEnquiryQuoteDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setQuoteFor(null);
+          }}
+          enquiryId={quoteFor.enquiryId}
+          transactionId={quoteFor.transactionId}
+          clientId={client.id}
+          onConverted={(quoteId) => navigate(`/clients/${client.id}/quotes/${quoteId}`)}
         />
       )}
     </>

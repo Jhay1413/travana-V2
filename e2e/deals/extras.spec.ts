@@ -25,9 +25,9 @@ async function openEditDrawer(page: Page, w: BoardWorld, deal: Deal): Promise<Lo
 
 async function openExtras(drawer: Locator): Promise<Locator> {
   const extras = drawer.getByTestId("drawer-section-extras");
-  if ((await extras.getAttribute("data-state")) === "closed") {
-    await extras.getByRole("button", { name: "Expand section" }).click();
-  }
+  // Extras are always open in the redesigned pop-up (no Expand/Collapse toggle).
+  await expect(extras).toBeVisible();
+  await expect(extras.getByRole("button", { name: "Expand section" })).toHaveCount(0);
   return extras;
 }
 

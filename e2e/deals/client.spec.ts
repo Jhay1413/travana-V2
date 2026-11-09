@@ -408,6 +408,9 @@ test.describe("clients", () => {
     await expect(page.getByTestId("client-center-header")).toContainText(client.surename);
 
     // ...and the outsider's page has finished loading (the client request came back 404) and shows no name.
+    // Leave the owner's page first: requests it already sent would otherwise come back 200 after the
+    // session swap and be mistaken for the outsider's lookup.
+    await page.goto("about:blank");
     await signIn(page, other.adminEmail);
     const lookup = page.waitForResponse((r) => r.url().includes(`/api/v2/neon-clients/${client.id}`) && r.request().method() === "GET");
     await page.goto(`/clients/${client.id}`);

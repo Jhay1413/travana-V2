@@ -2,13 +2,13 @@ import type { Page } from "@playwright/test";
 import { apiCreateClient, apiCreateEnquiry, openActionsMenu, signIn } from "../helpers/deals";
 import { expect, expectToast, test } from "../helpers/fixtures";
 import { queryRows, REF, seedDealsAgency, unique } from "../helpers/seed";
-import { chooseOption, chooseSearchable, pickDate, setNumber } from "../helpers/ui";
+import { chooseSearchable, expectChip, pickDate, pressChip, setNumber } from "../helpers/ui";
 
 /**
- * The enquiry form is the "Create / Edit Enquiry" drawer (EnquiryWizard in drawer presentation): three
- * collapsible sections (Holiday Details, Travel & Passengers, Accommodation & Budget) and one Create
- * button. The step-by-step dialog presentation (dialog-enquiry-wizard, button-wizard-next/back/submit)
- * exists in the component but nothing in the app opens it, so it cannot be reached from a real screen.
+ * The enquiry form is the "New / Edit enquiry" pop-up (EnquiryFormDialog, root test id `enquiry-drawer`): one
+ * scrolling two-column form (Where | Who and what), no wizard steps and no collapsible sections. Holiday type,
+ * flexibility, star rating, budget type, board basis and nights are chip / segmented groups (click by text, read
+ * aria-pressed). The footer keeps `form-drawer-submit` and `form-drawer-test-checkbox`.
  */
 
 async function openEnquiryDrawer(page: Page, clientId: string) {
@@ -18,7 +18,7 @@ async function openEnquiryDrawer(page: Page, clientId: string) {
   const drawer = page.getByTestId("enquiry-drawer");
   await expect(drawer).toBeVisible();
   // The default holiday type is applied once the lookups arrive.
-  await expect(drawer.getByTestId("select-holiday-type")).toContainText("Package Holiday");
+  await expectChip(drawer.getByTestId("select-holiday-type"), "Package Holiday");
   return drawer;
 }
 
@@ -28,33 +28,33 @@ interface FilledEnquiry {
   notes: string;
 }
 
-/** Fills every section of the package-holiday enquiry with distinctive values. */
+/** Fills every field of the package-holiday enquiry with distinctive values. */
 async function fillFullEnquiry(page: Page, title: string): Promise<FilledEnquiry> {
   const filled: FilledEnquiry = { title, travelDate: "2027-06-14", notes: `Wants a quiet resort ${unique("n")}` };
   const drawer = page.getByTestId("enquiry-drawer");
 
-  // Section 1: Holiday Details
+  // Where
   await drawer.getByTestId("input-enquiry-title").fill(title);
   await chooseSearchable(page, drawer.getByTestId("select-enquiry-country"), "Spain", { multi: true });
   await chooseSearchable(page, drawer.getByTestId("select-enquiry-destination"), "Majorca", { multi: true });
   await chooseSearchable(page, drawer.getByTestId("select-enquiry-resort"), REF.resort, { multi: true });
   await chooseSearchable(page, drawer.getByTestId("select-enquiry-accommodation"), REF.accommodation, { multi: true });
 
-  // Section 2: Travel & Passengers
-  await chooseSearchable(page, drawer.getByTestId("input-departure-airport"), "Newcastle", { multi: true });
+  await pressChip(drawer.getByTestId("chips-departure-airport"), /Newcastle/);
   await pickDate(page, drawer.getByTestId("input-travel-date"), filled.travelDate);
-  await chooseOption(page, drawer.getByTestId("select-flexibility"), "+/- 3 Days");
+  await pressChip(drawer.getByTestId("select-flexibility"), "+/- 3 Days");
+  await expectChip(drawer.getByTestId("select-nights"), "7"); // the default nights chip
   await setNumber(drawer.getByTestId("input-adults"), 3);
   await setNumber(drawer.getByTestId("input-children"), 1);
   await setNumber(drawer.getByTestId("input-child-age-0"), 7);
   await setNumber(drawer.getByTestId("input-infants"), 1);
 
-  // Section 3: Accommodation & Budget
-  await chooseOption(page, drawer.getByTestId("select-star-rating"), "4 Star");
-  await chooseSearchable(page, drawer.getByTestId("select-board-basis"), REF.boardBasis[0], { multi: true });
+  // Who and what
+  await pressChip(drawer.getByTestId("select-star-rating"), "4 Star");
+  await pressChip(drawer.getByTestId("select-board-basis"), REF.boardBasis[0]);
   await drawer.getByTestId("input-budget").fill("3200");
-  await chooseOption(page, drawer.getByTestId("select-budget-type"), "Package");
-  await drawer.getByTestId("textarea-enquiry-notes-step2").fill(filled.notes);
+  await pressChip(drawer.getByTestId("select-budget-type"), "Package");
+  await drawer.getByTestId("textarea-enquiry-notes").fill(filled.notes);
   return filled;
 }
 
@@ -156,7 +156,7 @@ test.describe("enquiry drawer", () => {
     expect(row.travel_date).toBeNull();
   });
 
-  test("collapsing and re-opening a section keeps what was typed in every section", async ({ page }) => {
+  test("there are no wizard steps or collapsible sections, and toggling chips keeps everything that was typed", async ({ page }) => {
     const agency = await seedDealsAgency();
     await signIn(page, agency.agentEmail);
     const client = await apiCreateClient(page.request);
@@ -165,20 +165,29 @@ test.describe("enquiry drawer", () => {
     await drawer.getByTestId("input-enquiry-title").fill(title);
     await setNumber(drawer.getByTestId("input-adults"), 4);
     await drawer.getByTestId("input-budget").fill("2750");
+    await drawer.getByTestId("textarea-enquiry-notes").fill("Keep me");
 
-    for (const n of [0, 1, 2]) {
-      const section = drawer.getByTestId(`enquiry-drawer-section-${n}`);
-      await section.getByRole("button", { name: "Collapse section" }).click();
-      await expect(section).toHaveAttribute("data-state", "closed");
-    }
-    for (const n of [0, 1, 2]) {
-      const section = drawer.getByTestId(`enquiry-drawer-section-${n}`);
-      await section.getByRole("button", { name: "Expand section" }).click();
-      await expect(section).toHaveAttribute("data-state", "open");
-    }
+    // One form: no step buttons, no section toggles.
+    await expect(drawer.getByRole("button", { name: "Collapse section" })).toHaveCount(0);
+    await expect(drawer.getByRole("button", { name: "Expand section" })).toHaveCount(0);
+    await expect(drawer.getByTestId("button-wizard-next")).toHaveCount(0);
+
+    // Chips toggle on and off; multi-select chips (nights) hold several values.
+    const nights = drawer.getByTestId("select-nights");
+    await pressChip(nights, "10");
+    await expectChip(nights, "7");
+    await nights.getByRole("button", { name: "7", exact: true }).click();
+    await expectChip(nights, "7", false);
+    await expectChip(nights, "10");
+    const flex = drawer.getByTestId("select-flexibility");
+    await pressChip(flex, "+/- 7 Days");
+    await flex.getByRole("button", { name: "+/- 7 Days", exact: true }).click(); // pressing the chosen one clears it
+    await expectChip(flex, "+/- 7 Days", false);
+
     await expect(drawer.getByTestId("input-enquiry-title")).toHaveValue(title);
     await expect(drawer.getByTestId("input-adults")).toHaveValue("4");
     await expect(drawer.getByTestId("input-budget")).toHaveValue("2750");
+    await expect(drawer.getByTestId("textarea-enquiry-notes")).toHaveValue("Keep me");
     await expect(drawer.getByTestId("form-drawer-submit")).toBeEnabled();
   });
 
@@ -188,7 +197,7 @@ test.describe("enquiry drawer", () => {
     const client = await apiCreateClient(page.request);
     const drawer = await openEnquiryDrawer(page, client.id);
     await drawer.getByTestId("input-enquiry-title").fill("Abandoned");
-    await page.getByTestId("form-drawer-close").click();
+    await page.getByTestId("enquiry-drawer").getByRole("button", { name: "Close" }).click();
     await expect(page.getByTestId("enquiry-drawer")).toBeHidden();
     expect(await queryRows(`select 1 from transaction where client_id = $1`, [client.id])).toHaveLength(0);
 
@@ -224,7 +233,8 @@ test.describe("enquiry drawer", () => {
     await expect(drawer.getByTestId("input-budget")).toHaveValue("1800");
     await expect(drawer.getByTestId("input-travel-date")).toContainText("01/07/2027");
     await expect(drawer.getByTestId("select-enquiry-destination")).toContainText("Majorca");
-    await expect(drawer.getByTestId("select-board-basis")).toContainText(REF.boardBasis[1]);
+    await expectChip(drawer.getByTestId("select-board-basis"), REF.boardBasis[1]);
+    await expectChip(drawer.getByTestId("select-nights"), "10");
 
     await drawer.getByTestId("input-budget").fill("2100");
     await drawer.getByTestId("form-drawer-submit").click();

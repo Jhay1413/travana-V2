@@ -38,6 +38,8 @@ interface MultiSearchableSelectProps {
   maxChips?: number;
   /** Extra classes for the selected-value chips (e.g. a lighter weight or size). */
   chipClassName?: string;
+  /** "fm" opts into the redesigned form-shell look (needs a `.fm` ancestor). No behaviour change. */
+  variant?: "default" | "fm";
 }
 
 /**
@@ -68,6 +70,7 @@ export function MultiSearchableSelect({
   addNewLabel = "Add new",
   maxChips = 3,
   chipClassName,
+  variant = "default",
 }: MultiSearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -169,6 +172,7 @@ export function MultiSearchableSelect({
         aria-controls={listboxId}
         className={cn(
           "h-auto min-h-9 w-full justify-between rounded-xl border-black/10 bg-white/70 py-1.5 font-normal",
+          variant === "fm" && "fm-select",
           className
         )}
         data-testid={dataTestId}
@@ -182,7 +186,7 @@ export function MultiSearchableSelect({
               <Badge
                 key={val}
                 variant="secondary"
-                className={cn("flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium", chipClassName)}
+                className={cn("flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium", variant === "fm" && "fm-select-chip", chipClassName)}
               >
                 <span className="max-w-[120px] truncate">{labelFor(val)}</span>
                 <span

@@ -24,7 +24,6 @@ export function PipelineDialogsHost({
     <>
       {quoteDialog && (
         <QuoteCreateDialog
-          presentation="drawer"
           transactionId={quoteDialog.transactionId}
           clientId={quoteDialog.clientId}
           userId={quoteDialog.userId}

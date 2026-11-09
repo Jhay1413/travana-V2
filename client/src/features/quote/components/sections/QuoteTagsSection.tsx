@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { requestErrorMessage, requestErrorStatus } from "@/lib/request-error";
 import { useFormContext } from "react-hook-form";
-import { Tag, X, Pencil, Trash2, Check } from "lucide-react";
+import { X, Pencil, Trash2, Check } from "lucide-react";
 import { FormField, FormItem } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { useTags } from "@/features/tag/api/use-tag-queries";
 import { useUpdateTag, useDeleteTag, useDetachQuoteTag } from "@/features/tag/api/use-tag-mutations";
 import { useRoles } from "@/hooks/use-role";
 import type { OrgRole } from "@/types/auth/auth.types";
-import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
+import { fmInputClass } from "@/features/quote/components/fm-classes";
 import { useToast } from "@/hooks/use-toast";
 import type { QuoteFormValues } from "@/features/quote/types";
 
@@ -24,11 +24,8 @@ type KnownTag = { id: string; name: string };
 const TAG_ADMIN_ROLES: OrgRole[] = ["org_admin", "platform_admin"];
 
 export function QuoteTagsSection({
-  bare = false,
   quoteId,
 }: {
-  /** Render without the card wrapper and header (inside a drawer section). */
-  bare?: boolean;
   /** Set when editing a saved quote: removing a saved tag then detaches it from this quote straight away. */
   quoteId?: string;
 } = {}) {
@@ -176,8 +173,7 @@ export function QuoteTagsSection({
 
         return (
           <FormItem>
-            <div className={bare ? "" : "rounded-2xl border border-black/10 bg-white/60 p-3"}>
-              {!bare && <SectionHeader icon={Tag} title="Tags" />}
+            <div>
               {(allTags.length > 0 || selected.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {allTags.map((tag) => {
@@ -268,7 +264,7 @@ export function QuoteTagsSection({
                         key={tag.id}
                         className={`group inline-flex items-center gap-1 rounded-full border py-0.5 pl-2.5 pr-1.5 text-xs font-medium transition-colors ${
                           isSelected
-                            ? "border-blue-500/30 bg-blue-500/10 text-blue-700"
+                            ? "border-[#FDE68A] bg-[#FEF3C7] text-[#92400E]"
                             : "border-black/10 bg-white/70 text-black/50 hover:border-black/20 hover:text-black/70"
                         }`}
                       >
@@ -341,7 +337,7 @@ export function QuoteTagsSection({
                   <Input
                     ref={inputRef}
                     placeholder="Add tag…"
-                    className="h-7 rounded-xl border-black/10 bg-white/70 text-[10px]"
+                    className={fmInputClass}
                     value={inputValue}
                     onChange={(e) => {
                       setInputValue(e.target.value);
@@ -365,7 +361,7 @@ export function QuoteTagsSection({
                         <button
                           key={t}
                           type="button"
-                          className="w-full px-2.5 py-1.5 text-left text-[11px] text-black/70 transition hover:bg-black/[0.04]"
+                          className="w-full px-2.5 py-1.5 text-left text-[13px] text-[#1F2937] transition hover:bg-black/[0.04]"
                           onClick={() => addTag(t)}
                         >
                           {t}
@@ -377,7 +373,7 @@ export function QuoteTagsSection({
                 <Button
                   size="sm"
                   type="button"
-                  className="h-7 rounded-xl bg-[#3b82f6] px-2.5 text-[10px] text-white hover:bg-[#3b82f6]/90"
+                  className="h-[42px] rounded-[10px] bg-[#F59E0B] px-4 text-[13px] font-semibold text-[#1F2937] hover:bg-[#E8900A]"
                   disabled={!inputValue.trim()}
                   onClick={() => addTag(inputValue)}
                 >

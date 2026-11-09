@@ -1,8 +1,7 @@
 import { useRef } from "react";
 import { GripVertical, ImagePlus, Star, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
-import { FormDrawerSection } from "@/components/shared/form-drawer";
+import { FormSection } from "@/components/shared/form-shell";
+import { formSectionDomId } from "@/features/quote/lib/quote-section-ids";
 import { useDragReorder } from "@/hooks/use-drag-reorder";
 import { cn } from "@/lib/utils";
 import {
@@ -12,7 +11,6 @@ import {
   withoutFailedUrlItem,
   type FormImageItem,
 } from "@/features/quote/lib/form-images";
-import type { FormLayout } from "@/features/quote/types";
 
 interface QuoteImagesSectionProps {
   title?: string;
@@ -20,7 +18,6 @@ interface QuoteImagesSectionProps {
   setItems: React.Dispatch<React.SetStateAction<FormImageItem[]>>;
   /** Records a saved image for server-side deletion when it's removed here. */
   setDeletedImageIds: React.Dispatch<React.SetStateAction<string[]>>;
-  layout?: FormLayout;
 }
 
 /**
@@ -33,10 +30,8 @@ export function QuoteImagesSection({
   items,
   setItems,
   setDeletedImageIds,
-  layout = "card",
 }: QuoteImagesSectionProps) {
-  const isDrawer = layout === "drawer";
-  const resolvedTitle = title ?? (isDrawer ? "Images" : "Quote Images");
+  const resolvedTitle = title ?? "Images";
   const imageInputRef = useRef<HTMLInputElement>(null);
   const { itemProps, draggingIndex, overIndex } = useDragReorder(items, setItems);
 
@@ -72,7 +67,7 @@ export function QuoteImagesSection({
   );
 
   const hint = (
-    <p className={isDrawer ? "text-[10px] text-black/45" : "text-[11px] text-black/45"}>
+    <p className="text-[10px] text-black/45">
       Drag to arrange. The first image is used as the main photo.
     </p>
   );
@@ -172,10 +167,19 @@ export function QuoteImagesSection({
     </div>
   );
 
-  if (isDrawer) {
-    return (
-      <FormDrawerSection title={resolvedTitle} data-testid="drawer-section-images">
-        <div className="rounded-xl border border-black/10 bg-white p-4">
+  return (
+      <FormSection
+        id={formSectionDomId("images")}
+        title={resolvedTitle}
+        icon={<ImagePlus size={16} color="#D97706" aria-hidden="true" />}
+        right={
+          <span className="whitespace-nowrap rounded-full bg-[#D1FAE5] px-3 py-1 text-xs font-semibold text-[#047857]">
+            {items.length} {items.length === 1 ? "image" : "images"}
+          </span>
+        }
+        data-testid="drawer-section-images"
+      >
+        <div>
           {fileInput}
           {hint}
           {items.length > 0 && <div className="mt-3">{grid}</div>}
@@ -183,41 +187,14 @@ export function QuoteImagesSection({
             <button
               type="button"
               onClick={() => imageInputRef.current?.click()}
-              className="inline-flex items-center gap-1 rounded bg-[#dbeafe] px-2 py-1 text-[10px] font-medium text-[#3b82f6] transition hover:bg-[#cfe2fb]"
+              className="fm-btn fm-btn--sm"
               data-testid="button-add-images"
             >
-              <ImagePlus className="h-3 w-3" />
+              <ImagePlus className="h-4 w-4" />
               Add images
             </button>
           </div>
         </div>
-      </FormDrawerSection>
+      </FormSection>
     );
-  }
-
-  return (
-    <div className="rounded-2xl border border-black/10 bg-white/70 p-4">
-      <SectionHeader icon={ImagePlus} title={resolvedTitle} />
-      <div className="space-y-3">
-        {fileInput}
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 w-full rounded-xl border-black/10 bg-white/70 text-sm"
-          onClick={() => imageInputRef.current?.click()}
-          data-testid="button-add-images"
-        >
-          <ImagePlus className="mr-2 h-4 w-4" />
-          Add images
-        </Button>
-
-        {items.length > 0 && (
-          <>
-            {hint}
-            {grid}
-          </>
-        )}
-      </div>
-    </div>
-  );
 }

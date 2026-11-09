@@ -58,7 +58,7 @@ describe("resolveIntent", () => {
       expect(r.form.holidayType).toBe("pt1");
       expect(r.form.leadSource).toBe("WHATSAPP");
       expect(r.form.adults).toBe(2);
-      expect(r.form.nights).toBe(7);
+      expect(r.form.flexibleNights).toEqual(["7"]);
       expect(Object.values(r.sources).every((s) => s === "set")).toBe(true);
     }
   });
@@ -91,7 +91,7 @@ describe("resolveIntent", () => {
       boardBasis: ["b1"],
       starRating: "4 Star",
       flexibility: "+/- 3 Days",
-      nights: 10,
+      flexibleNights: ["10"],
       adults: 3,
       children: 1,
       childAges: [7],
@@ -162,7 +162,7 @@ describe("resolveIntent", () => {
 
   it("clamps nights above the maximum, flags them and keeps the original in notes", () => {
     const r = resolveIntent(intent({ nights: 28 }), lk, ctx);
-    expect(r.form.nights).toBe(21);
+    expect(r.form.flexibleNights).toEqual(["21"]);
     expect(r.sources.nights).toBe("check");
     expect(r.form.notes).toContain("Nights: 28");
   });

@@ -1,5 +1,6 @@
 export {
   FormDrawer,
+  startPointerEventsWatchdog,
   FormDrawerSection,
   FormDrawerFooter,
   FormDrawerCheckbox,

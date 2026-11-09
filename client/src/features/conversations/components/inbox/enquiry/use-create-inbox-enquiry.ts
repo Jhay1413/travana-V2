@@ -33,7 +33,8 @@ export function useCreateInboxEnquiry(args: {
   const createTask = useCreateTask("enquiry", "");
   const createNote = useCreateInternalNote(conversationId);
 
-  const save = async (opts: SaveOptions): Promise<boolean> => {
+  /** Resolves to the created ids, or null when the save failed or the ids could not be read. */
+  const save = async (opts: SaveOptions): Promise<CreatedEnquiry | null> => {
     let response: unknown;
     try {
       response = await createTransaction.mutateAsync(
@@ -41,13 +42,13 @@ export function useCreateInboxEnquiry(args: {
       );
     } catch (err) {
       toast({ title: "Couldn't create the enquiry", description: errorMessage(err, "Please try again."), variant: "destructive" });
-      return false;
+      return null;
     }
     const plan = planSaveSteps(response, opts, { conversationId, firstName, now: new Date() });
     if (plan.kind === "unreadable") {
       toast({ title: "Enquiry saved", description: "It was created, but we could not open it. Find it on the client page." });
       onDone();
-      return true;
+      return null;
     }
 
     const { created, title } = plan;
@@ -73,8 +74,9 @@ export function useCreateInboxEnquiry(args: {
       description: problems.length ? `We could not add ${problems.join(" or ")}.` : undefined,
       action: openEnquiryAction(() => navigate(href)),
     });
-    onCreated({ enquiryId: created.enquiryId, transactionId: created.transactionId, title, clientId });
-    return true;
+    const result: CreatedEnquiry = { enquiryId: created.enquiryId, transactionId: created.transactionId, title, clientId };
+    onCreated(result);
+    return result;
   };
 
   return { save, isSaving: createTransaction.isPending || createTask.isPending || createNote.isPending };

@@ -32,6 +32,8 @@ interface DatePickerProps {
   modal?: boolean;
   id?: string;
   "data-testid"?: string;
+  /** "fm" opts into the redesigned form-shell look (needs a `.fm` ancestor). No behaviour change. */
+  variant?: "default" | "fm";
 }
 
 function parseDate(value: string | undefined): Date | undefined {
@@ -86,6 +88,7 @@ function DatePicker({
   disabled = false,
   id,
   "data-testid": testId,
+  variant = "default",
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
@@ -135,6 +138,7 @@ function DatePicker({
         className={cn(
           "h-10 w-full justify-start rounded-xl border-black/10 bg-white/70 px-3 text-left text-sm font-normal hover:bg-white/80",
           !selectedDate && "text-muted-foreground",
+          variant === "fm" && "fm-select fm-select--date",
           className
         )}
       >

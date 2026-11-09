@@ -35,7 +35,7 @@ export function buildQuoteInitialValuesFromEnquiry(enq: EnquiryTable): Partial<Q
     nights: enq.no_of_nights || 7,
     country: (firstDestination as unknown as { country_id?: string })?.country_id || "",
     destination: firstDestination?.destination_id || "",
-    resort: firstResort?.resort_id || (firstResort as unknown as { resorts_id?: string })?.resorts_id || "",
+    resort: firstResort?.resorts_id || firstResort?.resort_id || "",
     boardBasisId: firstBoardBasis?.board_basis_id || "",
     outboundDepartAirportId: firstAirport?.airport_id || "",
     cabinType: enq.cabin_type || "",

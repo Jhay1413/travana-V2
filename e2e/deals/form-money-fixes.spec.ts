@@ -26,7 +26,7 @@ test.describe("create booking with an upsell", () => {
     await drawer.getByTestId("drawer-costing-price").fill("1999");
 
     const section = drawer.getByTestId("drawer-section-upsells");
-    await section.getByRole("button", { name: "Expand section" }).click();
+    await expect(section).toBeVisible(); // upsells are always open in the pop-up
     await section.getByTestId("button-add-upsell").click();
     const card = section.getByTestId("card-upsell-0");
     await card.getByPlaceholder(/extra nights/i).fill("E2E seat upgrade");
@@ -76,9 +76,7 @@ test.describe("quote form Total Profit", () => {
     await expect(profit).toHaveText("£240.00");
 
     const extras = drawer.getByTestId("drawer-section-extras");
-    if ((await extras.getAttribute("data-state")) === "closed") {
-      await extras.getByRole("button", { name: "Expand section" }).click();
-    }
+    await expect(extras).toBeVisible(); // extras are always open in the pop-up
     await extras.getByRole("button", { name: "Transfer", exact: true }).click();
     // New extras default to "Included in package" (commission locked to 0): turn it off to enter a commission.
     await extras.getByRole("switch").click();

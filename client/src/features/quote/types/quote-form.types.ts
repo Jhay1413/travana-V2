@@ -335,13 +335,6 @@ export const LEAD_SOURCES = ["SHOP", "FACEBOOK", "WHATSAPP", "INSTAGRAM", "PHONE
  */
 export type SharedHolidayFormValues = Omit<QuoteFormValues, "quoteLink" | "status" | "not_for_social">;
 
-/**
- * How a form is laid out. "card" is the stacked-cards look used inside modal
- * dialogs; "drawer" is the teal-bar section look used inside the right-hand
- * Create / Edit drawer on the client dashboard.
- */
-export type FormLayout = "card" | "drawer";
-
 /** How an edit form is presented: a centered modal or the right-hand drawer. */
 export type FormPresentation = "dialog" | "drawer";
 
@@ -356,7 +349,12 @@ export interface QuoteRHFFormProps {
   existingImages?: { id: string; url: string }[];
   initialImageUrls?: string[];
   initialExtraAccomLabels?: string[];
-  layout?: FormLayout;
+  /** Pop-up heading, e.g. "Add quote" / "Edit quote". */
+  title?: string;
+  /** Muted line under the heading, e.g. the client the quote is for. */
+  subtitle?: string;
+  /** Shown in a green bar under the heading when the form opens pre-filled (e.g. from an enquiry). */
+  note?: string;
   /**
    * Set when this form creates a social post (`QuoteCreateDialog`'s
    * `socialPost` mode). Hides "Not For Social" — checking it there makes
@@ -370,7 +368,6 @@ export interface QuoteEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
-  presentation?: FormPresentation;
 }
 
 export interface QuoteCreateDialogProps {
@@ -394,5 +391,6 @@ export interface QuoteCreateDialogProps {
   duplicateFromQuoteId?: string;
   /** Quote a "Copy to client" is made from; sent as `source_quote_id` so its operators stay allowed. */
   sourceQuoteId?: string;
-  presentation?: FormPresentation;
+  /** Green bar under the heading, e.g. when pre-filled from an enquiry. */
+  note?: string;
 }

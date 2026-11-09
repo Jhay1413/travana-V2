@@ -2,6 +2,9 @@ import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  // Tests never need real CSS; without this Vite runs postcss/tailwind over any stylesheet a tested
+  // module pulls in (e.g. the form shell) and fails on the Tailwind v4 plugin setup.
+  css: { postcss: { plugins: [] } },
   test: {
     environment: "node",
     globals: true,

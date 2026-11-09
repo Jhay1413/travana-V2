@@ -19,7 +19,8 @@ import { enquiryKeys } from "@/features/enquiry/api/use-enquiry-queries";
 import { useQueryClient } from "@tanstack/react-query";
 import type { QuoteFormValues } from "@/features/quote/types/quote-form.types";
 import { useToast } from "@/hooks/use-toast";
-import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
+import { EnquiryFormDialog, type EnquirySaveResult } from "@/features/enquiry";
+import { ConvertEnquiryQuoteDialog } from "@/features/quote";
 
 import { transformNeonClientData } from "@/features/client/components/client-types";
 import { MergeClientDialog } from "@/features/client/components/modals/MergeClientDialog";
@@ -67,6 +68,8 @@ export default function ClientPage() {
   // Rail view state lives here so it survives opening a deal and coming back.
   const liveDealsState = useLiveDealsState();
   const [showQuoteCreateDialog, setShowQuoteCreateDialog] = useState(false);
+  // Set by the enquiry form's "Save & start quote": the saved enquiry to open the quote form for.
+  const [startQuoteFor, setStartQuoteFor] = useState<EnquirySaveResult | null>(null);
   const [showBookingCreateDialog, setShowBookingCreateDialog] = useState(false);
   const [convertingFromEnquiryTxnId, setConvertingFromEnquiryTxnId] = useState<string | null>(null);
   const [convertingEnquiryId, setConvertingEnquiryId] = useState<string | null>(null);
@@ -232,7 +235,7 @@ export default function ClientPage() {
   }
 
   const handleCreate = (kind: CreateKind) => {
-    if (kind === "enquiry") enquiryActions.setShowEnquiryWizard(true);
+    if (kind === "enquiry") enquiryActions.setShowEnquiryForm(true);
     else if (kind === "quote") setShowQuoteCreateDialog(true);
     else if (kind === "booking") setShowBookingCreateDialog(true);
     else if (kind === "task") taskCreate.setShowTaskDialog(true);
@@ -362,7 +365,6 @@ export default function ClientPage() {
     <>
       {holidaySelection ? detailLayout : overviewLayout}
       <QuoteCreateDialog
-        presentation="drawer"
         transactionId={convertingFromEnquiryTxnId || undefined}
         clientId={clientId}
         userId={currentUser?.id}
@@ -396,7 +398,6 @@ export default function ClientPage() {
         initialValues={convertingEnquiryInitialValues}
       />
       <BookingCreateDialog
-        presentation="drawer"
         clientId={clientId}
         open={showBookingCreateDialog}
         onOpenChange={setShowBookingCreateDialog}
@@ -462,14 +463,27 @@ export default function ClientPage() {
       />
       <PortalPinModal clientId={clientId} open={showPinModal} onOpenChange={setShowPinModal} />
 
-      <EnquiryWizard
-        presentation="drawer"
-        open={enquiryActions.showEnquiryWizard}
+      <EnquiryFormDialog
+        open={enquiryActions.showEnquiryForm}
         onOpenChange={enquiryActions.onWizardOpenChange}
         enquiry={enquiryActions.editingEnquiry}
         onSubmit={enquiryActions.handleEnquirySubmit}
         isSaving={enquiryActions.createTransactionMutation.isPending || enquiryActions.updateEnquiryMutation.isPending}
+        onStartQuote={setStartQuoteFor}
       />
+
+      {startQuoteFor && (
+        <ConvertEnquiryQuoteDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setStartQuoteFor(null);
+          }}
+          enquiryId={startQuoteFor.enquiryId}
+          transactionId={startQuoteFor.transactionId}
+          clientId={clientId}
+          onConverted={(quoteId) => navigate(`/clients/${clientId}?holiday=quote:${quoteId}`)}
+        />
+      )}
 
       <MergeClientDialog
         open={showMergeDialog}

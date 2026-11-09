@@ -11,7 +11,6 @@ import {
   Hotel,
   X,
   Plus,
-  PackagePlus,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,6 +29,7 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
+import { fmControlClass, fmInputClass, fmLabelClass, fmSmallButtonClass } from "@/features/quote/components/fm-classes";
 import {
   useAirports,
   useTourOperators,
@@ -56,17 +56,6 @@ const EXTRA_OPTIONS: { type: ExtraType; label: string; icon: LucideIcon; color: 
   { type: "airportParking", label: "Airport Parking", icon: ParkingSquare, color: "text-emerald-600" },
   { type: "extraAccommodation", label: "Extra Accommodation", icon: Hotel, color: "text-blue-600" },
 ];
-
-// ─── Section Header ───────────────────────────────────────────────────────────
-
-function SectionHeader({ icon: Icon, title, className = "" }: { icon: LucideIcon; title: string; className?: string }) {
-  return (
-    <div className={`flex items-center gap-2 text-sm font-semibold ${className}`}>
-      <Icon className="h-4 w-4" />
-      {title}
-    </div>
-  );
-}
 
 // ─── Extra Card Wrapper ───────────────────────────────────────────────────────
 
@@ -115,7 +104,7 @@ function IncludedToggle({ control, name, onInclude }: { control: Control<ExtrasF
               }}
             />
           </FormControl>
-          <FormLabel className="text-xs font-medium text-black/60 cursor-pointer">Included in package</FormLabel>
+          <FormLabel className={`${fmLabelClass} cursor-pointer`}>Included in package</FormLabel>
         </FormItem>
       )}
     />
@@ -134,8 +123,8 @@ function CostCommissionFields({ control, costName, commissionName }: { control: 
     <>
       <FormField control={control} name={costName} render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-xs font-medium text-black/60">Cost (£)</FormLabel>
-          <FormControl><Input type="number" min={0} step={0.01} className="rounded-xl text-sm" {...field} /></FormControl>
+          <FormLabel className={fmLabelClass}>Cost (£)</FormLabel>
+          <FormControl><Input type="number" min={0} step={0.01} className={fmInputClass} {...field} /></FormControl>
           {showIncludedHint && (
             <p className="text-[10px] text-amber-700" data-testid="extra-cost-included-hint">Not added to the total while included in the package.</p>
           )}
@@ -144,13 +133,13 @@ function CostCommissionFields({ control, costName, commissionName }: { control: 
       )} />
       <FormField control={control} name={commissionName} render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-xs font-medium text-black/60">Commission (£)</FormLabel>
+          <FormLabel className={fmLabelClass}>Commission (£)</FormLabel>
           <FormControl>
             <Input
               type="number"
               min={0}
               step={0.01}
-              className="rounded-xl text-sm"
+              className={fmInputClass}
               data-testid="extra-commission-input"
               {...field}
               onChange={(e) => {
@@ -174,15 +163,16 @@ function BookingRefTourOpFields({ control, prefix }: { control: Control<ExtrasFo
     <>
       <FormField control={control} name={`${prefix}.bookingRef` as any} render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-xs font-medium text-black/60">Booking Ref</FormLabel>
-          <FormControl><Input className="rounded-xl text-sm" placeholder="Optional" {...field} /></FormControl>
+          <FormLabel className={fmLabelClass}>Booking Ref</FormLabel>
+          <FormControl><Input className={fmInputClass} placeholder="Optional" {...field} /></FormControl>
         </FormItem>
       )} />
       <FormField control={control} name={`${prefix}.tourOperatorId` as any} render={({ field }) => (
         <FormItem>
-          <FormLabel className="text-xs font-medium text-black/60">Tour Operator</FormLabel>
+          <FormLabel className={fmLabelClass}>Tour Operator</FormLabel>
           <FormControl>
             <SearchableSelect
+              className={fmControlClass}
               options={operatorSelectOptions(tourOperatorsData, field.value, operatorNames[field.value ?? ""])}
               value={field.value ?? ""}
               onValueChange={field.onChange}
@@ -254,46 +244,46 @@ function TransferExtra({ control, index, mainTourOperatorId, setValue, onRemove 
       <FieldGrid>
         <FormField control={control} name={`${p}.pickUpLocation` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Pick-up Location</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. Manchester Airport" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Pick-up Location</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. Manchester Airport" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffLocation` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Drop-off Location</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. Hotel Melia" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Drop-off Location</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. Hotel Melia" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Pick-up Date</FormLabel>
-            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
+            <FormLabel className={fmLabelClass}>Pick-up Date</FormLabel>
+            <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Pick-up Time</FormLabel>
-            <FormControl><Input type="time" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Pick-up Time</FormLabel>
+            <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Drop-off Date</FormLabel>
-            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
+            <FormLabel className={fmLabelClass}>Drop-off Date</FormLabel>
+            <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Drop-off Time</FormLabel>
-            <FormControl><Input type="time" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Drop-off Time</FormLabel>
+            <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
         <BookingRefTourOpFields control={control} prefix={p} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
         <FormField control={control} name={`${p}.note` as any} render={({ field }) => (
           <FormItem className="sm:col-span-2 md:col-span-3">
-            <FormLabel className="text-xs font-medium text-black/60">Note</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="Optional note" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Note</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="Optional note" {...field} /></FormControl>
           </FormItem>
         )} />
       </FieldGrid>
@@ -318,51 +308,51 @@ function CarHireExtra({ control, index, mainTourOperatorId, setValue, onRemove }
       <FieldGrid>
         <FormField control={control} name={`${p}.pickUpLocation` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Pick-up Location</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. Airport terminal" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Pick-up Location</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. Airport terminal" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffLocation` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Drop-off Location</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. Same location" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Drop-off Location</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. Same location" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Pick-up Date</FormLabel>
-            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
+            <FormLabel className={fmLabelClass}>Pick-up Date</FormLabel>
+            <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Pick-up Time</FormLabel>
-            <FormControl><Input type="time" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Pick-up Time</FormLabel>
+            <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Drop-off Date</FormLabel>
-            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
+            <FormLabel className={fmLabelClass}>Drop-off Date</FormLabel>
+            <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Drop-off Time</FormLabel>
-            <FormControl><Input type="time" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Drop-off Time</FormLabel>
+            <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.noOfDays` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">No. of Days</FormLabel>
-            <FormControl><Input type="number" min={1} className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>No. of Days</FormLabel>
+            <FormControl><Input type="number" min={1} className={fmInputClass} {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.driverAge` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Driver Age</FormLabel>
-            <FormControl><Input type="number" min={17} className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Driver Age</FormLabel>
+            <FormControl><Input type="number" min={17} className={fmInputClass} {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />
@@ -390,20 +380,20 @@ function AttractionTicketExtra({ control, index, mainTourOperatorId, setValue, o
       <FieldGrid>
         <FormField control={control} name={`${p}.ticketType` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Ticket Type</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. Theme park, Museum" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Ticket Type</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. Theme park, Museum" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dateOfVisit` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Date of Visit</FormLabel>
-            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
+            <FormLabel className={fmLabelClass}>Date of Visit</FormLabel>
+            <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.numberOfTickets` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">No. of Tickets</FormLabel>
-            <FormControl><Input type="number" min={1} className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>No. of Tickets</FormLabel>
+            <FormControl><Input type="number" min={1} className={fmInputClass} {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />
@@ -432,30 +422,30 @@ function LoungePassExtra({ control, index, airportOptions, mainTourOperatorId, s
       <FieldGrid>
         <FormField control={control} name={`${p}.airportId` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Airport</FormLabel>
+            <FormLabel className={fmLabelClass}>Airport</FormLabel>
             <FormControl>
-              <SearchableSelect options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport" />
+              <SearchableSelect className={fmControlClass} options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport" />
             </FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.terminal` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Terminal</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. T1, T2" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Terminal</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. T1, T2" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dateOfUsage` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Date of Usage</FormLabel>
-            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
+            <FormLabel className={fmLabelClass}>Date of Usage</FormLabel>
+            <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <BookingRefTourOpFields control={control} prefix={p} />
         <CostCommissionFields control={control} costName={`${p}.cost`} commissionName={`${p}.commission`} />
         <FormField control={control} name={`${p}.note` as any} render={({ field }) => (
           <FormItem className="sm:col-span-2 md:col-span-3">
-            <FormLabel className="text-xs font-medium text-black/60">Note</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="Optional note" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Note</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="Optional note" {...field} /></FormControl>
           </FormItem>
         )} />
       </FieldGrid>
@@ -481,18 +471,18 @@ function AirportParkingExtra({ control, index, airportOptions, mainTourOperatorI
       <FieldGrid>
         <FormField control={control} name={`${p}.airportId` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Airport</FormLabel>
+            <FormLabel className={fmLabelClass}>Airport</FormLabel>
             <FormControl>
-              <SearchableSelect options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport" />
+              <SearchableSelect className={fmControlClass} options={airportOptions} value={field.value ?? ""} onValueChange={field.onChange} placeholder="Select airport" />
             </FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.parkingType` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Parking Type</FormLabel>
+            <FormLabel className={fmLabelClass}>Parking Type</FormLabel>
             <FormControl>
               <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="rounded-xl text-sm"><SelectValue placeholder="Select type" /></SelectTrigger>
+                <SelectTrigger className={fmInputClass}><SelectValue placeholder="Select type" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="short-stay">Short Stay</SelectItem>
                   <SelectItem value="long-stay">Long Stay</SelectItem>
@@ -506,38 +496,38 @@ function AirportParkingExtra({ control, index, airportOptions, mainTourOperatorI
         )} />
         <FormField control={control} name={`${p}.parkingDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Parking Date</FormLabel>
-            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
+            <FormLabel className={fmLabelClass}>Parking Date</FormLabel>
+            <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.duration` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Duration</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. 14 days" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Duration</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. 14 days" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.carMake` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Car Make</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. Ford" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Car Make</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. Ford" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.carModel` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Car Model</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. Focus" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Car Model</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. Focus" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.colour` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Colour</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. Silver" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Colour</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. Silver" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.carRegNumber` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Reg Number</FormLabel>
-            <FormControl><Input className="rounded-xl text-sm" placeholder="e.g. AB12 CDE" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Reg Number</FormLabel>
+            <FormControl><Input className={fmInputClass} placeholder="e.g. AB12 CDE" {...field} /></FormControl>
           </FormItem>
         )} />
         <BookingRefTourOpFields control={control} prefix={p} />
@@ -608,9 +598,10 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
       <FieldGrid>
         <FormField control={control} name={`${p}.accommodationId` as any} render={({ field }) => (
           <FormItem className="sm:col-span-2">
-            <FormLabel className="text-xs font-medium text-black/60">Accommodation</FormLabel>
+            <FormLabel className={fmLabelClass}>Accommodation</FormLabel>
             <FormControl>
               <SearchableSelect
+                className={fmControlClass}
                 options={accommodationOptions}
                 value={field.value ?? ""}
                 onValueChange={(val) => {
@@ -635,9 +626,10 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
         )} />
         <FormField control={control} name={`${p}.boardBasisId` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Board Basis</FormLabel>
+            <FormLabel className={fmLabelClass}>Board Basis</FormLabel>
             <FormControl>
               <SearchableSelect
+                className={fmControlClass}
                 options={boardBasisOptions}
                 value={field.value ?? ""}
                 onValueChange={field.onChange}
@@ -651,9 +643,10 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
         )} />
         <FormField control={control} name={`${p}.roomType` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Room Type</FormLabel>
+            <FormLabel className={fmLabelClass}>Room Type</FormLabel>
             <FormControl>
               <SearchableSelect
+                className={fmControlClass}
                 options={roomTypeOptions}
                 value={field.value ?? ""}
                 onValueChange={field.onChange}
@@ -668,20 +661,20 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
         )} />
         <FormField control={control} name={`${p}.checkInDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Check-in Date</FormLabel>
-            <FormControl><DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9 text-sm" /></FormControl>
+            <FormLabel className={fmLabelClass}>Check-in Date</FormLabel>
+            <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.checkInTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Check-in Time</FormLabel>
-            <FormControl><Input type="time" className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>Check-in Time</FormLabel>
+            <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.noOfNights` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">No. of Nights</FormLabel>
-            <FormControl><Input type="number" min={0} className="rounded-xl text-sm" {...field} /></FormControl>
+            <FormLabel className={fmLabelClass}>No. of Nights</FormLabel>
+            <FormControl><Input type="number" min={0} className={fmInputClass} {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />
@@ -696,7 +689,7 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
 
 // ─── Main Extras Section ──────────────────────────────────────────────────────
 
-export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourOperatorId = "", isCruise = false, bare = false }: { control: Control<ExtrasFormValues>; initialAccomLabels?: string[]; mainTourOperatorId?: string; isCruise?: boolean; /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean }) {
+export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourOperatorId = "", isCruise = false }: { control: Control<ExtrasFormValues>; initialAccomLabels?: string[]; mainTourOperatorId?: string; isCruise?: boolean }) {
   const formMethods = useFormContext();
   const { setValue } = formMethods;
   // The quote's selected destination lives on the same form — use it to
@@ -747,11 +740,10 @@ export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourO
   };
 
   return (
-    <div className={bare ? "" : "rounded-2xl border border-black/10 bg-white/70 p-4"}>
-      <div className={bare ? "mb-4 flex items-center justify-end" : "mb-4 flex items-center justify-between"}>
-        {!bare && <SectionHeader icon={PackagePlus} title="Extras" />}
+    <div>
+      <div className="mb-4 flex items-center justify-end">
         {totalExtras > 0 && (
-          <span className="rounded-full bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+          <span className="rounded-full bg-[#D1FAE5] px-3 py-1 text-xs font-semibold text-[#047857]">
             {totalExtras} added
           </span>
         )}
@@ -765,7 +757,7 @@ export function QuoteExtrasSection({ control, initialAccomLabels = [], mainTourO
             type="button"
             variant="outline"
             size="sm"
-            className="h-8 rounded-xl text-xs border-black/10 dark:border-white/10 gap-1.5"
+            className={`${fmSmallButtonClass} gap-1.5`}
             onClick={() => handleAdd(type)}
           >
             <Icon className={`h-3 w-3 ${color}`} />

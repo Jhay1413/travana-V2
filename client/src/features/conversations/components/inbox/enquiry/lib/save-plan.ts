@@ -1,4 +1,4 @@
-import { tomorrowAtTen, type EnquiryForm } from "./enquiry-form";
+import { tomorrowAtTen, type EnquiryForm } from "@/features/enquiry/lib/enquiry-form";
 import { readCreated, type CreatedIds } from "./read-created";
 
 export interface SaveOptions {

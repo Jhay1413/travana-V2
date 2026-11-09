@@ -1,7 +1,7 @@
 import { dbBookingFor, dbTransaction, signIn, uniqueSurname } from "../helpers/deals";
 import { expect, expectToast, test } from "../helpers/fixtures";
 import { queryRows, REF, seedDealsAgency, unique } from "../helpers/seed";
-import { chooseSearchable, pickDate, setNumber } from "../helpers/ui";
+import { chooseSearchable, expectChip, pickDate, pressChip, setNumber } from "../helpers/ui";
 
 /**
  * One whole story through real screens, no API shortcuts:
@@ -31,13 +31,13 @@ test("a new client becomes an enquiry, a quote and a booking, ending in the clie
   await page.getByTestId("client-index-create").click();
   await page.getByTestId("client-index-create-enquiry").click();
   const enquiry = page.getByTestId("enquiry-drawer");
-  await expect(enquiry.getByTestId("select-holiday-type")).toContainText("Package Holiday");
+  await expectChip(enquiry.getByTestId("select-holiday-type"), "Package Holiday");
   await enquiry.getByTestId("input-enquiry-title").fill(enquiryTitle);
   await chooseSearchable(page, enquiry.getByTestId("select-enquiry-country"), "Spain", { multi: true });
   await chooseSearchable(page, enquiry.getByTestId("select-enquiry-destination"), "Majorca", { multi: true });
   await pickDate(page, enquiry.getByTestId("input-travel-date"), "2027-07-05");
   await setNumber(enquiry.getByTestId("input-adults"), 2);
-  await chooseSearchable(page, enquiry.getByTestId("select-board-basis"), REF.boardBasis[0], { multi: true });
+  await pressChip(enquiry.getByTestId("select-board-basis"), REF.boardBasis[0]);
   await enquiry.getByTestId("input-budget").fill("2600");
   await enquiry.getByTestId("form-drawer-submit").click();
   await expectToast(page, "Enquiry created successfully");

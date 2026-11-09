@@ -1,4 +1,4 @@
-import type { ErrorKey, FormErrors } from "./enquiry-form";
+import type { ErrorKey, FormErrors } from "@/features/enquiry/lib/enquiry-form";
 
 // Short labels for the "Still needed" callout, and the phrase each one takes
 // inside the drafted question to the client.

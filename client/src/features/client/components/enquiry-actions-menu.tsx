@@ -3,26 +3,24 @@ import { useLocation } from "wouter";
 import { ArrowRight, CheckSquare, ChevronDown, Ellipsis, Pencil, Pin, PinOff, Ticket as TicketIcon, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { FormDrawer } from "@/components/shared/form-drawer";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useCurrentUser, usePackageTypes, useUsers } from "@/hooks/queries";
-import { useCreateQuote, useUpdateEnquiry, useDeleteEnquiry } from "@/hooks/mutations";
+import { useCurrentUser, useUsers } from "@/hooks/queries";
+import { useUpdateEnquiry, useDeleteEnquiry } from "@/hooks/mutations";
 import { useRole } from "@/hooks/use-role";
 import { useToast } from "@/hooks/use-toast";
-import { buildQuotePayload } from "@/features/quote/components/quote-create-dialog";
-import { QuoteRHFForm } from "@/features/quote/components/quote-rhf-form";
-import { buildQuoteInitialValuesFromEnquiry } from "@/features/quote/lib/enquiry-to-quote";
+import { ConvertEnquiryQuoteDialog } from "@/features/quote/components/convert-enquiry-quote-dialog";
 import { AddTaskModal } from "@/components/shared/add-task-modal";
 import { CreateTicketDialog } from "@/features/client/components/modals/CreateTicketDialog";
-import { EnquiryWizard } from "@/features/enquiry/components/enquiry-wizard";
+import { EnquiryFormDialog, type EnquirySubmitData } from "@/features/enquiry";
 import { useFavorites } from "@/features/favorite/api/use-favorite-queries";
 import { useToggleFavorite } from "@/features/favorite/api/use-favorite-mutations";
 import { enquiryApi } from "@/features/enquiry/api/enquiry.api";
 import type { Favorite } from "@/features/favorite/api/favorite.api";
-import type { EnquiryTable, CreateQuoteData, QuoteFormValues } from "@/features/quote/types";
+import type { EnquiryTable } from "@/features/quote/types";
 import { useClientTicketCreate, useControllableOpen } from "@/features/client/components/hooks";
 import { HEADER_ELLIPSIS_BUTTON_CLASS } from "@/features/client/components/holiday-header-classes";
+import { skipFocusReturnWhenFormOpens } from "@/components/shared/form-shell";
 
 type EnquiryUpdateData = Parameters<typeof enquiryApi.update>[1];
 
@@ -80,8 +78,6 @@ export function EnquiryActionsMenu({
   const toggleFavoriteMutation = useToggleFavorite();
   const updateEnquiryMutation = useUpdateEnquiry();
   const deleteEnquiryMutation = useDeleteEnquiry();
-  const createQuoteMutation = useCreateQuote();
-  const { data: packageTypesData } = usePackageTypes();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditWizard, setShowEditWizard] = useControllableOpen(editOpen, onEditOpenChange);
@@ -111,14 +107,9 @@ export function EnquiryActionsMenu({
   // "Enquiry marked as lost". Hide the action entirely once converted.
   const isConverted = enquiry.status === "Converted";
 
-  const convertDefaultValues = useMemo<Partial<QuoteFormValues>>(
-    () => buildQuoteInitialValuesFromEnquiry(enquiry),
-    [enquiry],
-  );
-
   // The wizard submits relation ids (destinations: string[], …) where EnquiryTable
   // carries joined objects, so the payload is re-typed to what the update API takes.
-  const handleEditSubmit = (data: Partial<EnquiryTable>) => {
+  const handleEditSubmit = (data: EnquirySubmitData) => {
     updateEnquiryMutation.mutate(
       { id: enquiryId, data: data as unknown as EnquiryUpdateData },
       {
@@ -139,41 +130,6 @@ export function EnquiryActionsMenu({
         onDeleted();
       },
       onError: () => toast({ title: "Failed to delete enquiry", variant: "destructive" }),
-    });
-  };
-
-  const handleConvertSubmit = (values: QuoteFormValues, images?: { files: File[]; urls: string[] }) => {
-    if (!enquiry.transaction_id) {
-      toast({
-        title: "Conversion Error",
-        description: "This enquiry is missing a transaction ID and cannot be converted.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const quotePayload = buildQuotePayload(values, packageTypesData);
-    const imageUrls = images?.urls || [];
-    const convertPayload: CreateQuoteData = {
-      ...quotePayload,
-      transaction_id: enquiry.transaction_id,
-      ...(imageUrls.length > 0 ? { images: imageUrls } : {}),
-    } as CreateQuoteData;
-
-    createQuoteMutation.mutate(convertPayload, {
-      onSuccess: (newQuote: { id: string }) => {
-        updateEnquiryMutation.mutate({ id: enquiryId, data: { status: "Converted" } });
-        setShowConvertModal(false);
-        toast({ title: "Enquiry converted to quote!" });
-        // Converting drops the enquiry out of the holidays list immediately
-        // (the transactions API stops returning `enquiry` once it leaves
-        // on_enquiry) — land on the new quote, selected in the client
-        // dashboard's deal view, instead of the old standalone quote page.
-        navigate(
-          clientId ? `/clients/${clientId}?holiday=quote:${newQuote.id}` : `/quotes/${newQuote.id}`,
-        );
-      },
-      onError: () => toast({ title: "Failed to convert enquiry to quote", variant: "destructive" }),
     });
   };
 
@@ -202,7 +158,7 @@ export function EnquiryActionsMenu({
             </Button>
           )}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48 rounded-xl">
+        <DropdownMenuContent onCloseAutoFocus={skipFocusReturnWhenFormOpens} align="end" className="w-48 rounded-xl">
           {!hidden("pin") && (
           <DropdownMenuItem
             onClick={() =>
@@ -285,8 +241,7 @@ export function EnquiryActionsMenu({
         </AlertDialogContent>
       </AlertDialog>
 
-      <EnquiryWizard
-        presentation="drawer"
+      <EnquiryFormDialog
         open={showEditWizard}
         onOpenChange={setShowEditWizard}
         enquiry={enquiry}
@@ -294,22 +249,20 @@ export function EnquiryActionsMenu({
         isSaving={updateEnquiryMutation.isPending}
       />
 
-      <FormDrawer
+      <ConvertEnquiryQuoteDialog
         open={showConvertModal}
         onOpenChange={setShowConvertModal}
-        title="Convert Enquiry to Quote"
-        description="Review and adjust the details from the enquiry, then create the quote."
-        data-testid="convert-enquiry-drawer"
-      >
-        <QuoteRHFForm
-          key={enquiryId + showConvertModal}
-          layout="drawer"
-          defaultValues={convertDefaultValues}
-          onSubmit={handleConvertSubmit}
-          isLoading={createQuoteMutation.isPending}
-          submitLabel="Convert to Quote"
-        />
-      </FormDrawer>
+        enquiryId={enquiryId}
+        transactionId={enquiry.transaction_id}
+        clientId={clientId}
+        onConverted={(quoteId) => {
+          // Converting drops the enquiry out of the holidays list immediately
+          // (the transactions API stops returning `enquiry` once it leaves
+          // on_enquiry) — land on the new quote, selected in the client
+          // dashboard's deal view, instead of the old standalone quote page.
+          navigate(clientId ? `/clients/${clientId}?holiday=quote:${quoteId}` : `/quotes/${quoteId}`);
+        }}
+      />
 
       <AddTaskModal
         open={showAddTaskDialog}

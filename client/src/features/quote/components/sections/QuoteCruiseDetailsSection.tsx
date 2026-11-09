@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from "react";
 import { useFormContext, useWatch, useFieldArray } from "react-hook-form";
-import { Anchor, Ship, Plus, Trash2 } from "lucide-react";
+import { Ship, Plus, Trash2 } from "lucide-react";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,10 @@ import { Switch } from "@/components/ui/switch";
 import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useCruiseLines, useShips, useCruiseItineraries } from "@/hooks/queries";
-import { SectionHeader } from "@/features/quote/components/sections/SectionHeader";
+import { fmControlClass, fmInputClass, fmLabelClass, fmSmallButtonClass, fmSubheadingClass } from "@/features/quote/components/fm-classes";
 import type { QuoteFormValues } from "@/features/quote/types";
 
-export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without the card wrapper and header (inside a drawer section). */ bare?: boolean } = {}) {
+export function QuoteCruiseDetailsSection() {
   const { control, setValue, register } = useFormContext<QuoteFormValues>();
   const { fields: itineraryFields, append: appendItineraryDay, remove: removeItineraryDay } = useFieldArray({
     control,
@@ -49,9 +49,7 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
   }, [appendItineraryDay, itineraryFields.length]);
 
   return (
-    <div className={bare ? "" : "rounded-2xl border border-black/10 bg-white/70 p-4"}>
-      {!bare && <SectionHeader icon={Anchor} title="Cruise Details" />}
-
+    <div>
       <FormField
         control={control}
         name="cruiseOnly"
@@ -60,20 +58,20 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
             <FormControl>
               <Switch checked={field.value} onCheckedChange={field.onChange} />
             </FormControl>
-            <FormLabel className="text-xs font-medium text-black/60 !mt-0">Cruise Only (no flights)</FormLabel>
+            <FormLabel className="text-xs font-medium text-[#6B7686] !mt-0">Cruise Only (no flights)</FormLabel>
           </FormItem>
         )}
       />
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="grid gap-x-4 gap-y-3.5 md:grid-cols-2">
         <FormField
           control={control}
           name="cruiseTitle"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Cruise Title</FormLabel>
+              <FormLabel className={fmLabelClass}>Cruise Title</FormLabel>
               <FormControl>
-                <Input {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" />
+                <Input {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -85,9 +83,10 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
           name="cruiseLine"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Cruise Line</FormLabel>
+              <FormLabel className={fmLabelClass}>Cruise Line</FormLabel>
               <FormControl>
                 <SearchableSelect
+                  className={fmControlClass}
                   options={cruiseLineOptions}
                   value={field.value ?? ""}
                   selectedLabel={field.value || undefined}
@@ -109,9 +108,10 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
           name="shipName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Ship Name</FormLabel>
+              <FormLabel className={fmLabelClass}>Ship Name</FormLabel>
               <FormControl>
                 <SearchableSelect
+                  className={fmControlClass}
                   options={shipOptions}
                   value={field.value ?? ""}
                   selectedLabel={field.value || undefined}
@@ -140,11 +140,12 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
               : "No voyages available for this ship";
             return (
               <FormItem>
-                <FormLabel className="text-xs font-medium text-black/60">Cruise Date</FormLabel>
+                <FormLabel className={fmLabelClass}>Cruise Date</FormLabel>
                 <FormControl>
                   {cruiseItineraries?.length || isFetchingCruiseDates ? (
                     // Catalog has voyages for this ship → pick a real sailing.
                     <SearchableSelect
+                  className={fmControlClass}
                       options={cruiseDateOptions}
                       value={field.value ?? ""}
                       selectedLabel={field.value || undefined}
@@ -156,7 +157,7 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
                     />
                   ) : (
                     // No catalog voyages for this ship → free date entry.
-                    <DatePicker value={field.value ?? ""} onChange={field.onChange} className="h-9" disablePast />
+                    <DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} disablePast />
                   )}
                 </FormControl>
                 <FormMessage />
@@ -170,9 +171,9 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
           name="cabinType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Cabin Type</FormLabel>
+              <FormLabel className={fmLabelClass}>Cabin Type</FormLabel>
               <FormControl>
-                <Input {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" />
+                <Input {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -184,9 +185,9 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
           name="cabinNumber"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Cabin Number</FormLabel>
+              <FormLabel className={fmLabelClass}>Cabin Number</FormLabel>
               <FormControl>
-                <Input {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" placeholder="e.g. Deck 10, Cabin 10248" />
+                <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="e.g. Deck 10, Cabin 10248" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -198,9 +199,9 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
           name="embarkation"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Embarkation Port</FormLabel>
+              <FormLabel className={fmLabelClass}>Embarkation Port</FormLabel>
               <FormControl>
-                <Input {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" />
+                <Input {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -212,9 +213,9 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
           name="debarkation"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs font-medium text-black/60">Debarkation Port</FormLabel>
+              <FormLabel className={fmLabelClass}>Debarkation Port</FormLabel>
               <FormControl>
-                <Input {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" />
+                <Input {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -226,9 +227,9 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
           name="cruiseExtras"
           render={({ field }) => (
             <FormItem className="md:col-span-2">
-              <FormLabel className="text-xs font-medium text-black/60">Cruise Extras</FormLabel>
+              <FormLabel className={fmLabelClass}>Cruise Extras</FormLabel>
               <FormControl>
-                <Input {...field} value={field.value ?? ""} className="h-9 rounded-xl border-black/10 bg-white/70" placeholder="Any extras..." />
+                <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="Any extras..." />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -239,12 +240,15 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
       {/* ── Itinerary (day-by-day) ──────────────────────────────────────────── */}
       <div className="mt-4">
         <div className="mb-2 flex items-center justify-between">
-          <SectionHeader icon={Ship} title="Itinerary" />
+          <p className={fmSubheadingClass}>
+            <Ship className="h-4 w-4" />
+            Itinerary
+          </p>
           <Button
             type="button"
             size="sm"
             variant="outline"
-            className="h-8 rounded-xl border-black/10 bg-white/70"
+            className={fmSmallButtonClass}
             onClick={handleAddDay}
           >
             <Plus className="mr-1 h-3.5 w-3.5" />
@@ -259,18 +263,18 @@ export function QuoteCruiseDetailsSection({ bare = false }: { /** Render without
                 type="number"
                 min={1}
                 {...register(`cruiseItinerary.${i}.day` as const, { valueAsNumber: true })}
-                className="h-9 w-20 rounded-xl border-black/10 bg-white/70"
+                className={`${fmInputClass} w-20`}
                 placeholder="Day"
               />
               <div className="flex flex-1 flex-col gap-2">
                 <Input
                   {...register(`cruiseItinerary.${i}.description` as const)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  className={fmInputClass}
                   placeholder="Port / description"
                 />
                 <Input
                   {...register(`cruiseItinerary.${i}.subDescription` as const)}
-                  className="h-9 rounded-xl border-black/10 bg-white/70"
+                  className={fmInputClass}
                   placeholder="Sub-description (optional)"
                 />
               </div>

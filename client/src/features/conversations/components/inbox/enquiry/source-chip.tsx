@@ -1,7 +1,9 @@
 import { Check, Info, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ChipKind = "chat" | "check" | "set" | "checked";
+import type { ChipKind } from "@/features/enquiry/lib/enquiry-form";
+
+export type { ChipKind };
 
 const GREEN = "bg-[#D1FAE5] text-[#047857] dark:bg-emerald-950/50 dark:text-emerald-300";
 

@@ -22,10 +22,7 @@ test.describe("quote form flight airport order", () => {
     await expect(drawer).toBeVisible();
 
     const flights = drawer.getByTestId("drawer-section-flights");
-    // Only expand when collapsed: the toggle closes an already-open section.
-    if ((await flights.getAttribute("data-state")) === "closed") {
-      await flights.getByRole("button", { name: "Expand section" }).click();
-    }
+    await expect(flights).toBeVisible();
     const outbound = flights.getByTestId("drawer-flight-outbound");
 
     // Departing: Popular heading first, pinned airports in the stakeholder order.
