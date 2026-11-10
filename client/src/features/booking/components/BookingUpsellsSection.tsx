@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useFieldArray, useWatch, type Control, type UseFormSetValue } from "react-hook-form";
 import { Plus, X, PackagePlus, type LucideIcon } from "lucide-react";
+import { fmControlClass, fmInputClass, fmLabelClass } from "@/features/quote/components/fm-classes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -35,7 +36,7 @@ function SectionHeader({ icon: Icon, title }: { icon: LucideIcon; title: string 
 }
 
 function FieldGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">{children}</div>;
+  return <div className="fm-grid fm-g3">{children}</div>;
 }
 
 // ─── Single Upsell Row ────────────────────────────────────────────────────────
@@ -104,11 +105,11 @@ function UpsellRow({
 
       <FieldGrid>
         <FormField control={control} name={`${p}.upsellType` as any} render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Type</FormLabel>
+          <FormItem className="space-y-0">
+            <FormLabel className={fmLabelClass}>Type</FormLabel>
             <FormControl>
               <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="rounded-xl text-sm" data-testid={`select-upsell-type-${index}`}>
+                <SelectTrigger className={fmControlClass} data-testid={`select-upsell-type-${index}`}>
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -128,19 +129,20 @@ function UpsellRow({
 
         <FormField control={control} name={`${p}.description` as any} render={({ field }) => (
           <FormItem className="sm:col-span-2">
-            <FormLabel className="text-xs font-medium text-black/60">Description</FormLabel>
+            <FormLabel className={fmLabelClass}>Description</FormLabel>
             <FormControl>
-              <Input className="rounded-xl text-sm" placeholder="e.g. 2 extra nights at Hotel Melia" {...field} />
+              <Input className={fmInputClass} placeholder="e.g. 2 extra nights at Hotel Melia" {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>
         )} />
 
         <FormField control={control} name={`${p}.tourOperatorId` as any} render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Tour Operator</FormLabel>
+          <FormItem className="space-y-0">
+            <FormLabel className={fmLabelClass}>Tour operator</FormLabel>
             <FormControl>
               <SearchableSelect
+                className={fmControlClass}
                 options={operatorSelectOptions(tourOperators, tourOperatorId, operatorNames[tourOperatorId ?? ""])}
                 disabled={operatorsUnavailable}
                 value={field.value ?? ""}
@@ -164,30 +166,30 @@ function UpsellRow({
         )} />
 
         <FormField control={control} name={`${p}.quantity` as any} render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Quantity</FormLabel>
+          <FormItem className="space-y-0">
+            <FormLabel className={fmLabelClass}>Quantity</FormLabel>
             <FormControl>
-              <Input type="number" min={1} className="rounded-xl text-sm" {...field} />
+              <Input type="number" min={1} className={fmInputClass} {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>
         )} />
 
         <FormField control={control} name={`${p}.cost` as any} render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Cost (£)</FormLabel>
+          <FormItem className="space-y-0">
+            <FormLabel className={fmLabelClass}>Cost (£)</FormLabel>
             <FormControl>
-              <Input type="number" min={0} step={0.01} className="rounded-xl text-sm" {...field} />
+              <Input type="number" min={0} step={0.01} className={fmInputClass} {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>
         )} />
 
         <FormField control={control} name={`${p}.commission` as any} render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-xs font-medium text-black/60">Commission (£)</FormLabel>
+          <FormItem className="space-y-0">
+            <FormLabel className={fmLabelClass}>Commission (£)</FormLabel>
             <FormControl>
-              <Input type="number" min={0} step={0.01} className="rounded-xl text-sm" {...field} />
+              <Input type="number" min={0} step={0.01} className={fmInputClass} {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>

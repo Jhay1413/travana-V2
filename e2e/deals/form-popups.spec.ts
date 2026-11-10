@@ -72,7 +72,7 @@ test.describe("enquiry pop-up", () => {
     await expect(quote).toBeVisible();
     await expect(quote.getByTestId("input-drawer-title")).toHaveValue(title);
     await expect(quote.getByLabel("Travel Date")).toContainText("14/06/2027");
-    await expect(quote.getByLabel("Adults")).toHaveValue("2");
+    await expect(quote.getByLabel("Adults", { exact: true })).toHaveValue("2");
     await expect(quote.getByRole("combobox").filter({ hasText: "Majorca" })).toBeVisible();
 
     await chooseSearchable(page, operatorSelect(quote), REF.operator);

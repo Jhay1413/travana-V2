@@ -72,7 +72,7 @@ test.describe("inbox: create enquiry from this chat", () => {
     await expect(quote).toBeVisible();
     await expect(quote.getByTestId("input-drawer-title")).toHaveValue(PACKAGE_INTENT.enquiryTitle);
     await expect(quote.getByLabel("Travel Date")).toContainText("10/07/2027");
-    await expect(quote.getByLabel("Adults")).toHaveValue("2");
+    await expect(quote.getByLabel("Adults", { exact: true })).toHaveValue("2");
     await chooseSearchable(page, quote.getByRole("combobox").filter({ hasText: /Select operator|E2E /i }), REF.operator);
     await quote.getByTestId("drawer-costing-price").fill("2500");
     await quote.getByTestId("form-drawer-submit").click();

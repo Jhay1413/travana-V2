@@ -414,7 +414,7 @@ export function BookingRHFForm({
                     name="haysRef"
                     render={({ field }) => (
                       <FormItem className="space-y-0">
-                        <FormLabel className={fmLabelClass}>Hays Ref</FormLabel>
+                        <FormLabel className={fmLabelClass}>Hays ref</FormLabel>
                         <FormControl>
                           <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="e.g. HAY-1234567" />
                         </FormControl>
@@ -427,7 +427,7 @@ export function BookingRHFForm({
                     name="supplierRef"
                     render={({ field }) => (
                       <FormItem className="space-y-0">
-                        <FormLabel className={fmLabelClass}>Supplier Ref</FormLabel>
+                        <FormLabel className={fmLabelClass}>Supplier ref</FormLabel>
                         <FormControl>
                           <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="Enter supplier reference..." />
                         </FormControl>

@@ -53,6 +53,24 @@ export function formatQuotePassengers(quote: QuoteDisplay): string | null {
 // Same field set for quotes and bookings — both share the QuoteDisplay shape
 // produced by transformQuoteData.
 export function buildQuoteLikeFields(item: QuoteDisplay): { left: FieldRowSpec[]; right: FieldRowSpec[] } {
+  const holidayType = item.packageType?.toLowerCase() ?? "";
+  if (!holidayType.includes("hot tub") && !holidayType.includes("cruise")) {
+    // Package holidays show exactly these eight facts, in this order (all in `left` so
+    // factRows keeps the order instead of interleaving two lists).
+    return {
+      left: [
+        { key: "travel-date", icon: "calendar-days", label: "Travel Date", value: item.travelDate ? formatUKDate(item.travelDate) : null },
+        { key: "departure-airport", icon: "plane-takeoff", label: "Departure Airport", value: item.flights?.outbound?.from || null },
+        { key: "hotel", icon: "hotel", label: "Hotel", value: item.accommodation?.property || null },
+        { key: "board-basis", icon: "utensils", label: "Board Basis", value: item.accommodation?.board || null },
+        { key: "room-type", icon: "bed-double", label: "Room Type", value: item.accommodation?.roomType || null },
+        { key: "no-nights", icon: "moon-star", label: "No. Nights", value: item.nights != null ? `${item.nights} night${item.nights === 1 ? "" : "s"}` : null },
+        { key: "no-passengers", icon: "users", label: "No. Passengers", value: formatQuotePassengers(item) },
+        { key: "transfer-type", icon: "bus", label: "Transfer Type", value: item.transferType || "Private Transfer" },
+      ],
+      right: [],
+    };
+  }
   return {
     // Icons are lucide marks, referenced by key (see holiday-field-icons.ts).
     left: [

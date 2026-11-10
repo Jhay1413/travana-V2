@@ -58,18 +58,18 @@ export function QuoteCruiseDetailsSection() {
             <FormControl>
               <Switch checked={field.value} onCheckedChange={field.onChange} />
             </FormControl>
-            <FormLabel className="text-xs font-medium text-[#6B7686] !mt-0">Cruise Only (no flights)</FormLabel>
+            <FormLabel className="text-xs font-medium text-[#6B7686] !mt-0">Cruise only (no flights)</FormLabel>
           </FormItem>
         )}
       />
 
-      <div className="grid gap-x-4 gap-y-3.5 md:grid-cols-2">
+      <div className="fm-grid fm-g2">
         <FormField
           control={control}
           name="cruiseTitle"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={fmLabelClass}>Cruise Title</FormLabel>
+              <FormLabel className={fmLabelClass}>Cruise title</FormLabel>
               <FormControl>
                 <Input {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
@@ -83,7 +83,7 @@ export function QuoteCruiseDetailsSection() {
           name="cruiseLine"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={fmLabelClass}>Cruise Line</FormLabel>
+              <FormLabel className={fmLabelClass}>Cruise line</FormLabel>
               <FormControl>
                 <SearchableSelect
                   className={fmControlClass}
@@ -108,7 +108,7 @@ export function QuoteCruiseDetailsSection() {
           name="shipName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={fmLabelClass}>Ship Name</FormLabel>
+              <FormLabel className={fmLabelClass}>Ship name</FormLabel>
               <FormControl>
                 <SearchableSelect
                   className={fmControlClass}
@@ -140,7 +140,7 @@ export function QuoteCruiseDetailsSection() {
               : "No voyages available for this ship";
             return (
               <FormItem>
-                <FormLabel className={fmLabelClass}>Cruise Date</FormLabel>
+                <FormLabel className={fmLabelClass}>Cruise date</FormLabel>
                 <FormControl>
                   {cruiseItineraries?.length || isFetchingCruiseDates ? (
                     // Catalog has voyages for this ship → pick a real sailing.
@@ -171,7 +171,7 @@ export function QuoteCruiseDetailsSection() {
           name="cabinType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={fmLabelClass}>Cabin Type</FormLabel>
+              <FormLabel className={fmLabelClass}>Cabin type</FormLabel>
               <FormControl>
                 <Input {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
@@ -185,7 +185,7 @@ export function QuoteCruiseDetailsSection() {
           name="cabinNumber"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={fmLabelClass}>Cabin Number</FormLabel>
+              <FormLabel className={fmLabelClass}>Cabin number</FormLabel>
               <FormControl>
                 <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="e.g. Deck 10, Cabin 10248" />
               </FormControl>
@@ -199,7 +199,7 @@ export function QuoteCruiseDetailsSection() {
           name="embarkation"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={fmLabelClass}>Embarkation Port</FormLabel>
+              <FormLabel className={fmLabelClass}>Embarkation port</FormLabel>
               <FormControl>
                 <Input {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
@@ -213,7 +213,7 @@ export function QuoteCruiseDetailsSection() {
           name="debarkation"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className={fmLabelClass}>Debarkation Port</FormLabel>
+              <FormLabel className={fmLabelClass}>Debarkation port</FormLabel>
               <FormControl>
                 <Input {...field} value={field.value ?? ""} className={fmInputClass} />
               </FormControl>
@@ -227,7 +227,7 @@ export function QuoteCruiseDetailsSection() {
           name="cruiseExtras"
           render={({ field }) => (
             <FormItem className="md:col-span-2">
-              <FormLabel className={fmLabelClass}>Cruise Extras</FormLabel>
+              <FormLabel className={fmLabelClass}>Cruise extras</FormLabel>
               <FormControl>
                 <Input {...field} value={field.value ?? ""} className={fmInputClass} placeholder="Any extras..." />
               </FormControl>

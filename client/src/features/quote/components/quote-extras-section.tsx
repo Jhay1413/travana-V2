@@ -85,7 +85,7 @@ function ExtraCard({ icon: Icon, title, iconColor, onRemove, children }: {
 // ─── Shared Field Row Helpers ─────────────────────────────────────────────────
 
 function FieldGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">{children}</div>;
+  return <div className="fm-grid fm-g3">{children}</div>;
 }
 
 function IncludedToggle({ control, name, onInclude }: { control: Control<ExtrasFormValues>; name: any; onInclude?: () => void }) {
@@ -163,13 +163,13 @@ function BookingRefTourOpFields({ control, prefix }: { control: Control<ExtrasFo
     <>
       <FormField control={control} name={`${prefix}.bookingRef` as any} render={({ field }) => (
         <FormItem>
-          <FormLabel className={fmLabelClass}>Booking Ref</FormLabel>
+          <FormLabel className={fmLabelClass}>Booking ref</FormLabel>
           <FormControl><Input className={fmInputClass} placeholder="Optional" {...field} /></FormControl>
         </FormItem>
       )} />
       <FormField control={control} name={`${prefix}.tourOperatorId` as any} render={({ field }) => (
         <FormItem>
-          <FormLabel className={fmLabelClass}>Tour Operator</FormLabel>
+          <FormLabel className={fmLabelClass}>Tour operator</FormLabel>
           <FormControl>
             <SearchableSelect
               className={fmControlClass}
@@ -244,37 +244,37 @@ function TransferExtra({ control, index, mainTourOperatorId, setValue, onRemove 
       <FieldGrid>
         <FormField control={control} name={`${p}.pickUpLocation` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Pick-up Location</FormLabel>
+            <FormLabel className={fmLabelClass}>Pick-up location</FormLabel>
             <FormControl><Input className={fmInputClass} placeholder="e.g. Manchester Airport" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffLocation` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Drop-off Location</FormLabel>
+            <FormLabel className={fmLabelClass}>Drop-off location</FormLabel>
             <FormControl><Input className={fmInputClass} placeholder="e.g. Hotel Melia" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Pick-up Date</FormLabel>
+            <FormLabel className={fmLabelClass}>Pick-up date</FormLabel>
             <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Pick-up Time</FormLabel>
+            <FormLabel className={fmLabelClass}>Pick-up time</FormLabel>
             <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Drop-off Date</FormLabel>
+            <FormLabel className={fmLabelClass}>Drop-off date</FormLabel>
             <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Drop-off Time</FormLabel>
+            <FormLabel className={fmLabelClass}>Drop-off time</FormLabel>
             <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
@@ -308,50 +308,50 @@ function CarHireExtra({ control, index, mainTourOperatorId, setValue, onRemove }
       <FieldGrid>
         <FormField control={control} name={`${p}.pickUpLocation` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Pick-up Location</FormLabel>
+            <FormLabel className={fmLabelClass}>Pick-up location</FormLabel>
             <FormControl><Input className={fmInputClass} placeholder="e.g. Airport terminal" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffLocation` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Drop-off Location</FormLabel>
+            <FormLabel className={fmLabelClass}>Drop-off location</FormLabel>
             <FormControl><Input className={fmInputClass} placeholder="e.g. Same location" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Pick-up Date</FormLabel>
+            <FormLabel className={fmLabelClass}>Pick-up date</FormLabel>
             <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.pickUpTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Pick-up Time</FormLabel>
+            <FormLabel className={fmLabelClass}>Pick-up time</FormLabel>
             <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Drop-off Date</FormLabel>
+            <FormLabel className={fmLabelClass}>Drop-off date</FormLabel>
             <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dropOffTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Drop-off Time</FormLabel>
+            <FormLabel className={fmLabelClass}>Drop-off time</FormLabel>
             <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.noOfDays` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>No. of Days</FormLabel>
+            <FormLabel className={fmLabelClass}>No. of days</FormLabel>
             <FormControl><Input type="number" min={1} className={fmInputClass} {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.driverAge` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Driver Age</FormLabel>
+            <FormLabel className={fmLabelClass}>Driver age</FormLabel>
             <FormControl><Input type="number" min={17} className={fmInputClass} {...field} /></FormControl>
             <FormMessage />
           </FormItem>
@@ -380,19 +380,19 @@ function AttractionTicketExtra({ control, index, mainTourOperatorId, setValue, o
       <FieldGrid>
         <FormField control={control} name={`${p}.ticketType` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Ticket Type</FormLabel>
+            <FormLabel className={fmLabelClass}>Ticket type</FormLabel>
             <FormControl><Input className={fmInputClass} placeholder="e.g. Theme park, Museum" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.dateOfVisit` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Date of Visit</FormLabel>
+            <FormLabel className={fmLabelClass}>Date of visit</FormLabel>
             <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.numberOfTickets` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>No. of Tickets</FormLabel>
+            <FormLabel className={fmLabelClass}>No. of tickets</FormLabel>
             <FormControl><Input type="number" min={1} className={fmInputClass} {...field} /></FormControl>
             <FormMessage />
           </FormItem>
@@ -436,7 +436,7 @@ function LoungePassExtra({ control, index, airportOptions, mainTourOperatorId, s
         )} />
         <FormField control={control} name={`${p}.dateOfUsage` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Date of Usage</FormLabel>
+            <FormLabel className={fmLabelClass}>Date of usage</FormLabel>
             <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
@@ -479,7 +479,7 @@ function AirportParkingExtra({ control, index, airportOptions, mainTourOperatorI
         )} />
         <FormField control={control} name={`${p}.parkingType` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Parking Type</FormLabel>
+            <FormLabel className={fmLabelClass}>Parking type</FormLabel>
             <FormControl>
               <Select value={field.value} onValueChange={field.onChange}>
                 <SelectTrigger className={fmInputClass}><SelectValue placeholder="Select type" /></SelectTrigger>
@@ -496,7 +496,7 @@ function AirportParkingExtra({ control, index, airportOptions, mainTourOperatorI
         )} />
         <FormField control={control} name={`${p}.parkingDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Parking Date</FormLabel>
+            <FormLabel className={fmLabelClass}>Parking date</FormLabel>
             <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
@@ -508,13 +508,13 @@ function AirportParkingExtra({ control, index, airportOptions, mainTourOperatorI
         )} />
         <FormField control={control} name={`${p}.carMake` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Car Make</FormLabel>
+            <FormLabel className={fmLabelClass}>Car make</FormLabel>
             <FormControl><Input className={fmInputClass} placeholder="e.g. Ford" {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.carModel` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Car Model</FormLabel>
+            <FormLabel className={fmLabelClass}>Car model</FormLabel>
             <FormControl><Input className={fmInputClass} placeholder="e.g. Focus" {...field} /></FormControl>
           </FormItem>
         )} />
@@ -526,7 +526,7 @@ function AirportParkingExtra({ control, index, airportOptions, mainTourOperatorI
         )} />
         <FormField control={control} name={`${p}.carRegNumber` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Reg Number</FormLabel>
+            <FormLabel className={fmLabelClass}>Reg number</FormLabel>
             <FormControl><Input className={fmInputClass} placeholder="e.g. AB12 CDE" {...field} /></FormControl>
           </FormItem>
         )} />
@@ -626,7 +626,7 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
         )} />
         <FormField control={control} name={`${p}.boardBasisId` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Board Basis</FormLabel>
+            <FormLabel className={fmLabelClass}>Board basis</FormLabel>
             <FormControl>
               <SearchableSelect
                 className={fmControlClass}
@@ -643,7 +643,7 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
         )} />
         <FormField control={control} name={`${p}.roomType` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Room Type</FormLabel>
+            <FormLabel className={fmLabelClass}>Room type</FormLabel>
             <FormControl>
               <SearchableSelect
                 className={fmControlClass}
@@ -661,19 +661,19 @@ function ExtraAccommodationExtra({ control, index, initialLabel, boardBasisOptio
         )} />
         <FormField control={control} name={`${p}.checkInDate` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Check-in Date</FormLabel>
+            <FormLabel className={fmLabelClass}>Check-in date</FormLabel>
             <FormControl><DatePicker variant="fm" value={field.value ?? ""} onChange={field.onChange} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.checkInTime` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>Check-in Time</FormLabel>
+            <FormLabel className={fmLabelClass}>Check-in time</FormLabel>
             <FormControl><Input type="time" className={fmInputClass} {...field} /></FormControl>
           </FormItem>
         )} />
         <FormField control={control} name={`${p}.noOfNights` as any} render={({ field }) => (
           <FormItem>
-            <FormLabel className={fmLabelClass}>No. of Nights</FormLabel>
+            <FormLabel className={fmLabelClass}>No. of nights</FormLabel>
             <FormControl><Input type="number" min={0} className={fmInputClass} {...field} /></FormControl>
             <FormMessage />
           </FormItem>
