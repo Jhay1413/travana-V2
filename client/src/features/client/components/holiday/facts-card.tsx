@@ -5,7 +5,7 @@ import type { FactRow } from "@/features/client/lib/holiday-facts";
 import { HOLIDAY_BTN_GHOST, HOLIDAY_CARD } from "@/features/client/components/holiday/holiday-styles";
 
 /**
- * "Holiday details" card: responsive grid (5 columns wide, down to 1) of icon chips with a label and value.
+ * "Holiday details" card: responsive grid (4 columns wide, down to 1) of icon chips with a label and value.
  *
  * Props:
  * - fields: rows to show; build them with factRows(buildQuoteLikeFields(display)) (rows without a value are already dropped).
@@ -54,12 +54,9 @@ export function FactsCard({ fields, readOnly, onEdit, supplierUrl, title = "Holi
       {fields.length === 0 ? (
         <p className="text-[13px] text-qp-muted">No details yet.</p>
       ) : (
-        // Up to 8 facts (package holidays) sit in two even rows of 4; longer lists go to 5 across on wide screens.
+        // At most 4 across (package holidays fill two even rows of 4), stepping down on narrower screens.
         <div
-          className={cn(
-            "grid gap-x-4 gap-y-3 max-[1700px]:grid-cols-4 max-[1280px]:grid-cols-3 max-[860px]:grid-cols-2 max-[620px]:grid-cols-1",
-            fields.length <= 8 ? "grid-cols-4" : "grid-cols-5",
-          )}
+          className="grid grid-cols-4 gap-x-4 gap-y-3 max-[1280px]:grid-cols-3 max-[860px]:grid-cols-2 max-[620px]:grid-cols-1"
           data-testid="holiday-facts-grid"
         >
           {fields.map((field) => {

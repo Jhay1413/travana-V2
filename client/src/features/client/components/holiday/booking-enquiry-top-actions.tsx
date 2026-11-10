@@ -82,7 +82,7 @@ export interface EnquiryTopActionsProps extends CommonProps {
   enquiryData: EnquiryTable;
 }
 
-/** Action row for an enquiry: Pin, Enquiry pill, assigned agent, Convert to Quote, overflow menu. */
+/** Action row for an enquiry: Pin, Enquiry pill, Convert to Quote, assigned agent, overflow menu. */
 export function EnquiryTopActions({ enquiryId, clientId, clientName, enquiryData, readOnly, editOpen, onEditOpenChange, onDeleted }: EnquiryTopActionsProps) {
   const queryClient = useQueryClient();
   const destinationName = enquiryData.destinations?.[0]?.name ?? null;
@@ -98,11 +98,6 @@ export function EnquiryTopActions({ enquiryId, clientId, clientName, enquiryData
       <TopBarStatusPill tone="info">Enquiry</TopBarStatusPill>
       {!readOnly && (
         <>
-          <AssignedAgentButton
-            transactionId={enquiryData.transaction_id}
-            userId={enquiryData.user_id}
-            onReallocated={() => queryClient.invalidateQueries({ queryKey: enquiryKeys.all })}
-          />
           {canConvertEnquiry(enquiryData) && (
             <button
               type="button"
@@ -113,6 +108,12 @@ export function EnquiryTopActions({ enquiryId, clientId, clientName, enquiryData
               Convert to Quote
             </button>
           )}
+          <AssignedAgentButton
+            transactionId={enquiryData.transaction_id}
+            userId={enquiryData.user_id}
+            onReallocated={() => queryClient.invalidateQueries({ queryKey: enquiryKeys.all })}
+          />
+
           <EnquiryActionsMenu
             enquiryId={enquiryId}
             clientId={clientId}
