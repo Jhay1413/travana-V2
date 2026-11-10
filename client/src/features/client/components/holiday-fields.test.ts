@@ -40,16 +40,27 @@ describe("formatQuotePassengers", () => {
 });
 
 describe("buildQuoteLikeFields", () => {
-  it("builds the quote/booking rows with string icon keys", () => {
-    const rows = flat(buildQuoteLikeFields(quote()));
+  it("shows only the eight package holiday facts, in order (no tour operator or lead source)", () => {
+    const rows = flat(buildQuoteLikeFields(quote({ packageType: "Package Holiday" })));
     expect(rows.map((r) => r.key)).toEqual([
-      "travel-date", "hotel", "room-type", "board-basis", "transfer-type",
-      "departure-airport", "tour-operator", "no-passengers", "no-nights", "lead-source",
+      "travel-date", "departure-airport", "hotel", "board-basis",
+      "room-type", "no-nights", "no-passengers", "transfer-type",
     ]);
     expect(byKey(rows, "hotel")).toMatchObject({ icon: "hotel", label: "Hotel", value: "Hotel Sol" });
     expect(byKey(rows, "travel-date")?.value).toBe("12/09/2026");
     expect(byKey(rows, "no-nights")?.value).toBe("7 nights");
-    expect(byKey(rows, "lead-source")?.value).toBe("Google Ads");
+    expect(byKey(rows, "no-passengers")?.value).toBe("2 Adults, 1 Child, 1 Infant");
+  });
+
+  it("keeps the full set, incl. tour operator and lead source, for hot tub and cruise", () => {
+    for (const packageType of ["Hot Tub Break", "Cruise Package"]) {
+      const rows = flat(buildQuoteLikeFields(quote({ packageType })));
+      expect(rows.map((r) => r.key)).toEqual([
+        "travel-date", "hotel", "room-type", "board-basis", "transfer-type",
+        "departure-airport", "tour-operator", "no-passengers", "no-nights", "lead-source",
+      ]);
+      expect(byKey(rows, "lead-source")?.value).toBe("Google Ads");
+    }
   });
 
   it("defaults the transfer type and nulls missing values", () => {

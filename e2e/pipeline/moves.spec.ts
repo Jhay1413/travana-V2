@@ -89,7 +89,7 @@ test.describe("moving a deal forward by drag and drop", () => {
     await expect(drawer).toBeVisible();
     await expect(drawer.getByTestId("input-drawer-title")).toHaveValue(deal.title);
     await expect(drawer.getByLabel("Travel Date")).toContainText("14/06/2027");
-    await expect(drawer.getByLabel("Adults")).toHaveValue("3");
+    await expect(drawer.getByLabel("Adults", { exact: true })).toHaveValue("3");
     await drawer.getByRole("button", { name: "Close" }).click();
     await expect(drawer).toBeHidden();
     await expect(cardIn(page, "Enquiry", deal.transactionId)).toBeVisible();

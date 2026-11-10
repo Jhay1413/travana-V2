@@ -96,7 +96,7 @@ test.describe("Add quote", () => {
     const qd = page.getByTestId("quote-create-drawer");
     await expect(qd).toBeVisible();
     await expect(qd.getByTestId("input-drawer-title")).toHaveValue(enq.title);
-    await expect(qd.getByLabel("Adults")).toHaveValue("4");
+    await expect(qd.getByLabel("Adults", { exact: true })).toHaveValue("4");
     await qd.getByRole("button", { name: "Close" }).click();
     await expect(qd).toBeHidden();
 

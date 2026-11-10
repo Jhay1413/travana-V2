@@ -54,7 +54,14 @@ export function FactsCard({ fields, readOnly, onEdit, supplierUrl, title = "Holi
       {fields.length === 0 ? (
         <p className="text-[13px] text-qp-muted">No details yet.</p>
       ) : (
-        <div className="grid grid-cols-5 gap-x-4 gap-y-3 max-[1700px]:grid-cols-4 max-[1280px]:grid-cols-3 max-[860px]:grid-cols-2 max-[620px]:grid-cols-1" data-testid="holiday-facts-grid">
+        // Up to 8 facts (package holidays) sit in two even rows of 4; longer lists go to 5 across on wide screens.
+        <div
+          className={cn(
+            "grid gap-x-4 gap-y-3 max-[1700px]:grid-cols-4 max-[1280px]:grid-cols-3 max-[860px]:grid-cols-2 max-[620px]:grid-cols-1",
+            fields.length <= 8 ? "grid-cols-4" : "grid-cols-5",
+          )}
+          data-testid="holiday-facts-grid"
+        >
           {fields.map((field) => {
             const Icon = FIELD_ICONS[field.icon];
             return (

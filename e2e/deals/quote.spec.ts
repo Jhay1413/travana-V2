@@ -60,9 +60,9 @@ test.describe("enquiry to quote", () => {
     await expect(drawer.getByLabel("Holiday Type")).toContainText("Package Holiday");
     await expect(drawer.getByLabel("Travel Date")).toContainText("14/06/2027");
     await expect(drawer.getByLabel("Nights")).toHaveValue("10");
-    await expect(drawer.getByLabel("Adults")).toHaveValue("2");
-    await expect(drawer.getByLabel("Children")).toHaveValue("1");
-    await expect(drawer.getByLabel("Infants")).toHaveValue("1");
+    await expect(drawer.getByLabel("Adults", { exact: true })).toHaveValue("2");
+    await expect(drawer.getByLabel("Children", { exact: true })).toHaveValue("1");
+    await expect(drawer.getByLabel("Infants", { exact: true })).toHaveValue("1");
     await expect(drawer.getByLabel("Age 1")).toHaveValue("6");
     await expect(drawer.getByRole("combobox").filter({ hasText: "Majorca" })).toBeVisible();
     await expect(drawer.getByRole("combobox").filter({ hasText: REF.boardBasis[0] })).toBeVisible();
@@ -110,8 +110,8 @@ test.describe("creating a quote", () => {
     await chooseSearchable(page, operatorSelect(drawer), REF.operator);
     await pickDate(page, drawer.getByLabel("Travel Date"), "2027-08-02");
     await setNumber(drawer.getByLabel("Nights"), 14);
-    await setNumber(drawer.getByLabel("Adults"), 2);
-    await setNumber(drawer.getByLabel("Children"), 2);
+    await setNumber(drawer.getByLabel("Adults", { exact: true }), 2);
+    await setNumber(drawer.getByLabel("Children", { exact: true }), 2);
     await setNumber(drawer.getByLabel("Age 1"), 5);
     await setNumber(drawer.getByLabel("Age 2"), 9);
     await chooseSearchable(page, drawer.getByRole("combobox").filter({ hasText: "Select country" }), "Spain");
@@ -159,7 +159,7 @@ test.describe("creating a quote", () => {
     await drawer.getByTestId("input-drawer-title").fill(title);
     await chooseOption(page, drawer.getByLabel("Holiday Type"), "Package Holiday");
     await pickDate(page, drawer.getByLabel("Travel Date"), "2027-08-02");
-    await setNumber(drawer.getByLabel("Children"), 2);
+    await setNumber(drawer.getByLabel("Children", { exact: true }), 2);
     await setNumber(drawer.getByLabel("Age 1"), 5);
     await setNumber(drawer.getByLabel("Age 2"), 9);
     await drawer.getByTestId("form-drawer-submit").click();
