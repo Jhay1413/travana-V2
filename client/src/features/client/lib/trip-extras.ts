@@ -1,5 +1,6 @@
 import type { QuoteDisplay } from "@/features/quote/components/quote-types";
 import { formatIsoDateTime, formatTimelineDate } from "@/features/quote/components/quote-types";
+import { buildSortKey } from "./trip-sort";
 import type { TripStop } from "./trip-types";
 
 const LAST = "￿";
@@ -8,10 +9,33 @@ function sortByKey<T>(items: T[], getKey: (item: T) => string | null | undefined
   return [...items].sort((a, b) => (getKey(a) || LAST).localeCompare(getKey(b) || LAST));
 }
 
+/**
+ * Section ranks inside a day. Stops use "0" (outbound) to "9" (flight extras); "-" sorts before them
+ * so pre-departure extras land ahead of that day's flight, "6" puts the rest after the day's itinerary.
+ */
+const BEFORE_FLIGHT = "-";
+const AFTER_ITINERARY = "6";
+/** Arrival-day airport pick-up: after the outbound flight ("0"/"1"), before hotel check-in ("3"). */
+const ARRIVAL_TRANSFER = "2";
+
+/** Sort key for an extra from its ISO date or date-time. Empty string when it has no date (sorts to the end). */
+export function extraSortKey(value: string | null | undefined, section: string): string {
+  if (!value) return "";
+  const [date = "", rest = ""] = value.split(/[T ]/);
+  if (!date) return "";
+  return buildSortKey(date, section, rest.slice(0, 5));
+}
+
+function transferSection(pickUp: string | null | undefined, dropOff: string | null | undefined): string {
+  if (/airport/i.test(dropOff ?? "")) return BEFORE_FLIGHT;
+  if (/airport/i.test(pickUp ?? "")) return ARRIVAL_TRANSFER;
+  return AFTER_ITINERARY;
+}
+
 const join = (parts: Array<string | null | undefined>, sep: string) => parts.filter(Boolean).join(sep);
 
 /**
- * Add-ons after the main itinerary: transfers, car hire, attraction tickets,
+ * Add-ons (merged into the itinerary by date via mergeTripItems): transfers, car hire, attraction tickets,
  * lounge passes and airport parking, each sorted by its own date like the
  * classic timeline's Extras section.
  */
@@ -32,7 +56,7 @@ export function buildTripExtras(q: QuoteDisplay): TripStop[] {
       title: join([t.pickUpLocation, t.dropOffLocation], " → "),
       lines,
       pills: [],
-      sortKey: t.pickUpTime ?? "",
+      sortKey: extraSortKey(t.pickUpTime, transferSection(t.pickUpLocation, t.dropOffLocation)),
     });
   });
 
@@ -49,7 +73,7 @@ export function buildTripExtras(q: QuoteDisplay): TripStop[] {
       title: join([c.pickUpLocation, c.dropOffLocation], " → "),
       lines,
       pills: [],
-      sortKey: c.pickUpTime ?? "",
+      sortKey: extraSortKey(c.pickUpTime, AFTER_ITINERARY),
     });
   });
 
@@ -68,7 +92,7 @@ export function buildTripExtras(q: QuoteDisplay): TripStop[] {
       title: t.ticketType ?? "",
       lines,
       pills: [],
-      sortKey: t.dateOfVisit ?? "",
+      sortKey: extraSortKey(t.dateOfVisit, AFTER_ITINERARY),
     });
   });
 
@@ -86,7 +110,7 @@ export function buildTripExtras(q: QuoteDisplay): TripStop[] {
       title: join([p.airportName, p.terminal ? `Terminal ${p.terminal}` : null], " · "),
       lines,
       pills: [],
-      sortKey: p.dateOfUsage ?? "",
+      sortKey: extraSortKey(p.dateOfUsage, BEFORE_FLIGHT),
     });
   });
 
@@ -104,7 +128,7 @@ export function buildTripExtras(q: QuoteDisplay): TripStop[] {
       title: join([p.airportName, p.parkingType], " · "),
       lines,
       pills: [],
-      sortKey: p.parkingDate ?? "",
+      sortKey: extraSortKey(p.parkingDate, BEFORE_FLIGHT),
     });
   });
 

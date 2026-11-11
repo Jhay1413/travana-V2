@@ -3,6 +3,7 @@
 // React/lucide and can be unit tested in node; holiday-field-icons.ts maps the
 // keys to lucide components.
 import { currency, formatUKDate, formatLeadSource, type QuoteDisplay } from "@/features/quote/components/quote-types";
+import { isNoneValue } from "@/lib/none-value";
 import type { EnquiryTable } from "@/features/quote/types";
 
 export type FieldIconKey =
@@ -39,13 +40,27 @@ export function formatBudgetType(budgetType?: string | null): string {
   return budgetType === "PER_PERSON" ? "pp" : ` ${budgetType.toLowerCase()}`;
 }
 
-export function formatQuotePassengers(quote: QuoteDisplay): string | null {
+/** Ages worth showing: drops null/undefined, and drops everything when all are 0 (0 is the stored default for "unknown"). */
+function visibleChildAges(ages: Array<number | null | undefined> | undefined, children: number): number[] {
+  const real = (ages ?? []).slice(0, children).filter((a): a is number => typeof a === "number");
+  return real.some((a) => a > 0) ? real : [];
+}
+
+/** The hero shows the transfer as a pill only when one is actually set ("None" and blank hide it). */
+export function showTransferPill(transferType: string | null | undefined): boolean {
+  return !!transferType?.trim() && !isNoneValue(transferType);
+}
+
+export function formatQuotePassengers(quote: QuoteDisplay, opts: { withAges?: boolean } = {}): string | null {
   const adults = quote.passengers?.adults ?? 0;
   const children = quote.passengers?.children ?? 0;
   const infants = quote.passengersInfants ?? 0;
   if (!adults && !children && !infants) return null;
   const parts = [`${adults} Adult${adults === 1 ? "" : "s"}`];
-  if (children) parts.push(`${children} Child${children === 1 ? "" : "ren"}`);
+  if (children) {
+    const ages = opts.withAges ? visibleChildAges(quote.passengers?.childAges, children) : [];
+    parts.push(`${children} Child${children === 1 ? "" : "ren"}${ages.length ? ` (${ages.join(", ")})` : ""}`);
+  }
   if (infants) parts.push(`${infants} Infant${infants === 1 ? "" : "s"}`);
   return parts.join(", ");
 }
@@ -65,7 +80,7 @@ export function buildQuoteLikeFields(item: QuoteDisplay): { left: FieldRowSpec[]
         { key: "board-basis", icon: "utensils", label: "Board Basis", value: item.accommodation?.board || null },
         { key: "room-type", icon: "bed-double", label: "Room Type", value: item.accommodation?.roomType || null },
         { key: "no-nights", icon: "moon-star", label: "No. Nights", value: item.nights != null ? `${item.nights} night${item.nights === 1 ? "" : "s"}` : null },
-        { key: "no-passengers", icon: "users", label: "No. Passengers", value: formatQuotePassengers(item) },
+        { key: "no-passengers", icon: "users", label: "No. Passengers", value: formatQuotePassengers(item, { withAges: true }) },
         { key: "transfer-type", icon: "bus", label: "Transfer Type", value: item.transferType || "Private Transfer" },
       ],
       right: [],
@@ -83,7 +98,7 @@ export function buildQuoteLikeFields(item: QuoteDisplay): { left: FieldRowSpec[]
     right: [
       { key: "departure-airport", icon: "plane-takeoff", label: "Departure Airport", value: item.flights?.outbound?.from || null },
       { key: "tour-operator", icon: "globe", label: "Tour Operator", value: item.commissions?.tourOperator || null },
-      { key: "no-passengers", icon: "users", label: "No. Passengers", value: formatQuotePassengers(item) },
+      { key: "no-passengers", icon: "users", label: "No. Passengers", value: formatQuotePassengers(item, { withAges: true }) },
       { key: "no-nights", icon: "moon-star", label: "No. Nights", value: item.nights != null ? `${item.nights} night${item.nights === 1 ? "" : "s"}` : null },
       { key: "lead-source", icon: "square-arrow-right", label: "Lead Source", value: item.leadSource ? formatLeadSource(item.leadSource) : null },
     ],

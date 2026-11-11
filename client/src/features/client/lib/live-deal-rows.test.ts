@@ -73,6 +73,17 @@ describe("row builders", () => {
     expect(buildBookingRows(bookings, { markLostBookings: true })[0].lost).toBe(true);
   });
 
+  it("never marks past-travel bookings as expired and keeps newest-created first", () => {
+    const bookings = [
+      { id: "old", sales_price: "500", travel_date: "2000-01-01", date_created: "2020-01-01T00:00:00Z" },
+      { id: "new", sales_price: "500", travel_date: "2000-02-01", date_created: "2024-01-01T00:00:00Z" },
+    ] as unknown as HolidayBooking[];
+    const rows = buildBookingRows(bookings);
+    expect(rows.every((r) => r.expired === false)).toBe(true);
+    expect(groupDealRows(rows).expired).toEqual([]);
+    expect(sortDealRows(rows, "newest", new Set()).map((r) => r.id)).toEqual(["new", "old"]);
+  });
+
   it("starts enquiry and booking date lines with the departure airport code", () => {
     const e = buildEnquiryRows([{ id: "e", title: "Spain", departing_airport_code: "MAN, NCL" } as unknown as EnquiryTable]);
     expect(e[0].dateLine).toBe("MAN, NCL");

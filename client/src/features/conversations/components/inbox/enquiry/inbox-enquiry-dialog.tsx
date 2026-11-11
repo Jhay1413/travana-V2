@@ -42,6 +42,8 @@ interface FormProps extends Omit<InboxEnquiryDialogProps, "open" | "intent" | "g
   resolved: ResolvedIntent;
   /** Reports "a save is in flight" so the overlay can ignore dismissals meanwhile. */
   onSavingChange(saving: boolean): void;
+  /** Reports whether the user changed the form, so closing can confirm first. */
+  onDirtyChange(dirty: boolean): void;
 }
 
 const SUBTITLE_READY = "Luna filled in what it could from the chat. Check it, then save.";
@@ -72,7 +74,7 @@ function LinkedClient({ client, conversation }: { client: NeonClient; conversati
   );
 }
 
-function ReadyForm({ resolved, conversation, client, quote, onAskClient, onCreated, onStartQuote, onOpenChange, onSavingChange }: FormProps) {
+function ReadyForm({ resolved, conversation, client, quote, onAskClient, onCreated, onStartQuote, onOpenChange, onSavingChange, onDirtyChange }: FormProps) {
   const { user } = useAuth();
   const { data: users = [] } = useUsers();
   const first = firstNameFor(client, conversation.contact);
@@ -111,6 +113,7 @@ function ReadyForm({ resolved, conversation, client, quote, onAskClient, onCreat
         if (!isSaving) onOpenChange(false);
       }}
       onStartQuote={onStartQuote}
+      onDirtyChange={onDirtyChange}
       onSubmit={async (_data, { form, startQuote }) => {
         // user_id is the deal owner; the branch comes from the saver's scope, not this field.
         if (!assigneeId) return;
@@ -171,7 +174,7 @@ function GeneratingBody({ onClose }: { onClose(): void }) {
   );
 }
 
-function PrefillBody(props: Omit<InboxEnquiryDialogProps, "open" | "generating"> & { onSavingChange(saving: boolean): void }) {
+function PrefillBody(props: Omit<InboxEnquiryDialogProps, "open" | "generating"> & { onSavingChange(saving: boolean): void; onDirtyChange(dirty: boolean): void }) {
   const { ready, isError, retry, resolved } = useEnquiryPrefill(props.intent, props.conversation.channel);
   const close = () => props.onOpenChange(false);
   if (isError) {
@@ -203,6 +206,7 @@ function PrefillBody(props: Omit<InboxEnquiryDialogProps, "open" | "generating">
 /** Centred pop-up to turn a chat into an enquiry, pre-filled by Luna. */
 export function InboxEnquiryDialog({ open, onOpenChange, generating = false, ...rest }: InboxEnquiryDialogProps) {
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   if (!open) return null;
   return (
     <FormOverlay
@@ -210,10 +214,11 @@ export function InboxEnquiryDialog({ open, onOpenChange, generating = false, ...
       onClose={() => onOpenChange(false)}
       // Closing mid-save would hide the result and invite a duplicate click.
       preventClose={saving}
+      isDirty={dirty}
       variant="enquiry"
       data-testid="drawer-create-enquiry"
     >
-      {generating ? <GeneratingBody onClose={() => onOpenChange(false)} /> : <PrefillBody {...rest} onOpenChange={onOpenChange} onSavingChange={setSaving} />}
+      {generating ? <GeneratingBody onClose={() => onOpenChange(false)} /> : <PrefillBody {...rest} onOpenChange={onOpenChange} onSavingChange={setSaving} onDirtyChange={setDirty} />}
     </FormOverlay>
   );
 }

@@ -2,6 +2,7 @@
 // already know the deal (the dashboard "New task", the "+" menu's Task).
 import type { EnquiryTable, Quote, Transaction } from "@/features/quote/types";
 import type { HolidayBooking } from "@/features/client/types";
+import { startOfToday } from "@/lib/deal-expiry";
 import { buildBookingRows, buildEnquiryRows, buildQuoteRows, groupDealRows, type HolidayRowData } from "./live-deal-rows";
 
 export type TaskDealType = "enquiry" | "quote" | "booking";
@@ -15,6 +16,14 @@ export interface TaskDealOption {
 }
 
 export const DEAL_GROUP_LABELS: Record<TaskDealType, string> = { quote: "Quotes", booking: "Bookings", enquiry: "Enquiries" };
+// The task picker still leaves out bookings whose travel date has passed, even
+// though the client page no longer labels bookings as Expired.
+function hasDeparted(b: { travel_date?: string | null }): boolean {
+  if (!b.travel_date) return false;
+  const t = new Date(b.travel_date).getTime();
+  return !isNaN(t) && t < startOfToday().getTime();
+}
+
 /** Display order of the groups in the deal picker. */
 export const DEAL_GROUP_ORDER: TaskDealType[] = ["quote", "booking", "enquiry"];
 
@@ -46,7 +55,7 @@ export function liveDealOptions(transactions: Transaction[]): TaskDealOption[] {
     row,
     ...row.copies.filter((c) => !c.expired && !c.lost),
   ]);
-  const bookingRows = groupDealRows(buildBookingRows(bookings, { markLostBookings: true })).active;
+  const bookingRows = groupDealRows(buildBookingRows(bookings.filter((b) => !hasDeparted(b)), { markLostBookings: true })).active;
   const enquiryRows = groupDealRows(buildEnquiryRows(enquiries)).active;
 
   return [

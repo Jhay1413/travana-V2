@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { QuoteDisplay } from "@/features/quote/components/quote-types";
-import { buildTripExtras, buildTripStops } from "./trip-timeline";
+import { buildTripExtras, buildTripStops, mergeTripItems } from "./trip-timeline";
 
 type Leg = QuoteDisplay["flights"]["outbound"];
 
@@ -75,6 +75,7 @@ describe("buildTripStops", () => {
   it("describes the outbound flight and the hotel", () => {
     const [out, , hotel] = buildTripStops(holiday());
     expect(out).toMatchObject({ title: "LGW → PMI", route: { depart: "06:15", arrive: "09:40" } });
+    expect(out).toMatchObject({ from: "LGW", to: "PMI", departTime: "06:15", arriveTime: "09:40" });
     expect(out!.lines).toContain("BA2640");
     expect(hotel).toMatchObject({ title: "Hotel Bahia", label: "Hotel check-in, 7 nights", pills: ["Junior Suite", "All Inclusive"] });
     expect(hotel!.lines).toContain("Alcudia, Spain");
@@ -98,6 +99,7 @@ describe("buildTripStops", () => {
     q.flights.inbound = leg();
     const inbound = buildTripStops(q).find((s) => s.kind === "inbound")!;
     expect(inbound.title).toBe("PMI → LGW");
+    expect(inbound).toMatchObject({ from: "PMI", to: "LGW", departTime: "", arriveTime: "" });
     expect(inbound.sortKey.startsWith("2026-11-09#4")).toBe(true);
   });
 
@@ -127,7 +129,7 @@ describe("buildTripStops", () => {
     expect(stops.map((s) => s.kind)).toEqual(["lodge-checkin", "lodge-arrival", "lodge-checkout"]);
     expect(stops[0]).toMatchObject({ tone: "lodge", title: "Woodland Lodge" });
     expect(stops[0]!.lines).toContain("2 pets");
-    expect(stops[2]!.sortKey).toBe("2026-11-09T10:00");
+    expect(stops[2]!.sortKey).toBe("2026-11-09#4#10:00");
   });
 
   it("sorts additional hotels by their own check-in and adds flight extras last", () => {
@@ -145,7 +147,41 @@ describe("buildTripStops", () => {
   });
 });
 
+describe("flight stops and transfer", () => {
+  it("gives connecting legs structured from/to/times", () => {
+    const q = holiday({
+      flights: {
+        outbound: leg({ from: "A", to: "B", departDate: "2026-11-02", departTime: "06:00", arriveTime: "07:00" }),
+        inbound: leg(),
+        outboundConnecting: [leg({ from: "B", to: "C", departDate: "2026-11-02", departTime: "08:00", arriveTime: "10:30" })],
+        inboundConnecting: [],
+      },
+    });
+    expect(buildTripStops(q).find((s) => s.kind === "outbound-connecting")).toMatchObject({ from: "B", to: "C", departTime: "08:00", arriveTime: "10:30" });
+  });
+
+  it("skips the transfer stop when the type is none", () => {
+    expect(buildTripStops(holiday({ transferType: "None" })).some((s) => s.kind === "transfer")).toBe(false);
+    expect(buildTripStops(holiday({ transferType: "none" })).some((s) => s.kind === "transfer")).toBe(false);
+  });
+});
+
 describe("buildTripExtras", () => {
+  it("sorts extras by date, pre-departure ones ahead of that day's flight", () => {
+    const q = holiday({
+      airportParkings: [{ parkingType: "Long stay", airportName: "LGW", parkingDate: "2026-11-02", duration: null, tourOperatorName: null }],
+      attractionTickets: [{ ticketType: "Zoo", dateOfVisit: "2026-11-04", numberOfTickets: 2, tourOperatorName: null }],
+      carHires: [{ pickUpLocation: "PMI", dropOffLocation: "PMI", pickUpTime: null, dropOffTime: null, noOfDays: 1, tourOperatorName: null }],
+    });
+    const kinds = mergeTripItems(buildTripStops(q), buildTripExtras(q)).map((s) => s.kind);
+    expect(kinds).toEqual(["extra-parking", "outbound", "transfer", "hotel", "extra-ticket", "inbound", "extra-carhire"]);
+  });
+
+  it("builds sort keys from the date field", () => {
+    const q = display({ loungePasses: [{ terminal: null, airportName: "LGW", dateOfUsage: "2026-11-02", note: null, tourOperatorName: null }] });
+    expect(buildTripExtras(q)[0]!.sortKey.startsWith("2026-11-02#-#")).toBe(true);
+  });
+
   it("is empty when there are no add-ons", () => {
     expect(buildTripExtras(display())).toEqual([]);
   });

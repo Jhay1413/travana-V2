@@ -14,6 +14,11 @@ function operatorSelect(drawer: Locator) {
   return drawer.getByRole("combobox").filter({ hasText: /Select operator|E2E /i });
 }
 
+/** The "Discard changes?" confirmation shown when a form with unsaved edits is asked to close. */
+function discardPrompt(page: Page): Locator {
+  return page.getByTestId("form-discard-confirm");
+}
+
 async function openEnquiryPopup(page: Page, clientId: string): Promise<Locator> {
   await page.goto(`/clients/${clientId}`);
   await page.getByTestId("client-index-create").click();
@@ -96,8 +101,70 @@ test.describe("enquiry pop-up", () => {
     await popup.getByTestId("input-enquiry-title").fill("Escape me");
     await expect(page.getByTestId("client-index-create-enquiry")).toBeHidden(); // the Create menu has finished closing
     await page.keyboard.press("Escape");
+    // The typed title is unsaved work, so Escape asks before closing.
+    await expect(discardPrompt(page)).toBeVisible();
+    await discardPrompt(page).getByRole("button", { name: "Discard" }).click();
     await expect(page.getByTestId("enquiry-drawer")).toBeHidden();
     expect(await queryRows(`select 1 from transaction where client_id = $1`, [client.id])).toHaveLength(0);
+  });
+
+  test("an untouched pop-up closes straight away on Escape and on the X, with no prompt", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+
+    await openEnquiryPopup(page, client.id);
+    await expect(page.getByTestId("client-index-create-enquiry")).toBeHidden(); // the Create menu has finished closing
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("enquiry-drawer")).toBeHidden();
+    await expect(discardPrompt(page)).toBeHidden();
+
+    const again = await openEnquiryPopup(page, client.id);
+    await expect(page.getByTestId("client-index-create-enquiry")).toBeHidden();
+    await again.getByRole("button", { name: "Close" }).click();
+    await expect(page.getByTestId("enquiry-drawer")).toBeHidden();
+    await expect(discardPrompt(page)).toBeHidden();
+  });
+
+  test("a dirty pop-up asks first: Keep editing keeps the typed value, Escape on the prompt closes only the prompt", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+    const popup = await openEnquiryPopup(page, client.id);
+    const title = popup.getByTestId("input-enquiry-title");
+    await title.fill("Keep me");
+    await expect(page.getByTestId("client-index-create-enquiry")).toBeHidden();
+
+    await page.keyboard.press("Escape");
+    await expect(discardPrompt(page)).toBeVisible();
+    await discardPrompt(page).getByRole("button", { name: "Keep editing" }).click();
+    await expect(discardPrompt(page)).toBeHidden();
+    await expect(page.getByTestId("enquiry-drawer")).toBeVisible();
+    await expect(title).toHaveValue("Keep me");
+
+    // Escape while the prompt is open dismisses the prompt only.
+    await page.keyboard.press("Escape");
+    await expect(discardPrompt(page)).toBeVisible();
+    // Wait until the prompt owns focus so the key goes to it, not to the form behind it.
+    await expect(discardPrompt(page).getByRole("button", { name: "Keep editing" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(discardPrompt(page)).toBeHidden();
+    await expect(page.getByTestId("enquiry-drawer")).toBeVisible();
+    await expect(title).toHaveValue("Keep me");
+  });
+
+  test("clicking outside a dirty pop-up does nothing", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+    const popup = await openEnquiryPopup(page, client.id);
+    await popup.getByTestId("input-enquiry-title").fill("Stay put");
+    await expect(page.getByTestId("client-index-create-enquiry")).toBeHidden();
+
+    await page.mouse.click(5, 5); // on the scrim, outside the dialog
+    await expect(page.getByTestId("enquiry-drawer")).toBeVisible();
+    await expect(discardPrompt(page)).toBeHidden();
+    await expect(popup.getByTestId("input-enquiry-title")).toHaveValue("Stay put");
   });
 
   test("opened from the Create menu, focus starts in the title field, and after Escape returns to the menu trigger", async ({ page }) => {
@@ -250,8 +317,9 @@ test.describe("quote pop-up", () => {
     await expect(popup.getByRole("button", { name: "Expand section" })).toHaveCount(0);
     await expect(popup.getByRole("button", { name: "Collapse section" })).toHaveCount(0);
 
-    // Escape closes it.
+    // Escape closes it directly: opening the form (auto-calculated values included) is not an edit.
     await page.keyboard.press("Escape");
+    await expect(discardPrompt(page)).toBeHidden();
     await expect(page.getByTestId("quote-edit-drawer")).toBeHidden();
   });
 });

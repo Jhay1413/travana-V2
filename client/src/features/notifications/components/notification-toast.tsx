@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, CheckCircle, LifeBuoy, MessageSquare, UserPlus, X } from "lucide-react";
+import { Bell, CheckCircle, Eye, LifeBuoy, MessageSquare, Pencil, Share2, UserPlus, X } from "lucide-react";
 import { useCurrentUser, useNotifications } from "@/hooks/queries";
 import { useMarkNotificationRead } from "@/hooks/mutations";
 import { isNotificationsPanelOpen } from "@/features/notifications/lib/panel-open-store";
@@ -81,6 +81,66 @@ const NOTIF_STYLE: Record<string, { icon: typeof Bell; label: string; border: st
     btnHover: "hover:text-teal-800 dark:hover:text-teal-200",
     dismissColor: "text-teal-500/60",
     dismissHover: "hover:bg-teal-200/50 hover:text-teal-700 dark:hover:bg-teal-500/20 dark:hover:text-teal-300",
+  },
+  quote_viewed: {
+    icon: Eye,
+    label: "Quote viewed",
+    border: "border-sky-200/60 dark:border-sky-500/30",
+    bg: "bg-sky-50/95 dark:bg-sky-950/90",
+    iconBg: "bg-sky-200/60 dark:bg-sky-500/20",
+    iconColor: "text-sky-600 dark:text-sky-400",
+    labelColor: "text-sky-600/80 dark:text-sky-400/80",
+    titleColor: "text-sky-900 dark:text-sky-100",
+    bodyColor: "text-sky-800/75 dark:text-sky-200/70",
+    btnColor: "text-sky-600 dark:text-sky-400",
+    btnHover: "hover:text-sky-800 dark:hover:text-sky-200",
+    dismissColor: "text-sky-500/60",
+    dismissHover: "hover:bg-sky-200/50 hover:text-sky-700 dark:hover:bg-sky-500/20 dark:hover:text-sky-300",
+  },
+  quote_shared: {
+    icon: Share2,
+    label: "Quote shared",
+    border: "border-indigo-200/60 dark:border-indigo-500/30",
+    bg: "bg-indigo-50/95 dark:bg-indigo-950/90",
+    iconBg: "bg-indigo-200/60 dark:bg-indigo-500/20",
+    iconColor: "text-indigo-600 dark:text-indigo-400",
+    labelColor: "text-indigo-600/80 dark:text-indigo-400/80",
+    titleColor: "text-indigo-900 dark:text-indigo-100",
+    bodyColor: "text-indigo-800/75 dark:text-indigo-200/70",
+    btnColor: "text-indigo-600 dark:text-indigo-400",
+    btnHover: "hover:text-indigo-800 dark:hover:text-indigo-200",
+    dismissColor: "text-indigo-500/60",
+    dismissHover: "hover:bg-indigo-200/50 hover:text-indigo-700 dark:hover:bg-indigo-500/20 dark:hover:text-indigo-300",
+  },
+  quote_accepted: {
+    icon: CheckCircle,
+    label: "Quote accepted",
+    border: "border-emerald-200/60 dark:border-emerald-500/30",
+    bg: "bg-emerald-50/95 dark:bg-emerald-950/90",
+    iconBg: "bg-emerald-200/60 dark:bg-emerald-500/20",
+    iconColor: "text-emerald-600 dark:text-emerald-400",
+    labelColor: "text-emerald-600/80 dark:text-emerald-400/80",
+    titleColor: "text-emerald-900 dark:text-emerald-100",
+    bodyColor: "text-emerald-800/75 dark:text-emerald-200/70",
+    btnColor: "text-emerald-600 dark:text-emerald-400",
+    btnHover: "hover:text-emerald-800 dark:hover:text-emerald-200",
+    dismissColor: "text-emerald-500/60",
+    dismissHover: "hover:bg-emerald-200/50 hover:text-emerald-700 dark:hover:bg-emerald-500/20 dark:hover:text-emerald-300",
+  },
+  quote_changes_requested: {
+    icon: Pencil,
+    label: "Changes requested",
+    border: "border-amber-200/60 dark:border-amber-500/30",
+    bg: "bg-amber-50/95 dark:bg-amber-950/90",
+    iconBg: "bg-amber-200/60 dark:bg-amber-500/20",
+    iconColor: "text-amber-600 dark:text-amber-400",
+    labelColor: "text-amber-600/80 dark:text-amber-400/80",
+    titleColor: "text-amber-900 dark:text-amber-100",
+    bodyColor: "text-amber-800/75 dark:text-amber-200/70",
+    btnColor: "text-amber-600 dark:text-amber-400",
+    btnHover: "hover:text-amber-800 dark:hover:text-amber-200",
+    dismissColor: "text-amber-500/60",
+    dismissHover: "hover:bg-amber-200/50 hover:text-amber-700 dark:hover:bg-amber-500/20 dark:hover:text-amber-300",
   },
 };
 

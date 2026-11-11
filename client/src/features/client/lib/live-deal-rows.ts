@@ -1,4 +1,4 @@
-import { isQuoteExpired, isEnquiryExpired, isBookingExpired, isQuoteLost, isEnquiryLost } from "@/lib/deal-expiry";
+import { isQuoteExpired, isEnquiryExpired, isQuoteLost, isEnquiryLost } from "@/lib/deal-expiry";
 import type { EnquiryTable, Quote } from "@/features/quote/types";
 import type { HolidayBooking, HolidaySelection } from "@/features/client/types";
 import { isPrimaryQuote } from "@/features/client/components/client-types";
@@ -172,7 +172,8 @@ export function buildBookingRows(bookings: HolidayBooking[], options: { markLost
       destinationName: null,
       dateLine: buildDateLine(br.departing_airport_code ?? null, b.travel_date, b.num_of_nights),
       createdAt: b.date_created,
-      expired: isBookingExpired(b),
+      // Bookings are never labelled or grouped as Expired (agency decision).
+      expired: false,
       lost: options.markLostBookings === true && isLostBooking(b),
       isCopy: false,
       copies: [],

@@ -6,15 +6,16 @@
  */
 import type { QuoteDisplay } from "@/features/quote/components/quote-types";
 import { formatTime24, formatTimelineDate } from "@/features/quote/components/quote-types";
+import { isNoneValue } from "@/lib/none-value";
 import { buildTripExtras } from "./trip-extras";
+import { buildSortKey, byKey, mergeTripItems } from "./trip-sort";
 import type { TripStop } from "./trip-types";
 
 export type { TripIcon, TripStop, TripTone } from "./trip-types";
-export { buildTripExtras };
+export { buildTripExtras, mergeTripItems };
 
 type Leg = QuoteDisplay["flights"]["outbound"];
 
-const buildSortKey = (date: string, section: string, time?: string) => `${date || "9999-12-31"}#${section}#${time || "00:00"}`;
 
 function legHasData(leg: Leg): boolean {
   return Boolean(leg.from || leg.to || leg.departDate || leg.arriveDate || leg.flightNo);
@@ -32,6 +33,11 @@ function flightRoute(leg: Leg): { depart: string; arrive: string } | undefined {
   const depart = formatTime24(leg.departTime);
   const arrive = formatTime24(leg.arriveTime);
   return depart || arrive ? { depart, arrive } : undefined;
+}
+
+/** Structured from/to + times for the two-row flight layout. */
+function flightEnds(from: string, to: string, leg: Leg) {
+  return { from, to, departTime: formatTime24(leg.departTime), arriveTime: formatTime24(leg.arriveTime) };
 }
 
 function landsNextDay(leg: Leg): boolean {
@@ -57,7 +63,7 @@ function lodgeStops(q: QuoteDisplay): TripStop[] {
     title: q.lodge?.type || "Lodge",
     lines: checkInLines,
     pills: [],
-    sortKey: `${checkIn}T14:00`,
+    sortKey: buildSortKey(checkIn, "3", "14:00"),
   });
   if (q.accommodation.property) {
     stops.push({
@@ -69,7 +75,7 @@ function lodgeStops(q: QuoteDisplay): TripStop[] {
       title: q.accommodation.property,
       lines: [place(q)].filter(Boolean),
       pills: [],
-      sortKey: `${checkIn}T15:00`,
+      sortKey: buildSortKey(checkIn, "3", "15:00"),
     });
   }
   const checkout = q.returnDate || q.travelDate;
@@ -82,7 +88,7 @@ function lodgeStops(q: QuoteDisplay): TripStop[] {
     title: formatTimelineDate(checkout),
     lines: [],
     pills: [],
-    sortKey: `${checkout}T10:00`,
+    sortKey: buildSortKey(checkout, "4", "10:00"),
   });
   return stops;
 }
@@ -101,6 +107,7 @@ function connectingStops(q: QuoteDisplay, legs: Leg[], direction: "out" | "in", 
     lines: flightLines(leg),
     pills: [],
     route: flightRoute(leg),
+    ...flightEnds(leg.from, leg.to, leg),
     landsNextDay: inbound && landsNextDay(leg) ? true : undefined,
     sortKey: buildSortKey(leg.departDate || fallbackDate, inbound ? "5" : "1", leg.departTime),
   }));
@@ -126,12 +133,13 @@ function standardStops(q: QuoteDisplay): TripStop[] {
       lines: flightLines(ob),
       pills: [],
       route: flightRoute(ob),
+      ...flightEnds(ob.from, ob.to, ob),
       sortKey: buildSortKey(ob.departDate, "0", ob.departTime),
     });
   }
   stops.push(...connectingStops(q, outboundConnecting, "out", (hasOutboundPrimary ? 1 : 0) + 1));
 
-  if (q.transferType && !isCruise) {
+  if (q.transferType && !isNoneValue(q.transferType) && !isCruise) {
     const date = q.checkInDate || q.travelDate || ob.departDate;
     stops.push({
       id: "transfer",
@@ -212,6 +220,7 @@ function standardStops(q: QuoteDisplay): TripStop[] {
       lines: [formatTimelineDate(date), [ib.carrier, ib.flightNo].filter(Boolean).join(" ")].filter(Boolean),
       pills: [],
       route: flightRoute(ib),
+      ...flightEnds(ib.from || ob.to || "", ib.to || ob.from || "", ib),
       landsNextDay: landsNextDay(ib) ? true : undefined,
       sortKey: buildSortKey(date, "4", ib.departTime),
     });
@@ -239,5 +248,5 @@ function standardStops(q: QuoteDisplay): TripStop[] {
 export function buildTripStops(q: QuoteDisplay): TripStop[] {
   const isHotTub = q.packageType?.toLowerCase().includes("hot tub");
   const stops = isHotTub ? lodgeStops(q) : standardStops(q);
-  return stops.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  return stops.sort((a, b) => byKey(a.sortKey, b.sortKey));
 }

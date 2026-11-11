@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { stepIndex } from "@/lib/photo-nav";
@@ -75,8 +75,30 @@ export function PhotoViewer({ images, open, index, title, onIndexChange, onOpenC
             <X className="size-5" />
           </button>
         </div>
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-2xl">
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-2xl">
           {current ? <img src={current.url} alt={`${title}, photo ${Math.min(index, count - 1) + 1}`} className="max-h-full max-w-full object-contain" /> : null}
+          {count > 1 && (
+            <>
+              <button
+                type="button"
+                aria-label="Previous photo"
+                data-testid="button-photo-prev"
+                onClick={() => onIndexChange(stepIndex(index, -1, count))}
+                className="absolute left-3 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white transition hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <ChevronLeft className="size-6" />
+              </button>
+              <button
+                type="button"
+                aria-label="Next photo"
+                data-testid="button-photo-next"
+                onClick={() => onIndexChange(stepIndex(index, 1, count))}
+                className="absolute right-3 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-black/50 text-white transition hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <ChevronRight className="size-6" />
+              </button>
+            </>
+          )}
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {images.map((img, i) => (

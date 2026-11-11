@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { FormCloseButton, FormHead, FormOverlay } from "@/components/shared/form-shell";
 import { useEnquiry, usePackageTypes } from "@/hooks/queries";
@@ -63,10 +63,11 @@ export function ConvertEnquiryQuoteDialog({ open, onOpenChange, enquiryId, trans
     });
   };
 
+  const [formDirty, setFormDirty] = useState(false);
   if (!open) return null;
 
   return (
-    <FormOverlay label="Convert enquiry to quote" onClose={() => onOpenChange(false)} preventClose={createQuote.isPending} variant="popup" data-testid="convert-enquiry-drawer">
+    <FormOverlay label="Convert enquiry to quote" onClose={() => onOpenChange(false)} preventClose={createQuote.isPending} isDirty={formDirty} variant="popup" data-testid="convert-enquiry-drawer">
       {isLoading && (
         <>
           <FormHead title="Convert enquiry to quote" right={<FormCloseButton onClick={() => onOpenChange(false)} />} />
@@ -91,6 +92,7 @@ export function ConvertEnquiryQuoteDialog({ open, onOpenChange, enquiryId, trans
           isLoading={createQuote.isPending}
           submitLabel="Convert to Quote"
           onCancel={() => onOpenChange(false)}
+          onDirtyChange={setFormDirty}
         />
       )}
     </FormOverlay>

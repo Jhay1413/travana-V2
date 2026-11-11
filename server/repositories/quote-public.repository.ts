@@ -380,12 +380,32 @@ export const quotePublicRepository = {
     return { transactionId: result.transactionId, agentUserId: result.agentUserId };
   },
 
-  async notifyAgent(quoteId: string, title: string, message: string, link?: string) {
+  /** Slim lookup for notification wording and links: the quote's label and its own client. */
+  async findNotifyInfo(quoteId: string): Promise<{ title: string | null; destinationName: string | null; clientId: string | null } | null> {
+    const [row] = await db
+      .select({ title: quote.title, clientId: transaction.client_id })
+      .from(quote)
+      .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .where(eq(quote.id, quoteId))
+      .limit(1);
+    if (!row) return null;
+    const [dest] = await db
+      .select({ name: destination.name })
+      .from(quote_accomodation)
+      .innerJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+      .innerJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .innerJoin(destination, eq(resorts.destination_id, destination.id))
+      .where(eq(quote_accomodation.quote_id, quoteId))
+      .limit(1);
+    return { title: row.title, destinationName: dest?.name ?? null, clientId: row.clientId };
+  },
+
+  async notifyAgent(quoteId: string, title: string, message: string, link?: string, type: string = "quote_viewed") {
     const agentUserId = await this.getAgentUserIdByQuoteId(quoteId);
     if (!agentUserId) return;
     await db.insert(notifications).values({
       userId: agentUserId,
-      type: "quote_viewed",
+      type,
       title,
       message,
       link: link || null,

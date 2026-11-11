@@ -50,9 +50,19 @@ const TONE_LABEL: Record<TripTone, string> = {
   lodge: "text-qp-trip-transfer-fg",
 };
 
+function FlightRow({ airport, time, testId }: { airport: string; time?: string; testId: string }) {
+  return (
+    <div className="flex min-w-0 items-start justify-between gap-3 text-[13px] font-semibold leading-snug" data-testid={testId}>
+      <span className="min-w-0 break-words">{airport}</span>
+      <span className="shrink-0 tabular-nums">{time || "--:--"}</span>
+    </div>
+  );
+}
+
 /** One stop on the vertical trip timeline: tone-coloured icon chip, a dashed connector down to the next stop, then the details. */
 export function TripStop({ stop, isLast }: { stop: TripStopData; isLast: boolean }) {
   const Icon = ICONS[stop.icon];
+  const isFlight = stop.from !== undefined && stop.to !== undefined;
   return (
     <li
       className={cn(
@@ -67,11 +77,18 @@ export function TripStop({ stop, isLast }: { stop: TripStopData; isLast: boolean
       </span>
       <div className="min-w-0">
         <span className={cn("text-[10.5px] font-semibold uppercase tracking-[.04em]", TONE_LABEL[stop.tone])}>{stop.label}</span>
-        <h3 className="mt-px min-w-0">
-          <TruncateTip text={stop.title} className="text-[13px] font-semibold leading-snug" />
-        </h3>
+        {isFlight ? (
+          <div className="mt-px flex min-w-0 flex-col gap-0.5" data-testid="trip-stop-flight-rows">
+            <FlightRow airport={stop.from ?? ""} time={stop.departTime} testId="trip-flight-from" />
+            <FlightRow airport={stop.to ?? ""} time={stop.arriveTime} testId="trip-flight-to" />
+          </div>
+        ) : (
+          <h3 className="mt-px min-w-0">
+            <TruncateTip text={stop.title} className="text-[13px] font-semibold leading-snug" />
+          </h3>
+        )}
         <div className="mt-0.5 flex min-w-0 flex-col gap-0.5 text-xs text-qp-muted">
-          {stop.route && (
+          {stop.route && !isFlight && (
             <span className="flex items-center gap-2 tabular-nums">
               <b className="text-sm font-semibold text-foreground">{stop.route.depart || "--:--"}</b>
               <i className="relative h-0 min-w-4 flex-1 border-t-2 border-social-border" aria-hidden />

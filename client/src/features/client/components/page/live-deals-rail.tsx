@@ -301,6 +301,7 @@ export function LiveDealsRail({ enquiries, quotes, bookings, state, isLoading, r
 
         {!isLoading && (
           <>
+            {(tab !== "bookings" || groups.expired.length > 0) && (
             <Collapsible label="Expired" count={groups.expired.length} open={expiredOpen} onToggle={() => setExpiredOpen(!expiredOpen)} testId="all-holidays-expired-toggle">
               {groups.expired.length ? (
                 <RowGroup rows={groups.expired} pinnedKeys={pinnedKeys} onSelect={onSelect} onTogglePin={handleTogglePin} />
@@ -308,6 +309,7 @@ export function LiveDealsRail({ enquiries, quotes, bookings, state, isLoading, r
                 <p className="pb-3 text-[13px] text-social-muted">Nothing here.</p>
               )}
             </Collapsible>
+            )}
             <Collapsible label="Lost" count={groups.lost.length} open={lostOpen} onToggle={() => setLostOpen(!lostOpen)} testId="all-holidays-lost-toggle">
               {groups.lost.length ? (
                 <RowGroup rows={groups.lost} pinnedKeys={pinnedKeys} onSelect={onSelect} onTogglePin={handleTogglePin} />

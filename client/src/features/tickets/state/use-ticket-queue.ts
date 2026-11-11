@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useCurrentUser } from "@/hooks/queries";
+import { useCurrentUser, useUsers } from "@/hooks/queries";
 import { useTickets } from "../api/use-ticket-queries";
 import { usePinnedTicketIds } from "../api/use-ticket-pin";
 import { agentOptions, deriveQueue } from "../lib/ticket-queue";
@@ -19,7 +19,8 @@ export function useTicketQueue({ boardAllowed = false }: { boardAllowed?: boolea
   const { data: agentRows, isLoading: loadingAgent } = useTickets(prefs.scope, { enabled: !!prefs.agentId, assignedTo: prefs.agentId });
   const rows = prefs.agentId ? agentRows : allRows;
   const isLoading = prefs.agentId ? loadingAgent : loadingAll;
-  const agents = useMemo(() => agentOptions(allRows ?? []), [allRows]);
+  const { data: roster } = useUsers();
+  const agents = useMemo(() => agentOptions(roster ?? [], allRows ?? []), [roster, allRows]);
   const pinned = usePinnedTicketIds();
   const now = useNow();
 

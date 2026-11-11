@@ -25,3 +25,6 @@ export { FormButton, FormCloseButton, FormLinkButton } from "./buttons";
 export type { FormButtonProps, FormButtonTone } from "./buttons";
 export { countDone, footerStatus } from "./lib/form-progress";
 export type { ProgressSection } from "./lib/form-progress";
+export { useFormOverlayClose } from "./form-overlay-context";
+export { decideClose } from "./close-decision";
+export type { CloseDecision } from "./close-decision";

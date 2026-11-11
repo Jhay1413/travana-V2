@@ -339,12 +339,13 @@ export function BookingCreateDialog({
     });
   };
 
+  const [formDirty, setFormDirty] = useState(false);
   if (!open) return null;
 
   const busy = createTransaction.isPending || isFinalizing;
 
   return (
-    <FormOverlay label="Create booking" onClose={() => onOpenChange(false)} preventClose={busy} variant="popup" data-testid="booking-create-drawer">
+    <FormOverlay label="Create booking" onClose={() => onOpenChange(false)} preventClose={busy} isDirty={formDirty} variant="popup" data-testid="booking-create-drawer">
       <BookingRHFForm
         key={clientId + open}
         title="Add booking"
@@ -353,6 +354,7 @@ export function BookingCreateDialog({
         isLoading={busy}
         submitLabel="Create Booking"
         onCancel={() => onOpenChange(false)}
+        onDirtyChange={setFormDirty}
         clientId={clientId}
       />
     </FormOverlay>

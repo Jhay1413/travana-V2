@@ -45,6 +45,8 @@ export function useEnquiryFormState(args: { enquiry?: Enquiry | null; init?: Enq
   const [form, setForm] = useState<EnquiryForm>(() => init?.form ?? (enquiry ? enquiryToForm(enquiry) : DEFAULT_FORM));
   const [sources, setSources] = useState<Sources | null>(() => init?.sources ?? null);
   const [touched, setTouched] = useState<ReadonlySet<FieldKey>>(() => new Set());
+  // True once the user has changed a field (auto-prefill and lookup follow-ups do not count).
+  const [userEdited, setUserEdited] = useState(false);
   const titleIsAuto = useRef(init?.titleIsAuto ?? false);
   const lookups = useEnquiryLookups(form);
   const [openModal, setOpenModal] = useState<EnquiryModalKind | null>(null);
@@ -82,11 +84,15 @@ export function useEnquiryFormState(args: { enquiry?: Enquiry | null; init?: Enq
   const edit = (key: FieldKey, patch: Partial<EnquiryForm>) => {
     if (key === "title") titleIsAuto.current = false;
     setForm((prev) => ({ ...prev, ...patch }));
+    setUserEdited(true);
     touch(key);
   };
 
   /** Edit a field that carries no source chip. */
-  const patch = (p: Partial<EnquiryForm>) => setForm((prev) => ({ ...prev, ...p }));
+  const patch = (p: Partial<EnquiryForm>) => {
+    setForm((prev) => ({ ...prev, ...p }));
+    setUserEdited(true);
+  };
 
   /** Applies a destination / resort patch; a followed title shows as "set for you". */
   const editLinked = (key: FieldKey, p: Partial<EnquiryForm>) => {
@@ -126,11 +132,13 @@ export function useEnquiryFormState(args: { enquiry?: Enquiry | null; init?: Enq
   /** Back to an empty form (create mode); the holiday type defaults again. */
   const reset = () => {
     titleIsAuto.current = false;
+    setUserEdited(false);
     setForm(DEFAULT_FORM);
   };
 
   return {
     form,
+    userEdited,
     lookups,
     modals: { current: openModal, open: setOpenModal, close: () => setOpenModal(null) },
     edit,

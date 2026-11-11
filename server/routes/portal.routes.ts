@@ -17,6 +17,7 @@ import crypto from "crypto";
 import { quoteExtrasTotalExpr } from "../v2/utils/commission-sql";
 import { customerPrice } from "../v2/utils/customer-price";
 import { quotePublicRepository } from "../repositories/quote-public.repository";
+import { quotePublicService } from "../services/quote-public.service";
 import { portalLoginTokenRepository } from "../v2/modules/portal/portal-login-token.repository";
 import { bridgePortalMessageToChat } from "../services/portal-chat-bridge";
 import { pushNotificationService } from "../services/push-notification.service";
@@ -1073,11 +1074,7 @@ portalRouter.post("/quote/:token/view", portalAuth, async (req: Request, res: Re
       viewerName,
     });
 
-    await quotePublicRepository.notifyAgent(
-      quoteId,
-      "Quote Viewed",
-      `${viewerName || "A client"} viewed their quote via the portal`,
-    );
+    await quotePublicService.notifyPortalView(String(token), quoteId, clientId, viewerName);
 
     res.json({ success: true });
   } catch (err: any) {
