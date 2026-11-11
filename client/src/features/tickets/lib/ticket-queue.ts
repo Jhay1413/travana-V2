@@ -226,9 +226,25 @@ export interface AgentOption {
   name: string;
 }
 
-/** The distinct assignees on the tickets the caller can already see, A to Z. */
-export function agentOptions(rows: Ticket[]): AgentOption[] {
+/** The staff fields needed to label an agent option. */
+export interface RosterUser {
+  id: string;
+  name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+}
+
+function rosterName(u: RosterUser): string {
+  return u.name?.trim() || [u.firstName, u.lastName].map((p) => p?.trim()).filter(Boolean).join(" ") || "Unknown";
+}
+
+/**
+ * Agent filter options: the whole staff roster, plus any assignee on the loaded
+ * tickets who is not on it (e.g. a deactivated user still holding a ticket). A to Z.
+ */
+export function agentOptions(roster: RosterUser[], rows: Ticket[]): AgentOption[] {
   const byId = new Map<string, string>();
+  for (const u of roster) byId.set(u.id, rosterName(u));
   for (const t of rows) {
     if (t.assignedTo && !byId.has(t.assignedTo)) byId.set(t.assignedTo, t.assignedToName?.trim() || "Unknown");
   }

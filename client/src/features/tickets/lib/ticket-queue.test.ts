@@ -251,16 +251,29 @@ describe("deriveQueue", () => {
 });
 
 describe("agentOptions", () => {
-  it("lists each assignee once, A to Z, skipping unassigned tickets", () => {
+  it("lists the roster A to Z, falling back to first + last name then Unknown", () => {
+    const roster = [
+      { id: "b", name: "Bea" },
+      { id: "a", name: "", firstName: "Ann", lastName: "Lee" },
+      { id: "c", name: "" },
+    ];
+    expect(agentOptions(roster, [])).toEqual([
+      { id: "a", name: "Ann Lee" },
+      { id: "b", name: "Bea" },
+      { id: "c", name: "Unknown" },
+    ]);
+  });
+
+  it("merges assignees missing from the roster once, without overriding roster names", () => {
     const rows = [
-      ticket({ id: "1", assignedTo: "b", assignedToName: "Bea" }),
-      ticket({ id: "2", assignedTo: "a", assignedToName: "Ann" }),
-      ticket({ id: "3", assignedTo: "b", assignedToName: "Bea" }),
+      ticket({ id: "1", assignedTo: "b", assignedToName: "Old Bea" }),
+      ticket({ id: "2", assignedTo: "x", assignedToName: "Xavier" }),
+      ticket({ id: "3", assignedTo: "x", assignedToName: "Xavier" }),
       ticket({ id: "4", assignedTo: null }),
     ];
-    expect(agentOptions(rows)).toEqual([
-      { id: "a", name: "Ann" },
+    expect(agentOptions([{ id: "b", name: "Bea" }], rows)).toEqual([
       { id: "b", name: "Bea" },
+      { id: "x", name: "Xavier" },
     ]);
   });
 });

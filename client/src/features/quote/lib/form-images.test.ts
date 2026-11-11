@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { existingImageItem, urlImageItem, withoutFailedUrlItem } from "./form-images";
+import { existingImageItem, imagesChanged, urlImageItem, withoutFailedUrlItem } from "./form-images";
 
 describe("withoutFailedUrlItem", () => {
   it("drops an imported URL image that failed to load", () => {
@@ -18,4 +18,16 @@ describe("withoutFailedUrlItem", () => {
     const a = urlImageItem("https://cdn.test/a.jpg");
     expect(withoutFailedUrlItem([a], "nope")).toEqual([a]);
   });
+});
+
+describe("imagesChanged", () => {
+  const a = existingImageItem("a", "u1");
+  const b = existingImageItem("b", "u2");
+  it("is false for the untouched list", () => expect(imagesChanged([a.key, b.key], [a, b])).toBe(false));
+  it("detects removal, addition and reorder", () => {
+    expect(imagesChanged([a.key, b.key], [a])).toBe(true);
+    expect(imagesChanged([a.key], [a, b])).toBe(true);
+    expect(imagesChanged([a.key, b.key], [b, a])).toBe(true);
+  });
+  it("is false for an empty list that stayed empty", () => expect(imagesChanged([], [])).toBe(false));
 });

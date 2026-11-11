@@ -100,3 +100,8 @@ export function newImageUrls(
 export function releaseItemPreview(item: FormImageItem): void {
   if (item.kind === "file") URL.revokeObjectURL(item.previewUrl);
 }
+
+/** True when the form's images differ from how they started (added, removed or reordered). */
+export function imagesChanged(baselineKeys: string[], items: FormImageItem[]): boolean {
+  return items.length !== baselineKeys.length || items.some((item, i) => item.key !== baselineKeys[i]);
+}

@@ -410,10 +410,11 @@ export function QuoteCreateDialog({
     }
   };
 
+  const [formDirty, setFormDirty] = useState(false);
   if (!open) return null;
 
   return (
-    <FormOverlay label={socialPost ? "Create social post" : "Add quote"} onClose={() => onOpenChange(false)} preventClose={isSubmitting} variant="popup" data-testid="quote-create-drawer">
+    <FormOverlay label={socialPost ? "Create social post" : "Add quote"} onClose={() => onOpenChange(false)} preventClose={isSubmitting} isDirty={formDirty} variant="popup" data-testid="quote-create-drawer">
       <QuoteRHFForm
         key={(transactionId || clientId || "social") + open}
         title={socialPost ? "Add social post" : "Add quote"}
@@ -423,6 +424,7 @@ export function QuoteCreateDialog({
         isLoading={isSubmitting}
         submitLabel={socialPost ? "Create Social Post" : "Create Quote"}
         onCancel={() => onOpenChange(false)}
+        onDirtyChange={setFormDirty}
         initialImageUrls={initialImages}
         socialPost={socialPost}
         note={note}

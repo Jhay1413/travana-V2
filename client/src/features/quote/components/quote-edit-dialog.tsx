@@ -594,10 +594,11 @@ export function QuoteEditDialog({
       setIsUploadingImages(false);
     }
   };
+  const [formDirty, setFormDirty] = useState(false);
   if (!open) return null;
 
   return (
-    <FormOverlay label="Edit quote" onClose={() => onOpenChange(false)} preventClose={isUploadingImages || updateQuote.isPending} variant="popup" data-testid="quote-edit-drawer">
+    <FormOverlay label="Edit quote" onClose={() => onOpenChange(false)} preventClose={isUploadingImages || updateQuote.isPending} isDirty={formDirty} variant="popup" data-testid="quote-edit-drawer">
       {isLoading && (
         <>
           <FormHead title="Edit quote" right={<FormCloseButton onClick={() => onOpenChange(false)} />} />
@@ -625,6 +626,7 @@ export function QuoteEditDialog({
             isLoading={isUploadingImages || updateQuote.isPending}
             submitLabel="Save Changes"
             onCancel={() => onOpenChange(false)}
+            onDirtyChange={setFormDirty}
           />
         </OperatorNamesProvider>
       )}

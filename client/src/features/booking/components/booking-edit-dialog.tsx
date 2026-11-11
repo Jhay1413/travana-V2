@@ -1,6 +1,6 @@
 import { OperatorNamesProvider } from "@/features/tour-operator";
 import { requestErrorMessage } from "@/lib/request-error";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { FormCloseButton, FormHead, FormOverlay } from "@/components/shared/form-shell";
 import { useToast } from "@/hooks/use-toast";
@@ -552,10 +552,11 @@ export function BookingEditDialog({
     );
   };
 
+  const [formDirty, setFormDirty] = useState(false);
   if (!open) return null;
 
   return (
-    <FormOverlay label="Edit booking" onClose={() => onOpenChange(false)} preventClose={updateBooking.isPending} variant="popup" data-testid="booking-edit-drawer">
+    <FormOverlay label="Edit booking" onClose={() => onOpenChange(false)} preventClose={updateBooking.isPending} isDirty={formDirty} variant="popup" data-testid="booking-edit-drawer">
       {isLoading && (
         <>
           <FormHead title="Edit booking" right={<FormCloseButton onClick={() => onOpenChange(false)} />} />
@@ -582,6 +583,7 @@ export function BookingEditDialog({
             isLoading={updateBooking.isPending}
             submitLabel="Save Changes"
             onCancel={() => onOpenChange(false)}
+            onDirtyChange={setFormDirty}
             clientId={clientId}
           />
         </OperatorNamesProvider>

@@ -305,6 +305,8 @@ export interface BookingRHFFormProps {
   isLoading?: boolean;
   submitLabel?: string;
   onCancel?: () => void;
+  /** Reports whether the form has unsaved changes (fields or images). */
+  onDirtyChange?: (dirty: boolean) => void;
   initialExtraAccomLabels?: string[];
   existingImages?: Array<{ id: string; url: string }>;
   initialImageUrls?: string[];

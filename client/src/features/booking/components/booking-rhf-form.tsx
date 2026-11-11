@@ -13,6 +13,7 @@ import { deriveCheckIn, outboundArrivalOf } from "@/lib/check-in-time";
 import { QuoteImagesSection } from "@/features/quote/components/sections/QuoteImagesSection";
 import {
   existingImageItem,
+  imagesChanged,
   pendingFiles,
   resolvedUrls,
   urlImageItem,
@@ -54,6 +55,7 @@ import {
   FormSideNav,
   countDone,
   footerStatus,
+  useFormOverlayClose,
   useScrollSpy,
 } from "@/components/shared/form-shell";
 
@@ -76,6 +78,7 @@ export function BookingRHFForm({
   isLoading,
   submitLabel = "Save",
   onCancel,
+  onDirtyChange,
   initialExtraAccomLabels = [],
   existingImages = [],
   initialImageUrls = [],
@@ -95,6 +98,18 @@ export function BookingRHFForm({
     ...initialImageUrls.map(urlImageItem),
   ]);
   const [deletedImageIds, setDeletedImageIds] = useState<string[]>([]);
+
+  // Report unsaved changes (fields or images) up to the dialog so closing can ask first.
+  const [baselineImageKeys] = useState(() => imageItems.map((i) => i.key));
+  const formIsDirty = form.formState.isDirty;
+  const isDirty = formIsDirty || imagesChanged(baselineImageKeys, imageItems);
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+    return () => onDirtyChange?.(false);
+  }, [isDirty, onDirtyChange]);
+  // Cancel / X go through the overlay's guarded close so a dirty form prompts first.
+  const overlayClose = useFormOverlayClose();
+  const handleCancel = onCancel ? (overlayClose ?? onCancel) : undefined;
 
   const setImageUrlsFromJson = useCallback((updater: (prev: string[]) => string[]) => {
     setImageItems((prev) => {
@@ -251,6 +266,19 @@ export function BookingRHFForm({
     if (update.inboundDepartDate) setValue("inboundDepartDate", update.inboundDepartDate, { shouldDirty: true });
   }, [checkInDate, nights, setValue]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Rebase the dirty baseline once lookups settle ─────────────────────────
+  // The effects above fill derived values (commission, package type) without any
+  // user input. RHF's isDirty compares the whole form to its defaults, so adopt
+  // the settled values as the new defaults exactly once; later changes (including
+  // user edits that re-trigger the commission calc) stay dirty.
+  // Declared after the auto effects so it runs after them in the same commit.
+  const didRebaseDefaults = useRef(false);
+  useEffect(() => {
+    if (didRebaseDefaults.current || !tourOperatorsData || !packageTypesData) return;
+    didRebaseDefaults.current = true;
+    form.reset(form.getValues(), { keepValues: true, keepDefaultValues: false, keepErrors: true });
+  }, [tourOperatorsData, packageTypesData, form]);
+
   // ── Import Deal ───────────────────────────────────────────────────────────
   // Same bookmarklet-capture flow as the quote form (useDealCaptureImport).
   const prepareJsonImport = (): JsonImportDeps => ({
@@ -365,7 +393,7 @@ export function BookingRHFForm({
           right={
             <>
               {importBar.button}
-              {onCancel ? <FormCloseButton onClick={onCancel} disabled={isLoading} /> : null}
+              {handleCancel ? <FormCloseButton onClick={handleCancel} disabled={isLoading} /> : null}
             </>
           }
         />
@@ -519,7 +547,7 @@ export function BookingRHFForm({
             </>
           }
         >
-          {onCancel ? <FormButton onClick={onCancel} disabled={isLoading}>Cancel</FormButton> : null}
+          {handleCancel ? <FormButton onClick={handleCancel} disabled={isLoading}>Cancel</FormButton> : null}
           <FormButton type="submit" tone="primary" disabled={isLoading} data-testid="form-drawer-submit">
             {isLoading ? "Saving..." : submitLabel}
           </FormButton>

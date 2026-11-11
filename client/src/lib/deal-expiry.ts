@@ -50,10 +50,3 @@ export function isQuoteLost(q: { quote_status?: string | null }): boolean {
 export function isEnquiryLost(e: { status?: string | null }): boolean {
   return e.status?.toLowerCase() === "lost";
 }
-
-export function isBookingExpired(b: { travel_date?: string | null }): boolean {
-  if (!b.travel_date) return false;
-  const d = new Date(b.travel_date);
-  if (isNaN(d.getTime())) return false;
-  return d.getTime() < startOfToday().getTime();
-}

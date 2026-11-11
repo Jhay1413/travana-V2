@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Phone } from "lucide-react";
 import {
   Chips,
@@ -9,6 +9,7 @@ import {
   FormHead,
   FormLinkButton,
   FormOverlay,
+  useFormOverlayClose,
 } from "@/components/shared/form-shell";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Enquiry } from "../types";
@@ -61,9 +62,11 @@ export interface EnquiryFormContentProps {
   isSaving: boolean;
   /** Called with the saved ids after "Save & start quote" (create and inbox only). */
   onStartQuote?: (result: EnquirySaveResult) => void;
+  /** Reports whether the user has changed the form, so the overlay can confirm before discarding. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export interface EnquiryFormDialogProps extends Omit<EnquiryFormContentProps, "onClose" | "inbox"> {
+export interface EnquiryFormDialogProps extends Omit<EnquiryFormContentProps, "onClose" | "inbox" | "onDirtyChange"> {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -83,11 +86,19 @@ const TITLE_PLACEHOLDER = {
 } as const;
 
 /** The pop-up's content (head, two columns, footer). Render inside a `FormOverlay`. */
-export function EnquiryFormContent({ enquiry, inbox, onClose, onSubmit, isSaving, onStartQuote }: EnquiryFormContentProps) {
+export function EnquiryFormContent({ enquiry, inbox, onClose, onSubmit, isSaving, onStartQuote, onDirtyChange }: EnquiryFormContentProps) {
   const mode = inbox ? "inbox" : enquiry ? "edit" : "create";
   const strict = mode === "inbox";
   const api = useEnquiryFormState({ enquiry, init: inbox?.init });
   const { form, lookups } = api;
+  const { userEdited } = api;
+  useEffect(() => {
+    onDirtyChange?.(userEdited);
+    return () => onDirtyChange?.(false);
+  }, [userEdited, onDirtyChange]);
+  // X / Cancel go through the overlay's guarded close so a changed form prompts first.
+  const overlayClose = useFormOverlayClose();
+  const requestClose = overlayClose ?? onClose;
   const kind = holidayKind(form.holidayTypeName);
   const [showErrors, setShowErrors] = useState(false);
   const bodyRef = useRef<HTMLFormElement>(null);
@@ -143,7 +154,7 @@ export function EnquiryFormContent({ enquiry, inbox, onClose, onSubmit, isSaving
                 Clear form
               </FormLinkButton>
             )}
-            <FormCloseButton onClick={() => !isSaving && onClose()} />
+            <FormCloseButton onClick={() => !isSaving && requestClose()} />
           </>
         }
       />
@@ -229,7 +240,7 @@ export function EnquiryFormContent({ enquiry, inbox, onClose, onSubmit, isSaving
           </>
         }
       >
-        <FormButton onClick={onClose} disabled={isSaving} data-testid="button-enquiry-cancel">
+        <FormButton onClick={requestClose} disabled={isSaving} data-testid="button-enquiry-cancel">
           Cancel
         </FormButton>
         {mode !== "edit" && onStartQuote && (
@@ -252,17 +263,19 @@ export function EnquiryFormContent({ enquiry, inbox, onClose, onSubmit, isSaving
 
 /** Centred pop-up for creating or editing an enquiry. Pass `enquiry` to edit. */
 export function EnquiryFormDialog({ open, onOpenChange, ...rest }: EnquiryFormDialogProps) {
+  const [dirty, setDirty] = useState(false);
   if (!open) return null;
   return (
     <FormOverlay
       label={rest.enquiry ? "Edit enquiry" : "New enquiry"}
       onClose={() => onOpenChange(false)}
       preventClose={rest.isSaving}
+      isDirty={dirty}
       initialFocusId="enq-title"
       variant="enquiry"
       data-testid="enquiry-drawer"
     >
-      <EnquiryFormContent {...rest} onClose={() => onOpenChange(false)} />
+      <EnquiryFormContent {...rest} onClose={() => onOpenChange(false)} onDirtyChange={setDirty} />
     </FormOverlay>
   );
 }

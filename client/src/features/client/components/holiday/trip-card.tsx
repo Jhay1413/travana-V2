@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { formatUKDate, type QuoteDisplay } from "@/features/quote/components/quote-types";
-import { buildTripExtras, buildTripStops } from "@/features/client/lib/trip-timeline";
+import { buildTripExtras, buildTripStops, mergeTripItems } from "@/features/client/lib/trip-timeline";
 import { TripStop } from "@/features/client/components/holiday/trip-stop";
 import { HOLIDAY_BTN_GHOST } from "@/features/client/components/holiday/holiday-styles";
 import { TruncateTip } from "@/features/client/components/holiday/truncate-tip";
@@ -15,7 +15,7 @@ export interface TripBodyProps {
 export function TripBody({ display, onEdit }: TripBodyProps) {
   const stops = useMemo(() => buildTripStops(display), [display]);
   const extras = useMemo(() => buildTripExtras(display), [display]);
-  const all = [...stops, ...extras];
+  const all = useMemo(() => mergeTripItems(stops, extras), [stops, extras]);
 
   const subtitle = [
     "Start to finish",

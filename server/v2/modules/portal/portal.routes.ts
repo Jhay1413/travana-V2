@@ -6,6 +6,7 @@ import { walletService } from '../wallet/wallet.service';
 import { tagService } from '../tag/tag.service';
 import { pushNotificationService } from '../notification/push-notification.service';
 import { quotePublicRepository } from '../quote/quote-public.repository';
+import { quotePublicService } from '../quote/quote-public.service';
 import { portalRepository } from './portal.repository';
 import { getPortalDeals } from './portal.service';
 import { neonClientRepository } from '../neon-client/neon-client.repository';
@@ -806,11 +807,7 @@ portalRouter.post('/quote/:token/view', portalAuth, async (req: Request, res: Re
       viewerName,
     });
 
-    await quotePublicRepository.notifyAgent(
-      quoteId,
-      'Quote Viewed',
-      `${viewerName || 'A client'} viewed their quote via the portal`,
-    );
+    await quotePublicService.notifyPortalView(String(token), quoteId, ownership.clientId, viewerName);
 
     res.json({ success: true });
   } catch (err: any) {

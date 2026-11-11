@@ -28,6 +28,11 @@ export interface TripStop {
   pills: string[];
   /** Flight times, drawn as "09:15 --- 12:40". */
   route?: { depart: string; arrive: string };
+  /** Flight stops only: airport names and times, drawn as two rows ("from  depart" / "to  arrive"). */
+  from?: string;
+  to?: string;
+  departTime?: string;
+  arriveTime?: string;
   /** The flight arrives on a later day than it departs. */
   landsNextDay?: boolean;
   sortKey: string;

@@ -7,6 +7,7 @@ import {
   buildQuoteLikeFields,
   formatBudgetType,
   formatQuotePassengers,
+  showTransferPill,
   joinNames,
   type FieldRowSpec,
 } from "./holiday-fields";
@@ -39,6 +40,32 @@ describe("formatQuotePassengers", () => {
   });
 });
 
+describe("formatQuotePassengers child ages", () => {
+  const withAges = (childAges: Array<number | null>, children = 2) => quote({ passengers: { adults: 2, children, childAges } });
+  it("shows ages after the children count when asked", () => {
+    expect(formatQuotePassengers(withAges([5, 8]), { withAges: true })).toBe("2 Adults, 2 Children (5, 8), 1 Infant");
+  });
+  it("skips null ages and omits the bracket when all are 0 or missing", () => {
+    expect(formatQuotePassengers(withAges([null, 7]), { withAges: true })).toBe("2 Adults, 2 Children (7), 1 Infant");
+    expect(formatQuotePassengers(withAges([0, 0]), { withAges: true })).toBe("2 Adults, 2 Children, 1 Infant");
+    expect(formatQuotePassengers(withAges([]), { withAges: true })).toBe("2 Adults, 2 Children, 1 Infant");
+  });
+  it("keeps a real 0 alongside other ages", () => {
+    expect(formatQuotePassengers(withAges([0, 6]), { withAges: true })).toBe("2 Adults, 2 Children (0, 6), 1 Infant");
+  });
+  it("drops ages beyond the number of children", () => {
+    expect(formatQuotePassengers(withAges([5, 8, 11], 2), { withAges: true })).toBe("2 Adults, 2 Children (5, 8), 1 Infant");
+    expect(formatQuotePassengers(withAges([5, 8], 1), { withAges: true })).toBe("2 Adults, 1 Child (5), 1 Infant");
+  });
+  it("leaves the plain form (hero) unchanged", () => {
+    expect(formatQuotePassengers(withAges([5, 8]))).toBe("2 Adults, 2 Children, 1 Infant");
+  });
+  it("appears in the Holiday details row", () => {
+    const rows = flat(buildQuoteLikeFields(quote({ packageType: "Package", passengers: { adults: 2, children: 1, childAges: [5] } })));
+    expect(byKey(rows, "no-passengers")?.value).toBe("2 Adults, 1 Child (5), 1 Infant");
+  });
+});
+
 describe("buildQuoteLikeFields", () => {
   it("shows only the eight package holiday facts, in order (no tour operator or lead source)", () => {
     const rows = flat(buildQuoteLikeFields(quote({ packageType: "Package Holiday" })));
@@ -49,7 +76,7 @@ describe("buildQuoteLikeFields", () => {
     expect(byKey(rows, "hotel")).toMatchObject({ icon: "hotel", label: "Hotel", value: "Hotel Sol" });
     expect(byKey(rows, "travel-date")?.value).toBe("12/09/2026");
     expect(byKey(rows, "no-nights")?.value).toBe("7 nights");
-    expect(byKey(rows, "no-passengers")?.value).toBe("2 Adults, 1 Child, 1 Infant");
+    expect(byKey(rows, "no-passengers")?.value).toBe("2 Adults, 1 Child (5), 1 Infant");
   });
 
   it("keeps the full set, incl. tour operator and lead source, for hot tub and cruise", () => {
@@ -68,6 +95,11 @@ describe("buildQuoteLikeFields", () => {
     expect(byKey(rows, "transfer-type")?.value).toBe("Private Transfer");
     expect(byKey(rows, "hotel")?.value).toBeNull();
     expect(byKey(rows, "travel-date")?.value).toBeNull();
+  });
+
+  it("keeps a stored None transfer type visible in the labelled row", () => {
+    const rows = flat(buildQuoteLikeFields(quote({ packageType: "Package", transferType: "None" })));
+    expect(byKey(rows, "transfer-type")?.value).toBe("None");
   });
 
   it("uses a singular night label", () => {
@@ -145,5 +177,15 @@ describe("buildEnquiryFields", () => {
 
   it("only uses icon keys that have a lucide mapping", () => {
     for (const row of flat(buildEnquiryFields(enquiry(), null))) expect(FIELD_ICONS[row.icon]).toBeDefined();
+  });
+});
+
+describe("showTransferPill", () => {
+  it("hides the hero pill for None and blank, shows real transfers", () => {
+    expect(showTransferPill("None")).toBe(false);
+    expect(showTransferPill(" none ")).toBe(false);
+    expect(showTransferPill("")).toBe(false);
+    expect(showTransferPill(null)).toBe(false);
+    expect(showTransferPill("Private Transfer")).toBe(true);
   });
 });

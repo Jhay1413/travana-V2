@@ -54,9 +54,40 @@ export const quotePublicService = {
       quoteId,
       actionType === "accepted" ? "Quote Accepted!" : "Changes Requested",
       `${name} ${actionLabel} on the ${dest} quote${message ? `: "${message}"` : ""}`,
+      undefined,
+      actionType === "accepted" ? "quote_accepted" : "quote_changes_requested",
     );
 
     return action;
+  },
+
+  /**
+   * Notify the owning agent that a client opened a quote in the portal. The
+   * message names the client and the quote; the link opens the quote in place
+   * on the client page.
+   */
+  async notifyPortalView(_token: string, quoteId: string, viewerClientId: string | null, viewerName: string | null) {
+    // Best-effort: a notification failure must never fail the view request.
+    try {
+      const info = await quotePublicRepository.findNotifyInfo(quoteId);
+      const ownerClientId = info?.clientId ?? null;
+      const label = info?.title || info?.destinationName || "";
+      const isOwner = !ownerClientId || ownerClientId === viewerClientId;
+      const who = viewerName || "A client";
+      const quotePhrase = label ? `${label} quote` : "quote";
+      const message = isOwner
+        ? `${who} viewed their ${quotePhrase} via the portal`
+        : `${who} viewed the ${quotePhrase} via the portal`;
+      await quotePublicRepository.notifyAgent(
+        quoteId,
+        "Quote Viewed",
+        message,
+        ownerClientId ? `/clients/${ownerClientId}?holiday=quote:${quoteId}` : `/quotes/${quoteId}`,
+        "quote_viewed",
+      );
+    } catch (err) {
+      console.error("Portal view notification failed:", err);
+    }
   },
 
   async logShare(token: string, method: string) {
@@ -65,11 +96,14 @@ export const quotePublicService = {
 
     const quoteData = await quotePublicRepository.findByToken(token);
     const dest = quoteData?.destinationName || "their holiday";
+    const name = quoteData?.clientName || "A customer";
 
     await quotePublicRepository.notifyAgent(
       quoteId,
       "Quote Shared!",
-      `A customer shared their ${dest} quote via ${method}`,
+      `${name} shared their ${dest} quote via ${method}`,
+      undefined,
+      "quote_shared",
     );
   },
 };
