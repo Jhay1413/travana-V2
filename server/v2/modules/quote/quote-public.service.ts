@@ -3,6 +3,20 @@ import { AppError } from "../../utils/error-handler";
 import { customerPrice } from "../../utils/customer-price";
 import type { InsertQuoteView } from "@shared/schema";
 
+type NotifyInfo = { title: string | null; destinationName: string | null; clientId: string | null; clientName: string | null };
+
+/** Label + link shared by the portal and shared-link view notifications. */
+function describeNotifyTarget(quoteId: string, info: NotifyInfo | null) {
+  const ownerClientId = info?.clientId ?? null;
+  const label = info?.title || info?.destinationName || "";
+  return {
+    ownerClientId,
+    label,
+    quotePhrase: label ? `${label} quote` : "quote",
+    link: ownerClientId ? `/clients/${ownerClientId}?holiday=quote:${quoteId}` : `/quotes/${quoteId}`,
+  };
+}
+
 export const quotePublicService = {
   async getQuoteByToken(token: string) {
     const data = await quotePublicRepository.findByToken(token);
@@ -24,8 +38,7 @@ export const quotePublicService = {
 
     const view = await quotePublicRepository.logView(quoteId, viewData);
 
-    // Public (non-portal) views are still counted for analytics, but we no
-    // longer notify the agent — only portal views create a "Quote Viewed" note.
+    await this.notifyLinkView(quoteId, viewData);
     return view;
   },
 
@@ -70,23 +83,42 @@ export const quotePublicService = {
     // Best-effort: a notification failure must never fail the view request.
     try {
       const info = await quotePublicRepository.findNotifyInfo(quoteId);
-      const ownerClientId = info?.clientId ?? null;
-      const label = info?.title || info?.destinationName || "";
+      const { ownerClientId, quotePhrase, link } = describeNotifyTarget(quoteId, info);
       const isOwner = !ownerClientId || ownerClientId === viewerClientId;
       const who = viewerName || "A client";
-      const quotePhrase = label ? `${label} quote` : "quote";
       const message = isOwner
         ? `${who} viewed their ${quotePhrase} via the portal`
         : `${who} viewed the ${quotePhrase} via the portal`;
+      await quotePublicRepository.notifyAgent(quoteId, "Quote Viewed", message, link, "quote_viewed");
+    } catch (err) {
+      console.error("Portal view notification failed:", err);
+    }
+  },
+
+  /**
+   * Notify the owning agent that someone opened the quote through the shared
+   * public link. Best-effort: never throws.
+   */
+  async notifyLinkView(quoteId: string, viewData: Omit<InsertQuoteView, "quoteId">) {
+    try {
+      const info = await quotePublicRepository.findNotifyInfo(quoteId);
+      const { label, quotePhrase, link } = describeNotifyTarget(quoteId, info);
+      const clientName = info?.clientName?.trim() || "";
+      const subject = clientName
+        ? `${clientName}'s ${quotePhrase}`
+        : label
+          ? `The ${quotePhrase}`
+          : "A quote";
+      const device = viewData.deviceType ? ` (${viewData.deviceType})` : "";
       await quotePublicRepository.notifyAgent(
         quoteId,
         "Quote Viewed",
-        message,
-        ownerClientId ? `/clients/${ownerClientId}?holiday=quote:${quoteId}` : `/quotes/${quoteId}`,
+        `${subject} was opened via the shared link${device}`,
+        link,
         "quote_viewed",
       );
     } catch (err) {
-      console.error("Portal view notification failed:", err);
+      console.error("Shared link view notification failed:", err);
     }
   },
 

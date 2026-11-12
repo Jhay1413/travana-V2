@@ -453,11 +453,12 @@ export const quotePublicRepository = {
   },
 
   /** Slim lookup for notification wording and links: the quote's label and its own client. */
-  async findNotifyInfo(quoteId: string): Promise<{ title: string | null; destinationName: string | null; clientId: string | null } | null> {
+  async findNotifyInfo(quoteId: string): Promise<{ title: string | null; destinationName: string | null; clientId: string | null; clientName: string | null } | null> {
     const [row] = await db
-      .select({ title: quote.title, clientId: transaction.client_id })
+      .select({ title: quote.title, clientId: transaction.client_id, firstName: clientTable.firstName, surname: clientTable.surename })
       .from(quote)
       .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
       .where(eq(quote.id, quoteId))
       .limit(1);
     if (!row) return null;
@@ -469,7 +470,7 @@ export const quotePublicRepository = {
       .innerJoin(destination, eq(resorts.destination_id, destination.id))
       .where(eq(quote_accomodation.quote_id, quoteId))
       .limit(1);
-    return { title: row.title, destinationName: dest?.name ?? null, clientId: row.clientId };
+    return { title: row.title, destinationName: dest?.name ?? null, clientId: row.clientId, clientName: [row.firstName, row.surname].filter(Boolean).join(" ") || null };
   },
 
   async notifyAgent(quoteId: string, title: string, message: string, link?: string, type: string = "quote_viewed") {

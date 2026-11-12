@@ -20,8 +20,8 @@ export const HOLIDAY_BTN_GHOST = `${BTN_BASE} min-h-8 border-transparent bg-tran
 
 const ICON_BASE =
   "grid size-10 shrink-0 place-items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50";
-/** Round 40px outline icon button; aria-pressed turns it orange (pin). */
-export const HOLIDAY_ICON_BTN = `${ICON_BASE} border border-social-border text-qp-muted hover:bg-muted hover:text-foreground aria-pressed:border-social-orange aria-pressed:bg-social-orange aria-pressed:text-slate-900`;
+/** Round 40px filled blue icon button (top bar: preview, share, guru); aria-pressed turns it orange (pin). */
+export const HOLIDAY_ICON_BTN = `${ICON_BASE} bg-primary text-primary-foreground hover:bg-primary/90 aria-pressed:bg-social-orange aria-pressed:text-slate-900 aria-pressed:hover:bg-social-orange/90`;
 /** Round 40px filled blue icon button (rail "+"). */
 export const HOLIDAY_ICON_BTN_BLUE = `${ICON_BASE} bg-primary text-primary-foreground hover:bg-primary/90`;
 

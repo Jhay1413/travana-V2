@@ -7,7 +7,7 @@ import {
   buildQuoteLikeFields,
   formatBudgetType,
   formatQuotePassengers,
-  showTransferPill,
+  transferPillLabel,
   joinNames,
   type FieldRowSpec,
 } from "./holiday-fields";
@@ -180,12 +180,12 @@ describe("buildEnquiryFields", () => {
   });
 });
 
-describe("showTransferPill", () => {
-  it("hides the hero pill for None and blank, shows real transfers", () => {
-    expect(showTransferPill("None")).toBe(false);
-    expect(showTransferPill(" none ")).toBe(false);
-    expect(showTransferPill("")).toBe(false);
-    expect(showTransferPill(null)).toBe(false);
-    expect(showTransferPill("Private Transfer")).toBe(true);
+describe("transferPillLabel", () => {
+  it("says No Transfers for None and blank, keeps real transfers", () => {
+    expect(transferPillLabel("None")).toBe("No Transfers");
+    expect(transferPillLabel(" none ")).toBe("No Transfers");
+    expect(transferPillLabel("")).toBe("No Transfers");
+    expect(transferPillLabel(null)).toBe("No Transfers");
+    expect(transferPillLabel("Private Transfer")).toBe("Private Transfer");
   });
 });

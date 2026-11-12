@@ -47,8 +47,10 @@ function visibleChildAges(ages: Array<number | null | undefined> | undefined, ch
 }
 
 /** The hero shows the transfer as a pill only when one is actually set ("None" and blank hide it). */
-export function showTransferPill(transferType: string | null | undefined): boolean {
-  return !!transferType?.trim() && !isNoneValue(transferType);
+/** Hero pill text for the transfer type: the real type, or "No Transfers" for blank / "None". */
+export function transferPillLabel(transferType: string | null | undefined): string {
+  const text = transferType?.trim() ?? "";
+  return text && !isNoneValue(text) ? text : "No Transfers";
 }
 
 export function formatQuotePassengers(quote: QuoteDisplay, opts: { withAges?: boolean } = {}): string | null {
