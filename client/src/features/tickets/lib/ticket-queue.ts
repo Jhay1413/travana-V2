@@ -239,14 +239,11 @@ function rosterName(u: RosterUser): string {
 }
 
 /**
- * Agent filter options: the whole staff roster, plus any assignee on the loaded
- * tickets who is not on it (e.g. a deactivated user still holding a ticket). A to Z.
+ * Agent filter options: the active staff roster only, A to Z. Disabled, banned or
+ * removed users never appear, even when they still hold tickets.
  */
-export function agentOptions(roster: RosterUser[], rows: Ticket[]): AgentOption[] {
+export function agentOptions(roster: RosterUser[]): AgentOption[] {
   const byId = new Map<string, string>();
   for (const u of roster) byId.set(u.id, rosterName(u));
-  for (const t of rows) {
-    if (t.assignedTo && !byId.has(t.assignedTo)) byId.set(t.assignedTo, t.assignedToName?.trim() || "Unknown");
-  }
   return [...byId].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
 }

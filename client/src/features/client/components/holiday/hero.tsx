@@ -7,7 +7,7 @@ import { getQuoteExpiryInfo } from "@/features/quote/lib/quote-expiry";
 import { useQuoteViews } from "@/features/quote/api/use-quote-share-queries";
 import { timeAgo } from "@/features/quote/lib/quote-views";
 import type { EnrichedBooking, EnrichedQuote } from "@/features/quote/types";
-import { formatQuotePassengers, showTransferPill } from "@/features/client/components/holiday-fields";
+import { formatQuotePassengers, transferPillLabel } from "@/features/client/components/holiday-fields";
 import { gbp2 } from "@/features/client/lib/holiday-format";
 import { quotePerPerson, quoteTotal } from "@/features/quote/lib/quote-money";
 import type { MosaicImage } from "@/features/client/lib/hero-mosaic";
@@ -104,7 +104,7 @@ export function Hero({ display, raw, mode, photos, stars, readOnly = false, onOp
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             {display.packageType && <StatusPill tone="plain">{display.packageType}</StatusPill>}
-            {showTransferPill(display.transferType) && <StatusPill tone="plain">{display.transferType}</StatusPill>}
+            <StatusPill tone="plain">{transferPillLabel(display.transferType)}</StatusPill>
             {display.isCopyQuote && <StatusPill tone="info">Copy quote</StatusPill>}
             {isLost && <StatusPill tone="bad">Lost</StatusPill>}
             {quote && (

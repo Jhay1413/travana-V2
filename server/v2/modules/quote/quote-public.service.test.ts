@@ -63,7 +63,7 @@ describe("quotePublicService.logView", () => {
 });
 
 describe("quotePublicService notifications", () => {
-  const info = (over: object) => vi.mocked(quotePublicRepository.findNotifyInfo).mockResolvedValue({ title: null, destinationName: null, clientId: "c1", ...over });
+  const info = (over: object) => vi.mocked(quotePublicRepository.findNotifyInfo).mockResolvedValue({ title: null, destinationName: null, clientId: "c1", clientName: null, ...over });
 
   it("owner view with a label links to the quote on the owner's client page", async () => {
     info({ title: "Lapland", destinationName: "Rovaniemi" });
@@ -102,7 +102,7 @@ describe("quotePublicService notifications", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(quotePublicRepository.findNotifyInfo).mockRejectedValueOnce(new Error("db down"));
     await expect(quotePublicService.notifyPortalView("tok", "q1", "c1", "Jane")).resolves.toBeUndefined();
-    vi.mocked(quotePublicRepository.findNotifyInfo).mockResolvedValue({ title: "x", destinationName: null, clientId: "c1" });
+    vi.mocked(quotePublicRepository.findNotifyInfo).mockResolvedValue({ title: "x", destinationName: null, clientId: "c1", clientName: null });
     vi.mocked(quotePublicRepository.notifyAgent).mockRejectedValueOnce(new Error("insert failed"));
     await expect(quotePublicService.notifyPortalView("tok", "q1", "c1", "Jane")).resolves.toBeUndefined();
     spy.mockRestore();
@@ -128,5 +128,52 @@ describe("quotePublicService notifications", () => {
     expect(vi.mocked(quotePublicRepository.notifyAgent).mock.calls.at(-1)?.[4]).toBe("quote_accepted");
     await quotePublicService.handleCustomerAction("tok", "changes_requested", "Cheaper", "Jane");
     expect(vi.mocked(quotePublicRepository.notifyAgent).mock.calls.at(-1)?.[4]).toBe("quote_changes_requested");
+  });
+});
+
+describe("quotePublicService.logView notifications", () => {
+  const withInfo = (over: object) =>
+    vi.mocked(quotePublicRepository.findNotifyInfo).mockResolvedValue({ title: null, destinationName: null, clientId: "c1", clientName: null, ...over });
+
+  beforeEach(() => {
+    vi.mocked(quotePublicRepository.findQuoteIdByToken).mockResolvedValue("q1");
+    vi.mocked(quotePublicRepository.logView).mockResolvedValue({ id: "v1" } as never);
+  });
+
+  it("stores the view and notifies the agent with the client name, label and device", async () => {
+    withInfo({ title: "Lapland", clientName: "Jane Smith" });
+    const view = await quotePublicService.logView("tok", { deviceType: "mobile" } as never);
+    expect(view).toEqual({ id: "v1" });
+    expect(quotePublicRepository.logView).toHaveBeenCalledWith("q1", { deviceType: "mobile" });
+    expect(quotePublicRepository.notifyAgent).toHaveBeenCalledWith(
+      "q1", "Quote Viewed", "Jane Smith's Lapland quote was opened via the shared link (mobile)", "/clients/c1?holiday=quote:q1", "quote_viewed",
+    );
+  });
+
+  it("omits the device when unknown and falls back to the destination", async () => {
+    withInfo({ destinationName: "Rovaniemi", clientName: "Jane Smith" });
+    await quotePublicService.logView("tok", {} as never);
+    expect(vi.mocked(quotePublicRepository.notifyAgent).mock.calls.at(-1)?.[2]).toBe("Jane Smith's Rovaniemi quote was opened via the shared link");
+  });
+
+  it("with no client name uses 'The <label> quote' or 'A quote', and links to the standalone quote with no client", async () => {
+    withInfo({ title: "Lapland" });
+    await quotePublicService.logView("tok", {} as never);
+    expect(vi.mocked(quotePublicRepository.notifyAgent).mock.calls.at(-1)?.[2]).toBe("The Lapland quote was opened via the shared link");
+    withInfo({ clientId: null });
+    await quotePublicService.logView("tok", {} as never);
+    expect(quotePublicRepository.notifyAgent).toHaveBeenLastCalledWith(
+      "q1", "Quote Viewed", "A quote was opened via the shared link", "/quotes/q1", "quote_viewed",
+    );
+  });
+
+  it("still succeeds when findNotifyInfo or notifyAgent throws", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(quotePublicRepository.findNotifyInfo).mockRejectedValueOnce(new Error("db down"));
+    await expect(quotePublicService.logView("tok", {} as never)).resolves.toEqual({ id: "v1" });
+    withInfo({ title: "x" });
+    vi.mocked(quotePublicRepository.notifyAgent).mockRejectedValueOnce(new Error("insert failed"));
+    await expect(quotePublicService.logView("tok", {} as never)).resolves.toEqual({ id: "v1" });
+    spy.mockRestore();
   });
 });

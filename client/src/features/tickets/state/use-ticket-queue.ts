@@ -20,7 +20,7 @@ export function useTicketQueue({ boardAllowed = false }: { boardAllowed?: boolea
   const rows = prefs.agentId ? agentRows : allRows;
   const isLoading = prefs.agentId ? loadingAgent : loadingAll;
   const { data: roster } = useUsers();
-  const agents = useMemo(() => agentOptions(roster ?? [], allRows ?? []), [roster, allRows]);
+  const agents = useMemo(() => agentOptions(roster ?? []), [roster]);
   const pinned = usePinnedTicketIds();
   const now = useNow();
 
