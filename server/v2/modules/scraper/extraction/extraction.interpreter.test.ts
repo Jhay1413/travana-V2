@@ -2335,9 +2335,18 @@ describe("imageContainerIncludes: ordered groups with caps", () => {
     expect(run(["lodge-gallery", { match: "park-gallery", max: 5 }], bare)).toHaveLength(18);
   });
 
-  it("applies the seeded Hoseasons config (INFERRED selectors): lodge all + 5 park", () => {
-    const out = runExtractionSpec(seedSpec("hoseasons"), { title: "", text: PAD, url: PAGE, images }, "x").hotel_images;
-    expect(out).toHaveLength(13);
+  it("applies the seeded Hoseasons config: only photos inside a slick-slide", () => {
+    const slides = Array.from({ length: 6 }, (_, i) => ({
+      src: `https://img.chooseacottage.co.uk/property/whi/840/whia-lp31743_in0${i}b_25.jpg`,
+      context: i === 0 ? "slick-slide slick-current slick-active slick-track slick-list slick-slider" : "slick-slide slick-track slick-list slick-slider",
+    }));
+    const outside = [
+      { src: "https://img.chooseacottage.co.uk/property/whi/840/related-1.jpg", context: "related-lodges card" },
+      { src: "https://img.chooseacottage.co.uk/park/whi/park-1.jpg", context: "park-overview hero" },
+    ];
+    const out = runExtractionSpec(seedSpec("hoseasons"), { title: "", text: PAD, url: PAGE, images: [...outside, ...slides] }, "x").hotel_images;
+    expect(out).toHaveLength(6);
+    expect(out.every((s) => s.includes("/whia-lp31743_in0"))).toBe(true);
   });
 });
 

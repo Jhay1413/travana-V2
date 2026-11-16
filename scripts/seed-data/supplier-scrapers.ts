@@ -1523,13 +1523,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
         "constants": {
           "tour_operator": "Hoseasons"
         },
-        "imageContainerIncludes": [
-          "lodge-gallery|property-gallery|accommodation-gallery",
-          {
-            "match": "park-gallery|park-images",
-            "max": 5
-          }
-        ]
+        "imageContainerIncludes": "slick-slide"
       },
       "adapterType": "dom",
       "captureOnly": true,
