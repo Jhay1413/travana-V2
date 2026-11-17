@@ -1444,13 +1444,13 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "pets": {
             "from": "text",
             "group": 1,
-            "regex": "Pets\\s*(\\d+)",
+            "regex": "(?:Pets\\s*|(?<=\\d\\s+guests?\\s+[-–]\\s+)(?=\\d+\\s+pets?\\b))(\\d+)",
             "transform": "number"
           },
           "adults": {
             "from": "text",
             "group": 1,
-            "regex": "Adults \\(18\\+\\)\\s*(\\d+)",
+            "regex": "(?:Adults \\(18\\+\\)\\s*|(?=\\d+\\s+guests?\\s+[-–]\\s+\\d+\\s+pets?\\b))(\\d+)",
             "transform": "number"
           },
           "country": {
@@ -1478,7 +1478,16 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "cottage_id": {
             "from": "url",
             "group": 1,
-            "regex": "([^/?#]+)$"
+            "regex": "-([a-z]{2,3}\\d{3,})(?:[?#]|$)"
+          },
+          "lodge_code": {
+            "from": "text",
+            "group": 1,
+            "regex": "(?:^|\\n)[ \\t]*(Ref:[ \\t]+LP\\d+)[ \\t]*(?=\\n|$)",
+            "origin": "picked",
+            "pickedAt": "2026-10-01T10:34:49.812Z",
+            "strategy": "value-pattern-line",
+            "verifiedValue": "Ref: LP31765"
           },
           "lodge_type": {
             "from": "text",
@@ -1499,7 +1508,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "travel_date": {
             "from": "text",
             "group": 1,
-            "regex": "(\\d{1,2}(?:st|nd|rd|th)?\\s+\\w+\\s+\\d{4})\\s*-",
+            "regex": "(\\d{1,2}(?:st|nd|rd|th)?\\s+\\w+\\s+\\d{4})\\s*[-–]",
             "transform": "date"
           },
           "no_of_nights": {
@@ -1509,20 +1518,31 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
             "transform": "number"
           },
           "accommodation": {
-            "from": "title",
+            "from": "headings",
             "group": 1,
-            "regex": "^([^\\-]+)\\s-"
+            "regex": "^([^\\n]+)",
+            "origin": "picked",
+            "pickedAt": "2026-10-01T10:34:49.811Z",
+            "strategy": "heading-position",
+            "verifiedValue": "Gold 3 Caravan with parking"
           },
           "lodge_park_name": {
-            "from": "title",
+            "from": "url",
             "group": 1,
-            "regex": "-\\s([^\\-]+)\\s-\\sHoliday Parks"
+            "regex": "^[a-z][a-z0-9+.-]*://[^/?#]+(?:/[^/?#]+)*?/([^/?#]+?)-[a-z0-9]{2,8}(?:/[^/?#]*-[a-z]{2,3}\\d{3,})?/?(?:[?#]|$)",
+            "origin": "picked",
+            "pickedAt": "2026-10-01T10:34:49.813Z",
+            "strategy": "url-path-slug",
+            "transform": "titleCase",
+            "verifiedValue": "White Cross Bay"
           }
         },
         "version": 1,
         "constants": {
+          "currency": "GBP",
           "tour_operator": "Hoseasons"
         },
+        "packageType": "lodge",
         "imageContainerIncludes": "slick-slide"
       },
       "adapterType": "dom",

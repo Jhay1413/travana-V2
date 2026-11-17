@@ -125,10 +125,13 @@ function HotTubWhere({ api, errors, chip }: ColumnProps) {
           onValueChange={api.pickDestinations}
           selectedLabels={lookups.labelOf}
           options={lookups.allDestinationOptions}
+          onSearchCapture={lookups.setDestSearch}
           placeholder="Search destinations..."
           searchPlaceholder="Search destinations..."
           emptyMessage="No destinations found."
           data-testid="select-enquiry-destination"
+          onAddNew={() => api.modals.open("destination")}
+          addNewLabel="Add Destination"
         />
       </Field>
       <Field label="Accommodation type">
@@ -207,6 +210,7 @@ export function EnquiryWhereColumn({ kind, ...props }: ColumnProps & { kind: Hol
       <div className="fm-kicker">Where</div>
       {kind === "hottub" ? <HotTubWhere {...props} /> : kind === "cruise" ? <CruiseWhere {...props} /> : <PackageWhere {...props} />}
       {kind === "package" && <EnquiryAddModals api={props.api} />}
+      {kind === "hottub" && <EnquiryAddModals api={props.api} destinationOnly />}
     </div>
   );
 }

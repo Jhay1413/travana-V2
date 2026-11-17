@@ -339,3 +339,76 @@ describe("mapJsonToIds - tour operator (global catalogue + org link)", () => {
     expect(ensureLink).toHaveBeenCalledTimes(1);
   });
 });
+
+// The quote form lists only the lodges of the selected park, so a lodge id
+// from one park next to another park's id leaves the Lodge field empty.
+describe("mapJsonToIds - park and lodge always agree", () => {
+  const LODGE_INPUT = {
+    isLodgeQuote: true,
+    parkName: "Kittys View Country Lodges",
+    lodgeName: "The Paw Pad",
+    lodgeCode: "lp16512",
+  };
+
+  it("a lodge found by code brings its own park: no park lookup, no duplicate park", async () => {
+    repo.findLodgeByCode.mockResolvedValue({ id: "lodge-paw", park_id: "park-kittys-saved" });
+
+    const result = await jsonMapperService.mapJsonToIds(LODGE_INPUT);
+
+    expect(result.lodgeId).toBe("lodge-paw");
+    expect(result.parkId).toBe("park-kittys-saved");
+    expect(repo.findParkByName).not.toHaveBeenCalled();
+    expect(repo.createPark).not.toHaveBeenCalled();
+    expect(repo.createLodge).not.toHaveBeenCalled();
+  });
+
+  it("a code-matched lodge with no park falls back to the park name", async () => {
+    repo.findLodgeByCode.mockResolvedValue({ id: "lodge-paw", park_id: null });
+    repo.findParkByName.mockResolvedValue({ id: "park-by-name" });
+
+    const result = await jsonMapperService.mapJsonToIds(LODGE_INPUT);
+
+    expect(result.lodgeId).toBe("lodge-paw");
+    expect(result.parkId).toBe("park-by-name");
+  });
+
+  it("a same-named lodge in ANOTHER park is not used: a new lodge is created in the resolved park", async () => {
+    repo.findLodgeByCode.mockResolvedValue(null);
+    repo.findParkByName.mockResolvedValue({ id: "park-a" });
+    repo.findLodgeByName.mockResolvedValue({ id: "lodge-other", park_id: "park-b" });
+    repo.createLodge.mockResolvedValue({ id: "lodge-new" });
+
+    const result = await jsonMapperService.mapJsonToIds(LODGE_INPUT);
+
+    expect(repo.createLodge).toHaveBeenCalledWith("park-a", "lp16512", "The Paw Pad");
+    expect(result.lodgeId).toBe("lodge-new");
+    expect(result.parkId).toBe("park-a");
+  });
+
+  it("a name match inside the resolved park is reused", async () => {
+    repo.findLodgeByCode.mockResolvedValue(null);
+    repo.findParkByName.mockResolvedValue({ id: "park-a" });
+    repo.findLodgeByName.mockResolvedValue({ id: "lodge-same", park_id: "park-a" });
+
+    const result = await jsonMapperService.mapJsonToIds(LODGE_INPUT);
+
+    expect(result.lodgeId).toBe("lodge-same");
+    expect(result.parkId).toBe("park-a");
+    expect(repo.createLodge).not.toHaveBeenCalled();
+  });
+
+  it("an unknown park and lodge are both created, as before", async () => {
+    repo.findLodgeByCode.mockResolvedValue(null);
+    repo.findParkByName.mockResolvedValue(null);
+    repo.findLodgeByName.mockResolvedValue(null);
+    repo.createPark.mockResolvedValue({ id: "park-new" });
+    repo.createLodge.mockResolvedValue({ id: "lodge-new" });
+
+    const result = await jsonMapperService.mapJsonToIds(LODGE_INPUT);
+
+    expect(repo.createPark).toHaveBeenCalledWith("Kittys View Country Lodges", undefined);
+    expect(repo.createLodge).toHaveBeenCalledWith("park-new", "lp16512", "The Paw Pad");
+    expect(result.parkId).toBe("park-new");
+    expect(result.lodgeId).toBe("lodge-new");
+  });
+});
