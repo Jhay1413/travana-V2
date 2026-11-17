@@ -7,6 +7,8 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useParks, useLodges } from "@/hooks/queries";
 import { AddLodgeModal } from "@/features/lookups/components/lookups/add-lodge-modal";
+import { AddParkModal } from "@/features/lookups/components/lookups/add-park-modal";
+import { noParkMatchesSearch } from "@/features/quote/lib/park-search";
 import { fmControlClass, fmInputClass, fmLabelClass } from "@/features/quote/components/fm-classes";
 import type { QuoteFormValues } from "@/features/quote/types";
 
@@ -15,11 +17,16 @@ export function QuoteLodgeDetailsSection() {
   const parkId = useWatch({ control, name: "parkId" });
   const { data: parksData } = useParks();
   const { data: lodgesData, isFetching: isLodgesFetching } = useLodges(parkId || undefined);
+  const [parkSearch, setParkSearch] = useState("");
+  const [showAddParkModal, setShowAddParkModal] = useState(false);
+  // Label for a just-created park until the refetched list contains it.
+  const [createdPark, setCreatedPark] = useState<{ id: string; label: string } | null>(null);
   const [lodgeSearch, setLodgeSearch] = useState("");
   const [showAddLodgeModal, setShowAddLodgeModal] = useState(false);
   // Label for a just-created lodge until the refetched list contains it.
   const [createdLodge, setCreatedLodge] = useState<{ id: string; label: string } | null>(null);
 
+  const canAddPark = noParkMatchesSearch(parksData ?? [], parkSearch);
   const parkName = (parksData ?? []).find((p: { id: string; name: string | null }) => p.id === parkId)?.name ?? undefined;
   const lodgeTerm = lodgeSearch.trim().toLowerCase();
   const lodgeList: { lodge_name: string | null; lodge_code: string | null }[] = lodgesData ?? [];
@@ -45,7 +52,14 @@ export function QuoteLodgeDetailsSection() {
                     label: p.name || p.id,
                   }))}
                   value={field.value ?? ""}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    setParkSearch("");
+                  }}
+                  onSearchCapture={setParkSearch}
+                  selectedLabel={createdPark && createdPark.id === field.value ? createdPark.label : undefined}
+                  onAddNew={canAddPark ? () => setShowAddParkModal(true) : undefined}
+                  addNewLabel="Add Park"
                   placeholder="Select park..."
                 />
               </FormControl>
@@ -135,6 +149,18 @@ export function QuoteLodgeDetailsSection() {
           )}
         />
       </div>
+
+      <AddParkModal
+        open={showAddParkModal}
+        onOpenChange={setShowAddParkModal}
+        initialName={parkSearch.trim()}
+        onSuccess={(park) => {
+          setCreatedPark({ id: park.id, label: park.name || park.code || park.id });
+          setValue("parkId", park.id, { shouldDirty: true });
+          setValue("lodgeId", "", { shouldDirty: true });
+          setParkSearch("");
+        }}
+      />
 
       {parkId && (
         <AddLodgeModal

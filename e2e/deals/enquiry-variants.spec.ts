@@ -193,3 +193,29 @@ test.describe("Cruise Package enquiry pop-up", () => {
     await expect(popup.getByTestId("select-enquiry-country")).not.toContainText("Spain");
   });
 });
+
+test.describe("Hot Tub Break enquiry destination", () => {
+  test("an unknown destination offers Add Destination and the created destination is selected", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+    const destName = `E2E Dest ${unique("d")}`;
+
+    const popup = await openEnquiryPopup(page, client.id, "Hot Tub Break");
+    const trigger = popup.getByTestId("select-enquiry-destination");
+    await trigger.click();
+    const listbox = page.getByRole("listbox").last();
+    await listbox.getByRole("textbox").fill(destName);
+    await listbox.getByTestId("button-searchable-add-new").click();
+
+    const modal = page.getByRole("dialog").filter({ hasText: "Add Destination" });
+    await expect(modal).toBeVisible();
+    await expect(modal).toContainText("United Kingdom"); // hot tub has no country picker, so the UK is the default
+    await modal.getByRole("button", { name: "Create Destination" }).click();
+    await expectToast(page, "Destination created");
+
+    await expect(popup.getByTestId("select-enquiry-destination")).toContainText(destName);
+    const rows = await queryRows<{ id: string }>(`select id from destination_table where name = $1`, [destName]);
+    expect(rows).toHaveLength(1);
+  });
+});

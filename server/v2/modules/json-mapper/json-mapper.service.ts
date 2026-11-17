@@ -350,20 +350,34 @@ export const jsonMapperService = {
 
     roomTypeId = await resolveRoomType(input.roomType);
 
-    if (input.parkName) {
+    // The form lists only the lodges of the selected park, so the park and the
+    // lodge must agree or the Lodge field shows empty. A lodge code identifies
+    // one lodge, so a code match decides the park too (the scraped park name is
+    // often spelt differently from the saved one and would otherwise create a
+    // duplicate park the lodge does not belong to).
+    if (input.lodgeCode) {
+      const lodge = await jsonMapperRepository.findLodgeByCode(input.lodgeCode);
+      if (lodge) {
+        lodgeId = lodge.id;
+        if (lodge.park_id) parkId = lodge.park_id;
+      }
+    }
+
+    if (!parkId && input.parkName) {
       let parkRecord = await jsonMapperRepository.findParkByName(input.parkName);
       if (!parkRecord && input.parkCode) parkRecord = await jsonMapperRepository.findParkByCode(input.parkCode);
       if (parkRecord) { parkId = parkRecord.id; }
       else { parkRecord = await jsonMapperRepository.createPark(input.parkName, input.parkCode || undefined); parkId = parkRecord.id; warnings.push(`Created new park: "${input.parkName}"`); }
     }
 
-    if (input.lodgeCode) {
-      const lodge = await jsonMapperRepository.findLodgeByCode(input.lodgeCode);
-      if (lodge) lodgeId = lodge.id;
-    }
     if (!lodgeId && input.lodgeName) {
+      // Lodge names repeat across parks ("Gold 2 Caravan"), so a name match
+      // only counts when it sits in the resolved park (or has no park yet).
       const lodge = await jsonMapperRepository.findLodgeByName(input.lodgeName);
-      if (lodge) lodgeId = lodge.id;
+      if (lodge && (!parkId || !lodge.park_id || lodge.park_id === parkId)) {
+        lodgeId = lodge.id;
+        if (!parkId && lodge.park_id) parkId = lodge.park_id;
+      }
     }
     if (!lodgeId && parkId && (input.lodgeCode || input.lodgeName)) {
       const newLodge = await jsonMapperRepository.createLodge(parkId, input.lodgeCode, input.lodgeName);

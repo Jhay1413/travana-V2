@@ -5,9 +5,10 @@ import { AddResortModal } from "@/features/lookups/components/lookups/add-resort
 import type { EnquiryFormApi } from "./use-enquiry-form-state";
 
 /** The "Add new" lookup modals behind the package pickers; each adds what was created to the form. */
-export function EnquiryAddModals({ api }: { api: EnquiryFormApi }) {
+export function EnquiryAddModals({ api, destinationOnly = false }: { api: EnquiryFormApi; destinationOnly?: boolean }) {
   const { form, lookups, modals } = api;
-  const primaryCountry = form.countries[0] ?? "";
+  // Hot tub breaks have no country picker, so a new destination defaults to the UK.
+  const primaryCountry = form.countries[0] ?? (destinationOnly ? lookups.ukCountry?.id ?? "" : "");
   const primaryDestination = form.destinations[0] ?? "";
   const primaryResort = form.resorts[0] ?? "";
   const closeWith = (kind: NonNullable<typeof modals.current>) => (open: boolean) => {
@@ -16,7 +17,7 @@ export function EnquiryAddModals({ api }: { api: EnquiryFormApi }) {
 
   return (
     <>
-      <AddCountryModal
+      {!destinationOnly && <AddCountryModal
         open={modals.current === "country"}
         onOpenChange={closeWith("country")}
         initialName={lookups.search.country}
@@ -24,7 +25,7 @@ export function EnquiryAddModals({ api }: { api: EnquiryFormApi }) {
           api.pickCountries(form.countries.includes(c.id) ? form.countries : [...form.countries, c.id]);
           lookups.setCountrySearch("");
         }}
-      />
+      />}
       <AddDestinationModal
         open={modals.current === "destination"}
         onOpenChange={closeWith("destination")}
@@ -35,7 +36,7 @@ export function EnquiryAddModals({ api }: { api: EnquiryFormApi }) {
           lookups.setDestSearch("");
         }}
       />
-      <AddResortModal
+      {!destinationOnly && <AddResortModal
         open={modals.current === "resort"}
         onOpenChange={closeWith("resort")}
         initialName={lookups.search.resort}
@@ -46,8 +47,8 @@ export function EnquiryAddModals({ api }: { api: EnquiryFormApi }) {
           api.pickResorts([...form.resorts, res.id], [res]);
           lookups.setResortSearch("");
         }}
-      />
-      <AddAccommodationModal
+      />}
+      {!destinationOnly && <AddAccommodationModal
         open={modals.current === "accommodation"}
         onOpenChange={closeWith("accommodation")}
         initialName={lookups.search.accommodation}
@@ -60,7 +61,7 @@ export function EnquiryAddModals({ api }: { api: EnquiryFormApi }) {
           api.pickAccommodations([...form.accommodations, acc.id], [acc]);
           lookups.setAccomSearch("");
         }}
-      />
+      />}
     </>
   );
 }

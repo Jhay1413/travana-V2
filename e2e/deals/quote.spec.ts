@@ -539,3 +539,30 @@ test.describe("quote room type select", () => {
     await expect(options.nth(1)).toHaveAttribute("aria-selected", "false");
   });
 });
+
+test.describe("quote park select (Hot Tub Break)", () => {
+  test("an unknown park name offers Add Park, the modal saves it and the park is selected", async ({ page }) => {
+    const agency = await seedDealsAgency();
+    await signIn(page, agency.agentEmail);
+    const client = await apiCreateClient(page.request);
+    const parkName = `E2E Park ${unique("p")}`;
+
+    const drawer = await openQuoteDrawerFromClient(page, client.id);
+    await chooseOption(page, drawer.getByLabel("Holiday Type"), "Hot Tub Break");
+
+    const parkTrigger = drawer.getByRole("combobox").filter({ hasText: "Select park" });
+    await parkTrigger.click();
+    const listbox = page.getByRole("listbox").last();
+    await listbox.getByRole("textbox").fill(parkName);
+    await listbox.getByTestId("button-searchable-add-new").click();
+
+    const modal = page.getByRole("dialog").filter({ hasText: "Add Park" });
+    await expect(modal.getByTestId("input-park-name")).toHaveValue(parkName); // pre-filled from the search
+    await modal.getByTestId("button-save-park").click();
+    await expectToast(page, "Park added");
+
+    await expect(drawer.getByRole("combobox").filter({ hasText: parkName })).toBeVisible();
+    const rows = await queryRows<{ name: string }>(`select name from park_table where name = $1`, [parkName]);
+    expect(rows).toHaveLength(1);
+  });
+});

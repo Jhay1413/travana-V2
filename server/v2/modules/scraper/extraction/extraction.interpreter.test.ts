@@ -2536,6 +2536,90 @@ describe("review follow-ups: Jet2 negations, Jet2 room header lines, Hoseasons h
   });
 });
 
+// One Hoseasons spec serves two layouts: the agent site (/agents/lodges/…,
+// labelled party fields) and the public site (/accom/…, a "2 guests - 0 pets"
+// summary and an en-dash date). The agent block pins today's agent results so a
+// public-site rule can never change them.
+describe("Hoseasons seed: agent site and public site share one spec", () => {
+  const spec = seedSpec("hoseasons");
+  const AGENT_URL =
+    "https://www.hoseasons.co.uk/agents/lodges/white-cross-bay-pwba/gold-3-caravan-with-parking-lp31765?start=03-10-2026&adult=2&nights=7&range=3";
+  const PUBLIC_URL =
+    "https://www.hoseasons.co.uk/accom/kittys-view-country-lodges-kvcr/the-paw-pad-lp16512?accommodationType=&siteId=KVCR&sort=recommended&features=&nights=7";
+
+  const agent = (extra = "") =>
+    runExtractionSpec(
+      spec,
+      {
+        title: "Gold 3 Caravan with parking - White Cross Bay - Lodges - Book Online - Hoseasons",
+        headings: ["Gold 3 Caravan with parking"],
+        url: AGENT_URL,
+        text: [
+          PAD,
+          "Home > Lodges > Cumbria > White Cross Bay > Gold 3 Caravan with parking",
+          "Gold 3 Caravan with parking",
+          "White Cross Bay in Lake Windermere , Cumbria",
+          "",
+          "Ref: LP31765",
+          extra,
+          "3rd October 2026 - 10th October 2026 (7 nights)",
+          "Adults (18+)\n3\nChildren (2-17)\n1\nBabies (Under 2)\n0\nPets\n2",
+          "PRICE NOW £630",
+        ].join("\n"),
+      },
+      "x",
+    );
+
+  const publicSite = (text: string) =>
+    runExtractionSpec(spec, { title: "The Paw Pad", headings: ["The Paw Pad"], url: PUBLIC_URL, text: `${PAD}\n${text}` }, "x");
+
+  it("agent page: every field reads as before", () => {
+    const q = agent();
+    expect(q.lodge_park_name).toBe("White Cross Bay");
+    expect(q.accommodation).toBe("Gold 3 Caravan with parking");
+    expect(q.lodge_code).toBe("Ref: LP31765");
+    expect(q.travel_date).toBe("2026-10-03");
+    expect(q.no_of_nights).toBe(7);
+    expect(q.adults).toBe(3);
+    expect(q.children).toBe(1);
+    expect(q.infants).toBe(0);
+    expect(q.pets).toBe(2);
+    expect(q.sales_price).toBe(630);
+    // Was the link's query string ("start=03-10-2026&adult=2…") before.
+    expect(q.cottage_id).toBe("lp31765");
+  });
+
+  it("agent page: loose 'guests' / 'pets' wording elsewhere does not steal the party fields", () => {
+    const q = agent("Sleeps up to 6 guests\nUp to 2 pets welcome\n1 pets allowed per lodge");
+    expect(q.adults).toBe(3);
+    expect(q.pets).toBe(2);
+  });
+
+  it("agent park page (no lodge segment) still reads the park from the URL", () => {
+    const q = runExtractionSpec(
+      spec,
+      { title: "", text: PAD, url: "https://www.hoseasons.co.uk/agents/lodges/white-acres-whia" },
+      "x",
+    );
+    expect(q.lodge_park_name).toBe("White Acres");
+  });
+
+  it("public page: park comes from the park segment, not the lodge", () => {
+    const q = publicSite("01 Dec 2026 – 7 nights\n2 guests - 0 pets");
+    expect(q.lodge_park_name).toBe("Kittys View Country Lodges");
+    expect(q.accommodation).toBe("The Paw Pad");
+    expect(q.lodge_code).toBe("lp16512");
+  });
+
+  it("public page: reads the en-dash date, nights, guests and pets", () => {
+    const q = publicSite("01 Dec 2026 – 7 nights\n4 guests - 1 pets\n£455");
+    expect(q.travel_date).toBe("2026-12-01");
+    expect(q.no_of_nights).toBe(7);
+    expect(q.adults).toBe(4);
+    expect(q.pets).toBe(1);
+  });
+});
+
 describe("seed: every regex rule's group index exists in its pattern", () => {
   const rules = supplierScraperSeed.flatMap((s) => {
     const fields = (s.config.extraction as ExtractionSpec | undefined)?.fields ?? {};
