@@ -2611,6 +2611,21 @@ describe("Hoseasons seed: agent site and public site share one spec", () => {
     expect(q.lodge_code).toBe("lp16512");
   });
 
+  it("agent page: a bare '£' line before PRICE NOW never replaces the PRICE NOW amount", () => {
+    const q = agent("PRICE WAS\n£700\nDeposit\n£50");
+    expect(q.sales_price).toBe(630);
+  });
+
+  it("public page: the price is the amount standing alone on its own line", () => {
+    // <h3><sup>£</sup>879</h3> renders as "£879"; amounts inside a sentence are ignored.
+    const q = publicSite("Low deposit from £25 per booking\n01 Dec 2026 – 7 nights\n2 guests - 0 pets\n£879\nBook now");
+    expect(q.sales_price).toBe(879);
+  });
+
+  it("public page: reads a price with a thousands comma", () => {
+    expect(publicSite("2 guests - 0 pets\n£1,249\nBook now").sales_price).toBe(1249);
+  });
+
   it("public page: reads the en-dash date, nights, guests and pets", () => {
     const q = publicSite("01 Dec 2026 – 7 nights\n4 guests - 1 pets\n£455");
     expect(q.travel_date).toBe("2026-12-01");
