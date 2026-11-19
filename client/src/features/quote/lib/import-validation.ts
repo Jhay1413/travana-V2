@@ -10,6 +10,11 @@ function isMoneyField(field: string | undefined): field is MoneyField {
   return !!field && (MONEY_FIELDS as readonly string[]).includes(field);
 }
 
+// Errors that mean "the two prices disagree", not "there is no price". The
+// extracted number still fills the form for these — the agent sees the error
+// in the import panel and corrects it there (stakeholder decision, 19 Nov 2026).
+const FILL_ANYWAY_CODES: readonly string[] = ["PRICE_PARTY_MISMATCH", "PRICE_BELOW_PER_PERSON"];
+
 // Which raw scraped keys does a money field's server-side name correspond to
 // on the quote object handed to the form importer? Both are read verbatim
 // from `ScrapedQuoteJson` (server/v2/modules/scraper/extraction/extraction.validate.ts),
@@ -18,7 +23,7 @@ export function getMoneyFieldsNeedingAttention(validation: ImportValidation | un
   const needsAttention = new Set<MoneyField>();
   if (!validation) return needsAttention;
   for (const issue of validation.issues) {
-    if (issue.level === "error" && isMoneyField(issue.field)) {
+    if (issue.level === "error" && isMoneyField(issue.field) && !FILL_ANYWAY_CODES.includes(issue.code)) {
       needsAttention.add(issue.field);
     }
   }
@@ -28,7 +33,8 @@ export function getMoneyFieldsNeedingAttention(validation: ImportValidation | un
 // Removes money fields that failed validation from the quote payload before
 // it reaches the form importer, so they're left blank rather than populated
 // with a value that might be wrong. Everything else (including fields with
-// only a WARNING) still auto-fills.
+// only a WARNING, and prices that merely disagree with each other — see
+// FILL_ANYWAY_CODES) still auto-fills.
 export function withMoneyFieldsQuarantined(
   quote: Record<string, unknown>,
   validation: ImportValidation | undefined,
@@ -68,8 +74,8 @@ export function fieldLabel(field: string | undefined): string | undefined {
 // useful instead of nothing.
 const ISSUE_COPY: Record<string, string> = {
   PRICE_ZERO: "The price didn't extract — the capture may have been taken before the page finished loading. Re-capture, or enter the price manually.",
-  PRICE_PARTY_MISMATCH: "The total price doesn't match price-per-person × travellers (adults + children) — one of the two extracted wrong (this is the bug where a per-person fare gets recorded as the total). Check both and enter the total manually.",
-  PRICE_BELOW_PER_PERSON: "The total price is lower than the per-person price, which can't be right. Check both and enter the total manually.",
+  PRICE_PARTY_MISMATCH: "The total price doesn't match price-per-person × travellers (adults + children) — one of the two extracted wrong (this is the bug where a per-person fare gets recorded as the total). The extracted price has been filled in — check both and correct the total if it's wrong.",
+  PRICE_BELOW_PER_PERSON: "The total price is lower than the per-person price, which can't be right. The extracted price has been filled in — check both and correct the total if it's wrong.",
   DATE_NOT_ISO: "The date didn't come through in a format we could read. Enter it manually.",
   DATE_OUT_OF_RANGE: "This date falls outside a plausible booking window — the extraction likely grabbed the wrong text. Check and correct it.",
   NIGHTS_ITINERARY_MISMATCH: "The number of nights doesn't match the day-by-day itinerary on the page. Check the nights against the itinerary.",

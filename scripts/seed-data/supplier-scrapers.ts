@@ -1502,7 +1502,7 @@ export const supplierScraperSeed: SupplierScraperSeed[] = [
           "sales_price": {
             "from": "text",
             "group": 1,
-            "regex": "PRICE NOW\\s*£\\s?(\\d{2,4})",
+            "regex": "(?:PRICE NOW\\s*£\\s?(?=\\d{2})|^(?![\\s\\S]*PRICE NOW)[\\s\\S]*?\\n[^\\S\\n]*£\\s*(?=[\\d,]+[^\\S\\n]*(?:\\n|$)))(\\d[\\d,]{1,5})",
             "transform": "number"
           },
           "travel_date": {

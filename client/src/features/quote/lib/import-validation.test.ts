@@ -60,6 +60,26 @@ describe("withMoneyFieldsQuarantined", () => {
     expect(result.quote_title).toBe("Best Deal");
   });
 
+  it.each(["PRICE_PARTY_MISMATCH", "PRICE_BELOW_PER_PERSON"])(
+    "still fills the price on %s — the prices disagree, but the extracted number is kept",
+    (code) => {
+      const quote = { sales_price: 899, price_per_person: 899 };
+      const v = validation([{ code, level: "error", field: "sales_price", message: "m" }]);
+      expect(getMoneyFieldsNeedingAttention(v).size).toBe(0);
+      expect(withMoneyFieldsQuarantined(quote, v)).toEqual(quote);
+      expect(hasImportErrors(v)).toBe(true); // the error is still shown in the panel
+    },
+  );
+
+  it("still blanks a zero price even when a mismatch is reported alongside it", () => {
+    const quote = { sales_price: 0, price_per_person: 300 };
+    const v = validation([
+      { code: "PRICE_PARTY_MISMATCH", level: "error", field: "sales_price", message: "m" },
+      { code: "PRICE_ZERO", level: "error", field: "sales_price", message: "m" },
+    ]);
+    expect(withMoneyFieldsQuarantined(quote, v).sales_price).toBeUndefined();
+  });
+
   it("leaves money fields populated when the only issues are warnings", () => {
     const quote = { sales_price: 1200 };
     const v = validation([{ code: "NIGHTS_SOURCE_CONFLICT", level: "warn", field: "no_of_nights", message: "m" }]);

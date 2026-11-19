@@ -63,13 +63,17 @@ export function ConversationRow({ conversation: c, selected, isDoneTab, staff, c
             {c.contact.displayName}
           </span>
           <div className="flex h-7 shrink-0 items-center gap-1.5">
-            <div className="flex items-center gap-1.5 group-focus-within:hidden group-hover:hidden">
+            {/* The actions must stay rendered while one of their menus is open
+                (group-has-[[data-state=open]]): the menu is positioned against
+                its trigger button, and moving the pointer into the menu ends the
+                row hover — hiding the trigger would send the menu to the corner. */}
+            <div className="flex items-center gap-1.5 group-focus-within:hidden group-hover:hidden group-has-[[data-state=open]]:hidden">
               <span className={cn("text-[12px]", c.unread ? "font-semibold text-social-orange-text" : "text-social-muted")}>
                 {formatRowTime(c.lastActivityAt, now)}
               </span>
               {c.unread && <span className="h-2 w-2 rounded-full bg-social-orange" aria-label="Unread" />}
             </div>
-            <div className="hidden group-focus-within:flex group-hover:flex">
+            <div className="hidden group-focus-within:flex group-hover:flex group-has-[[data-state=open]]:flex">
               <RowHoverActions
                 snoozed={c.snoozed}
                 isDoneTab={isDoneTab}
