@@ -21,7 +21,8 @@ import { toOnlySocialsBody, onlySocialsPlainLength } from "@shared/social-post-b
 import { useSocialAccounts } from "@/features/social/api/use-social-settings-queries";
 import { Clock, Send, Sparkles } from "lucide-react";
 import { editorHtmlToPost, postToEditorHtml } from "@/lib/post-editor-html";
-import { browserTimezoneLabel, combineLocal, splitLocal } from "@/features/social/lib/schedule-time";
+import { browserTimezoneLabel, combineLocal, scheduleToLocal, splitLocal } from "@/features/social/lib/schedule-time";
+import { buildSaveTextPayload, shouldPreSaveText } from "./save-payload";
 import { PostContentForm } from "./post-content-form";
 import { FacebookOptionsCard } from "./facebook-options-card";
 import { PlatformPicker } from "./platform-picker";
@@ -43,15 +44,6 @@ import type { SocialPostEditorDialogProps } from "./editor.types";
 
 const DEFAULT_TIME = "09:00";
 const imagesLabel = (n: number) => `${n} image${n === 1 ? "" : "s"}`;
-
-/** Wall-clock "YYYY-MM-DDTHH:mm" of a stored UTC schedule, in the browser's timezone. */
-function scheduleToLocal(postSchedule: string | null | undefined): string {
-  if (!postSchedule) return "";
-  const d = new Date(postSchedule);
-  if (isNaN(d.getTime())) return "";
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export function SocialPostEditorDialog({
   open,
@@ -201,8 +193,17 @@ export function SocialPostEditorDialog({
     if (!travelDeal) return;
     try {
       // A scheduled post keeps its accounts until it is rescheduled; only a draft remembers the ticks.
-      const accountIds = !isScheduled && accountsQuery.data && selectedIds.length > 0 ? { accountIds: selectedIds } : {};
-      await savePost.mutateAsync({ id: travelDeal.id, data: { post: currentPost(), ...accountIds } });
+      const accountIds = accountsQuery.data ? selectedIds : [];
+      await savePost.mutateAsync({
+        id: travelDeal.id,
+        data: buildSaveTextPayload({
+          post: currentPost(),
+          postSchedule: travelDeal.postSchedule,
+          isPending,
+          isScheduled,
+          accountIds,
+        }),
+      });
     } catch (err) {
       const msg = errorMessage(err, isPending ? "Couldn't update the scheduled post on Facebook/Instagram — nothing was changed" : "Failed to save post");
       // The server saves the text before it checks the accounts, and says so in its message.
@@ -243,17 +244,21 @@ export function SocialPostEditorDialog({
     // The server formats every selected image to 1080×1080 while scheduling.
     const upload = buildOrderedUpload(imageOrder);
 
-    try {
-      await savePost.mutateAsync({
-        id: travelDeal.id,
-        data: {
-          post: currentHtml,
-        },
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to save post";
-      toast({ title: "Save failed", description: msg, variant: "destructive" });
-      return;
+    // A pending post is not pre-saved: the reschedule request below carries the text and the server saves it
+    // once OnlySocials accepted it, so the text is not pushed to OnlySocials twice.
+    if (shouldPreSaveText(isPending)) {
+      try {
+        await savePost.mutateAsync({
+          id: travelDeal.id,
+          data: {
+            post: currentHtml,
+          },
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to save post";
+        toast({ title: "Save failed", description: msg, variant: "destructive" });
+        return;
+      }
     }
 
     try {

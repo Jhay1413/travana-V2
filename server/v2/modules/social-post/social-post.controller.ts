@@ -4,7 +4,7 @@ import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import type { UpdateSocialPostInput } from "./social-post.types";
 import { getScope } from "../../utils/scope";
-import { parseImageOrderField, sanitizeUrlInput } from "./media-order";
+import { parseExistingImageIdsField, parseImageOrderField, sanitizeUrlInput } from "./media-order";
 import { parseAccountIdsField } from "./social-post.validator";
 
 export const socialPostController = {
@@ -33,9 +33,8 @@ export const socialPostController = {
     }
     // Local wall-clock string for OnlySocials; falls back to the UTC value for old clients.
     const postScheduleLocal = (req.body.postScheduleLocal as string) || postSchedule;
-    let existingImageIds: number[] = [];
+    const existingImageIds = parseExistingImageIdsField(req.body.existingImageIds);
     let imageUrls: unknown = [];
-    try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const { urls, dropped, order } = sanitizeUrlInput(imageUrls, parseImageOrderField(req.body.imageOrder));
     const newFiles = (req.files as Express.Multer.File[]) || [];
@@ -57,9 +56,8 @@ export const socialPostController = {
     // Local wall-clock string for OnlySocials; falls back to the UTC value for old clients.
     const postScheduleLocal = (req.body.postScheduleLocal as string) || postSchedule;
     const postContent = (req.body.postContent as string) || "";
-    let existingImageIds: number[] = [];
+    const existingImageIds = parseExistingImageIdsField(req.body.existingImageIds);
     let imageUrls: unknown = [];
-    try { existingImageIds = JSON.parse(req.body.existingImageIds || "[]"); } catch { existingImageIds = []; }
     try { imageUrls = JSON.parse(req.body.imageUrls || "[]"); } catch { imageUrls = []; }
     const { urls, dropped, order } = sanitizeUrlInput(imageUrls, parseImageOrderField(req.body.imageOrder));
     const newFiles = (req.files as Express.Multer.File[]) || [];

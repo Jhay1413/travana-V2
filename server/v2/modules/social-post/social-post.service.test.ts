@@ -52,6 +52,7 @@ vi.mock("../ai-embeddings/ai-embeddings.service", () => ({
 }));
 
 import { toOnlySocialsBody } from "@shared/social-post-body";
+import { AppError } from "../../utils/error-handler";
 import {
   buildOrgSocialContact,
   familySize,
@@ -324,8 +325,36 @@ describe("socialPostService auto-upscale at schedule time", () => {
     mocks.uploadOnlySocialsMedia.mockResolvedValue({ id: "10" });
     mocks.uploadMediaFromUrl.mockResolvedValueOnce({ id: "11" }).mockResolvedValueOnce({ id: "12" });
     mocks.scheduleOnlySocialsPost.mockResolvedValue({ uuid: "os-1" });
-    mocks.rescheduleOnlySocialsPost.mockResolvedValue({ uuid: "os-1" });
+    mocks.rescheduleOnlySocialsPost.mockResolvedValue({ success: true });
     mocks.listAccounts.mockReset().mockResolvedValue({ configured: true, accounts: [FB_ACCOUNT] });
+  });
+
+  it("reschedulePost saves the text with the new schedule and keeps the existing onlySocialsId", async () => {
+    mocks.prepareImagesForPost.mockResolvedValue({ imageUrls: [], files: [], upscaled: [], skipped: [] });
+    await socialPostService.reschedulePost(
+      "deal-1", "2026-01-01T10:00:00Z", "2026-01-01T10:00:00", [3], [], "new text", [], { orgId: null },
+    );
+    const saved = mocks.repo.update.mock.calls[0][1] as Record<string, unknown>;
+    expect(saved.post).toBe(toOnlySocialsBody("new text"));
+    expect(saved.postSchedule).toEqual(new Date("2026-01-01T10:00:00Z"));
+    expect("onlySocialsId" in saved).toBe(false);
+  });
+
+  it("reschedulePost leaves the stored text alone when no text is sent", async () => {
+    mocks.prepareImagesForPost.mockResolvedValue({ imageUrls: [], files: [], upscaled: [], skipped: [] });
+    await socialPostService.reschedulePost(
+      "deal-1", "2026-01-01T10:00:00Z", "2026-01-01T10:00:00", [3], [], "", [], { orgId: null },
+    );
+    expect("post" in (mocks.repo.update.mock.calls[0][1] as Record<string, unknown>)).toBe(false);
+  });
+
+  it("reschedulePost saves nothing when the OnlySocials PUT fails", async () => {
+    mocks.prepareImagesForPost.mockResolvedValue({ imageUrls: [], files: [], upscaled: [], skipped: [] });
+    mocks.rescheduleOnlySocialsPost.mockRejectedValue(new AppError("boom", 500));
+    await expect(
+      socialPostService.reschedulePost("deal-1", "2026-01-01T10:00:00Z", "2026-01-01T10:00:00", [3], [], "new text", [], { orgId: null }),
+    ).rejects.toMatchObject({ statusCode: 500 });
+    expect(mocks.repo.update).not.toHaveBeenCalled();
   });
 
   it("schedulePost uploads the prepared files/urls and returns the auto-upscale summary", async () => {

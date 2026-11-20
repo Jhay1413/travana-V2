@@ -277,7 +277,7 @@ export const rescheduleOnlySocialsPost = async (
   postContent: string,
   images: number[],
   targets: OnlySocialsPublishTarget[]
-): Promise<{ id: string; uuid: string; name: string; hexColor: string }> => {
+): Promise<{ success: boolean }> => {
   const [scheduleDate, rawTime = "00:00"] = newPostSchedule.split("T");
   const scheduleTime = rawTime.substring(0, 5);
   const url = `${getApiBase()}/posts/${onlySocialsPostId}`;
@@ -293,17 +293,31 @@ export const rescheduleOnlySocialsPost = async (
       ),
     });
 
-    const data = (await response.json()) as { id: string; uuid: string; name: string; hexColor: string };
+    // The documented success body is { success: true }; tolerate an empty or non-JSON body on success.
+    const raw = await response.text();
+    let data: unknown = null;
+    if (raw.trim() !== "") {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = null;
+      }
+    }
     console.log(`[OnlySocials][timing] reschedule PUT /posts: ${Date.now() - tPut}ms`);
 
     if (!response.ok) {
-      console.error("[OnlySocials] reschedule failed:", JSON.stringify(data));
-      throw new AppError(`OnlySocials reschedule error: ${JSON.stringify(data)}`, response.status);
+      const detail = data === null ? raw : JSON.stringify(data);
+      console.error("[OnlySocials] reschedule failed:", detail);
+      throw new AppError(`OnlySocials reschedule error: ${detail}`, response.status);
     }
 
-    console.log("[OnlySocials] post rescheduled successfully:", data.id);
+    if (typeof data === "object" && data !== null && "success" in data && data.success === false) {
+      throw new AppError(`OnlySocials reschedule error: ${JSON.stringify(data)}`, 502);
+    }
 
-    return data;
+    console.log("[OnlySocials] post rescheduled successfully:", onlySocialsPostId);
+
+    return { success: true };
   } catch (error) {
     if (error instanceof AppError) throw error;
     throw new AppError(

@@ -248,15 +248,22 @@ const SCHEDULED_TEXT_UPDATE_FAILED = "Couldn't update the scheduled post on Face
 /**
  * Replaces the text of a scheduled post on OnlySocials, keeping the date/time it already has there, its saved
  * accounts (stored targets, else the legacy account, re-checked against the allow-list) and its current media.
+ * The date/time is the wall-clock the caller supplies (`scheduleLocal`, "YYYY-MM-DDTHH:mm" in the workspace's
+ * zone as the browser sees it): OnlySocials' GET only returns a UTC `scheduled_at` and the server does not know
+ * the workspace timezone, so it never converts one itself.
  * Any failure becomes one clear error; the caller has not saved anything locally yet.
  */
 async function pushTextToScheduledPost(
   deal: TravelDeal,
   body: string,
   orgId: string | null,
-): Promise<{ uuid: string; targets: OnlySocialsPublishTarget[] }> {
+  scheduleLocal: string | undefined,
+): Promise<{ targets: OnlySocialsPublishTarget[] }> {
   const onlySocialsId = deal.onlySocialsId;
   if (!onlySocialsId) throw new AppError("Post has not been scheduled on OnlySocials yet", 400);
+  if (!scheduleLocal) {
+    throw new AppError(`${SCHEDULED_TEXT_UPDATE_FAILED}. The post's current date and time are missing; reload the page and try again.`, 400);
+  }
   // Rules the user can act on (account disconnected, caption too long) keep their own message.
   const refused = (err: AppError) => new AppError(`${SCHEDULED_TEXT_UPDATE_FAILED}. ${err.message}`, err.statusCode);
   const targets = await resolveTargets(undefined, deal, orgId).catch((err: unknown) => {
@@ -267,16 +274,13 @@ async function pushTextToScheduledPost(
     const remote = await fetchOnlySocialsPost(onlySocialsId);
     const version = remote.versions?.find((v) => v.is_original) ?? remote.versions?.[0];
     const mediaIds = (version?.content?.[0]?.media ?? []).map((m) => m.id);
-    const date = remote.date?.split("T")[0];
-    const time = remote.time;
-    if (!date || !time) throw new Error("OnlySocials did not return the post date and time");
     try {
       assertInstagramRules(targets, mediaIds.length, sentBody);
     } catch (err) {
       throw err instanceof AppError ? refused(err) : err;
     }
-    const result = await rescheduleOnlySocialsPost(onlySocialsId, `${date}T${time}`, sentBody, mediaIds, targets);
-    return { uuid: result.uuid, targets };
+    await rescheduleOnlySocialsPost(onlySocialsId, scheduleLocal, sentBody, mediaIds, targets);
+    return { targets };
   } catch (err) {
     if (err instanceof AppError && err.message.startsWith(SCHEDULED_TEXT_UPDATE_FAILED)) throw err;
     console.error("[SocialPost] scheduled text update failed:", err);
@@ -683,16 +687,15 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
   async updateTravelDeal(id: string, data: UpdateSocialPostInput, scope: ScopeOrTrusted): Promise<TravelDeal> {
     const deal = await assertDealInScope(id, scope);
     // Explicit allow-list: never forward request keys (onlySocialsId, quote_id, postSchedule...) to the repository.
-    const payload: Partial<Pick<TravelDeal, "post" | "only_socials_targets" | "onlySocialsId">> = {};
+    const payload: Partial<Pick<TravelDeal, "post" | "only_socials_targets">> = {};
     if (typeof data.post === "string") payload.post = toOnlySocialsBody(data.post);
     // A post still waiting to go out is changed on OnlySocials FIRST (same date/time, accounts and media); the
     // local text is only saved once that succeeded, so the two never disagree. Posted/draft deals stay local-only.
     const pushedToOnlySocials =
       payload.post !== undefined && isStillScheduled(deal)
-        ? await pushTextToScheduledPost(deal, payload.post, await dealOrgId(id, scope))
+        ? await pushTextToScheduledPost(deal, payload.post, await dealOrgId(id, scope), data.postScheduleLocal)
         : null;
     if (pushedToOnlySocials) {
-      payload.onlySocialsId = pushedToOnlySocials.uuid;
       payload.only_socials_targets = toStoredTargets(pushedToOnlySocials.targets);
     }
     // The text is always saved. The accounts part is checked against the agency allow-list only (no live OnlySocials
@@ -826,7 +829,7 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     // OnlySocials gets the local wall-clock value; the DB keeps the UTC instant.
     const tSchedule = Date.now();
     assertInstagramRules(targets, allImageIds.length, sentBody);
-    const result = await rescheduleOnlySocialsPost(
+    await rescheduleOnlySocialsPost(
       deal.onlySocialsId,
       newPostScheduleLocal,
       sentBody,
@@ -836,8 +839,10 @@ NOTE: Use HTML <br> tags between each line. Return ONLY the summary text.`,
     console.log(`[SocialPost][timing] rescheduleOnlySocialsPost: ${Date.now() - tSchedule}ms`);
 
     const tDb = Date.now();
+    // The PUT answers only { success }, so the post keeps its existing onlySocialsId. The text was just sent to
+    // OnlySocials, so it is saved with the schedule (an empty postContent leaves the stored text alone).
     const updated = await socialPostRepository.update(id, {
-      onlySocialsId: result.uuid,
+      ...(postContent ? { post: sentBody } : {}),
       only_socials_targets: toStoredTargets(targets),
       postSchedule: new Date(newPostSchedule),
     });

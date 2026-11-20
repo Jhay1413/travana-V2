@@ -96,6 +96,8 @@ export interface QuoteImageSource {
 export interface UpdatePostInput {
   post?: string;
   accountIds?: number[];
+  /** Wall-clock "YYYY-MM-DDTHH:mm" of a pending post's stored schedule; never stored, only re-sent to OnlySocials. */
+  postScheduleLocal?: string;
 }
 
 export const socialPostApi = {

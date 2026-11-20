@@ -17,6 +17,14 @@ export function combineLocal(dateYmd: string, timeHm: string): CombinedSchedule 
   return { local, utcIso: new Date(local).toISOString() };
 }
 
+/** Wall-clock "YYYY-MM-DDTHH:mm" of a stored UTC schedule, in the browser's timezone. Empty when missing/invalid. */
+export function scheduleToLocal(postSchedule: string | null | undefined): string {
+  if (!postSchedule) return "";
+  const d = new Date(postSchedule);
+  if (isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Inverse of `combineLocal`'s `local`. Missing parts come back as empty strings. */
 export function splitLocal(local: string): { date: string; time: string } {
   const match = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?/.exec(local);

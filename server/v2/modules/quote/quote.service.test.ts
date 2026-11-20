@@ -1311,3 +1311,143 @@ describe("newQuoteService - another organisation's or unreadable quotes stay a 4
     expect(newQuoteRepository.addFlight).toHaveBeenCalledWith({ flight_number: "X", quote_id: "q1" });
   });
 });
+
+describe("newQuoteService.updateQuote — un-ticking not_for_social creates the free social copy", () => {
+  // The copy is fire-and-forget from updateQuote — wait for its async chain.
+  const flush = () => new Promise((r) => setTimeout(r, 10));
+
+  const SAVED_DETAILS = {
+    id: "q1", transaction_id: "t1", isFreeQuote: false, not_for_social: false, quote_status: "in_play",
+    holiday_type_id: "ht1", travel_date: "2027-05-01", quote_type: "package", title: "Saved title",
+    sales_price: "600", adult: 2, child: 1, discounts: "100", service_charge: "50", price_per_person: "166.67",
+    quote_token: "tok", quote_sent_at: new Date(), accepted_at: new Date(), parent_quote_id: "p0",
+    tags: ["beach"],
+    flights: [
+      { id: "f1", quote_id: "q1", flight_type: "outbound", leg_order: 0, flight_number: "BA1", departing_airport_name: "x" },
+      { id: "f2", quote_id: "q1", flight_type: "outbound", leg_order: 1, flight_number: "BA2" },
+      { id: "f3", quote_id: "q1", flight_type: "inbound", leg_order: 0, flight_number: "BA3" },
+    ],
+    accommodations: [
+      { id: "a1", quote_id: "q1", is_primary: true, accomodation_id: "acc1", accomodation_name: "Hotel" },
+      { id: "a2", quote_id: "q1", is_primary: false, accomodation_id: "acc2", no_of_nights: 2 },
+    ],
+    transfers: [{ id: "tr1", pick_up_location: "A" }],
+    carHires: [{ id: "c1", pick_up_location: "B" }],
+    attractionTickets: [{ id: "at1", ticket_type: "zoo" }],
+    loungePasses: [{ id: "l1", terminal: "T2" }],
+    airportParkings: [{ id: "p1", parking_type: "long" }],
+    cruises: [{ cruise_name: "Fjords", cruise_line: "Line", ship: "Ship", extras: [{ name: "Wifi" }], itinerary: [{ day_number: 1, description: "Day one", sub_description: "sub" }], pre_cruise_stay: 1, post_cruise_stay: 2, tour_operator_id: "op1" }],
+    passengers: [{ type: "child", age: 7 }, { type: "adult", age: 40 }],
+  };
+
+  function arrange(opts: { before: Record<string, unknown>; isTest?: boolean; details?: Record<string, unknown> }) {
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", transaction_id: "t1", isFreeQuote: false, not_for_social: true, ...opts.before } as never);
+    vi.mocked(newQuoteRepository.update).mockResolvedValue({ id: "q1", transaction_id: "t1", isFreeQuote: false } as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue((opts.details ?? SAVED_DETAILS) as never);
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: "org1", user_id: "u1", is_test: opts.isTest ?? false } as never);
+    vi.mocked(transactionRepository.create).mockResolvedValue({ id: "freeTxn" } as never);
+    vi.mocked(newQuoteRepository.create).mockResolvedValue({ id: "freeQ" } as never);
+    vi.mocked(quoteImageRepository.getByQuoteId).mockResolvedValue([{ url: "https://cdn.example.com/a.jpg" }] as never);
+  }
+
+  it("true -> false creates a free copy from the post-update quote", async () => {
+    arrange({ before: {} });
+
+    await newQuoteService.updateQuote("q1", { not_for_social: false, title: "Saved title" } as never, TRUSTED);
+    await flush();
+
+    // Copy is read AFTER the update wrote.
+    expect(vi.mocked(newQuoteRepository.update).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(newQuoteRepository.findWithDetails).mock.invocationCallOrder[0]);
+    expect(transactionRepository.create).toHaveBeenCalledWith(expect.objectContaining({ status: "on_quote", user_id: "u1", is_test: false }));
+
+    const created = vi.mocked(newQuoteRepository.create).mock.calls[0][0] as Record<string, unknown>;
+    expect(created).toMatchObject({
+      transaction_id: "freeTxn", isFreeQuote: true, isQuoteCopy: false, not_for_social: false,
+      title: "Saved title", sales_price: "600", discounts: null, service_charge: null,
+      price_per_person: "200.00", // 600 / (2 adults + 1 child), discount + service charge cleared
+    });
+    for (const key of ["id", "quote_token", "quote_sent_at", "accepted_at", "parent_quote_id"]) {
+      expect(created).not.toHaveProperty(key);
+    }
+
+    const copyId = "freeQ";
+    expect(newQuoteRepository.upsertFlightByType).toHaveBeenCalledWith(copyId, "outbound", expect.objectContaining({ flight_number: "BA1" }), 0);
+    expect(newQuoteRepository.upsertFlightByType).toHaveBeenCalledWith(copyId, "inbound", expect.objectContaining({ flight_number: "BA3" }), 0);
+    expect(newQuoteRepository.replaceConnectingLegs).toHaveBeenCalledWith(copyId, "outbound", [expect.objectContaining({ flight_number: "BA2" })]);
+    expect(newQuoteRepository.upsertPrimaryAccommodation).toHaveBeenCalledWith(copyId, expect.objectContaining({ accomodation_id: "acc1" }));
+    expect(newQuoteRepository.replaceExtraAccommodations).toHaveBeenCalledWith(copyId, [expect.objectContaining({ accomodation_id: "acc2" })]);
+    expect(newQuoteRepository.replaceTransfers).toHaveBeenCalledWith(copyId, [expect.objectContaining({ pick_up_location: "A" })]);
+    expect(newQuoteRepository.replaceCarHires).toHaveBeenCalledWith(copyId, [expect.objectContaining({ pick_up_location: "B" })]);
+    expect(newQuoteRepository.replaceAttractionTickets).toHaveBeenCalledWith(copyId, [expect.objectContaining({ ticket_type: "zoo" })]);
+    expect(newQuoteRepository.replaceLoungePasses).toHaveBeenCalledWith(copyId, [expect.objectContaining({ terminal: "T2" })]);
+    expect(newQuoteRepository.replaceAirportParkings).toHaveBeenCalledWith(copyId, [expect.objectContaining({ parking_type: "long" })]);
+    expect(newQuoteRepository.upsertCruise).toHaveBeenCalledWith(copyId, expect.objectContaining({ cruiseTitle: "Fjords", cruiseExtras: "Wifi", tourOperatorId: "op1" }));
+    expect(newQuoteRepository.replaceChildPassengers).toHaveBeenCalledWith(copyId, "quote", [7]);
+    expect(quoteImageRepository.addImages).toHaveBeenCalledWith(copyId, ["https://cdn.example.com/a.jpg"]);
+    // images are not pushed back into the accommodation/lodge libraries for the copy
+    expect(newQuoteRepository.saveImagesToAccommodation).not.toHaveBeenCalled();
+    expect(tagService.addQuoteTags).toHaveBeenCalledWith(copyId, ["beach"]);
+  });
+
+  it("syncs the copy's embedding with the ORIGINAL transaction's org", async () => {
+    arrange({ before: {} });
+    vi.mocked(newQuoteRepository.isEmbeddableFreeQuote).mockResolvedValue(true as never);
+
+    await newQuoteService.updateQuote("q1", { not_for_social: false } as never, TRUSTED);
+    await flush();
+
+    expect(aiEmbeddingsService.syncSource).toHaveBeenCalledWith(expect.objectContaining({ orgId: "org1", sourceId: "freeQ" }));
+  });
+
+  it("does not create a copy when it was already false (false -> false)", async () => {
+    arrange({ before: { not_for_social: false } });
+    await newQuoteService.updateQuote("q1", { not_for_social: false } as never, TRUSTED);
+    await flush();
+    expect(newQuoteRepository.create).not.toHaveBeenCalled();
+    expect(transactionRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("does not create a copy when set to true (false -> true and true -> true)", async () => {
+    arrange({ before: { not_for_social: false } });
+    await newQuoteService.updateQuote("q1", { not_for_social: true } as never, TRUSTED);
+    arrange({ before: { not_for_social: true } });
+    await newQuoteService.updateQuote("q1", { not_for_social: true } as never, TRUSTED);
+    await flush();
+    expect(newQuoteRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("does not create a copy when not_for_social is absent from the payload", async () => {
+    arrange({ before: {} });
+    await newQuoteService.updateQuote("q1", { title: "Renamed" } as never, TRUSTED);
+    await flush();
+    expect(newQuoteRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("does not create a copy for a free quote", async () => {
+    arrange({ before: { isFreeQuote: true } });
+    await newQuoteService.updateQuote("q1", { not_for_social: false } as never, TRUSTED);
+    await flush();
+    expect(newQuoteRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("does not create a copy for a test transaction", async () => {
+    arrange({ before: {}, isTest: true });
+    await newQuoteService.updateQuote("q1", { not_for_social: false } as never, TRUSTED);
+    await flush();
+    expect(transactionRepository.create).not.toHaveBeenCalled();
+    expect(newQuoteRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("a failure creating the copy does not fail the update", async () => {
+    arrange({ before: {} });
+    vi.mocked(newQuoteRepository.create).mockRejectedValue(new Error("boom"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(newQuoteService.updateQuote("q1", { not_for_social: false } as never, TRUSTED)).resolves.toBeDefined();
+    await flush();
+
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+});
