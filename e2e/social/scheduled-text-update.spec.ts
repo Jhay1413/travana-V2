@@ -69,7 +69,8 @@ test.describe("saving text on a scheduled post", () => {
     await page.getByTestId("button-save-draft").click();
 
     await expectToast(page, "Scheduled post updated");
-    expect(Object.keys(patched ?? {})).toEqual(["post"]);
+    // The text plus the post's own time, which the server re-sends so OnlySocials keeps it.
+    expect(Object.keys(patched ?? {}).sort()).toEqual(["post", "postScheduleLocal"]);
     expect(String((patched as Record<string, unknown> | null)?.post)).toContain("EXTRA-WORDS");
     await expect(page.getByTestId("dialog-social-post-preview")).toBeHidden();
   });

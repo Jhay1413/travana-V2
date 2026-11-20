@@ -9,6 +9,7 @@ import { enquiryTableRepository } from "../enquiry/enquiry.repository";
 import { destinationGuruService } from "../destination-guru/destination-guru.service";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { buildQuoteEmbeddingText, buildQuoteEmbeddingMetadata } from "./quote-embedding";
+import { mapQuoteExtrasFromDetails, mapChildAgesFromDetails, buildFreeSocialCopyInput } from "./quote-details.mapper";
 import { refreshQuotePricePerPerson } from "./quote-price-per-person.service";
 import { pricePerPersonText } from "../../utils/customer-price";
 import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
@@ -368,6 +369,26 @@ async function createFreeSocialCopy(
   syncFreeQuoteEmbedding(freeQ.id, txn.org_id);
 }
 
+// Un-ticking "not for social" on an existing client quote (true -> false) must give it the
+// free social copy a quote created with the box already unticked would have got. Runs after
+// the update's section writes finished, so the copy reflects the quote as saved. Best-effort:
+// the caller fires it off the request path and logs any error.
+async function createFreeSocialCopyFromSavedQuote(quoteId: string): Promise<void> {
+  const details = await newQuoteRepository.findWithDetails(quoteId);
+  if (!details || details.isFreeQuote) return;
+  const txn = await transactionRepository.findById(details.transaction_id);
+  if (!txn || txn.is_test) return;
+  const savedImages = await quoteImageRepository.getByQuoteId(quoteId);
+  const imageUrls = savedImages.map((image) => image.url).filter((url): url is string => typeof url === "string" && url.length > 0);
+  const { accepted: normalizedImages } = partitionAcceptableImageUrls(imageUrls);
+  const { quoteFields, sections } = buildFreeSocialCopyInput(details, details, normalizedImages);
+  await createFreeSocialCopy(
+    quoteFields,
+    sections,
+    { user_id: txn.user_id, is_test: txn.is_test, org_id: txn.org_id },
+  );
+}
+
 export const newQuoteService = {
   /** True/false when the quote that owns this child row is a free (social) quote or a deal quote; null when the child does not exist. */
   async isFreeQuoteOfChild(kind: QuoteChildKind, childId: string, orgId: string | null = null): Promise<boolean | null> {
@@ -628,14 +649,7 @@ export const newQuoteService = {
 
     const { id: _sourceId, date_created: _sourceCreatedAt, transaction_id: _ignoredTransactionId, quote_token: _ignoreToken, quote_sent_at: _ignoreSentAt, quote_sent_via: _ignoreSentVia, accepted_at: _ignoreAcceptedAt, accepted_by: _ignoreAcceptedBy, ...sourceInsertData } = sourceQuote;
     const sourceDetails = await newQuoteRepository.findWithDetails(sourceQuoteId);
-    const sourceExtras = sourceDetails ? {
-      transfers: (sourceDetails.transfers || []).map((t: Record<string, unknown>) => ({ booking_ref: t.booking_ref, tour_operator_id: t.tour_operator_id, pick_up_location: t.pick_up_location, drop_off_location: t.drop_off_location, pick_up_time: t.pick_up_time, drop_off_time: t.drop_off_time, note: t.note, cost: t.cost, commission: t.commission, is_included_in_package: t.is_included_in_package })),
-      carHires: (sourceDetails.carHires || []).map((c: Record<string, unknown>) => ({ booking_ref: c.booking_ref, tour_operator_id: c.tour_operator_id, pick_up_location: c.pick_up_location, drop_off_location: c.drop_off_location, pick_up_time: c.pick_up_time, drop_off_time: c.drop_off_time, no_of_days: c.no_of_days, driver_age: c.driver_age, cost: c.cost, commission: c.commission, is_included_in_package: c.is_included_in_package })),
-      attractionTickets: (sourceDetails.attractionTickets || []).map((t: Record<string, unknown>) => ({ booking_ref: t.booking_ref, tour_operator_id: t.tour_operator_id, ticket_type: t.ticket_type, date_of_visit: t.date_of_visit, number_of_tickets: t.number_of_tickets, cost: t.cost, commission: t.commission, is_included_in_package: t.is_included_in_package })),
-      loungePasses: (sourceDetails.loungePasses || []).map((p: Record<string, unknown>) => ({ booking_ref: p.booking_ref, tour_operator_id: p.tour_operator_id, airport_id: p.airport_id, terminal: p.terminal, date_of_usage: p.date_of_usage, note: p.note, cost: p.cost, commission: p.commission, is_included_in_package: p.is_included_in_package })),
-      airportParkings: (sourceDetails.airportParkings || []).map((p: Record<string, unknown>) => ({ booking_ref: p.booking_ref, tour_operator_id: p.tour_operator_id, airport_id: p.airport_id, parking_type: p.parking_type, parking_date: p.parking_date, car_make: p.car_make, car_model: p.car_model, colour: p.colour, car_reg_number: p.car_reg_number, duration: p.duration, cost: p.cost, commission: p.commission, is_included_in_package: p.is_included_in_package })),
-      extraAccommodations: (sourceDetails.accommodations || []).filter((a: Record<string, unknown>) => !a.is_primary).map((a: Record<string, unknown>) => ({ booking_ref: a.booking_ref, tour_operator_id: a.tour_operator_id, accomodation_id: a.accomodation_id, board_basis_id: a.board_basis_id, room_type: a.room_type, check_in_date_time: a.check_in_date_time, no_of_nights: a.no_of_nights, cost: a.cost, commission: a.commission, is_included_in_package: a.is_included_in_package })),
-    } : {};
+    const sourceExtras = sourceDetails ? mapQuoteExtrasFromDetails(sourceDetails) : {};
 
     const payload: CreateQuotePayload = {
       ...(sourceInsertData as InsertQuote),
@@ -657,9 +671,7 @@ export const newQuoteService = {
     // The child count comes across via the quote columns, but the individual
     // child ages live in the passengers table — copy them from the source so
     // the duplicate keeps the same children.
-    const childAges = (sourceDetails?.passengers || [])
-      .filter((p: Record<string, unknown>) => p.type === "child")
-      .map((p: Record<string, unknown>) => Number(p.age) || 0);
+    const childAges = sourceDetails ? mapChildAgesFromDetails(sourceDetails) : [];
     if (childAges.length > 0) {
       await newQuoteRepository.replaceChildPassengers(newQuote.id, "quote", childAges);
     }
@@ -710,7 +722,9 @@ export const newQuoteService = {
     const needsPriceCalc = 'sales_price' in quoteData || 'adult' in quoteData || 'child' in quoteData || 'discounts' in quoteData || 'service_charge' in quoteData;
 
     let preUpdateRow: Quote | undefined;
-    if (needsPriceCalc || needsPrevStatus) {
+    // not_for_social is read too, to spot the true -> false (un-ticked) transition.
+    const needsPrevNotForSocial = 'not_for_social' in quoteData;
+    if (needsPriceCalc || needsPrevStatus || needsPrevNotForSocial) {
       preUpdateRow = await newQuoteRepository.findById(id);
     }
 
@@ -814,6 +828,14 @@ export const newQuoteService = {
     if (q.isFreeQuote) {
       const txn = await transactionRepository.findById(q.transaction_id);
       syncFreeQuoteEmbedding(id, txn?.org_id);
+    }
+
+    // Un-ticked not-for-social (true -> false) on a client quote: create its free social copy,
+    // best-effort and off the request path, like createQuote does.
+    if (quoteData.not_for_social === false && preUpdateRow?.not_for_social === true && !preUpdateRow.isFreeQuote) {
+      createFreeSocialCopyFromSavedQuote(id).catch((err) => {
+        console.error('FREE QUOTE (quote.service) - error creating free copy after un-ticking not_for_social:', err);
+      });
     }
 
     // Skip the expensive multi-join findWithDetails() here — the controller just

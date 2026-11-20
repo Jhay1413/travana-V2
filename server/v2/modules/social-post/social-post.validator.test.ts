@@ -31,6 +31,17 @@ describe("updateSocialPostSchema (PATCH /social-posts/:id)", () => {
     expect((await run(updateSocialPostSchema, { params: { id: ID }, body: { accountIds } }))?.statusCode).toBe(400);
   });
 
+  it("accepts a well-formed postScheduleLocal", async () => {
+    expect(await run(updateSocialPostSchema, { params: { id: ID }, body: { post: "x", postScheduleLocal: "2026-12-01T09:30" } })).toBeUndefined();
+  });
+
+  it.each(["2026-12-01", "2026-12-01 09:30", "2026-12-01T9:30", "2026-12-01T09:30:00", "2026-12-01T24:00", "2026-12-01T09:60", "soon", ""])(
+    "rejects a malformed postScheduleLocal %j",
+    async (postScheduleLocal) => {
+      expect((await run(updateSocialPostSchema, { params: { id: ID }, body: { post: "x", postScheduleLocal } }))?.statusCode).toBe(400);
+    },
+  );
+
   it("rejects a non-string post", async () => {
     expect((await run(updateSocialPostSchema, { params: { id: ID }, body: { post: 5 } }))?.statusCode).toBe(400);
   });

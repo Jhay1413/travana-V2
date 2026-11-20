@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { AppError } from "../../utils/error-handler";
-import { assertOrderTokens, buildMediaSlots, parseImageOrderField, parseOrderToken, sanitizeUrlInput } from "./media-order";
+import { assertOrderTokens, buildMediaSlots, parseExistingImageIdsField, parseImageOrderField, parseOrderToken, sanitizeUrlInput } from "./media-order";
 import { scheduleMediaSchema } from "./social-post.validator";
 
 const file = (name: string) => ({ originalname: name }) as Express.Multer.File;
@@ -167,5 +167,24 @@ describe("sanitizeUrlInput", () => {
 
   it("treats a non-array as no urls", () => {
     expect(sanitizeUrlInput("nope", undefined)).toEqual({ urls: [], dropped: [], order: undefined });
+  });
+});
+
+describe("parseExistingImageIdsField", () => {
+  it("returns an empty list when absent, blank or not a JSON array", () => {
+    expect(parseExistingImageIdsField(undefined)).toEqual([]);
+    expect(parseExistingImageIdsField(" ")).toEqual([]);
+    expect(parseExistingImageIdsField("nope")).toEqual([]);
+    expect(parseExistingImageIdsField('{"a":1}')).toEqual([]);
+  });
+
+  it("turns numeric string ids into numbers so imageOrder tokens match them", () => {
+    const ids = parseExistingImageIdsField('["2778336", 12]');
+    expect(ids).toEqual([2778336, 12]);
+    expect(() => assertOrderTokens(["existing:2778336", "existing:12"], { existingIds: ids, fileCount: 0, urlCount: 0 })).not.toThrow();
+  });
+
+  it("drops entries that are not whole non-negative numbers, and duplicates", () => {
+    expect(parseExistingImageIdsField('[1, "1", "abc", -2, 1.5, null, "", {"id":3}]')).toEqual([1]);
   });
 });

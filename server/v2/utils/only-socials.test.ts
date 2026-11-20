@@ -175,7 +175,8 @@ describe("schedule / reschedule request bodies", () => {
   });
 
   it("rescheduleOnlySocialsPost PUTs the replaced accounts", async () => {
-    const fetchMock = stubFetch();
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, text: async () => '{"success":true}' });
+    vi.stubGlobal("fetch", fetchMock);
     await rescheduleOnlySocialsPost("os-1", "2026-02-02T09:00", "hello", [], [IG]);
 
     const [url, init] = fetchMock.mock.calls[0];
@@ -184,5 +185,25 @@ describe("schedule / reschedule request bodies", () => {
     const body = JSON.parse((init as { body: string }).body);
     expect(body.accounts).toEqual([7]);
     expect(body.versions[0].options).toEqual({});
+  });
+
+  it("rescheduleOnlySocialsPost copes with the documented { success: true } answer", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => '{"success":true}' }));
+    expect(await rescheduleOnlySocialsPost("os-1", "2026-02-02T09:00", "hello", [], [FB])).toEqual({ success: true });
+  });
+
+  it("rescheduleOnlySocialsPost copes with an empty success body", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "" }));
+    expect(await rescheduleOnlySocialsPost("os-1", "2026-02-02T09:00", "hello", [], [FB])).toEqual({ success: true });
+  });
+
+  it("rescheduleOnlySocialsPost fails on an HTTP error, even with a non-JSON body", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, text: async () => "<html>oops</html>" }));
+    await expect(rescheduleOnlySocialsPost("os-1", "2026-02-02T09:00", "hello", [], [FB])).rejects.toMatchObject({ statusCode: 500 });
+  });
+
+  it("rescheduleOnlySocialsPost fails when the answer says success: false", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => '{"success":false}' }));
+    await expect(rescheduleOnlySocialsPost("os-1", "2026-02-02T09:00", "hello", [], [FB])).rejects.toBeDefined();
   });
 });

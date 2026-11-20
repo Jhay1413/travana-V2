@@ -29,8 +29,8 @@ export interface OnlySocialsPost {
   name: string;
   hexColor: string;
   status: string;
-  date: string;
-  time: string;
+  /** "YYYY-MM-DD HH:mm:ss" in UTC; null when the post has no publish time. */
+  scheduled_at: string | null;
   versions: OnlySocialsPostVersion[];
   tags: string[];
   created_at: string;
@@ -88,4 +88,9 @@ export interface OnlySocialsPublishTarget {
 export interface UpdateSocialPostInput {
   post?: string;
   accountIds?: number[];
+  /**
+   * Wall-clock "YYYY-MM-DDTHH:mm" of the post's existing publish time. Never stored: only re-sent to OnlySocials
+   * so a text edit of a pending post keeps its time.
+   */
+  postScheduleLocal?: string;
 }

@@ -72,7 +72,7 @@ describe("socialPostService platform selection", () => {
     mocks.repo.findPrimaryAccommodationNameForQuote.mockResolvedValue(null);
     mocks.prepareImagesForPost.mockResolvedValue(NO_UPSCALE);
     mocks.scheduleOnlySocialsPost.mockResolvedValue({ uuid: "os-9" });
-    mocks.rescheduleOnlySocialsPost.mockResolvedValue({ uuid: "os-9" });
+    mocks.rescheduleOnlySocialsPost.mockResolvedValue({ success: true });
     mocks.listAccounts.mockReset().mockResolvedValue({ configured: true, accounts: [FB_ACCOUNT, SECOND_FB, IG, IG_OFF, FB_DEAD] });
   });
 
@@ -190,6 +190,7 @@ describe("socialPostService platform selection", () => {
   });
 
   describe("updateTravelDeal (PATCH whitelist)", () => {
+    const LOCAL = "2026-12-01T10:30";
     const patch = (body: object, scope: object = { orgId: null }) => socialPostService.updateTravelDeal("deal-1", body as never, scope as never);
 
     beforeEach(() => {
@@ -241,9 +242,9 @@ describe("socialPostService platform selection", () => {
     describe("text edit on a scheduled post is pushed to OnlySocials first", () => {
       const future = new Date(Date.now() + 3 * 24 * 3600 * 1000);
       const scheduled = { ...deal, onlySocialsId: "os-1", postSchedule: future, only_socials_targets: [{ accountId: 5, platform: "facebook" }, { accountId: 7, platform: "instagram" }] };
+      // The documented GET shape: a UTC scheduled_at, no date/time fields.
       const remote = {
-        date: "2026-12-01",
-        time: "09:30",
+        scheduled_at: "2026-12-01 09:30:00",
         versions: [{ is_original: true, content: [{ body: "old", media: [{ id: 11 }, { id: 12 }] }] }],
       };
 
@@ -252,20 +253,20 @@ describe("socialPostService platform selection", () => {
         mocks.fetchOnlySocialsPost.mockReset().mockResolvedValue(remote);
       });
 
-      it("keeps the OnlySocials date/time, accounts and media, and only then saves the text", async () => {
+      it("re-sends the supplied wall-clock time with the remote media and stored accounts, and only then saves the text", async () => {
         const order: string[] = [];
         mocks.rescheduleOnlySocialsPost.mockImplementation(async () => {
           order.push("onlysocials");
-          return { uuid: "os-1" };
+          return { success: true };
         });
         mocks.repo.update.mockImplementation(async (_id: string, data: object) => {
           order.push("local");
           return { ...scheduled, ...data };
         });
-        await patch({ post: "new text" });
+        await patch({ post: "new text", postScheduleLocal: LOCAL });
         expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith(
           "os-1",
-          "2026-12-01T09:30",
+          LOCAL,
           "new text",
           [11, 12],
           [{ accountId: 5, platform: "facebook" }, { accountId: 7, platform: "instagram" }],
@@ -276,14 +277,29 @@ describe("socialPostService platform selection", () => {
 
       it("uses the legacy account when the post has no stored targets", async () => {
         mocks.repo.findById.mockResolvedValue({ ...scheduled, only_socials_targets: null });
-        await patch({ post: "t" });
-        expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith("os-1", "2026-12-01T09:30", "t", [11, 12], FB_TARGET);
+        await patch({ post: "t", postScheduleLocal: LOCAL });
+        expect(mocks.rescheduleOnlySocialsPost).toHaveBeenCalledWith("os-1", LOCAL, "t", [11, 12], FB_TARGET);
+      });
+
+      it("keeps the existing onlySocialsId and never stores postScheduleLocal or a schedule", async () => {
+        await patch({ post: "new text", postScheduleLocal: LOCAL });
+        const saved = mocks.repo.update.mock.calls[0][1] as Record<string, unknown>;
+        expect("onlySocialsId" in saved).toBe(false);
+        expect("postScheduleLocal" in saved).toBe(false);
+        expect("postSchedule" in saved).toBe(false);
+      });
+
+      it("without postScheduleLocal it refuses with 400 and touches nothing", async () => {
+        await expect(patch({ post: "new text" })).rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining("nothing was changed") });
+        expect(mocks.fetchOnlySocialsPost).not.toHaveBeenCalled();
+        expect(mocks.rescheduleOnlySocialsPost).not.toHaveBeenCalled();
+        expect(mocks.repo.update).not.toHaveBeenCalled();
       });
 
       it("an OnlySocials failure saves nothing and says nothing was changed", async () => {
         mocks.rescheduleOnlySocialsPost.mockRejectedValue(new AppError("OnlySocials reschedule error: boom", 500));
         vi.spyOn(console, "error").mockImplementation(() => undefined);
-        await expect(patch({ post: "new text" })).rejects.toMatchObject({
+        await expect(patch({ post: "new text", postScheduleLocal: LOCAL })).rejects.toMatchObject({
           statusCode: 502,
           message: "Couldn't update the scheduled post on Facebook/Instagram — nothing was changed",
         });
@@ -293,14 +309,14 @@ describe("socialPostService platform selection", () => {
       it("failing to read the post from OnlySocials also saves nothing", async () => {
         mocks.fetchOnlySocialsPost.mockRejectedValue(new AppError("down", 500));
         vi.spyOn(console, "error").mockImplementation(() => undefined);
-        await expect(patch({ post: "new text" })).rejects.toMatchObject({ statusCode: 502 });
+        await expect(patch({ post: "new text", postScheduleLocal: LOCAL })).rejects.toMatchObject({ statusCode: 502 });
         expect(mocks.rescheduleOnlySocialsPost).not.toHaveBeenCalled();
         expect(mocks.repo.update).not.toHaveBeenCalled();
       });
 
       it("a stored account that is no longer allowed is refused before OnlySocials is touched", async () => {
         mocks.repo.findById.mockResolvedValue({ ...scheduled, only_socials_targets: [{ accountId: 9, platform: "facebook" }] });
-        await expect(patch({ post: "t" })).rejects.toMatchObject({ statusCode: 422, message: expect.stringContaining("nothing was changed") });
+        await expect(patch({ post: "t", postScheduleLocal: LOCAL })).rejects.toMatchObject({ statusCode: 422, message: expect.stringContaining("nothing was changed") });
         expect(mocks.fetchOnlySocialsPost).not.toHaveBeenCalled();
         expect(mocks.repo.update).not.toHaveBeenCalled();
       });

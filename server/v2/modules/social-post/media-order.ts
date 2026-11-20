@@ -39,6 +39,28 @@ export function parseImageOrderField(raw: unknown): string[] | undefined {
 }
 
 /**
+ * Parses the multipart `existingImageIds` field (a JSON array of OnlySocials media ids). OnlySocials returns media
+ * ids as strings in some responses, so numeric strings are accepted and turned into numbers: `imageOrder` tokens
+ * are matched against these as numbers. Anything that is not a non-negative whole number is dropped.
+ */
+export function parseExistingImageIdsField(raw: unknown): number[] {
+  if (typeof raw !== "string" || raw.trim() === "") return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const ids: number[] = [];
+  for (const entry of parsed) {
+    const n = typeof entry === "number" ? entry : typeof entry === "string" && /^\d+$/.test(entry.trim()) ? Number(entry.trim()) : NaN;
+    if (Number.isSafeInteger(n) && n >= 0 && !ids.includes(n)) ids.push(n);
+  }
+  return ids;
+}
+
+/**
  * Pure validation of `order` tokens against what the request actually carries.
  * Run before any upload/upscale work so a bad order fails without side effects.
  */

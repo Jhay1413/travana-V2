@@ -56,13 +56,17 @@ const scheduleBody = z.object({ imageOrder: imageOrderField, accountIds: account
 
 export const scheduleMediaSchema = z.object({ body: scheduleBody });
 
-/** PATCH /social-posts/:id: only the post text and the chosen accounts may change; unknown keys are refused. */
+/**
+ * PATCH /social-posts/:id: only the post text and the chosen accounts may change; unknown keys are refused.
+ * `postScheduleLocal` is never stored; it only tells OnlySocials which time to keep when the text of a pending post is pushed.
+ */
 export const updateSocialPostSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
   body: z
     .object({
       post: z.string().max(20000).optional(),
       accountIds: z.array(z.number().int().positive()).min(1).max(20).optional(),
+      postScheduleLocal: z.string().regex(/^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/).optional(),
     })
     .strict(),
 });
