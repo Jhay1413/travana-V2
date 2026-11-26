@@ -17,7 +17,7 @@ vi.mock("../platform-admin/platform-admin-credits.repository", () => ({
   startOfMonthUtc: vi.fn(),
 }));
 
-import { fireAutoTriggerForClient } from "./sms.service";
+import { sendAutoSmsTemplates } from "./sms.service";
 import { smsRepository as repo } from "./sms.repository";
 
 const SINCE = new Date("2026-10-20T00:00:00Z");
@@ -41,11 +41,11 @@ describe("days_before_departure sweep and fully-paid bookings", () => {
     vi.mocked(repo.findActiveTemplatesByTrigger).mockResolvedValue([template("t1", "balance_due")] as never);
     vi.mocked(repo.isBookingFullyPaid).mockResolvedValue(true);
 
-    const out = await fireAutoTriggerForClient({
+    const out = await sendAutoSmsTemplates({
       clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE, bookingId: "bk1",
     });
 
-    expect(out).toEqual({ sent: 0, skipped: 1, failed: 0 });
+    expect(out).toEqual({ sent: 0, skipped: 1, failed: 0, reason: "fully_paid" });
     expect(repo.isBookingFullyPaid).toHaveBeenCalledWith("bk1");
     expect(repo.hasRecentAutoSend).not.toHaveBeenCalled();
   });
@@ -54,7 +54,7 @@ describe("days_before_departure sweep and fully-paid bookings", () => {
     vi.mocked(repo.findActiveTemplatesByTrigger).mockResolvedValue([template("t1", "balance_due")] as never);
     vi.mocked(repo.isBookingFullyPaid).mockResolvedValue(false);
 
-    await fireAutoTriggerForClient({ clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE, bookingId: "bk1" });
+    await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE, bookingId: "bk1" });
 
     expect(repo.hasRecentAutoSend).toHaveBeenCalledWith("t1", "c1", SINCE);
   });
@@ -65,7 +65,7 @@ describe("days_before_departure sweep and fully-paid bookings", () => {
     ] as never);
     vi.mocked(repo.isBookingFullyPaid).mockResolvedValue(true);
 
-    await fireAutoTriggerForClient({ clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE, bookingId: "bk1" });
+    await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE, bookingId: "bk1" });
 
     expect(repo.isBookingFullyPaid).not.toHaveBeenCalled();
     expect(repo.hasRecentAutoSend).toHaveBeenCalledTimes(2);
@@ -77,7 +77,7 @@ describe("days_before_departure sweep and fully-paid bookings", () => {
     ] as never);
     vi.mocked(repo.isBookingFullyPaid).mockResolvedValue(true);
 
-    const out = await fireAutoTriggerForClient({
+    const out = await sendAutoSmsTemplates({
       clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE, bookingId: "bk1",
     });
 
@@ -91,8 +91,8 @@ describe("days_before_departure sweep and fully-paid bookings", () => {
     vi.mocked(repo.findActiveTemplatesByTrigger).mockResolvedValue([template("t1", "balance_due")] as never);
     vi.mocked(repo.isBookingFullyPaid).mockResolvedValue(true);
 
-    await fireAutoTriggerForClient({ clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE });
-    await fireAutoTriggerForClient({ clientId: "c1", autoTrigger: "on_booking_create", dedupeSince: SINCE, bookingId: "bk1" });
+    await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE });
+    await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "on_booking_create", dedupeSince: SINCE, bookingId: "bk1" });
 
     expect(repo.isBookingFullyPaid).not.toHaveBeenCalled();
   });
@@ -104,7 +104,7 @@ describe("days_before_departure sweep and fully-paid bookings", () => {
       { ...template("tnull", "custom"), triggerDaysBefore: null },
     ] as never);
 
-    await fireAutoTriggerForClient({
+    await sendAutoSmsTemplates({
       clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE, bookingId: "bk1", triggerDaysBefore: 7,
     });
 
@@ -118,7 +118,7 @@ describe("days_before_departure sweep and fully-paid bookings", () => {
       { ...template("t7", "custom"), triggerDaysBefore: 7 },
     ] as never);
 
-    await fireAutoTriggerForClient({ clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE });
+    await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: SINCE });
 
     expect(repo.hasRecentAutoSend).toHaveBeenCalledTimes(2);
   });

@@ -435,6 +435,9 @@ export const bookingService = {
         clientId: txn.client_id,
         autoTrigger: 'on_booking_create',
         triggerSource: 'booking.convertQuoteToBooking',
+        // The booking that was just created: its reference, destination and dates, its deal's agent (homeworker check)
+        // and the duplicate guard are all about THIS booking, so two bookings in a row each get a confirmation.
+        bookingId: b.id,
         dedupeSince,
       });
     }
@@ -491,6 +494,9 @@ export const bookingService = {
         clientId: txn.client_id,
         autoTrigger: 'on_booking_create',
         triggerSource: 'booking.createBooking',
+        // The booking that was just created: its reference, destination and dates, its deal's agent (homeworker check)
+        // and the duplicate guard are all about THIS booking, so two bookings in a row each get a confirmation.
+        bookingId: b.id,
         dedupeSince,
       });
     }

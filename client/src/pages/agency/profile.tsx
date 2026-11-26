@@ -31,6 +31,8 @@ const EMPTY_PROFILE: ProfileForm = {
   town: "",
   county: "",
   postcode: "",
+  atol: "",
+  abta: "",
 };
 
 function readProfile(settings: OrganizationSettings | undefined): ProfileForm {
@@ -43,6 +45,8 @@ function readProfile(settings: OrganizationSettings | undefined): ProfileForm {
     town: p.town ?? "",
     county: p.county ?? "",
     postcode: p.postcode ?? "",
+    atol: p.atol ?? "",
+    abta: p.abta ?? "",
   };
 }
 
@@ -206,6 +210,33 @@ export default function AgencyProfilePage() {
                   data-testid="input-profile-postcode"
                 />
               </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-x-6 gap-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="b-atol" className={LABEL}>ATOL Number</Label>
+              <Input
+                id="b-atol"
+                value={profile.atol}
+                onChange={(e) => setField("atol")(e.target.value)}
+                maxLength={40}
+                className={`${INPUT} w-full sm:w-[290px]`}
+                data-testid="input-profile-atol"
+              />
+              <p className={HELP}>Optional. Shown in your customer portal footer.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="b-abta" className={LABEL}>ABTA Number</Label>
+              <Input
+                id="b-abta"
+                value={profile.abta}
+                onChange={(e) => setField("abta")(e.target.value)}
+                maxLength={40}
+                className={`${INPUT} w-full sm:w-[290px]`}
+                data-testid="input-profile-abta"
+              />
+              <p className={HELP}>Optional. Shown in your customer portal footer.</p>
             </div>
           </div>
 

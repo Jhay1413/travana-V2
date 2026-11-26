@@ -26,7 +26,7 @@ axiosClient.interceptors.response.use(
       // A suspended or removed user's session is ended by the server; keep the reason for the sign-in page.
       writeAuthNotice(typeof window === "undefined" ? null : window.sessionStorage, (error.response.data as { code?: unknown } | undefined)?.code);
       const url = error.config?.url || "";
-      const skipRedirectPaths = ["/api/auth/", "/api/v2/users/profiles/", "/api/public/", "/api/v2/quote-share/"];
+      const skipRedirectPaths = ["/api/auth/", "/api/v2/users/profiles/", "/api/public/", "/api/v2/quote-share/", "/api/v2/quotes/preview/"];
       if (!skipRedirectPaths.some((p) => url.includes(p))) {
         // Soft re-auth instead of `window.location.href = "/"`: a full reload
         // mid-navigation looks like the page "loading twice". The app listens

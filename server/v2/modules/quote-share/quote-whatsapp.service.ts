@@ -7,6 +7,7 @@ import { conversationsService } from "../conversations/conversations.service";
 import { messagesService } from "../messages/messages.service";
 import type { SsMessage } from "../messages/messages.types";
 import { neonClientService } from "../neon-client/neon-client.service";
+import { organizationRepository } from "../organization/organization.repository";
 import { buildPublicQuoteMessage, normalisePhone, resolveQuoteToken } from "../sms/sms.service";
 import { quoteShareService } from "./quote-share.service";
 import { createRecentSendGuard } from "../../utils/recent-send-guard";
@@ -115,7 +116,9 @@ export const quoteWhatsappService = {
     // With an explicit quoteId this either returns the client's tokened quote or throws a 400.
     const quote = (await resolveQuoteToken(clientId, quoteId)) as { id: string; token: string };
 
-    const { text, quoteUrl } = buildPublicQuoteMessage({ firstName: client.firstName, token: quote.token });
+    // The message is signed with the customer's own agency (from data), never a fixed name.
+    const companyName = scope.orgId ? (await organizationRepository.findById(scope.orgId))?.name ?? null : null;
+    const { text, quoteUrl } = buildPublicQuoteMessage({ firstName: client.firstName, token: quote.token, companyName });
     const fallback = (reason: QuoteWhatsappFallbackReason, detail?: string): SendQuoteWhatsappResult => ({
       status: "fallback",
       reason,

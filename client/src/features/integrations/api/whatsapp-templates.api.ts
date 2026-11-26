@@ -3,6 +3,7 @@ import type {
   CreateWaTemplateInput,
   CreateWaTemplateResult,
   QuoteTemplateSettings,
+  TemplateSettings,
   UpdateTemplateSettings,
   WaTemplateList,
   WaTemplateSyncResult,
@@ -11,6 +12,7 @@ import type {
 const BASE = "/api/v2/whatsapp-templates";
 const SETTINGS = "/api/v2/quote-share/whatsapp-template-settings";
 const UPDATE_SETTINGS = "/api/v2/whatsapp-updates/settings";
+const PIN_RESET_SETTINGS = "/api/v2/whatsapp-templates/portal-sign-in-settings";
 
 export const whatsappTemplatesApi = {
   list: async (channelId: string): Promise<WaTemplateList> => {
@@ -39,6 +41,14 @@ export const whatsappTemplatesApi = {
   },
   getUpdateSettings: async (): Promise<UpdateTemplateSettings> => {
     const { data } = await axiosClient.get<UpdateTemplateSettings>(UPDATE_SETTINGS);
+    return data;
+  },
+  getPinResetSettings: async (): Promise<TemplateSettings> => {
+    const { data } = await axiosClient.get<TemplateSettings>(PIN_RESET_SETTINGS);
+    return data;
+  },
+  savePinResetSettings: async (input: TemplateSettings): Promise<TemplateSettings> => {
+    const { data } = await axiosClient.put<TemplateSettings>(PIN_RESET_SETTINGS, input);
     return data;
   },
   saveUpdateSettings: async (input: UpdateTemplateSettings): Promise<UpdateTemplateSettings> => {

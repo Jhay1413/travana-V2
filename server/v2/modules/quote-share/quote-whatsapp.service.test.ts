@@ -274,13 +274,20 @@ describe("quoteWhatsappService.send - closed window template", () => {
     expect(vi.mocked(whatsappTemplatesRepository.send).mock.calls[0][1].variable_values?.["2"]).toBe("your travel agent");
   });
 
-  it("only loads the user and org when a variable needs them", async () => {
+  it("only loads the user when a variable needs it; the org is read once, for the message signature", async () => {
     vi.mocked(whatsappSettingsService.getQuote).mockResolvedValue({
       templateName: "quote_ready", templateLanguage: null, channelId: null, variables: { "1": { source: "quote_link" } },
     });
+    vi.mocked(organizationRepository.findById).mockClear();
     await send();
     expect(userRepository.findById).not.toHaveBeenCalled();
-    expect(organizationRepository.findById).not.toHaveBeenCalled();
+    expect(organizationRepository.findById).toHaveBeenCalledTimes(1);
+  });
+
+  it("signs the message and the wa.me text with the customer's own agency name, never a fixed one", async () => {
+    vi.mocked(organizationRepository.findById).mockResolvedValue({ name: "Sunny Holidays" } as never);
+    await send();
+    expect(buildPublicQuoteMessage).toHaveBeenCalledWith(expect.objectContaining({ companyName: "Sunny Holidays" }));
   });
 
   it("reports template_failed with the SendSeven detail when success is false", async () => {
@@ -327,7 +334,7 @@ describe("quoteWhatsappService.send - closed window template", () => {
 describe("quoteWhatsappService.send", () => {
   it("sends the text into the existing open conversation", async () => {
     await expect(send()).resolves.toEqual({ status: "sent", conversationId: "conv1" });
-    expect(buildPublicQuoteMessage).toHaveBeenCalledWith({ firstName: "Ann", token: "tok" });
+    expect(buildPublicQuoteMessage).toHaveBeenCalledWith(expect.objectContaining({ firstName: "Ann", token: "tok" }));
     expect(messagesService.send).toHaveBeenCalledWith(
       "o1",
       { conversation_id: "conv1", channel_id: "ch1", message_type: "text", text: MSG.text },

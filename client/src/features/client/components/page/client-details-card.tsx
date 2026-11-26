@@ -177,7 +177,7 @@ export function ClientDetailsCard({ clientId, clientData, readOnly, onEditClient
         itemClassName="flex-1 px-2"
       />
       {tab === "details" && <ClientDetailsPanel clientId={clientId} clientData={clientData} readOnly={readOnly} onEditClient={onEditClient} />}
-      {tab === "portal" && <PortalAccessPanel clientId={clientId} readOnly={readOnly} onChangePin={onChangePin} />}
+      {tab === "portal" && <PortalAccessPanel clientId={clientId} readOnly={readOnly} onChangePin={onChangePin} clientPhone={clientData?.phoneNumber} />}
       {tab === "referrals" && <ReferralNetworkPanel clientId={clientId} />}
     </section>
   );

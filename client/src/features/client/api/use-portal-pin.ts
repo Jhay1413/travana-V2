@@ -1,6 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSendSms } from "@/features/sms/api/use-sms-mutations";
+import { heldFor, hold, toastForResult, useStaffSend, type Held, type SendChannel, type WhatsappFallback } from "@/features/customer-messaging";
 import { useToast } from "@/hooks/use-toast";
 import { portalPinApi } from "./portal-pin.api";
 
@@ -10,13 +10,17 @@ export const portalPinKeys = {
 
 /**
  * Portal PIN state and actions for one client — whether a PIN exists, set /
- * change / remove it, and text the client their portal login link. Shared by
+ * change / remove it, and send the client a one-time sign-in link by WhatsApp or SMS. Shared by
  * the overview's Portal Access card and the PIN modal so both stay in step.
  */
 export function usePortalPin(clientId: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const sendSms = useSendSms();
+  const staffSend = useStaffSend();
+  // The wa.me hand-over when the link could not go through the agency's WhatsApp inbox (the text carries the one-time link).
+  // Held with the client it was made for: it is never shown (or sent) while another client is on screen.
+  const [heldFallback, setHeldFallback] = useState<Held<WhatsappFallback> | null>(null);
+  const fallback = heldFor(heldFallback, clientId);
 
   const statusQuery = useQuery({
     queryKey: portalPinKeys.detail(clientId),
@@ -59,56 +63,47 @@ export function usePortalPin(clientId: string) {
     }
   }, [removeMutation, toast]);
 
-  const sendLink = useCallback(() => {
-    sendSms.mutate(
-      {
-        // Server resolves the org's own "Portal Login" template if it has one,
-        // otherwise falls back to the built-in default body.
-        category: "portal_login",
-        recipients: { mode: "client", clientId },
-        triggerSource: "manual.portal_link",
-      },
-      {
-        onSuccess: (data) => {
-          if (data.sent > 0) {
-            toast({ title: "Portal link sent via SMS" });
-          } else if (data.skipped > 0) {
-            const reason = data.results[0]?.status ?? "skipped";
+  /** Sends a one-time sign-in link by the chosen channel (valid 48 hours, works once). Only that channel is used. */
+  const sendLink = useCallback(
+    (channel: SendChannel) => {
+      setHeldFallback(null);
+      staffSend.mutate(
+        { clientId, purpose: "portal_sign_in", channel },
+        {
+          onSuccess: (data) => {
+            if (data.status === "fallback") setHeldFallback(hold(clientId, data.fallback));
+            const message = toastForResult(data, "sign-in link");
+            if (message) toast(message);
+          },
+          onError: (e: unknown) => {
+            const err = e as { response?: { data?: { message?: string } }; message?: string };
             toast({
-              title: "Not sent",
-              description:
-                reason === "skipped_optout"
-                  ? "Client has opted out of SMS."
-                  : reason === "skipped_no_phone"
-                    ? "Client has no phone number on file."
-                    : "Client skipped.",
+              title: "Send failed",
+              description: err?.response?.data?.message ?? err?.message,
               variant: "destructive",
             });
-          } else {
-            const err = data.results[0]?.error ?? "Send failed";
-            toast({ title: "Send failed", description: err, variant: "destructive" });
-          }
+          },
+          // The server may have flagged the customer as having to choose a PIN: show the real state.
+          onSettled: () => {
+            void queryClient.invalidateQueries({ queryKey: portalPinKeys.detail(clientId) });
+          },
         },
-        onError: (e: unknown) => {
-          const err = e as { response?: { data?: { message?: string } }; message?: string };
-          toast({
-            title: "Send failed",
-            description: err?.response?.data?.message ?? err?.message,
-            variant: "destructive",
-          });
-        },
-      },
-    );
-  }, [clientId, sendSms, toast]);
+      );
+    },
+    [clientId, staffSend, toast, queryClient],
+  );
 
   return {
     hasPin: statusQuery.data?.hasPin ?? false,
     mustChangePin: statusQuery.data?.mustChangePin ?? false,
     loading: statusQuery.isLoading,
     saving: setMutation.isPending || removeMutation.isPending,
-    sending: sendSms.isPending,
+    // A send for another client that is still in flight does not make this one look busy.
+    sending: staffSend.isPending && staffSend.variables?.clientId === clientId,
     setPin,
     removePin,
     sendLink,
+    fallback,
+    clearFallback: () => setHeldFallback(null),
   };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { quoteTemplateSettingsBody, updateTemplateSettingsBody } from "./whatsapp-settings.validator";
+import { quoteTemplateSettingsBody, pinResetTemplateSettingsBody, updateTemplateSettingsBody } from "./whatsapp-settings.validator";
 
 const base = { templateName: "general_update", templateLanguage: "en", channelId: "ch1" };
 const clear = { templateName: null, templateLanguage: null, channelId: null, variables: {} };
@@ -50,5 +50,31 @@ describe("quoteTemplateSettingsBody", () => {
 
   it("rejects the message source", () => {
     expect(parse({ ...base, variables: { "1": { source: "message" } } }).success).toBe(false);
+  });
+});
+
+describe("pinResetTemplateSettingsBody", () => {
+  const parse = (body: unknown) => pinResetTemplateSettingsBody.safeParse(body);
+
+  it("accepts a template that carries the sign-in link, with name, agency and custom placeholders", () => {
+    expect(parse({ ...base, templateName: "portal_sign_in", variables: { "1": { source: "client_first_name" }, "2": { source: "agency_name" }, "3": { source: "sign_in_link" }, "4": { source: "custom", text: "x" } } }).success).toBe(true);
+  });
+
+  it("a template with no sign-in link placeholder is refused (the customer could not use it)", () => {
+    expect(parse({ ...base, templateName: "portal_sign_in", variables: { "1": { source: "client_first_name" } } }).success).toBe(false);
+  });
+
+  it("clearing the template needs no placeholders", () => {
+    expect(parse(clear).success).toBe(true);
+  });
+
+  it("refuses the quote, message and agent sources", () => {
+    for (const source of ["quote_link", "message", "agent_name"]) {
+      expect(parse({ ...base, templateName: "t", variables: { "1": { source }, "2": { source: "sign_in_link" } } }).success).toBe(false);
+    }
+  });
+
+  it("the other kinds refuse sign_in_link", () => {
+    expect(quoteTemplateSettingsBody.safeParse({ ...base, templateName: "t", variables: { "1": { source: "sign_in_link" } } }).success).toBe(false);
   });
 });

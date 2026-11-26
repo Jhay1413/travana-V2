@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { customerActionDetail, customerActionLabel, isPositiveCustomerAction } from "@/features/quote/lib/customer-actions";
 import { Card } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -14,6 +15,7 @@ import {
   Smartphone,
   Tablet,
   CheckCircle2,
+  XCircle,
   MessageSquare,
   ChevronDown,
   ChevronUp,
@@ -264,20 +266,28 @@ export function QuoteEngagement({ quoteId, className }: QuoteEngagementProps) {
                 <div
                   key={action.id}
                   className={`rounded-xl border px-3 py-2 ${
-                    action.actionType === "accepted"
+                    isPositiveCustomerAction(action.actionType)
                       ? "border-green-200 bg-green-50/50"
-                      : "border-amber-200 bg-amber-50/50"
+                      : action.actionType === "declined"
+                        ? "border-red-200 bg-red-50/50"
+                        : "border-amber-200 bg-amber-50/50"
                   }`}
                   data-testid={`action-${action.id}`}
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    {action.actionType === "accepted" ? (
+                    {isPositiveCustomerAction(action.actionType) ? (
                       <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                    ) : action.actionType === "declined" ? (
+                      <XCircle className="h-3.5 w-3.5 text-red-600" />
                     ) : (
                       <MessageSquare className="h-3.5 w-3.5 text-amber-600" />
                     )}
                     <span className="text-xs font-semibold">
-                      {action.actionType === "accepted" ? "Wants to Book" : "Changes Requested"}
+                      {action.actionType === "accepted"
+                        ? "Wants to Book"
+                        : action.actionType === "changes_requested"
+                          ? "Changes Requested"
+                          : customerActionLabel(action.actionType)}
                     </span>
                     <span className="ml-auto text-[10px] text-black/40">
                       {formatTimeAgo(action.createdAt)}
@@ -285,6 +295,9 @@ export function QuoteEngagement({ quoteId, className }: QuoteEngagementProps) {
                   </div>
                   {action.customerName && (
                     <p className="text-[10px] text-black/50">From: {action.customerName}</p>
+                  )}
+                  {customerActionDetail(action) && (
+                    <p className="mt-1 text-[10px] text-black/60">{customerActionDetail(action)}</p>
                   )}
                   {action.message && (
                     <p className="mt-1 text-xs text-black/70 italic">"{action.message}"</p>

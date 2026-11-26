@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,8 @@ export interface TemplatePickerCopy {
   idPrefix: string;
   title: string;
   description: string;
+  /** Optional second line under the description (guidance for managers). */
+  helper?: string;
   /** Accessible name of the template select. */
   selectLabel: string;
   noneLabel: string;
@@ -55,6 +57,8 @@ interface TemplatePickerCardProps {
   settingsLoading: boolean;
   /** Connected channels, used to name the number a saved template lives on. */
   channels: SsChannel[];
+  /** Optional line under the description (the automatic messages show whether the type is being sent). */
+  statusLine?: ReactNode;
 }
 
 /** WhatsApp-style outgoing bubble showing the template with example values in place of its placeholders. */
@@ -80,7 +84,7 @@ function BubblePreview({ template, mappings, testId }: { template: WaTemplate; m
 }
 
 /** Which approved template is sent when a client's 24-hour window has closed, and what fills its placeholders. Shared by the quote and update cards. */
-export function TemplatePickerCard({ kind, sources, copy, save, extraValidation, channelId, templates, templatesLoading, templatesError, settings: saved, settingsLoading, channels }: TemplatePickerCardProps) {
+export function TemplatePickerCard({ kind, sources, copy, save, extraValidation, channelId, templates, templatesLoading, templatesError, settings: saved, settingsLoading, channels, statusLine }: TemplatePickerCardProps) {
   const { toast } = useToast();
   const prefix = copy.idPrefix;
   const approved = useMemo(() => templates.filter((t) => t.status === "APPROVED"), [templates]);
@@ -161,6 +165,12 @@ export function TemplatePickerCard({ kind, sources, copy, save, extraValidation,
         <p className="mt-0.5 text-[12px] text-social-muted xl:text-[13px]">
           {copy.description}
         </p>
+        {copy.helper && (
+          <p className="mt-1 text-[12px] font-medium text-social-muted xl:text-[13px]" data-testid={`${prefix}-helper`}>
+            {copy.helper}
+          </p>
+        )}
+        {statusLine}
       </div>
 
       {otherChannel && (

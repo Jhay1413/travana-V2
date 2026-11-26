@@ -9,6 +9,7 @@ import { connectableTypes } from "../lib/channel-status";
 import { connectedWhatsappChannels } from "../lib/whatsapp-channels";
 import { useRefreshOnReturn } from "../state/use-refresh-on-return";
 import { useConnectFlow } from "../state/use-connect-flow";
+import { AutoMessagesSection } from "./auto-messages-section";
 import { ChannelsSection } from "./channels-section";
 import { CARD } from "./classes";
 import { DelegateDialog } from "./delegate-dialog";
@@ -82,6 +83,7 @@ export function IntegrationsPage() {
             onClearLink={flow.clearLink}
           />
           {waChannels.length > 0 && <WhatsappSection channels={waChannels} canWrite={canWrite} />}
+          {canWrite && <AutoMessagesSection channels={waChannels} />}
           <DelegateDialog channelType={delegateType} onClose={() => setDelegateType(null)} />
         </>
       )}

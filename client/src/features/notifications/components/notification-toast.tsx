@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, CheckCircle, Eye, LifeBuoy, MessageSquare, Pencil, Share2, UserPlus, X } from "lucide-react";
+import { Bell, CheckCircle, Eye, LifeBuoy, MessageSquare, Pencil, Share2, Undo2, UserPlus, X, XCircle } from "lucide-react";
 import { useCurrentUser, useNotifications } from "@/hooks/queries";
 import { useMarkNotificationRead } from "@/hooks/mutations";
 import { isNotificationsPanelOpen } from "@/features/notifications/lib/panel-open-store";
@@ -141,6 +141,36 @@ const NOTIF_STYLE: Record<string, { icon: typeof Bell; label: string; border: st
     btnHover: "hover:text-amber-800 dark:hover:text-amber-200",
     dismissColor: "text-amber-500/60",
     dismissHover: "hover:bg-amber-200/50 hover:text-amber-700 dark:hover:bg-amber-500/20 dark:hover:text-amber-300",
+  },
+  quote_declined: {
+    icon: XCircle,
+    label: "Quote declined",
+    border: "border-rose-200/60 dark:border-rose-500/30",
+    bg: "bg-rose-50/95 dark:bg-rose-950/90",
+    iconBg: "bg-rose-200/60 dark:bg-rose-500/20",
+    iconColor: "text-rose-600 dark:text-rose-400",
+    labelColor: "text-rose-600/80 dark:text-rose-400/80",
+    titleColor: "text-rose-900 dark:text-rose-100",
+    bodyColor: "text-rose-800/75 dark:text-rose-200/70",
+    btnColor: "text-rose-600 dark:text-rose-400",
+    btnHover: "hover:text-rose-800 dark:hover:text-rose-200",
+    dismissColor: "text-rose-500/60",
+    dismissHover: "hover:bg-rose-200/50 hover:text-rose-700 dark:hover:bg-rose-500/20 dark:hover:text-rose-300",
+  },
+  quote_reopened: {
+    icon: Undo2,
+    label: "Quote reopened",
+    border: "border-emerald-200/60 dark:border-emerald-500/30",
+    bg: "bg-emerald-50/95 dark:bg-emerald-950/90",
+    iconBg: "bg-emerald-200/60 dark:bg-emerald-500/20",
+    iconColor: "text-emerald-600 dark:text-emerald-400",
+    labelColor: "text-emerald-600/80 dark:text-emerald-400/80",
+    titleColor: "text-emerald-900 dark:text-emerald-100",
+    bodyColor: "text-emerald-800/75 dark:text-emerald-200/70",
+    btnColor: "text-emerald-600 dark:text-emerald-400",
+    btnHover: "hover:text-emerald-800 dark:hover:text-emerald-200",
+    dismissColor: "text-emerald-500/60",
+    dismissHover: "hover:bg-emerald-200/50 hover:text-emerald-700 dark:hover:bg-emerald-500/20 dark:hover:text-emerald-300",
   },
 };
 

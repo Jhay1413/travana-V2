@@ -5,7 +5,9 @@ import routes from "./routes/index";
 import v2Routes from "./v2/routes/index";
 import { setupAuth, registerAuthRoutes } from "./v2/middlewares/auth";
 import { errorHandler } from "./middlewares/error.middleware";
-import quotePublicRoutes from "./routes/quote-public.routes";
+import quotePublicRoutes from "./v2/modules/quote/quote-public.routes";
+import { publicQuoteHeaders } from "./v2/middlewares/public-quote-headers";
+import { isQuoteTokenPath, maskQuoteTokenPath } from "./v2/utils/log-mask";
 import websitePublicRoutes from "./routes/website-public.routes";
 import portalRoutes from "./routes/portal.routes";
 import { warmPool } from "./v2/config/database";
@@ -57,8 +59,9 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse && res.locals.skipResponseLog !== true) {
+      // A quote share token is a credential: log it masked, and never log the quote body behind it.
+      let logLine = `${req.method} ${maskQuoteTokenPath(path)} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse && res.locals.skipResponseLog !== true && !isQuoteTokenPath(path)) {
         const responseStr = JSON.stringify(capturedJsonResponse);
         logLine += ` :: ${responseStr.length > 500 ? responseStr.slice(0, 500) + "...[truncated]" : responseStr}`;
       }
@@ -71,6 +74,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // The page itself is never cached or indexed and does not leak its address in Referer (the router sets the same for the API).
+  app.use("/view-quote", publicQuoteHeaders);
   app.use("/api/public/quote", quotePublicRoutes);
   app.use("/api/public/website", websitePublicRoutes);
   app.use("/api/portal", portalRoutes);

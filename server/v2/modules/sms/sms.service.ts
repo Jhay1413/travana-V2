@@ -1,6 +1,11 @@
 import { smsRepository } from './sms.repository';
 import { getPublicBaseUrl } from '../../utils/public-url';
 import { AppError } from '../../utils/error-handler';
+import { formatUkDate, placeholderBalanceDueDate } from '../../utils/balance-due';
+import { maskLoginCodes } from '../../utils/mask-login-code';
+import { purposesForTrigger, smsRowMatchesPurpose } from '../customer-messaging/customer-messaging.purposes';
+import type { SkipReason } from '../customer-messaging/customer-messaging.types';
+import type { AutoMessagePurpose } from '@shared/schema';
 import {
   platformAdminCreditsRepository,
   startOfMonthUtc,
@@ -33,7 +38,16 @@ export async function attachChargeToMessage(chargeId: string, smsMessageId: stri
   }
 }
 
-const CONNEXA_BASE = 'https://cnxa.io';
+const DEFAULT_CONNEXA_BASE = 'https://cnxa.io';
+/** The provider address; CONNEXA_BASE_URL overrides it (the E2E suite points it at a local fake). */
+function connexaBase(): string {
+  return (process.env.CONNEXA_BASE_URL?.trim() || DEFAULT_CONNEXA_BASE).replace(/\/$/, '');
+}
+
+/** True when the SMS provider login is present (it is not validated here). */
+export function isSmsConfigured(): boolean {
+  return !!(process.env.CONNEXA_EMAIL && process.env.CONNEXA_PASSWORD);
+}
 const DEFAULT_TOKEN_TTL_MS = 55 * 60 * 1000;
 const TOKEN_REFRESH_LEAD_MS = 30_000;
 const DEFAULT_SENDER = 'Quotehub by';
@@ -60,7 +74,7 @@ async function getBearerToken(): Promise<string> {
     return cachedToken.token;
   }
   const { email, password } = getCreds();
-  const res = await fetch(`${CONNEXA_BASE}/api/issue-token`, {
+  const res = await fetch(`${connexaBase()}/api/issue-token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -141,7 +155,7 @@ export function sanitiseSenderId(name: string | null | undefined): string {
 
 export async function sendSms({ to, body }: { to: string; body: string }): Promise<{ sid: string; status: string }> {
   const token = await getBearerToken();
-  const res = await fetch(`${CONNEXA_BASE}/api/schedule-message`, {
+  const res = await fetch(`${connexaBase()}/api/schedule-message`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -202,7 +216,7 @@ export const QUOTE_SHARE_COMPANY_NAME = "Tina's Travel";
  * in client/src/features/quote/components/QuoteShareDialog.tsx.
  */
 export const PUBLIC_QUOTE_MESSAGE_BODY =
-  'Hi {{first_name}}, your quote is ready - tap to view it: {{quote_url}} - {{company_name}}';
+  'Hi {{first_name}}, your quote is ready - tap to view it: {{quote_url}}{{signature}}';
 
 export function buildPublicQuoteUrl(token: string): string {
   // Public quote view — no login/PIN required; anyone with the link can view
@@ -215,12 +229,15 @@ export function buildPublicQuoteUrl(token: string): string {
 export function buildPublicQuoteMessage(opts: {
   firstName: string | null | undefined;
   token: string;
+  /** The customer's own agency, from data. Absent = no signature: a fixed agency name is never sent to a customer. */
+  companyName?: string | null;
 }): { text: string; quoteUrl: string } {
   const quoteUrl = buildPublicQuoteUrl(opts.token);
+  const name = opts.companyName?.trim();
   const text = mergeTemplate(PUBLIC_QUOTE_MESSAGE_BODY, {
     first_name: opts.firstName ?? '',
     quote_url: quoteUrl,
-    company_name: QUOTE_SHARE_COMPANY_NAME,
+    signature: name ? ` - ${name}` : '',
   });
   return { text, quoteUrl };
 }
@@ -305,16 +322,15 @@ export async function buildContextForClient(client: SmsContextClient, opts: { bo
     if (bookingRow) {
       ctx.hays_ref = bookingRow.hays_ref ?? '';
       ctx.supplier_ref = bookingRow.supplier_ref ?? '';
-      ctx.departure_date = formatDate(bookingRow.travel_date);
+      ctx.departure_date = formatUkDate(bookingRow.travel_date);
       ctx.destination = bookingRow.title ?? '';
       const sales = bookingRow.sales_price ? parseFloat(String(bookingRow.sales_price)) : 0;
       const deposit = bookingRow.discounts ? parseFloat(String(bookingRow.discounts)) : 0;
       const balance = Math.max(0, sales - deposit);
       if (sales > 0) ctx.balance_due = formatGbp(balance);
-      if (bookingRow.travel_date) {
-        const dep = new Date(String(bookingRow.travel_date));
-        if (!Number.isNaN(dep.getTime())) { dep.setDate(dep.getDate() - 14); ctx.balance_due_date = formatDate(dep); }
-      }
+      // Placeholder rule carried over from the original reminder (see balance-due.ts): departure minus 14 days.
+      const due = placeholderBalanceDueDate(bookingRow.travel_date);
+      if (due) ctx.balance_due_date = formatUkDate(due);
     }
   } catch { /* best-effort */ }
   try {
@@ -329,21 +345,78 @@ export type AutoTrigger =
   | 'on_pin_set'
   | 'days_before_departure';
 
+/** One tracked SMS: credit consumed, sent, logged in sms_messages (sent or failed), charge attached. */
+export interface TrackedSmsInput {
+  orgId: string;
+  templateId: string | null;
+  templateName: string;
+  clientId: string;
+  clientName: string;
+  phone: string;
+  body: string;
+  triggerSource: string;
+  triggeredBy?: string | null;
+  triggeredByName?: string;
+}
+
+export type TrackedSmsOutcome = { ok: true; providerMessageId: string } | { ok: false; error: string };
+
+export async function sendTrackedSms(input: TrackedSmsInput): Promise<TrackedSmsOutcome> {
+  const baseRow = {
+    templateId: input.templateId,
+    templateName: input.templateName,
+    clientId: input.clientId,
+    clientName: input.clientName,
+    toPhone: input.phone,
+    // The log is readable by staff: a live sign-in code is never kept there (the sent message keeps it).
+    body: maskLoginCodes(input.body),
+    providerMessageId: null as string | null,
+    providerError: null as string | null,
+    costCents: null as number | null,
+    triggeredBy: input.triggeredBy ?? null,
+    triggeredByName: input.triggeredByName ?? 'auto',
+    triggerSource: input.triggerSource,
+  };
+  const credit = await consumeSmsCredit(input.orgId);
+  try {
+    const result = await sendSms({ to: input.phone, body: input.body });
+    const msg = await smsRepository.createMessage({ ...baseRow, status: 'sent', providerMessageId: result.sid });
+    if (credit.chargeId && msg?.id) await attachChargeToMessage(credit.chargeId, msg.id);
+    return { ok: true, providerMessageId: result.sid };
+  } catch (err: any) {
+    const error = err?.message || String(err);
+    const msg = await smsRepository.createMessage({ ...baseRow, status: 'failed', providerError: error });
+    if (credit.chargeId && msg?.id) await attachChargeToMessage(credit.chargeId, msg.id);
+    return { ok: false, error };
+  }
+}
+
+export interface AutoSmsResult {
+  sent: number;
+  skipped: number;
+  failed: number;
+  suspended?: true;
+  /** Why nothing was sent, when nothing was (the last skip or failure). */
+  reason?: SkipReason;
+  /** First template that was sent. */
+  templateName?: string;
+  providerMessageId?: string;
+}
+
 /**
- * Fan out auto-fire SMS for a client. Looks up active templates with the
- * given trigger, builds the per-client context, and sends one SMS per
- * template.
+ * The SMS branch of automatic customer messages: today's per-template behaviour. Looks up active
+ * templates with the given trigger (optionally only the rows of one message type), builds the
+ * per-client context, and sends one SMS per template.
  *
- * Safe to call from event handlers — never throws on per-template failure,
- * logs each outcome to `sms_messages`. The caller's flow is unaffected.
+ * Safe to call from event handlers - never throws on per-template failure, logs each outcome to
+ * `sms_messages`. The caller's flow is unaffected.
  *
- * Idempotency: when `dedupeSince` is set, templates already sent to this
- * client since that timestamp are skipped. The days-before-departure cron
- * passes `dedupeSince = start of today`; one-shot event triggers
- * (`on_booking_create`, `on_pin_set`) pass a 5-minute window so a retried
- * event doesn't double-send.
+ * Idempotency: when `dedupeSince` is set, templates already sent to this client since that
+ * timestamp are skipped. The days-before-departure cron passes `dedupeSince = start of today`;
+ * one-shot event triggers (`on_booking_create`, `on_pin_set`) pass a 5-minute window so a
+ * retried event doesn't double-send.
  */
-export async function fireAutoTriggerForClient(opts: {
+export async function sendAutoSmsTemplates(opts: {
   clientId: string;
   autoTrigger: AutoTrigger;
   triggerSource?: string;
@@ -354,30 +427,37 @@ export async function fireAutoTriggerForClient(opts: {
   bookingTitle?: string;
   /** The booking that fired this send (the departure sweep); lets paid bookings skip balance reminders. */
   bookingId?: string;
-}): Promise<{ sent: number; skipped: number; failed: number; suspended?: true }> {
+  /** Only the rows that switch this message type on (balance vs. other reminders share one trigger). */
+  purpose?: AutoMessagePurpose;
+}): Promise<AutoSmsResult> {
   let sent = 0; let skipped = 0; let failed = 0;
+  let reason: SkipReason | undefined;
+  let templateName: string | undefined;
+  let providerMessageId: string | undefined;
   try {
     const client = await smsRepository.findClientById(opts.clientId);
-    if (!client) return { sent, skipped, failed };
+    if (!client) return { sent, skipped, failed, reason: 'client_not_found' };
     const phone = normalisePhone(client.phoneNumber);
     if (!client.smsOptIn || !phone) {
-      return { sent, skipped: 1, failed };
+      return { sent, skipped: 1, failed, reason: !client.smsOptIn ? 'opted_out' : 'no_phone' };
     }
 
     // Templates are per-org — a client without an orgId can't have auto-fires
     // (would otherwise pick up templates from arbitrary orgs).
-    if (!client.orgId) return { sent, skipped, failed };
+    if (!client.orgId) return { sent, skipped, failed, reason: 'client_not_found' };
 
     // A suspended organisation sends nothing automatically and must not use SMS credit.
     if (!(await smsRepository.isOrgActive(client.orgId))) {
-      return { sent, skipped: 1, failed, suspended: true };
+      return { sent, skipped: 1, failed, suspended: true, reason: 'org_suspended' };
     }
 
     const found = await smsRepository.findActiveTemplatesByTrigger(client.orgId, opts.autoTrigger);
-    const templates = opts.triggerDaysBefore === undefined
+    const byDays = opts.triggerDaysBefore === undefined
       ? found
       : found.filter((t) => t.triggerDaysBefore === opts.triggerDaysBefore);
-    if (templates.length === 0) return { sent, skipped, failed };
+    const purpose = opts.purpose;
+    const templates = purpose ? byDays.filter((t) => smsRowMatchesPurpose(t, purpose)) : byDays;
+    if (templates.length === 0) return { sent, skipped, failed, reason: 'switched_off' };
 
     const ctx = await buildContextForClient(client, { bookingId: opts.bookingId });
     const clientName = `${client.firstName ?? ''} ${client.surename ?? ''}`.trim();
@@ -387,45 +467,75 @@ export async function fireAutoTriggerForClient(opts: {
     for (const t of templates) {
       if (opts.autoTrigger === 'days_before_departure' && opts.bookingId && t.category === 'balance_due') {
         fullyPaid ??= await smsRepository.isBookingFullyPaid(opts.bookingId);
-        if (fullyPaid) { skipped++; continue; }
+        if (fullyPaid) { skipped++; reason = 'fully_paid'; continue; }
       }
       if (opts.dedupeSince) {
         const already = await smsRepository.hasRecentAutoSend(t.id, client.id, opts.dedupeSince);
-        if (already) { skipped++; continue; }
+        if (already) { skipped++; reason = 'duplicate'; continue; }
       }
 
-      const body = mergeTemplate(t.body, ctx);
-      const baseRow = {
+      // A message that promises a quote link is not sent with a blank one (no quote the customer can still open).
+      if (/\{\{?\s*quote_url\s*\}?\}/.test(t.body) && !ctx.quote_url) { skipped++; reason = 'no_quote_link'; continue; }
+      const outcome = await sendTrackedSms({
+        orgId: client.orgId,
         templateId: t.id,
         templateName: t.name,
         clientId: client.id,
         clientName,
-        toPhone: phone,
-        body,
-        providerMessageId: null as string | null,
-        providerError: null as string | null,
-        costCents: null as number | null,
-        triggeredBy: null as string | null,
-        triggeredByName: 'auto',
+        phone,
+        body: mergeTemplate(t.body, ctx),
         triggerSource: opts.triggerSource ?? opts.autoTrigger,
-      };
-
-      const credit = await consumeSmsCredit(client.orgId);
-      try {
-        const result = await sendSms({ to: phone, body });
-        const msg = await smsRepository.createMessage({ ...baseRow, status: 'sent', providerMessageId: result.sid });
-        if (credit.chargeId && msg?.id) await attachChargeToMessage(credit.chargeId, msg.id);
+      });
+      if (outcome.ok) {
         sent++;
-      } catch (err: any) {
-        const msg = await smsRepository.createMessage({ ...baseRow, status: 'failed', providerError: err?.message || String(err) });
-        if (credit.chargeId && msg?.id) await attachChargeToMessage(credit.chargeId, msg.id);
+        templateName ??= t.name;
+        providerMessageId ??= outcome.providerMessageId;
+      } else {
         failed++;
+        reason = 'send_failed';
       }
     }
   } catch (err) {
     console.error('[sms] fireAutoTriggerForClient failed:', err);
   }
-  return { sent, skipped, failed };
+  return {
+    sent, skipped, failed,
+    ...(sent === 0 && reason ? { reason } : {}),
+    ...(templateName ? { templateName } : {}),
+    ...(providerMessageId ? { providerMessageId } : {}),
+  };
+}
+
+/** Which message types fire for a trigger. */
+export function purposesFor(trigger: AutoTrigger): AutoMessagePurpose[] {
+  return trigger === 'on_booking_create' || trigger === 'on_pin_set' || trigger === 'days_before_departure'
+    ? purposesForTrigger(trigger)
+    : [];
+}
+
+/**
+ * Entry point for booking created, PIN set and the departure sweep. Hands each message type to the
+ * customer-messaging dispatcher, which sends by the agency's chosen channel (WhatsApp by default,
+ * SMS when set) and logs the outcome. Never throws; the caller's flow is unaffected.
+ *
+ * Loaded on demand because the dispatcher itself builds on this file (the SMS branch above).
+ */
+export async function fireAutoTriggerForClient(opts: {
+  clientId: string;
+  autoTrigger: AutoTrigger;
+  triggerSource?: string;
+  dedupeSince?: Date;
+  triggerDaysBefore?: number;
+  bookingTitle?: string;
+  bookingId?: string;
+}): Promise<{ sent: number; skipped: number; failed: number; suspended?: true }> {
+  try {
+    const { customerMessagingService } = await import('../customer-messaging/customer-messaging.service');
+    return await customerMessagingService.fireAutoTrigger(opts);
+  } catch (err) {
+    console.error('[sms] fireAutoTriggerForClient failed:', err);
+    return { sent: 0, skipped: 0, failed: 0 };
+  }
 }
 
 export async function pingSmsConnection(): Promise<{ connected: boolean; fromPhone?: string; balance?: string; error?: string }> {

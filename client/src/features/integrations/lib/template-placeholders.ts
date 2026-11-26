@@ -46,11 +46,19 @@ const SOURCE_EXAMPLE: Record<Exclude<TemplateVariableSource, "custom">, string> 
   agent_name: "Alex",
   agency_name: "Travana Travel",
   quote_link: "https://…/q/abc",
+  sign_in_link: "https://…/portal/login?mt=…",
   message: "Your transfer is now at 10:30.",
+  destination: "Lanzarote",
+  booking_reference: "HAY-1234567",
+  departure_date: "14 Jun 2027",
+  portal_link: "https://…/portal/login",
+  balance_due_date: "31 May 2027",
 };
 
 /**
  * Default mapping. Quote: {{1}} client name, last of 2+ the quote link, the rest fixed text.
+ * Portal sign-in link: {{1}} client name, the last (or only) placeholder the sign-in link, the rest fixed text.
+ * Automatic messages: {{1}} client name (when there are 2+), the rest fixed text to be mapped.
  * Update: {{1}} client name, last of 2+ the agent's message, the rest fixed text; a lone
  * placeholder holds the message, since an update template can't work without one.
  */
@@ -59,6 +67,17 @@ export function defaultMapping(index: number, total: number, kind: TemplateKind 
     if (total === 1) return { source: "message" };
     if (index === 0) return { source: "client_first_name" };
     if (index === total - 1) return { source: "message" };
+    return { source: "custom", text: "" };
+  }
+  if (kind === "pinReset") {
+    if (total === 1) return { source: "sign_in_link" };
+    if (index === 0) return { source: "client_first_name" };
+    if (index === total - 1) return { source: "sign_in_link" };
+    return { source: "custom", text: "" };
+  }
+  if (kind === "auto") {
+    // Automatic customer messages: {{1}} is the client's name, the rest are for the manager to map.
+    if (index === 0 && total >= 2) return { source: "client_first_name" };
     return { source: "custom", text: "" };
   }
   if (index === 0) return { source: "client_first_name" };
@@ -123,4 +142,9 @@ export function messagePlaceholderProblem(mappings: Record<string, TemplateVaria
   if (count === 0) return "Pick one placeholder to hold the agent's message.";
   if (count > 1) return "Only one placeholder can hold the agent's message.";
   return null;
+}
+
+/** Why a sign-in link template can't be saved yet: one placeholder must carry the link, or the customer couldn't use the message. */
+export function signInLinkPlaceholderProblem(mappings: Record<string, TemplateVariableMapping>): string | null {
+  return Object.values(mappings).some((m) => m.source === "sign_in_link") ? null : "Pick one placeholder to hold the sign-in link.";
 }

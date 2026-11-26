@@ -11,10 +11,8 @@ import {
 import { env } from "@/config/env";
 import { whatsAppLink } from "@/features/conversations";
 import { useToast } from "@/hooks/use-toast";
-import {
-  useSendQuoteWhatsapp,
-  type QuoteWhatsappFallbackReason,
-} from "../api/use-quote-share-queries";
+import type { QuoteWhatsappFallbackReason } from "../api/use-quote-share-queries";
+import { SendByChoice, effectiveChannel, canSendBy, heldFor, hold, toastForResult, useSendAvailability, useStaffSend, type Held, type SendChannel } from "@/features/customer-messaging";
 import { planShareSend } from "../lib/quote-share-send";
 
 const WHATSAPP_FALLBACK_COPY: Record<QuoteWhatsappFallbackReason, string> = {
@@ -53,7 +51,7 @@ interface QuoteShareDialogProps {
   clientPhone?: string | null;
   /** Called after the link was copied ("link") or a WhatsApp was sent / opened
    *  ("whatsapp"), so the caller can record the quote as sent. */
-  onSent?: (via: "link" | "whatsapp") => void;
+  onSent?: (via: "link" | "whatsapp" | "sms") => void;
 }
 
 export function QuoteShareDialog({
@@ -69,16 +67,27 @@ export function QuoteShareDialog({
   onSent,
 }: QuoteShareDialogProps) {
   const { toast } = useToast();
-  const sendWhatsapp = useSendQuoteWhatsapp();
-  const [whatsappFallback, setWhatsappFallback] = useState<WhatsappFallback | null>(null);
-  // Don't carry a fallback (or a stale mutation state) into the next time the dialog opens.
-  const resetWhatsapp = sendWhatsapp.reset;
+  const sendQuote = useStaffSend();
+  const planned = planShareSend({ clientId, quoteId });
+  const availabilityQuery = useSendAvailability(clientId, "quote_link", open && planned === "whatsapp");
+  // The pick and the hand-over belong to this client and quote: if either changes they are not carried over.
+  const scopeKey = `${clientId ?? ""}:${quoteId ?? ""}`;
+  const [pickedHeld, setPickedHeld] = useState<Held<SendChannel> | null>(null);
+  const channel = effectiveChannel(heldFor(pickedHeld, scopeKey), availabilityQuery.data);
+  const setPickedChannel = (c: SendChannel) => setPickedHeld(hold(scopeKey, c));
+  const channelReady = canSendBy(channel, availabilityQuery.data);
+  const [fallbackHeld, setFallbackHeld] = useState<Held<WhatsappFallback> | null>(null);
+  const whatsappFallback = heldFor(fallbackHeld, scopeKey);
+  const setWhatsappFallback = (value: WhatsappFallback | null) => setFallbackHeld(value ? hold(scopeKey, value) : null);
+  // Don't carry a fallback, a channel pick or a stale mutation state into the next time the dialog opens.
+  const resetSend = sendQuote.reset;
   useEffect(() => {
     if (!open) {
-      setWhatsappFallback(null);
-      resetWhatsapp();
+      setFallbackHeld(null);
+      setPickedHeld(null);
+      resetSend();
     }
-  }, [open, resetWhatsapp]);
+  }, [open, resetSend]);
   const fallbackHref = (() => {
     const base = whatsAppLink(clientPhone);
     return base && whatsappFallback ? `${base}?text=${encodeURIComponent(whatsappFallback.text)}` : null;
@@ -91,19 +100,22 @@ export function QuoteShareDialog({
       variant: "destructive",
     });
 
-  const sendWhatsappMessage = () => {
+  // Sends by the channel chosen above, and only that one: a channel that cannot deliver says why and nothing goes
+  // out on the other (the staff member switches the choice themselves).
+  const sendByChannel = () => {
     if (!clientId || !quoteId) return;
     setWhatsappFallback(null);
-    sendWhatsapp.mutate(
-      { quoteId, clientId },
+    sendQuote.mutate(
+      { clientId, quoteId, purpose: "quote_link", channel },
       {
         onSuccess: (data) => {
-          if (data.status === "sent") {
-            toast({ title: data.viaTemplate ? "Sent to the client as a WhatsApp template message" : "Quote link sent via WhatsApp" });
-            onSent?.("whatsapp");
-          } else {
-            setWhatsappFallback({ reason: data.reason, text: data.text, detail: data.detail });
+          if (data.status === "fallback") {
+            setWhatsappFallback({ reason: data.fallback.reason, text: data.fallback.text, detail: data.fallback.detail });
+            return;
           }
+          const message = toastForResult(data, "quote");
+          if (message) toast(message);
+          if (data.status === "sent") onSent?.(data.channel);
         },
         onError: sendErrorToast,
       },
@@ -123,7 +135,7 @@ export function QuoteShareDialog({
         if (plan === "link") onSent?.("link");
       })
       .catch(() => toast({ title: "Couldn't copy link", variant: "destructive" }));
-    if (plan === "whatsapp" && !sendWhatsapp.isPending) sendWhatsappMessage();
+    if (plan === "whatsapp" && !sendQuote.isPending) sendByChannel();
   };
 
   return (
@@ -136,7 +148,7 @@ export function QuoteShareDialog({
           <DialogTitle className="text-sm font-semibold">Share Quote</DialogTitle>
           <DialogDescription className="text-xs text-black/55">
             {clientId
-              ? "Send the link below to your customer on WhatsApp. It is also copied to your clipboard."
+              ? "Send the link below to your customer by WhatsApp or SMS. It is also copied to your clipboard."
               : "Copy the link below and send it to your customer."}
           </DialogDescription>
         </DialogHeader>
@@ -160,18 +172,42 @@ export function QuoteShareDialog({
                   className="h-9 rounded-xl px-4"
                   data-testid="button-copy-share-link"
                   onClick={handleSend}
-                  disabled={sendWhatsapp.isPending}
+                  disabled={sendQuote.isPending || (planned === "whatsapp" && !channelReady)}
                 >
-                  {sendWhatsapp.isPending ? (
+                  {sendQuote.isPending ? (
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   ) : shareCopied ? (
                     <Check className="mr-1.5 h-3.5 w-3.5" />
                   ) : (
                     <Copy className="mr-1.5 h-3.5 w-3.5" />
                   )}
-                  {sendWhatsapp.isPending ? "Sending…" : shareCopied ? "Sent" : "Send"}
+                  {sendQuote.isPending ? "Sending…" : shareCopied ? "Sent" : "Send"}
                 </Button>
               </div>
+              {planned === "whatsapp" && (
+                <SendByChoice
+                  availability={availabilityQuery.data}
+                  loading={availabilityQuery.isLoading}
+                  value={channel}
+                  onChange={setPickedChannel}
+                  disabled={sendQuote.isPending}
+                />
+              )}
+              {planned === "whatsapp" && availabilityQuery.isError && (
+                <p className="flex flex-wrap items-center gap-2 text-xs text-destructive" role="alert" data-testid="send-by-error">
+                  Couldn't check which channels can be used.
+                  <button type="button" className="font-semibold underline" onClick={() => void availabilityQuery.refetch()} data-testid="button-send-by-retry">
+                    Try again
+                  </button>
+                </p>
+              )}
+              {planned === "whatsapp" && !channelReady && !sendQuote.isPending && (
+                // Send is off (still checking, the check failed, or neither channel can be used): copying the link always works.
+                <Button type="button" variant="outline" size="sm" className="h-8 rounded-xl px-3" onClick={() => void onCopy()} data-testid="button-copy-link-only">
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  Copy link
+                </Button>
+              )}
               {clientId && whatsappFallback && (
                 <div
                   className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"

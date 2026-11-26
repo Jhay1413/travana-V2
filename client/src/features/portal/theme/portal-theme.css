@@ -1,0 +1,162 @@
+/*
+ * Customer portal theme: cream, navy and amber, square corners.
+ *
+ * Everything here is scoped to `.portal-theme`. Nothing is declared on :root or on
+ * html/body, so the staff app renders exactly as before. The wrapper redefines the
+ * shared shadcn tokens (--background, --primary, --radius ...) that the app's
+ * `@theme inline` block turns into utilities, which is what lets the portal reuse
+ * `bg-background`, `text-primary`, `border-border` and the shadcn primitives.
+ *
+ * The agency's brand colour is written onto the wrapper at runtime by
+ * PortalThemeProvider (--primary, --primary-foreground, --portal-brand-accent).
+ */
+/* Same order the app declares (Tailwind v4), so these rules sit in the layers they name and Tailwind utilities always win over them. */
+@layer theme, base, components, utilities;
+
+
+@layer base {
+.portal-theme {
+  /* Portal-only palette (H S% L%, used as hsl(var(--token))) */
+  --portal-cream: 32 67% 95%; /* #FBF3EA */
+  --portal-sand: 34 47% 88%; /* #EFE3D3 */
+  --portal-line: 34 35% 82%; /* #E2D4C2 */
+  --portal-ink: 218 31% 15%; /* #1B2433 */
+  --portal-navy: 212 100% 19%; /* #002C60 */
+  --portal-navy-deep: 213 100% 11%; /* #001A3A */
+  --portal-amber: 27 74% 50%; /* #DE7621 */
+  --portal-amber-ink: 26 84% 36%; /* #A9520F, amber text on cream (AA) */
+  --portal-amber-soft: 27 80% 71%; /* #F2B27A, amber text on navy (AA) */
+  --portal-muted: 220 13% 35%; /* #4E5666 */
+  --portal-danger: 4 75% 40%; /* #B4261A */
+  /* The agency's brand colour as an accent, when it is too light to carry large surfaces. */
+  --portal-brand-accent: var(--portal-amber-soft);
+
+  --portal-font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --portal-font-sans: "Jost", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Shared shadcn tokens, redefined for the portal only */
+  --background: var(--portal-cream);
+  --foreground: var(--portal-ink);
+  --card: 0 0% 100%;
+  --card-foreground: var(--portal-ink);
+  --popover: var(--portal-cream);
+  --popover-foreground: var(--portal-ink);
+  --primary: var(--portal-navy);
+  --primary-foreground: 0 0% 100%;
+  --secondary: var(--portal-sand);
+  --secondary-foreground: var(--portal-navy);
+  --muted: var(--portal-sand);
+  --muted-foreground: var(--portal-muted);
+  --accent: var(--portal-amber);
+  --accent-foreground: var(--portal-navy-deep);
+  --destructive: var(--portal-danger);
+  --destructive-foreground: 0 0% 100%;
+  --border: var(--portal-line);
+  --input: 218 31% 15% / 0.45;
+  --ring: var(--portal-amber);
+  --radius: 0rem;
+
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--portal-font-sans);
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.6;
+  color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+}
+
+.portal-theme ::placeholder {
+  color: #656d7c; /* 4.5:1 on cream */
+}
+
+.portal-theme :focus-visible {
+  outline: 2px solid hsl(var(--portal-amber));
+  outline-offset: 3px;
+}
+}
+
+@layer components {
+/* Fonts and type roles ------------------------------------------------------ */
+.portal-serif {
+  font-family: var(--portal-font-serif);
+}
+
+/* Small tracked uppercase label above a heading. 11px is the floor for labels. */
+.portal-eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: hsl(var(--portal-amber-ink));
+}
+
+/* Field labels and small caps */
+.portal-caps-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Palette utilities (the app has no tailwind.config, so the portal-only tokens get plain classes) */
+.portal-bg-cream { background-color: hsl(var(--portal-cream)); }
+.portal-bg-sand { background-color: hsl(var(--portal-sand)); }
+.portal-bg-navy { background-color: hsl(var(--portal-navy)); }
+.portal-bg-navy-deep { background-color: hsl(var(--portal-navy-deep)); }
+.portal-text-ink { color: hsl(var(--portal-ink)); }
+.portal-text-amber-ink { color: hsl(var(--portal-amber-ink)); }
+.portal-text-amber-soft { color: hsl(var(--portal-amber-soft)); }
+.portal-text-brand-accent { color: hsl(var(--portal-brand-accent)); }
+.portal-bg-brand-accent { background-color: hsl(var(--portal-brand-accent)); }
+.portal-border-line { border-color: hsl(var(--portal-line)); }
+.portal-text-danger { color: hsl(var(--portal-danger)); }
+
+/* The navy fade over a photo hero (also used over the plain navy hero for consistency) */
+.portal-hero-fade {
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 26, 58, 0.55) 0%,
+    rgba(0, 26, 58, 0) 22%,
+    rgba(0, 26, 58, 0) 38%,
+    rgba(0, 26, 58, 0.88) 72%,
+    rgba(0, 26, 58, 0.96) 100%
+  );
+}
+}
+
+@layer base {
+/*
+ * Existing inner pages (home, quotes, bookings, deals, messages ...) keep their dark
+ * look for now. They were written against the staff app's tokens (rounded-xl = 1rem
+ * radius, Poppins), so this restores the radius inside them.
+ */
+.portal-legacy {
+  --radius: 1rem;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* ...and gives back the placeholder and focus ring those pages had before the portal theme existed. */
+.portal-legacy ::placeholder {
+  color: color-mix(in oklab, currentColor 50%, transparent);
+}
+.portal-legacy :focus-visible {
+  outline: revert;
+  outline-offset: revert;
+}
+
+/* Respect the reduced-motion preference everywhere inside the portal */
+@media (prefers-reduced-motion: reduce) {
+  .portal-theme *,
+  .portal-theme *::before,
+  .portal-theme *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+}

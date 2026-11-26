@@ -16,6 +16,7 @@ import { ADMIN_MENU_ROLES, MenuModeProvider, useMenuMode } from "@/components/la
 import EmailInbox from "@/features/email/components/email-inbox";
 // PortalPinGate is a named export used as a layout wrapper — kept static.
 import { PortalPinGate } from "@/pages/portal/portal-pin-gate";
+import { PortalThemeProvider } from "@/features/portal";
 import { Loader2 } from "lucide-react";
 import type { OrgRole } from "@/types/auth/auth.types";
 import { BotSettingsPage, KnowledgeBasePage } from "@/features/ai-assistant";
@@ -84,13 +85,15 @@ const CruiseQuotePreviewPage = lazy(() => import("@/pages/cruise-quote-preview")
 // Portal pages
 const PortalLoginPage = lazy(() => import("@/pages/portal/portal-login"));
 const PortalHomePage = lazy(() => import("@/pages/portal/portal-home"));
-const PortalQuotesPage = lazy(() => import("@/pages/portal/portal-quotes"));
-const PortalBookingsPage = lazy(() => import("@/pages/portal/portal-bookings"));
 const PortalDealsPage = lazy(() => import("@/pages/portal/portal-deals"));
 const PortalMessagesPage = lazy(() => import("@/pages/portal/portal-messages"));
 const PortalQuoteViewPage = lazy(() => import("@/pages/portal/portal-quote-view"));
+const PortalBookingViewPage = lazy(() => import("@/pages/portal/portal-booking-view"));
 const PortalTagsPage = lazy(() => import("@/pages/portal/portal-tags"));
 const PortalReferralsPage = lazy(() => import("@/pages/portal/portal-referrals"));
+const PortalTripsPage = lazy(() => import("@/pages/portal/portal-trips"));
+const PortalAccountPage = lazy(() => import("@/pages/portal/portal-account"));
+const PortalLegacyRedirect = lazy(() => import("@/pages/portal/portal-redirect"));
 // ──────────────────────────────────────────────────────────────────────────────
 
 const ALL_ROLES: OrgRole[] = [
@@ -280,20 +283,28 @@ function AppRouter() {
 
   if (location === "/portal" || location.startsWith("/portal/")) {
     return (
-      <PortalPinGate>
-        <Switch>
-          <Route path="/portal/login" component={PortalLoginPage} />
-          <Route path="/portal/tags" component={PortalTagsPage} />
-          <Route path="/portal/quote/:token" component={PortalQuoteViewPage} />
-          <Route path="/portal/quotes" component={PortalQuotesPage} />
-          <Route path="/portal/bookings" component={PortalBookingsPage} />
-          <Route path="/portal/deals" component={PortalDealsPage} />
-          <Route path="/portal/messages" component={PortalMessagesPage} />
-          <Route path="/portal/referrals" component={PortalReferralsPage} />
-          <Route path="/portal" component={PortalHomePage} />
-          <Route path="/portal/:rest*" component={PortalHomePage} />
-        </Switch>
-      </PortalPinGate>
+      <PortalThemeProvider>
+        <PortalPinGate>
+          <Switch>
+            <Route path="/portal/login" component={PortalLoginPage} />
+            <Route path="/portal/tags" component={PortalTagsPage} />
+            <Route path="/portal/quote/:token" component={PortalQuoteViewPage} />
+            <Route path="/portal/booking/:id" component={PortalBookingViewPage} />
+            {/* Old tabs: Quotes and Bookings now live under Trips. */}
+            <Route path="/portal/quotes" component={PortalLegacyRedirect} />
+            <Route path="/portal/bookings" component={PortalLegacyRedirect} />
+            <Route path="/portal/trips" component={PortalLegacyRedirect} />
+            <Route path="/portal/trips/quotes" component={PortalTripsPage} />
+            <Route path="/portal/trips/bookings" component={PortalTripsPage} />
+            <Route path="/portal/account" component={PortalAccountPage} />
+            <Route path="/portal/deals" component={PortalDealsPage} />
+            <Route path="/portal/messages" component={PortalMessagesPage} />
+            <Route path="/portal/referrals" component={PortalReferralsPage} />
+            <Route path="/portal" component={PortalHomePage} />
+            <Route path="/portal/:rest*" component={PortalHomePage} />
+          </Switch>
+        </PortalPinGate>
+      </PortalThemeProvider>
     );
   }
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import type { NextFunction, Request, Response, Router } from "express";
 
 vi.mock("./whatsapp-templates.controller", () => ({
-  whatsappTemplatesController: { list: vi.fn(), sync: vi.fn(), create: vi.fn(), remove: vi.fn() },
+  whatsappTemplatesController: { list: vi.fn(), sync: vi.fn(), create: vi.fn(), remove: vi.fn(), getPortalSignInSettings: vi.fn(), savePortalSignInSettings: vi.fn() },
 }));
 
 import router from "./whatsapp-templates.routes";

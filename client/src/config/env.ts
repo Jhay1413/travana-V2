@@ -14,6 +14,11 @@ export const env = {
    * links). Falls back to `window.location.origin` when unset so local dev
    * keeps working without configuring `VITE_PUBLIC_APP_URL`.
    */
+  /**
+   * `VITE_PORTAL_PAYMENTS`: shows the customer portal's Payments placeholder on a booking. Off unless set to
+   * "true" (what the customer owes and when is undecided, so no figure is ever shown either way).
+   */
+  portalPayments: import.meta.env.VITE_PORTAL_PAYMENTS as string | undefined,
   publicBaseUrl: (import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin).replace(/\/+$/, ""),
 } as const;
 

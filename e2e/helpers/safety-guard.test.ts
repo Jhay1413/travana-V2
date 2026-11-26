@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { buildServerEnv, pickInherited, TEST_DATABASE_URL } from "./env";
+import { buildServerEnv, FAKE_PROVIDERS_URL, pickInherited, TEST_DATABASE_URL } from "./env";
 import {
+  FAKE_CONNEXA_EMAIL,
+  FAKE_CONNEXA_PASSWORD,
   FORBIDDEN_ENV_NAMES,
   SafetyGuardError,
   assertNoForbiddenEnv,
   assertSafeDatabaseUrl,
   assertSafeServerEnv,
   assertTestDatabaseName,
+  isFakeConnexaLogin,
 } from "./safety-guard";
 
 describe("assertSafeDatabaseUrl", () => {
@@ -148,5 +151,44 @@ describe("buildServerEnv", () => {
 
   it("pickInherited ignores undefined values", () => {
     expect(pickInherited({ PATH: undefined })).toEqual({});
+  });
+});
+
+describe("the fake SMS login (loopback provider only)", () => {
+  const fake = {
+    CONNEXA_EMAIL: FAKE_CONNEXA_EMAIL,
+    CONNEXA_PASSWORD: FAKE_CONNEXA_PASSWORD,
+    CONNEXA_BASE_URL: "http://127.0.0.1:5056/connexa",
+  };
+
+  it("is allowed, and only that exact login pointed at this machine", () => {
+    expect(isFakeConnexaLogin(fake)).toBe(true);
+    expect(() => assertNoForbiddenEnv(fake)).not.toThrow();
+    expect(isFakeConnexaLogin({ ...fake, CONNEXA_BASE_URL: "http://localhost:5056/connexa" })).toBe(true);
+  });
+
+  it("is refused with a real-looking login, a missing half, or a provider address off this machine", () => {
+    expect(() => assertNoForbiddenEnv({ ...fake, CONNEXA_EMAIL: "me@real.com" })).toThrow(/CONNEXA_EMAIL/);
+    expect(() => assertNoForbiddenEnv({ ...fake, CONNEXA_PASSWORD: "hunter2" })).toThrow(/CONNEXA_PASSWORD/);
+    expect(() => assertNoForbiddenEnv({ CONNEXA_EMAIL: FAKE_CONNEXA_EMAIL })).toThrow(/CONNEXA_EMAIL/);
+    expect(() => assertNoForbiddenEnv({ ...fake, CONNEXA_BASE_URL: "https://cnxa.io" })).toThrow(/CONNEXA/);
+    expect(() => assertNoForbiddenEnv({ ...fake, CONNEXA_BASE_URL: "http://127.0.0.1.evil.com" })).toThrow(/CONNEXA/);
+    expect(() => assertNoForbiddenEnv({ CONNEXA_EMAIL: FAKE_CONNEXA_EMAIL, CONNEXA_PASSWORD: FAKE_CONNEXA_PASSWORD })).toThrow(/CONNEXA/);
+  });
+
+  it("does not loosen any other credential", () => {
+    expect(() => assertNoForbiddenEnv({ ...fake, CONVERSATIONS_API_TOKEN: "t" })).toThrow(/CONVERSATIONS_API_TOKEN/);
+    expect(() => assertNoForbiddenEnv({ ...fake, SMS_DEPARTURE_SWEEP_ENABLED: "true" })).toThrow(/SMS_DEPARTURE_SWEEP_ENABLED/);
+  });
+
+  it("is exactly what the test server gets, and the server env still passes the guard", () => {
+    const env = buildServerEnv({ PATH: "/bin" });
+    expect(env.CONNEXA_EMAIL).toBe(FAKE_CONNEXA_EMAIL);
+    expect(env.CONNEXA_PASSWORD).toBe(FAKE_CONNEXA_PASSWORD);
+    expect(env.CONNEXA_BASE_URL).toBe(`${FAKE_PROVIDERS_URL}/connexa`);
+    expect(() => assertSafeServerEnv(env)).not.toThrow();
+    // The sweep flag and the SendSeven tokens stay out.
+    expect(env.SMS_DEPARTURE_SWEEP_ENABLED).toBeUndefined();
+    expect(env.CONVERSATIONS_API_TOKEN).toBeUndefined();
   });
 });

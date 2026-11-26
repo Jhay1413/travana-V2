@@ -27,6 +27,9 @@ export interface SendSevenConfig {
   tenantId?: string | null;
 }
 
+/** How long one SendSeven API call may take before it is abandoned. */
+export const SENDSEVEN_TIMEOUT_MS = 15_000;
+
 type QueryValue = string | number | boolean | undefined | null;
 export type SsQuery = Record<string, QueryValue>;
 
@@ -156,6 +159,9 @@ export async function sendSevenRequest<T>(
         ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      // A stalled provider must not hold a request (or an automatic send) open for ever; the abort is
+      // reported like any other failure to reach SendSeven (a 502 AppError), so every caller already handles it.
+      signal: AbortSignal.timeout(SENDSEVEN_TIMEOUT_MS),
     });
   } catch {
     throw new AppError("Failed to reach the SendSeven service", 502);

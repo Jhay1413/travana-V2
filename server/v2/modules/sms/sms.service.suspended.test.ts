@@ -17,7 +17,7 @@ vi.mock("../platform-admin/platform-admin-credits.repository", () => ({
   startOfMonthUtc: vi.fn(),
 }));
 
-import { fireAutoTriggerForClient } from "./sms.service";
+import { sendAutoSmsTemplates } from "./sms.service";
 import { smsRepository as repo } from "./sms.repository";
 import { platformAdminCreditsRepository as credits } from "../platform-admin/platform-admin-credits.repository";
 
@@ -37,11 +37,11 @@ describe("automatic texts and suspended organisations", () => {
   it("an event trigger for a suspended organisation sends nothing and uses no credit", async () => {
     vi.mocked(repo.isOrgActive).mockResolvedValue(false);
 
-    const out = await fireAutoTriggerForClient({
+    const out = await sendAutoSmsTemplates({
       clientId: "c1", autoTrigger: "on_booking_create", dedupeSince: new Date(),
     });
 
-    expect(out).toEqual({ sent: 0, skipped: 1, failed: 0, suspended: true });
+    expect(out).toEqual({ sent: 0, skipped: 1, failed: 0, suspended: true, reason: "org_suspended" });
     expect(repo.isOrgActive).toHaveBeenCalledWith("o1");
     expect(repo.findActiveTemplatesByTrigger).not.toHaveBeenCalled();
     expect(credits.consumeOneCredit).not.toHaveBeenCalled();
@@ -51,7 +51,7 @@ describe("automatic texts and suspended organisations", () => {
   it("the departure trigger is skipped the same way", async () => {
     vi.mocked(repo.isOrgActive).mockResolvedValue(false);
 
-    const out = await fireAutoTriggerForClient({
+    const out = await sendAutoSmsTemplates({
       clientId: "c1", autoTrigger: "days_before_departure", dedupeSince: new Date(), bookingId: "bk1",
     });
 
@@ -62,12 +62,12 @@ describe("automatic texts and suspended organisations", () => {
   it("an active organisation carries on to its templates as before", async () => {
     vi.mocked(repo.isOrgActive).mockResolvedValue(true);
 
-    const out = await fireAutoTriggerForClient({
+    const out = await sendAutoSmsTemplates({
       clientId: "c1", autoTrigger: "on_booking_create", dedupeSince: new Date(),
     });
 
     expect(repo.findActiveTemplatesByTrigger).toHaveBeenCalledWith("o1", "on_booking_create");
     expect(repo.hasRecentAutoSend).toHaveBeenCalledTimes(1);
-    expect(out).toEqual({ sent: 0, skipped: 1, failed: 0 });
+    expect(out).toEqual({ sent: 0, skipped: 1, failed: 0, reason: "duplicate" });
   });
 });

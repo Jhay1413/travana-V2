@@ -54,21 +54,24 @@ export const walletService = {
     amount: number,
     bankDetails: { account_name: string; account_number: string; sort_code: string }
   ) {
-    const balance = await walletTransactionRepository.getBalance(clientId);
-    if (amount <= 0) throw new AppError("Amount must be greater than 0", 400);
-    if (amount > balance + 0.001) {
-      throw new AppError(`Amount exceeds available balance of £${balance.toFixed(2)}`, 400);
-    }
+    // Check and insert under one per-client lock, so two requests at once cannot both pass on the same balance.
+    return walletTransactionRepository.withClientWalletLock(clientId, async (wallet) => {
+      const balance = await wallet.getBalance();
+      if (amount <= 0) throw new AppError("Amount must be greater than 0", 400);
+      if (amount > balance + 0.001) {
+        throw new AppError(`Amount exceeds available balance of £${balance.toFixed(2)}`, 400);
+      }
 
-    return walletTransactionRepository.create({
-      client_id: clientId,
-      type: "debit",
-      source: "bank_transfer",
-      amount: amount.toFixed(2),
-      account_name: bankDetails.account_name,
-      account_number: bankDetails.account_number,
-      sort_code: bankDetails.sort_code,
-      status: "pending",
+      return wallet.create({
+        client_id: clientId,
+        type: "debit",
+        source: "bank_transfer",
+        amount: amount.toFixed(2),
+        account_name: bankDetails.account_name,
+        account_number: bankDetails.account_number,
+        sort_code: bankDetails.sort_code,
+        status: "pending",
+      });
     });
   },
 

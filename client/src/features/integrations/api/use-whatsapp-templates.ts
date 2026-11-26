@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { channelsKeys, conversationsKeys } from "@/features/conversations";
+import { customerMessagingKeys } from "./use-customer-messaging";
 import { whatsappTemplatesApi } from "./whatsapp-templates.api";
-import type { CreateWaTemplateInput, QuoteTemplateSettings, UpdateTemplateSettings } from "../types";
+import type { CreateWaTemplateInput, QuoteTemplateSettings, TemplateSettings, UpdateTemplateSettings } from "../types";
 
 export const templatesKeys = {
   all: [...channelsKeys.all, "whatsapp-templates"] as const,
   list: (channelId: string) => [...channelsKeys.all, "whatsapp-templates", "list", channelId] as const,
   settings: () => [...channelsKeys.all, "whatsapp-templates", "quote-settings"] as const,
   updateSettings: () => [...channelsKeys.all, "whatsapp-templates", "update-settings"] as const,
+  pinResetSettings: () => [...channelsKeys.all, "whatsapp-templates", "pin-reset-settings"] as const,
 };
 
 export function useWhatsappTemplates(channelId: string | null) {
@@ -77,6 +79,27 @@ export function useSaveUpdateTemplateSettings() {
       void qc.invalidateQueries({ queryKey: templatesKeys.updateSettings() });
       // The inbox composer reads whether an update template exists.
       void qc.invalidateQueries({ queryKey: conversationsKeys.updateTemplate() });
+    },
+  });
+}
+
+export function usePinResetTemplateSettings(enabled = true) {
+  return useQuery({
+    queryKey: templatesKeys.pinResetSettings(),
+    queryFn: () => whatsappTemplatesApi.getPinResetSettings(),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useSavePinResetTemplateSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TemplateSettings) => whatsappTemplatesApi.savePinResetSettings(input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: templatesKeys.pinResetSettings() });
+      // The sign-in link status line depends on this template.
+      void qc.invalidateQueries({ queryKey: customerMessagingKeys.readiness() });
     },
   });
 }

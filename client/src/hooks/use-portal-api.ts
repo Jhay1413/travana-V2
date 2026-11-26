@@ -1,6 +1,32 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { normalizeOrgSlug } from "@/lib/portal-org-slug";
+import type { PortalQuoteOwnership } from "@shared/portal-quotes";
+import {
+  authenticationToJSON,
+  registrationToJSON,
+  toCreationOptions,
+  toRequestOptions,
+  type CreationOptionsJSON,
+  type RequestOptionsJSON,
+} from "@/lib/webauthn-base64url";
 
 const PORTAL_TOKEN_KEY = "portal_token";
+/** Remembered agency slug (from ?org= on the login page). It is sent as `preferOrg` at PIN sign-in — which only
+ *  breaks ties between accounts whose PIN matches and never filters — and as `org` for deal filters before sign-in. */
+const PORTAL_ORG_KEY = "portal_org";
+
+/** The remembered slug, or null (a junk stored value is treated as none). */
+export function getPortalOrgSlug(): string | null {
+  return normalizeOrgSlug(localStorage.getItem(PORTAL_ORG_KEY));
+}
+
+/** Stores a slug only if it is a valid one; returns whether it was stored. */
+export function setPortalOrgSlug(slug: string): boolean {
+  const valid = normalizeOrgSlug(slug);
+  if (!valid) return false;
+  localStorage.setItem(PORTAL_ORG_KEY, valid);
+  return true;
+}
 
 /** Per-login flag: whether the user dismissed/handled the "get notified" banner.
  *  Stored in sessionStorage so it survives tab navigation but resets on a new login. */
@@ -23,7 +49,15 @@ export function clearPortalToken() {
   sessionStorage.removeItem(PORTAL_PUSH_BANNER_DISMISSED_KEY);
 }
 
-async function portalFetch(url: string, options: RequestInit = {}) {
+/** A failed portal API call: the server's customer-readable message plus its HTTP status and optional machine code (e.g. REAUTH_REQUIRED). */
+export class PortalApiError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string) {
+    super(message);
+    this.name = "PortalApiError";
+  }
+}
+
+export async function portalFetch(url: string, options: RequestInit = {}) {
   const token = getPortalToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -40,7 +74,7 @@ async function portalFetch(url: string, options: RequestInit = {}) {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Portal API error: ${res.status}`);
+    throw new PortalApiError(body.error || `Portal API error: ${res.status}`, res.status, typeof body.code === "string" ? body.code : undefined);
   }
   return res.json();
 }
@@ -53,34 +87,6 @@ export interface PortalUser {
   avatarUrl?: string;
   /** True when the client is still on a system-seeded default PIN. */
   mustChangePin?: boolean;
-}
-
-export interface PortalQuote {
-  id: string;
-  title: string;
-  destination: string;
-  hotel: string;
-  price: number;
-  price_per_person: number;
-  travel_date: string;
-  return_date: string;
-  expiry_date: string;
-  image_url: string;
-  quote_url: string;
-}
-
-export interface PortalBooking {
-  id: string;
-  title: string;
-  destination: string;
-  hotel: string;
-  price: number;
-  price_per_person: number;
-  travel_date: string;
-  return_date: string;
-  booking_reference: string;
-  image_url: string;
-  documents_url: string;
 }
 
 export interface PortalDeal {
@@ -177,7 +183,7 @@ export const portalKeys = {
     ["portal", "deals", country ?? "", tag ?? "", matchInterests ? "interests" : "all"] as const,
   latestDeals: ["portal", "latestDeals"] as const,
   forYouDeals: ["portal", "forYouDeals"] as const,
-  dealFilters: ["portal", "dealFilters"] as const,
+  dealFilters: (org?: string | null) => ["portal", "dealFilters", org ?? ""] as const,
   messages: ["portal", "messages"] as const,
   allTags: ["portal", "allTags"] as const,
   myTags: ["portal", "myTags"] as const,
@@ -193,7 +199,7 @@ export const portalKeys = {
 export function usePortalUser() {
   return useQuery<PortalUser>({
     queryKey: portalKeys.user,
-    queryFn: () => portalFetch("/api/portal/user"),
+    queryFn: () => portalFetch("/api/v2/portal/user"),
     retry: false,
     enabled: !!getPortalToken(),
   });
@@ -202,38 +208,17 @@ export function usePortalUser() {
 export function useLogPortalQuoteView() {
   return useMutation({
     mutationFn: (token: string) =>
-      portalFetch(`/api/portal/quote/${token}/view`, { method: "POST" }),
+      portalFetch(`/api/v2/portal/quote/${token}/view`, { method: "POST" }),
   });
 }
 
 /** Whether the logged-in client owns the quote behind this share token. */
 export function usePortalQuoteOwnership(token: string) {
-  return useQuery<{ found: boolean; owns: boolean; isPublicDeal?: boolean }>({
+  return useQuery<PortalQuoteOwnership>({
     queryKey: ["portal", "quote-owns", token],
-    queryFn: () => portalFetch(`/api/portal/quote/${token}/owns`),
+    queryFn: () => portalFetch(`/api/v2/portal/quote/${token}/owns`),
     retry: false,
     enabled: !!token && !!getPortalToken(),
-  });
-}
-
-export function usePortalQuotes() {
-  return useQuery<PortalQuote[]>({
-    queryKey: portalKeys.quotes,
-    queryFn: () => portalFetch("/api/portal/quotes"),
-    retry: false,
-    enabled: !!getPortalToken(),
-  });
-}
-
-export function usePortalBookings() {
-  return useQuery<PortalBooking[]>({
-    // v2 route: resolves price, destination (via the booking's own primary
-    // accommodation) and imagery the same way the admin booking-details read does.
-    // The legacy v1 /api/portal/bookings returns no price, empty images and "TBC".
-    queryFn: () => portalFetch("/api/v2/portal/bookings"),
-    queryKey: portalKeys.bookings,
-    retry: false,
-    enabled: !!getPortalToken(),
   });
 }
 
@@ -291,9 +276,11 @@ export function usePortalForYouDeals() {
 }
 
 export function usePortalDealFilters() {
+  // A signed-in client's agency comes from the session, so no slug is sent then.
+  const org = getPortalToken() ? null : getPortalOrgSlug();
   return useQuery<PortalDealFilters>({
-    queryKey: portalKeys.dealFilters,
-    queryFn: () => portalFetch("/api/portal/deals/filters"),
+    queryKey: portalKeys.dealFilters(org),
+    queryFn: () => portalFetch(`/api/v2/portal/deals/filters${org ? `?org=${encodeURIComponent(org)}` : ""}`),
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -316,13 +303,6 @@ export function useSubmitQuoteRequest() {
   });
 }
 
-export function useSubmitInterest() {
-  return useMutation({
-    mutationFn: (dealId: string) =>
-      portalFetch("/api/portal/interest", { method: "POST", body: JSON.stringify({ dealId }) }),
-  });
-}
-
 export function useSendMessage() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -338,7 +318,7 @@ export function useSendMessage() {
 export async function portalMagicLogin(
   code: string,
 ): Promise<{ token: string; clientId: string; firstName: string; mustChangePin?: boolean }> {
-  const res = await fetch("/api/portal/magic-login", {
+  const res = await fetch("/api/v2/portal/magic-login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code }),
@@ -354,10 +334,12 @@ export async function portalMagicLogin(
 
 export function useChangePortalPin() {
   const queryClient = useQueryClient();
-  return useMutation<{ success: boolean }, Error, { newPin: string }>({
+  return useMutation<{ success: boolean; token?: string }, Error, { newPin: string }>({
     mutationFn: ({ newPin }) =>
-      portalFetch("/api/portal/change-pin", { method: "POST", body: JSON.stringify({ newPin }) }),
-    onSuccess: () => {
+      portalFetch("/api/v2/portal/change-pin", { method: "POST", body: JSON.stringify({ newPin }) }),
+    onSuccess: (data) => {
+      // After a magic-link sign-in the server reissues a PIN-method session once the customer has chosen their PIN.
+      if (data?.token) setPortalToken(data.token);
       queryClient.invalidateQueries({ queryKey: portalKeys.user });
     },
   });
@@ -365,15 +347,23 @@ export function useChangePortalPin() {
 
 export function usePortalLogin() {
   return useMutation<
-    { token: string; clientId: string; firstName: string; hasBiometric: boolean; mustChangePin?: boolean },
+    {
+      token: string;
+      clientId: string;
+      firstName: string;
+      hasBiometric: boolean;
+      /** True when the server could not check for existing Face ID credentials: do not offer set-up. */
+      biometricCheckFailed?: boolean;
+      mustChangePin?: boolean;
+    },
     Error,
-    { email: string; pin: string }
+    { email: string; pin: string; org?: string; preferOrg?: string }
   >({
-    mutationFn: async ({ email, pin }) => {
-      const res = await fetch("/api/portal/login", {
+    mutationFn: async ({ email, pin, org, preferOrg }) => {
+      const res = await fetch("/api/v2/portal/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, pin }),
+        body: JSON.stringify({ email, pin, ...(org ? { org } : {}), ...(preferOrg ? { preferOrg } : {}) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -582,17 +572,69 @@ export function useRequestWalletWithdraw() {
   });
 }
 
+/** Whether this device remembers a Face ID / Touch ID set-up. Purely local — the server is never asked who has biometrics. */
+export function hasLocalBiometric(): boolean {
+  return !!localStorage.getItem("portal_credential_id") && !!window.PublicKeyCredential;
+}
+
+/**
+ * Two-step Face ID / Touch ID set-up for the signed-in customer: the server issues
+ * the challenge, the device signs it, the server verifies the attestation.
+ * Resolves quietly (no throw) when the device has no platform authenticator.
+ */
+export async function registerPortalBiometric(): Promise<void> {
+  if (!window.PublicKeyCredential) return;
+  const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  if (!available) return;
+
+  const { options, challengeToken } = (await portalFetch("/api/v2/portal/webauthn/register/options", {
+    method: "POST",
+    body: JSON.stringify({}),
+  })) as { options: CreationOptionsJSON; challengeToken: string };
+
+  const credential = (await navigator.credentials.create({ publicKey: toCreationOptions(options) })) as PublicKeyCredential | null;
+  if (!credential) return;
+
+  await portalFetch("/api/v2/portal/webauthn/register", {
+    method: "POST",
+    body: JSON.stringify({
+      challengeToken,
+      response: registrationToJSON(credential),
+      deviceName: navigator.userAgent.includes("iPhone") ? "iPhone" :
+                  navigator.userAgent.includes("Android") ? "Android" : "Device",
+    }),
+  });
+  localStorage.setItem("portal_credential_id", credential.id);
+}
+
+/** Forget this device's remembered Face ID (used when a sign-in with it was rejected, so a dead button does not return). */
+export function clearLocalBiometric() {
+  localStorage.removeItem("portal_credential_id");
+}
+
+/** Two-step Face ID / Touch ID sign-in: fetch a challenge, have the device sign it, send the assertion back. */
 export function usePortalBiometricLogin() {
   return useMutation<
-    { token: string; clientId: string; firstName: string },
+    { token: string; clientId: string; firstName: string; mustChangePin?: boolean },
     Error,
-    { clientId: string; credentialId: string }
+    void
   >({
-    mutationFn: async ({ clientId, credentialId }) => {
-      const res = await fetch("/api/portal/webauthn/login", {
+    mutationFn: async () => {
+      const optRes = await fetch("/api/v2/portal/webauthn/login/options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId, credentialId }),
+        body: JSON.stringify({}),
+      });
+      if (!optRes.ok) throw new Error("Biometric login failed");
+      const { options, challengeToken } = (await optRes.json()) as { options: RequestOptionsJSON; challengeToken: string };
+
+      const credential = (await navigator.credentials.get({ publicKey: toRequestOptions(options) })) as PublicKeyCredential | null;
+      if (!credential) throw new Error("Biometric login failed");
+
+      const res = await fetch("/api/v2/portal/webauthn/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeToken, response: authenticationToJSON(credential) }),
       });
       if (!res.ok) {
         throw new Error("Biometric login failed");

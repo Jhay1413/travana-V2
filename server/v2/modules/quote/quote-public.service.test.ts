@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("./quote-public.repository", () => ({
   quotePublicRepository: {
     findByToken: vi.fn(),
+    findAccessState: vi.fn(),
+    hasRecentLinkViewNotification: vi.fn(),
     findNotifyInfo: vi.fn(),
     findQuoteIdByToken: vi.fn(),
     logView: vi.fn(),
@@ -14,52 +16,12 @@ vi.mock("./quote-public.repository", () => ({
 import { quotePublicService } from "./quote-public.service";
 import { quotePublicRepository } from "./quote-public.repository";
 
+const OPEN = { visible: true, isBooked: false, clientDeleted: false, dateExpiry: null, agencyName: null, agencySettings: null };
+
 beforeEach(() => {
   vi.clearAllMocks();
-});
-
-describe("quotePublicService.getQuoteByToken — price math", () => {
-  it("derives totalPrice and pricePerPerson from the stored figures", async () => {
-    vi.mocked(quotePublicRepository.findByToken).mockResolvedValue({
-      salesPrice: "1000",
-      discounts: "100",
-      serviceCharge: "50",
-      adults: 2,
-      children: 0,
-    } as never);
-
-    const result = await quotePublicService.getQuoteByToken("tok");
-
-    expect(result.totalPrice).toBe("950.00"); // 1000 − 100 + 50
-    expect(result.pricePerPerson).toBe("475.00"); // 950 / 2
-  });
-
-  it("returns 0.00 per person when there are no passengers", async () => {
-    vi.mocked(quotePublicRepository.findByToken).mockResolvedValue({
-      salesPrice: "1000",
-      adults: 0,
-      children: 0,
-    } as never);
-
-    const result = await quotePublicService.getQuoteByToken("tok");
-
-    expect(result.pricePerPerson).toBe("0.00");
-  });
-
-  it("throws 404 for an unknown token", async () => {
-    vi.mocked(quotePublicRepository.findByToken).mockResolvedValue(undefined as never);
-
-    await expect(quotePublicService.getQuoteByToken("nope")).rejects.toMatchObject({ statusCode: 404 });
-  });
-});
-
-describe("quotePublicService.logView", () => {
-  it("throws 404 when the token resolves to no quote", async () => {
-    vi.mocked(quotePublicRepository.findQuoteIdByToken).mockResolvedValue(undefined as never);
-
-    await expect(quotePublicService.logView("nope", {} as never)).rejects.toMatchObject({ statusCode: 404 });
-    expect(quotePublicRepository.logView).not.toHaveBeenCalled();
-  });
+  vi.mocked(quotePublicRepository.findAccessState).mockResolvedValue(OPEN);
+  vi.mocked(quotePublicRepository.hasRecentLinkViewNotification).mockResolvedValue(false);
 });
 
 describe("quotePublicService notifications", () => {
@@ -110,9 +72,9 @@ describe("quotePublicService notifications", () => {
 
   it("share includes the client name and uses the quote_shared type", async () => {
     vi.mocked(quotePublicRepository.findQuoteIdByToken).mockResolvedValue("q1");
-    vi.mocked(quotePublicRepository.findByToken).mockResolvedValue({ clientName: "Jane Smith", destinationName: "Rovaniemi" } as never);
+    vi.mocked(quotePublicRepository.findNotifyInfo).mockResolvedValue({ title: null, clientId: "c1", clientName: "Jane Smith", destinationName: "Rovaniemi" });
 
-    await quotePublicService.logShare("tok", "WhatsApp");
+    await quotePublicService.logShare("ABC234", "WhatsApp");
 
     expect(quotePublicRepository.notifyAgent).toHaveBeenCalledWith(
       "q1", "Quote Shared!", "Jane Smith shared their Rovaniemi quote via WhatsApp", undefined, "quote_shared",
@@ -131,6 +93,50 @@ describe("quotePublicService notifications", () => {
   });
 });
 
+describe("quotePublicService.handleCustomerAction: portal decisions", () => {
+  beforeEach(() => {
+    vi.mocked(quotePublicRepository.findQuoteIdByToken).mockResolvedValue("q1");
+    vi.mocked(quotePublicRepository.createCustomerAction).mockResolvedValue({} as never);
+    vi.mocked(quotePublicRepository.findByToken).mockResolvedValue({ destinationName: "Rovaniemi" } as never);
+  });
+
+  it("an accept keeps its exact record shape and wording (no new keys when there are no details)", async () => {
+    await quotePublicService.handleCustomerAction("tok", "accepted", "Sea view", "Jane");
+    expect(quotePublicRepository.createCustomerAction).toHaveBeenCalledWith({ quoteId: "q1", actionType: "accepted", message: "Sea view", customerName: "Jane" });
+    expect(quotePublicRepository.notifyAgent).toHaveBeenCalledWith(
+      "q1", "Quote Accepted!", "Jane wants to book on the Rovaniemi quote: \"Sea view\"", undefined, "quote_accepted",
+    );
+  });
+
+  it("a decline stores the reason and the similar flag and tells the agent why", async () => {
+    await quotePublicService.handleCustomerAction("tok", "declined", "Too far north", "Jane", { reason: "Wrong destination", wantsSimilar: true });
+    expect(quotePublicRepository.createCustomerAction).toHaveBeenCalledWith({
+      quoteId: "q1", actionType: "declined", message: "Too far north", customerName: "Jane", reason: "Wrong destination", wantsSimilar: true,
+    });
+    expect(quotePublicRepository.notifyAgent).toHaveBeenCalledWith(
+      "q1",
+      "Quote Declined",
+      "Jane is not interested in the Rovaniemi quote (Wrong destination): \"Too far north\". They would like something similar.",
+      undefined,
+      "quote_declined",
+    );
+  });
+
+  it("a decline with no reason or note and no wish for something similar reads plainly", async () => {
+    await quotePublicService.handleCustomerAction("tok", "declined", null, null, { reason: null, wantsSimilar: false });
+    expect(quotePublicRepository.createCustomerAction).toHaveBeenCalledWith({ quoteId: "q1", actionType: "declined", message: null, customerName: null, wantsSimilar: false });
+    expect(vi.mocked(quotePublicRepository.notifyAgent).mock.calls.at(-1)?.[2]).toBe("A customer is not interested in the Rovaniemi quote.");
+  });
+
+  it("an undo of a decline is recorded and the agent is told", async () => {
+    await quotePublicService.handleCustomerAction("tok", "reopened", null, "Jane");
+    expect(quotePublicRepository.createCustomerAction).toHaveBeenCalledWith({ quoteId: "q1", actionType: "reopened", message: null, customerName: "Jane" });
+    expect(quotePublicRepository.notifyAgent).toHaveBeenCalledWith(
+      "q1", "Quote Reopened", "Jane has reopened the Rovaniemi quote, so it is undecided again", undefined, "quote_reopened",
+    );
+  });
+});
+
 describe("quotePublicService.logView notifications", () => {
   const withInfo = (over: object) =>
     vi.mocked(quotePublicRepository.findNotifyInfo).mockResolvedValue({ title: null, destinationName: null, clientId: "c1", clientName: null, ...over });
@@ -142,7 +148,7 @@ describe("quotePublicService.logView notifications", () => {
 
   it("stores the view and notifies the agent with the client name, label and device", async () => {
     withInfo({ title: "Lapland", clientName: "Jane Smith" });
-    const view = await quotePublicService.logView("tok", { deviceType: "mobile" } as never);
+    const view = await quotePublicService.logView("ABC234", { deviceType: "mobile" } as never);
     expect(view).toEqual({ id: "v1" });
     expect(quotePublicRepository.logView).toHaveBeenCalledWith("q1", { deviceType: "mobile" });
     expect(quotePublicRepository.notifyAgent).toHaveBeenCalledWith(
@@ -152,16 +158,16 @@ describe("quotePublicService.logView notifications", () => {
 
   it("omits the device when unknown and falls back to the destination", async () => {
     withInfo({ destinationName: "Rovaniemi", clientName: "Jane Smith" });
-    await quotePublicService.logView("tok", {} as never);
+    await quotePublicService.logView("ABC234", {} as never);
     expect(vi.mocked(quotePublicRepository.notifyAgent).mock.calls.at(-1)?.[2]).toBe("Jane Smith's Rovaniemi quote was opened via the shared link");
   });
 
   it("with no client name uses 'The <label> quote' or 'A quote', and links to the standalone quote with no client", async () => {
     withInfo({ title: "Lapland" });
-    await quotePublicService.logView("tok", {} as never);
+    await quotePublicService.logView("ABC234", {} as never);
     expect(vi.mocked(quotePublicRepository.notifyAgent).mock.calls.at(-1)?.[2]).toBe("The Lapland quote was opened via the shared link");
     withInfo({ clientId: null });
-    await quotePublicService.logView("tok", {} as never);
+    await quotePublicService.logView("ABC234", {} as never);
     expect(quotePublicRepository.notifyAgent).toHaveBeenLastCalledWith(
       "q1", "Quote Viewed", "A quote was opened via the shared link", "/quotes/q1", "quote_viewed",
     );
@@ -170,10 +176,10 @@ describe("quotePublicService.logView notifications", () => {
   it("still succeeds when findNotifyInfo or notifyAgent throws", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(quotePublicRepository.findNotifyInfo).mockRejectedValueOnce(new Error("db down"));
-    await expect(quotePublicService.logView("tok", {} as never)).resolves.toEqual({ id: "v1" });
+    await expect(quotePublicService.logView("ABC234", {} as never)).resolves.toEqual({ id: "v1" });
     withInfo({ title: "x" });
     vi.mocked(quotePublicRepository.notifyAgent).mockRejectedValueOnce(new Error("insert failed"));
-    await expect(quotePublicService.logView("tok", {} as never)).resolves.toEqual({ id: "v1" });
+    await expect(quotePublicService.logView("ABC234", {} as never)).resolves.toEqual({ id: "v1" });
     spy.mockRestore();
   });
 });

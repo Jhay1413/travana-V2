@@ -2,7 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { neonClientApi } from "@/api";
 import { neonClientKeys } from "@/hooks/queries";
 import type { NeonClient, NeonClientImportRow } from "@/features/client/types/neon-client";
+import { staffMessagingKeys } from "@/features/customer-messaging";
 import { clientPassengerKeys } from "./use-client-passengers";
+import { portalPinKeys } from "./use-portal-pin";
 
 export function useCreateNeonClient() {
   const queryClient = useQueryClient();
@@ -24,6 +26,9 @@ export function useUpdateNeonClient() {
       queryClient.invalidateQueries({ queryKey: neonClientKeys.all });
       // The lead passenger's name and date of birth come from the client record.
       queryClient.invalidateQueries({ queryKey: clientPassengerKeys.list(variables.id) });
+      // The phone number and the text opt-out decide which "Send by" options work, and the PIN status can change with them.
+      queryClient.invalidateQueries({ queryKey: staffMessagingKeys.availabilityRoot(variables.id) });
+      queryClient.invalidateQueries({ queryKey: portalPinKeys.detail(variables.id) });
     },
   });
 }

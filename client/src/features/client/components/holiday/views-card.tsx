@@ -12,6 +12,7 @@ import {
 } from "@/features/quote/lib/quote-views";
 import { HOLIDAY_SIDE_CARD } from "@/features/client/components/holiday/holiday-styles";
 import { TruncateTip } from "@/features/client/components/holiday/truncate-tip";
+import { customerActionDetail, customerActionLabel } from "@/features/quote/lib/customer-actions";
 
 const DEVICE_ICON: Record<DeviceKind, LucideIcon> = {
   mobile: Smartphone,
@@ -19,12 +20,6 @@ const DEVICE_ICON: Record<DeviceKind, LucideIcon> = {
   desktop: Laptop,
   unknown: Eye,
 };
-
-function actionLabel(type: string): string {
-  if (type === "accepted") return "Accepted the quote";
-  if (type === "changes_requested") return "Asked for changes";
-  return type;
-}
 
 export interface ViewsCardProps {
   quoteId: string;
@@ -93,10 +88,11 @@ export function ViewsCard({ quoteId, sentAt }: ViewsCardProps) {
           <ul className="flex flex-col gap-1">
             {actions.map((a) => (
               <li key={a.id} className="min-w-0 text-xs">
-                <TruncateTip text={`${actionLabel(a.actionType)} · ${a.customerName || "Customer"} · ${formatDay(a.createdAt)}`}>
-                  <b className="font-semibold">{actionLabel(a.actionType)}</b>
+                <TruncateTip text={`${customerActionLabel(a.actionType)} · ${a.customerName || "Customer"} · ${formatDay(a.createdAt)}`}>
+                  <b className="font-semibold">{customerActionLabel(a.actionType)}</b>
                   <span className="text-qp-muted"> · {a.customerName || "Customer"} · {formatDay(a.createdAt)}</span>
                 </TruncateTip>
+                {customerActionDetail(a) && <TruncateTip text={customerActionDetail(a)} className="mt-0.5 text-qp-muted" />}
                 {a.message && <TruncateTip text={a.message} className="mt-0.5 text-qp-muted" />}
               </li>
             ))}

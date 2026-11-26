@@ -3,6 +3,36 @@ import { wallet_transaction, clientTable, referral, booking } from "@shared/sche
 import type { InsertWalletTransaction, WalletTransaction } from "@shared/schema";
 import { and, eq, ne, sql } from "drizzle-orm";
 
+/** The pool or a transaction: both can run the balance read. */
+type WalletExecutor = Pick<typeof db, "select">;
+
+/** What a caller may do while it holds the client's wallet lock. */
+export interface LockedWalletOps {
+  getBalance(): Promise<number>;
+  create(data: InsertWalletTransaction): Promise<WalletTransaction>;
+}
+
+// Available balance = sum of processed credits − sum of non-rejected debits
+async function balanceOf(executor: WalletExecutor, clientId: string): Promise<number> {
+  const [row] = await executor
+    .select({
+      balance: sql<string>`
+        COALESCE(SUM(
+          CASE WHEN ${wallet_transaction.type} = 'credit' AND ${wallet_transaction.status} = 'processed'
+          THEN ${wallet_transaction.amount}::numeric ELSE 0 END
+        ), 0)
+        -
+        COALESCE(SUM(
+          CASE WHEN ${wallet_transaction.type} = 'debit' AND ${wallet_transaction.status} != 'rejected'
+          THEN ${wallet_transaction.amount}::numeric ELSE 0 END
+        ), 0)
+      `,
+    })
+    .from(wallet_transaction)
+    .where(eq(wallet_transaction.client_id, clientId));
+  return parseFloat(row?.balance ?? "0");
+}
+
 export const walletTransactionRepository = {
   async create(data: InsertWalletTransaction): Promise<WalletTransaction> {
     const [result] = await db.insert(wallet_transaction).values(data).returning();
@@ -28,23 +58,25 @@ export const walletTransactionRepository = {
 
   // Available balance = sum of processed credits − sum of non-rejected debits
   async getBalance(clientId: string): Promise<number> {
-    const [row] = await db
-      .select({
-        balance: sql<string>`
-          COALESCE(SUM(
-            CASE WHEN ${wallet_transaction.type} = 'credit' AND ${wallet_transaction.status} = 'processed'
-            THEN ${wallet_transaction.amount}::numeric ELSE 0 END
-          ), 0)
-          -
-          COALESCE(SUM(
-            CASE WHEN ${wallet_transaction.type} = 'debit' AND ${wallet_transaction.status} != 'rejected'
-            THEN ${wallet_transaction.amount}::numeric ELSE 0 END
-          ), 0)
-        `,
-      })
-      .from(wallet_transaction)
-      .where(eq(wallet_transaction.client_id, clientId));
-    return parseFloat(row?.balance ?? "0");
+    return balanceOf(db, clientId);
+  },
+
+  /**
+   * Runs `fn` inside ONE database transaction holding a per-client lock (an advisory transaction lock keyed on the
+   * client). The lock is taken before anything is read, so two requests for the same client queue up and the second
+   * sees the first one's debit: the balance check and the insert can no longer both pass on the same balance.
+   */
+  async withClientWalletLock<T>(clientId: string, fn: (ops: LockedWalletOps) => Promise<T>): Promise<T> {
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"wallet:" + clientId}))`);
+      return fn({
+        getBalance: () => balanceOf(tx, clientId),
+        create: async (data) => {
+          const [result] = await tx.insert(wallet_transaction).values(data).returning();
+          return result;
+        },
+      });
+    });
   },
 
   async findAll() {

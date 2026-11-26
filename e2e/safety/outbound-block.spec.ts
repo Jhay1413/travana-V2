@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { apiCreateClient, apiCreateQuoteDeal, dbBookingFor, signIn } from "../helpers/deals";
 import { BROWSER_LOG, CANARY_FILE, OUTBOUND_LOG } from "../helpers/env";
 import { expect, test } from "../helpers/fixtures";
+import { fakeProviders } from "../helpers/fake-providers";
+import { setStoredChannel } from "../helpers/messaging";
 import { readOutboundAttempts } from "../helpers/outbound-report";
 import { countMessagingConfigRows, queryRows, seedDealsAgency, unique } from "../helpers/seed";
 
@@ -47,8 +49,10 @@ test.describe("outbound block", () => {
        values ($1, $2, $3, 'booking_confirmation', 'Hi {{first_name}}, your booking {{hays_ref}} is confirmed.', 'on_booking_create', true)`,
       [randomUUID(), agency.orgId, templateName],
     );
+    await setStoredChannel(agency.orgId, "sms");
     const client = await apiCreateClient(page.request, { phoneNumber: "07700900123" });
     const deal = await apiCreateQuoteDeal(page.request, agency, client.id, userId);
+    await fakeProviders.reset(); // disarmed: the fake SMS provider refuses the login
     const attemptsBefore = readOutboundAttempts(OUTBOUND_LOG).length;
 
     const res = await page.request.post(`/api/v2/bookings/convert/${deal.quoteId}`, { data: { haysRef: "HAY-1234567", supplierRef: "TUI 1" } });
@@ -66,10 +70,16 @@ test.describe("outbound block", () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].template_name).toBe(templateName);
-    // Never sent or delivered; the send throws before any network call because no SMS login exists.
+    // Never sent or delivered: the fake SMS provider (on this machine) refuses its login until a spec arms it.
     expect(rows[0].status).toBe("failed");
     expect(rows[0].provider_message_id).toBeNull();
-    expect(rows[0].provider_error).toMatch(/Connexa is not connected/);
+    // Exactly what the fake provider answers (nothing else could have produced this text).
+    expect(rows[0].provider_error).toBe("Connexa auth failed: fake provider is not armed");
+    // The fake saw exactly one token request (refused) and never a message, and the WhatsApp side was never touched.
+    const calls = await fakeProviders.calls();
+    expect(calls.filter((c) => c.provider === "connexa" && c.path === "/api/issue-token")).toHaveLength(1);
+    expect(calls.filter((c) => c.provider === "connexa" && c.path === "/api/schedule-message")).toHaveLength(0);
+    expect(calls.filter((c) => c.provider === "sendseven")).toHaveLength(0);
     expect(await queryRows(`select 1 from sms_messages where client_id = $1 and status in ('sent', 'delivered')`, [client.id])).toHaveLength(0);
 
     // And the block saw nothing to refuse: no connection to any outside host was even attempted.

@@ -491,6 +491,13 @@
       "when": 1794016663614,
       "tag": "0069_shiny_rumiko_fujikawa",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1795503789406,
+      "tag": "0070_melted_maestro",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@ import {
   transaction, resorts, destination, country, room_type,
   lodges, park, user, clientTable,
   quoteViewsTable, quoteCustomerActionsTable, destinationGuruTable,
-  notifications,
+  notifications, organization,
 } from "@shared/schema";
 import type { QuoteView, InsertQuoteView, QuoteCustomerAction, InsertQuoteCustomerAction } from "@shared/schema";
 
@@ -26,9 +26,31 @@ export interface ClientQuoteViewSummary {
 }
 import { eq, desc, sql, and, inArray, or, ilike } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import crypto from "crypto";
 import { buildTransactionScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 import { fetchExtrasTotalMaps } from "../transaction/extras-total.repository";
+import { isUndefinedColumn, isValueTooLong } from "../../utils/pg-errors";
+import { LEGACY_QUOTE_TOKEN_LENGTH, mintQuoteToken } from "../../utils/quote-token";
+// The portal's visibility rule and live-booking rule, imported so the public link can never drift from them.
+import { customerVisibleQuoteWhere, dealIsBooked } from "../portal/portal-quotes.repository";
+import type { QuoteAccessRow } from "./quote-public.types";
+
+/** The columns quote_customer_actions has always had; reads and writes that don't need the newer ones stick to these. */
+const ACTION_BASE_COLUMNS = {
+  id: quoteCustomerActionsTable.id,
+  quoteId: quoteCustomerActionsTable.quoteId,
+  actionType: quoteCustomerActionsTable.actionType,
+  message: quoteCustomerActionsTable.message,
+  customerName: quoteCustomerActionsTable.customerName,
+  createdAt: quoteCustomerActionsTable.createdAt,
+};
+
+let warnedActionColumns = false;
+/** The reason / wants_similar columns are not in the database until the schema is pushed: log that once. */
+function warnActionColumnsMissing(): void {
+  if (warnedActionColumns) return;
+  warnedActionColumns = true;
+  console.warn("[quote-public] quote_customer_actions.reason / wants_similar do not exist yet; push the schema. Declines are unavailable and reasons are not shown until then.");
+}
 
 const departAirport = alias(airport, "depart_airport");
 const arriveAirport = alias(airport, "arrive_airport");
@@ -44,26 +66,52 @@ const parkingAirport = alias(airport, "parking_airport");
 const cruiseTourOp = alias(tour_operator, "cruise_tour_op");
 
 export const quotePublicRepository = {
-  generateToken(): string {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    const bytes = crypto.randomBytes(6);
-    let token = "";
-    for (let i = 0; i < 6; i++) {
-      token += chars[bytes[i] % chars.length];
-    }
-    return token;
+  /** True when some quote already carries this token. */
+  async isTokenTaken(token: string): Promise<boolean> {
+    const rows = await db.select({ id: quote.id }).from(quote).where(eq(quote.quote_token, token)).limit(1);
+    return rows.length > 0;
   },
 
+  /**
+   * The quote's share token, minted (20 characters, unused) and stored when it has none yet. The write only lands
+   * on a quote that still has no token, so two callers racing share one token. Until the schema push widens the
+   * column the database refuses a 20 character value; then a 12 character token is stored instead (logged).
+   */
   async setToken(quoteId: string): Promise<string> {
     const existing = await db.select({ token: quote.quote_token }).from(quote).where(eq(quote.id, quoteId)).limit(1);
     if (existing[0]?.token) return existing[0].token;
 
-    const token = this.generateToken();
-    await db.update(quote).set({ quote_token: token }).where(eq(quote.id, quoteId));
-    return token;
+    const store = async (length?: number): Promise<string | null> => {
+      const token = await mintQuoteToken((candidate) => this.isTokenTaken(candidate), length);
+      const updated = await db
+        .update(quote)
+        .set({ quote_token: token })
+        .where(and(eq(quote.id, quoteId), sql`${quote.quote_token} IS NULL`))
+        .returning({ token: quote.quote_token });
+      return updated[0]?.token ?? null;
+    };
+
+    let stored: string | null;
+    try {
+      stored = await store();
+    } catch (err) {
+      if (!isValueTooLong(err)) throw err;
+      console.warn("[quote-public] quote_token is still varchar(12): storing a 12 character token until the schema is pushed.");
+      stored = await store(LEGACY_QUOTE_TOKEN_LENGTH);
+    }
+    if (stored) return stored;
+    const [again] = await db.select({ token: quote.quote_token }).from(quote).where(eq(quote.id, quoteId)).limit(1);
+    if (!again?.token) throw new Error("Could not store a quote token");
+    return again.token;
   },
 
   async findByToken(token: string) {
+    const quoteId = await this.findQuoteIdByToken(token);
+    return quoteId ? this.findRecordById(quoteId) : undefined;
+  },
+
+  /** Everything the public page and the portal read for one quote. Callers decide who may see which parts. */
+  async findRecordById(quoteId: string) {
     const [q] = await db
       .select({
         quote: quote,
@@ -83,7 +131,7 @@ export const quotePublicRepository = {
       .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
       .leftJoin(lodges, eq(quote.lodge_id, lodges.id))
       .leftJoin(park, eq(lodges.park_id, park.id))
-      .where(eq(quote.quote_token, token))
+      .where(eq(quote.id, quoteId))
       .limit(1);
 
     if (!q) return undefined;
@@ -393,12 +441,44 @@ export const quotePublicRepository = {
   },
 
   async createCustomerAction(data: InsertQuoteCustomerAction): Promise<QuoteCustomerAction> {
-    const [result] = await db.insert(quoteCustomerActionsTable).values(data).returning();
-    return result;
+    if (data.reason == null && data.wantsSimilar == null) {
+      // Drizzle's insert names every column in the table, so this older shape of action (accept / request changes,
+      // and the portal's "interested") is written with a plain statement that works before the schema push too.
+      const res = await db.execute(sql`
+        insert into quote_customer_actions (quote_id, action_type, message, customer_name)
+        values (${data.quoteId}, ${data.actionType}, ${data.message ?? null}, ${data.customerName ?? null})
+        returning id, quote_id, action_type, message, customer_name, created_at
+      `);
+      const row = res.rows[0] as { id: string; quote_id: string; action_type: string; message: string | null; customer_name: string | null; created_at: Date };
+      return {
+        id: row.id,
+        quoteId: row.quote_id,
+        actionType: row.action_type,
+        message: row.message,
+        customerName: row.customer_name,
+        createdAt: row.created_at,
+        reason: null,
+        wantsSimilar: null,
+      };
+    }
+    try {
+      const [result] = await db.insert(quoteCustomerActionsTable).values(data).returning();
+      return result;
+    } catch (err) {
+      if (isUndefinedColumn(err)) warnActionColumnsMissing();
+      throw err;
+    }
   },
 
   async getCustomerActions(quoteId: string): Promise<QuoteCustomerAction[]> {
-    return db.select().from(quoteCustomerActionsTable).where(eq(quoteCustomerActionsTable.quoteId, quoteId)).orderBy(desc(quoteCustomerActionsTable.createdAt));
+    try {
+      return await db.select().from(quoteCustomerActionsTable).where(eq(quoteCustomerActionsTable.quoteId, quoteId)).orderBy(desc(quoteCustomerActionsTable.createdAt));
+    } catch (err) {
+      if (!isUndefinedColumn(err)) throw err;
+      warnActionColumnsMissing();
+      const rows = await db.select(ACTION_BASE_COLUMNS).from(quoteCustomerActionsTable).where(eq(quoteCustomerActionsTable.quoteId, quoteId)).orderBy(desc(quoteCustomerActionsTable.createdAt));
+      return rows.map((r) => ({ ...r, reason: null, wantsSimilar: null }));
+    }
   },
 
   async updateSentInfo(quoteId: string, sentVia: string) {
@@ -410,9 +490,13 @@ export const quotePublicRepository = {
     await db.update(quote).set(updates).where(eq(quote.id, quoteId));
   },
 
+  /**
+   * The quote a token opens. A token that matches more than one quote (possible until the unique index is pushed)
+   * is never resolved to an arbitrary one: it is treated as unknown and logged.
+   */
   async findQuoteIdByToken(token: string): Promise<string | null> {
-    const [result] = await db.select({ id: quote.id }).from(quote).where(eq(quote.quote_token, token)).limit(1);
-    return result?.id || null;
+    const found = await this.findTokenOwnership(token);
+    return found?.quoteId ?? null;
   },
 
   /**
@@ -422,13 +506,61 @@ export const quotePublicRepository = {
    * enforce portal ownership — a logged-in client may only view their own quote.
    */
   async findTokenOwnership(token: string): Promise<{ quoteId: string; clientId: string | null } | null> {
-    const [row] = await db
+    const rows = await db
       .select({ quoteId: quote.id, clientId: transaction.client_id })
       .from(quote)
       .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
       .where(eq(quote.quote_token, token))
+      .limit(2);
+    if (rows.length > 1) {
+      console.error(`[quote-public] a share token matches ${rows.length} quotes; treating it as not found (duplicate quote_token, push the unique index)`);
+      return null;
+    }
+    return rows[0] ?? null;
+  },
+
+  /**
+   * Whether the public link may open this quote, and the facts that decide it. `visible` is the portal's own
+   * customerVisibleQuoteWhere (a quote with no deal is never visible); `isBooked` is the deal having a live booking.
+   */
+  async findAccessState(quoteId: string): Promise<QuoteAccessRow | null> {
+    const [row] = await db
+      .select({
+        visible: sql<boolean>`coalesce(${customerVisibleQuoteWhere()}, false)`,
+        isBooked: sql<boolean>`coalesce(${dealIsBooked()}, false)`,
+        clientDeleted: sql<boolean>`(${clientTable.deletedAt} IS NOT NULL)`,
+        dateExpiry: quote.date_expiry,
+        agencyName: organization.name,
+        agencySettings: organization.settings,
+      })
+      .from(quote)
+      .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .leftJoin(clientTable, eq(transaction.client_id, clientTable.id))
+      .leftJoin(organization, eq(transaction.org_id, organization.id))
+      .where(eq(quote.id, quoteId))
       .limit(1);
     return row ?? null;
+  },
+
+  /**
+   * Has the agent already been told, within the last `withinMinutes`, that this quote was opened through the shared
+   * link? One notification per quote per window, whatever the number of views.
+   */
+  async hasRecentLinkViewNotification(quoteId: string, link: string, withinMinutes: number): Promise<boolean> {
+    const agentUserId = await this.getAgentUserIdByQuoteId(quoteId);
+    if (!agentUserId) return false;
+    const rows = await db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(and(
+        eq(notifications.userId, agentUserId),
+        eq(notifications.type, "quote_viewed"),
+        eq(notifications.link, link),
+        sql`${notifications.message} LIKE '%opened via the shared link%'`,
+        sql`${notifications.createdAt} > now() - make_interval(mins => ${withinMinutes})`,
+      ))
+      .limit(1);
+    return rows.length > 0;
   },
 
   async getAgentUserIdByQuoteId(quoteId: string): Promise<string | null> {

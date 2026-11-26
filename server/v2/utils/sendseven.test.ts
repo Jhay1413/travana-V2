@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runWithSendSevenConfigAsync, sendSevenRequest } from "./sendseven";
+import { runWithSendSevenConfigAsync, sendSevenRequest, SENDSEVEN_TIMEOUT_MS } from "./sendseven";
 
 const CONFIG = { baseUrl: "https://ss.test/api/v1", token: "tok" };
 
@@ -48,6 +48,28 @@ describe("sendSevenRequest error messages", () => {
     await expect(runWithSendSevenConfigAsync(CONFIG, () => sendSevenRequest("GET", "/x"))).rejects.toMatchObject({
       statusCode: 502,
       message: "SendSeven service returned 503",
+    });
+  });
+});
+
+describe("sendSevenRequest timeout", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("gives every call a 15 second abort signal", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, {}));
+    vi.stubGlobal("fetch", fetchMock);
+    await runWithSendSevenConfigAsync(CONFIG, () => sendSevenRequest("GET", "/x"));
+    const init = fetchMock.mock.calls[0][1] as { signal?: AbortSignal };
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(init.signal?.aborted).toBe(false);
+    expect(SENDSEVEN_TIMEOUT_MS).toBe(15_000);
+  });
+
+  it("a call that times out is reported like any other failure to reach SendSeven (a 502), so every caller already copes", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new DOMException("The operation was aborted due to timeout", "TimeoutError")));
+    await expect(runWithSendSevenConfigAsync(CONFIG, () => sendSevenRequest("POST", "/whatsapp-templates/x/send", { body: {} }))).rejects.toMatchObject({
+      statusCode: 502,
+      message: "Failed to reach the SendSeven service",
     });
   });
 });

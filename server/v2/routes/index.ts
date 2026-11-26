@@ -37,6 +37,8 @@ import { sendSevenContext } from '../modules/conversation-integration/conversati
 import channelsRoutes from '../modules/channels/channels.routes';
 import whatsappTemplatesRoutes from '../modules/whatsapp-templates/whatsapp-templates.routes';
 import whatsappUpdatesRoutes from '../modules/whatsapp-updates/whatsapp-updates.routes';
+import customerMessagingRoutes from '../modules/customer-messaging/customer-messaging.routes';
+import customerMessagingStaffRoutes from '../modules/customer-messaging/customer-messaging-staff.routes';
 import commentsRoutes from '../modules/comments/comments.routes';
 import contactLinkRoutes from '../modules/contact-link/contact-link.routes';
 import sendsevenWebhookRoutes from '../modules/sendseven-webhook/sendseven-webhook.routes';
@@ -135,6 +137,10 @@ router.use('/messages',           ...auth, noHomeworker, sendSevenContext, messa
 router.use('/channels',           ...auth, noHomeworker, sendSevenContext, channelsRoutes);
 router.use('/whatsapp-templates', ...auth, noHomeworker, sendSevenContext, whatsappTemplatesRoutes);
 router.use('/whatsapp-updates',   ...auth, noHomeworker, sendSevenContext, whatsappUpdatesRoutes);
+// Staff sends, "Send by" availability and the message history (any staff member, homeworkers included): declared
+// first on the same path; its three paths answer here, everything else falls through to the manager-only settings.
+router.use('/customer-messaging', customerMessagingStaffRoutes);
+router.use('/customer-messaging', ...auth, noHomeworker, customerMessagingRoutes);
 router.use('/comments',           ...auth, noHomeworker, sendSevenContext, commentsRoutes);
 router.use('/contact-links',      ...auth, contactLinkRoutes);
 router.use('/bot-config',         ...auth, botConfigRoutes);

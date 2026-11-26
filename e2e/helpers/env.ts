@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertSafeServerEnv } from "./safety-guard";
+import { FAKE_CONNEXA_EMAIL, FAKE_CONNEXA_PASSWORD, assertSafeServerEnv } from "./safety-guard";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 /**
@@ -19,6 +19,9 @@ export const CANARY_FILE = path.join(E2E_STATE_DIR, "outbound-canary.json");
 export const TEST_DATABASE_URL = "postgres://postgres:postgres@localhost:55432/travana_test";
 export const E2E_PORT = 5055;
 export const BASE_URL = `http://localhost:${E2E_PORT}`;
+/** Where the loopback fake of the SMS and WhatsApp providers listens (helpers/fake-providers.ts). */
+export const FAKE_PROVIDERS_PORT = 5056;
+export const FAKE_PROVIDERS_URL = `http://127.0.0.1:${FAKE_PROVIDERS_PORT}`;
 
 /**
  * Only these variables are copied from the parent environment into the server
@@ -67,6 +70,13 @@ export function buildServerEnv(parent: Record<string, string | undefined> = proc
     SESSION_SECRET: "e2e-session-secret-not-a-real-secret",
     EMAIL_ENCRYPTION_KEY: "e2e-encryption-key-not-a-real-secret",
     PORT: String(E2E_PORT),
+    // The SMS provider is the loopback fake, with a fake login (the only one the safety guard accepts). The fake
+    // answers 401 until a spec arms it, so nothing is ever delivered unless a spec asks for it.
+    CONNEXA_BASE_URL: `${FAKE_PROVIDERS_URL}/connexa`,
+    CONNEXA_EMAIL: FAKE_CONNEXA_EMAIL,
+    CONNEXA_PASSWORD: FAKE_CONNEXA_PASSWORD,
+    // Links in automatic messages need a site address (a message with no address in front of its link is not sent).
+    PUBLIC_BASE_URL: BASE_URL,
     // Emails are only printed to the server log. RESEND_API_KEY is deliberately never set.
     EMAIL_PROVIDER: "console",
     E2E_OUTBOUND_LOG: OUTBOUND_LOG,

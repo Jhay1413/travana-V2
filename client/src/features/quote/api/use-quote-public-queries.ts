@@ -1,6 +1,8 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import axiosClient from "@/api/client/axios-client";
+import { QUOTE_PREVIEW_ENDPOINT } from "@/api/endpoints";
 
+/** Exactly what the public API sends: no client or passenger names, ids or price breakdown. */
 export interface PublicQuoteData {
   title: string;
   holidayType: string;
@@ -10,8 +12,7 @@ export interface PublicQuoteData {
   children: number;
   infants: number;
   pets: number;
-  salesPrice: string;
-  // Calculated customer total = sales price − discount + service charge (computed by the API).
+  // Calculated customer total (the server works it out); per person is the same total over the travellers.
   totalPrice: string;
   pricePerPerson: string;
   transferType: string;
@@ -20,7 +21,6 @@ export interface PublicQuoteData {
   destinationName: string;
   countryName: string;
   resortName: string;
-  tags: string[];
   flights: Array<{
     flightType: string | null;
     flightNumber: string | null;
@@ -28,7 +28,6 @@ export interface PublicQuoteData {
     arrivalAirport: string;
     departureDateTime: string | null;
     arrivalDateTime: string | null;
-    airline: string;
     legOrder: number | null;
   }>;
   accommodations: Array<{
@@ -37,20 +36,15 @@ export interface PublicQuoteData {
     roomType: string;
     checkInDateTime: string | null;
     starRating: string | null;
-    resortName: string;
   }>;
   transfers: Array<{
     from: string;
     to: string;
-    pickUpTime: string | null;
-    dropOffTime: string | null;
     note: string;
   }>;
   carHires: Array<{
     pickupLocation: string;
     dropoffLocation: string;
-    pickupTime: string | null;
-    dropoffTime: string | null;
     numDays: number;
   }>;
   attractionTickets: Array<{
@@ -62,7 +56,6 @@ export interface PublicQuoteData {
     airportName: string;
     terminal: string;
     dateOfUsage: string | null;
-    note: string;
   }>;
   airportParkings: Array<{
     airportName: string;
@@ -77,82 +70,122 @@ export interface PublicQuoteData {
     cruiseDate: string | null;
     itinerary: Array<{ day: number; description: string; subDescription: string }>;
   }>;
-  passengers: Array<{
-    title: string | null;
-    firstName: string | null;
-    lastName: string | null;
-    type: string | null;
-    age: number | null;
-  }>;
   images: Array<{
-    id: string;
     image_url: string | null;
     isPrimary: boolean | null;
   }>;
   destinationGuru: {
     destination: string;
     country: string | null;
-    data: any;
+    data: unknown;
   } | null;
   agent: {
     name: string;
     avatar: string | null;
   };
+  agency: AgencyContact;
+  /** True when the quote's expiry date has passed: the page shows the "price was held until" banner. */
+  expired: boolean;
+  expiredOn: string | null;
 }
+
+export interface AgencyContact {
+  name: string | null;
+  phone: string | null;
+}
+
+export type PublicQuoteBlockCode = "BOOKED" | "UNAVAILABLE";
+
+/** The 410 the server answers for a quote the public link must not open: nothing about the quote itself. */
+export interface PublicQuoteBlock {
+  error: string;
+  code: PublicQuoteBlockCode;
+  agency: AgencyContact;
+}
+
+/** What the page shows for a token: the quote, or the reason it is closed. */
+export type PublicQuoteResult =
+  | {
+      kind: "quote";
+      quote: PublicQuoteData;
+      /** True when the quote came from the staff preview endpoint (a signed-in staff member opened ?preview=1). */
+      isStaffPreview: boolean;
+      /** Staff preview only: why customers would be refused (null when the public link would open it). */
+      previewBlock: PublicQuoteBlockCode | null;
+    }
+  | { kind: "blocked"; block: PublicQuoteBlock };
 
 export const publicQuoteKeys = {
   all: ["public-quote"] as const,
-  detail: (token: string) => [...publicQuoteKeys.all, token] as const,
+  detail: (token: string, preview: boolean) => [...publicQuoteKeys.all, token, preview ? "preview" : "public"] as const,
 };
 
-export function usePublicQuote(token: string) {
-  return useQuery<PublicQuoteData>({
-    queryKey: publicQuoteKeys.detail(token),
+type PreviewResponse = PublicQuoteData & { previewBlock: PublicQuoteBlockCode | null };
+
+function isBlockBody(value: unknown): value is PublicQuoteBlock {
+  if (typeof value !== "object" || value === null) return false;
+  const { code } = value as { code?: unknown };
+  return code === "BOOKED" || code === "UNAVAILABLE";
+}
+
+async function fetchPreview(token: string): Promise<PublicQuoteResult | null> {
+  try {
+    const { data } = await axiosClient.get<PreviewResponse>(QUOTE_PREVIEW_ENDPOINT(token));
+    const { previewBlock, ...quote } = data;
+    return { kind: "quote", quote, isStaffPreview: true, previewBlock };
+  } catch {
+    // Not signed in as staff, or not allowed to read this quote: the page behaves like it does for any visitor.
+    return null;
+  }
+}
+
+async function fetchPublic(token: string): Promise<PublicQuoteResult> {
+  try {
+    const { data } = await axiosClient.get<PublicQuoteData>(`/api/public/quote/${encodeURIComponent(token)}`);
+    return { kind: "quote", quote: data, isStaffPreview: false, previewBlock: null };
+  } catch (err) {
+    const body = (err as { status?: number; data?: unknown }).data;
+    if ((err as { status?: number }).status === 410 && isBlockBody(body)) return { kind: "blocked", block: body };
+    throw err;
+  }
+}
+
+/**
+ * The quote behind a share token. With `preview` (the page was opened with ?preview=1) a staff session is tried first
+ * on the staff preview endpoint; a refusal falls back to the normal public request, blocks included.
+ */
+export function usePublicQuote(token: string, preview = false) {
+  return useQuery<PublicQuoteResult>({
+    queryKey: publicQuoteKeys.detail(token, preview),
     queryFn: async () => {
-      const { data } = await axiosClient.get(`/api/public/quote/${token}`);
-      return data;
+      if (preview) {
+        const previewed = await fetchPreview(token);
+        if (previewed) return previewed;
+      }
+      return fetchPublic(token);
     },
     enabled: !!token,
-    retry: 1,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 }
 
 export function useLogQuoteView() {
   return useMutation({
     mutationFn: async ({ token }: { token: string }) => {
-      const { data } = await axiosClient.post(`/api/public/quote/${token}/view`, {});
+      const { data } = await axiosClient.post(`/api/public/quote/${encodeURIComponent(token)}/view`, {});
       return data;
     },
   });
 }
+
+/** The share buttons the server accepts (anything else is refused). */
+export type ShareMethod = "WhatsApp" | "Facebook" | "Email" | "Copy Link";
 
 export function useShareQuote() {
   return useMutation({
-    mutationFn: async ({ token, method }: { token: string; method: string }) => {
-      const { data } = await axiosClient.post(`/api/public/quote/${token}/share`, { method });
-      return data;
-    },
-  });
-}
-
-export function useSubmitQuoteAction() {
-  return useMutation({
-    mutationFn: async ({
-      token,
-      actionType,
-      message,
-      customerName,
-    }: {
-      token: string;
-      actionType: "accepted" | "changes_requested";
-      message?: string;
-      customerName?: string;
-    }) => {
-      const { data } = await axiosClient.post(`/api/public/quote/${token}/action`, {
-        actionType,
-        message,
-        customerName,
-      });
+    mutationFn: async ({ token, method }: { token: string; method: ShareMethod }) => {
+      const { data } = await axiosClient.post(`/api/public/quote/${encodeURIComponent(token)}/share`, { method });
       return data;
     },
   });

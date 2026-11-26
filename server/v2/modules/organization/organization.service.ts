@@ -37,9 +37,10 @@ export const organizationService = {
 
     // data.settings is passed as a patch; the repository merges it atomically in SQL.
     // `onboarding` is server-owned (written only via mergeSettingsSection); a stale copy from a
-    // client's cached settings must never overwrite it.
+    // client's cached settings must never overwrite it. `messaging` (the automatic-message channel) is
+    // likewise server-owned: it is changed only through /customer-messaging/settings, by managers.
     if (data.settings && typeof data.settings === 'object') {
-      const { onboarding: _ignored, ...rest } = data.settings as Record<string, unknown>;
+      const { onboarding: _ignored, messaging: _ignoredMessaging, ...rest } = data.settings as Record<string, unknown>;
       data = { ...data, settings: rest };
     }
 

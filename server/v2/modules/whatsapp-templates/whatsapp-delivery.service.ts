@@ -87,10 +87,20 @@ function nonEmpty(value: string | null | undefined, alt: string): string {
 
 export interface VariableContext {
   orgId: string;
-  userId: string;
+  /** The staff member sending; absent for automated sends (agent_name then reads "your travel agent"). */
+  userId?: string | null;
   clientFirstName: string | null | undefined;
   quoteUrl?: string;
+  /** The customer's one-time portal sign-in link (portal PIN reset only). */
+  signInLink?: string;
   message?: string;
+  // Automatic customer messages (booking confirmation, portal ready, reminders). Blank values get a plain fallback.
+  destination?: string | null;
+  bookingReference?: string | null;
+  departureDate?: string | null;
+  /** The portal address (/portal/login). Required by any template that maps portal_link. */
+  portalLink?: string;
+  balanceDueDate?: string | null;
 }
 
 // Meta rejects empty template parameters, so every resolved value is non-empty.
@@ -108,7 +118,7 @@ export async function resolveVariableValues(
         break;
       case "agent_name": {
         if (agentName === undefined) {
-          const u = await userRepository.findById(ctx.userId);
+          const u = ctx.userId ? await userRepository.findById(ctx.userId) : undefined;
           agentName = nonEmpty(u?.name, nonEmpty(u?.email?.split("@")[0], "your travel agent"));
         }
         values[key] = agentName;
@@ -126,6 +136,27 @@ export async function resolveVariableValues(
         // Validators keep quote_link out of update templates, so a missing link is a bug.
         if (!ctx.quoteUrl) throw new AppError("Quote link is not available for this send", 500);
         values[key] = ctx.quoteUrl;
+        break;
+      case "sign_in_link":
+        // Validators keep sign_in_link out of every other template kind, so a missing link is a bug.
+        if (!ctx.signInLink) throw new AppError("Sign-in link is not available for this send", 500);
+        values[key] = ctx.signInLink;
+        break;
+      case "destination":
+        values[key] = nonEmpty(ctx.destination, "your holiday");
+        break;
+      case "booking_reference":
+        values[key] = nonEmpty(ctx.bookingReference, "your booking");
+        break;
+      case "departure_date":
+        values[key] = nonEmpty(ctx.departureDate, "the date on your booking");
+        break;
+      case "balance_due_date":
+        values[key] = nonEmpty(ctx.balanceDueDate, "the date on your booking");
+        break;
+      case "portal_link":
+        if (!ctx.portalLink) throw new AppError("Portal link is not available for this send", 500);
+        values[key] = ctx.portalLink;
         break;
       case "message":
         if (ctx.message === undefined) throw new AppError("Message is not available for this send", 500);

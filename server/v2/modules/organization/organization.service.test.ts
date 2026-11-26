@@ -68,6 +68,14 @@ describe("organizationService.update", () => {
     expect(vi.mocked(organizationRepository.update).mock.calls[0][1].settings).toEqual({ currency: "USD" });
   });
 
+  it("strips the server-owned messaging key from the general settings save (only /customer-messaging/settings may change it)", async () => {
+    vi.mocked(organizationRepository.update).mockResolvedValue({ id: "o1" } as never);
+
+    await organizationService.update("o1", { settings: { messaging: { autoChannel: "sms" }, currency: "USD" } } as never);
+
+    expect(vi.mocked(organizationRepository.update).mock.calls[0][1].settings).toEqual({ currency: "USD" });
+  });
+
   it("throws 404 when a settings update finds no organization", async () => {
     vi.mocked(organizationRepository.update).mockResolvedValue(null as never);
     await expect(organizationService.update("o1", { settings: { a: 1 } } as never)).rejects.toMatchObject({ statusCode: 404 });

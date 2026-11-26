@@ -9,7 +9,11 @@ import {
   quote as quoteTable,
   organization as organizationTable,
 } from '@shared/schema';
-import { and, desc, eq, getTableColumns, gte, isNotNull, isNull, inArray, sql } from 'drizzle-orm';
+// Read-only: the portal's own rule for which quotes a customer can open, so a message never carries a link that
+// now shows "no longer available".
+import { customerVisibleQuoteWhere } from '../portal/portal-quotes.repository';
+import { liveBookingWhere } from '../portal/portal.repository';
+import { and, desc, eq, exists, getTableColumns, gte, isNotNull, isNull, inArray, not, sql } from 'drizzle-orm';
 
 let warnedMissingChecksTable = false;
 
@@ -348,8 +352,12 @@ export const smsRepository = {
       .innerJoin(transactionTable, eq(quoteTable.transaction_id, transactionTable.id))
       .where(and(
         eq(transactionTable.client_id, clientId),
-        eq(transactionTable.is_active, true),
         isNotNull(quoteTable.quote_token),
+        // Only a quote the customer may open: live, not a test deal, not lost or archived, and not already booked.
+        customerVisibleQuoteWhere(),
+        not(exists(
+          db.select({ one: sql`1` }).from(bookingTable).where(and(eq(bookingTable.transaction_id, transactionTable.id), liveBookingWhere())),
+        )),
       ))
       .orderBy(desc(quoteTable.date_created))
       .limit(1);

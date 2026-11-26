@@ -1,230 +1,209 @@
-import { notificationRepository } from '../notification/notification.repository';
+import { AppError } from '../../utils/error-handler';
+import { referralService } from '../referral/referral.service';
+import { referralPayoutService } from '../referral/referral-payout.service';
+import { referralWithdrawalService } from '../referral/referral-withdrawal.service';
+import { walletService } from '../wallet/wallet.service';
+import { tagService } from '../tag/tag.service';
 import { pushNotificationService } from '../notification/push-notification.service';
-import { portalRepository, type PortalDealRow } from './portal.repository';
-import { verifyPortalToken } from './portal-auth';
-import { sanitizeRichText } from '../../utils/sanitize-rich-text';
+import { quotePublicRepository } from '../quote/quote-public.repository';
+import { quotePublicService } from '../quote/quote-public.service';
+import { bridgePortalMessageToChat } from '../../../services/portal-chat-bridge';
+import { DEAL_INTEREST_PREFIX, portalRepository } from './portal.repository';
+import { portalQuotesService } from './portal-quotes.service';
+import type {
+  PortalMessageDto,
+  PushSubscriptionInput,
+  QuoteViewMeta,
+} from './portal.types';
 
-const PORTAL_SENDER_PREFIX = 'portal-client:';
+// Portal clients are not staff, so wallet/referral reads run with no agency scope.
+const TRUSTED_PORTAL_SCOPE = { orgId: null } as const;
 
-export function portalSenderId(clientId: string): string {
-  return `${PORTAL_SENDER_PREFIX}${clientId}`;
-}
+/** Identical taps running at this moment (a double tap): the second takes the first's answer. */
+const interestInFlight = new Map<string, Promise<{ alreadyTold: boolean }>>();
 
-export function isPortalSender(senderId: string): boolean {
-  return senderId.startsWith(PORTAL_SENDER_PREFIX);
-}
+export const portalService = {
+  // ── Profile ──────────────────────────────────────────────────────────────
 
-export function extractClientIdFromSender(senderId: string): string | null {
-  if (!isPortalSender(senderId)) return null;
-  return senderId.replace(PORTAL_SENDER_PREFIX, '');
-}
+  async getProfile(clientId: string) {
+    const client = await portalRepository.findClientProfile(clientId);
+    if (!client) throw new AppError('Client not found', 404);
+    return client;
+  },
 
-async function reconcileParticipants(
-  conversationId: string,
-  agentIds: string[],
-  clientId: string,
-): Promise<void> {
-  const existing = await portalRepository.listParticipantUserIds(conversationId);
-  const existingUserIds = new Set(existing.map((e) => e.userId));
-  const portalId = portalSenderId(clientId);
-  const desiredIds = new Set([portalId, ...agentIds]);
+  // ── Messages ─────────────────────────────────────────────────────────────
 
-  for (const agentId of agentIds) {
-    if (!existingUserIds.has(agentId)) {
-      await portalRepository.addParticipant(conversationId, agentId);
-    }
-  }
+  async listMessages(clientId: string): Promise<PortalMessageDto[]> {
+    const msgs = await portalRepository.findClientPortalMessages(clientId, 100);
+    return msgs.map((m) => ({
+      id: m.id,
+      sender: m.sender as 'agent' | 'client',
+      agent_name: m.agentName || undefined,
+      text: m.text,
+      timestamp: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
+    }));
+  },
 
-  for (const existingId of existingUserIds) {
-    if (existingId && !desiredIds.has(existingId)) {
-      await portalRepository.removeParticipant(conversationId, existingId);
-    }
-  }
-}
+  async sendMessage(clientId: string, text: string): Promise<void> {
+    const trimmed = text.trim();
+    if (!trimmed) throw new AppError('Message text required', 400);
+    await portalRepository.insertClientPortalMessage(clientId, trimmed);
+    await bridgePortalMessageToChat(clientId, trimmed, false);
+  },
 
-async function findOrCreatePortalConversation(
-  clientId: string,
-  clientName: string,
-  agentIds: string[],
-  isGroupChat: boolean,
-): Promise<string> {
-  const existing = await portalRepository.findConversationByPortalClient(clientId);
-  if (existing) {
-    await reconcileParticipants(existing.id, agentIds, clientId);
-    return existing.id;
-  }
+  async submitQuoteRequest(
+    clientId: string,
+    input: { destination?: string | number; dates?: string | number; travellers?: string | number; notes?: string | number },
+  ): Promise<void> {
+    const messageText = `Quote Request:\n• Destination: ${input.destination || 'Not specified'}\n• Dates: ${input.dates || 'Flexible'}\n• Travellers: ${input.travellers || 'Not specified'}\n• Notes: ${input.notes || 'None'}`;
+    await portalRepository.insertClientPortalMessage(clientId, messageText);
+    await bridgePortalMessageToChat(clientId, messageText, false);
+  },
 
-  const convType = isGroupChat ? 'group' : 'portal';
-  const convName = `Portal: ${clientName}`;
-
-  try {
-    const conv = await portalRepository.createConversation({
-      type: convType,
-      name: convName,
-      createdBy: portalSenderId(clientId),
-      portalClientId: clientId,
-      portalClientName: clientName,
-    });
-
-    if (!conv) {
-      const retry = await portalRepository.findConversationByPortalClient(clientId);
-      if (retry) {
-        await reconcileParticipants(retry.id, agentIds, clientId);
-        return retry.id;
-      }
-      throw new Error('Failed to create or find portal conversation');
-    }
-
-    await portalRepository.addParticipant(conv.id, portalSenderId(clientId));
-    for (const agentId of agentIds) {
-      await portalRepository.addParticipant(conv.id, agentId);
-    }
-
-    return conv.id;
-  } catch (err: any) {
-    if (err.code === '23505') {
-      const retry = await portalRepository.findConversationByPortalClient(clientId);
-      if (retry) {
-        await reconcileParticipants(retry.id, agentIds, clientId);
-        return retry.id;
-      }
-    }
-    throw err;
-  }
-}
-
-export async function bridgePortalMessageToChat(
-  clientId: string,
-  messageText: string,
-  isFromDeal: boolean = false,
-): Promise<void> {
-  try {
-    const clientName = await portalRepository.getClientName(clientId);
-    let agentIds: string[] = [];
-    let isGroupChat = false;
-
-    if (isFromDeal) {
-      agentIds = await portalRepository.findAllNonBannedAgentIds();
-      isGroupChat = agentIds.length > 1;
-    } else {
-      const agentId = await portalRepository.findActiveAgentIdForClient(clientId);
-      if (agentId) {
-        agentIds = [agentId];
-      } else {
-        agentIds = await portalRepository.findAllNonBannedAgentIds();
-        isGroupChat = agentIds.length > 1;
-      }
-    }
-
-    if (agentIds.length === 0) return;
-
-    const conversationId = await findOrCreatePortalConversation(
-      clientId,
-      clientName,
-      agentIds,
-      isGroupChat,
-    );
-
-    await portalRepository.insertChatMessage({
-      conversationId,
-      senderId: portalSenderId(clientId),
-      content: sanitizeRichText(messageText),
-    });
-
-    await portalRepository.touchConversation(conversationId);
-
-    const preview = messageText.length > 80 ? messageText.slice(0, 80) + '…' : messageText;
-
-    for (const agentId of agentIds) {
-      try {
-        await notificationRepository.create({
-          userId: agentId,
-          type: 'chat_message',
-          title: `Portal Message from ${clientName}`,
-          message: preview,
-          link: '/command-center?view=connect-internal-chat',
-          read: false,
-        });
-      } catch {}
-    }
-  } catch (err) {
-    console.error('Portal-chat bridge error:', err);
-  }
-}
-
-export async function bridgeAgentReplyToPortal(
-  conversationId: string,
-  agentId: string,
-  agentName: string,
-  messageText: string,
-): Promise<void> {
-  try {
-    const portalClientId = await portalRepository.findPortalClientIdForConversation(conversationId);
-    if (!portalClientId) return;
-
-    const plainText = messageText.replace(/<[^>]*>/g, '').trim();
-    if (!plainText) return;
-
-    await portalRepository.insertPortalMessageFromAgent({
-      clientId: portalClientId,
-      agentId,
-      agentName,
-      text: plainText,
-    });
-
+  /**
+   * "I'm interested" on a deal. Idempotent per customer and deal: the first tap messages the agent, any later one
+   * (another tab, another device, a repeat) sends nothing and answers `alreadyTold: true`. "Already told" is read
+   * from the customer's own stored message (its text ends with the deal id), so no schema is needed.
+   */
+  async recordInterest(clientId: string, dealId: string): Promise<{ alreadyTold: boolean }> {
+    const key = `${clientId}:${dealId}`;
+    const running = interestInFlight.get(key);
+    if (running) return running;
+    const work = (async () => {
+      if (await portalRepository.hasClientInterestMessage(clientId, dealId)) return { alreadyTold: true };
+      const messageText = `${DEAL_INTEREST_PREFIX}${dealId}`;
+      await portalRepository.insertClientPortalMessage(clientId, messageText);
+      await bridgePortalMessageToChat(clientId, messageText, true);
+      return { alreadyTold: false };
+    })();
+    interestInFlight.set(key, work);
     try {
-      await pushNotificationService.sendToClient(portalClientId, {
-        title: `Message from ${agentName || 'Your Travel Agent'}`,
-        body: plainText.length > 120 ? plainText.slice(0, 117) + '...' : plainText,
-        url: '/portal/messages',
-      });
-    } catch (pushErr) {
-      console.error('Push notification error (non-blocking):', pushErr);
+      return await work;
+    } finally {
+      interestInFlight.delete(key);
     }
-  } catch (err) {
-    console.error('Agent-to-portal bridge error:', err);
-  }
-}
+  },
 
-// ── Deals ────────────────────────────────────────────────────────────────
+  // ── Tags ─────────────────────────────────────────────────────────────────
 
-/** Best-effort portal auth: decodes a bearer token if one was sent, without
- *  requiring it — /deals stays reachable for unauthenticated callers. Never
- *  trusts a client id from anywhere but a verified token. Returns null on a
- *  missing/invalid/expired token rather than throwing. */
-function resolveOptionalPortalClientId(authorizationHeader: string | undefined): string | null {
-  if (!authorizationHeader?.startsWith('Bearer ')) return null;
-  const payload = verifyPortalToken(authorizationHeader.slice(7));
-  return payload?.clientId ?? null;
-}
+  getAllTags() {
+    return tagService.getAllTags();
+  },
 
-export interface GetPortalDealsOptions {
-  country?: string;
-  tag?: string;
-  recentDays?: number;
-  /** Restrict to deals sharing a tag with the caller's saved Travel Interests,
-   *  when they can be resolved (valid bearer token + at least one saved tag).
-   *  No-op otherwise, so an unauthenticated caller or one with no saved
-   *  interests still sees the unfiltered list. */
-  matchInterests: boolean;
-  authorizationHeader: string | undefined;
-}
+  async hasTags(clientId: string): Promise<{ hasTags: boolean }> {
+    return { hasTags: await tagService.clientHasTags(clientId) };
+  },
 
-export async function getPortalDeals(options: GetPortalDealsOptions): Promise<PortalDealRow[]> {
-  let clientTagIds: string[] | undefined;
-  if (options.matchInterests) {
-    const clientId = resolveOptionalPortalClientId(options.authorizationHeader);
-    if (clientId) {
-      const tagIds = await portalRepository.findClientTagIds(clientId);
-      if (tagIds.length > 0) clientTagIds = tagIds;
+  getMyTags(clientId: string) {
+    return tagService.getClientTags(clientId);
+  },
+
+  async setMyTags(clientId: string, tagIds: string[]): Promise<void> {
+    if (tagIds.length === 0) throw new AppError('At least one tag is required', 400);
+    await tagService.setClientTags(clientId, tagIds);
+  },
+
+  // ── Push notifications ───────────────────────────────────────────────────
+
+  getVapidKey(): { publicKey: string } {
+    return { publicKey: pushNotificationService.getPublicKey() };
+  },
+
+  async subscribePush(clientId: string, subscription: PushSubscriptionInput): Promise<void> {
+    await pushNotificationService.subscribe(clientId, subscription);
+  },
+
+  async unsubscribePush(clientId: string, endpoint: string): Promise<void> {
+    await pushNotificationService.unsubscribe(clientId, endpoint);
+  },
+
+  // ── VIP / referral / wallet ──────────────────────────────────────────────
+
+  async getVipStatus(clientId: string) {
+    const client = await portalRepository.findVipSummary(clientId);
+    if (!client) throw new AppError('Client not found', 404);
+
+    const balance = await walletService.getBalance(clientId, TRUSTED_PORTAL_SCOPE);
+    return {
+      vipTier: client.vipTier ?? 'not_enrolled',
+      vipEnrolledAt: client.vipEnrolledAt,
+      totalReferrals: client.totalReferrals,
+      walletBalance: balance.toFixed(2),
+    };
+  },
+
+  getReferrals(clientId: string) {
+    return referralService.getReferralsByReferrer(clientId, TRUSTED_PORTAL_SCOPE);
+  },
+
+  async getWalletBalance(clientId: string): Promise<{ balance: string }> {
+    const balance = await walletService.getBalance(clientId, TRUSTED_PORTAL_SCOPE);
+    return { balance: balance.toFixed(2) };
+  },
+
+  getWalletTransactions(clientId: string) {
+    return walletService.getTransactions(clientId, TRUSTED_PORTAL_SCOPE);
+  },
+
+  requestPayout(clientId: string) {
+    return referralPayoutService.requestPayouts(clientId);
+  },
+
+  getPayoutRequests(clientId: string) {
+    return referralPayoutService.getPayoutsByClient(clientId);
+  },
+
+  getWithdrawals(clientId: string) {
+    return referralWithdrawalService.getWithdrawalsByClient(clientId);
+  },
+
+  async withdraw(
+    clientId: string,
+    input: { amount: string | number; account_name: string; account_number: string; sort_code: string },
+  ) {
+    const parsed = parseFloat(String(input.amount));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw new AppError('amount must be a positive number', 400);
     }
-  }
+    return walletService.requestBankTransfer(
+      clientId,
+      parsed,
+      { account_name: input.account_name, account_number: input.account_number, sort_code: input.sort_code },
+      TRUSTED_PORTAL_SCOPE,
+    );
+  },
 
-  return portalRepository.findDeals({
-    country: options.country,
-    tag: options.tag,
-    limit: 50,
-    recentDays: options.recentDays,
-    clientTagIds,
-  });
-}
+  // ── Quote view tracking ──────────────────────────────────────────────────
+
+  async logQuoteView(clientId: string, token: string, meta: QuoteViewMeta): Promise<void> {
+    const client = await portalRepository.findClientNameById(clientId);
+    const viewerName = [client?.firstName, client?.lastName].filter(Boolean).join(' ') || null;
+
+    // The owning client, or a customer of the same agency reading one of its published deals (as before). Any
+    // other quote is a 404, the same answer as for a token that does not exist.
+    const { access } = await portalQuotesService.getReadable(clientId, token);
+    const quoteId = access.quoteId;
+
+    const ua = meta.userAgent;
+    let deviceType = 'desktop';
+    if (/mobile|android|iphone|ipad/i.test(ua)) {
+      deviceType = /ipad|tablet/i.test(ua) ? 'tablet' : 'mobile';
+    }
+    let browser = 'Unknown';
+    if (/edg/i.test(ua)) browser = 'Edge';
+    else if (/chrome/i.test(ua)) browser = 'Chrome';
+    else if (/firefox/i.test(ua)) browser = 'Firefox';
+    else if (/safari/i.test(ua)) browser = 'Safari';
+    else if (/opera|opr/i.test(ua)) browser = 'Opera';
+
+    await quotePublicRepository.logView(quoteId, {
+      ipAddress: meta.ipAddress.substring(0, 45),
+      deviceType,
+      browser,
+      userAgent: ua.substring(0, 500),
+      viewerName,
+    });
+
+    await quotePublicService.notifyPortalView(token, quoteId, clientId, viewerName);
+  },
+};

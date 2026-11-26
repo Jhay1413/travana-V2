@@ -1,14 +1,21 @@
+import { useState } from "react";
 import { Loader2, KeyRound, Send, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useVipOverview } from "@/features/referral/api/use-referral-queries";
 import { usePortalPin } from "@/features/client/api/use-portal-pin";
+import { SendByChoice, WhatsappFallbackPanel, canSendBy, effectiveChannel, heldFor, hold, useSendAvailability, type Held, type SendChannel } from "@/features/customer-messaging";
 import { currency } from "@/features/client/components/client-types";
 
 // ─── Portal access ──────────────────────────────────────────────────────────
 
-export function PortalAccessPanel({ clientId, readOnly, onChangePin }: { clientId: string; readOnly: boolean; onChangePin: () => void }) {
-  const { hasPin, loading, sending, sendLink } = usePortalPin(clientId);
+export function PortalAccessPanel({ clientId, readOnly, onChangePin, clientPhone }: { clientId: string; readOnly: boolean; onChangePin: () => void; clientPhone?: string | null }) {
+  const { hasPin, loading, sending, sendLink, fallback, clearFallback } = usePortalPin(clientId);
+  const availabilityQuery = useSendAvailability(clientId, "portal_sign_in", !readOnly);
+  // The pick belongs to this client: another client's page starts from the agency's channel again.
+  const [pickedHeld, setPickedHeld] = useState<Held<SendChannel> | null>(null);
+  const channel = effectiveChannel(heldFor(pickedHeld, clientId), availabilityQuery.data);
+  const canSend = canSendBy(channel, availabilityQuery.data);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2" data-testid="card-portal-pin">
@@ -34,12 +41,6 @@ export function PortalAccessPanel({ clientId, readOnly, onChangePin }: { clientI
           </span>
         </div>
         <div className="flex items-center gap-1.5">
-          {!readOnly && hasPin && (
-            <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-lg px-2.5 text-[12px]" disabled={sending} onClick={sendLink} data-testid="button-send-portal-link">
-              {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" strokeWidth={1.8} />}
-              Send link
-            </Button>
-          )}
           {!readOnly && !loading && (
             <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-lg px-2.5 text-[12px]" onClick={onChangePin} data-testid="button-change-pin">
               <KeyRound className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -47,6 +48,20 @@ export function PortalAccessPanel({ clientId, readOnly, onChangePin }: { clientI
             </Button>
           )}
         </div>
+        {!readOnly && (
+          <div className="flex w-full flex-wrap items-start justify-between gap-2 border-t border-social-border pt-2.5" data-testid="portal-send-link-row">
+            <SendByChoice availability={availabilityQuery.data} loading={availabilityQuery.isLoading} value={channel} onChange={(c) => { clearFallback(); setPickedHeld(hold(clientId, c)); }} disabled={sending} testId="portal-send-by" />
+            <Button type="button" variant="outline" className="h-8 gap-1.5 rounded-lg px-2.5 text-[12px]" disabled={sending || !canSend} onClick={() => sendLink(channel)} data-testid="button-send-portal-link">
+              {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" strokeWidth={1.8} />}
+              Send link
+            </Button>
+            {fallback && (
+              <div className="w-full">
+                <WhatsappFallbackPanel fallback={fallback} phone={clientPhone} testId="portal-whatsapp-fallback" />
+              </div>
+            )}
+          </div>
+        )}
     </div>
   );
 }

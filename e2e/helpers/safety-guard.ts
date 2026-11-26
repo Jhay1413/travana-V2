@@ -62,9 +62,37 @@ export function assertSafeDatabaseUrl(url: string | undefined, label = "database
   }
 }
 
+/**
+ * The one SMS login the test server may hold: obviously fake values, and only together with a provider address on
+ * this machine (CONNEXA_BASE_URL), so they can never reach the real provider. The loopback fake in
+ * helpers/fake-providers.ts answers them.
+ */
+export const FAKE_CONNEXA_EMAIL = "e2e-fake-connexa@example.invalid";
+export const FAKE_CONNEXA_PASSWORD = "e2e-fake-connexa-password-not-real";
+const FAKE_LOGIN_NAMES = ["CONNEXA_EMAIL", "CONNEXA_PASSWORD"];
+
+function envValue(env: Record<string, string | undefined>, name: string): string | undefined {
+  const key = Object.keys(env).find((k) => k.toUpperCase() === name);
+  return key === undefined ? undefined : env[key];
+}
+
+/** True only for the fake SMS login pointed at a loopback provider address. */
+export function isFakeConnexaLogin(env: Record<string, string | undefined>): boolean {
+  if (envValue(env, "CONNEXA_EMAIL") !== FAKE_CONNEXA_EMAIL || envValue(env, "CONNEXA_PASSWORD") !== FAKE_CONNEXA_PASSWORD) return false;
+  try {
+    const host = new URL(envValue(env, "CONNEXA_BASE_URL") ?? "").hostname;
+    return host === "127.0.0.1" || host === "localhost";
+  } catch {
+    return false;
+  }
+}
+
 /** Throws if any forbidden credential name is present (even with an empty value). */
 export function assertNoForbiddenEnv(env: Record<string, string | undefined>): void {
-  const present = FORBIDDEN_ENV_NAMES.filter((name) => Object.keys(env).some((k) => k.toUpperCase() === name));
+  const fakeLogin = isFakeConnexaLogin(env);
+  const present = FORBIDDEN_ENV_NAMES.filter(
+    (name) => Object.keys(env).some((k) => k.toUpperCase() === name) && !(fakeLogin && FAKE_LOGIN_NAMES.includes(name)),
+  );
   if (present.length > 0) {
     throw new SafetyGuardError(`forbidden credential variable(s) set in the server env: ${present.join(", ")}`);
   }

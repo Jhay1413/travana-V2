@@ -74,11 +74,15 @@ export function useClientQuoteViews(clientId: string) {
 export interface QuoteCustomerActionEntry {
   id: string;
   quoteId: string;
-  /** "accepted" or "changes_requested". */
+  /** "accepted", "changes_requested", or from the customer portal "declined" / "reopened" (the undo of a decline). */
   actionType: string;
   message: string | null;
   customerName: string | null;
   createdAt: string;
+  /** Portal "not interested": one of the fixed reasons, when the customer chose one. */
+  reason?: string | null;
+  /** Portal "not interested": the customer asked for something similar. */
+  wantsSimilar?: boolean | null;
 }
 
 export function useQuoteCustomerActions(quoteId: string) {

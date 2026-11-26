@@ -20,7 +20,7 @@ vi.mock("../platform-admin/platform-admin-credits.repository", () => ({
   startOfMonthUtc: vi.fn(),
 }));
 
-import { buildContextForClient, fireAutoTriggerForClient, sendSms, CONNEXA_TIMEOUT_MS } from "./sms.service";
+import { buildContextForClient, sendAutoSmsTemplates, sendSms, CONNEXA_TIMEOUT_MS } from "./sms.service";
 import { smsRepository as repo } from "./sms.repository";
 
 const client = { id: "c1", orgId: "o1", email: "a@b.com", firstName: "Ann", surename: "Lee" };
@@ -74,7 +74,7 @@ describe("buildContextForClient and the booking it describes", () => {
     vi.mocked(repo.hasRecentAutoSend).mockResolvedValue(true); // stop before sending
     vi.mocked(repo.findActiveBookingForClient).mockResolvedValue(july as never);
 
-    await fireAutoTriggerForClient({
+    await sendAutoSmsTemplates({
       clientId: "c1", autoTrigger: "days_before_departure", bookingId: "bk-july", dedupeSince: new Date(),
     });
 
@@ -88,7 +88,7 @@ describe("buildContextForClient and the booking it describes", () => {
     vi.mocked(repo.hasRecentAutoSend).mockResolvedValue(true);
     vi.mocked(repo.findLatestActiveBookingForClient).mockResolvedValue(december as never);
 
-    await fireAutoTriggerForClient({ clientId: "c1", autoTrigger: "on_booking_create", dedupeSince: new Date() });
+    await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "on_booking_create", dedupeSince: new Date() });
 
     expect(repo.findLatestActiveBookingForClient).toHaveBeenCalledWith("c1");
     expect(repo.findActiveBookingForClient).not.toHaveBeenCalled();

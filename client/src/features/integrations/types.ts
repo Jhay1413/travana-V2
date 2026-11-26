@@ -98,7 +98,9 @@ export interface CreateWaTemplateResult {
   status: string | null;
 }
 
-export type TemplateVariableSource = "client_first_name" | "agent_name" | "agency_name" | "quote_link" | "message" | "custom";
+export type TemplateVariableSource =
+  | "client_first_name" | "agent_name" | "agency_name" | "quote_link" | "sign_in_link" | "message" | "custom"
+  | "destination" | "booking_reference" | "departure_date" | "portal_link" | "balance_due_date";
 
 export interface TemplateVariableMapping {
   source: TemplateVariableSource;
@@ -112,11 +114,36 @@ export interface TemplateSettings {
   variables: Record<string, TemplateVariableMapping>;
 }
 
-/** Which of the two org-level templates a card or mapping is for. */
-export type TemplateKind = "quote" | "update";
+/** Which org-level template a card or mapping is for ("auto" = one of the automatic customer messages). */
+export type TemplateKind = "quote" | "update" | "pinReset" | "auto";
 
 export type QuoteVariableSource = TemplateVariableSource;
 export type QuoteVariableMapping = TemplateVariableMapping;
 export type QuoteTemplateSettings = TemplateSettings;
 /** The "General update" template agents use once a client's 24-hour window has closed. */
 export type UpdateTemplateSettings = TemplateSettings;
+
+/** How automatic customer messages go out, agency-wide. */
+export type AutoChannel = "whatsapp" | "sms";
+
+export type AutoMessagePurpose = "booking_confirmation" | "portal_ready" | "balance_reminder" | "departure_reminder";
+
+export type ReadinessReason =
+  | "switched_off" | "not_connected" | "no_channel" | "no_template" | "sms_not_configured" | "unreachable"
+  | "org_suspended" | "database_update_needed" | "template_missing" | "template_not_approved" | "mapping_mismatch";
+
+export interface PurposeReadiness {
+  purpose: AutoMessagePurpose | "portal_sign_in";
+  switchedOn: boolean;
+  /** A text message row exists for this type, so the switch has something to turn on. */
+  hasSwitch: boolean;
+  channel: AutoChannel;
+  ready: boolean;
+  reason: ReadinessReason | null;
+  note?: "no_template_outside_window";
+}
+
+export interface CustomerMessagingReadiness {
+  autoChannel: AutoChannel;
+  purposes: PurposeReadiness[];
+}

@@ -45,5 +45,15 @@ export function templateSettingsSchema({ allowedSources, requireOneMessage }: Te
     });
 }
 
+export const PIN_RESET_TEMPLATE_SOURCES = ["client_first_name", "agency_name", "sign_in_link", "custom"] as const satisfies readonly WhatsappTemplateVariableSource[];
+
 export const quoteTemplateSettingsBody = templateSettingsSchema({ allowedSources: QUOTE_TEMPLATE_SOURCES, requireOneMessage: false });
 export const updateTemplateSettingsBody = templateSettingsSchema({ allowedSources: UPDATE_TEMPLATE_SOURCES, requireOneMessage: true });
+
+// The portal sign-in link template must carry the link somewhere, or the customer would get a message they cannot use.
+export const pinResetTemplateSettingsBody = templateSettingsSchema({ allowedSources: PIN_RESET_TEMPLATE_SOURCES, requireOneMessage: false }).superRefine((body, ctx) => {
+  if (body.templateName === null) return;
+  if (!Object.values(body.variables).some((v) => v.source === "sign_in_link")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["variables"], message: "One placeholder must hold the sign-in link" });
+  }
+});

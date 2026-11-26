@@ -18,6 +18,7 @@ import { chromium } from "@playwright/test";
 import { BASE_URL, BROWSER_LOG, CANARY_FILE, E2E_STATE_DIR, OUTBOUND_LOG, TEST_DATABASE_URL, buildServerEnv } from "./helpers/env";
 import { BROWSER_ARGS, installBrowserGuard } from "./helpers/browser-guard";
 import { formatRunViolations, readOutboundAttempts, readRunViolations } from "./helpers/outbound-report";
+import { startFakeProviders, type RunningFakeProviders } from "./helpers/fake-providers";
 import { assertSafeDatabaseUrl, assertSafeServerEnv } from "./helpers/safety-guard";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -123,6 +124,8 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
   //    be tested instead of the one with the outbound block).
   const alreadyUp = await fetch(`${BASE_URL}/api/auth/user`).then(() => true, () => false);
   if (alreadyUp) throw new Error(`Something already answers on ${BASE_URL}. Stop the leftover E2E server first.`);
+  // The fake SMS / WhatsApp providers, on this machine only, before the server that points at them.
+  const fakeProviders: RunningFakeProviders = await startFakeProviders();
   mkdirSync(path.join(root, "test-results"), { recursive: true });
   mkdirSync(E2E_STATE_DIR, { recursive: true });
   refuseIfLeftoverViolations();
@@ -147,11 +150,13 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
     await warmUpClient();
   } catch (err) {
     killTree(child);
+    await fakeProviders.close();
     throw err;
   }
 
   return async () => {
     killTree(child);
+    await fakeProviders.close();
     await new Promise<void>((resolve) => log.end(resolve));
     const problems: string[] = [];
     // 1. The outbound check comes first, so nothing below can skip it.

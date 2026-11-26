@@ -95,6 +95,7 @@ import { referralService } from "../referral/referral.service";
 import { walletService } from "../wallet/wallet.service";
 import { orgTourOperatorRepository } from "../tour-operator/org-tour-operator.repository";
 import { AppError } from "../../utils/error-handler";
+import { fireAutoTriggerForClient } from "../sms/sms.service";
 import { refreshBookingPricePerPerson } from "../quote/quote-price-per-person.service";
 
 // A "trusted" scope (orgId: null) short-circuits the in-scope assertions, so
@@ -710,5 +711,32 @@ describe("bookingService - booking children are reachable only through their own
     vi.mocked(bookingRepository.findChildBookingId).mockResolvedValue(null as never);
     await expect(bookingService.removeFlight("bA", "f1", AGENT)).rejects.toMatchObject({ statusCode: 404 });
     expect(bookingRepository.removeFlight).not.toHaveBeenCalled();
+  });
+});
+
+describe("the booking confirmation is about the booking that was just created", () => {
+  beforeEach(() => {
+    vi.mocked(transactionRepository.findById).mockResolvedValue({ id: "t1", org_id: null, client_id: "c1" } as never);
+    vi.mocked(bookingRepository.findByTransactionId).mockResolvedValue(undefined as never);
+    vi.mocked(bookingRepository.create).mockResolvedValue({ id: "b-new", travel_date: null, package_commission: null } as never);
+    vi.mocked(bookingRepository.countByClientId).mockResolvedValue(1 as never);
+    vi.mocked(neonClientRepository.findById).mockResolvedValue({ id: "c1" } as never);
+    vi.mocked(newQuoteRepository.findById).mockResolvedValue({ id: "q1", transaction_id: "t1", sales_price: "900", adult: 3, child: 0, discounts: "0", service_charge: "0" } as never);
+    vi.mocked(newQuoteRepository.findWithDetails).mockResolvedValue({ flights: [], accommodations: [], passengers: [] } as never);
+    vi.mocked(quoteImageRepository.getByQuoteId).mockResolvedValue([] as never);
+  });
+
+  it("createBooking passes the new booking's id with the trigger", async () => {
+    await bookingService.createBooking({ transaction_id: "t1", sales_price: "600", adult: 2, child: 0 } as never, TRUSTED);
+    expect(fireAutoTriggerForClient).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: "c1", autoTrigger: "on_booking_create", triggerSource: "booking.createBooking", bookingId: "b-new" }),
+    );
+  });
+
+  it("convertQuoteToBooking passes the new booking's id with the trigger", async () => {
+    await bookingService.convertQuoteToBooking("q1", "HAY-1234567", "S1", TRUSTED);
+    expect(fireAutoTriggerForClient).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: "c1", autoTrigger: "on_booking_create", triggerSource: "booking.convertQuoteToBooking", bookingId: "b-new" }),
+    );
   });
 });

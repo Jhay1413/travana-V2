@@ -89,6 +89,13 @@ export const AGENT_PROFILE_ENDPOINTS = {
   payouts: (userId: string) => `${API_V2}/agent-profile/${encodeURIComponent(userId)}/payouts`,
 } as const;
 
+/** Staff-facing customer messaging: the "Send by" choice, the send, and the per-client message history. */
+export const CUSTOMER_MESSAGING_STAFF_ENDPOINTS = {
+  availability: `${API_V2}/customer-messaging/availability`,
+  send: `${API_V2}/customer-messaging/send`,
+  log: `${API_V2}/customer-messaging/log`,
+} as const;
+
 export const QUOTE_ENDPOINTS = {
   accepted: (quoteId: string) => `${API_V2}/quotes/${quoteId}/accepted`,
 } as const;
@@ -101,3 +108,6 @@ export const QUOTE_SHARE_ENDPOINTS = {
   sent: (quoteId: string) => `${API_V2}/quote-share/${quoteId}/sent`,
   sendWhatsapp: (quoteId: string) => `${API_V2}/quote-share/${quoteId}/send-whatsapp`,
 } as const;
+
+/** Staff-only preview of the public quote page for a share token (any state, never records a view). */
+export const QUOTE_PREVIEW_ENDPOINT = (token: string) => `${API_V2}/quotes/preview/${encodeURIComponent(token)}`;

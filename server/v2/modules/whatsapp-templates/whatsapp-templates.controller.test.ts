@@ -8,9 +8,13 @@ vi.mock("./whatsapp-templates.service", () => ({
     remove: vi.fn(),
   },
 }));
+vi.mock("./whatsapp-settings.service", () => ({
+  whatsappSettingsService: { getPinReset: vi.fn(), savePinReset: vi.fn() },
+}));
 
 import { whatsappTemplatesController as c } from "./whatsapp-templates.controller";
 import { whatsappTemplatesService as svc } from "./whatsapp-templates.service";
+import { whatsappSettingsService as settingsSvc } from "./whatsapp-settings.service";
 
 function req(over: { query?: Record<string, unknown>; params?: Record<string, unknown>; body?: unknown; role?: string } = {}) {
   const role = over.role ?? "org_admin";
@@ -81,5 +85,37 @@ describe("whatsappTemplatesController", () => {
     await flush();
     expect(svc.remove).toHaveBeenCalledWith("t1");
     expect(res.json).toHaveBeenCalledWith({ success: true, message: expect.any(String), data: { removed: true } });
+  });
+});
+
+describe("portal sign-in link template settings", () => {
+  const settings = { templateName: "portal_sign_in", templateLanguage: "en_GB", channelId: "ch1", variables: { "1": { source: "sign_in_link" as const } } };
+  const scoped = (body?: unknown, orgId: string | null = "o1") =>
+    ({ ...(req({ body }) as object), orgId, user: { authType: "password", userId: "u1" } }) as never;
+
+  it("GET returns the caller's own org's settings", async () => {
+    vi.mocked(settingsSvc.getPinReset).mockResolvedValue(settings);
+    const res = mockRes();
+    await c.getPortalSignInSettings(scoped(), res as never, vi.fn());
+    await flush();
+    expect(settingsSvc.getPinReset).toHaveBeenCalledWith("o1");
+    expect(res.json).toHaveBeenCalledWith({ success: true, message: expect.any(String), data: settings });
+  });
+
+  it("PUT saves for the caller's org and user, and returns what was saved", async () => {
+    vi.mocked(settingsSvc.savePinReset).mockResolvedValue(settings);
+    const res = mockRes();
+    await c.savePortalSignInSettings(scoped(settings), res as never, vi.fn());
+    await flush();
+    expect(settingsSvc.savePinReset).toHaveBeenCalledWith("o1", settings, "u1");
+    expect(res.json).toHaveBeenCalledWith({ success: true, message: expect.any(String), data: settings });
+  });
+
+  it("without an organisation in scope it is a 400 and nothing is read or written", async () => {
+    const next = vi.fn();
+    await c.getPortalSignInSettings(scoped(undefined, null), mockRes() as never, next);
+    await flush();
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
+    expect(settingsSvc.getPinReset).not.toHaveBeenCalled();
   });
 });

@@ -19,6 +19,9 @@ export interface OrganizationProfile {
   town?: string;
   county?: string;
   postcode?: string;
+  /** ATOL / ABTA numbers, shown in the customer portal footer when entered. */
+  atol?: string;
+  abta?: string;
 }
 
 export interface OrganizationBrandingSettings {

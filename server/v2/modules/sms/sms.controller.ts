@@ -1,3 +1,5 @@
+import { formatUkDate, placeholderBalanceDueDate } from '../../utils/balance-due';
+import { maskLoginCodes } from '../../utils/mask-login-code';
 import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { asyncHandler } from '../../utils/async-handler';
@@ -20,7 +22,7 @@ import {
   startOfMonthUtc,
 } from '../platform-admin/platform-admin-credits.repository';
 import { getPublicBaseUrl } from '../../utils/public-url';
-import { DEFAULT_PORTAL_PIN, MAGIC_LINK_TTL_MS } from '../portal/portal-auth';
+import { MAGIC_LINK_TTL_MS } from '../portal/portal-auth';
 import { portalLoginTokenRepository } from '../portal/portal-login-token.repository';
 import bcrypt from 'bcryptjs';
 import { neonClientRepository } from '../neon-client/neon-client.repository';
@@ -51,13 +53,6 @@ function formatGbp(value: unknown): string {
   const n = typeof value === 'number' ? value : parseFloat(String(value));
   if (Number.isNaN(n)) return '';
   return `£${n.toFixed(2)}`;
-}
-
-function formatDate(value: unknown): string {
-  if (!value) return '';
-  const d = new Date(String(value));
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 const DEFAULT_TEMPLATES = [
@@ -120,6 +115,22 @@ async function requireAdminOrManager(req: Request) {
   return { user: actor.user, userId: actor.userId, orgId: actor.orgId };
 }
 
+/**
+ * The automatic triggers. A template with one of these is the on/off switch of a customer message type on BOTH channels
+ * (WhatsApp too), so changing one is a manager decision, held to the same rule as the Integrations settings:
+ * org admin, branch manager or platform admin by organisation role, and never a homeworker. (The legacy user.role
+ * shortcut that manual templates still accept does not count here.)
+ */
+const AUTO_TRIGGERS: ReadonlySet<string> = new Set(['on_booking_create', 'on_pin_set', 'days_before_departure']);
+const isAutoTrigger = (value: unknown): boolean => typeof value === 'string' && AUTO_TRIGGERS.has(value);
+
+function assertMayChangeAutomaticMessages(req: Request): void {
+  const roles = (req.orgRoles && req.orgRoles.length > 0 ? req.orgRoles : [req.orgRole ?? '']) as OrgRole[];
+  if (roles.includes('homeworker') || !hasAnyRole(roles, MANAGER_ROLES)) {
+    throw new AppError('Only managers can change automatic messages', 403);
+  }
+}
+
 function buildPortalLink() {
   return `${getPublicBaseUrl()}/portal/login`;
 }
@@ -138,7 +149,7 @@ function buildQuoteUrl(token: string): string {
  * exchanges `?mt=` for a real session.
  */
 async function buildAutoLoginQuoteUrl(clientId: string, token: string): Promise<string> {
-  const code = await portalLoginTokenRepository.create(clientId, MAGIC_LINK_TTL_MS);
+  const code = await portalLoginTokenRepository.create(clientId, MAGIC_LINK_TTL_MS, 'staff');
   const next = encodeURIComponent(`/portal/quote/${token}`);
   return `${getPublicBaseUrl()}/portal/login?mt=${code}&next=${next}`;
 }
@@ -166,13 +177,11 @@ async function buildContextForClient(
   const email = (client.email ?? '').trim();
   ctx.portal_email = email;
   if (opts?.autoLoginQuote && !client.portalPin) {
-    // Quote auto-login flow: seed a known default PIN and flag it for a forced
-    // change on first entry. The SMS link itself carries a signed token, so the
-    // client never needs to type this; it's only a cross-device fallback.
+    // Quote auto-login flow: the client has no PIN yet. No default PIN is written (nothing known is ever stored):
+    // they are flagged to choose their own at the portal PIN gate after tapping the link, which signs them in.
+    // Until then no PIN matches, so PIN sign-in simply fails for them.
     try {
-      const hash = await bcrypt.hash(DEFAULT_PORTAL_PIN, 10);
-      await neonClientRepository.setPortalPin(client.id, hash, { mustChange: true });
-      ctx.portal_pin = DEFAULT_PORTAL_PIN;
+      await neonClientRepository.setPortalPin(client.id, null, { mustChange: true });
     } catch { /* best-effort */ }
   } else if (opts?.ensurePin && email && !client.portalPin) {
     try {
@@ -192,16 +201,15 @@ async function buildContextForClient(
     if (bookingRow) {
       ctx.hays_ref = bookingRow.hays_ref ?? '';
       ctx.supplier_ref = bookingRow.supplier_ref ?? '';
-      ctx.departure_date = formatDate(bookingRow.travel_date);
+      ctx.departure_date = formatUkDate(bookingRow.travel_date);
       ctx.destination = bookingRow.title ?? '';
       const sales = bookingRow.sales_price ? parseFloat(String(bookingRow.sales_price)) : 0;
       const deposit = bookingRow.discounts ? parseFloat(String(bookingRow.discounts)) : 0;
       const balance = Math.max(0, sales - deposit);
       if (sales > 0) ctx.balance_due = formatGbp(balance);
-      if (bookingRow.travel_date) {
-        const dep = new Date(String(bookingRow.travel_date));
-        if (!Number.isNaN(dep.getTime())) { dep.setDate(dep.getDate() - 14); ctx.balance_due_date = formatDate(dep); }
-      }
+      // Placeholder rule carried over from the original reminder (see balance-due.ts): departure minus 14 days.
+      const due = placeholderBalanceDueDate(bookingRow.travel_date);
+      if (due) ctx.balance_due_date = formatUkDate(due);
     }
   } catch { /* best-effort */ }
   try {
@@ -260,6 +268,7 @@ export const smsController = {
   createTemplate: asyncHandler(async (req: Request, res: Response) => {
     const { userId, orgId } = await requireAdminOrManager(req);
     if (!orgId) throw new AppError('Cannot create templates without an organisation context', 400);
+    if (isAutoTrigger(req.body?.autoTrigger)) assertMayChangeAutomaticMessages(req);
     // Strip any org_id supplied by client — orgId is server-controlled.
     const { orgId: _ignored, ...body } = req.body ?? {};
     const row = await smsRepository.createTemplate({ ...body, orgId, createdBy: userId });
@@ -268,6 +277,9 @@ export const smsController = {
 
   updateTemplate: asyncHandler(async (req: Request, res: Response) => {
     const { orgId } = await requireAdminOrManager(req);
+    // A template that is (or becomes) an automatic trigger is the on/off switch of a customer message type.
+    const existing = await smsRepository.findTemplate(req.params.id as string, orgId);
+    if (isAutoTrigger(existing?.autoTrigger) || isAutoTrigger(req.body?.autoTrigger)) assertMayChangeAutomaticMessages(req);
     // Don't allow orgId reassignment via PATCH.
     const { orgId: _ignored, ...patch } = req.body ?? {};
     const row = await smsRepository.updateTemplate(req.params.id as string, orgId, patch);
@@ -277,6 +289,8 @@ export const smsController = {
 
   deleteTemplate: asyncHandler(async (req: Request, res: Response) => {
     const { orgId } = await requireAdminOrManager(req);
+    const existing = await smsRepository.findTemplate(req.params.id as string, orgId);
+    if (isAutoTrigger(existing?.autoTrigger)) assertMayChangeAutomaticMessages(req);
     await smsRepository.deleteTemplate(req.params.id as string, orgId);
     return successResponse(res, null, 'Template deleted');
   }),
@@ -343,7 +357,7 @@ export const smsController = {
       const body = mergeTemplate(baseBody, ctx);
       const phone = normalisePhone(c.phoneNumber);
       const clientName = `${c.firstName ?? ''} ${c.surename ?? ''}`.trim();
-      const msgBase = { templateId: template?.id ?? null, templateName: template?.name ?? null, clientId: c.id, clientName, body, providerMessageId: null, providerError: null, costCents: null, triggeredBy: userId, triggeredByName: performerName, triggerSource: triggerSource || 'manual' };
+      const msgBase = { templateId: template?.id ?? null, templateName: template?.name ?? null, clientId: c.id, clientName, body: maskLoginCodes(body), providerMessageId: null, providerError: null, costCents: null, triggeredBy: userId, triggeredByName: performerName, triggerSource: triggerSource || 'manual' };
 
       if (!c.smsOptIn) {
         await smsRepository.createMessage({ ...msgBase, toPhone: phone || c.phoneNumber || '', status: 'skipped_optout' });

@@ -8,6 +8,8 @@ import { addFlightValidator, updateFlightValidator, addAccommodationValidator, u
 import { requireOrgRole } from "../../middlewares/auth/require-org-role";
 import { blockReadOnlyClientRoles } from "../../middlewares/auth/block-read-only-roles";
 import { restrictSocialManagerToFreeQuotes } from "./quote-social-guard.middleware";
+import { quotePublicController } from "./quote-public.controller";
+import { publicQuoteHeaders } from "../../middlewares/public-quote-headers";
 
 const router = Router();
 // social_media_manager may only write social (free) quotes, never deal quotes.
@@ -34,6 +36,8 @@ router.get("/free", validate(freeQuotesQueryValidator), quoteController.listFree
 router.get("/free/status-counts", validate(freeQuoteStatusCountsValidator), quoteController.getFreeQuoteStatusCounts);
 router.get("/engagement/recent", validate(recentEngagementQueryValidator), quoteController.listRecentClientEngagement);
 router.get("/", quoteController.listQuotes);
+// Staff preview of the public page for a share token: any state, same org/role scope as opening the quote, no view recorded.
+router.get("/preview/:token", publicQuoteHeaders, quotePublicController.previewQuote);
 router.get("/:id", quoteController.getQuoteById);
 router.post("/social-post", upload.array("images", 50), quoteController.createSocialQuote);
 router.post("/", upload.array("images", 50), quoteController.createQuote);

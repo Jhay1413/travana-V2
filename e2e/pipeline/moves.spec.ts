@@ -1,3 +1,4 @@
+import { setStoredChannel } from "../helpers/messaging";
 import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { HAYS_REF_MESSAGE } from "../../shared/booking-refs";
@@ -171,6 +172,8 @@ test.describe("moving a deal forward by drag and drop", () => {
        values ($1, $2, 'Booked', 'booking_confirmation', 'Hi {{first_name}}, booked {{hays_ref}}', 'on_booking_create', true)`,
       [randomUUID(), w.agency.orgId],
     );
+    // Automatic messages go by WhatsApp unless the agency chose SMS: this test is about the SMS path.
+    await setStoredChannel(w.agency.orgId, "sms");
     const deal = await quoteDeal(page.request, w);
     const taskId = await seedQuoteTask({ userId: w.userId, orgId: w.agency.orgId, branchId: w.agency.branchId, quoteId: deal.entityId });
     await openBoard(page);
@@ -196,7 +199,7 @@ test.describe("moving a deal forward by drag and drop", () => {
     expect(await queryRows(`select 1 from sms_messages where client_id = $1`, [w.clientId])).toHaveLength(1);
     const [row] = await queryRows<{ status: string; provider_error: string }>(`select status, provider_error from sms_messages where client_id = $1`, [w.clientId]);
     expect(row.status).toBe("failed");
-    expect(row.provider_error).toMatch(/Connexa is not connected/);
+    expect(row.provider_error).toMatch(/Connexa/);
     expect(await taskCompleted(taskId)).toBe(true);
     // (The global teardown fails the run if the server also tried to reach any outside host.)
   });

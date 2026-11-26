@@ -929,7 +929,8 @@ export const quote = pgTable('quote_table', {
   isQuoteCopy: boolean().default(false),
   parent_quote_id: uuid().references((): AnyPgColumn => quote.id),
   isFreeQuote: boolean().default(false),
-  quote_token: varchar('quote_token', { length: 12 }),
+  // 20 characters for new tokens (the column was varchar(12); older 6 and 8 character tokens stay valid).
+  quote_token: varchar('quote_token', { length: 32 }),
   quote_sent_at: timestamp('quote_sent_at', { precision: 0, withTimezone: true }),
   quote_sent_via: varchar('quote_sent_via'),
   // Manual "customer accepted" mark by the agent (the customer's own accept lives in quote_customer_actions).
@@ -946,6 +947,8 @@ export const quote = pgTable('quote_table', {
   // leading transaction_id also serves the inArray(transaction_id) enrich lookups.
   index("idx_quote_transaction_status").on(table.transaction_id, table.quote_status),
   index("idx_quote_main_tour_operator").on(table.main_tour_operator_id),
+  // A share token opens exactly one quote. Partial: most quotes have no token yet.
+  uniqueIndex("uq_quote_quote_token").on(table.quote_token).where(sql`${table.quote_token} IS NOT NULL`),
 ]);
 
 export const insertQuoteSchema = createInsertSchema(quote).omit({ id: true, date_created: true });
@@ -2302,8 +2305,20 @@ export const insertOrgSocialSettingsSchema = createInsertSchema(orgSocialSetting
 // Per-org WhatsApp template used to send quotes when the 24h window is closed.
 // Keys of quoteTemplateVariables are the template's placeholder numbers ("1", "2", ...).
 // updateTemplate* holds the "General update" template agents use to message a client once the window has closed.
-export type WhatsappTemplateVariableSource = "client_first_name" | "agent_name" | "agency_name" | "quote_link" | "message" | "custom";
+export type WhatsappTemplateVariableSource =
+  | "client_first_name" | "agent_name" | "agency_name" | "quote_link" | "sign_in_link" | "message" | "custom"
+  // Automatic customer messages (booking confirmation, portal ready, reminders). No money amount on purpose.
+  | "destination" | "booking_reference" | "departure_date" | "portal_link" | "balance_due_date";
 export type WhatsappTemplateVariable = { source: WhatsappTemplateVariableSource; text?: string };
+/** The automatic customer messages that carry their own WhatsApp template (portal sign-in link keeps pin_reset_*, quote link keeps quote_*). */
+export type AutoMessagePurpose = "booking_confirmation" | "portal_ready" | "balance_reminder" | "departure_reminder";
+export type PurposeTemplateConfig = {
+  templateName: string | null;
+  language: string | null;
+  channelId: string | null;
+  variables: Record<string, WhatsappTemplateVariable>;
+};
+export type PurposeTemplates = Partial<Record<AutoMessagePurpose, PurposeTemplateConfig>>;
 export type QuoteTemplateVariableSource = WhatsappTemplateVariableSource;
 export type QuoteTemplateVariable = WhatsappTemplateVariable;
 
@@ -2317,6 +2332,13 @@ export const orgWhatsappSettings = pgTable("org_whatsapp_settings", {
   updateTemplateLanguage: text("update_template_language"),
   updateTemplateChannelId: text("update_template_channel_id"),
   updateTemplateVariables: jsonb("update_template_variables").$type<Record<string, WhatsappTemplateVariable>>().notNull().default({}),
+  // "Portal sign-in link" template: sent when a customer asks "Forgotten your PIN?" and their 24h window is closed.
+  pinResetTemplateName: text("pin_reset_template_name"),
+  pinResetTemplateLanguage: text("pin_reset_template_language"),
+  pinResetTemplateChannelId: text("pin_reset_template_channel_id"),
+  pinResetTemplateVariables: jsonb("pin_reset_template_variables").$type<Record<string, WhatsappTemplateVariable>>().notNull().default({}),
+  // One approved template per automatic message type, keyed by AutoMessagePurpose.
+  purposeTemplates: jsonb("purpose_templates").$type<PurposeTemplates>().notNull().default({}),
   updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -2682,6 +2704,10 @@ export const quoteCustomerActionsTable = pgTable("quote_customer_actions", {
   message: text("message"),
   customerName: varchar("customer_name", { length: 255 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // Portal "Not interested": one of the fixed reasons (null when none was given) and whether the customer
+  // asked for something similar. Both stay null on every other kind of action.
+  reason: varchar("reason", { length: 100 }),
+  wantsSimilar: boolean("wants_similar"),
 });
 
 export const insertQuoteCustomerActionSchema = createInsertSchema(quoteCustomerActionsTable).omit({ id: true, createdAt: true });
@@ -2786,6 +2812,13 @@ export const webauthnCredentials = pgTable("webauthn_credentials", {
   publicKey: text("public_key").notNull(),
   counter: integer("counter").notNull().default(0),
   deviceName: varchar("device_name", { length: 255 }),
+  // JSON array of authenticator transports reported at registration (e.g. ["internal"]).
+  // Null on legacy rows.
+  transports: text("transports"),
+  // Set only when the credential was registered through the verified WebAuthn flow
+  // (public_key is then the base64url COSE key). Null = legacy row whose public_key
+  // was never a verifiable key: it can no longer sign in and is replaced on re-enrol.
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
@@ -2798,6 +2831,9 @@ export const portalLoginTokens = pgTable("portal_login_tokens", {
   clientId: uuid("client_id").notNull().references(() => clientTable.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   used: boolean("used").notNull().default(false),
+  // What minted the code: "pin_reset" for the customer's own "Forgotten your PIN?" request. NULL = a staff-sent link
+  // (the staff path leaves it out on purpose, so it keeps working before this column exists in a database).
+  source: varchar("source", { length: 20 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 export type PortalLoginTokenRow = typeof portalLoginTokens.$inferSelect;
@@ -2883,6 +2919,33 @@ export const insertSmsMessageSchema = createInsertSchema(smsMessagesTable).omit(
 });
 export type SmsMessage = typeof smsMessagesTable.$inferSelect;
 export type InsertSmsMessage = z.infer<typeof insertSmsMessageSchema>;
+
+// One row per automatic customer message outcome (sent or skipped), on either channel.
+// WhatsApp duplicate protection reads this table; SMS keeps using sms_messages.
+export const customerMessageLog = pgTable("customer_message_log", {
+  id: uuid("id").default(sql`gen_random_uuid()`).primaryKey(),
+  orgId: uuid("org_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+  clientId: uuid("client_id").references(() => clientTable.id, { onDelete: "set null" }),
+  /** booking_confirmation | portal_ready | balance_reminder | departure_reminder | portal_sign_in */
+  purpose: varchar("purpose", { length: 40 }).notNull(),
+  /** whatsapp | sms */
+  channel: varchar("channel", { length: 10 }).notNull(),
+  /** pending (reserved, being sent) | sent | skipped */
+  status: varchar("status", { length: 10 }).notNull(),
+  reason: varchar("reason", { length: 40 }),
+  templateName: varchar("template_name", { length: 512 }),
+  triggerSource: varchar("trigger_source", { length: 80 }),
+  triggeredBy: text("triggered_by").references(() => user.id, { onDelete: "set null" }),
+  providerMessageId: varchar("provider_message_id", { length: 120 }),
+  dedupeKey: varchar("dedupe_key", { length: 160 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  idx_org_created: index("idx_customer_message_log_org_created").on(table.orgId, table.createdAt),
+  idx_client_created: index("idx_customer_message_log_client_created").on(table.clientId, table.createdAt),
+  idx_dedupe: index("idx_customer_message_log_dedupe").on(table.orgId, table.clientId, table.purpose, table.dedupeKey, table.createdAt),
+}));
+export type CustomerMessageLogRow = typeof customerMessageLog.$inferSelect;
+export type InsertCustomerMessageLog = typeof customerMessageLog.$inferInsert;
 
 // =====================================================================
 // HR — hr_records is keyed to user.id. The legacy hr_employees /

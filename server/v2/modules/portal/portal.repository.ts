@@ -1,12 +1,9 @@
 // Intentionally outside the shop/homeworker partition: portal reads are client-facing and token-gated, not staff reads.
 import { db } from '../../config/database';
 import {
-  chatConversations,
-  chatParticipants,
-  chatMessages,
   transaction,
   clientTable,
-  user,
+  organization,
   portalMessages,
   webauthnCredentials,
   quote,
@@ -19,6 +16,8 @@ import {
   accommodation_images,
   booking,
   booking_accomodation,
+  board_basis,
+  tour_operator,
   bookingImages,
   deal_images,
   lodge_images,
@@ -27,14 +26,42 @@ import {
   clientTags,
 } from '@shared/schema';
 import { quoteExtrasTotalExpr, bookingExtrasTotalExpr } from '../../utils/commission-sql';
-import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, notExists, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import type { LoginCandidate, WebauthnCredentialRow } from './portal.types';
 
-const portalDealActiveWhere = () =>
+/** The quote belongs to a transaction of the given agency. Every portal deal read
+ *  goes through this so one agency's deals can never reach another's clients. */
+const quoteInOrg = (orgId: string) =>
+  exists(
+    db.select({ one: sql`1` })
+      .from(transaction)
+      .where(and(eq(transaction.id, quote.transaction_id), eq(transaction.org_id, orgId))),
+  );
+
+export const portalDealActiveWhere = (orgId: string) =>
   and(
     eq(quote.is_active, true),
     isNotNull(quote.quote_token),
     eq(quote.show_on_portal, true),
     eq(quote.isFreeQuote, true),
+    quoteInOrg(orgId),
+  );
+
+/**
+ * THE definition of a live booking, shared by the bookings list and by "this quote is already booked": active, and
+ * not LOST (a LOST booking is a dead deal, not a trip; a NULL status counts as live, as the rest of the app does),
+ * and not on a TEST deal (the same rule as `customerVisibleQuoteWhere`). It must be used where the booking's own deal
+ * (`transaction`) is in the query: the list and detail join it, and the "quote's deal is booked" sub-queries read the
+ * outer query's `transaction`, which is that same deal.
+ *
+ * OWNER DECISION PENDING: whether a real booking on a deactivated deal should disappear. If so, add
+ * `eq(transaction.is_active, true),` to the `and(...)` below: this is the only place to change.
+ */
+export const liveBookingWhere = () =>
+  and(
+    eq(booking.is_active, true),
+    eq(transaction.is_test, false),
+    or(isNull(booking.booking_status), sql`${booking.booking_status} <> 'LOST'`),
   );
 
 /** EXISTS filter: true when the quote has at least one of the given tag ids.
@@ -61,26 +88,6 @@ export interface PortalDealRow {
   portalAddedAt?: Date | string | null;
 }
 
-export interface PortalQuoteRow {
-  quoteId: string;
-  title: string | null;
-  salesPrice: string | null;
-  discounts: string | null;
-  serviceCharge: string | null;
-  /** Cost of extras not included in the package (added to the customer total). */
-  extrasTotal: string | number | null;
-  adult: number | null;
-  child: number | null;
-  pricePerPerson: string | null;
-  travelDate: string | Date;
-  numNights: number | null;
-  dateExpiry: Date | string | null;
-  quoteToken: string | null;
-  accommodationName: string | null;
-  destinationName: string | null;
-  countryName: string | null;
-}
-
 export interface PortalBookingRow {
   bookingId: string;
   quoteId: string | null;
@@ -95,146 +102,74 @@ export interface PortalBookingRow {
   extrasTotal: string | number | null;
   adult: number | null;
   child: number | null;
+  infant?: number | null;
   travelDate: string | Date;
   numNights: number | null;
   accommodationName: string | null;
   destinationName: string | null;
   countryName: string | null;
+  operatorName?: string | null;
+  boardName?: string | null;
+}
+
+/** The message the agent receives when a customer taps "I'm interested" on a deal. The wording must not change. */
+export const DEAL_INTEREST_PREFIX = '❤️ Interested in deal: ';
+const DEAL_INTEREST_LEGACY_PREFIX = 'Interested in deal: ';
+
+/** The deal id in a stored "interested" message (either wording), or null for any other text. */
+export function dealIdFromInterestText(text: string): string | null {
+  const m = /^(?:❤️ )?Interested in deal: (\S+)$/.exec(text);
+  return m ? m[1] : null;
 }
 
 export const portalRepository = {
-  // ── Chat bridge ──────────────────────────────────────────────────────────
-  async getClientName(clientId: string): Promise<string> {
-    const [client] = await db
-      .select({ firstName: clientTable.firstName, surename: clientTable.surename })
-      .from(clientTable)
-      .where(eq(clientTable.id, clientId))
-      .limit(1);
-    if (!client) return 'Portal Client';
-    return `${(client.firstName || '').trim()} ${(client.surename || '').trim()}`.trim() || 'Portal Client';
-  },
-
-  async findActiveAgentIdForClient(clientId: string): Promise<string | null> {
-    const [txn] = await db
-      .select({ userId: transaction.user_id })
-      .from(transaction)
-      .where(and(eq(transaction.client_id, clientId), eq(transaction.is_active, true)))
-      .orderBy(desc(transaction.created_at))
-      .limit(1);
-    return txn?.userId || null;
-  },
-
-  async findAllNonBannedAgentIds(): Promise<string[]> {
-    const agents = await db
-      .select({ id: user.id })
-      .from(user)
-      .where(sql`${user.banned} = false OR ${user.banned} IS NULL`);
-    return agents.map((a) => a.id);
-  },
-
-  async findConversationByPortalClient(clientId: string): Promise<{ id: string } | undefined> {
-    const [row] = await db
-      .select({ id: chatConversations.id })
-      .from(chatConversations)
-      .where(eq(chatConversations.portalClientId, clientId))
-      .limit(1);
-    return row;
-  },
-
-  async findPortalClientIdForConversation(conversationId: string): Promise<string | null> {
-    const [conv] = await db
-      .select({ portalClientId: chatConversations.portalClientId })
-      .from(chatConversations)
-      .where(eq(chatConversations.id, conversationId))
-      .limit(1);
-    return conv?.portalClientId || null;
-  },
-
-  async listParticipantUserIds(conversationId: string): Promise<Array<{ userId: string | null }>> {
-    return db
-      .select({ userId: chatParticipants.userId })
-      .from(chatParticipants)
-      .where(eq(chatParticipants.conversationId, conversationId));
-  },
-
-  async addParticipant(conversationId: string, userId: string): Promise<void> {
-    await db.insert(chatParticipants).values({ conversationId, userId });
-  },
-
-  async removeParticipant(conversationId: string, userId: string): Promise<void> {
-    await db
-      .delete(chatParticipants)
-      .where(and(eq(chatParticipants.conversationId, conversationId), eq(chatParticipants.userId, userId)));
-  },
-
-  async createConversation(input: {
-    type: string;
-    name: string;
-    createdBy: string;
-    portalClientId: string;
-    portalClientName: string;
-  }): Promise<{ id: string } | undefined> {
-    const [conv] = await db
-      .insert(chatConversations)
-      .values({
-        type: input.type,
-        name: input.name,
-        createdBy: input.createdBy,
-        portalClientId: input.portalClientId,
-        portalClientName: input.portalClientName,
-      })
-      .onConflictDoNothing()
-      .returning();
-    return conv;
-  },
-
-  async insertChatMessage(input: { conversationId: string; senderId: string; content: string }): Promise<void> {
-    await db.insert(chatMessages).values(input);
-  },
-
-  async touchConversation(conversationId: string): Promise<void> {
-    await db
-      .update(chatConversations)
-      .set({ updatedAt: new Date() })
-      .where(eq(chatConversations.id, conversationId));
-  },
-
-  async insertPortalMessageFromAgent(input: {
-    clientId: string;
-    agentId: string;
-    agentName: string;
-    text: string;
-  }): Promise<void> {
-    await db.insert(portalMessages).values({
-      clientId: input.clientId,
-      sender: 'agent',
-      agentId: input.agentId,
-      agentName: input.agentName,
-      text: input.text,
-    });
-  },
-
   // ── Auth (email/PIN + WebAuthn) ──────────────────────────────────────────
-  async findClientForLogin(email: string): Promise<{
-    id: string;
-    email: string | null;
-    firstName: string | null;
-    portalPin: string | null;
-    mustChangePin: boolean;
-  } | undefined> {
-    const [row] = await db
+  /**
+   * Non-deleted clients with this email, best candidate first. A row that has a
+   * portal PIN sorts ahead of a PIN-less duplicate (a client copied into a
+   * homeworker branch has none), then oldest first, then id so the order is
+   * fully deterministic. With `orgId` only that agency's clients are returned.
+   * Capped at `limit` so the number of PIN comparisons stays fixed and small.
+   */
+  async findLoginCandidates(email: string, orgId: string | undefined, limit: number): Promise<LoginCandidate[]> {
+    return db
       .select({
         id: clientTable.id,
         email: clientTable.email,
         firstName: clientTable.firstName,
         portalPin: clientTable.portalPin,
         mustChangePin: clientTable.mustChangePin,
+        orgId: clientTable.orgId,
       })
       .from(clientTable)
       // Case-insensitive match: stored emails may be mixed-case, so compare both
       // sides lower-cased rather than relying on the stored value already being
-      // normalised. Otherwise a real account returns "email does not exist".
-      .where(and(sql`lower(${clientTable.email}) = ${email.toLowerCase().trim()}`, isNull(clientTable.deletedAt)))
+      // normalised.
+      .where(and(
+        sql`lower(${clientTable.email}) = ${email.toLowerCase().trim()}`,
+        isNull(clientTable.deletedAt),
+        orgId ? eq(clientTable.orgId, orgId) : undefined,
+      ))
+      .orderBy(sql`(${clientTable.portalPin} IS NOT NULL) DESC`, asc(clientTable.createdAt), asc(clientTable.id))
+      .limit(limit);
+  },
+
+  /** Active agency id for a portal slug, or null when the slug is unknown/inactive. */
+  async findActiveOrgIdBySlug(slug: string): Promise<string | null> {
+    const [row] = await db
+      .select({ id: organization.id })
+      .from(organization)
+      .where(and(eq(organization.slug, slug), eq(organization.isActive, true)))
+      .limit(1);
+    return row?.id ?? null;
+  },
+
+  /** The agency a live (non-deleted) client belongs to; undefined when the client is gone, null orgId when unassigned. */
+  async findClientOrg(clientId: string): Promise<{ orgId: string | null } | undefined> {
+    const [row] = await db
+      .select({ orgId: clientTable.orgId })
+      .from(clientTable)
+      .where(and(eq(clientTable.id, clientId), isNull(clientTable.deletedAt)))
       .limit(1);
     return row;
   },
@@ -243,9 +178,15 @@ export const portalRepository = {
     id: string;
     email: string | null;
     firstName: string | null;
+    mustChangePin: boolean;
   } | undefined> {
     const [row] = await db
-      .select({ id: clientTable.id, email: clientTable.email, firstName: clientTable.firstName })
+      .select({
+        id: clientTable.id,
+        email: clientTable.email,
+        firstName: clientTable.firstName,
+        mustChangePin: clientTable.mustChangePin,
+      })
       .from(clientTable)
       .where(and(eq(clientTable.id, clientId), isNull(clientTable.deletedAt)))
       .limit(1);
@@ -311,60 +252,120 @@ export const portalRepository = {
     return row;
   },
 
-  async insertWebauthnCredential(input: {
+  /**
+   * Stores a verified credential, replacing what the client had: legacy
+   * (unverified) rows and any row with the same credential id go, so re-enrolling
+   * on a device leaves exactly one usable row.
+   */
+  async replaceWebauthnCredential(maxCredentials: number, input: {
     clientId: string;
     credentialId: string;
     publicKey: string;
+    counter: number;
+    transports: string[];
     deviceName: string;
   }): Promise<void> {
-    await db.insert(webauthnCredentials).values({
-      clientId: input.clientId,
-      credentialId: input.credentialId,
-      publicKey: input.publicKey,
-      deviceName: input.deviceName,
-      counter: 0,
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(webauthnCredentials)
+        .where(and(
+          eq(webauthnCredentials.clientId, input.clientId),
+          or(isNull(webauthnCredentials.verifiedAt), eq(webauthnCredentials.credentialId, input.credentialId)),
+        ));
+      await tx.insert(webauthnCredentials).values({
+        clientId: input.clientId,
+        credentialId: input.credentialId,
+        publicKey: input.publicKey,
+        counter: input.counter,
+        transports: JSON.stringify(input.transports),
+        deviceName: input.deviceName,
+        verifiedAt: new Date(),
+      });
+
+      // Keep at most `maxCredentials` per customer: the oldest verified ones are replaced.
+      const keep = await tx
+        .select({ id: webauthnCredentials.id })
+        .from(webauthnCredentials)
+        .where(and(eq(webauthnCredentials.clientId, input.clientId), isNotNull(webauthnCredentials.verifiedAt)))
+        .orderBy(desc(webauthnCredentials.createdAt), desc(webauthnCredentials.id))
+        .limit(maxCredentials);
+      if (keep.length === maxCredentials) {
+        await tx
+          .delete(webauthnCredentials)
+          .where(and(
+            eq(webauthnCredentials.clientId, input.clientId),
+            isNotNull(webauthnCredentials.verifiedAt),
+            notInArray(webauthnCredentials.id, keep.map((k) => k.id)),
+          ));
+      }
     });
   },
 
-  async findWebauthnByCredential(clientId: string, credentialId: string) {
+  /** A credential by its id, across clients (the id is globally unique in practice). */
+  async findWebauthnByCredentialId(credentialId: string): Promise<WebauthnCredentialRow | undefined> {
     const [row] = await db
-      .select()
+      .select({
+        id: webauthnCredentials.id,
+        clientId: webauthnCredentials.clientId,
+        credentialId: webauthnCredentials.credentialId,
+        publicKey: webauthnCredentials.publicKey,
+        counter: webauthnCredentials.counter,
+        transports: webauthnCredentials.transports,
+        verifiedAt: webauthnCredentials.verifiedAt,
+      })
       .from(webauthnCredentials)
-      .where(and(
-        eq(webauthnCredentials.clientId, clientId),
-        eq(webauthnCredentials.credentialId, credentialId),
-      ))
+      .where(eq(webauthnCredentials.credentialId, credentialId))
+      .orderBy(sql`(${webauthnCredentials.verifiedAt} IS NOT NULL) DESC`, asc(webauthnCredentials.createdAt))
       .limit(1);
     return row;
   },
 
-  async incrementWebauthnCounter(id: string): Promise<void> {
-    await db
-      .update(webauthnCredentials)
-      .set({ counter: sql`${webauthnCredentials.counter} + 1` })
-      .where(eq(webauthnCredentials.id, id));
+  async updateWebauthnCounter(id: string, counter: number): Promise<void> {
+    await db.update(webauthnCredentials).set({ counter }).where(eq(webauthnCredentials.id, id));
   },
 
+  /** Verified credentials only: legacy rows cannot sign in, so they do not count as Face ID being set up. */
   async findWebauthnCredentialIdsForClient(clientId: string): Promise<Array<{ id: string }>> {
     return db
       .select({ id: webauthnCredentials.id })
       .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.clientId, clientId));
+      .where(and(eq(webauthnCredentials.clientId, clientId), isNotNull(webauthnCredentials.verifiedAt)));
+  },
+
+  async findVerifiedWebauthnForClient(clientId: string): Promise<Array<{ credentialId: string; transports: string | null }>> {
+    return db
+      .select({ credentialId: webauthnCredentials.credentialId, transports: webauthnCredentials.transports })
+      .from(webauthnCredentials)
+      .where(and(eq(webauthnCredentials.clientId, clientId), isNotNull(webauthnCredentials.verifiedAt)));
   },
 
   async findWebauthnDevicesForClient(clientId: string): Promise<Array<{ id: string; deviceName: string | null }>> {
     return db
       .select({ id: webauthnCredentials.id, deviceName: webauthnCredentials.deviceName })
       .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.clientId, clientId));
+      .where(and(eq(webauthnCredentials.clientId, clientId), isNotNull(webauthnCredentials.verifiedAt)));
+  },
+
+  /** The customer's verified Face ID credentials, newest first (for the Account page). */
+  async findWebauthnCredentialsForClient(clientId: string): Promise<Array<{ id: string; credentialId: string; createdAt: Date | null }>> {
+    return db
+      .select({ id: webauthnCredentials.id, credentialId: webauthnCredentials.credentialId, createdAt: webauthnCredentials.createdAt })
+      .from(webauthnCredentials)
+      .where(and(eq(webauthnCredentials.clientId, clientId), isNotNull(webauthnCredentials.verifiedAt)))
+      .orderBy(desc(webauthnCredentials.createdAt), desc(webauthnCredentials.id));
+  },
+
+  /** Deletes one credential, only if it belongs to this customer. Resolves whether or not a row was there. */
+  async deleteWebauthnCredentialForClient(clientId: string, id: string): Promise<void> {
+    await db.delete(webauthnCredentials).where(and(eq(webauthnCredentials.id, id), eq(webauthnCredentials.clientId, clientId)));
   },
 
   // ── Deal filters / listings ──────────────────────────────────────────────
-  async findDealFilters(): Promise<{
+  async findDealFilters(orgId: string): Promise<{
     countries: string[];
     popularTags: Array<{ tag: string; count: number }>;
   }> {
-    const baseWhere = portalDealActiveWhere();
+    const baseWhere = portalDealActiveWhere(orgId);
 
     const [countryRows, tagRows] = await Promise.all([
       db
@@ -406,14 +407,16 @@ export const portalRepository = {
     return rows.map((r) => r.tagId);
   },
 
-  async findForYouDeals(opts: { clientTagIds: string[]; limit: number; recentDays?: number }): Promise<PortalDealRow[]> {
-    const { clientTagIds, limit, recentDays } = opts;
+  async findForYouDeals(opts: { orgId: string; clientTagIds: string[]; limit: number; recentDays?: number }): Promise<PortalDealRow[]> {
+    const { orgId, clientTagIds, limit, recentDays } = opts;
     if (clientTagIds.length === 0) return [];
 
     const conds: SQL[] = [
       eq(quote.is_active, true),
       isNotNull(quote.quote_token),
+      eq(quote.show_on_portal, true),
       eq(quote.isFreeQuote, true),
+      quoteInOrg(orgId),
       quoteHasAnyTag(clientTagIds),
     ];
     // Same recency window as findDeals: a deal that has aged out of the portal is
@@ -449,6 +452,7 @@ export const portalRepository = {
   },
 
   async findDeals(opts: {
+    orgId: string;
     country?: string;
     tag?: string;
     limit: number;
@@ -464,6 +468,7 @@ export const portalRepository = {
       isNotNull(quote.quote_token),
       eq(quote.show_on_portal, true),
       eq(quote.isFreeQuote, true),
+      quoteInOrg(opts.orgId),
     ];
     // "Latest Deals" recency window: only deals added to the portal within the last
     // N days (portal_added_at). Deals age out of this list once they pass the window.
@@ -543,53 +548,6 @@ export const portalRepository = {
   },
 
   // ── Client quotes / bookings ─────────────────────────────────────────────
-  async findClientQuotes(clientId: string): Promise<PortalQuoteRow[]> {
-    return db
-      .select({
-        quoteId: quote.id,
-        title: quote.title,
-        salesPrice: quote.sales_price,
-        discounts: quote.discounts,
-        serviceCharge: quote.service_charge,
-        extrasTotal: quoteExtrasTotalExpr(),
-        adult: quote.adult,
-        child: quote.child,
-        pricePerPerson: quote.price_per_person,
-        travelDate: quote.travel_date,
-        numNights: quote.num_of_nights,
-        dateExpiry: quote.date_expiry,
-        quoteToken: quote.quote_token,
-        accommodationName: accomodation_list.name,
-        destinationName: destination.name,
-        countryName: country.country_name,
-      })
-      .from(transaction)
-      .innerJoin(quote, eq(quote.transaction_id, transaction.id))
-      .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
-      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
-      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
-      .leftJoin(destination, eq(resorts.destination_id, destination.id))
-      .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(
-        eq(transaction.client_id, clientId),
-        eq(quote.is_active, true),
-        // Exclude quotes whose transaction already has an active booked booking —
-        // once a trip is booked, its other quote options/copies must stop
-        // appearing as pending quotes. Transaction-level (not booking.quote_id)
-        // so it also covers bookings created without a quote_id.
-        notExists(
-          db.select({ one: sql`1` })
-            .from(booking)
-            .where(and(
-              eq(booking.transaction_id, transaction.id),
-              eq(booking.is_active, true),
-              eq(booking.booking_status, 'BOOKED'),
-            )),
-        ),
-      ))
-      .orderBy(desc(quote.date_created));
-  },
-
   async findClientBookings(clientId: string): Promise<PortalBookingRow[]> {
     // Resolve accommodation/destination from the booking's OWN primary accommodation
     // (booking_accomodation), mirroring the canonical booking read. The previous
@@ -609,23 +567,31 @@ export const portalRepository = {
         extrasTotal: bookingExtrasTotalExpr(),
         adult: booking.adult,
         child: booking.child,
+        infant: booking.infant,
         travelDate: booking.travel_date,
         numNights: booking.num_of_nights,
         accommodationName: accomodation_list.name,
         destinationName: destination.name,
         countryName: country.country_name,
+        operatorName: tour_operator.name,
+        boardName: board_basis.type,
       })
       .from(transaction)
       .innerJoin(booking, eq(booking.transaction_id, transaction.id))
+      .leftJoin(tour_operator, eq(booking.main_tour_operator_id, tour_operator.id))
       .leftJoin(
         booking_accomodation,
         and(eq(booking_accomodation.booking_id, booking.id), eq(booking_accomodation.is_primary, true)),
       )
+      .leftJoin(board_basis, eq(booking_accomodation.board_basis_id, board_basis.id))
       .leftJoin(accomodation_list, eq(booking_accomodation.accomodation_id, accomodation_list.id))
       .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
       .leftJoin(destination, eq(resorts.destination_id, destination.id))
       .leftJoin(country, eq(destination.country_id, country.id))
-      .where(and(eq(transaction.client_id, clientId), eq(booking.is_active, true)))
+      .where(and(
+        eq(transaction.client_id, clientId),
+        liveBookingWhere(),
+      ))
       .orderBy(desc(booking.travel_date));
   },
 
@@ -708,6 +674,34 @@ export const portalRepository = {
       .where(eq(portalMessages.clientId, clientId))
       .orderBy(asc(portalMessages.createdAt))
       .limit(limit);
+  },
+
+  /** The exact texts a customer's "I'm interested" on a deal is stored as (the live wording, and the one the v2 route used to send). */
+  async hasClientInterestMessage(clientId: string, dealId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: portalMessages.id })
+      .from(portalMessages)
+      .where(and(
+        eq(portalMessages.clientId, clientId),
+        eq(portalMessages.sender, 'client'),
+        inArray(portalMessages.text, [`${DEAL_INTEREST_PREFIX}${dealId}`, `${DEAL_INTEREST_LEGACY_PREFIX}${dealId}`]),
+      ))
+      .limit(1);
+    return !!row;
+  },
+
+  /** Ids of the deals this customer has already told the agent about (parsed from their own sent messages). */
+  async findToldDealIds(clientId: string): Promise<string[]> {
+    const rows = await db
+      .select({ text: portalMessages.text })
+      .from(portalMessages)
+      .where(and(eq(portalMessages.clientId, clientId), eq(portalMessages.sender, 'client'), ilike(portalMessages.text, '%Interested in deal: %')));
+    const ids = new Set<string>();
+    for (const { text } of rows) {
+      const id = dealIdFromInterestText(text);
+      if (id) ids.add(id);
+    }
+    return Array.from(ids);
   },
 
   async insertClientPortalMessage(clientId: string, text: string): Promise<void> {

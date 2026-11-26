@@ -13,6 +13,7 @@ vi.mock("./wallet-transaction.repository", () => ({
     findPendingDebitByBookingId: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    withClientWalletLock: vi.fn(),
   },
 }));
 vi.mock("../../../services/invoicePdf.service", () => ({
@@ -29,6 +30,10 @@ const TRUSTED = { orgId: null } as const;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(walletTransactionRepository.bookingOfClientInWriteScope).mockResolvedValue(true);
+  // The lock helper runs the callback with operations that go to the mocked reads and writes.
+  vi.mocked(walletTransactionRepository.withClientWalletLock).mockImplementation(async (_clientId, fn) =>
+    fn({ getBalance: () => walletTransactionRepository.getBalance("c1"), create: (data) => walletTransactionRepository.create(data) }),
+  );
 });
 
 describe("walletService.applyBookingCredit — booking ownership", () => {
@@ -126,6 +131,63 @@ describe("walletService.requestBankTransfer", () => {
       sort_code: "00-00-00",
       status: "pending",
     });
+  });
+});
+
+describe("walletService.requestBankTransfer: one lock around the check and the insert", () => {
+  const bank = { account_name: "Ada", account_number: "12345678", sort_code: "00-00-00" };
+
+  it("takes the client's lock before the balance is read, and reads and inserts inside it", async () => {
+    const order: string[] = [];
+    vi.mocked(walletTransactionRepository.withClientWalletLock).mockImplementation(async (clientId, fn) => {
+      order.push(`lock:${clientId}`);
+      return fn({
+        getBalance: async () => {
+          order.push("balance");
+          return 100;
+        },
+        create: async (data) => {
+          order.push("insert");
+          return { id: "w1", ...data } as never;
+        },
+      });
+    });
+    await walletService.requestBankTransfer("c1", 40, bank, TRUSTED);
+    expect(order).toEqual(["lock:c1", "balance", "insert"]);
+    // Nothing outside the lock reads or writes.
+    expect(walletTransactionRepository.getBalance).not.toHaveBeenCalled();
+    expect(walletTransactionRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("the second of two requests sees the first one's debit: only one of two 80s passes on a balance of 100, with the same message", async () => {
+    let balance = 100;
+    let queue: Promise<unknown> = Promise.resolve();
+    vi.mocked(walletTransactionRepository.withClientWalletLock).mockImplementation((_clientId, fn) => {
+      const run = queue.then(() =>
+        fn({
+          getBalance: async () => balance,
+          create: async (data) => {
+            balance -= Number(data.amount);
+            return { id: "w" } as never;
+          },
+        }),
+      );
+      queue = run.catch(() => undefined);
+      return run as never;
+    });
+    const results = await Promise.allSettled([
+      walletService.requestBankTransfer("c1", 80, bank, TRUSTED),
+      walletService.requestBankTransfer("c1", 80, bank, TRUSTED),
+    ]);
+    expect(results.map((r) => r.status).sort()).toEqual(["fulfilled", "rejected"]);
+    const rejected = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(rejected?.reason).toMatchObject({ statusCode: 400, message: "Amount exceeds available balance of £20.00" });
+  });
+
+  it("keeps the validation messages: zero and over-balance", async () => {
+    vi.mocked(walletTransactionRepository.getBalance).mockResolvedValue(10 as never);
+    await expect(walletService.requestBankTransfer("c1", 0, bank, TRUSTED)).rejects.toMatchObject({ statusCode: 400, message: "Amount must be greater than 0" });
+    await expect(walletService.requestBankTransfer("c1", 10.5, bank, TRUSTED)).rejects.toMatchObject({ statusCode: 400, message: "Amount exceeds available balance of £10.00" });
   });
 });
 

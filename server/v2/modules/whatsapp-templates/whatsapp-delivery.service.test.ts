@@ -245,3 +245,32 @@ describe("linkClientToConversationContact", () => {
     warn.mockRestore();
   });
 });
+
+describe("resolveVariableValues: automatic customer message sources", () => {
+  const base = { orgId: "o1", clientFirstName: "Ann" };
+
+  it("fills destination, reference, departure date, portal link and balance due date from the context", async () => {
+    const values = await resolveVariableValues(
+      {
+        "1": { source: "destination" }, "2": { source: "booking_reference" }, "3": { source: "departure_date" },
+        "4": { source: "portal_link" }, "5": { source: "balance_due_date" },
+      },
+      { ...base, destination: "Rome", bookingReference: "HAY-1234567", departureDate: "1 Jun 2027", portalLink: "https://p/portal/login", balanceDueDate: "18 May 2027" },
+    );
+    expect(values).toEqual({ "1": "Rome", "2": "HAY-1234567", "3": "1 Jun 2027", "4": "https://p/portal/login", "5": "18 May 2027" });
+  });
+
+  it("gives blank or missing values a non-empty fallback (Meta rejects empty parameters)", async () => {
+    const values = await resolveVariableValues(
+      { "1": { source: "destination" }, "2": { source: "booking_reference" }, "3": { source: "departure_date" }, "4": { source: "balance_due_date" } },
+      { ...base, destination: "  ", bookingReference: null },
+    );
+    expect(Object.values(values).every((v) => v.trim().length > 0)).toBe(true);
+    expect(values["1"]).toBe("your holiday");
+    expect(values["2"]).toBe("your booking");
+  });
+
+  it("a portal link placeholder with no link available is a bug, not an empty message", async () => {
+    await expect(resolveVariableValues({ "1": { source: "portal_link" } }, base)).rejects.toMatchObject({ statusCode: 500 });
+  });
+});

@@ -154,4 +154,4 @@ export interface SendTemplateResponse {
 }
 
 export type TemplateRecipient = Pick<SendTemplateRequest, "contact_id" | "conversation_id" | "whatsapp_id">;
-export type TemplateSettingsKind = "quote" | "update";
+export type TemplateSettingsKind = "quote" | "update" | "pinReset";

@@ -56,3 +56,23 @@ describe("preview with the message source", () => {
     expect(seg?.kind).toBe("value");
   });
 });
+
+import { signInLinkPlaceholderProblem } from "./template-placeholders";
+
+describe("portal sign-in link templates", () => {
+  it("defaults: first placeholder the name, last the sign-in link, a lone one the link", () => {
+    expect(defaultMapping(0, 3, "pinReset")).toEqual({ source: "client_first_name" });
+    expect(defaultMapping(1, 3, "pinReset")).toEqual({ source: "custom", text: "" });
+    expect(defaultMapping(2, 3, "pinReset")).toEqual({ source: "sign_in_link" });
+    expect(defaultMapping(0, 1, "pinReset")).toEqual({ source: "sign_in_link" });
+  });
+
+  it("needs a placeholder that holds the sign-in link", () => {
+    expect(signInLinkPlaceholderProblem({ "1": { source: "client_first_name" }, "2": { source: "sign_in_link" } })).toBeNull();
+    expect(signInLinkPlaceholderProblem({ "1": { source: "client_first_name" } })).toMatch(/sign-in link/);
+  });
+
+  it("the preview shows an example link", () => {
+    expect(renderPreview("Hi {{1}} {{2}}", { "1": { source: "client_first_name" }, "2": { source: "sign_in_link" } })).toContain("/portal/login");
+  });
+});

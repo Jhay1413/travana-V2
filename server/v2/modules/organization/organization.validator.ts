@@ -22,6 +22,9 @@ const profileSchema = z.object({
   town:         z.string().max(100).optional().or(z.literal('')),
   county:       z.string().max(100).optional().or(z.literal('')),
   postcode:     z.string().max(20).optional().or(z.literal('')),
+  // Licence / membership numbers shown in the customer portal footer.
+  atol:         z.string().trim().max(40).optional().or(z.literal('')),
+  abta:         z.string().trim().max(40).optional().or(z.literal('')),
 }).partial();
 
 const brandingSchema = z.object({

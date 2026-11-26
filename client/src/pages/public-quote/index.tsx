@@ -1,4 +1,4 @@
-import { isPreviewSearch } from "@/features/quote/lib/preview-search";
+import { isPreviewSearch, shareableQuoteUrl } from "@/features/quote/lib/preview-search";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
@@ -43,9 +43,11 @@ import {
 import {
   usePublicQuote,
   useLogQuoteView,
-  useSubmitQuoteAction,
   useShareQuote,
+  type PublicQuoteBlock,
+  type PublicQuoteBlockCode,
   type PublicQuoteData,
+  type ShareMethod,
 } from "@/features/quote/api/use-quote-public-queries";
 import { getPortalToken, usePortalQuoteOwnership } from "@/hooks/use-portal-api";
 import defaultHeroBg from "@assets/Maldives_1773092726855.png";
@@ -119,7 +121,7 @@ function getResponsiveImageUrl(
   return url;
 }
 
-function HeroSection({ quote, images }: { quote: PublicQuoteData; images: Array<{ id: string; image_url: string | null; isPrimary: boolean | null }> }) {
+function HeroSection({ quote, images }: { quote: PublicQuoteData; images: PublicQuoteData["images"] }) {
   const validImages = useMemo(() => images.filter(i => i.image_url), [images]);
   const primaryImage = validImages.find(i => i.isPrimary) || validImages[0];
   const heroUrl = primaryImage?.image_url || null;
@@ -241,7 +243,7 @@ function ImageGallery({ images }: { images: PublicQuoteData["images"] }) {
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
             {validImages.map((img, idx) => (
               <motion.button
-                key={img.id}
+                key={img.image_url ?? idx}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setSelectedIdx(idx)}
@@ -923,8 +925,8 @@ function CruiseSection({ cruises }: { cruises: PublicQuoteData["cruises"] }) {
 }
 
 function PricingSection({ quote }: { quote: PublicQuoteData }) {
-  // Show the calculated customer total (sales − discount + service charge), not the raw sales price.
-  const total = formatCurrency(quote.totalPrice ?? quote.salesPrice);
+  // Show the calculated customer total (the server works it out).
+  const total = formatCurrency(quote.totalPrice);
   const pp = formatCurrency(quote.pricePerPerson);
 
   if (!total) return null;
@@ -983,14 +985,16 @@ function AgentSection({ agent }: { agent: PublicQuoteData["agent"] }) {
   );
 }
 
-function ShareSection({ token, quote }: { token: string; quote: PublicQuoteData }) {
+function ShareSection({ token, quote, isStaffPreview }: { token: string; quote: PublicQuoteData; isStaffPreview: boolean }) {
   const [copied, setCopied] = useState(false);
   const shareMutation = useShareQuote();
-  const quoteUrl = window.location.href;
+  // Whatever is shared or copied is the plain public link: never the staff-only ?preview=1 address.
+  const quoteUrl = shareableQuoteUrl(window.location.href);
   const shareText = `Check out this amazing ${quote.destinationName || "holiday"} quote from Tinas Travel!`;
 
-  const handleShare = (method: string) => {
-    shareMutation.mutate({ token, method });
+  const handleShare = (method: ShareMethod) => {
+    // A staff preview shares without telling anyone: no share is recorded and the agent is not notified.
+    if (!isStaffPreview) shareMutation.mutate({ token, method });
 
     switch (method) {
       case "WhatsApp":
@@ -1065,149 +1069,6 @@ function ShareSection({ token, quote }: { token: string; quote: PublicQuoteData 
   );
 }
 
-function CustomerActionSection({ token }: { token: string }) {
-  const [actionType, setActionType] = useState<"accepted" | "changes_requested" | null>(null);
-  const [message, setMessage] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const submitAction = useSubmitQuoteAction();
-
-  const handleSubmit = () => {
-    if (!actionType) return;
-    submitAction.mutate(
-      { token, actionType, message: message || undefined, customerName: customerName || undefined },
-      {
-        onSuccess: () => setSubmitted(true),
-      },
-    );
-  };
-
-  if (submitted) {
-    return (
-      <SectionWrapper delay={0.4}>
-        <GlassCard className="p-6 md:p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-4">
-            <Check className="w-8 h-8 text-green-400" />
-          </div>
-          <h2 className="text-xl font-bold text-white mb-2" data-testid="text-action-success">Thank You!</h2>
-          <p className="text-white/60">
-            {actionType === "accepted"
-              ? "We've received your booking confirmation. Your travel advisor will be in touch shortly."
-              : "We've received your feedback. Your travel advisor will review and get back to you soon."}
-          </p>
-        </GlassCard>
-      </SectionWrapper>
-    );
-  }
-
-  return (
-    <SectionWrapper delay={0.4}>
-      <GlassCard className="p-6 md:p-8">
-        <h2 className="text-xl font-bold text-white mb-2" data-testid="text-actions-title">What would you like to do?</h2>
-        <p className="text-sm text-white/50 mb-6">Let your travel advisor know your decision</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-          <button
-            onClick={() => setActionType("accepted")}
-            className={`p-4 rounded-2xl border-2 transition-all text-left ${actionType === "accepted"
-              ? "border-green-500/50 bg-green-500/10"
-              : "border-white/10 bg-white/5 hover:bg-white/10"
-              }`}
-            data-testid="button-accept-quote"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${actionType === "accepted" ? "bg-green-500/30" : "bg-white/10"
-                }`}>
-                <Check className={`w-4 h-4 ${actionType === "accepted" ? "text-green-400" : "text-white/50"}`} />
-              </div>
-              <span className="font-semibold text-white">I'd like to book this</span>
-            </div>
-            <p className="text-xs text-white/40 pl-11">Confirm you're happy and want to proceed</p>
-          </button>
-
-          <button
-            onClick={() => setActionType("changes_requested")}
-            className={`p-4 rounded-2xl border-2 transition-all text-left ${actionType === "changes_requested"
-              ? "border-blue-500/50 bg-blue-500/10"
-              : "border-white/10 bg-white/5 hover:bg-white/10"
-              }`}
-            data-testid="button-request-changes"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${actionType === "changes_requested" ? "bg-blue-500/30" : "bg-white/10"
-                }`}>
-                <MessageSquare className={`w-4 h-4 ${actionType === "changes_requested" ? "text-blue-400" : "text-white/50"}`} />
-              </div>
-              <span className="font-semibold text-white">Request changes</span>
-            </div>
-            <p className="text-xs text-white/40 pl-11">Let us know what you'd like to change</p>
-          </button>
-        </div>
-
-        <AnimatePresence>
-          {actionType && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="overflow-hidden"
-            >
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm text-white/60 block mb-1.5">Your Name</label>
-                  <input
-                    type="text"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Enter your name"
-                    className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-white/30 transition-colors"
-                    data-testid="input-customer-name"
-                  />
-                </div>
-                {actionType === "changes_requested" && (
-                  <div>
-                    <label className="text-sm text-white/60 block mb-1.5">What changes would you like?</label>
-                    <textarea
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      placeholder="E.g. different dates, room upgrade, add activities..."
-                      rows={3}
-                      className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-white/30 transition-colors resize-none"
-                      data-testid="input-change-message"
-                    />
-                  </div>
-                )}
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitAction.isPending}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                  data-testid="button-submit-action"
-                >
-                  {submitAction.isPending ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      {actionType === "accepted" ? "Confirm Booking" : "Send Request"}
-                    </>
-                  )}
-                </button>
-                {submitAction.isError && (
-                  <p className="text-red-400 text-sm flex items-center gap-1" data-testid="text-action-error">
-                    <AlertCircle className="w-4 h-4" />
-                    Something went wrong. Please try again.
-                  </p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </GlassCard>
-    </SectionWrapper>
-  );
-}
-
 function tryParseJson(str: string): any {
   try {
     return JSON.parse(str);
@@ -1216,11 +1077,108 @@ function tryParseJson(str: string): any {
   }
 }
 
+/** Keeps crawlers that run scripts away from the page (the server also sends X-Robots-Tag). */
+function useNoIndex() {
+  useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex";
+    document.head.appendChild(meta);
+    return () => {
+      meta.remove();
+    };
+  }, []);
+}
+
+function FullScreenMessage({ testId, children }: { testId: string; children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4" data-testid={testId}>
+      <div className="text-center max-w-md">{children}</div>
+    </div>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center" data-testid="loading-public-quote">
+      <div className="text-center">
+        <Loader2 className="w-8 h-8 text-white/40 animate-spin mx-auto mb-4" />
+        <p className="text-white/30 text-sm">Loading your quote...</p>
+      </div>
+    </div>
+  );
+}
+
+/** A quote that cannot be opened by its link: a plain page that says nothing about why or what the quote was. */
+function BlockedScreen({ block }: { block: PublicQuoteBlock }) {
+  const { agency } = block;
+  if (block.code === "BOOKED") {
+    return (
+      <FullScreenMessage testId="blocked-quote-booked">
+        <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+          <Check className="w-8 h-8 text-green-400" />
+        </div>
+        <h1 className="text-2xl font-bold text-white mb-2" data-testid="text-blocked-title">This holiday has been booked.</h1>
+        <a
+          href="/portal/trips/bookings"
+          className="inline-flex items-center gap-2 mt-4 rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-white/20"
+          data-testid="link-view-in-portal"
+        >
+          View it in your portal
+          <ArrowRight className="w-4 h-4" />
+        </a>
+      </FullScreenMessage>
+    );
+  }
+  return (
+    <FullScreenMessage testId="blocked-quote-unavailable">
+      <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
+        <X className="w-8 h-8 text-white/40" />
+      </div>
+      <h1 className="text-2xl font-bold text-white mb-2" data-testid="text-blocked-title">This quote is no longer available.</h1>
+      <p className="text-white/50" data-testid="text-blocked-contact">
+        {agency.name ? `Please contact ${agency.name}.` : "Please contact your travel advisor."}
+      </p>
+      {agency.phone && (
+        <a
+          href={`tel:${agency.phone.replace(/\s+/g, "")}`}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:bg-white/20 hover:text-white"
+          data-testid="link-blocked-phone"
+        >
+          <Phone className="h-3.5 w-3.5" />
+          {agency.phone}
+        </a>
+      )}
+    </FullScreenMessage>
+  );
+}
+
+function ExpiredBanner({ quote }: { quote: PublicQuoteData }) {
+  const who = quote.agent.name ? quote.agent.name : "your travel advisor";
+  const at = quote.agency.name ? ` at ${quote.agency.name}` : "";
+  return (
+    <div className="bg-amber-500/15 border-b border-amber-400/30 px-4 py-3 text-center text-sm text-amber-100" data-testid="banner-quote-expired">
+      This price was held until {formatDate(quote.expiredOn)}. Please contact {who}{at} to check it is still available.
+    </div>
+  );
+}
+
+/** Shown only to signed-in staff previewing a quote the public link would refuse. */
+function StaffPreviewBar() {
+  return (
+    <div className="bg-slate-800 border-b border-white/10 px-4 py-2 text-center text-xs text-white/80" data-testid="bar-staff-preview">
+      Staff preview — customers cannot see this quote
+    </div>
+  );
+}
+
 export default function PublicQuotePage() {
+  useNoIndex();
   const [, params] = useRoute("/view-quote/:token");
   const token = params?.token || "";
   const [, setLocation] = useLocation();
   const isPortalAuthed = getPortalToken() !== null;
+  const wantsPreview = isPreviewSearch(window.location.search);
 
   // When the viewer is signed in to the client portal AND this quote belongs to
   // them, send them to the authenticated portal view (which additionally lets
@@ -1239,65 +1197,55 @@ export default function PublicQuotePage() {
     }
   }, [ownsQuote, token, setLocation]);
 
-  // The public quote is only fetched (and its view logged) once we've decided the
+  // The quote is only fetched (and its view logged) once we've decided the
   // viewer stays on the public page — owners are redirected before this runs.
-  const { data: quote, isLoading, error } = usePublicQuote(shouldRenderPublic ? token : "");
+  const { data: result, isLoading, error } = usePublicQuote(shouldRenderPublic ? token : "", wantsPreview);
   const logView = useLogQuoteView();
   const viewLogged = useRef(false);
 
+  // A view is recorded for an open quote seen as a customer would see it: never for a staff preview, never for a blocked quote.
   useEffect(() => {
-    if (shouldRenderPublic && token && !viewLogged.current && !isPreviewSearch(window.location.search)) {
+    if (result?.kind === "quote" && !result.isStaffPreview && !viewLogged.current && token) {
       viewLogged.current = true;
       logView.mutate({ token });
     }
-  }, [shouldRenderPublic, token]);
+  }, [result, token]);
 
   // Verifying portal ownership, or redirecting an owner to the portal view.
-  if (ownershipPending || ownsQuote) {
+  if (ownershipPending || ownsQuote || isLoading) return <LoadingScreen />;
+
+  if (result?.kind === "blocked") return <BlockedScreen block={result.block} />;
+
+  if (error || !result) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center" data-testid="loading-public-quote">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 text-white/40 animate-spin mx-auto mb-4" />
-          <p className="text-white/30 text-sm">Loading your quote...</p>
+      <FullScreenMessage testId="error-public-quote">
+        <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+          <X className="w-8 h-8 text-red-400" />
         </div>
-      </div>
+        <h1 className="text-2xl font-bold text-white mb-2">Quote Not Found</h1>
+        <p className="text-white/50">This quote link may have expired or is no longer available. Please contact your travel advisor for assistance.</p>
+      </FullScreenMessage>
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center" data-testid="loading-public-quote">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 text-white/40 animate-spin mx-auto mb-4" />
-          <p className="text-white/30 text-sm">Loading your quote...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !quote) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center px-4" data-testid="error-public-quote">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
-            <X className="w-8 h-8 text-red-400" />
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Quote Not Found</h1>
-          <p className="text-white/50">This quote link may have expired or is no longer available. Please contact your travel advisor for assistance.</p>
-        </div>
-      </div>
-    );
-  }
-
-  return <PublicQuoteContent quote={quote} token={token} />;
+  return <PublicQuoteContent quote={result.quote} token={token} isStaffPreview={result.isStaffPreview} previewBlock={result.previewBlock} />;
 }
 
-export function PublicQuoteContent({ quote, token, isPortal = false }: { quote: PublicQuoteData; token: string; isPortal?: boolean }) {
-  // The booking decision section is only available to clients viewing through
-  // the authenticated portal — public link viewers cannot accept/request changes.
-  const canTakeAction = isPortal && getPortalToken() !== null;
+export function PublicQuoteContent({
+  quote,
+  token,
+  isStaffPreview = false,
+  previewBlock = null,
+}: {
+  quote: PublicQuoteData;
+  token: string;
+  isStaffPreview?: boolean;
+  previewBlock?: PublicQuoteBlockCode | null;
+}) {
   return (
     <div className="min-h-screen bg-[#0a0a0f]" data-testid="page-public-quote">
+      {isStaffPreview && previewBlock && <StaffPreviewBar />}
+      {quote.expired && <ExpiredBanner quote={quote} />}
       <HeroSection quote={quote} images={quote.images} />
 
 
@@ -1316,8 +1264,7 @@ export function PublicQuoteContent({ quote, token, isPortal = false }: { quote: 
         <ExtrasSection quote={quote} />
         <PricingSection quote={quote} />
         <AgentSection agent={quote.agent} />
-        <ShareSection token={token} quote={quote} />
-        {canTakeAction && <CustomerActionSection token={token} />}
+        <ShareSection token={token} quote={quote} isStaffPreview={isStaffPreview} />
       </div>
 
       <footer className="border-t border-white/5 py-6 mt-8">

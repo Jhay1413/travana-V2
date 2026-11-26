@@ -69,11 +69,19 @@ describe("public quote message helpers", () => {
     expect(buildPublicQuoteUrl("tok")).toBe("https://app.test/view-quote/tok");
   });
 
-  it("renders the same body the Share dialog's Send button texts", () => {
-    expect(buildPublicQuoteMessage({ firstName: "Ann", token: "tok" })).toEqual({
-      text: "Hi Ann, your quote is ready - tap to view it: https://app.test/view-quote/tok - Tina's Travel",
+  it("signs the message with the customer's own agency name, from data", () => {
+    expect(buildPublicQuoteMessage({ firstName: "Ann", token: "tok", companyName: "Sunny Holidays" })).toEqual({
+      text: "Hi Ann, your quote is ready - tap to view it: https://app.test/view-quote/tok - Sunny Holidays",
       quoteUrl: "https://app.test/view-quote/tok",
     });
+  });
+
+  it("carries no signature, and never a fixed agency name, when the agency name is missing", () => {
+    for (const companyName of [undefined, null, "  "]) {
+      const { text } = buildPublicQuoteMessage({ firstName: "Ann", token: "tok", companyName });
+      expect(text).toBe("Hi Ann, your quote is ready - tap to view it: https://app.test/view-quote/tok");
+      expect(text).not.toMatch(/Tina/i);
+    }
   });
 
   it("tolerates a missing first name", () => {

@@ -33,6 +33,7 @@ import { ClientPageHeader } from "@/features/client/components/page/client-page-
 import { ClientStatBoxes } from "@/features/client/components/page/client-stat-boxes";
 import { ClientDashboardCard } from "@/features/client/components/page/client-dashboard-card";
 import { ClientDetailsCard } from "@/features/client/components/page/client-details-card";
+import { MessagesSentCard } from "@/features/client/components/page/messages-sent-card";
 import { LiveDealsRail } from "@/features/client/components/page/live-deals-rail";
 import { useLiveDealsState } from "@/features/client/components/page/use-live-deals-state";
 import { EditClientModal } from "@/features/client/components/page/modals/edit-client-modal";
@@ -319,6 +320,7 @@ export default function ClientPage() {
                 onEditClient={editForm.openEditDialog}
                 onChangePin={() => setShowPinModal(true)}
               />
+              <MessagesSentCard clientId={clientId} />
             </div>
           </div>
         </div>

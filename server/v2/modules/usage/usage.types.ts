@@ -34,7 +34,8 @@ export interface RecordAiUsageInput {
   userId?: string | null;
 }
 
-export type SendsevenSendSource = "manual" | "ai";
+/** "auto" = sent by the system with no agent (automatic customer messages); it is metered like a manual send. */
+export type SendsevenSendSource = "manual" | "ai" | "auto";
 
 export interface RecordSendsevenSendInput {
   orgId: string;

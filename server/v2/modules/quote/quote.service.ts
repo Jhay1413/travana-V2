@@ -1,4 +1,5 @@
 import { newQuoteRepository } from "./quote.repository";
+import { quotePublicRepository } from "./quote-public.repository";
 import { assertQuoteWritable, assertQuoteDealWritable } from "./quote-access";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { quoteImageRepository } from "./quote-image.repository";
@@ -1040,16 +1041,9 @@ export const newQuoteService = {
 
   async setPortalVisibility(id: string, showOnPortal: boolean, scope: ScopeOrTrusted) {
     await assertQuoteInScopeForWrite(id, scope);
-    let token: string | undefined;
-    if (showOnPortal) {
-      const existing = await newQuoteRepository.findTokenById(id);
-      if (!existing?.token) {
-        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        token = "";
-        for (let i = 0; i < 8; i++) token += chars[Math.floor(Math.random() * chars.length)];
-      }
-    }
-    await newQuoteRepository.setPortalVisibility(id, showOnPortal, token);
+    // A deal on the portal needs a share token: the one shared minting path (20 characters, checked unused).
+    if (showOnPortal) await quotePublicRepository.setToken(id);
+    await newQuoteRepository.setPortalVisibility(id, showOnPortal);
   },
 
   async setFeatured(id: string, isFeatured: boolean, scope: ScopeOrTrusted) {
