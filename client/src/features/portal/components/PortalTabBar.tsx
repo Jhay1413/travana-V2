@@ -52,7 +52,9 @@ export function PortalTabBar({
               key={tab.key}
               type="button"
               onClick={() => (tab.path ? onNavigate(tab.path) : onOpenAgent())}
-              aria-current={on ? "page" : undefined}
+              // The agent's tab opens a sheet rather than a page: it says "expanded", never "current page" (the visual highlight stays).
+              aria-current={tab.path && on ? "page" : undefined}
+              aria-expanded={tab.path ? undefined : agentOpen}
               aria-haspopup={tab.path ? undefined : "dialog"}
               aria-label={tab.key === "agent" ? (agent && agent !== "your agent" ? `Message ${agent}` : "Message your agent") : label}
               className={cn(

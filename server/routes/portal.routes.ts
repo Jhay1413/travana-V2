@@ -1,19 +1,16 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { db } from "../config/database";
-import { clientTable, portalMessages } from "@shared/schema";
+import { clientTable } from "@shared/schema";
 import { referralService } from "../services/referral.service";
 import { referralPayoutService } from "../services/referralPayout.service";
 import { referralWithdrawalService } from "../services/referralWithdrawal.service";
 import { walletService } from "../services/wallet.service";
-import { eq, and, isNull, asc } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { verifyPortalToken } from "../v2/modules/portal/portal-auth";
 import { noResponseLog } from "../v2/middlewares/no-response-log";
 import { portalCoreRouter } from "../v2/modules/portal/portal-core.routes";
 import { portalQuotesRouter } from "../v2/modules/portal/portal-quotes.routes";
-import { bridgePortalMessageToChat } from "../services/portal-chat-bridge";
-import { portalService } from "../v2/modules/portal/portal.service";
-import { stripDealInterestMarker } from "../v2/modules/portal/portal-interest-text";
-import { AppError } from "../v2/utils/error-handler";
+import { portalWritesRouter } from "../v2/modules/portal/portal-writes.routes";
 import { pushNotificationService } from "../services/push-notification.service";
 import { tagService } from "../services/tag.service";
 
@@ -28,10 +25,14 @@ portalRouter.use(noResponseLog);
 // PWA clients still pointing at /api/portal keep working — they run the v2 handlers.
 // The JWT helpers are shared with v2 so a token minted on either path verifies on both.
 // Phase 2 moved the customer's profile and quotes (user, quotes, quote detail/action, owns, view) the same way.
-// Remaining endpoints below (messages, tags, vip/wallet, push) are legacy and move in a later phase.
+// Messages and every other WRITE (message, quote-request, interest, my-tags, push subscribe/unsubscribe, wallet request-payout/withdraw)
+// are v2 too, through the same router the v2 module mounts: one validator set (message max 5000), one service.
+// Remaining endpoints below are read-only legacy handlers (tags, vip, wallet reads, vapid key) and move in a later phase.
 portalRouter.use(portalCoreRouter);
 // The customer's profile and quotes (/user, /quotes, /quotes/:token, /quote/:token/owns|view) are v2 handlers too.
 portalRouter.use(portalQuotesRouter);
+// Messages and all writes: the v2 handlers, v2 validators and v2 error format.
+portalRouter.use(portalWritesRouter);
 
 async function portalAuth(req: Request, res: Response, next: NextFunction) {
   const auth = req.headers.authorization;
@@ -57,89 +58,6 @@ async function portalAuth(req: Request, res: Response, next: NextFunction) {
   (req as any).portalClient = payload;
   next();
 }
-
-portalRouter.get("/messages", portalAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = (req as any).portalClient;
-
-    const msgs = await db
-      .select()
-      .from(portalMessages)
-      .where(eq(portalMessages.clientId, clientId))
-      .orderBy(asc(portalMessages.createdAt))
-      .limit(100);
-
-    const mapped = msgs.map(m => ({
-      id: m.id,
-      sender: m.sender as "agent" | "client",
-      agent_name: m.agentName || undefined,
-      text: stripDealInterestMarker(m.text),
-      timestamp: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
-    }));
-
-    res.json(mapped);
-  } catch (err: any) {
-    console.error("Portal messages error:", err);
-    res.status(500).json({ error: "Failed to load messages" });
-  }
-});
-
-portalRouter.post("/message", portalAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = (req as any).portalClient;
-    const { text } = req.body;
-    if (!text?.trim()) return res.status(400).json({ error: "Message text required" });
-
-    const trimmed = text.trim();
-    await db.insert(portalMessages).values({
-      clientId,
-      sender: "client",
-      text: trimmed,
-    });
-
-    await bridgePortalMessageToChat(clientId, trimmed, false);
-
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Portal send message error:", err);
-    res.status(500).json({ error: "Failed to send message" });
-  }
-});
-
-portalRouter.post("/quote-request", portalAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = (req as any).portalClient;
-    const { destination, dates, travellers, notes } = req.body;
-
-    const messageText = `📋 Quote Request:\n• Destination: ${destination || "Not specified"}\n• Dates: ${dates || "Flexible"}\n• Travellers: ${travellers || "Not specified"}\n• Notes: ${notes || "None"}`;
-    await db.insert(portalMessages).values({
-      clientId,
-      sender: "client",
-      text: messageText,
-    });
-
-    await bridgePortalMessageToChat(clientId, messageText, false);
-
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Quote request error:", err);
-    res.status(500).json({ error: "Failed to submit quote request" });
-  }
-});
-
-portalRouter.post("/interest", portalAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = (req as any).portalClient;
-    const { dealId } = req.body;
-
-    // Same handler as v2: the deal's name (not its id) goes to the agent, once per customer and deal.
-    const { alreadyTold } = await portalService.recordInterest(clientId, String(dealId ?? ""));
-    res.json({ success: true, alreadyTold });
-  } catch (err: any) {
-    if (err instanceof AppError) return res.status(err.statusCode).json({ error: err.message });
-    res.status(500).json({ error: "Failed to record interest" });
-  }
-});
 
 portalRouter.get("/tags", async (_req: Request, res: Response) => {
   try {
@@ -173,50 +91,8 @@ portalRouter.get("/my-tags", portalAuth, async (req: Request, res: Response) => 
   }
 });
 
-portalRouter.post("/my-tags", portalAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = (req as any).portalClient;
-    const { tagIds } = req.body;
-    if (!Array.isArray(tagIds) || tagIds.length === 0) {
-      return res.status(400).json({ error: "At least one tag is required" });
-    }
-    await tagService.setClientTags(clientId, tagIds);
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Portal set tags error:", err);
-    res.status(500).json({ error: "Failed to save tags" });
-  }
-});
-
 portalRouter.get("/push/vapid-key", (req: Request, res: Response) => {
   res.json({ publicKey: pushNotificationService.getPublicKey() });
-});
-
-portalRouter.post("/push/subscribe", portalAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = (req as any).portalClient;
-    const { subscription } = req.body;
-    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
-      return res.status(400).json({ error: "Invalid subscription" });
-    }
-    await pushNotificationService.subscribe(clientId, subscription);
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error("Push subscribe error:", err);
-    res.status(500).json({ error: "Failed to subscribe" });
-  }
-});
-
-portalRouter.post("/push/unsubscribe", portalAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = (req as any).portalClient;
-    const { endpoint } = req.body;
-    if (!endpoint) return res.status(400).json({ error: "Endpoint required" });
-    await pushNotificationService.unsubscribe(clientId, endpoint);
-    res.json({ success: true });
-  } catch (err: any) {
-    res.status(500).json({ error: "Failed to unsubscribe" });
-  }
 });
 
 // ── VIP Referral Portal Endpoints ──────────────────────────────────────────
@@ -304,47 +180,6 @@ portalRouter.get("/wallet/transactions", portalAuth, async (req: Request, res: R
     res.json(txns);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to load wallet transactions" });
-  }
-});
-
-// Client requests payout for all eligible (PENDING + isDue) referrals
-// Creates referral_payout records (status: requested) for admin to approve
-portalRouter.post("/wallet/request-payout", portalAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = (req as any).portalClient;
-    const result = await referralPayoutService.requestPayouts(clientId);
-    res.json({ success: true, ...result });
-  } catch (err: any) {
-    const status = err?.statusCode ?? 500;
-    res.status(status).json({ error: err.message ?? "Failed to submit payout request." });
-  }
-});
-
-// Client requests a bank transfer withdrawal from their wallet
-portalRouter.post("/wallet/withdraw", portalAuth, async (req: Request, res: Response) => {
-  try {
-    const { clientId } = (req as any).portalClient;
-    const { amount, account_name, account_number, sort_code } = req.body;
-
-    const parsed = parseFloat(amount);
-    if (!amount || isNaN(parsed) || parsed <= 0) {
-      return res.status(400).json({ error: "amount must be a positive number" });
-    }
-    if (!account_name || !account_number || !sort_code) {
-      return res.status(400).json({ error: "account_name, account_number and sort_code are required" });
-    }
-
-    const tx = await walletService.requestBankTransfer(clientId, parsed, {
-      account_name,
-      account_number,
-      sort_code,
-    });
-
-    res.json({ success: true, transaction: tx });
-  } catch (err: any) {
-    console.error("Portal wallet withdraw error:", err);
-    const status = err?.statusCode ?? 500;
-    res.status(status).json({ error: err.message ?? "Failed to submit withdrawal request." });
   }
 });
 

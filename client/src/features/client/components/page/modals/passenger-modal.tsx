@@ -65,10 +65,7 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
   const pending = saveLead.isPending || create.isPending || update.isPending || remove.isPending;
   // Add and edit (lead passport included) need all six fields and a valid passport; the server enforces the same rules.
   const errors = passengerDraftErrors(draft, { nextDeparture, isLead });
-  // Adding (and the lead passport) keep every rule. Editing an existing passenger is never blocked by a gap or a
-  // near-expiry passport (those are warnings); only a blank name or a malformed number that was typed stops Save.
-  const editBlocker = errors.firstName ?? errors.surname ?? (draft.passportNumber.trim() ? errors.passportNumber : null) ?? null;
-  const blockedReason = isEdit ? editBlocker : passengerSaveBlockedReason(errors);
+  const blockedReason = passengerSaveBlockedReason(errors);
   const canSave = blockedReason === null;
   const deadline = passportExpiryDeadlineLabel(nextDeparture);
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { isSeededPortalLoginBody, SEEDED_PORTAL_LOGIN_BODY, SEEDED_SIGNATURE, withAgencySignature } from "./customer-messaging.seeds";
+import { isSeededAgencyName, isSeededPortalLoginBody, SEEDED_PORTAL_LOGIN_BODY, SEEDED_SIGNATURE, withAgencySignature } from "./customer-messaging.seeds";
 
 describe("the seeded Portal Login wording", () => {
   it("is exactly what the SMS templates page seeds (read from sms.controller.ts, so the two cannot drift apart)", () => {
@@ -64,6 +64,21 @@ describe("withAgencySignature (rows seeded with the old fixed signature)", () =>
   it("an agency actually named Tina's Travel is unaffected", () => {
     expect(withAgencySignature(OLD, "Tina's Travel")).toBe(OLD);
     expect(withAgencySignature(OLD, "  TINAS TRAVEL ")).toBe(OLD);
+  });
+
+  it("is linear on adversarial bodies (long whitespace runs, many dashes)", () => {
+    const start = performance.now();
+    withAgencySignature(" ".repeat(200_000) + "x", "Sunny");
+    withAgencySignature("- ".repeat(100_000), "Sunny");
+    withAgencySignature("a" + " ".repeat(200_000) + "-" + " ".repeat(200_000), "Sunny");
+    expect(performance.now() - start).toBeLessThan(100);
+  });
+
+  it("isSeededAgencyName matches only the real fixed name", () => {
+    expect(isSeededAgencyName("Tina's Travel")).toBe(true);
+    expect(isSeededAgencyName("  TINAS   TRAVEL ")).toBe(true);
+    expect(isSeededAgencyName("Sunny Holidays")).toBe(false);
+    expect(isSeededAgencyName(null)).toBe(false);
   });
 
   it("only the exact ending is touched: the name elsewhere, other endings and new {{company_name}} rows are left alone", () => {

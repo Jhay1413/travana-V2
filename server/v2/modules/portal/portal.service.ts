@@ -42,7 +42,8 @@ export const portalService = {
       id: m.id,
       sender: m.sender as 'agent' | 'client',
       agent_name: m.agentName || undefined,
-      text: stripDealInterestMarker(m.text),
+      // Only the customer's own sent rows can be an "interested" message; an agent's text is shown exactly as stored.
+      text: m.sender === 'client' ? stripDealInterestMarker(m.text) : m.text,
       timestamp: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
     }));
   },

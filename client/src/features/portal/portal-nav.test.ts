@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PORTAL_TABS, activeTabForPath, interestsRedirectTarget, menuKeyForPath, portalNextTarget, portalRedirectTarget, portalTabs, withoutParams } from "./portal-nav";
+import { PORTAL_TABS, activeTabForPath, interestsRedirectTarget, menuKeyForPath, portalLoginTarget, portalNextTarget, portalRedirectTarget, portalTabs, withoutParams } from "./portal-nav";
 
 describe("portal tabs", () => {
   it("are five: Home, Quotes, Bookings, Message and the agent", () => {
@@ -77,6 +77,35 @@ describe("portalNextTarget", () => {
     expect(portalNextTarget("?next=https://evil.example")).toBe("/portal");
     expect(portalNextTarget("?next=//evil.example")).toBe("/portal");
     expect(portalNextTarget("")).toBe("/portal");
+  });
+  it("keeps the query and the hash of a portal target", () => {
+    expect(portalNextTarget("?next=%2Fportal%2Fbookings%23passports")).toBe("/portal/bookings#passports");
+    expect(portalNextTarget("?next=%2Fportal%2Fdeals%3Fcountry%3DSpain%26tag%3Dbeach%23top")).toBe("/portal/deals?country=Spain&tag=beach#top");
+  });
+  it("rejects anything that is not a portal path", () => {
+    for (const next of ["/staff/dashboard", "/portalx", "/portal.evil.example", "/portal@evil.example", "///evil", "javascript:alert(1)", "portal/bookings", "http://localhost/portal", "\\portal"]) {
+      expect(portalNextTarget(`?next=${encodeURIComponent(next)}`), next).toBe("/portal");
+    }
+  });
+});
+
+describe("portalLoginTarget (the signed-out redirect)", () => {
+  it("carries the path, the query and the hash through sign-in", () => {
+    const target = portalLoginTarget("/portal/bookings", "", "#passports");
+    expect(target).toBe("/portal/login?next=%2Fportal%2Fbookings%23passports");
+    expect(portalNextTarget(target.slice(target.indexOf("?")))).toBe("/portal/bookings#passports");
+
+    const withQuery = portalLoginTarget("/portal/deals", "?country=Spain&tag=beach", "");
+    expect(portalNextTarget(withQuery.slice(withQuery.indexOf("?")))).toBe("/portal/deals?country=Spain&tag=beach");
+  });
+  it("a plain deep link without query or hash", () => {
+    const target = portalLoginTarget("/portal/deals");
+    expect(portalNextTarget(target.slice(target.indexOf("?")))).toBe("/portal/deals");
+  });
+  it("does not carry a target that is not a portal path, nor the sign-in page itself", () => {
+    expect(portalLoginTarget("/elsewhere", "?a=1", "#b")).toBe("/portal/login");
+    expect(portalLoginTarget("//evil.example", "", "")).toBe("/portal/login");
+    expect(portalLoginTarget("/portal/login", "?org=sunny", "")).toBe("/portal/login");
   });
 });
 

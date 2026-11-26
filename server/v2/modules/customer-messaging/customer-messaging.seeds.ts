@@ -13,10 +13,29 @@ const LEGACY_SEEDED_PORTAL_LOGIN_BODY =
 /** The fixed agency name the OLD seeded templates end with. It must never go out in a customer message from another agency. */
 export const SEEDED_SIGNATURE = /tina'?s\s+travel/i;
 
-/** The seeded signature as the end of a body: " - Tina's Travel" (with or without the apostrophe, any case or spacing). */
-const SEEDED_SIGNATURE_AT_END = /\s+-\s*tina'?s\s+travel\s*$/i;
+/** What may follow the last dash of a seeded signature: "Tina's Travel" (with or without the apostrophe, any case or spacing). */
+const SEEDED_SIGNATURE_NAME = /^\s*tina'?s\s+travel$/i;
+/** The name part is at most this long, so the pattern above only ever runs over a short tail, never over a whole body. */
+const SEEDED_SIGNATURE_NAME_MAX = 40;
+
+/**
+ * Where the " - Tina's Travel" ending of a body starts (the index of its dash), or -1 when the body does not end that way.
+ * String operations plus one pattern run over a tail of at most 40 characters: linear whatever the body looks like.
+ */
+function seededSignatureDash(body: string): number {
+  const trimmed = body.trimEnd();
+  const dash = trimmed.lastIndexOf("-");
+  if (dash < 1 || !/\s/.test(trimmed[dash - 1])) return -1;
+  const tail = trimmed.slice(dash + 1);
+  return tail.length <= SEEDED_SIGNATURE_NAME_MAX && SEEDED_SIGNATURE_NAME.test(tail) ? dash : -1;
+}
 
 const normalise = (text: string): string => text.replace(/\s+/g, " ").trim().toLowerCase();
+
+/** Is this agency genuinely called "Tina's Travel" (any case, spacing, with or without the apostrophe)? Then the fixed signature is its own. */
+export function isSeededAgencyName(name: string | null | undefined): boolean {
+  return normalise(name ?? "").replace(/'/g, "") === "tinas travel";
+}
 
 /** Is this body still the seeded default (ignoring case and spacing)? An agency that never edited it has this. */
 export function isSeededPortalLoginBody(body: string): boolean {
@@ -30,8 +49,10 @@ export function isSeededPortalLoginBody(body: string): boolean {
  * name is unknown. An agency that really is called Tina's Travel, and any body that does not end that way, is unchanged.
  */
 export function withAgencySignature(body: string, agencyName: string | null | undefined): string {
-  if (!SEEDED_SIGNATURE_AT_END.test(body)) return body;
+  const dash = seededSignatureDash(body);
+  if (dash < 0) return body;
   const name = (agencyName ?? "").trim();
-  if (normalise(name).replace(/'/g, "") === "tinas travel") return body;
-  return body.replace(SEEDED_SIGNATURE_AT_END, name ? " - {{company_name}}" : "");
+  if (isSeededAgencyName(name)) return body;
+  const head = body.trimEnd().slice(0, dash).trimEnd();
+  return name ? `${head} - {{company_name}}` : head;
 }

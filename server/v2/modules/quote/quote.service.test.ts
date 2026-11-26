@@ -8,6 +8,7 @@ vi.mock("./quote.repository", () => ({
     transactionInScopeForWrite: vi.fn(),
     findChildQuoteId: vi.fn(),
     findTitleAndPortalVisibilityById: vi.fn(),
+    isLivePortalDeal: vi.fn(),
     findById: vi.fn(),
     findWithDetails: vi.fn(),
     create: vi.fn(),
@@ -72,6 +73,7 @@ vi.mock("../ai-embeddings/ai-embeddings.service", () => ({
 }));
 
 import { newQuoteService } from "./quote.service";
+import { portalPushCooldown } from "./portal-push-cooldown";
 import { newQuoteRepository } from "./quote.repository";
 import { pushNotificationService } from "../notification/push-notification.service";
 import { transactionRepository } from "../transaction/transaction.repository";
@@ -1474,24 +1476,53 @@ describe("newQuoteService.getPortalPushMessage: headed with the deal's own agenc
 });
 
 describe("newQuoteService.sendPortalPush: only the deal's own agency is notified", () => {
+  beforeEach(() => {
+    portalPushCooldown.reset();
+    vi.mocked(pushNotificationService.sendToOrg).mockReset();
+    vi.mocked(newQuoteRepository.isLivePortalDeal).mockResolvedValue(true as never);
+  });
   it("sends to that agency's org id and nowhere else", async () => {
     vi.mocked(pushNotificationService.sendToOrg).mockResolvedValue(3);
     vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue({ title: "Deal A", show_on_portal: true, agencyName: "Agency A", orgId: "org-a" } as never);
     expect(await newQuoteService.sendPortalPush("q1", TRUSTED)).toBe(3);
     expect(pushNotificationService.sendToOrg).toHaveBeenCalledTimes(1);
     expect(pushNotificationService.sendToOrg).toHaveBeenCalledWith("org-a", { title: "Latest Holiday Deals from Agency A", body: "Deal A", url: "/portal" });
+    expect(newQuoteRepository.isLivePortalDeal).toHaveBeenCalledWith("q1", "org-a");
   });
   it("a deal with no resolvable agency sends nothing and is a plain 400", async () => {
-    vi.mocked(pushNotificationService.sendToOrg).mockClear();
     vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue({ title: "Deal", show_on_portal: true, agencyName: null, orgId: null } as never);
     await expect(newQuoteService.sendPortalPush("q1", TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
     expect(pushNotificationService.sendToOrg).not.toHaveBeenCalled();
   });
   it("a deal the caller cannot act on sends nothing", async () => {
-    vi.mocked(pushNotificationService.sendToOrg).mockClear();
     vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(false as never);
     await expect(newQuoteService.sendPortalPush("q1", TRUSTED)).rejects.toMatchObject({ statusCode: 404 });
     expect(pushNotificationService.sendToOrg).not.toHaveBeenCalled();
     vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(true as never);
+  });
+  it("a quote that is not a live published deal (a customer's private quote) is a plain 400 and nothing is sent", async () => {
+    vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue({ title: "Mrs Jones - Maldives", show_on_portal: false, agencyName: "Agency A", orgId: "org-a" } as never);
+    vi.mocked(newQuoteRepository.isLivePortalDeal).mockResolvedValue(false as never);
+    await expect(newQuoteService.sendPortalPush("q1", TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(pushNotificationService.sendToOrg).not.toHaveBeenCalled();
+    expect(portalPushCooldown.remainingMs("q1")).toBe(0);
+  });
+  it("the same deal cannot be pushed again for 6 hours: a plain 429 says when it can go again", async () => {
+    vi.mocked(pushNotificationService.sendToOrg).mockResolvedValue(2);
+    vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue({ title: "Deal A", show_on_portal: true, agencyName: "Agency A", orgId: "org-a" } as never);
+    await newQuoteService.sendPortalPush("q1", TRUSTED);
+    const refused = newQuoteService.sendPortalPush("q1", TRUSTED);
+    await expect(refused).rejects.toMatchObject({ statusCode: 429 });
+    await expect(refused).rejects.toThrow(/can be sent again in (5 hours 59 minutes|6 hours)./);
+    expect(pushNotificationService.sendToOrg).toHaveBeenCalledTimes(1);
+    // Another deal is unaffected.
+    await newQuoteService.sendPortalPush("q2", TRUSTED);
+    expect(pushNotificationService.sendToOrg).toHaveBeenCalledTimes(2);
+  });
+  it("a push that fails does not start the cooldown", async () => {
+    vi.mocked(pushNotificationService.sendToOrg).mockRejectedValueOnce(new Error("push service down")).mockResolvedValue(1);
+    vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue({ title: "Deal A", show_on_portal: true, agencyName: "Agency A", orgId: "org-a" } as never);
+    await expect(newQuoteService.sendPortalPush("q1", TRUSTED)).rejects.toThrow("push service down");
+    await expect(newQuoteService.sendPortalPush("q1", TRUSTED)).resolves.toBe(1);
   });
 });

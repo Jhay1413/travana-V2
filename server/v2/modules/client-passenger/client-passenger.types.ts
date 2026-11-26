@@ -16,11 +16,6 @@ export interface ClientPassenger {
   /** 'M' | 'F' | 'X', or null. */
   sex: string | null;
   passportIssueDate: string | null;
-  /**
-   * Present on the answer to an edit: gaps in the saved record (no title, passport close to expiry, ...). They never
-   * refuse a save; the UI shows them next to the passport warning.
-   */
-  warnings?: string[];
 }
 
 export interface ClientPassengersResponse {

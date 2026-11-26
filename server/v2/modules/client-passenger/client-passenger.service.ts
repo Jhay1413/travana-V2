@@ -191,9 +191,7 @@ export const clientPassengerService = {
     if (existing.isLead) {
       throw new AppError("The lead passenger is edited through the client record and the lead passport endpoint", 400);
     }
-    // Owner rule: passport flags never block and edits are never blocked. Only what the patch CHANGES is
-    // hard-validated, and only for format; every other gap in the record (no title, a passport close to expiry, ...)
-    // comes back as a warning on the saved passenger.
+    // Validate the merged passenger (stored + patch): an old record with gaps must be completed to be saved.
     const patch = definedOnly(input);
     const merged = normalizeFields({
       title: existing.title,
@@ -206,15 +204,10 @@ export const clientPassengerService = {
       ...patch,
     });
     const nextDeparture = await this.getNextDeparture(clientId);
-    const errors = validatePassenger(merged, { nextDeparture, today: ukTodayYmd() });
-    const hard = (['firstName', 'surname'] as const).find((f) => f in patch && errors[f]);
-    if (hard) throw new AppError(errors[hard] as string, 400);
-    // A passport number that is being changed must be well formed (clearing it is allowed and becomes a warning).
-    // (Switching the Non-UK flag changes which format applies, so it is checked the same way.)
-    if (('passportNumber' in patch || 'passportNonUk' in patch) && merged.passportNumber && errors.passportNumber) throw new AppError(errors.passportNumber, 400);
+    assertPassengerRules(merged, nextDeparture);
     const row = await clientPassengerRepository.update(clientId, passengerId, merged);
     if (!row) throw new AppError('Passenger not found', 404);
-    return { ...toApi(row, nextDeparture), warnings: Object.values(errors).filter((m): m is string => !!m) };
+    return toApi(row, nextDeparture);
   },
 
   async remove(clientId: string, passengerId: string, scope: Scope): Promise<void> {

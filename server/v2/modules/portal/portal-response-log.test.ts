@@ -201,7 +201,7 @@ describe('the legacy /api/portal router (server/routes/portal.routes.ts)', () =>
     const mark = source.indexOf('portalRouter.use(noResponseLog);');
     expect(mark).toBeGreaterThan(-1);
     expect(source).toContain('import { noResponseLog } from "../v2/middlewares/no-response-log";');
-    for (const later of ['portalRouter.use(portalCoreRouter);', 'portalRouter.use(portalQuotesRouter);', 'portalRouter.get("/messages"', 'portalRouter.post("/wallet/withdraw"']) {
+    for (const later of ['portalRouter.use(portalCoreRouter);', 'portalRouter.use(portalQuotesRouter);', 'portalRouter.use(portalWritesRouter);', 'portalRouter.get("/vip"']) {
       expect(source.indexOf(later)).toBeGreaterThan(mark);
     }
   });

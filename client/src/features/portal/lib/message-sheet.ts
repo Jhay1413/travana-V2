@@ -55,28 +55,62 @@ export function aboutFromPath(pathname: string): string | null {
 
 const cap = (s: string): string => s.trim().slice(0, MAX_ABOUT_LABEL);
 
+const bookingLabel = (b: PortalBookingListItem): string => cap(b.title || b.hotel || b.destination || "Your booking");
+const quoteLabel = (q: PortalQuoteListItem): string => cap(q.hotel || q.title || q.destination || "Your quote");
+
+/** True for a preference that names one particular booking or quote (not null, not "other"). */
+const namesAnItem = (preferred: string | null | undefined): preferred is string =>
+  !!preferred && (preferred.startsWith("booking:") || preferred.startsWith("quote:") || preferred.startsWith("quote-token:"));
+
+function findIn(options: readonly AboutOption[], preferred: string): AboutOption | undefined {
+  return preferred.startsWith("quote-token:") ? options.find((o) => o.token === preferred.slice("quote-token:".length)) : options.find((o) => o.key === preferred);
+}
+
+/**
+ * The booking or quote a screen asked for, found in the WHOLE lists (so a past booking or a declined quote, which the
+ * "It's about" list leaves out, is still found), or null when the lists do not hold it.
+ */
+function requestedItem(preferred: string, bookings: readonly PortalBookingListItem[], quotes: readonly PortalQuoteListItem[]): AboutOption | null {
+  if (preferred.startsWith("booking:")) {
+    const b = bookings.find((x) => aboutKey({ kind: "booking", id: x.id }) === preferred);
+    return b ? { key: preferred, label: bookingLabel(b) } : null;
+  }
+  const q = preferred.startsWith("quote-token:")
+    ? quotes.find((x) => x.token === preferred.slice("quote-token:".length))
+    : quotes.find((x) => aboutKey({ kind: "quote", id: x.id }) === preferred);
+  return q ? { key: aboutKey({ kind: "quote", id: q.id }), label: quoteLabel(q), token: q.token } : null;
+}
+
 /**
  * The "It's about" list: upcoming bookings by title (soonest first), then open quotes by hotel (else title), then
  * "Something else". A booking the list has not delivered (yet) but the summary names as the next one is still offered.
+ * When `preferred` names a booking or quote the list leaves out (a past booking, a declined quote: the page the customer
+ * is on), that item is added first, so the message is about it and not about another trip.
  */
 export function buildAboutOptions(input: {
   bookings: readonly PortalBookingListItem[] | undefined;
   quotes: readonly PortalQuoteListItem[] | undefined;
   nextBooking?: PortalSummaryNextBooking | null;
+  preferred?: string | null;
 }): AboutOption[] {
   const options: AboutOption[] = [];
   const upcoming = [...(input.bookings ?? [])]
     .filter((b) => b.trip_status !== "past")
     .sort((a, b) => new Date(a.travel_date).getTime() - new Date(b.travel_date).getTime());
-  for (const b of upcoming) options.push({ key: aboutKey({ kind: "booking", id: b.id }), label: cap(b.title || b.hotel || b.destination || "Your booking") });
+  for (const b of upcoming) options.push({ key: aboutKey({ kind: "booking", id: b.id }), label: bookingLabel(b) });
   const next = input.nextBooking;
   if (next && !upcoming.some((b) => b.id === next.id)) {
     options.unshift({ key: aboutKey({ kind: "booking", id: next.id }), label: cap(next.title || next.destination || "Your booking") });
   }
   for (const q of splitQuotes([...(input.quotes ?? [])]).active) {
-    options.push({ key: aboutKey({ kind: "quote", id: q.id }), label: cap(q.hotel || q.title || q.destination || "Your quote"), token: q.token });
+    options.push({ key: aboutKey({ kind: "quote", id: q.id }), label: quoteLabel(q), token: q.token });
   }
   options.push({ key: "other", label: OTHER_LABEL });
+  const wanted = input.preferred;
+  if (namesAnItem(wanted) && !findIn(options, wanted)) {
+    const item = requestedItem(wanted, input.bookings ?? [], input.quotes ?? []);
+    if (item) options.unshift(item);
+  }
   return options;
 }
 
@@ -85,11 +119,17 @@ export function defaultAboutKey(options: readonly AboutOption[]): string {
   return (options.find((o) => o.key.startsWith("booking:")) ?? options.find((o) => o.key.startsWith("quote:")) ?? options[options.length - 1])?.key ?? "other";
 }
 
-/** The option to show as chosen: the one asked for when it is in the list, else the default. */
+/**
+ * The option to show as chosen: the one asked for when it is in the list. When a particular booking or quote was asked
+ * for and cannot be found, "Something else" (never a different trip); when nothing in particular was asked, the default.
+ */
 export function resolveAbout(options: readonly AboutOption[], preferred: string | null): AboutOption {
-  const wanted = preferred?.startsWith("quote-token:") ? options.find((o) => o.token === preferred.slice("quote-token:".length)) : options.find((o) => o.key === preferred);
-  const fallback = options.find((o) => o.key === defaultAboutKey(options));
-  return wanted ?? fallback ?? { key: "other", label: OTHER_LABEL };
+  const other = options.find((o) => o.key === "other") ?? { key: "other", label: OTHER_LABEL };
+  if (preferred === "other") return other;
+  const wanted = preferred ? findIn(options, preferred) : undefined;
+  if (wanted) return wanted;
+  if (namesAnItem(preferred)) return other;
+  return options.find((o) => o.key === defaultAboutKey(options)) ?? other;
 }
 
 export interface MessageDraft {

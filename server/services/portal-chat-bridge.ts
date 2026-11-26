@@ -8,6 +8,8 @@ import { notificationRepository } from "../repositories/notification.repository"
 import { notSuspendedOrBanned } from "../v2/utils/user-conditions";
 import { pushNotificationService } from "./push-notification.service";
 import { sanitizeRichText } from "../v2/utils/sanitize-rich-text";
+import { plainTextToHtml } from "../v2/utils/escape-html";
+import { richTextToPlainText } from "../v2/utils/rich-text-to-plain";
 
 const PORTAL_SENDER_PREFIX = "portal-client:";
 
@@ -175,6 +177,15 @@ async function findOrCreatePortalConversation(
   }
 }
 
+/**
+ * What the staff inbox stores for a message the customer sent. The staff chat renders messages as HTML, so the
+ * customer's own words are always escaped (a typed link or tag is shown as text) and their line breaks become <br>.
+ * Only `display.html`, markup the SERVER built itself (the deal-interest link, with every value escaped), may carry tags.
+ */
+export function chatContentForPortalMessage(messageText: string, display?: { html: string }): string {
+  return display ? sanitizeRichText(display.html) : plainTextToHtml(messageText);
+}
+
 export async function bridgePortalMessageToChat(
   clientId: string,
   messageText: string,
@@ -217,7 +228,7 @@ export async function bridgePortalMessageToChat(
     await db.insert(chatMessages).values({
       conversationId,
       senderId: portalSenderId(clientId),
-      content: sanitizeRichText(display?.html ?? messageText),
+      content: chatContentForPortalMessage(messageText, display),
     });
 
     await db
@@ -262,7 +273,7 @@ export async function bridgeAgentReplyToPortal(
 
     if (!conv?.portalClientId) return;
 
-    const plainText = messageText.replace(/<[^>]*>/g, "").trim();
+    const plainText = richTextToPlainText(messageText);
     if (!plainText) return;
 
     await db.insert(portalMessages).values({

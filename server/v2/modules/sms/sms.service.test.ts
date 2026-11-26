@@ -13,11 +13,38 @@ vi.mock("./sms.repository", () => ({
 
 vi.mock("../../utils/public-url", () => ({ getPublicBaseUrl: () => "https://app.test" }));
 
-import { resolveQuoteToken, buildPublicQuoteUrl, buildPublicQuoteMessage } from "./sms.service";
+import { resolveQuoteToken, buildPublicQuoteUrl, buildPublicQuoteMessage, mergeTemplate } from "./sms.service";
 import { smsRepository } from "./sms.repository";
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe("mergeTemplate signature", () => {
+  const BODY = "Hi {{first_name}}, your portal is ready: {{portal_link}} (use the PIN we shared). - {{company_name}}";
+  it("signs the text with the agency name when it is known", () => {
+    expect(mergeTemplate(BODY, { first_name: "Sam", portal_link: "L", company_name: "Sunny" })).toBe("Hi Sam, your portal is ready: L (use the PIN we shared). - Sunny");
+  });
+  it("drops the dangling ' - ' when the agency name is empty, blank, null or missing", () => {
+    const want = "Hi Sam, your portal is ready: L (use the PIN we shared).";
+    expect(mergeTemplate(BODY, { first_name: "Sam", portal_link: "L", company_name: "" })).toBe(want);
+    expect(mergeTemplate(BODY, { first_name: "Sam", portal_link: "L", company_name: "  " })).toBe(want);
+    expect(mergeTemplate(BODY, { first_name: "Sam", portal_link: "L", company_name: null })).toBe(want);
+    expect(mergeTemplate(BODY, { first_name: "Sam", portal_link: "L" })).toBe(want);
+    expect(mergeTemplate("Call us. -  {{ company_name }}  \n", {})).toBe("Call us.");
+  });
+  it("touches nothing else: a dash not followed by the company field, or a name in the middle", () => {
+    expect(mergeTemplate("Call us - soon", {})).toBe("Call us - soon");
+    expect(mergeTemplate("{{company_name}} says hi -", { company_name: "" })).toBe(" says hi -");
+    expect(mergeTemplate("Hello {{company_name}}", { company_name: "" })).toBe("Hello ");
+    expect(mergeTemplate("Great-{{company_name}}", {})).toBe("Great-");
+  });
+  it("stays fast on long runs of braces and letters", () => {
+    const start = performance.now();
+    mergeTemplate("{{".repeat(20_000) + "a".repeat(20_000), {});
+    mergeTemplate("{ ".repeat(50_000), {});
+    expect(performance.now() - start).toBeLessThan(200);
+  });
 });
 
 describe("resolveQuoteToken", () => {

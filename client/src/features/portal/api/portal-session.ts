@@ -1,4 +1,5 @@
 import { clearPortalToken } from "@/hooks/use-portal-api";
+import { clearMessageSheetStore } from "../lib/message-sheet-store";
 import { clearToldThisSession } from "../lib/told-deals";
 import { pushSupported, unsubscribePortalPush } from "./use-portal-push";
 
@@ -9,4 +10,5 @@ export async function signOutPortal(): Promise<void> {
   }
   clearPortalToken();
   clearToldThisSession();
+  clearMessageSheetStore();
 }

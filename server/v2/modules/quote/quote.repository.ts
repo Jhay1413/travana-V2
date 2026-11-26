@@ -22,6 +22,7 @@ import { eq, asc, desc, sql, and, or, inArray, isNotNull, isNull, gte, lte, ilik
 import { alias } from "drizzle-orm/pg-core";
 import { buildTransactionScopeConds, buildTransactionRecordScopeConds, buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
 import type { QuoteEmbeddingDetails } from "./quote-embedding";
+import { portalDealActiveWhere } from "../portal/portal.repository";
 import { fetchServiceCommissionMaps } from "../transaction/service-commission.repository";
 import { fetchExtrasTotalMaps } from "../transaction/extras-total.repository";
 import { PORTAL_ACTIVE_WINDOW_DAYS, type QuoteChildKind, type PortalStatus, type SocialStatus, type SocialStatusCounts } from "./quote.types";
@@ -948,6 +949,16 @@ export const newQuoteRepository = {
       .where(eq(quote.id, id))
       .limit(1);
     return row;
+  },
+
+  /** Is this quote a live published deal of the agency, by the very rule the portal's deals list uses (portalDealActiveWhere)? */
+  async isLivePortalDeal(id: string, orgId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: quote.id })
+      .from(quote)
+      .where(and(eq(quote.id, id), portalDealActiveWhere(orgId)))
+      .limit(1);
+    return !!row;
   },
 
   /** Set show_on_portal flag (the share token is minted separately, by quotePublicRepository.setToken). */

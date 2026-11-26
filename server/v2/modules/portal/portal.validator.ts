@@ -160,9 +160,16 @@ export const portalForYouValidator = z.object({
 
 // ── Messages ────────────────────────────────────────────────────────────────
 
+/** The longest chat message a customer can send (the portal's Message sheet and chat box stay under this). */
+export const PORTAL_MESSAGE_MAX_LENGTH = 5000;
+
 export const portalSendMessageValidator = z.object({
   body: z.object({
-    text: required('Message text required', 5000),
+    text: z
+      .string({ required_error: 'Message text required', invalid_type_error: 'Message text required' })
+      .trim()
+      .min(1, 'Message text required')
+      .max(PORTAL_MESSAGE_MAX_LENGTH, 'That message is too long. Please keep it under 5,000 characters.'),
   }),
 });
 

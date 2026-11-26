@@ -17,6 +17,7 @@ import {
   menuKeyForPath,
   signOutPortal,
   interestsRedirectTarget,
+  portalLoginTarget,
   usePortalBrandingValue,
   usePortalMessageSheet,
   usePortalSummary,
@@ -86,7 +87,8 @@ function PortalShell({ children, tone }: Required<PortalLayoutProps>) {
 
     const token = getPortalToken();
     if (!token) {
-      setLocation("/portal/login");
+      // Keep the page they were going to (path, query and hash) so signing in lands there, not on Home.
+      setLocation(portalLoginTarget(window.location.pathname, window.location.search, window.location.hash));
     }
   }, [setLocation]);
 

@@ -71,10 +71,27 @@ export function portalRedirectTarget(pathname: string, search = "", hash = ""): 
   return null;
 }
 
+/** Is this a same-site portal path ("/portal", "/portal/...", "/portal?..." or "/portal#...")? The one gate every post-sign-in target passes. */
+function isPortalPath(target: string): boolean {
+  if (!target.startsWith("/portal") || target.startsWith("//")) return false;
+  const after = target.charAt("/portal".length);
+  return after === "" || after === "/" || after === "?" || after === "#";
+}
+
 /** The post-sign-in / post-interests destination in `?next=`: only same-site portal paths, else the portal home. */
 export function portalNextTarget(search: string): string {
   const next = new URLSearchParams(search).get("next");
-  return next && next.startsWith("/portal") && !next.startsWith("//") ? next : "/portal";
+  return next && isPortalPath(next) ? next : "/portal";
+}
+
+/**
+ * The sign-in page for a signed-out visitor, remembering where they were going: the whole page address (path, query and
+ * hash) travels in `?next=`, so `/portal/bookings#passports` is where they land after signing in. Anything that is not a
+ * portal path is not carried (they get the plain sign-in page and then the portal home).
+ */
+export function portalLoginTarget(pathname: string, search = "", hash = ""): string {
+  const target = `${pathname}${search}${hash}`;
+  return isPortalPath(target) && cleanPath(pathname) !== "/portal/login" ? `/portal/login?next=${encodeURIComponent(target)}` : "/portal/login";
 }
 
 /** The query string (with its `?`, or "") without the named parameters; every other parameter is kept. */

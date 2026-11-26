@@ -21,11 +21,20 @@ export async function pickDate(page: Page, trigger: Locator, iso: string): Promi
   await expect(trigger).toContainText(`${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`);
 }
 
-/** Radix <Select>: opens the trigger and clicks the option with exactly this name. */
+/**
+ * Radix <Select>: opens the trigger and clicks the option with exactly this name.
+ * Radix keeps the page's pointer-events off until the closing list has fully unmounted (after its fade-out), and a
+ * click that lands in that last frame is swallowed. So the helper starts from a closed select and only returns once
+ * the list is gone and the trigger reports it is collapsed, which makes a second choose straight after a first safe.
+ */
 export async function chooseOption(page: Page, trigger: Locator, name: string): Promise<void> {
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await centre(trigger);
   await trigger.click();
-  await page.getByRole("option", { name, exact: true }).click();
+  const option = page.getByRole("option", { name, exact: true });
+  await option.click();
+  await expect(option).toHaveCount(0);
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
 }
 
 /** The app's SearchableSelect / MultiSearchableSelect: open, (optionally search), click the option. Multi selects stay open, so close them again. */

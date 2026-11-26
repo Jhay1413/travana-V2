@@ -1,8 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import type { PortalSummary } from "@shared/portal-summary";
-import { useSendMessage } from "@/hooks/use-portal-api";
+import { getPortalToken, useSendMessage } from "@/hooks/use-portal-api";
 import { cn } from "@/lib/utils";
 import { usePortalBookingList } from "../../api/use-portal-bookings";
 import { usePortalQuoteList } from "../../api/use-portal-quotes";
@@ -27,6 +27,7 @@ import {
   type MessageAbout,
   type MessageDraft,
 } from "../../lib/message-sheet";
+import { loadMessageSheetState, messageSheetKey, saveMessageSheetState, type SentBubble } from "../../lib/message-sheet-store";
 import { agentFirstName } from "../../lib/quote-format";
 import { usePortalBrandingValue } from "../../theme/PortalThemeProvider";
 import { PortalButton } from "../brand";
@@ -47,32 +48,35 @@ export function usePortalMessageSheet(): PortalMessageSheetApi {
   return useContext(PortalMessageSheetContext);
 }
 
-interface SentBubble {
-  about: string;
-  extras: string;
-  text: string;
-  at: string;
-}
-
 /**
  * Mounts the "Message <agent>" sheet once for the whole portal shell and hands out `usePortalMessageSheet()`.
- * What the customer has typed survives closing the sheet; it is cleared only by a successful send.
+ * What the customer has typed survives closing the sheet AND changing page: each page mounts its own provider, so the
+ * draft (subject, extras, text, reply-by) and this session's sent bubbles are held in a small module-level store
+ * (lib/message-sheet-store) keyed to the signed-in customer and cleared on sign-out. A draft is cleared only by a successful send.
  */
 export function PortalMessageSheetProvider({ children }: { children: ReactNode }) {
   const [location, setLocation] = useLocation();
+  const sessionKey = messageSheetKey(localStorage.getItem("portal_client_id"), getPortalToken());
   const branding = usePortalBrandingValue();
   const send = useSendMessage();
   const [isOpen, setIsOpen] = useState(false);
-  const [pref, setPref] = useState<string | null>(null);
+  const [pref, setPref] = useState<string | null>(() => loadMessageSheetState(sessionKey).about);
   const [view, setView] = useState<"form" | "sent">("form");
-  const [draft, setDraft] = useState<MessageDraft>(EMPTY_DRAFT);
-  const [thread, setThread] = useState<SentBubble[]>([]);
+  const [draft, setDraft] = useState<MessageDraft>(() => loadMessageSheetState(sessionKey).draft);
+  const [thread, setThread] = useState<readonly SentBubble[]>(() => loadMessageSheetState(sessionKey).thread);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
   const openerRef = useRef<HTMLElement | null>(null);
   const locationRef = useRef(location);
   locationRef.current = location;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  // Whatever the customer has typed, chosen or sent follows them to the next page's sheet.
+  useEffect(() => {
+    saveMessageSheetState(sessionKey, { draft, about: pref, thread });
+  }, [sessionKey, draft, pref, thread]);
 
   const agent = agentFirstName(branding.agentName);
   const named = agent !== "your agent";
@@ -80,7 +84,10 @@ export function PortalMessageSheetProvider({ children }: { children: ReactNode }
   const open = useCallback((about?: MessageAbout) => {
     const active = document.activeElement;
     openerRef.current = active instanceof HTMLElement ? active : null;
-    setPref(about ? aboutKey(about) : aboutFromPath(locationRef.current));
+    // The page the customer is on (or what opened the sheet) names the subject; otherwise a draft in progress keeps its own.
+    const fromPage = about ? aboutKey(about) : aboutFromPath(locationRef.current);
+    const hasDraft = draftRef.current.text.trim() !== "" || draftRef.current.extras.length > 0;
+    setPref((previous) => fromPage ?? (hasDraft ? previous : null));
     setView("form");
     setError("");
     setIsOpen(true);
@@ -208,9 +215,12 @@ function MessageSheetBody({
   // Home's summary is already loaded by the shell; read it, do not ask again.
   const summary = queryClient.getQueryData<PortalSummary>(portalSummaryKey);
   const options = useMemo(
-    () => buildAboutOptions({ bookings: bookings.data, quotes: quotes.data, nextBooking: summary?.nextBooking ?? null }),
-    [bookings.data, quotes.data, summary?.nextBooking],
+    () => buildAboutOptions({ bookings: bookings.data, quotes: quotes.data, nextBooking: summary?.nextBooking ?? null, preferred: pref }),
+    [bookings.data, quotes.data, summary?.nextBooking, pref],
   );
+  // Until both lists have answered, the list cannot say what the message is about: no list, and no Send (a quick send must
+  // never go out as "Something else" by accident).
+  const loadingAbout = bookings.isLoading || quotes.isLoading;
   const chosen = resolveAbout(options, pref);
   const radios = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -265,14 +275,20 @@ function MessageSheetBody({
       noValidate
       onSubmit={(e) => {
         e.preventDefault();
+        if (loadingAbout) return;
         onSend(chosen.label);
       }}
       data-testid="message-form"
     >
       <fieldset className="m-0 flex min-w-0 flex-col border-0 p-0">
         <legend className="portal-caps-label mb-2 p-0">It&apos;s about</legend>
-        <div role="radiogroup" aria-label="It's about" data-testid="message-about">
-          {options.map((o, i) => {
+        {loadingAbout && (
+          <p role="status" className="m-0 border-t border-[#E2D4C2] py-4 text-sm text-muted-foreground" data-testid="message-about-loading">
+            Loading your trips and quotes…
+          </p>
+        )}
+        <div role="radiogroup" aria-label="It's about" data-testid="message-about" hidden={loadingAbout}>
+          {!loadingAbout && options.map((o, i) => {
             const on = o.key === chosen.key;
             return (
               <button
@@ -368,7 +384,7 @@ function MessageSheetBody({
           {error}
         </p>
       )}
-      <PortalButton type="submit" size="lg" className="w-full" disabled={sending} data-testid="message-send">
+      <PortalButton type="submit" size="lg" className="w-full" disabled={sending || loadingAbout} data-testid="message-send">
         {sending ? "Sending..." : agent === "your agent" ? "Send to your agent" : `Send to ${agent}`}
       </PortalButton>
     </form>

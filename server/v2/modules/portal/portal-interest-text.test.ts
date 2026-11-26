@@ -36,6 +36,39 @@ describe("dealIdFromInterestText", () => {
   });
 });
 
+describe("long and adversarial text", () => {
+  it("never scans text over the bound and returns it unchanged", () => {
+    const long = `❤️ Interested in deal: ${"a ".repeat(400)}[deal:${ID}]`;
+    expect(long.length).toBeGreaterThan(600);
+    expect(stripDealInterestMarker(long)).toBe(long);
+    expect(dealIdFromInterestText(long)).toBeNull();
+  });
+  it("strips a 200,000-character adversarial string in well under 50 ms", () => {
+    const attacks = [
+      " ".repeat(200_000),
+      `❤️ Interested in deal: ${" ".repeat(200_000)}[deal:`,
+      `❤️ Interested in deal: ${"[deal:".repeat(33_000)}`,
+      "\t \n".repeat(66_000),
+    ];
+    const start = performance.now();
+    for (const a of attacks) {
+      stripDealInterestMarker(a);
+      dealIdFromInterestText(a);
+    }
+    expect(performance.now() - start).toBeLessThan(50);
+  });
+  it("needs a real id and the marker as the last token", () => {
+    expect(stripDealInterestMarker("❤️ Interested in deal: X [deal:abc]")).toBe("❤️ Interested in deal: X [deal:abc]");
+    expect(stripDealInterestMarker(`❤️ Interested in deal: X [deal:${ID}] more`)).toBe(`❤️ Interested in deal: X [deal:${ID}] more`);
+    expect(dealIdFromInterestText(`❤️ Interested in deal: X [deal:${ID}] more`)).toBeNull();
+  });
+  it("keeps the whole label under the bound even for a very long title", () => {
+    const m = buildInterestMessages({ id: ID, title: "T".repeat(5000), destinationName: "D".repeat(5000), countryName: "C".repeat(5000) });
+    expect(m.portalText.length).toBeLessThan(600);
+    expect(dealIdFromInterestText(m.portalText)).toBe(ID);
+  });
+});
+
 describe("stripDealInterestMarker", () => {
   it("removes the marker from an interest message only", () => {
     expect(stripDealInterestMarker(`❤️ Interested in deal: Hot Tub Break [deal:${ID}]`)).toBe("❤️ Interested in deal: Hot Tub Break");

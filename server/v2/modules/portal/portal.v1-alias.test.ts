@@ -28,6 +28,16 @@ describe("v1 portal router (server/routes/portal.routes.ts)", () => {
     },
   );
 
+  it("mounts the shared v2 writes router (messages and every write) and keeps no write handler of its own", () => {
+    expect(v1).toContain('import { portalWritesRouter } from "../v2/modules/portal/portal-writes.routes";');
+    expect(v1).toContain("portalRouter.use(portalWritesRouter);");
+    expect(v1).not.toMatch(/portalRouter\.(post|put|delete|patch)\(/);
+    for (const [method, path] of [["get", "/messages"], ["post", "/message"], ["post", "/quote-request"], ["post", "/interest"], ["post", "/my-tags"], ["post", "/push/subscribe"], ["post", "/push/unsubscribe"], ["post", "/wallet/request-payout"], ["post", "/wallet/withdraw"]]) {
+      const own = new RegExp("portalRouter\\." + method + "\\(\\s*" + QUOTE + path + QUOTE);
+      expect(v1, `${method} ${path}`).not.toMatch(own);
+    }
+  });
+
   it("uses the shared v2 JWT helper instead of deriving its own secret", () => {
     expect(v1).toContain('from "../v2/modules/portal/portal-auth"');
     expect(v1).not.toMatch(/createHash|jwt\.sign|jwt\.verify/);

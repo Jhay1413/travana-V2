@@ -232,45 +232,34 @@ describe("writes", () => {
     expect(repo.update).not.toHaveBeenCalled();
   });
 
-  it("update of an old or portal-created record with gaps is NOT refused: an unrelated edit saves and the gaps come back as warnings", async () => {
-    vi.mocked(repo.findOne).mockResolvedValue(row() as never); // names only: no title, no date of birth, no passport
-    vi.mocked(repo.update).mockResolvedValue(row({ firstName: "Z" }) as never);
-    const saved = await clientPassengerService.update("c1", "p1", { firstName: "Z" }, SCOPE);
+  it("update of an old record with gaps is refused until completed, even for an unrelated patch", async () => {
+    vi.mocked(repo.findOne).mockResolvedValue(row() as never); // names only
+    await expect(clientPassengerService.update("c1", "p1", { firstName: "Z" }, SCOPE)).rejects.toMatchObject({ statusCode: 400, message: "Title is required" });
+    expect(repo.update).not.toHaveBeenCalled();
+    vi.mocked(repo.update).mockResolvedValue(row() as never);
+    await clientPassengerService.update("c1", "p1", FULL, SCOPE);
     expect(repo.update).toHaveBeenCalledTimes(1);
-    expect(saved.warnings).toEqual(expect.arrayContaining(["Title is required", "Date of birth is required", "Passport number is required", "Passport expiry is required"]));
   });
 
-  it("editing an unrelated field on a portal-created row (no title, new details present) succeeds", async () => {
+  it("a portal-created row with no title cannot be edited until staff complete the title, and then keeps its portal details", async () => {
     const portalRow = row({ ...FULL, title: null, passportNonUk: true, passportNumber: "AB1234567", nationality: "British", sex: "F", passportIssueDate: "2020-01-01" });
     vi.mocked(repo.findOne).mockResolvedValue(portalRow as never);
-    vi.mocked(repo.update).mockResolvedValue({ ...portalRow, surname: "Smyth" } as never);
-    const saved = await clientPassengerService.update("c1", "p1", { surname: "Smyth" }, SCOPE);
+    await expect(clientPassengerService.update("c1", "p1", { surname: "Smyth" }, SCOPE)).rejects.toMatchObject({ statusCode: 400, message: "Title is required" });
+    expect(repo.update).not.toHaveBeenCalled();
+    vi.mocked(repo.update).mockResolvedValue({ ...portalRow, title: "Mr.", surname: "Smyth" } as never);
+    const saved = await clientPassengerService.update("c1", "p1", { title: "Mr.", surname: "Smyth" }, SCOPE);
     expect(saved.surname).toBe("Smyth");
-    expect(saved.warnings).toEqual(["Title is required"]);
     expect(saved.nationality).toBe("British");
   });
 
-  it("a passport near expiry is a warning, not an error: the save goes through", async () => {
+  it("update blocks a patch that clears a mandatory field or breaks the expiry rule", async () => {
     vi.mocked(repo.findOne).mockResolvedValue(row({ ...FULL, passportNonUk: false }) as never);
-    vi.mocked(repo.update).mockResolvedValue(row({ ...FULL }) as never);
+    await expect(clientPassengerService.update("c1", "p1", { passportNumber: "" }, SCOPE)).rejects.toMatchObject({ message: "Passport number is required" });
     vi.mocked(repo.findNextDepartureDate).mockResolvedValue("2039-08-01");
-    const saved = await clientPassengerService.update("c1", "p1", {}, SCOPE);
-    expect(repo.update).toHaveBeenCalledTimes(1);
-    expect(saved.passportWarning).toBe(true);
-    expect(saved.warnings).toEqual(["Passport must be valid for more than 6 months after travel (until after 01/02/2040)"]);
-  });
-
-  it("clearing the passport number is allowed (it becomes a warning)", async () => {
-    vi.mocked(repo.findOne).mockResolvedValue(row({ ...FULL, passportNonUk: false }) as never);
-    vi.mocked(repo.update).mockResolvedValue(row({ ...FULL, passportNumber: null }) as never);
-    const saved = await clientPassengerService.update("c1", "p1", { passportNumber: "" }, SCOPE);
-    expect(saved.warnings).toContain("Passport number is required");
-  });
-
-  it("a malformed passport number that is being changed is still refused, as is a blank name", async () => {
-    vi.mocked(repo.findOne).mockResolvedValue(row({ ...FULL, passportNonUk: false }) as never);
-    await expect(clientPassengerService.update("c1", "p1", { passportNumber: "12" }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
-    await expect(clientPassengerService.update("c1", "p1", { firstName: "  " }, SCOPE)).rejects.toMatchObject({ statusCode: 400, message: "First name is required" });
+    await expect(clientPassengerService.update("c1", "p1", {}, SCOPE)).rejects.toMatchObject({
+      statusCode: 400,
+      message: "Passport must be valid for more than 6 months after travel (until after 01/02/2040)",
+    });
     expect(repo.update).not.toHaveBeenCalled();
   });
 

@@ -28,7 +28,7 @@ import { whatsappSettingsService } from "../whatsapp-templates/whatsapp-settings
 import { SKIP_REASON_TEXT } from "./customer-messaging.reasons";
 import { customerMessagingService } from "./customer-messaging.service";
 import { customerMessagingRepository } from "./customer-messaging.repository";
-import { isSeededPortalLoginBody, SEEDED_SIGNATURE, withAgencySignature } from "./customer-messaging.seeds";
+import { isSeededAgencyName, isSeededPortalLoginBody, SEEDED_SIGNATURE, withAgencySignature } from "./customer-messaging.seeds";
 import type { AutoChannel, SkipReason } from "./customer-messaging.types";
 import type { StaffPurpose, StaffSendInput, StaffSendResult } from "./customer-messaging-staff.types";
 
@@ -245,7 +245,8 @@ async function signInSmsBody(ctx: Ctx, link: string, orgName: string | null): Pr
     const merge = await buildSmsContext({ id: ctx.client.id, orgId: ctx.orgId, email: ctx.client.email, firstName: ctx.client.firstName, surename: ctx.client.surename });
     // A row seeded with the old fixed signature is signed with this agency's own name instead.
     const merged = mergeTemplate(withAgencySignature(template.body, merge.company_name), { ...merge, portal_link: link });
-    if (!SEEDED_SIGNATURE.test(merged)) return { body: merged, templateName: template.name, templateId: template.id };
+    // The fixed signature only blocks the template when it is another agency's: an agency really called Tina's Travel may use it.
+    if (!(SEEDED_SIGNATURE.test(merged) && !isSeededAgencyName(merge.company_name))) return { body: merged, templateName: template.name, templateId: template.id };
   }
   return {
     body: buildStaffSignInText({ firstName: ctx.client.firstName, orgName, link, hours: STAFF_LINK_TTL_HOURS }),

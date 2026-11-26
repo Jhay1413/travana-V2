@@ -10,6 +10,7 @@ import { seedPortalCustomer, startSignedIn } from "../helpers/portal";
 import { seedPortalBooking } from "../helpers/portal-bookings";
 import { portalMessageTexts, seedPortalQuote, seedPortalQuoteWorld, type PortalQuoteWorld, type SeededPortalQuote } from "../helpers/portal-quotes";
 import { seedAgentMessage } from "../helpers/portal-screens";
+import { queryRows } from "../helpers/seed";
 
 const token = () => randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
 const EMPTY_ERROR = "Write a few words, or pick something above.";
@@ -114,7 +115,10 @@ test.describe("customer portal: five tabs", () => {
     await openFromTab(page);
     await expect(page).toHaveURL(/\/portal\/quotes$/);
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByTestId("nav-tab-agent")).toHaveAttribute("aria-current", "page");
+    // The agent's tab opens a dialog: it says so with aria-expanded / aria-haspopup, never aria-current="page".
+    await expect(page.getByTestId("nav-tab-agent")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("nav-tab-agent")).toHaveAttribute("aria-haspopup", "dialog");
+    await expect(page.getByTestId("nav-tab-agent")).not.toHaveAttribute("aria-current", /.*/);
     await expect(page.getByTestId("nav-tab-quotes")).not.toHaveAttribute("aria-current", "page");
     // Highlighted in white with the accent bar; the other tabs stay dim.
     expect(await page.getByTestId("nav-tab-agent").evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 255, 255)");
@@ -123,7 +127,8 @@ test.describe("customer portal: five tabs", () => {
     await page.keyboard.press("Escape");
     await expect(sheet(page)).toHaveCount(0);
     await expect(page.getByTestId("nav-tab-quotes")).toHaveAttribute("aria-current", "page");
-    await expect(page.getByTestId("nav-tab-agent")).not.toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("nav-tab-agent")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("nav-tab-agent")).not.toHaveAttribute("aria-current", /.*/);
   });
 
   test("on the chat page the sheet opens on top of the chat and the chat stays where it was", async ({ page }) => {
@@ -133,7 +138,7 @@ test.describe("customer portal: five tabs", () => {
     await expect(page.getByTestId("message-log")).toContainText("Hello from your agent");
     await openFromTab(page);
     await expect(page).toHaveURL(/\/portal\/messages$/);
-    await expect(page.getByTestId("nav-tab-agent")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("nav-tab-agent")).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("nav-tab-messages")).not.toHaveAttribute("aria-current", "page");
     await page.getByTestId("sheet-close").click();
     await expect(sheet(page)).toHaveCount(0);
@@ -204,14 +209,68 @@ test.describe("customer portal: the Message sheet, what it is about", () => {
     await expect(checkedRadio(page)).toHaveAttribute("data-testid", "message-about-other");
   });
 
+  test("a declined quote's own page keeps that quote as the subject, never another trip", async ({ page }) => {
+    const { algarve } = await fixture(page);
+    await page.goto(`/portal/quote/${algarve.token}`);
+    await page.getByTestId("button-not-interested").click();
+    const decline = page.getByTestId("sheet-decline");
+    await decline.getByTestId("chip-reason-0").click();
+    await decline.getByTestId("button-decline-submit").click();
+    await expect(page.getByTestId("quote-declined-banner")).toBeVisible();
+
+    // Reload so the lists come from the server: the declined quote is no longer in the "open quotes" part of the list.
+    await page.goto(`/portal/quote/${algarve.token}`);
+    await expect(page.getByTestId("quote-declined-banner")).toBeVisible();
+    await openFromTab(page);
+    await expect(checkedRadio(page)).toHaveAttribute("data-testid", `message-about-quote:${algarve.id}`);
+    await expect(checkedRadio(page)).toContainText(/Algarve|Golf/);
+  });
+
+  test("while the lists load there is a loading line and Send is off, so a quick send cannot go out as Something else", async ({ page }) => {
+    const { q } = await fixture(page);
+    // Hold the bookings and quotes lists back from the start: the sheet reads them when it opens.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/api/v2/portal/bookings", async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await page.route("**/api/v2/portal/quotes", async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await page.goto("/portal/messages");
+    await expect(page.getByTestId("portal-messages")).toBeVisible();
+    await openFromTab(page);
+    await expect(page.getByTestId("message-about-loading")).toBeVisible();
+    await expect(page.getByTestId("message-about").getByRole("radio")).toHaveCount(0);
+    await expect(page.getByTestId("message-send")).toBeDisabled();
+    await page.getByTestId("message-text").fill("Too quick");
+    await page.getByTestId("message-send").click({ force: true });
+    expect(await portalMessageTexts(q.portal.clientId)).toHaveLength(0);
+
+    release();
+    await expect(page.getByTestId("message-about-loading")).toHaveCount(0);
+    await expect(page.getByTestId("message-send")).toBeEnabled();
+    await expect(page.getByTestId("message-about").getByRole("radio").first()).toBeVisible();
+  });
+
   test("the radios, chips and reply choice work from the keyboard and announce their state", async ({ page }) => {
-    const { tenerife } = await fixture(page);
+    const { tenerife, algarve, tripId } = await fixture(page);
     await page.goto("/portal");
     await openFromTab(page);
-    const first = page.getByTestId("message-about").getByRole("radio").first();
+    const radios = page.getByTestId("message-about").getByRole("radio");
+    const first = radios.first();
+    // The list is the booking, then the open quotes in the server's order (newest first), then "Something else".
+    await expect(radios).toHaveCount(4);
+    await expect(first).toHaveAttribute("data-testid", `message-about-booking:${tripId}`);
+    await expect(radios.nth(1)).toHaveAttribute("data-testid", `message-about-quote:${algarve.id}`);
+    await expect(radios.nth(2)).toHaveAttribute("data-testid", `message-about-quote:${tenerife.id}`);
     await first.focus();
     await page.keyboard.press("ArrowDown");
-    await expect(checkedRadio(page)).toHaveAttribute("data-testid", `message-about-quote:${tenerife.id}`);
+    await expect(checkedRadio(page)).toHaveAttribute("data-testid", `message-about-quote:${algarve.id}`);
     await expect(checkedRadio(page)).toBeFocused();
     await page.keyboard.press("ArrowUp");
     await expect(first).toHaveAttribute("aria-checked", "true");
@@ -294,6 +353,29 @@ test.describe("customer portal: the Message sheet, sending", () => {
     await expect(log).toContainText("It is our anniversary, could we have a sea view?");
     await expect(log).toContainText("Reply by: WhatsApp");
     await expect(log.getByText("It is our anniversary, could we have a sea view?")).toHaveCount(1);
+  });
+
+  test("the staff inbox stores the customer's words escaped, one <br> per line: a typed <a> or <img> is text, not markup", async ({ page }) => {
+    const { q } = await fixture(page);
+    await page.goto("/portal");
+    await openFromTab(page);
+    await page.getByTestId("message-extra-airport-parking").click();
+    await page.getByTestId("message-text").fill('See <a href="https://evil.example">this</a> <img src=x onerror=alert(1)>\nSecond line');
+    await page.getByTestId("message-send").click();
+    await expect(page.getByTestId("message-sent")).toBeVisible();
+
+    // Five lines on the customer's side (About, Would like, the words over two lines, Reply by) are five lines for staff (four with a one-line message).
+    await expect
+      .poll(async () => {
+        const rows = await queryRows<{ content: string }>(`select content from chat_messages where sender_id = $1`, [`portal-client:${q.portal.clientId}`]);
+        return rows.map((r) => r.content);
+      })
+      .toHaveLength(1);
+    const [row] = await queryRows<{ content: string }>(`select content from chat_messages where sender_id = $1`, [`portal-client:${q.portal.clientId}`]);
+    expect(row.content).not.toMatch(/<(?!br>)/);
+    expect(row.content).toContain("&lt;a href=&quot;https://evil.example&quot;&gt;this&lt;/a&gt;");
+    expect(row.content).toContain("&lt;img src=x onerror=alert(1)&gt;<br>Second line");
+    expect(row.content.split("<br>").length).toBeGreaterThanOrEqual(5);
   });
 
   test("a chip alone is enough, and the lines for what is empty are left out", async ({ page }) => {
@@ -395,6 +477,38 @@ test.describe("customer portal: the Message sheet, sending", () => {
     release();
     await expect(page.getByTestId("message-sent")).toBeVisible();
     expect(await portalMessageTexts(q.portal.clientId)).toHaveLength(1);
+  });
+
+  test("the draft and the sent bubbles follow the customer from page to page, and are gone after signing out", async ({ page }) => {
+    const { q, algarve } = await fixture(page);
+    await page.goto("/portal");
+    await openFromTab(page);
+    await page.getByTestId(`message-about-quote:${algarve.id}`).click();
+    await page.getByTestId("message-text").fill("Half written on Home");
+    await page.getByTestId("message-extra-travel-insurance").click();
+    await page.getByTestId("message-via-whatsapp").click();
+    await page.getByTestId("sheet-close").click();
+
+    // Another page mounts its own sheet: the draft, the subject and the reply choice are still there.
+    await page.getByTestId("nav-tab-quotes").click();
+    await expect(page).toHaveURL(/\/portal\/quotes$/);
+    await openFromTab(page);
+    await expect(page.getByTestId("message-text")).toHaveValue("Half written on Home");
+    await expect(page.getByTestId("message-extra-travel-insurance")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("message-via-whatsapp")).toHaveAttribute("aria-pressed", "true");
+    await expect(checkedRadio(page)).toHaveAttribute("data-testid", `message-about-quote:${algarve.id}`);
+
+    // Send it, change page again: the sent bubble is still part of the same conversation.
+    await page.getByTestId("message-send").click();
+    await expect(page.getByTestId("message-sent-bubble")).toHaveCount(1);
+    await page.getByTestId("message-done").click();
+    await page.getByTestId("nav-tab-bookings").click();
+    await expect(page).toHaveURL(/\/portal\/bookings$/);
+    await openFromTab(page);
+    await page.getByTestId("message-text").fill("Second note");
+    await page.getByTestId("message-send").click();
+    await expect(page.getByTestId("message-sent-bubble")).toHaveCount(2);
+    expect(await portalMessageTexts(q.portal.clientId)).toHaveLength(2);
   });
 
   test("what was typed survives closing the sheet", async ({ page }) => {

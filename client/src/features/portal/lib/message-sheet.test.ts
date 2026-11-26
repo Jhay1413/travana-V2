@@ -72,6 +72,15 @@ describe("buildAboutOptions", () => {
     expect(options.map((o) => o.label)).toEqual(["Sooner trip", "Later trip", "Hotel Playa", "Something else"]);
     expect(options.map((o) => o.key)).toEqual(["booking:b1", "booking:b2", "quote:q1", "other"]);
   });
+  it("keeps the open quotes in the order the list gives them (it does not re-sort them), after the booking, so one step down from the default booking is the list's first quote", () => {
+    const options = buildAboutOptions({
+      bookings: [booking("b1", "Lisbon", "2027-06-01")],
+      quotes: [quote("q-new", "Algarve"), quote("q-old", "Tenerife")], // the server sends newest first
+    });
+    expect(options.map((o) => o.key)).toEqual(["booking:b1", "quote:q-new", "quote:q-old", "other"]);
+    expect(defaultAboutKey(options)).toBe("booking:b1");
+    expect(options[options.findIndex((o) => o.key === defaultAboutKey(options)) + 1].key).toBe("quote:q-new");
+  });
   it("offers only Something else when there is nothing", () => {
     expect(buildAboutOptions({ bookings: undefined, quotes: undefined }).map((o) => o.key)).toEqual(["other"]);
   });
@@ -92,11 +101,34 @@ describe("preselection", () => {
     expect(defaultAboutKey(buildAboutOptions({ bookings: [], quotes: [quote("q1", "Hotel Playa")] }))).toBe("quote:q1");
     expect(defaultAboutKey(buildAboutOptions({ bookings: [], quotes: [] }))).toBe("other");
   });
-  it("honours a named booking, quote id or quote token, else the default", () => {
+  it("honours a named booking, quote id or quote token, else the default when nothing in particular was asked", () => {
     expect(resolveAbout(options, "quote:q1").label).toBe("Hotel Playa");
     expect(resolveAbout(options, "quote-token:tok-q1").key).toBe("quote:q1");
-    expect(resolveAbout(options, "booking:gone").key).toBe("booking:b1");
     expect(resolveAbout(options, null).key).toBe("booking:b1");
+    expect(resolveAbout(options, "other").key).toBe("other");
+  });
+  it("never swaps a named booking or quote that cannot be found for a different trip: it falls back to Something else", () => {
+    expect(resolveAbout(options, "booking:gone").key).toBe("other");
+    expect(resolveAbout(options, "quote:gone").key).toBe("other");
+    expect(resolveAbout(options, "quote-token:nope").key).toBe("other");
+  });
+  it("includes the page's own item when the list leaves it out (a declined quote, a past booking) as the first and chosen subject", () => {
+    const bookings = [booking("b1", "Trip", "2027-06-01"), booking("b0", "Old trip", "2020-01-01", "past")];
+    const quotes = [quote("q1", "Hotel Playa"), quote("q2", "Hotel Roma", true)];
+
+    const declined = buildAboutOptions({ bookings, quotes, preferred: "quote-token:tok-q2" });
+    expect(declined.map((o) => o.key)).toEqual(["quote:q2", "booking:b1", "quote:q1", "other"]);
+    expect(resolveAbout(declined, "quote-token:tok-q2")).toMatchObject({ key: "quote:q2", label: "Hotel Roma" });
+    expect(resolveAbout(buildAboutOptions({ bookings, quotes, preferred: "quote:q2" }), "quote:q2").label).toBe("Hotel Roma");
+
+    const past = buildAboutOptions({ bookings, quotes, preferred: "booking:b0" });
+    expect(resolveAbout(past, "booking:b0")).toMatchObject({ key: "booking:b0", label: "Old trip" });
+  });
+  it("adds nothing for an item the lists do not hold, and nothing twice for one they do", () => {
+    const bookings = [booking("b1", "Trip", "2027-06-01")];
+    const quotes = [quote("q1", "Hotel Playa")];
+    expect(buildAboutOptions({ bookings, quotes, preferred: "quote-token:unknown" }).map((o) => o.key)).toEqual(["booking:b1", "quote:q1", "other"]);
+    expect(buildAboutOptions({ bookings, quotes, preferred: "quote:q1" }).map((o) => o.key)).toEqual(["booking:b1", "quote:q1", "other"]);
   });
   it("reads a quote or booking screen from the address", () => {
     expect(aboutFromPath("/portal/quote/abc")).toBe("quote-token:abc");

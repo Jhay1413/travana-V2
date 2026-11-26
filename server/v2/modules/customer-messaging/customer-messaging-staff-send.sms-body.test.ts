@@ -90,10 +90,14 @@ describe("the SMS sign-in text through the real merge and the real log masking",
     expect(await sendSms(null)).toContain("valid for 48 hours");
   });
 
-  it("an edited template that merges to the seeded signature is replaced by the built-in text", async () => {
+  it("an agency really named Tina's Travel keeps its own edited template", async () => {
     vi.mocked(smsRepository.findOrgNameById).mockResolvedValue("Tina's Travel" as never);
     const body = await sendSms("Sign in: {{portal_link}} from {{company_name}}");
-    expect(body).toContain("valid for 48 hours");
-    expect(body).not.toMatch(/Tina'?s Travel/i);
+    expect(body).toBe("Sign in: https://app.example/portal/login?mt=ABCDEFGH2345&next=%2Fportal from Tina's Travel");
+  });
+
+  it("an edited template signed with the fixed name, sent by another agency, is signed with that agency's own name", async () => {
+    const body = await sendSms("Sign in: {{portal_link}} - Tina's Travel");
+    expect(body).toBe("Sign in: https://app.example/portal/login?mt=ABCDEFGH2345&next=%2Fportal - Sunny Holidays");
   });
 });

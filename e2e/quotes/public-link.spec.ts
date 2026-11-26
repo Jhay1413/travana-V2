@@ -85,9 +85,11 @@ test.describe("public quote link", () => {
     for (const banned of ["Tina", "Tinas", "Travana", "0191"]) {
       await expect(visitor.locator("body"), banned).not.toContainText(banned);
     }
-    expect(await visitor.content()).not.toMatch(/Tinas|Travana/);
     const header = visitor.getByTestId("public-quote-header");
     await expect(header.getByTestId("portal-agency-name").or(header.getByTestId("portal-agency-logo"))).toBeVisible();
+    // Only the rendered page is checked. The document <head> carries the app-wide link-preview tags from
+    // client/index.html, which name the platform for every route and cannot vary per agency without server rendering.
+    expect(await visitor.locator("#root").innerHTML()).not.toMatch(/Tinas|Travana/);
     await expect(visitor.getByTestId("portal-footer")).toContainText(w.q.world.agency.orgName);
     // No Menu and no tab bar for a visitor who is not signed in.
     await expect(visitor.getByTestId("button-portal-menu")).toHaveCount(0);

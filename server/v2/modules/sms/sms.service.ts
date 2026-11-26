@@ -111,11 +111,31 @@ export interface MergeContext {
   [key: string]: string | number | null | undefined;
 }
 
+/** Is the last thing in `body` the merge field `field` ("... - {{company_name}}")? Plain string checks over a short tail: linear. */
+function endsWithMergeField(body: string, field: string): boolean {
+  const trimmed = body.trimEnd();
+  const open = trimmed.lastIndexOf('{');
+  if (open < 0 || trimmed.length - open > field.length + 12) return false;
+  return trimmed.slice(open).replace(/[{}\s]/g, '') === field && trimmed.endsWith('}');
+}
+
+/**
+ * Fills the {{field}} placeholders. One function for every SMS merge path. When the text ends with " - {{company_name}}"
+ * and the agency name is unknown, the signature merges to nothing and the dangling " - " is dropped with the whitespace
+ * around it, so a message never ends with a bare dash.
+ */
 export function mergeTemplate(body: string, ctx: MergeContext): string {
-  return body.replace(/\{\{?\s*([a-zA-Z0-9_]+)\s*\}?\}/g, (_m, key) => {
+  // The field name is bounded so a long run of letters after a brace costs at most 40 steps per brace.
+  const merged = body.replace(/\{\{?\s*([a-zA-Z0-9_]{1,40})\s*\}?\}/g, (_m, key) => {
     const value = ctx[key];
     return value === undefined || value === null ? '' : String(value);
   });
+  const nameUnknown = !String(ctx.company_name ?? '').trim();
+  if (!nameUnknown || !endsWithMergeField(body, 'company_name')) return merged;
+  const text = merged.trimEnd();
+  if (!text.endsWith('-')) return merged;
+  const before = text.slice(0, -1);
+  return before === '' || /\s$/.test(before) ? before.trimEnd() : merged;
 }
 
 export function normalisePhone(raw: string | null | undefined, defaultCountry = 'GB'): string | null {

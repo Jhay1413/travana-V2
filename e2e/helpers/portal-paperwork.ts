@@ -4,7 +4,7 @@
  * is always stubbed with page.route (a real AI provider is never called).
  */
 import "./test-db-env";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import type { PortalPassportReadResult } from "../../shared/portal-passengers";
@@ -34,6 +34,15 @@ export interface SeedFileOptions {
 
 const LOCAL_UPLOADS_DIR = path.join(process.cwd(), "uploads", "client-files");
 
+/**
+ * Stub files this run wrote under uploads/client-files. That folder also holds real uploads and is in the repository,
+ * so every stub is removed when the test worker exits: a run must leave nothing behind there.
+ */
+const writtenLocalFiles = new Set<string>();
+process.once("exit", () => {
+  for (const file of writtenLocalFiles) rmSync(file, { force: true });
+});
+
 /** A file on the client's profile, as the staff Files tab leaves it. */
 export async function seedPortalFile(clientId: string, opts: SeedFileOptions): Promise<string> {
   const link = opts.link ?? (opts.bookingId ? { type: "Booking" as const, id: opts.bookingId } : null);
@@ -42,7 +51,9 @@ export async function seedPortalFile(clientId: string, opts: SeedFileOptions): P
   if (opts.storage === "s3") filename = `client-files/${stored}`;
   if (opts.storage === "local") {
     mkdirSync(LOCAL_UPLOADS_DIR, { recursive: true });
-    writeFileSync(path.join(LOCAL_UPLOADS_DIR, stored), "%PDF-1.4 e2e seed file");
+    const target = path.join(LOCAL_UPLOADS_DIR, stored);
+    writeFileSync(target, "%PDF-1.4 e2e seed file");
+    writtenLocalFiles.add(target);
   }
   const [row] = await queryRows<{ id: string }>(
     `insert into client_files (client_id, filename, original_name, title, mime_type, size, category, allocation_type, allocation_id)

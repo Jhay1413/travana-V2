@@ -12,7 +12,7 @@ export type { PortalPushState } from "./api/use-portal-push";
 export { usePortalFaceId, findThisDevice, FACE_ID_REAUTH_MESSAGE } from "./api/use-portal-face-id";
 export { signOutPortal } from "./api/portal-session";
 
-export { PORTAL_TABS, portalTabs, activeTabForPath, menuKeyForPath, portalRedirectTarget, portalNextTarget, withoutParams, interestsRedirectTarget } from "./portal-nav";
+export { PORTAL_TABS, portalTabs, activeTabForPath, menuKeyForPath, portalRedirectTarget, portalNextTarget, portalLoginTarget, withoutParams, interestsRedirectTarget } from "./portal-nav";
 export type { PortalTab, PortalTabKey } from "./portal-nav";
 
 export { AgencyMark, ShareIcon, Eyebrow, FactList, PortalButton, PortalHero, PortalSection, SplitHeading, portalButtonClass } from "./components/brand";

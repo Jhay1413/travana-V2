@@ -16,6 +16,7 @@ import { refreshQuotePricePerPerson } from "./quote-price-per-person.service";
 import { pricePerPersonText } from "../../utils/customer-price";
 import { tourOperatorLinkService } from "../tour-operator/tour-operator-link.service";
 import { AppError } from "../../utils/error-handler";
+import { describeWait, portalPushCooldown } from "./portal-push-cooldown";
 import { normalizeAcceptableImageUrls, partitionAcceptableImageUrls } from "../../utils/image-storage";
 import type { Scope } from "../../utils/scope";
 import { withoutProtectedKeys } from "./quote-child.validator";
@@ -1069,13 +1070,29 @@ export const newQuoteService = {
   },
 
   /**
-   * Pushes a deal to the portal customers of the deal's OWN agency and nobody else. A deal with no resolvable
-   * agency sends nothing (plain 400). The caller's own access to the quote is checked first.
+   * Pushes a deal to the portal customers of the deal's OWN agency and nobody else. The caller's own access to the quote
+   * is checked first; a deal with no resolvable agency sends nothing (plain 400); only a deal that is LIVE on the portal
+   * (the very rule the portal's deals list uses) may be pushed, so a customer's private quote title is never broadcast
+   * (plain 400); and the same deal can be pushed once every 6 hours (429 saying when it can be sent again).
    */
   async sendPortalPush(id: string, scope: ScopeOrTrusted): Promise<number> {
     const message = await this.getPortalPushMessage(id, scope);
     if (!message.orgId) throw new AppError("This deal has no agency to notify", 400);
-    return pushNotificationService.sendToOrg(message.orgId, { title: message.title, body: message.body, url: "/portal" });
+    if (!(await newQuoteRepository.isLivePortalDeal(id, message.orgId))) {
+      throw new AppError("Only a deal that is live on the customer portal can be pushed. Publish it to the portal first.", 400);
+    }
+    const wait = portalPushCooldown.remainingMs(id);
+    if (wait > 0) {
+      throw new AppError(`This deal was already pushed to your customers. It can be sent again in ${describeWait(wait)}.`, 429);
+    }
+    // Reserved before sending so two clicks at once cannot both go out; given back if the send fails.
+    portalPushCooldown.record(id);
+    try {
+      return await pushNotificationService.sendToOrg(message.orgId, { title: message.title, body: message.body, url: "/portal" });
+    } catch (err) {
+      portalPushCooldown.release(id);
+      throw err;
+    }
   },
 
   async getRecentClientEngagement(scope: ScopeOrTrusted, limit = 10, options: RecentEngagementOptions = {}) {

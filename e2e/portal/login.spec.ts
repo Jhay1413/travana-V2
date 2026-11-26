@@ -349,3 +349,41 @@ test.describe("customer portal: agency branding", () => {
     expect(Object.keys(body).sort()).toEqual(["address", "atol", "brandColor", "email", "iconUrl", "logoUrl", "name", "phone"]);
   });
 });
+
+test.describe("customer portal: a signed-out deep link keeps its target", () => {
+  async function signIn(page: import("@playwright/test").Page, c: { email: string; pin: string }): Promise<void> {
+    await page.getByTestId("input-email").fill(c.email);
+    await page.getByTestId("input-pin").fill(c.pin);
+    await page.getByTestId("button-login").click();
+  }
+
+  test("/portal/bookings#passports sends the customer to sign in with the whole address in ?next=, and back to it afterwards", async ({ page }) => {
+    const c = await seedPortalCustomer();
+    await page.addInitScript(() => localStorage.setItem("portal_setup_wizard_done", "1"));
+
+    await page.goto("/portal/bookings#passports");
+    await expect(page).toHaveURL(/\/portal\/login\?next=%2Fportal%2Fbookings%23passports$/);
+    await signIn(page, c);
+    await expect(page).toHaveURL(/\/portal\/bookings#passports$/);
+    await expect(page.getByTestId("nav-tab-bookings")).toHaveAttribute("aria-current", "page");
+  });
+
+  test("a query string survives too (/portal/deals?country=Spain)", async ({ page }) => {
+    const c = await seedPortalCustomer();
+    await page.addInitScript(() => localStorage.setItem("portal_setup_wizard_done", "1"));
+
+    await page.goto("/portal/deals?country=Spain");
+    await expect(page).toHaveURL(/\/portal\/login\?next=%2Fportal%2Fdeals%3Fcountry%3DSpain$/);
+    await signIn(page, c);
+    await expect(page).toHaveURL(/\/portal\/deals\?country=Spain$/);
+  });
+
+  test("a ?next= that is not a portal path is ignored: sign-in lands on Home", async ({ page }) => {
+    const c = await seedPortalCustomer();
+    await page.addInitScript(() => localStorage.setItem("portal_setup_wizard_done", "1"));
+
+    await page.goto(`/portal/login?next=${encodeURIComponent("https://evil.example/steal")}`);
+    await signIn(page, c);
+    await expect(page).toHaveURL(/\/portal$/);
+  });
+});
