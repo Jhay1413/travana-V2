@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { createRateLimiter } from '../../middlewares/rate-limit.middleware';
+import { noResponseLog } from '../../middlewares/no-response-log';
 import { validate } from '../../middlewares/validation.middleware';
 import { portalPinResetController } from './portal-pin-reset.controller';
 import { portalPinResetValidator } from './portal-pin-reset.validator';
 
 export const portalPinResetRouter = Router();
+portalPinResetRouter.use(noResponseLog);
 
 // Per-IP cap on top of the per-email allowance: each text costs the agency money.
 const pinResetIpLimiter = createRateLimiter({

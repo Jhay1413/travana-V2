@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import { newQuoteService } from "./quote.service";
-import { pushNotificationService } from "../notification/push-notification.service";
 import { successResponse } from "../../utils/response";
 import { asyncHandler } from "../../utils/async-handler";
 import { getUserId } from "../../utils/get-user-id";
@@ -314,12 +313,7 @@ export const quoteController = {
   portalPush: asyncHandler(async (req: Request, res: Response) => {
     const scope = getScope(req);
     const id = req.params.id as string;
-    const q = await newQuoteService.getTitleForPortalPush(id, scope);
-    const sent = await pushNotificationService.sendToAll({
-      title: "Latest Holiday Deals from Tinas Travel",
-      body: q.title || "Check out our latest travel deal!",
-      url: "/portal",
-    });
+    const sent = await newQuoteService.sendPortalPush(id, scope);
     res.json({ success: true, sent });
   }),
 

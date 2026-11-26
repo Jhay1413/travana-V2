@@ -81,19 +81,19 @@ test.describe("customer portal: Home", () => {
     await startSignedIn(page, q.portal);
     await page.goto("/portal");
     await expect(page.getByTestId("home-price-held")).toContainText("until 1 Jul 2027");
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await expect(page.getByTestId(`quote-held-${held.id}`)).toContainText("1 Jul 2027");
   });
 
-  test("the Trips badge is the same number as Home's quotes to consider: answered quotes are not counted", async ({ page }) => {
+  test("the Quotes badge is the same number as Home's quotes to consider: answered quotes are not counted", async ({ page }) => {
     const { soon } = await fixture(page);
     await page.goto("/portal");
-    await expect(page.getByTestId("nav-badge-trips")).toHaveText("3");
+    await expect(page.getByTestId("nav-badge-quotes")).toHaveText("3");
     const auth = { Authorization: `Bearer ${await page.evaluate(() => localStorage.getItem("portal_token"))}` };
     await page.request.post(`/api/v2/portal/quotes/${soon.token}/action`, { headers: auth, data: { action: "declined", reason: "Too expensive", wantsSimilar: false } });
     await page.goto("/portal");
     await expect(page.getByRole("button", { name: "2 quotes to consider" })).toBeVisible();
-    await expect(page.getByTestId("nav-badge-trips")).toHaveText("2");
+    await expect(page.getByTestId("nav-badge-quotes")).toHaveText("2");
   });
 
   test("a booking with no recorded length shows its date without nights or an end date", async ({ page }) => {
@@ -140,12 +140,12 @@ test.describe("customer portal: Home", () => {
     for (const id of [soon.id]) await expect(page.getByTestId(`home-quote-${id}`)).toBeVisible();
     await expect(page.getByTestId("home-quotes-track").locator("button")).toHaveCount(3);
 
-    // Nothing money-owed or passport-related anywhere on the page.
+    // Nothing money-owed anywhere on the page (the passport card is a real part of Home now).
     const text = await page.getByTestId("portal-home").innerText();
-    expect(text).not.toMatch(/balance|passport/i);
+    expect(text).not.toMatch(/balance/i);
   });
 
-  test("'View quote' on the price-held card and on a rail card opens that quote", async ({ page }) => {
+  test("'I'm interested' on the price-held card and a rail card open that quote", async ({ page }) => {
     const { soon, full } = await fixture(page);
     await page.goto("/portal");
     await page.getByTestId("home-price-held-view").click();
@@ -158,24 +158,26 @@ test.describe("customer portal: Home", () => {
     await expect(page.getByTestId("quote-title")).toContainText("Hotel Playa Azul Majorca");
   });
 
-  test("the summary rows, 'See all' and the next journey open Trips", async ({ page }) => {
+  test("the summary rows, 'See all' and the next journey open their screens", async ({ page }) => {
     await fixture(page);
     await page.goto("/portal");
     await page.getByRole("button", { name: "3 quotes to consider" }).click();
-    await expect(page).toHaveURL(/\/portal\/trips\/quotes$/);
+    await expect(page).toHaveURL(/\/portal\/quotes$/);
     await page.goto("/portal");
     await page.getByRole("button", { name: "1 holiday booked" }).click();
-    await expect(page).toHaveURL(/\/portal\/trips\/bookings$/);
+    await expect(page).toHaveURL(/\/portal\/bookings$/);
     await page.goto("/portal");
     await page.getByTestId("home-next-booking").click();
     await expect(page).toHaveURL(/\/portal\/booking\/[0-9a-f-]{36}$/);
     await page.goto("/portal");
     await page.getByTestId("home-quotes-see-all").click();
-    await expect(page).toHaveURL(/\/portal\/trips\/quotes$/);
+    await expect(page).toHaveURL(/\/portal\/quotes$/);
   });
 
-  test("the quotes rail scrolls with the mouse (arrow buttons) and with the keyboard", async ({ page }) => {
-    await fixture(page);
+  test("the quotes rail scrolls with the mouse (arrow buttons) on a desktop", async ({ page }) => {
+    const { q } = await fixture(page);
+    // Three cards fit inside the 1024px column with nothing to scroll (so no arrows); a fourth makes the rail overflow.
+    await seedPortalQuote(page, q, { title: "Fourth Quote Break", token: token(), salesPrice: "1500.00" });
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/portal");
     const track = page.getByTestId("home-quotes-track");
@@ -188,12 +190,29 @@ test.describe("customer portal: Home", () => {
     await expect(page.getByTestId("home-quotes-prev")).toBeEnabled();
     await page.getByTestId("home-quotes-prev").click();
     await expect.poll(left).toBeLessThan(5);
+  });
 
-    await track.focus();
-    await page.keyboard.press("ArrowRight");
-    await expect.poll(left).toBeGreaterThan(50);
-    await page.keyboard.press("ArrowLeft");
-    await expect.poll(left).toBeLessThan(5);
+  test("the quotes rail scrolls with the keyboard at every width, and a phone shows the Swipe hint instead of arrow buttons", async ({ page }) => {
+    const { q } = await fixture(page);
+    await seedPortalQuote(page, q, { title: "Fourth Quote Break", token: token(), salesPrice: "1500.00" });
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/portal");
+      const track = page.getByTestId("home-quotes-track");
+      await expect(track).toBeVisible();
+      const left = () => track.evaluate((el) => el.scrollLeft);
+      if (width < 768) {
+        // The design's "Swipe" hint (on the deals rail, as in the design); arrow buttons are for desktop.
+        await expect(page.getByTestId("home-for-you").getByText("Swipe")).toBeVisible();
+        await expect(page.getByTestId("home-quotes-prev")).toBeHidden();
+        await expect(page.getByTestId("home-quotes-next")).toBeHidden();
+      }
+      await track.focus();
+      await page.keyboard.press("ArrowRight");
+      await expect.poll(left, `scrolled right at ${width}px`).toBeGreaterThan(50);
+      await page.keyboard.press("ArrowLeft");
+      await expect.poll(left, `scrolled back at ${width}px`).toBeLessThan(5);
+    }
   });
 
   test("a deal's 'I'm interested' tells the agent once and shows the told state, also after a reload", async ({ page }) => {
@@ -267,13 +286,14 @@ test.describe("customer portal: Home", () => {
     await expect(page.getByText(/Destination: Lisbon/)).toBeVisible();
   });
 
-  test("the agent block names the agency and opens Messages", async ({ page }) => {
+  test("the agent block names the agency and opens the Message sheet", async ({ page }) => {
     const { q } = await fixture(page);
     await page.goto("/portal");
     await expect(page.getByTestId("home-agent")).toBeVisible();
     await expect(page.getByTestId("home-agency-name")).toContainText(q.portal.orgName);
     await page.getByTestId("home-message-agent").click();
-    await expect(page).toHaveURL(/\/portal\/messages$/);
+    await expect(page.getByTestId("sheet-message")).toBeVisible();
+    await expect(page).toHaveURL(/\/portal$/);
   });
 
   test("a customer with wallet credit sees the Rewards card, which opens Referrals & rewards", async ({ page }) => {

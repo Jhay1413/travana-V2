@@ -141,7 +141,7 @@ export function MessagesPushPrompt({ onEnabled }: { onEnabled: () => void }) {
         <p className="portal-serif text-[20px] leading-tight text-primary">Hear back sooner</p>
         <p className="text-[15px] text-muted-foreground">Get notified instantly when your travel agent replies.</p>
         {errorMsg && (
-          <p role="alert" className="portal-text-danger text-[14px] [overflow-wrap:anywhere]">
+          <p role="alert" className="portal-text-danger text-[13px] [overflow-wrap:anywhere]">
             {errorMsg}
           </p>
         )}

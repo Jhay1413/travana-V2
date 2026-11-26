@@ -1,8 +1,11 @@
 import { Router } from 'express';
+import { noResponseLog } from '../../middlewares/no-response-log';
 import { validate } from '../../middlewares/validation.middleware';
 import { portalController } from './portal.controller';
 import { portalBrandingRouter } from './portal-branding.routes';
 import { portalCoreRouter } from './portal-core.routes';
+import { portalDocumentsRouter } from './portal-documents.routes';
+import { portalPassportsRouter } from './portal-passports.routes';
 import { portalPinResetRouter } from './portal-pin-reset.routes';
 import { portalQuotesRouter } from './portal-quotes.routes';
 import { portalSummaryRouter } from './portal-summary.routes';
@@ -19,6 +22,10 @@ import {
 
 const portalRouter = Router();
 
+// Every portal response can carry a credential or personal data (session tokens, passport details, signed
+// document links, bank details, chat): the global request logger must never print any portal body.
+portalRouter.use(noResponseLog);
+
 // Authentication, deals and bookings.
 portalRouter.use(portalCoreRouter);
 
@@ -31,6 +38,12 @@ portalRouter.use(portalQuotesRouter);
 
 // Home's one-call summary (counts, next booking, soonest held price, rewards).
 portalRouter.use(portalSummaryRouter);
+
+// "My documents": the files on the customer's own profile (client_files only), listed and downloaded.
+portalRouter.use(portalDocumentsRouter);
+
+// Passengers and passports: the customer's saved travellers, reading a passport photo, saving confirmed details.
+portalRouter.use(portalPassportsRouter);
 
 // ── Messages ────────────────────────────────────────────────────────────────
 portalRouter.get('/messages', portalAuth, portalController.messages);

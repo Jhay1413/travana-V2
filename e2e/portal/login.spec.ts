@@ -9,7 +9,7 @@ async function bearer(page: import("@playwright/test").Page): Promise<string> {
   return `Bearer ${token}`;
 }
 
-const TABS = ["home", "trips", "deals", "messages", "account"] as const;
+const TABS = ["home", "quotes", "bookings", "messages", "agent"] as const;
 
 test.describe("customer portal: sign-in", () => {
   test("a PIN sign-in lands on Home with the five tabs and no fixed brand name", async ({ page }) => {
@@ -85,44 +85,44 @@ test.describe("customer portal: sign-in", () => {
 });
 
 test.describe("customer portal: navigation", () => {
-  test("the tabs, the Trips segments and the old /portal/quotes and /portal/bookings URLs", async ({ page }) => {
+  test("the five tabs, the menu rows for the other pages, and the old Trips URLs", async ({ page }) => {
     const c = await seedPortalCustomer();
     await startSignedIn(page, c);
 
     await page.goto("/portal");
     await expect(page.getByTestId("nav-tab-home")).toHaveAttribute("aria-current", "page");
 
-    await page.getByTestId("nav-tab-trips").click();
-    await expect(page).toHaveURL(/\/portal\/trips\/quotes$/);
-    await expect(page.getByTestId("nav-tab-trips")).toHaveAttribute("aria-current", "page");
-    await expect(page.getByTestId("trips-segment-quotes")).toHaveAttribute("aria-current", "page");
+    await page.getByTestId("nav-tab-quotes").click();
+    await expect(page).toHaveURL(/\/portal\/quotes$/);
+    await expect(page.getByTestId("nav-tab-quotes")).toHaveAttribute("aria-current", "page");
 
-    await page.getByTestId("trips-segment-bookings").click();
-    await expect(page).toHaveURL(/\/portal\/trips\/bookings$/);
-    await expect(page.getByTestId("trips-segment-bookings")).toHaveAttribute("aria-current", "page");
-    // The hosted page does not draw a second shell.
+    await page.getByTestId("nav-tab-bookings").click();
+    await expect(page).toHaveURL(/\/portal\/bookings$/);
+    await expect(page.getByTestId("nav-tab-bookings")).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("nav-bottom")).toHaveCount(1);
 
-    await page.getByTestId("nav-tab-deals").click();
-    await expect(page).toHaveURL(/\/portal\/deals$/);
-    await expect(page.getByTestId("nav-tab-deals")).toHaveAttribute("aria-current", "page");
-
+    // The fourth tab, "Message", opens the chat page (the fifth, the agent, opens the Message sheet: message-sheet.spec.ts).
     await page.getByTestId("nav-tab-messages").click();
     await expect(page).toHaveURL(/\/portal\/messages$/);
     await expect(page.getByTestId("nav-tab-messages")).toHaveAttribute("aria-current", "page");
 
-    await page.getByTestId("nav-tab-account").click();
+    // Deals, Rewards, Travel interests and Account have no tab: they are menu rows.
+    await page.goto("/portal");
+    await page.getByTestId("button-portal-menu").click();
+    await page.getByTestId("menu-item-deals").click();
+    await expect(page).toHaveURL(/\/portal\/deals$/);
+    await page.getByTestId("button-portal-menu").click();
+    await page.getByTestId("menu-item-account").click();
     await expect(page).toHaveURL(/\/portal\/account$/);
     await expect(page.getByTestId("portal-account")).toBeVisible();
-    await expect(page.getByTestId("nav-tab-account")).toHaveAttribute("aria-current", "page");
 
-    // Old tab URLs still work: they land on the right Trips segment.
+    // The short-lived Trips URLs redirect to the separate screens.
     await page.goto("/portal/quotes");
-    await expect(page).toHaveURL(/\/portal\/trips\/quotes$/);
-    await expect(page.getByTestId("trips-segment-quotes")).toHaveAttribute("aria-current", "page");
+    await expect(page).toHaveURL(/\/portal\/quotes$/);
     await page.goto("/portal/bookings");
-    await expect(page).toHaveURL(/\/portal\/trips\/bookings$/);
-    await expect(page.getByTestId("trips-segment-bookings")).toHaveAttribute("aria-current", "page");
+    await expect(page).toHaveURL(/\/portal\/bookings$/);
+    await page.goto("/portal/trips");
+    await expect(page).toHaveURL(/\/portal\/quotes$/);
   });
 
   test("the Account page lists its rows, and Sign out returns to the login screen", async ({ page }) => {
@@ -310,22 +310,27 @@ test.describe("customer portal: agency branding", () => {
     await expect(page.getByTestId("portal-agency-logo")).toHaveCount(0);
   });
 
-  test("a dark brand colour drives the theme; a too-light one stays navy and only accents", async ({ page }) => {
-    const NAVY = "212.5 100.0% 18.8%";
-    const dark = await seedPortalCustomer({ brandColor: "#1a5fb4" });
-    await page.goto(`/portal/login?org=${dark.slug}`);
-    await expect(page.getByTestId("portal-agency-name")).toBeVisible();
-    await expect.poll(() => page.locator(".portal-theme").first().evaluate((el) => (el as HTMLElement).style.getPropertyValue("--primary"))).not.toBe(NAVY);
+  test("an agency with a bright brand colour still gets the design's navy everywhere, with its own logo and name", async ({ page }) => {
+    const NAVY = "rgb(0, 44, 96)";
+    const c = await seedPortalCustomer({ brandColor: "#1a5fb4", logoUrl: "/favicon.png" });
+    // The login screen: the agency's logo shows, and the link in the design's navy is navy, not the brand blue.
+    await page.goto(`/portal/login?org=${c.slug}`);
+    await expect(page.getByTestId("portal-agency-logo")).toBeVisible();
+    await expect(page.getByTestId("button-forgot-pin")).toBeVisible();
+    expect(await page.getByTestId("button-forgot-pin").evaluate((el) => getComputedStyle(el).color)).toBe(NAVY);
+    // The wrapper never carries a brand colour.
+    expect(await page.locator(".portal-theme").first().evaluate((el) => (el as HTMLElement).getAttribute("style") ?? "")).not.toContain("--primary");
 
-    const light = await seedPortalCustomer({ brandColor: "#f4c430" });
-    await page.goto(`/portal/login?org=${light.slug}`);
-    await expect(page.getByTestId("portal-agency-name")).toBeVisible();
-    const vars = await page.locator(".portal-theme").first().evaluate((el) => ({
-      primary: (el as HTMLElement).style.getPropertyValue("--primary"),
-      accent: (el as HTMLElement).style.getPropertyValue("--portal-brand-accent"),
-    }));
-    expect(vars.primary).toBe(NAVY);
-    expect(vars.accent).not.toBe("");
+    // Signed in: the agent heading and the outline button on Home are navy too.
+    await startSignedIn(page, c);
+    await page.goto("/portal");
+    await expect(page.getByTestId("home-agent")).toBeVisible();
+    expect(await page.getByTestId("home-agent-name").evaluate((el) => getComputedStyle(el).color)).toBe(NAVY);
+    const outline = page.getByTestId("home-message-agent");
+    expect(await outline.evaluate((el) => getComputedStyle(el).color)).toBe(NAVY);
+    expect(await outline.evaluate((el) => getComputedStyle(el).borderTopColor)).toBe(NAVY);
+    expect(await page.getByTestId("nav-bottom").evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(0, 26, 58)");
+    await expect(page.getByTestId("portal-header-home").getByAltText(c.orgName)).toBeVisible();
   });
 
   test("the public branding endpoint answers 200 with nothing for an unknown agency and leaks nothing extra", async ({ page }) => {

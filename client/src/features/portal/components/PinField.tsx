@@ -44,7 +44,7 @@ export function PinField({
           onClick={() => setShow((s) => !s)}
           aria-pressed={show}
           aria-label={show ? "Hide PIN" : "Show PIN"}
-          className="min-h-11 px-1 text-[11px] font-medium uppercase tracking-[0.2em] portal-text-amber-ink"
+          className="min-h-8 p-0 text-[11px] font-normal uppercase tracking-[0.2em] portal-text-amber-ink"
           data-testid={toggleTestId}
         >
           {show ? "Hide" : "Show"}
@@ -56,13 +56,13 @@ export function PinField({
         inputMode="numeric"
         pattern="[0-9]*"
         autoComplete={autoComplete}
-        placeholder="4 digits"
+        placeholder="Your PIN"
         value={value}
         onChange={(e) => onChange(sanitisePin(e.target.value))}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         className={cn(
-          "portal-serif flex min-h-12 w-full rounded-none border-0 border-b border-input bg-transparent px-0 text-[26px] tracking-[0.4em] text-foreground transition-colors placeholder:text-[16px] placeholder:tracking-normal focus-visible:border-accent focus-visible:outline-none",
+          "portal-serif flex min-h-12 w-full rounded-none border-0 border-b border-input bg-transparent px-0 text-[22px] tracking-[0.4em] text-foreground placeholder:tracking-normal",
           invalid && "border-destructive",
         )}
         data-testid={testId}

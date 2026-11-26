@@ -1,13 +1,11 @@
 import { useEffect, useReducer, useState } from "react";
 import { PORTAL_DECLINE_REASONS } from "@shared/portal-quotes";
-import { cn } from "@/lib/utils";
 import { INITIAL_DECLINE_FORM, declineFormReducer } from "../../lib/quote-decision";
 import { SHARE_METHOD, mailtoHref, shareMessage, shareNotice, shareUrl, smsHref, whatsAppHref } from "../../lib/quote-share";
-import { PortalButton, portalButtonClass } from "../brand";
+import { PortalButton, portalButtonClass, ShareIcon } from "../brand";
 import { PortalSheet } from "../PortalSheet";
 
-const TEXT_AREA =
-  "min-h-[88px] w-full resize-y rounded-none border border-input bg-transparent p-3 text-[16px] leading-relaxed text-foreground placeholder:text-muted-foreground focus-visible:border-accent focus-visible:outline-none";
+const TEXT_AREA = "portal-textarea";
 
 /** "Not interested": a reason (optional chips), a note (optional) and "send me something similar" (ticked). */
 export function DeclineSheet({
@@ -43,7 +41,7 @@ export function DeclineSheet({
       italic="right?"
       description={
         <>
-          Tell {agent} what didn&apos;t work about <span className="text-foreground">{quoteTitle}</span> and they&apos;ll find something that suits you better. A reason is optional.
+          Tell {agent} what didn&apos;t work about <span className="font-normal text-foreground">{quoteTitle}</span> and they&apos;ll find something that suits you better. A reason is optional.
         </>
       }
       testId="sheet-decline"
@@ -62,10 +60,7 @@ export function DeclineSheet({
                   type="button"
                   aria-pressed={on}
                   onClick={() => dispatch({ type: "reason", reason })}
-                  className={cn(
-                    "min-h-11 border px-4 text-[15px] transition-colors",
-                    on ? "border-primary bg-primary text-primary-foreground" : "border-input text-foreground hover:border-primary",
-                  )}
+                  className="portal-chip"
                   data-testid={`chip-reason-${i}`}
                 >
                   {reason}
@@ -91,7 +86,7 @@ export function DeclineSheet({
           />
         </div>
 
-        <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px]">
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px] text-foreground">
           <input
             type="checkbox"
             checked={form.wantsSimilar}
@@ -103,12 +98,14 @@ export function DeclineSheet({
         </label>
 
         {failed && (
-          <p role="alert" className="portal-text-danger text-[15px]" data-testid="decline-error">
+          <p role="alert" className="portal-text-danger text-[13px]" data-testid="decline-error">
             That didn&apos;t send. Please try again.
           </p>
         )}
 
         <PortalButton
+          size="lg"
+          className="w-full"
           disabled={pending}
           onClick={() =>
             onSubmit({
@@ -139,6 +136,7 @@ export function ShareSheet({
   imageUrl,
   agencyName,
   agent,
+  total,
   onShared,
 }: {
   open: boolean;
@@ -149,6 +147,8 @@ export function ShareSheet({
   imageUrl: string;
   agencyName: string | null;
   agent: string;
+  /** The quote's total as shown ("£3,177.46"), under its dates in the preview card. */
+  total?: string;
   /** Called with the method name each time a share is started, so it can be recorded. */
   onShared: (method: string) => void;
 }) {
@@ -180,6 +180,7 @@ export function ShareSheet({
   }
 
   const link = "w-full";
+  const small = (extra = "") => portalButtonClass("outline", `${link} ${extra}`.trim(), "sm");
 
   return (
     <PortalSheet
@@ -188,45 +189,46 @@ export function ShareSheet({
       label="Share this quote"
       lead="Ask what"
       italic="they think."
-      description={shareNotice(agent)}
       testId="sheet-share"
     >
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-[22px]">
         <div className="flex items-center gap-3.5 border border-border bg-card p-3.5">
-          {imageUrl && <img src={imageUrl} alt="" className="size-[72px] flex-none object-cover" />}
+          {imageUrl && <img src={imageUrl} alt="" className="size-[88px] flex-none object-cover" />}
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="portal-serif text-[20px] leading-tight text-primary">{title}</span>
-            {dates && <span className="text-[15px] text-muted-foreground">{dates}</span>}
+            <span className="portal-serif text-[19px] leading-[1.2] text-primary">{title}</span>
+            {dates && <span className="text-[13px] text-muted-foreground">{dates}</span>}
+            {total && <span className="portal-serif text-[19px] portal-text-ink">{total}</span>}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          <a href={whatsAppHref(message)} target="_blank" rel="noopener noreferrer" onClick={() => onShared(SHARE_METHOD.whatsapp)} className={portalButtonClass("outline", `${link} px-4`)} data-testid="share-whatsapp">
+          <a href={whatsAppHref(message)} target="_blank" rel="noopener noreferrer" onClick={() => onShared(SHARE_METHOD.whatsapp)} className={small()} data-testid="share-whatsapp">
             WhatsApp
           </a>
-          <a href={smsHref(message)} onClick={() => onShared(SHARE_METHOD.sms)} className={portalButtonClass("outline", `${link} px-4`)} data-testid="share-sms">
+          <a href={smsHref(message)} onClick={() => onShared(SHARE_METHOD.sms)} className={small()} data-testid="share-sms">
             Text message
           </a>
-          <a href={mailtoHref("A holiday I'm looking at", message)} onClick={() => onShared(SHARE_METHOD.email)} className={portalButtonClass("outline", `${link} px-4`)} data-testid="share-email">
+          <a href={mailtoHref("A holiday I'm looking at", message)} onClick={() => onShared(SHARE_METHOD.email)} className={small()} data-testid="share-email">
             Email
           </a>
-          <button type="button" onClick={copy} className={portalButtonClass("outline", `${link} px-4`)} data-testid="button-copy-link">
-            {copied ? "Copied" : "Copy link"}
+          <button type="button" onClick={copy} className={small()} data-testid="button-copy-link">
+            {copied ? "Copied ✓" : "Copy link"}
           </button>
         </div>
 
         {typeof navigator !== "undefined" && typeof navigator.share === "function" && (
           <PortalButton variant="link" className="self-center" onClick={nativeShare} data-testid="share-native">
-            More options
+<ShareIcon /> More options
           </PortalButton>
         )}
 
         {copied && (
-          <p role="status" className="portal-text-amber-ink text-[15px]" data-testid="share-copied">
+          <p role="status" className="portal-text-amber-ink text-[13px]" data-testid="share-copied">
             Link copied. Paste it wherever you like.
           </p>
         )}
-        <p className="break-all text-[15px] text-muted-foreground" data-testid="share-url">
+        <p className="text-[13px] leading-[1.6] text-muted-foreground">{shareNotice(agent)}</p>
+        <p className="break-all text-[13px] text-muted-foreground" data-testid="share-url">
           {url}
         </p>
       </div>

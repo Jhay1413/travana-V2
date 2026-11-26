@@ -24,7 +24,8 @@ describe("settingsWriteGuard", () => {
     ["POST", "/airports"],
     ["PATCH", "/destinations/abc"],
     ["DELETE", "/destinations/abc"],
-    ["POST", "/parks"],
+    ["PATCH", "/parks/abc"],
+    ["DELETE", "/parks/abc"],
     ["PATCH", "/accommodations/abc"],
     ["POST", "/cruise/lines"],
     ["DELETE", "/deletion-codes/abc"],
@@ -51,6 +52,7 @@ describe("settingsWriteGuard", () => {
     "/countries",
     "/destinations",
     "/lodges",
+    "/parks",
     "/resorts",
     "/room-types/",
   ])("keeps the %s quick-add open to agents, managers and homeworkers", (path) => {

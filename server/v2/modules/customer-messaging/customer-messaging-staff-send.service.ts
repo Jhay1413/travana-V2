@@ -28,7 +28,7 @@ import { whatsappSettingsService } from "../whatsapp-templates/whatsapp-settings
 import { SKIP_REASON_TEXT } from "./customer-messaging.reasons";
 import { customerMessagingService } from "./customer-messaging.service";
 import { customerMessagingRepository } from "./customer-messaging.repository";
-import { isSeededPortalLoginBody, SEEDED_SIGNATURE } from "./customer-messaging.seeds";
+import { isSeededPortalLoginBody, SEEDED_SIGNATURE, withAgencySignature } from "./customer-messaging.seeds";
 import type { AutoChannel, SkipReason } from "./customer-messaging.types";
 import type { StaffPurpose, StaffSendInput, StaffSendResult } from "./customer-messaging-staff.types";
 
@@ -243,7 +243,8 @@ async function signInSmsBody(ctx: Ctx, link: string, orgName: string | null): Pr
   const template = await smsRepository.findTemplateByCategory(ctx.orgId, "portal_login");
   if (template?.active && PORTAL_LINK_PLACEHOLDER.test(template.body) && !isSeededPortalLoginBody(template.body)) {
     const merge = await buildSmsContext({ id: ctx.client.id, orgId: ctx.orgId, email: ctx.client.email, firstName: ctx.client.firstName, surename: ctx.client.surename });
-    const merged = mergeTemplate(template.body, { ...merge, portal_link: link });
+    // A row seeded with the old fixed signature is signed with this agency's own name instead.
+    const merged = mergeTemplate(withAgencySignature(template.body, merge.company_name), { ...merge, portal_link: link });
     if (!SEEDED_SIGNATURE.test(merged)) return { body: merged, templateName: template.name, templateId: template.id };
   }
   return {

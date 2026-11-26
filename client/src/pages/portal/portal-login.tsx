@@ -180,26 +180,26 @@ export default function PortalLoginPage() {
   return (
     <PortalThemeScope>
       <main className="relative flex min-h-dvh flex-col">
-        <PortalHero className="h-[400px] md:h-[440px]">
-          <Eyebrow className="portal-text-amber-soft">Your customer portal</Eyebrow>
+        <PortalHero className="h-[470px] md:h-[520px]">
+          <Eyebrow className="text-accent">Your customer hub</Eyebrow>
           <h1 className="portal-serif text-[52px] font-light leading-none tracking-[-0.01em]" data-testid="text-portal-title">
             Welcome
             <br />
-            <em>back.</em>
+            <em className="italic">back.</em>
           </h1>
-          <p className="max-w-[300px] text-[15px] leading-[1.7] text-white/85">Your quotes, your bookings and our latest finds, kept in one quiet place.</p>
+          <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/[0.78]">Your quotes, your bookings and our latest finds, kept in one quiet place.</p>
         </PortalHero>
         <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center py-[22px]">
           <AgencyMark branding={branding} tone="dark" />
         </div>
 
-        <section className="mx-auto w-full max-w-md px-7 pb-16 pt-12">
+        <section className="mx-auto w-full max-w-md px-7 pb-[72px] pt-14">
           {forgotten ? (
             <div data-testid="pin-reset-panel">
               <h2 className="portal-serif text-[32px] font-light leading-tight text-primary">Forgotten your PIN?</h2>
               <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">Enter your email and we'll send you a link to sign in and choose a new PIN.</p>
               {resetDone ? (
-                <p role="status" className="mt-8 border-t border-border pt-6 text-[16px] leading-relaxed text-foreground" data-testid="text-pin-reset-confirmation">
+                <p role="status" className="mt-8 border-t border-border pt-6 text-[15px] leading-relaxed text-foreground" data-testid="text-pin-reset-confirmation">
                   {PIN_RESET_CONFIRMATION}
                 </p>
               ) : (
@@ -216,11 +216,11 @@ export default function PortalLoginPage() {
                     data-testid="input-reset-email"
                   />
                   {error && (
-                    <p role="alert" className="portal-text-danger text-[14px]" data-testid="text-error">
+                    <p role="alert" className="portal-text-danger text-[13px]" data-testid="text-error">
                       {error}
                     </p>
                   )}
-                  <PortalButton type="submit" disabled={pinReset.isPending || !email.trim()} className="w-full" data-testid="button-send-reset">
+                  <PortalButton type="submit" size="lg" disabled={pinReset.isPending || !email.trim()} className="w-full" data-testid="button-send-reset">
                     {pinReset.isPending ? "Sending" : "Text me a link"}
                   </PortalButton>
                 </form>
@@ -232,26 +232,6 @@ export default function PortalLoginPage() {
                 data-testid="button-back-to-signin"
               >
                 Back to sign in
-              </button>
-            </div>
-          ) : showBiometric ? (
-            <div className="flex flex-col items-center gap-5 text-center">
-              <p className="text-[15px] text-muted-foreground">Welcome back. Use Face ID or your fingerprint to sign in.</p>
-              {error && (
-                <p role="alert" className="portal-text-danger text-[14px]" data-testid="text-error">
-                  {error}
-                </p>
-              )}
-              <PortalButton onClick={handleBiometricLogin} disabled={biometricLogin.isPending} className="w-full" data-testid="button-biometric-login">
-                {biometricLogin.isPending ? "Checking" : "Sign in with Face ID"}
-              </PortalButton>
-              <button
-                type="button"
-                onClick={() => setShowBiometric(false)}
-                className="portal-serif min-h-11 text-lg italic text-primary underline decoration-border underline-offset-4"
-                data-testid="button-use-pin"
-              >
-                Use PIN instead
               </button>
             </div>
           ) : (
@@ -270,14 +250,20 @@ export default function PortalLoginPage() {
               <PinField id="pin" label="PIN" value={pin} onChange={setPin} autoComplete="current-password" testId="input-pin" toggleTestId="button-toggle-pin" />
 
               {error && (
-                <p role="alert" className="portal-text-danger text-[14px]" data-testid="text-error">
+                <p role="alert" className="portal-text-danger text-[13px]" data-testid="text-error">
                   {error}
                 </p>
               )}
 
-              <PortalButton type="submit" disabled={loginMutation.isPending || !email || pin.length !== 4} className="mt-1.5 w-full" data-testid="button-login">
-                {loginMutation.isPending ? "Signing in" : "Sign in"}
+              <PortalButton type="submit" size="lg" disabled={loginMutation.isPending || !email || pin.length !== 4} className="mt-1.5 w-full" data-testid="button-login">
+                {loginMutation.isPending ? "Logging in" : "Log in"}
               </PortalButton>
+              {/* Existing functionality the design does not show: a text button in the design's link style. */}
+              {showBiometric && (
+                <PortalButton variant="link" className="-mt-4 self-center" onClick={handleBiometricLogin} disabled={biometricLogin.isPending} data-testid="button-biometric-login">
+                  {biometricLogin.isPending ? "Checking" : "Log in with Face ID"}
+                </PortalButton>
+              )}
               <button
                 type="button"
                 onClick={openForgotten}
@@ -290,7 +276,8 @@ export default function PortalLoginPage() {
           )}
 
           <div className="mt-11 flex flex-col items-center gap-4 border-t border-border pt-7 text-center">
-            <p className="max-w-[300px] text-[14px] leading-[1.7] text-muted-foreground">First time here? Use the link your travel agent sent you.</p>
+            {branding.iconUrl && <img src={branding.iconUrl} alt="" className="block h-auto w-8" />}
+            <p className="max-w-[280px] text-sm leading-[1.7] text-muted-foreground">First time here? Use the link in the welcome email from your travel agent to set your PIN.</p>
           </div>
         </section>
       </main>

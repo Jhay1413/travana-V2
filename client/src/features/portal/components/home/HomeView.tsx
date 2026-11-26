@@ -7,6 +7,7 @@ import { splitQuotes } from "../../lib/quote-decision";
 import { agentFirstName } from "../../lib/quote-format";
 import { usePortalBrandingValue } from "../../theme/PortalThemeProvider";
 import { PortalButton, PortalHero, PortalSection } from "../brand";
+import { HomePassportCard } from "../passports/HomePassportCard";
 import { HomeDeals } from "./HomeDeals";
 import { HomeQuotesRail } from "./HomeQuotesRail";
 import { HomeAgentBlock, HomeComingUp, HomeHero, HomeNextJourney, HomeRequestQuote, HomeSummaryRows } from "./HomeSections";
@@ -92,7 +93,9 @@ export function HomeView() {
         </>
       ) : (
         <>
-          <HomeComingUp summary={data} sections={sections} />
+          <HomeComingUp summary={data} sections={sections} agent={agent}>
+            <HomePassportCard />
+          </HomeComingUp>
           <HomeSummaryRows summary={data} sections={sections} agent={agent} />
           {data.nextBooking && <HomeNextJourney booking={data.nextBooking} />}
           {sections.quotesRail && <HomeQuotesRail quotes={railQuotes} />}
@@ -114,7 +117,7 @@ function HomeShell({ children }: { children: React.ReactNode }) {
 function HomeLoading() {
   return (
     <div data-testid="portal-home" aria-busy="true">
-      <PortalHero className="min-h-[260px]">
+      <PortalHero>
         <div role="status" aria-label="Loading your home page" className="flex flex-col items-center gap-4" data-testid="home-loading">
           <div className="h-3 w-28 animate-pulse bg-white/20" />
           <div className="h-12 w-56 animate-pulse bg-white/20" />

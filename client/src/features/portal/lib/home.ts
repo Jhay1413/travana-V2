@@ -39,6 +39,22 @@ export function nextHolidaySentence(daysToGo: number): string {
   return `Your next holiday is ${daysToGo} days away.`;
 }
 
+/**
+ * The same sentence as nextHolidaySentence, in three parts so the design can set the figure in white 400 weight:
+ * "Your next holiday is " + "12 days" + " away."
+ */
+export function nextHolidayParts(daysToGo: number): { before: string; strong: string; after: string } {
+  if (daysToGo <= 0) return { before: "Your next holiday starts ", strong: "today", after: "." };
+  if (daysToGo === 1) return { before: "Your next holiday starts ", strong: "tomorrow", after: "." };
+  return { before: "Your next holiday is ", strong: `${daysToGo} days`, after: " away." };
+}
+
+/** "7 nights, all inclusive": the italic line at the right of the next-journey card; "" when neither is known. */
+export function nightsBoardLine(nights: number | null, board: string | null): string {
+  const parts = [nights ? `${nights} ${nights === 1 ? "night" : "nights"}` : "", board ? board.toLowerCase() : ""].filter(Boolean);
+  return parts.join(", ");
+}
+
 /** The heading's italic half under "Tenerife,": "in 12 days.", "tomorrow.", "today." */
 export function journeyWhen(daysToGo: number): string {
   if (daysToGo <= 0) return "today.";

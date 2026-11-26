@@ -5,6 +5,7 @@ import { transactionRepository } from "../transaction/transaction.repository";
 import { quoteImageRepository } from "./quote-image.repository";
 import { quoteImageService } from "./quote-image.service";
 import { tagService } from "../tag/tag.service";
+import { pushNotificationService } from "../notification/push-notification.service";
 import { taskService } from "../task/task.service";
 import { enquiryTableRepository } from "../enquiry/enquiry.repository";
 import { destinationGuruService } from "../destination-guru/destination-guru.service";
@@ -1051,12 +1052,30 @@ export const newQuoteService = {
     await newQuoteRepository.setFeatured(id, isFeatured);
   },
 
-  /** Used by the portal-push endpoint to fetch the title before broadcasting. */
-  async getTitleForPortalPush(id: string, scope: ScopeOrTrusted) {
+  /**
+   * The notification the portal-push endpoint broadcasts: headed with the deal's own agency name
+   * (never a fixed brand; "Latest holiday deals" when the agency is unknown), with the deal title as the body.
+   */
+  async getPortalPushMessage(id: string, scope: ScopeOrTrusted): Promise<{ title: string; body: string; orgId: string | null }> {
     await assertQuoteInScope(id, scope);
     const row = await newQuoteRepository.findTitleAndPortalVisibilityById(id);
     if (!row) throw new AppError("Quote not found", 404);
-    return row;
+    const agency = row.agencyName?.trim();
+    return {
+      title: agency ? `Latest Holiday Deals from ${agency}` : "Latest holiday deals",
+      body: row.title || "Check out our latest travel deal!",
+      orgId: row.orgId ?? null,
+    };
+  },
+
+  /**
+   * Pushes a deal to the portal customers of the deal's OWN agency and nobody else. A deal with no resolvable
+   * agency sends nothing (plain 400). The caller's own access to the quote is checked first.
+   */
+  async sendPortalPush(id: string, scope: ScopeOrTrusted): Promise<number> {
+    const message = await this.getPortalPushMessage(id, scope);
+    if (!message.orgId) throw new AppError("This deal has no agency to notify", 400);
+    return pushNotificationService.sendToOrg(message.orgId, { title: message.title, body: message.body, url: "/portal" });
   },
 
   async getRecentClientEngagement(scope: ScopeOrTrusted, limit = 10, options: RecentEngagementOptions = {}) {

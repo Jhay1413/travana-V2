@@ -18,6 +18,7 @@ import type {
   CreatePassengerInput,
   LeadPassportFields,
   PassengerFields,
+  PassportExtraFields,
   UpdatePassengerInput,
 } from './client-passenger.types';
 
@@ -59,6 +60,9 @@ function toApi(row: ClientPassengerRow, nextDeparture: string | null): ClientPas
     passportExpiry: row.passportExpiry,
     passportNonUk: row.passportNonUk,
     passportWarning: computePassportWarning(row.passportExpiry, nextDeparture),
+    nationality: row.nationality ?? null,
+    sex: row.sex ?? null,
+    passportIssueDate: row.passportIssueDate ?? null,
   };
 }
 
@@ -76,7 +80,19 @@ function leadToApi(client: NeonClient, row: ClientPassengerRow | null, nextDepar
     passportExpiry,
     passportNonUk: row?.passportNonUk ?? false,
     passportWarning: computePassportWarning(passportExpiry, nextDeparture),
+    nationality: row?.nationality ?? null,
+    sex: row?.sex ?? null,
+    passportIssueDate: row?.passportIssueDate ?? null,
   };
+}
+
+/** The passport details read from the passport: only keys the caller sent are written; an empty value clears it. */
+function extraFields(input: PassportExtraFields): PassportExtraFields {
+  const out: PassportExtraFields = {};
+  if (input.nationality !== undefined) out.nationality = cleanText(input.nationality);
+  if (input.sex !== undefined) out.sex = cleanText(input.sex);
+  if (input.passportIssueDate !== undefined) out.passportIssueDate = cleanText(input.passportIssueDate);
+  return out;
 }
 
 /** Trim everything; the passport number is upper-cased when Non-UK. Empty becomes null. */
@@ -90,6 +106,7 @@ function normalizeFields(input: CreatePassengerInput): PassengerFields {
     passportNumber: cleanText(normalisePassportNumber(input.passportNumber, passportNonUk)),
     passportExpiry: cleanText(input.passportExpiry),
     passportNonUk,
+    ...extraFields(input),
   };
 }
 
@@ -136,13 +153,14 @@ export const clientPassengerService = {
     };
   },
 
-  async setLeadPassport(clientId: string, input: { passportNumber?: string | null; passportExpiry?: string | null; passportNonUk?: boolean }, scope: Scope): Promise<ClientPassenger> {
+  async setLeadPassport(clientId: string, input: { passportNumber?: string | null; passportExpiry?: string | null; passportNonUk?: boolean } & PassportExtraFields, scope: Scope): Promise<ClientPassenger> {
     const client = await this.loadClientForWrite(clientId, scope);
     const passportNonUk = !!input.passportNonUk;
     const fields: LeadPassportFields = {
       passportNumber: cleanText(normalisePassportNumber(input.passportNumber, passportNonUk)),
       passportExpiry: cleanText(input.passportExpiry),
       passportNonUk,
+      ...extraFields(input),
     };
     const nextDeparture = await this.getNextDeparture(clientId);
     // The lead's title, name and date of birth come from the client record but are mandatory too.
@@ -173,7 +191,10 @@ export const clientPassengerService = {
     if (existing.isLead) {
       throw new AppError("The lead passenger is edited through the client record and the lead passport endpoint", 400);
     }
-    // Validate the merged passenger (stored + patch): an old record with gaps must be completed to be saved.
+    // Owner rule: passport flags never block and edits are never blocked. Only what the patch CHANGES is
+    // hard-validated, and only for format; every other gap in the record (no title, a passport close to expiry, ...)
+    // comes back as a warning on the saved passenger.
+    const patch = definedOnly(input);
     const merged = normalizeFields({
       title: existing.title,
       firstName: existing.firstName,
@@ -182,13 +203,18 @@ export const clientPassengerService = {
       passportNumber: existing.passportNumber,
       passportExpiry: existing.passportExpiry,
       passportNonUk: existing.passportNonUk,
-      ...definedOnly(input),
+      ...patch,
     });
     const nextDeparture = await this.getNextDeparture(clientId);
-    assertPassengerRules(merged, nextDeparture);
+    const errors = validatePassenger(merged, { nextDeparture, today: ukTodayYmd() });
+    const hard = (['firstName', 'surname'] as const).find((f) => f in patch && errors[f]);
+    if (hard) throw new AppError(errors[hard] as string, 400);
+    // A passport number that is being changed must be well formed (clearing it is allowed and becomes a warning).
+    // (Switching the Non-UK flag changes which format applies, so it is checked the same way.)
+    if (('passportNumber' in patch || 'passportNonUk' in patch) && merged.passportNumber && errors.passportNumber) throw new AppError(errors.passportNumber, 400);
     const row = await clientPassengerRepository.update(clientId, passengerId, merged);
     if (!row) throw new AppError('Passenger not found', 404);
-    return toApi(row, nextDeparture);
+    return { ...toApi(row, nextDeparture), warnings: Object.values(errors).filter((m): m is string => !!m) };
   },
 
   async remove(clientId: string, passengerId: string, scope: Scope): Promise<void> {

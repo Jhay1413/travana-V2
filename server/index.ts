@@ -7,7 +7,7 @@ import { setupAuth, registerAuthRoutes } from "./v2/middlewares/auth";
 import { errorHandler } from "./middlewares/error.middleware";
 import quotePublicRoutes from "./v2/modules/quote/quote-public.routes";
 import { publicQuoteHeaders } from "./v2/middlewares/public-quote-headers";
-import { isQuoteTokenPath, maskQuoteTokenPath } from "./v2/utils/log-mask";
+import { createRequestLogger } from "./v2/middlewares/request-log";
 import websitePublicRoutes from "./routes/website-public.routes";
 import portalRoutes from "./routes/portal.routes";
 import { warmPool } from "./v2/config/database";
@@ -45,33 +45,7 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      // A quote share token is a credential: log it masked, and never log the quote body behind it.
-      let logLine = `${req.method} ${maskQuoteTokenPath(path)} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse && res.locals.skipResponseLog !== true && !isQuoteTokenPath(path)) {
-        const responseStr = JSON.stringify(capturedJsonResponse);
-        logLine += ` :: ${responseStr.length > 500 ? responseStr.slice(0, 500) + "...[truncated]" : responseStr}`;
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
-});
+app.use(createRequestLogger((line) => log(line)));
 
 (async () => {
   // The page itself is never cached or indexed and does not leak its address in Referer (the router sets the same for the API).

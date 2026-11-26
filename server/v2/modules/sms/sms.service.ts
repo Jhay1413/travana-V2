@@ -4,6 +4,7 @@ import { AppError } from '../../utils/error-handler';
 import { formatUkDate, placeholderBalanceDueDate } from '../../utils/balance-due';
 import { maskLoginCodes } from '../../utils/mask-login-code';
 import { purposesForTrigger, smsRowMatchesPurpose } from '../customer-messaging/customer-messaging.purposes';
+import { withAgencySignature } from '../customer-messaging/customer-messaging.seeds';
 import type { SkipReason } from '../customer-messaging/customer-messaging.types';
 import type { AutoMessagePurpose } from '@shared/schema';
 import {
@@ -205,9 +206,6 @@ function buildQuoteUrl(token: string): string {
   // Portal quote view (requires portal login), not the public /view-quote page.
   return `${getPublicBaseUrl()}/portal/quote/${token}`;
 }
-
-/** Brand name merged into quote-share messages (SMS and WhatsApp). */
-export const QUOTE_SHARE_COMPANY_NAME = "Tina's Travel";
 
 /**
  * Body of the Share dialog's primary "Send" message. ASCII only - the SMS
@@ -483,7 +481,7 @@ export async function sendAutoSmsTemplates(opts: {
         clientId: client.id,
         clientName,
         phone,
-        body: mergeTemplate(t.body, ctx),
+        body: mergeTemplate(withAgencySignature(t.body, ctx.company_name), ctx),
         triggerSource: opts.triggerSource ?? opts.autoTrigger,
       });
       if (outcome.ok) {

@@ -40,7 +40,7 @@ test.describe("customer portal: Deals", () => {
     await page.goto("/portal/deals");
 
     await expect(page.getByTestId("portal-deals")).toBeVisible();
-    await expect(page.getByTestId("nav-tab-deals")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("portal-deals")).toBeVisible();
     await expect(page.getByTestId("tab-deals-latest")).toHaveAttribute("aria-selected", "true");
     const card = page.getByTestId(`card-deal-${beach.id}`);
     await expect(card).toBeVisible();

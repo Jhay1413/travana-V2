@@ -50,12 +50,12 @@ test.describe("customer portal: Travel interests", () => {
   test("saving returns to `next` when the visit carried one", async ({ page }) => {
     const c = await seedPortalCustomer({ withInterest: false });
     await startSignedIn(page, c);
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await expect(page).toHaveURL(/\/portal\/tags/);
-    await page.goto(`/portal/tags?next=${encodeURIComponent("/portal/trips/quotes")}`);
+    await page.goto(`/portal/tags?next=${encodeURIComponent("/portal/quotes")}`);
     await page.getByRole("button", { name: c.tagName }).click();
     await page.getByTestId("button-save-interests").click();
-    await expect(page).toHaveURL(/\/portal\/trips\/quotes$/);
+    await expect(page).toHaveURL(/\/portal\/quotes$/);
   });
 
   test("a reset-PIN visit (?change-pin=1) goes through interests and comes back to the new-PIN form", async ({ page }) => {

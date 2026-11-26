@@ -18,6 +18,13 @@ export const PORTAL_ENDPOINTS = {
   /** The public share page records a share here (the same call the public quote page makes). */
   bookings: "/api/v2/portal/bookings",
   booking: (id: string) => `/api/v2/portal/bookings/${encodeURIComponent(id)}`,
+  /** "My documents": the files on the customer's profile (optional `?bookingId=`), and one file's short-lived download link. */
+  documents: "/api/v2/portal/documents",
+  documentDownload: (id: string) => `/api/v2/portal/documents/${encodeURIComponent(id)}/download`,
+  /** Passengers and passports: list / add a passenger, save one's passport, and read a passport photo (multipart, field "photo"). */
+  passengers: "/api/v2/portal/passengers",
+  passengerPassport: (id: string) => `/api/v2/portal/passengers/${encodeURIComponent(id)}/passport`,
+  passportRead: "/api/v2/portal/passports/read",
   quoteShare: (token: string) => `/api/public/quote/${encodeURIComponent(token)}/share`,
   pushVapidKey: "/api/portal/push/vapid-key",
   pushSubscribe: "/api/portal/push/subscribe",

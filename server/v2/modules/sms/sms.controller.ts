@@ -15,8 +15,8 @@ import {
   attachChargeToMessage,
   resolveQuoteToken,
   buildPublicQuoteUrl,
-  QUOTE_SHARE_COMPANY_NAME,
 } from './sms.service';
+import { withAgencySignature } from '../customer-messaging/customer-messaging.seeds';
 import {
   platformAdminCreditsRepository,
   startOfMonthUtc,
@@ -56,12 +56,12 @@ function formatGbp(value: unknown): string {
 }
 
 const DEFAULT_TEMPLATES = [
-  { name: 'Weekly Deals', category: 'weekly_deals' as const, body: 'Hi {{first_name}}, this week\'s hottest holiday deals just dropped. Check them out: {{portal_link}} - Tina\'s Travel', autoTrigger: 'manual' as const },
-  { name: 'Balance Due Reminder', category: 'balance_due' as const, body: 'Hi {{first_name}}, a friendly reminder that your balance of {{balance_due}} for your {{destination}} trip is due by {{balance_due_date}}. Reply or call us if you need help. - Tina\'s Travel', autoTrigger: 'days_before_departure' as const },
-  { name: 'Booking Confirmation', category: 'booking_confirmation' as const, body: 'Hi {{first_name}}, your booking to {{destination}} is confirmed! Reference: {{hays_ref}}. We\'ll be in touch with next steps. - Tina\'s Travel', autoTrigger: 'on_booking_create' as const },
-  { name: 'Tickets Ready', category: 'tickets_ready' as const, body: 'Hi {{first_name}}, great news - your tickets for {{destination}} are ready! Log in to your portal to view: {{portal_link}} - Tina\'s Travel', autoTrigger: 'manual' as const },
-  { name: 'Portal Login', category: 'portal_login' as const, body: 'Hi {{first_name}}, your client portal is ready. Log in here: {{portal_link}} (use your email and the PIN we shared). - Tina\'s Travel', autoTrigger: 'on_pin_set' as const },
-  { name: 'Quote Link', category: 'quote_link' as const, body: "Hi {{first_name}}, your quote is ready. Tap to view it instantly: {{quote_url}} (you'll set a secure PIN on first visit). - Tina's Travel", autoTrigger: 'manual' as const },
+  { name: 'Weekly Deals', category: 'weekly_deals' as const, body: 'Hi {{first_name}}, this week\'s hottest holiday deals just dropped. Check them out: {{portal_link}} - {{company_name}}', autoTrigger: 'manual' as const },
+  { name: 'Balance Due Reminder', category: 'balance_due' as const, body: 'Hi {{first_name}}, a friendly reminder that your balance of {{balance_due}} for your {{destination}} trip is due by {{balance_due_date}}. Reply or call us if you need help. - {{company_name}}', autoTrigger: 'days_before_departure' as const },
+  { name: 'Booking Confirmation', category: 'booking_confirmation' as const, body: 'Hi {{first_name}}, your booking to {{destination}} is confirmed! Reference: {{hays_ref}}. We\'ll be in touch with next steps. - {{company_name}}', autoTrigger: 'on_booking_create' as const },
+  { name: 'Tickets Ready', category: 'tickets_ready' as const, body: 'Hi {{first_name}}, great news - your tickets for {{destination}} are ready! Log in to your portal to view: {{portal_link}} - {{company_name}}', autoTrigger: 'manual' as const },
+  { name: 'Portal Login', category: 'portal_login' as const, body: 'Hi {{first_name}}, your client portal is ready. Log in here: {{portal_link}} (use your email and the PIN we shared). - {{company_name}}', autoTrigger: 'on_pin_set' as const },
+  { name: 'Quote Link', category: 'quote_link' as const, body: "Hi {{first_name}}, your quote is ready. Tap to view it instantly: {{quote_url}} (you'll set a secure PIN on first visit). - {{company_name}}", autoTrigger: 'manual' as const },
 ];
 
 /** Seed the default template set for a single org if any are missing. */
@@ -161,11 +161,12 @@ function generatePin(): string {
 
 async function buildContextForClient(
   client: any,
-  opts?: { ensurePin?: boolean; autoLoginQuote?: boolean; publicQuoteLink?: boolean; quoteId?: string },
+  opts?: { ensurePin?: boolean; autoLoginQuote?: boolean; publicQuoteLink?: boolean; quoteId?: string; companyName?: string },
 ) {
   const ctx: any = {
     first_name: client.firstName, last_name: client.surename, portal_link: buildPortalLink(),
-    company_name: QUOTE_SHARE_COMPANY_NAME, destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '', quote_url: '',
+    // The sending agency's own name, from data; empty when unknown. Never a fixed brand.
+    company_name: opts?.companyName ?? '', destination: '', departure_date: '', balance_due: '', balance_due_date: '', hays_ref: '', supplier_ref: '', quote_url: '',
     portal_email: '', portal_pin: '', portal_credentials: '',
   };
 
@@ -347,14 +348,29 @@ export const smsController = {
     let sent = 0; let skipped = 0; let failed = 0;
     const results: any[] = [];
 
+    // The agency's name per organisation (one lookup each): a platform admin can send across several.
+    const orgNames = new Map<string, string>();
+    const agencyNameFor = async (clientOrgId: string | null | undefined): Promise<string> => {
+      const id = clientOrgId ?? orgId;
+      if (!id) return '';
+      const known = orgNames.get(id);
+      if (known !== undefined) return known;
+      let name = '';
+      try { name = (await smsRepository.findOrgNameById(id)) ?? ''; } catch { /* best-effort: an unknown agency has no signature */ }
+      orgNames.set(id, name);
+      return name;
+    };
+
     for (const c of clients) {
+      const companyName = await agencyNameFor((c as { orgId?: string | null }).orgId);
       const ctx = await buildContextForClient(c, {
         ensurePin: wantsPin,
         autoLoginQuote: wantsQuoteUrl,
         publicQuoteLink: usePublicQuoteLink,
         quoteId: typeof quoteId === 'string' && quoteId ? quoteId : undefined,
+        companyName,
       });
-      const body = mergeTemplate(baseBody, ctx);
+      const body = mergeTemplate(withAgencySignature(baseBody, companyName), ctx);
       const phone = normalisePhone(c.phoneNumber);
       const clientName = `${c.firstName ?? ''} ${c.surename ?? ''}`.trim();
       const msgBase = { templateId: template?.id ?? null, templateName: template?.name ?? null, clientId: c.id, clientName, body: maskLoginCodes(body), providerMessageId: null, providerError: null, costCents: null, triggeredBy: userId, triggeredByName: performerName, triggerSource: triggerSource || 'manual' };

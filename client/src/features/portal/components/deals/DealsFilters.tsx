@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 const CHIP =
-  "inline-flex min-h-11 max-w-full items-center border px-4 text-[12px] font-medium uppercase tracking-[0.14em] transition-colors [overflow-wrap:anywhere]";
+  "inline-flex min-h-11 max-w-full items-center border px-4 text-[11px] font-normal uppercase tracking-[0.16em] transition-colors [overflow-wrap:anywhere]";
 
 export function filterChipClass(pressed: boolean): string {
   return cn(CHIP, pressed ? "border-primary bg-primary text-primary-foreground" : "border-input bg-transparent text-primary hover:bg-secondary");
@@ -86,7 +86,7 @@ export function DealsFilters(props: FiltersProps) {
         <button
           type="button"
           onClick={props.onClear}
-          className="min-h-11 self-start text-[11px] font-medium uppercase tracking-[0.2em] text-primary underline underline-offset-4 hover:portal-text-amber-ink"
+          className="min-h-11 self-start text-[11px] font-normal uppercase tracking-[0.2em] text-primary underline underline-offset-4 hover:portal-text-amber-ink"
           data-testid="button-clear-filters"
         >
           Clear filters

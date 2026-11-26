@@ -13,10 +13,12 @@ vi.mock("./quote-public.repository", () => ({
   },
 }));
 
+vi.mock("../portal/portal-branding.repository", () => ({ portalBrandingRepository: {} }));
+
 import { quotePublicService } from "./quote-public.service";
 import { quotePublicRepository } from "./quote-public.repository";
 
-const OPEN = { visible: true, isBooked: false, clientDeleted: false, dateExpiry: null, agencyName: null, agencySettings: null };
+const OPEN = { visible: true, isBooked: false, clientDeleted: false, dateExpiry: null, agencyName: null, agencyLogoUrl: null, agencySettings: null };
 
 beforeEach(() => {
   vi.clearAllMocks();

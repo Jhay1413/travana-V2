@@ -105,10 +105,10 @@ export function WalletTab({
                 return (
                   <li key={entry.id} className="flex items-start justify-between gap-4 border-t border-border py-4" data-testid={`wallet-entry-${entry.id}`}>
                     <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-x-3 text-[16px] font-medium text-foreground">
+                      <p className="flex flex-wrap items-center gap-x-3 text-[15px] text-foreground">
                         {t.label}
                         {t.pending && (
-                          <span className="text-[11px] font-medium uppercase tracking-[0.18em] portal-text-amber-ink" data-testid={`wallet-entry-pending-${entry.id}`}>
+                          <span className="text-[11px] font-normal uppercase tracking-[0.18em] portal-text-amber-ink" data-testid={`wallet-entry-pending-${entry.id}`}>
                             Pending
                           </span>
                         )}

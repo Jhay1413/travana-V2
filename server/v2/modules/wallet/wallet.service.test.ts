@@ -23,6 +23,7 @@ vi.mock("../../../services/invoicePdf.service", () => ({
 }));
 
 import { walletService } from "./wallet.service";
+import { generateWithdrawalInvoiceBuffer } from "../../../services/invoicePdf.service";
 import { walletTransactionRepository } from "./wallet-transaction.repository";
 
 const TRUSTED = { orgId: null } as const;
@@ -216,6 +217,19 @@ describe("walletService.processDebit — state machine", () => {
       status: "processed",
       transfer_reference: "REF1",
     });
+  });
+});
+
+describe("walletService.processDebit: the invoice is issued by the client's own agency", () => {
+  it("hands the agency name from the details row to the invoice, and null when there is none", async () => {
+    for (const agencyName of ["Sunny Holidays", null]) {
+      vi.mocked(generateWithdrawalInvoiceBuffer).mockClear();
+      vi.mocked(walletTransactionRepository.findById).mockResolvedValue({ id: "w1", type: "debit", status: "pending" } as never);
+      vi.mocked(walletTransactionRepository.update).mockResolvedValue({ id: "w1", status: "processed", processed_at: null } as never);
+      vi.mocked(walletTransactionRepository.findByIdWithDetails).mockResolvedValue({ id: "w1", amount: "5", source: "booking_credit", clientFirstName: "Sam", clientSurname: "Lee", created_at: null, agencyName } as never);
+      await walletService.processDebit("w1", {}, TRUSTED);
+      expect(vi.mocked(generateWithdrawalInvoiceBuffer).mock.calls[0][0]).toMatchObject({ agencyName });
+    }
   });
 });
 

@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:hello@tinastraveldeals.co.uk";
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:no-reply@travana.app";
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
@@ -37,37 +37,6 @@ export const pushNotificationService = {
     await db
       .delete(pushSubscriptions)
       .where(and(eq(pushSubscriptions.clientId, clientId), eq(pushSubscriptions.endpoint, endpoint)));
-  },
-
-  async sendToAll(payload: { title: string; body: string; icon?: string; url?: string }): Promise<number> {
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-      console.warn("VAPID keys not configured, skipping push notification");
-      return 0;
-    }
-
-    const subs = await db.select().from(pushSubscriptions);
-    console.log(`[Push] Broadcasting to all, found ${subs.length} subscription(s)`);
-    if (subs.length === 0) return 0;
-
-    const jsonPayload = JSON.stringify(payload);
-    let sent = 0;
-
-    for (const sub of subs) {
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          jsonPayload,
-        );
-        sent++;
-      } catch (err: any) {
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
-        } else {
-          console.error("Push broadcast failed:", err.statusCode || err.message);
-        }
-      }
-    }
-    return sent;
   },
 
   async sendToClient(clientId: string, payload: { title: string; body: string; icon?: string; url?: string }): Promise<void> {

@@ -3,7 +3,7 @@ import { pushSubscriptionRepository } from "./push-subscription.repository";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:hello@tinastraveldeals.co.uk";
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:no-reply@travana.app";
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
@@ -27,13 +27,15 @@ export const pushNotificationService = {
     await pushSubscriptionRepository.removeByClientAndEndpoint(clientId, endpoint);
   },
 
-  async sendToAll(payload: { title: string; body: string; icon?: string; url?: string }): Promise<number> {
+  /** Customer-facing broadcast, limited to the portal customers of one agency. No org id sends nothing. */
+  async sendToOrg(orgId: string, payload: { title: string; body: string; icon?: string; url?: string }): Promise<number> {
+    if (!orgId) return 0;
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
       console.warn("VAPID keys not configured, skipping push notification");
       return 0;
     }
 
-    const subs = await pushSubscriptionRepository.findAll();
+    const subs = await pushSubscriptionRepository.findByOrgId(orgId);
     if (subs.length === 0) return 0;
 
     const jsonPayload = JSON.stringify(payload);

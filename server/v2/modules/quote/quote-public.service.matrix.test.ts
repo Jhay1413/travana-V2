@@ -13,6 +13,7 @@ vi.mock("./quote-public.repository", () => ({
     notifyAgent: vi.fn(),
   },
 }));
+vi.mock("../portal/portal-branding.repository", () => ({ portalBrandingRepository: {} }));
 vi.mock("./quote-access", () => ({ assertQuoteReadable: vi.fn() }));
 
 import { quotePublicService, blockFor, toPublicPayload } from "./quote-public.service";
@@ -30,9 +31,24 @@ const openState = (over: Partial<QuoteAccessRow> = {}): QuoteAccessRow => ({
   clientDeleted: false,
   dateExpiry: null,
   agencyName: "Tinas Travel",
-  agencySettings: { profile: { phone: "0191 594 7999" } },
+  agencyLogoUrl: "https://cdn.example.com/logo.png",
+  agencySettings: {
+    profile: { phone: "0191 594 7999", email: "hello@agency.example", addressLine1: "1 High Street", town: "Newcastle", postcode: "NE1 1AA" },
+    branding: { iconUrl: "/uploads/icon.png" },
+  },
   ...over,
 });
+
+/** The agency block the default state produces. */
+const AGENCY = {
+  name: "Tinas Travel",
+  phone: "0191 594 7999",
+  logoUrl: "https://cdn.example.com/logo.png",
+  iconUrl: "/uploads/icon.png",
+  email: "hello@agency.example",
+  address: "1 High Street, Newcastle, NE1 1AA",
+};
+const NO_AGENCY = { name: null, phone: null, logoUrl: null, iconUrl: null, email: null, address: null };
 
 /** A record as the repository returns it: full of the things the public payload must never carry. */
 function dirtyRecord(over: Record<string, unknown> = {}) {
@@ -115,7 +131,7 @@ describe("quotePublicService.getPublicQuote: state matrix", () => {
     const data = await quotePublicService.getPublicQuote(TOKEN);
     expect(data.expired).toBe(true);
     expect(data.expiredOn).toBe("2020-01-02T00:00:00.000Z");
-    expect(data.agency).toEqual({ name: "Tinas Travel", phone: "0191 594 7999" });
+    expect(data.agency).toEqual(AGENCY);
   });
 
   it("a future expiry is not flagged", async () => {
@@ -137,7 +153,7 @@ describe("quotePublicService.getPublicQuote: state matrix", () => {
     expect((err as QuoteBlockedError).body).toEqual({
       error: "This holiday has been booked.",
       code: "BOOKED",
-      agency: { name: "Tinas Travel", phone: "0191 594 7999" },
+      agency: AGENCY,
     });
     expect(quotePublicRepository.findRecordById).not.toHaveBeenCalled();
   });
@@ -153,7 +169,7 @@ describe("quotePublicService.getPublicQuote: state matrix", () => {
     expect((err as QuoteBlockedError).body).toEqual({
       error: "This quote is no longer available.",
       code: "UNAVAILABLE",
-      agency: { name: "Tinas Travel", phone: "0191 594 7999" },
+      agency: AGENCY,
     });
     expect(Object.keys((err as QuoteBlockedError).body).sort()).toEqual(["agency", "code", "error"]);
     expect(quotePublicRepository.findRecordById).not.toHaveBeenCalled();
@@ -161,7 +177,7 @@ describe("quotePublicService.getPublicQuote: state matrix", () => {
 
   it("a quote whose access row is missing is unavailable, with no agency", async () => {
     vi.mocked(quotePublicRepository.findAccessState).mockResolvedValue(null);
-    await expect(quotePublicService.getPublicQuote(TOKEN)).rejects.toMatchObject({ statusCode: 410, body: { code: "UNAVAILABLE", agency: { name: null, phone: null } } });
+    await expect(quotePublicService.getPublicQuote(TOKEN)).rejects.toMatchObject({ statusCode: 410, body: { code: "UNAVAILABLE", agency: NO_AGENCY } });
   });
 
   it("an unknown token is a 404, the same for a malformed one (no lookup at all)", async () => {
@@ -179,9 +195,30 @@ describe("quotePublicService.getPublicQuote: state matrix", () => {
     expect(quotePublicRepository.findAccessState).not.toHaveBeenCalled();
   });
 
-  it("blockFor gives the agency without a phone when none is set", () => {
-    expect(blockFor(openState({ visible: false, agencySettings: {} }))).toEqual({ code: "UNAVAILABLE", agency: { name: "Tinas Travel", phone: null } });
+  it("blockFor gives the agency with nulls for everything that is not set", () => {
+    expect(blockFor(openState({ visible: false, agencyLogoUrl: null, agencySettings: {} }))).toEqual({
+      code: "UNAVAILABLE",
+      agency: { ...NO_AGENCY, name: "Tinas Travel" },
+    });
     expect(blockFor(openState())).toBeNull();
+  });
+
+  it("the agency block has exactly six keys and only safe URLs", () => {
+    const block = blockFor(openState({ visible: false }));
+    expect(Object.keys(block!.agency).sort()).toEqual(["address", "email", "iconUrl", "logoUrl", "name", "phone"]);
+    for (const unsafe of ["javascript:alert(1)", "data:image/png;base64,AAAA", "//evil.example/x.png", "ftp://x/y.png"]) {
+      const { agency } = blockFor(openState({ visible: false, agencyLogoUrl: unsafe, agencySettings: { branding: { iconUrl: unsafe } } }))!;
+      expect(agency.logoUrl, unsafe).toBeNull();
+      expect(agency.iconUrl, unsafe).toBeNull();
+    }
+    const { agency } = blockFor(openState({ visible: false, agencyLogoUrl: "/uploads/logo.png", agencySettings: { branding: { iconUrl: "http://cdn.example.com/i.png" } } }))!;
+    expect(agency.logoUrl).toBe("/uploads/logo.png");
+    expect(agency.iconUrl).toBe("http://cdn.example.com/i.png");
+  });
+
+  it("never carries settings the page does not show (plan, ATOL, ABTA, colour, billing)", () => {
+    const { agency } = blockFor(openState({ visible: false, agencySettings: { profile: { phone: "1", atol: "ATOL 1", abta: "ABTA 2" }, plan: "pro", billing: { x: 1 } } }))!;
+    expect(JSON.stringify(agency)).not.toMatch(/ATOL|ABTA|pro|billing/);
   });
 });
 

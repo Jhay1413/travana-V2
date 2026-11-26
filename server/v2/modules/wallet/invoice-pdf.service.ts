@@ -4,6 +4,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { s3Client, S3_BUCKET } from '../../config/s3';
 
 export interface WithdrawalInvoiceData {
+  /** The agency that issues the invoice (the client's organisation). Null or empty prints no name: never a wrong one. */
+  agencyName?: string | null;
   withdrawalId: string;
   requestedAt: Date | null;
   processedAt: Date | null;
@@ -55,7 +57,8 @@ export async function generateWithdrawalInvoiceBuffer(data: WithdrawalInvoiceDat
     const ACCENT = '#4F46E5';
     const LIGHT = '#F3F4F6';
 
-    doc.fillColor(ACCENT).fontSize(22).font('Helvetica-Bold').text("Tina's Travel", 50, 50);
+    const agencyName = data.agencyName?.trim();
+    if (agencyName) doc.fillColor(ACCENT).fontSize(22).font('Helvetica-Bold').text(agencyName, 50, 50, { width: 330 });
     doc.fillColor(GREY).fontSize(9).font('Helvetica').text('Referral Withdrawal Invoice', 50, 78);
 
     const invoiceNo = `INV-${data.withdrawalId.slice(0, 8).toUpperCase()}`;

@@ -1,5 +1,5 @@
 /**
- * Customer portal, Phase 4: Bookings (Trips > Bookings) and the booking screen in the new look. The booking is made
+ * Customer portal, Phase 4: Bookings (My bookings) and the booking screen in the new look. The booking is made
  * through the staff API and its itinerary is written to the practice database (see helpers/portal-bookings.ts);
  * everything is asserted through the real screens and the portal's own endpoints.
  */
@@ -37,19 +37,20 @@ const bodyText = (page: Page) => page.evaluate(() => document.body.innerText);
 test.describe("customer portal: bookings list", () => {
   test("lists an upcoming and a past booking with price and references, and leaves out a LOST one", async ({ page }) => {
     const { upcoming, past, lost } = await fixture(page);
-    await page.goto("/portal/trips/bookings");
+    await page.goto("/portal/bookings");
 
     await expect(page.getByTestId("portal-bookings")).toBeVisible();
-    const card = page.getByTestId(`booking-card-${upcoming.id}`);
-    await expect(card).toBeVisible();
-    await expect(page.getByTestId(`booking-status-${upcoming.id}`)).toHaveText("45 days to go");
-    await expect(page.getByTestId(`booking-price-${upcoming.id}`)).toHaveText("£2,350.00");
-    await expect(card).toContainText("£1,175.00 per person");
-    await expect(page.getByTestId(`booking-ref-${upcoming.id}`)).toContainText(upcoming.haysRef);
-    await expect(card).toContainText("E2E Sun Holidays");
-    await expect(card).toContainText("7 nights · All Inclusive · 2 adults");
-    await expect(card).toContainText("View booking");
-    await expect(card.locator("img").first()).toBeVisible();
+    // The next holiday is shown in full, as the design's My bookings screen.
+    await expect(page.getByTestId("portal-booking")).toBeVisible();
+    await expect(page.getByTestId("booking-title")).toContainText("Hotel Playa Azul");
+    await expect(page.getByTestId("booking-countdown")).toContainText("45");
+    await expect(page.getByTestId("booking-total")).toHaveText("£2,350.00");
+    await expect(page.getByTestId("booking-per-person")).toContainText("£1,175.00 per person");
+    await expect(page.getByTestId("booking-details")).toContainText(upcoming.haysRef);
+    await expect(page.getByTestId("booking-details")).toContainText("E2E Sun Holidays");
+    await expect(page.getByTestId("booking-details")).toContainText("7 nights · All Inclusive");
+    await expect(page.getByTestId("booking-flights")).toBeVisible();
+    await expect(page.getByTestId("booking-journey-rest")).toBeVisible();
 
     await expect(page.getByTestId("bookings-past")).toContainText("Where you've");
     const row = page.getByTestId(`booking-past-${past.id}`);
@@ -58,29 +59,40 @@ test.describe("customer portal: bookings list", () => {
     await expect(page.getByTestId(`booking-past-ref-${past.id}`)).toContainText(past.haysRef);
     await expect(row).toContainText("Travelled");
 
-    await expect(page.getByTestId(`booking-card-${lost.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`booking-other-${lost.id}`)).toHaveCount(0);
     await expect(page.getByTestId(`booking-past-${lost.id}`)).toHaveCount(0);
     expect(await bodyText(page)).not.toContain("Dead Deal");
   });
 
-  test("a card opens its booking, and a past row does too", async ({ page }) => {
+  test("a past row opens its booking, and a booking screen marks the Bookings tab", async ({ page }) => {
     const { upcoming, past } = await fixture(page);
-    await page.goto("/portal/trips/bookings");
-    await page.getByTestId(`booking-card-${upcoming.id}`).click();
-    await expect(page).toHaveURL(new RegExp(`/portal/booking/${upcoming.id}$`));
-    await expect(page.getByTestId("portal-booking")).toBeVisible();
-    await expect(page.getByTestId("nav-tab-trips")).toHaveAttribute("aria-current", "page");
-    await page.goto("/portal/trips/bookings");
+    await page.goto("/portal/bookings");
     await page.getByTestId(`booking-past-${past.id}`).click();
     await expect(page).toHaveURL(new RegExp(`/portal/booking/${past.id}$`));
+    await expect(page.getByTestId("portal-booking")).toBeVisible();
+    await expect(page.getByTestId("nav-tab-bookings")).toHaveAttribute("aria-current", "page");
     await expect(page.getByTestId("booking-countdown")).toHaveText("Travelled");
+    await page.goto(`/portal/booking/${upcoming.id}`);
+    await expect(page.getByTestId("portal-booking")).toBeVisible();
+  });
+
+  test("a second upcoming holiday is listed under 'Your other holidays' and opens its own full screen", async ({ page }) => {
+    const { q, upcoming } = await fixture(page);
+    const later = await seedPortalBooking(page, q, { title: "Later Lanzarote Break", travelDate: 120 });
+    await page.goto("/portal/bookings");
+    await expect(page.getByTestId("booking-title")).toContainText("Hotel Playa Azul");
+    await expect(page.getByTestId("bookings-others")).toContainText("Later Lanzarote Break");
+    await expect(page.getByTestId(`booking-other-${upcoming.id}`)).toHaveCount(0);
+    await page.getByTestId(`booking-other-${later.id}`).click();
+    await expect(page).toHaveURL(new RegExp(`/portal/booking/${later.id}$`));
+    await expect(page.getByTestId("booking-title")).toContainText("Later Lanzarote");
   });
 
   test("a booking whose status was never set is shown, one that is LOST is not (API and screen)", async ({ page }) => {
     const { q, upcoming, lost } = await fixture(page);
     const unset = await seedPortalBooking(page, q, { title: "No Status Yet", travelDate: 90, noStatus: true });
-    await page.goto("/portal/trips/bookings");
-    await expect(page.getByTestId(`booking-card-${unset.id}`)).toBeVisible();
+    await page.goto("/portal/bookings");
+    await expect(page.getByTestId("bookings-others")).toContainText("No Status Yet");
     const headers = await authHeaders(page);
     const list = (await (await page.request.get("/api/v2/portal/bookings", { headers })).json()) as { id: string }[];
     expect(list.map((b) => b.id)).toContain(unset.id);
@@ -93,9 +105,9 @@ test.describe("customer portal: bookings list", () => {
     const { q } = await fixture(page);
     const testBooking = await seedPortalBooking(page, q, { title: "Staff Practice Trip", travelDate: 20 });
     await queryRows(`update transaction set is_test = true where id = $1`, [testBooking.transactionId]);
-    await page.goto("/portal/trips/bookings");
+    await page.goto("/portal/bookings");
     await expect(page.getByTestId("portal-bookings")).toBeVisible();
-    await expect(page.getByTestId(`booking-card-${testBooking.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`booking-other-${testBooking.id}`)).toHaveCount(0);
     expect(await bodyText(page)).not.toContain("Staff Practice Trip");
     const headers = await authHeaders(page);
     expect((await page.request.get(`/api/v2/portal/bookings/${testBooking.id}`, { headers })).status()).toBe(404);
@@ -111,11 +123,11 @@ test.describe("customer portal: bookings list", () => {
   test("a customer with no bookings sees the empty state, with a way to Quotes and to the agent", async ({ page }) => {
     const c = await seedPortalCustomer();
     await startSignedIn(page, c);
-    await page.goto("/portal/trips/bookings");
+    await page.goto("/portal/bookings");
     await expect(page.getByTestId("bookings-empty")).toContainText("No holidays");
     await expect(page.getByTestId("button-bookings-message")).toContainText(/Message /);
     await page.getByTestId("button-bookings-quotes").click();
-    await expect(page).toHaveURL(/\/portal\/trips\/quotes$/);
+    await expect(page).toHaveURL(/\/portal\/quotes$/);
   });
 
   test("a failed load says so and Try again recovers", async ({ page }) => {
@@ -125,11 +137,11 @@ test.describe("customer portal: bookings list", () => {
       if (fail) await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Failed to load bookings" }) });
       else await route.continue();
     });
-    await page.goto("/portal/trips/bookings");
+    await page.goto("/portal/bookings");
     await expect(page.getByTestId("bookings-error")).toBeVisible();
     fail = false;
     await page.getByTestId("button-bookings-retry").click();
-    await expect(page.getByTestId(`booking-card-${upcoming.id}`)).toBeVisible();
+    await expect(page.getByTestId("portal-booking")).toBeVisible();
   });
 });
 
@@ -156,10 +168,21 @@ test.describe("customer portal: the booking screen", () => {
     await expect(page.getByTestId("booking-per-person")).toHaveText("£1,175.00 per person");
     await expect(page.getByTestId("booking-disclaimer")).toHaveText("Prices include all applicable taxes and fees.");
 
-    // Flight out, the transfer, the first hotel, the second hotel, the flight home, then the extra.
-    const kinds = await page.locator('[data-testid^="journey-item-"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
-    expect(kinds).toEqual(["flight-out", "transfer", "hotel", "hotel", "flight-in", "extra"]);
-    const journey = page.getByTestId("quote-journey");
+    // The booking has six things. The two flights are the "Flights / There and back." cards (outbound first, then the
+    // return, each with its flight number); the other four are "Your stay" in date order: the transfer, the first
+    // hotel, the second hotel, then the extra. Together that is everything, nothing missing and nothing twice.
+    const flights = page.locator('[data-testid^="booking-flight-"]');
+    await expect(flights).toHaveCount(2);
+    await expect(flights.nth(0)).toContainText("Outbound flight");
+    await expect(flights.nth(0)).toContainText("E2E101");
+    await expect(flights.nth(1)).toContainText("Return flight");
+    await expect(flights.nth(1)).toContainText("E2E102");
+    const stay = page.getByTestId("booking-journey-rest");
+    await expect(stay).toContainText("Your stay");
+    const kinds = await stay.locator('[data-testid^="journey-item-"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-kind")));
+    expect(kinds).toEqual(["transfer", "hotel", "hotel", "extra"]);
+    expect(await page.locator('[data-testid^="journey-item-"]').count() + (await flights.count())).toBe(6);
+    const journey = stay;
     await expect(journey).toContainText("Palma airport to Hotel Playa Azul");
     await expect(journey).toContainText("Double sea view");
     await expect(journey).toContainText("Family suite");
@@ -197,10 +220,10 @@ test.describe("customer portal: the booking screen", () => {
     for (const k of keys) expect(k, k).not.toMatch(/cost|commission|salesPrice|discount|serviceCharge|userId|clientId|transactionId|passenger|firstName|lastName|surname/i);
   });
 
-  test("with the payments flag off there is no balance, paid amount, due date, document or passport text anywhere", async ({ page }) => {
+  test("with the payments flag off there is no balance, paid amount, due date, deposit or progress text anywhere", async ({ page }) => {
     const { upcoming, past } = await fixture(page);
-    const banned = /balance|\bpaid\b|\bdue\b|payments?\b|documents?\b|passports?\b|deposit/i;
-    for (const url of ["/portal/trips/bookings", `/portal/booking/${upcoming.id}`, `/portal/booking/${past.id}`]) {
+    const banned = /balance|\bpaid\b|\bdue\b|payments?\b|deposit|progress/i;
+    for (const url of ["/portal/bookings", `/portal/booking/${upcoming.id}`, `/portal/booking/${past.id}`]) {
       await page.goto(url);
       await expect(page.getByTestId(url.includes("/booking/") ? "portal-booking" : "portal-bookings")).toBeVisible();
       expect(await bodyText(page), url).not.toMatch(banned);
@@ -215,16 +238,17 @@ test.describe("customer portal: the booking screen", () => {
     await expect(page.getByTestId("booking-countdown")).toHaveText("Travelled");
     await page.goto(`/portal/booking/${away.id}`);
     await expect(page.getByTestId("booking-countdown")).toHaveText("You're away");
-    await page.goto("/portal/trips/bookings");
-    await expect(page.getByTestId(`booking-status-${away.id}`)).toHaveText("You're away now");
+    await page.goto("/portal/bookings");
+    await expect(page.getByTestId("booking-countdown")).toContainText("away");
   });
 
-  test("'Ask about this booking' opens Messages with the composer started", async ({ page }) => {
+  test("'Ask about this booking' opens the Message sheet over the booking with that booking chosen", async ({ page }) => {
     const { upcoming } = await fixture(page);
     await page.goto(`/portal/booking/${upcoming.id}`);
     await page.getByTestId("button-ask-about-booking").click();
-    await expect(page).toHaveURL(/\/portal\/messages\?about=/);
-    await expect(page.getByTestId("input-message")).toHaveValue(`About Hotel Playa Azul Majorca (${upcoming.haysRef}): `);
+    await expect(page.getByTestId("sheet-message")).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/portal/booking/${upcoming.id}$`));
+    await expect(page.getByTestId(`message-about-booking:${upcoming.id}`)).toHaveAttribute("aria-checked", "true");
   });
 
   test("another customer's booking id shows the not-found screen, and the API answers 404 (and 400 for a malformed id)", async ({ page }) => {
@@ -247,7 +271,7 @@ test.describe("customer portal: the booking screen", () => {
     await expect(page.getByTestId("booking-not-found")).toBeVisible();
     await expect(page.getByTestId("booking-total")).toHaveCount(0);
     await page.getByTestId("button-back-to-bookings").click();
-    await expect(page).toHaveURL(/\/portal\/trips\/bookings$/);
+    await expect(page).toHaveURL(/\/portal\/bookings$/);
 
     const headers = { Authorization: `Bearer ${otherToken}` };
     expect((await page.request.get(`/api/v2/portal/bookings/${upcoming.id}`, { headers })).status()).toBe(404);
@@ -279,15 +303,9 @@ test.describe("customer portal: bookings at 360px", () => {
     await startSignedIn(page, q.portal);
     await page.setViewportSize({ width: 360, height: 740 });
 
-    await page.goto("/portal/trips/bookings");
-    const card = page.getByTestId(`booking-card-${long.id}`);
-    await expect(card).toBeVisible();
+    await page.goto("/portal/bookings");
+    await expect(page.getByTestId("portal-booking")).toBeVisible();
     expect(await scrollWidth(page)).toBeLessThanOrEqual(360);
-    const cardBox = await card.boundingBox();
-    expect(cardBox && cardBox.x >= 0 && cardBox.x + cardBox.width <= 360, `card box ${JSON.stringify(cardBox)}`).toBe(true);
-    const seg = await page.getByTestId("trips-segment-bookings").boundingBox();
-    expect(seg?.height ?? 0).toBeGreaterThanOrEqual(43.5);
-
     await page.goto(`/portal/booking/${long.id}`);
     const h1 = page.getByTestId("booking-title");
     await expect(h1).toBeVisible();

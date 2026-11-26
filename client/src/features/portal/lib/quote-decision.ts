@@ -25,7 +25,7 @@ export function optimisticDecision(action: "interested" | "declined" | "reopened
   return { state: "declined", reason: input.reason || null, note: input.note?.trim() || null, wantsSimilar: input.wantsSimilar ?? true, at };
 }
 
-/** Selector: the sticky bar and the interested block show only while the customer can still decide. */
+/** Selector: the decision buttons and the interested block show only while the customer can still decide. */
 export function canShowDecisionControls(quote: Pick<PortalQuoteDetail, "canDecide" | "decision">): boolean {
   return quote.canDecide && quote.decision.state === "none";
 }

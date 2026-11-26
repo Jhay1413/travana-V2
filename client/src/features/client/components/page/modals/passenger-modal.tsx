@@ -19,11 +19,13 @@ import { useToast } from "@/hooks/use-toast";
 import type { ClientPassenger } from "@/features/client/api/client-passenger.api";
 import { useClientPassengerMutations } from "@/features/client/api/use-client-passengers";
 import {
+  PASSENGER_SEXES,
   PASSENGER_TITLES,
   draftFromPassenger,
   draftToInput,
   passengerDraftErrors,
   passengerFullName,
+  passengerSexLabel,
   passengerSaveBlockedReason,
   passportExpiryDeadlineLabel,
   type PassengerDraft,
@@ -35,6 +37,9 @@ function serverMessage(err: unknown): string | null {
 }
 
 const ERROR_CLASS = "text-[12px] text-destructive";
+
+/** Radix Select items cannot have an empty value, so "not stated" uses a placeholder value. */
+const NOT_STATED = "none";
 
 interface PassengerModalProps {
   clientId: string;
@@ -60,7 +65,10 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
   const pending = saveLead.isPending || create.isPending || update.isPending || remove.isPending;
   // Add and edit (lead passport included) need all six fields and a valid passport; the server enforces the same rules.
   const errors = passengerDraftErrors(draft, { nextDeparture, isLead });
-  const blockedReason = passengerSaveBlockedReason(errors);
+  // Adding (and the lead passport) keep every rule. Editing an existing passenger is never blocked by a gap or a
+  // near-expiry passport (those are warnings); only a blank name or a malformed number that was typed stops Save.
+  const editBlocker = errors.firstName ?? errors.surname ?? (draft.passportNumber.trim() ? errors.passportNumber : null) ?? null;
+  const blockedReason = isEdit ? editBlocker : passengerSaveBlockedReason(errors);
   const canSave = blockedReason === null;
   const deadline = passportExpiryDeadlineLabel(nextDeparture);
 
@@ -83,7 +91,14 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
     const input = draftToInput(draft);
     try {
       if (isLead) {
-        await saveLead.mutateAsync({ passportNumber: input.passportNumber, passportExpiry: input.passportExpiry, passportNonUk: input.passportNonUk });
+        await saveLead.mutateAsync({
+          passportNumber: input.passportNumber,
+          passportExpiry: input.passportExpiry,
+          passportNonUk: input.passportNonUk,
+          nationality: input.nationality,
+          sex: input.sex,
+          passportIssueDate: input.passportIssueDate,
+        });
         done("Passport details saved");
       } else if (passenger?.id) {
         await update.mutateAsync({ passengerId: passenger.id, input });
@@ -207,6 +222,42 @@ export function PassengerModal({ clientId, open, onOpenChange, passenger, nextDe
                     Must expire after {deadline} (6 months past travel)
                   </p>
                 )}
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="passenger-nationality">Nationality</Label>
+                <Input
+                  id="passenger-nationality"
+                  maxLength={100}
+                  value={draft.nationality}
+                  onChange={(e) => set({ nationality: e.target.value })}
+                  data-testid="input-passenger-nationality"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="passenger-sex">Sex</Label>
+                <Select value={draft.sex || NOT_STATED} onValueChange={(v) => set({ sex: v === NOT_STATED ? "" : v })}>
+                  <SelectTrigger id="passenger-sex" data-testid="select-passenger-sex">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NOT_STATED}>Not stated</SelectItem>
+                    {PASSENGER_SEXES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {passengerSexLabel(s)} ({s})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="col-span-2 grid gap-1.5">
+                <Label htmlFor="passenger-passport-issue">Passport issue date</Label>
+                <Input
+                  id="passenger-passport-issue"
+                  type="date"
+                  value={draft.passportIssueDate}
+                  onChange={(e) => set({ passportIssueDate: e.target.value })}
+                  data-testid="input-passenger-passport-issue"
+                />
               </div>
             </div>
             {blockedReason && (

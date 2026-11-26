@@ -285,8 +285,19 @@ describe("registrationOptions", () => {
     expect(claims).toMatchObject({ challenge: "rc", clientId: "c1" });
     const args = vi.mocked(generateRegistrationOptions).mock.calls[0][0];
     expect(args.rpID).toBe(rp.rpID);
+    expect(args.rpName).toBe("Customer portal");
     expect(args.excludeCredentials).toEqual([{ id: "old", transports: ["internal"] }]);
     expect(args.authenticatorSelection).toMatchObject({ residentKey: "required", userVerification: "required" });
+  });
+
+  it("shows the customer's own agency in the passkey prompt, and leaves the RP ID alone", async () => {
+    vi.mocked(generateRegistrationOptions).mockResolvedValue({ challenge: "rc" } as never);
+    repo.findVerifiedWebauthnForClient.mockResolvedValue([]);
+    repo.findClientBasicById.mockResolvedValue({ id: "c1", email: "sam@example.com", firstName: "Sam", mustChangePin: false, agencyName: "Sunny Holidays" });
+    await portalWebauthnService.registrationOptions(freshSession(), rp);
+    const args = vi.mocked(generateRegistrationOptions).mock.calls[0][0];
+    expect(args.rpName).toBe("Sunny Holidays");
+    expect(args.rpID).toBe(rp.rpID);
   });
 
   it("rejects a client that no longer exists", async () => {

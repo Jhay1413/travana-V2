@@ -1,7 +1,5 @@
 // Public surface of the customer-portal feature: import it from here, not from deep paths.
 export { PortalThemeProvider, PortalThemeScope, usePortalTheme, usePortalBrandingValue, usePortalOverlayContainer } from "./theme/PortalThemeProvider";
-export { resolveBrandPalette, paletteToCssVars, normaliseHex, readableForeground, PORTAL_NAVY, PORTAL_CREAM } from "./theme/brand-colour";
-export type { BrandPalette, BrandMode } from "./theme/brand-colour";
 export { loadPortalFonts } from "./theme/portal-fonts";
 
 export { PORTAL_ENDPOINTS } from "./api/portal-endpoints";
@@ -14,14 +12,18 @@ export type { PortalPushState } from "./api/use-portal-push";
 export { usePortalFaceId, findThisDevice, FACE_ID_REAUTH_MESSAGE } from "./api/use-portal-face-id";
 export { signOutPortal } from "./api/portal-session";
 
-export { PORTAL_TABS, TRIPS_SEGMENTS, activeTabForPath, tripsSegmentForPath, portalRedirectTarget, portalNextTarget, withoutParams, interestsRedirectTarget } from "./portal-nav";
-export type { PortalTab, PortalTabKey, TripsSegment } from "./portal-nav";
+export { PORTAL_TABS, portalTabs, activeTabForPath, menuKeyForPath, portalRedirectTarget, portalNextTarget, withoutParams, interestsRedirectTarget } from "./portal-nav";
+export type { PortalTab, PortalTabKey } from "./portal-nav";
 
-export { AgencyMark, Eyebrow, FactList, PortalButton, PortalHero, PortalSection, SplitHeading, portalButtonClass } from "./components/brand";
+export { AgencyMark, ShareIcon, Eyebrow, FactList, PortalButton, PortalHero, PortalSection, SplitHeading, portalButtonClass } from "./components/brand";
 export { PinField, sanitisePin } from "./components/PinField";
 export { PortalDialog } from "./components/PortalDialog";
 export { PortalFooter } from "./components/PortalFooter";
 export { PortalHeader } from "./components/PortalHeader";
+export { PortalMenu, menuCount } from "./components/PortalMenu";
+export type { PortalMenuItem } from "./components/PortalMenu";
+export { PortalHeroContext, useRegisterPortalHero } from "./components/hero-context";
+export { agentFirstName } from "./lib/quote-format";
 export { PortalTabBar } from "./components/PortalTabBar";
 export { PortalField } from "./components/PortalField";
 
@@ -40,3 +42,7 @@ export { RewardsView } from "./components/rewards/RewardsView";
 export { InterestsView } from "./components/interests/InterestsView";
 export { SetupWizard } from "./components/setup/SetupWizard";
 export { OPEN_SETUP_WIZARD_EVENT } from "./lib/setup-wizard";
+export { PortalMessageSheetProvider, usePortalMessageSheet } from "./components/messages/MessageSheet";
+export type { PortalMessageSheetApi } from "./components/messages/MessageSheet";
+export type { MessageAbout } from "./lib/message-sheet";
+export { HomePassportCard } from "./components/passports/HomePassportCard";

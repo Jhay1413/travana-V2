@@ -136,7 +136,7 @@ export function SetupWizard({ manualOnly = false }: { manualOnly?: boolean }) {
           <Check className="size-8 portal-text-amber-ink" strokeWidth={1.5} aria-hidden />
           <p className="portal-serif text-[30px] leading-tight text-primary">You&apos;re all set.</p>
           <p className="max-w-[300px] text-[15px] text-muted-foreground">You&apos;ll get notified when your travel agent messages you.</p>
-          <PortalButton className="mt-4 w-full" onClick={finish} data-testid="wizard-finish">
+          <PortalButton size="lg" className="mt-4 w-full" onClick={finish} data-testid="wizard-finish">
             Let&apos;s go
           </PortalButton>
         </div>
@@ -155,7 +155,7 @@ export function SetupWizard({ manualOnly = false }: { manualOnly?: boolean }) {
                     {notifError}
                   </p>
                 )}
-                <PortalButton className="w-full" onClick={handleEnableNotifications} disabled={notifStatus === "loading"} data-testid="wizard-enable-push">
+                <PortalButton size="lg" className="w-full" onClick={handleEnableNotifications} disabled={notifStatus === "loading"} data-testid="wizard-enable-push">
                   {notifStatus === "loading" ? "Setting up…" : notifStatus === "error" ? "Try again" : "Turn on notifications"}
                 </PortalButton>
                 <p className="text-center text-[14px] text-muted-foreground">Tap &quot;Allow&quot; when your browser asks. You can turn this off anytime.</p>
@@ -164,7 +164,7 @@ export function SetupWizard({ manualOnly = false }: { manualOnly?: boolean }) {
               <div className="mt-4 flex flex-col gap-2 border border-border bg-secondary px-4 py-3" data-testid="wizard-notif-unavailable">
                 {platform === "ios" ? (
                   <>
-                    <p className="text-[15px] font-medium text-foreground">On iPhone, Apple requires you to install this app first.</p>
+                    <p className="text-[15px] font-normal text-foreground">On iPhone, Apple requires you to install this app first.</p>
                     <p className="text-[15px] text-muted-foreground">
                       Use the &quot;Add to Home Screen&quot; option below, then open the app from your Home Screen. Notifications will work after that.
                     </p>
@@ -182,7 +182,7 @@ export function SetupWizard({ manualOnly = false }: { manualOnly?: boolean }) {
               {installed ? (
                 <p className="mt-3 text-[15px] portal-text-amber-ink">Installed! Find it on your Home Screen.</p>
               ) : installPromptAvailable ? (
-                <PortalButton className="mt-4 w-full" onClick={handleInstall} data-testid="wizard-install-app">
+                <PortalButton size="lg" className="mt-4 w-full" onClick={handleInstall} data-testid="wizard-install-app">
                   Install app
                 </PortalButton>
               ) : (
@@ -205,24 +205,24 @@ export function SetupWizard({ manualOnly = false }: { manualOnly?: boolean }) {
                           <Steps>
                             <>Tap the Share button at the bottom of the screen</>
                             <>
-                              Tap the Plus button (bottom right), then <strong className="font-medium text-primary">&quot;Add to Home Screen&quot;</strong>
+                              Tap the Plus button (bottom right), then <strong className="font-normal text-primary">&quot;Add to Home Screen&quot;</strong>
                             </>
                             <>
-                              Tap <strong className="font-medium text-primary">&quot;Add&quot;</strong> and open it from your Home Screen
+                              Tap <strong className="font-normal text-primary">&quot;Add&quot;</strong> and open it from your Home Screen
                             </>
                           </Steps>
                         </>
                       ) : (
                         <Steps>
                           <>
-                            Tap <strong className="font-medium text-primary">⋮ Menu</strong> (top right)
+                            Tap <strong className="font-normal text-primary">⋮ Menu</strong> (top right)
                           </>
                           <>
-                            Tap <strong className="font-medium text-primary">&quot;Install app&quot;</strong> or{" "}
-                            <strong className="font-medium text-primary">&quot;Add to Home screen&quot;</strong>
+                            Tap <strong className="font-normal text-primary">&quot;Install app&quot;</strong> or{" "}
+                            <strong className="font-normal text-primary">&quot;Add to Home screen&quot;</strong>
                           </>
                           <>
-                            Tap <strong className="font-medium text-primary">&quot;Install&quot;</strong>
+                            Tap <strong className="font-normal text-primary">&quot;Install&quot;</strong>
                           </>
                         </Steps>
                       )}
@@ -235,11 +235,11 @@ export function SetupWizard({ manualOnly = false }: { manualOnly?: boolean }) {
 
           <div className="flex flex-col gap-3">
             {outcome === "notifications-only" && (
-              <PortalButton onClick={finish} data-testid="wizard-continue">
+              <PortalButton size="lg" className="w-full" onClick={finish} data-testid="wizard-continue">
                 Continue
               </PortalButton>
             )}
-            <PortalButton variant="outline" onClick={finish} data-testid="wizard-skip">
+            <PortalButton variant="link" className="self-center" onClick={finish} data-testid="wizard-skip">
               {notifStatus === "done" ? "Done" : "Maybe later"}
             </PortalButton>
           </div>

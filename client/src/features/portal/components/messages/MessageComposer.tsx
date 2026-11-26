@@ -45,13 +45,13 @@ export function MessageComposer({
           onKeyDown={onKeyDown}
           placeholder="Type a message…"
           rows={1}
-          className="min-h-12 max-h-28 min-w-0 flex-1 resize-none rounded-none border border-input bg-card px-3 py-3 text-[16px] leading-snug text-foreground focus-visible:border-accent focus-visible:outline-none"
+          className="min-h-12 max-h-28 min-w-0 flex-1 resize-none rounded-none border border-input bg-card px-3 py-3 portal-serif text-[22px] leading-snug text-foreground focus-visible:border-accent focus-visible:outline-none"
           data-testid="input-message"
         />
         <PortalButton
           onClick={onSend}
           disabled={!canSend(value, sending)}
-          className="min-h-12 px-5"
+          size="sm" className="px-5"
           aria-label={sending ? "Sending" : "Send message"}
           data-testid="button-send-message"
         >

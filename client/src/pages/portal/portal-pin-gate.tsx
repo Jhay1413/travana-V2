@@ -53,8 +53,8 @@ export function PortalPinGate({ children }: { children: ReactNode }) {
   return (
     <PortalThemeScope>
       <main className="relative flex min-h-dvh flex-col">
-        <PortalHero className="h-[340px]">
-          <Eyebrow className="portal-text-amber-soft">One last step</Eyebrow>
+        <PortalHero className="h-[470px] md:h-[520px]">
+          <Eyebrow className="text-accent">One last step</Eyebrow>
           <h1 className="portal-serif text-[44px] font-light leading-none" data-testid="text-set-pin-title">
             Secure your
             <br />
@@ -72,12 +72,12 @@ export function PortalPinGate({ children }: { children: ReactNode }) {
             <PinField id="confirm-pin" label="Confirm PIN" value={confirm} onChange={setConfirm} autoComplete="new-password" testId="input-confirm-pin" />
 
             {error && (
-              <p role="alert" className="portal-text-danger text-[14px]" data-testid="text-set-pin-error">
+              <p role="alert" className="portal-text-danger text-[13px]" data-testid="text-set-pin-error">
                 {error}
               </p>
             )}
 
-            <PortalButton type="submit" disabled={changePin.isPending || pin.length !== 4 || confirm.length !== 4} className="w-full" data-testid="button-save-pin">
+            <PortalButton type="submit" size="lg" disabled={changePin.isPending || pin.length !== 4 || confirm.length !== 4} className="w-full" data-testid="button-save-pin">
               {changePin.isPending ? "Saving" : "Save PIN"}
             </PortalButton>
           </form>

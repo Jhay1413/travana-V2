@@ -33,7 +33,7 @@ describe("quotePublicRepository.findAccessState", () => {
     const state = await quotePublicRepository.findAccessState(q.id);
     expect(state).toMatchObject({ visible: true, isBooked: false, clientDeleted: false, agencyName: "Tinas Travel" });
     expect(blockFor(state)).toBeNull();
-    expect(blockFor({ ...state!, visible: false })?.agency).toEqual({ name: "Tinas Travel", phone: "0191 594 7999" });
+    expect(blockFor({ ...state!, visible: false })?.agency).toMatchObject({ name: "Tinas Travel", phone: "0191 594 7999" });
   });
 
   it.each([

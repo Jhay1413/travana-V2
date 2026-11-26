@@ -3,7 +3,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { QuoteWithJoins } from "../client-types";
+import {
+  bookingAllocationOptions,
+  enquiryAllocationOptions,
+  noAllocationsMessage,
+  quoteAllocationOptions,
+  type AllocationDeal,
+  type AllocationOption,
+} from "@/features/client/lib/upload-allocation";
 
 type UploadFileState = {
   file: File | null;
@@ -13,11 +20,52 @@ type UploadFileState = {
   allocationId: string;
 };
 
+/** The "Select Quote / Enquiry / Booking" list: the client's real deals, or a plain note when there are none. */
+function AllocationSelect({
+  kind,
+  options,
+  value,
+  onChange,
+  testId,
+}: {
+  kind: "Enquiry" | "Quote" | "Booking";
+  options: AllocationOption[];
+  value: string;
+  onChange: (id: string) => void;
+  testId: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-medium text-black/60">Select {kind}</Label>
+      {options.length === 0 ? (
+        <p className="text-sm text-black/55" data-testid={`${testId}-empty`}>
+          {noAllocationsMessage(kind)}
+        </p>
+      ) : (
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid={testId}>
+            <SelectValue placeholder={`Select ${kind.toLowerCase()}...`} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((o) => (
+              <SelectItem key={o.id} value={o.id}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </div>
+  );
+}
+
 export function UploadFileDialog({
   open,
   onOpenChange,
   clientName,
   quotes,
+  enquiries,
+  bookings,
   uploadFile,
   setUploadFile,
   onUpload,
@@ -25,7 +73,10 @@ export function UploadFileDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   clientName: string;
-  quotes: QuoteWithJoins[];
+  quotes: ReadonlyArray<AllocationDeal>;
+  /** The client's real enquiries and bookings, from the same transactions the page already loads. */
+  enquiries: ReadonlyArray<AllocationDeal>;
+  bookings: ReadonlyArray<AllocationDeal>;
   uploadFile: UploadFileState;
   setUploadFile: (state: UploadFileState) => void;
   onUpload: () => void;
@@ -108,65 +159,37 @@ export function UploadFileDialog({
                 <SelectItem value="None">None (Client level)</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-black/55">Linking a file shares it with the customer.</p>
           </div>
 
-          {uploadFile.allocationType === "Quote" && quotes.length > 0 && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Select Quote</Label>
-              <Select
-                value={uploadFile.allocationId}
-                onValueChange={(v) => setUploadFile({ ...uploadFile, allocationId: v })}
-              >
-                <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-quote-allocation">
-                  <SelectValue placeholder="Select quote..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {quotes.map((q) => (
-                    <SelectItem key={q.id} value={q.id}>
-                      {q.title || q.quote_type || "Quote"} - {q.quote_status || "—"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {uploadFile.allocationType === "Quote" && (
+            <AllocationSelect
+              kind="Quote"
+              options={quoteAllocationOptions(quotes)}
+              value={uploadFile.allocationId}
+              onChange={(v) => setUploadFile({ ...uploadFile, allocationId: v })}
+              testId="select-quote-allocation"
+            />
           )}
 
           {uploadFile.allocationType === "Enquiry" && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Select Enquiry</Label>
-              <Select
-                value={uploadFile.allocationId}
-                onValueChange={(v) => setUploadFile({ ...uploadFile, allocationId: v })}
-              >
-                <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-enquiry-allocation">
-                  <SelectValue placeholder="Select enquiry..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="enquiry-1">Initial requirements</SelectItem>
-                  <SelectItem value="enquiry-2">Budget alignment</SelectItem>
-                  <SelectItem value="enquiry-3">Destination short-list</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <AllocationSelect
+              kind="Enquiry"
+              options={enquiryAllocationOptions(enquiries)}
+              value={uploadFile.allocationId}
+              onChange={(v) => setUploadFile({ ...uploadFile, allocationId: v })}
+              testId="select-enquiry-allocation"
+            />
           )}
 
           {uploadFile.allocationType === "Booking" && (
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-black/60">Select Booking</Label>
-              <Select
-                value={uploadFile.allocationId}
-                onValueChange={(v) => setUploadFile({ ...uploadFile, allocationId: v })}
-              >
-                <SelectTrigger className="h-10 rounded-xl border-black/10 bg-white/70" data-testid="select-booking-allocation">
-                  <SelectValue placeholder="Select booking..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="booking-1">Hotel confirmation</SelectItem>
-                  <SelectItem value="booking-2">Transfers</SelectItem>
-                  <SelectItem value="booking-3">Activities</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <AllocationSelect
+              kind="Booking"
+              options={bookingAllocationOptions(bookings)}
+              value={uploadFile.allocationId}
+              onChange={(v) => setUploadFile({ ...uploadFile, allocationId: v })}
+              testId="select-booking-allocation"
+            />
           )}
 
           <div className="flex justify-end gap-3 pt-2">

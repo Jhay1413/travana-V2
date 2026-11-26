@@ -10,7 +10,7 @@ export const portalQuoteKeys = {
   detail: (token: string) => ["portal", "quote", token] as const,
 };
 
-/** The signed-in customer's quotes (also feeds the Trips badge and Home, which share this query). */
+/** The signed-in customer's quotes (also feeds the Quotes badge and Home, which share this query). */
 export function usePortalQuoteList() {
   return useQuery<PortalQuoteListItem[]>({
     queryKey: portalQuoteKeys.list,
@@ -73,7 +73,7 @@ export function usePortalQuoteAction(token: string, quoteId: string) {
     onSuccess: ({ decision }) => {
       queryClient.setQueryData<PortalQuoteListItem[]>(portalQuoteKeys.list, (old) => (old ? applyDecisionToList(old, quoteId, decision) : old));
       queryClient.setQueryData<PortalQuoteDetail>(portalQuoteKeys.detail(token), (old) => (old ? applyDecisionToDetail(old, decision) : old));
-      // The Trips badge and Home's "quotes to consider" count come from the summary, which an answer changes.
+      // The Quotes badge and Home's "quotes to consider" count come from the summary, which an answer changes.
       void queryClient.invalidateQueries({ queryKey: portalSummaryKey });
     },
   });

@@ -1,6 +1,8 @@
 import axiosClient from "@/api/client/axios-client";
 import { NEON_CLIENT_ENDPOINTS } from "@/api/endpoints";
 
+export type PassengerSex = "M" | "F" | "X";
+
 export interface ClientPassenger {
   /** null only for the lead when no lead row is saved yet. */
   id: string | null;
@@ -15,6 +17,11 @@ export interface ClientPassenger {
   passportExpiry: string | null;
   passportNonUk: boolean;
   passportWarning: boolean;
+  /** Read from the passport by the customer portal; staff may view and correct them. */
+  nationality: string | null;
+  sex: PassengerSex | null;
+  /** YYYY-MM-DD */
+  passportIssueDate: string | null;
 }
 
 export interface ClientPassengersResponse {
@@ -27,6 +34,9 @@ export interface LeadPassportInput {
   passportNumber: string | null;
   passportExpiry: string | null;
   passportNonUk: boolean;
+  nationality?: string | null;
+  sex?: PassengerSex | null;
+  passportIssueDate?: string | null;
 }
 
 export interface PassengerInput {
@@ -37,6 +47,9 @@ export interface PassengerInput {
   passportNumber?: string | null;
   passportExpiry?: string | null;
   passportNonUk?: boolean;
+  nationality?: string | null;
+  sex?: PassengerSex | null;
+  passportIssueDate?: string | null;
 }
 
 export const clientPassengerApi = {

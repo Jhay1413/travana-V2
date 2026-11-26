@@ -14,6 +14,7 @@ import {
   passengerCountLabel,
   passengerFullName,
   passengerLabel,
+  passengerSexLabel,
   passportFootnote,
   type RightCardTab,
 } from "@/features/client/lib/client-passengers";
@@ -77,6 +78,9 @@ function PassengerCard({ passenger, index, readOnly, nextDeparture, onEdit }: { 
               )}
             </span>
           </PassportCell>
+          <PassportCell label="Nationality">{orDash(passenger.nationality)}</PassportCell>
+          <PassportCell label="Sex">{passengerSexLabel(passenger.sex)}</PassportCell>
+          <PassportCell label="Passport issued">{formatPassengerDate(passenger.passportIssueDate)}</PassportCell>
         </div>
       </div>
     </div>

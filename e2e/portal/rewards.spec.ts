@@ -39,7 +39,6 @@ test.describe("customer portal: Rewards", () => {
     const { inWallet, pending, paid, voided } = await fixture(page);
     await page.goto("/portal/referrals");
     await expect(page.getByTestId("portal-rewards")).toBeVisible();
-    await expect(page.getByTestId("nav-tab-account")).toHaveAttribute("aria-current", "page");
 
     await expect(page.getByTestId("text-tier-label")).toHaveText("Standard VIP");
     await expect(page.getByTestId("text-tier-perks")).toHaveText("25% commission reward per referral");

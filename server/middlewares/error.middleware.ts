@@ -29,6 +29,17 @@ export const errorHandler = (
     });
   }
 
+  // body-parser errors carry the raw request text on `err.body` (a malformed sign-in body holds the PIN): never log the error object.
+  const parseType = (err as { type?: unknown }).type;
+  if (parseType === "entity.parse.failed" || parseType === "entity.too.large") {
+    console.warn(`[http] request body rejected: ${String(parseType)}`);
+    return res.status(parseType === "entity.too.large" ? 413 : 400).json({
+      success: false,
+      message: "The request could not be read",
+      error: "The request could not be read",
+    });
+  }
+
   console.error(err);
   return res.status(500).json({
     success: false,

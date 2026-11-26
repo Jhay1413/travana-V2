@@ -7,6 +7,7 @@ vi.mock("./quote.repository", () => ({
     quoteInScopeForWrite: vi.fn(),
     transactionInScopeForWrite: vi.fn(),
     findChildQuoteId: vi.fn(),
+    findTitleAndPortalVisibilityById: vi.fn(),
     findById: vi.fn(),
     findWithDetails: vi.fn(),
     create: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock("../transaction/transaction.repository", () => ({
   transactionRepository: { findById: vi.fn(), update: vi.fn(), create: vi.fn() },
 }));
 vi.mock("./quote-image.repository", () => ({ quoteImageRepository: { addImages: vi.fn(), getByQuoteId: vi.fn() } }));
+vi.mock("../notification/push-notification.service", () => ({ pushNotificationService: { sendToOrg: vi.fn() } }));
 vi.mock("../tag/tag.service", () => ({ tagService: { addQuoteTags: vi.fn(), updateQuoteTags: vi.fn(), detachQuoteTag: vi.fn() } }));
 vi.mock("../task/task.service", () => ({ taskService: { completeByEntity: vi.fn() } }));
 vi.mock("../enquiry/enquiry.repository", () => ({ enquiryTableRepository: { findByTransactionId: vi.fn() } }));
@@ -71,6 +73,7 @@ vi.mock("../ai-embeddings/ai-embeddings.service", () => ({
 
 import { newQuoteService } from "./quote.service";
 import { newQuoteRepository } from "./quote.repository";
+import { pushNotificationService } from "../notification/push-notification.service";
 import { transactionRepository } from "../transaction/transaction.repository";
 import { aiEmbeddingsService } from "../ai-embeddings/ai-embeddings.service";
 import { quoteImageRepository } from "./quote-image.repository";
@@ -1449,5 +1452,46 @@ describe("newQuoteService.updateQuote — un-ticking not_for_social creates the 
 
     expect(errSpy).toHaveBeenCalled();
     errSpy.mockRestore();
+  });
+});
+
+describe("newQuoteService.getPortalPushMessage: headed with the deal's own agency", () => {
+  it("names the agency, and the deal title is the body", async () => {
+    vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue({ title: "Cyprus Beach Deal", show_on_portal: true, agencyName: "Sunny Holidays" } as never);
+    expect(await newQuoteService.getPortalPushMessage("q1", TRUSTED)).toEqual({ title: "Latest Holiday Deals from Sunny Holidays", body: "Cyprus Beach Deal", orgId: null });
+  });
+  it("with no agency name it is a neutral heading, never a fixed brand", async () => {
+    vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue({ title: null, show_on_portal: true, agencyName: null } as never);
+    expect(await newQuoteService.getPortalPushMessage("q1", TRUSTED)).toEqual({ title: "Latest holiday deals", body: "Check out our latest travel deal!", orgId: null });
+  });
+  it("refuses a deal outside the caller's scope, and an unknown one", async () => {
+    vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(false as never);
+    await expect(newQuoteService.getPortalPushMessage("q1", TRUSTED)).rejects.toMatchObject({ statusCode: 404 });
+    vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(true as never);
+    vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue(undefined as never);
+    await expect(newQuoteService.getPortalPushMessage("q1", TRUSTED)).rejects.toMatchObject({ statusCode: 404 });
+  });
+});
+
+describe("newQuoteService.sendPortalPush: only the deal's own agency is notified", () => {
+  it("sends to that agency's org id and nowhere else", async () => {
+    vi.mocked(pushNotificationService.sendToOrg).mockResolvedValue(3);
+    vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue({ title: "Deal A", show_on_portal: true, agencyName: "Agency A", orgId: "org-a" } as never);
+    expect(await newQuoteService.sendPortalPush("q1", TRUSTED)).toBe(3);
+    expect(pushNotificationService.sendToOrg).toHaveBeenCalledTimes(1);
+    expect(pushNotificationService.sendToOrg).toHaveBeenCalledWith("org-a", { title: "Latest Holiday Deals from Agency A", body: "Deal A", url: "/portal" });
+  });
+  it("a deal with no resolvable agency sends nothing and is a plain 400", async () => {
+    vi.mocked(pushNotificationService.sendToOrg).mockClear();
+    vi.mocked(newQuoteRepository.findTitleAndPortalVisibilityById).mockResolvedValue({ title: "Deal", show_on_portal: true, agencyName: null, orgId: null } as never);
+    await expect(newQuoteService.sendPortalPush("q1", TRUSTED)).rejects.toMatchObject({ statusCode: 400 });
+    expect(pushNotificationService.sendToOrg).not.toHaveBeenCalled();
+  });
+  it("a deal the caller cannot act on sends nothing", async () => {
+    vi.mocked(pushNotificationService.sendToOrg).mockClear();
+    vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(false as never);
+    await expect(newQuoteService.sendPortalPush("q1", TRUSTED)).rejects.toMatchObject({ statusCode: 404 });
+    expect(pushNotificationService.sendToOrg).not.toHaveBeenCalled();
+    vi.mocked(newQuoteRepository.quoteInScope).mockResolvedValue(true as never);
   });
 });

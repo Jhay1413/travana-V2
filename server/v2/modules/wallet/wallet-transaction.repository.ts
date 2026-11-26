@@ -1,5 +1,5 @@
 import { db } from "../../config/database";
-import { wallet_transaction, clientTable, booking, transaction } from "@shared/schema";
+import { wallet_transaction, clientTable, organization, booking, transaction } from "@shared/schema";
 import type { InsertWalletTransaction, WalletTransaction } from "@shared/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { buildTransactionWriteScopeConds, type ScopeOrTrusted } from "../../utils/scope-conditions";
@@ -170,12 +170,14 @@ export const walletTransactionRepository = {
         clientSurname: clientTable.surename,
         clientEmail: clientTable.email,
         clientPhone: clientTable.phoneNumber,
+        agencyName: organization.name,
         bookingHaysRef: booking.hays_ref,
         bookingSupplierRef: booking.supplier_ref,
         bookingTravelDate: booking.travel_date,
       })
       .from(wallet_transaction)
       .leftJoin(clientTable, eq(wallet_transaction.client_id, clientTable.id))
+      .leftJoin(organization, eq(clientTable.orgId, organization.id))
       .leftJoin(booking, eq(wallet_transaction.booking_id, booking.id))
       .where(eq(wallet_transaction.id, id))
       .limit(1);

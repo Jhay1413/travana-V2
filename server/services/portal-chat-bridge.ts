@@ -179,6 +179,8 @@ export async function bridgePortalMessageToChat(
   clientId: string,
   messageText: string,
   isFromDeal: boolean = false,
+  /** What the agent sees instead of the stored text: rich text for the inbox and a plain-text notification preview. */
+  display?: { html: string; preview: string },
 ): Promise<void> {
   try {
     const clientName = await getClientName(clientId);
@@ -215,7 +217,7 @@ export async function bridgePortalMessageToChat(
     await db.insert(chatMessages).values({
       conversationId,
       senderId: portalSenderId(clientId),
-      content: sanitizeRichText(messageText),
+      content: sanitizeRichText(display?.html ?? messageText),
     });
 
     await db
@@ -223,9 +225,10 @@ export async function bridgePortalMessageToChat(
       .set({ updatedAt: new Date() })
       .where(eq(chatConversations.id, conversationId));
 
-    const preview = messageText.length > 80
-      ? messageText.slice(0, 80) + "…"
-      : messageText;
+    const previewSource = display?.preview ?? messageText;
+    const preview = previewSource.length > 80
+      ? previewSource.slice(0, 80) + "…"
+      : previewSource;
 
     for (const agentId of agentIds) {
       try {

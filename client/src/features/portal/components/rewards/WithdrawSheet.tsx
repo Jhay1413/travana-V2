@@ -84,14 +84,14 @@ export function WithdrawSheet({
       {requested ? (
         <div className="flex flex-col items-center gap-2 py-4 text-center" role="status" data-testid="withdraw-done">
           <p className="portal-eyebrow">Withdrawal requested</p>
-          <p className="portal-serif text-[56px] font-light leading-none portal-text-ink" data-testid="withdraw-done-amount">
+          <p className="portal-serif text-[58px] font-light leading-none portal-text-ink" data-testid="withdraw-done-amount">
             {poundsText(requested.amount)}
           </p>
           <p className="text-[15px] text-foreground" data-testid="withdraw-done-method">
             {methodLabel(requested.method)}
           </p>
           <p className="mt-2 text-[15px] text-muted-foreground">Your agent will process your payment shortly.</p>
-          <PortalButton variant="outline" className="mt-6 w-full" onClick={onClose} data-testid="button-withdraw-close">
+          <PortalButton variant="link" className="mt-4 self-center" onClick={onClose} data-testid="button-withdraw-close">
             Close
           </PortalButton>
         </div>
@@ -123,7 +123,7 @@ export function WithdrawSheet({
                     aria-checked={on}
                     onClick={() => setMethod(m.value)}
                     className={cn(
-                      "min-h-12 border px-3 text-[12px] font-medium uppercase tracking-[0.16em] transition-colors",
+                      "min-h-12 border px-3 text-[11px] font-normal uppercase tracking-[0.16em] transition-colors",
                       on ? "border-primary bg-primary text-primary-foreground" : "border-input bg-transparent text-primary hover:bg-secondary",
                     )}
                     data-testid={`button-method-${m.value}`}
@@ -153,7 +153,7 @@ export function WithdrawSheet({
           )}
 
           <div className="flex flex-col gap-3">
-            <PortalButton className="w-full" onClick={handleWithdraw} disabled={withdraw.isPending} data-testid="button-withdraw-submit">
+            <PortalButton size="lg" className="w-full" onClick={handleWithdraw} disabled={withdraw.isPending} data-testid="button-withdraw-submit">
               {withdraw.isPending ? "Requesting…" : `Withdraw ${poundsText(balance)}`}
             </PortalButton>
             <p className="text-center text-[15px] text-muted-foreground">Your agent will process your payment after confirming your details.</p>

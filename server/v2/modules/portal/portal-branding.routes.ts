@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { createRateLimiter } from '../../middlewares/rate-limit.middleware';
+import { noResponseLog } from '../../middlewares/no-response-log';
 import { validate } from '../../middlewares/validation.middleware';
 import { portalBrandingController } from './portal-branding.controller';
 import { portalBrandingBySlugValidator } from './portal-branding.validator';
 import { portalAuth } from './portal.middleware';
 
 export const portalBrandingRouter = Router();
+portalBrandingRouter.use(noResponseLog);
 
 // The public lookup is cheap but unauthenticated: a per-IP cap blunts slug guessing.
 const publicBrandingLimiter = createRateLimiter({

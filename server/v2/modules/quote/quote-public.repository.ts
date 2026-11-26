@@ -531,6 +531,7 @@ export const quotePublicRepository = {
         clientDeleted: sql<boolean>`(${clientTable.deletedAt} IS NOT NULL)`,
         dateExpiry: quote.date_expiry,
         agencyName: organization.name,
+        agencyLogoUrl: organization.logoUrl,
         agencySettings: organization.settings,
       })
       .from(quote)

@@ -91,7 +91,8 @@ const PortalQuoteViewPage = lazy(() => import("@/pages/portal/portal-quote-view"
 const PortalBookingViewPage = lazy(() => import("@/pages/portal/portal-booking-view"));
 const PortalTagsPage = lazy(() => import("@/pages/portal/portal-tags"));
 const PortalReferralsPage = lazy(() => import("@/pages/portal/portal-referrals"));
-const PortalTripsPage = lazy(() => import("@/pages/portal/portal-trips"));
+const PortalQuotesPage = lazy(() => import("@/pages/portal/portal-quotes"));
+const PortalBookingsPage = lazy(() => import("@/pages/portal/portal-bookings"));
 const PortalAccountPage = lazy(() => import("@/pages/portal/portal-account"));
 const PortalLegacyRedirect = lazy(() => import("@/pages/portal/portal-redirect"));
 // ──────────────────────────────────────────────────────────────────────────────
@@ -290,12 +291,12 @@ function AppRouter() {
             <Route path="/portal/tags" component={PortalTagsPage} />
             <Route path="/portal/quote/:token" component={PortalQuoteViewPage} />
             <Route path="/portal/booking/:id" component={PortalBookingViewPage} />
-            {/* Old tabs: Quotes and Bookings now live under Trips. */}
-            <Route path="/portal/quotes" component={PortalLegacyRedirect} />
-            <Route path="/portal/bookings" component={PortalLegacyRedirect} />
+            <Route path="/portal/quotes" component={PortalQuotesPage} />
+            <Route path="/portal/bookings" component={PortalBookingsPage} />
+            {/* The short-lived Trips tab: its paths now redirect to the separate screens. */}
             <Route path="/portal/trips" component={PortalLegacyRedirect} />
-            <Route path="/portal/trips/quotes" component={PortalTripsPage} />
-            <Route path="/portal/trips/bookings" component={PortalTripsPage} />
+            <Route path="/portal/trips/quotes" component={PortalLegacyRedirect} />
+            <Route path="/portal/trips/bookings" component={PortalLegacyRedirect} />
             <Route path="/portal/account" component={PortalAccountPage} />
             <Route path="/portal/deals" component={PortalDealsPage} />
             <Route path="/portal/messages" component={PortalMessagesPage} />

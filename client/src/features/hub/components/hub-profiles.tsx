@@ -1701,7 +1701,7 @@ export default function HubProfiles() {
                     <div className="flex items-start gap-3">
                       <Users className="h-4 w-4 text-slate-400 mt-0.5 flex-shrink-0" />
                       <div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{profile.role} at Tina's Travel Deals</p>
+                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{currentUser?.orgName ? `${profile.role} at ${currentUser.orgName}` : profile.role}</p>
                         <p className="text-xs text-slate-500">Current Role</p>
                       </div>
                     </div>

@@ -7,8 +7,7 @@
  * `@theme inline` block turns into utilities, which is what lets the portal reuse
  * `bg-background`, `text-primary`, `border-border` and the shadcn primitives.
  *
- * The agency's brand colour is written onto the wrapper at runtime by
- * PortalThemeProvider (--primary, --primary-foreground, --portal-brand-accent).
+ * The colours are the design's own and are the same for every agency: the agency's brand colour is never applied here.
  */
 /* Same order the app declares (Tailwind v4), so these rules sit in the layers they name and Tailwind utilities always win over them. */
 @layer theme, base, components, utilities;
@@ -17,19 +16,17 @@
 @layer base {
 .portal-theme {
   /* Portal-only palette (H S% L%, used as hsl(var(--token))) */
-  --portal-cream: 32 67% 95%; /* #FBF3EA */
-  --portal-sand: 34 47% 88%; /* #EFE3D3 */
-  --portal-line: 34 35% 82%; /* #E2D4C2 */
-  --portal-ink: 218 31% 15%; /* #1B2433 */
-  --portal-navy: 212 100% 19%; /* #002C60 */
-  --portal-navy-deep: 213 100% 11%; /* #001A3A */
-  --portal-amber: 27 74% 50%; /* #DE7621 */
-  --portal-amber-ink: 26 84% 36%; /* #A9520F, amber text on cream (AA) */
-  --portal-amber-soft: 27 80% 71%; /* #F2B27A, amber text on navy (AA) */
-  --portal-muted: 220 13% 35%; /* #4E5666 */
-  --portal-danger: 4 75% 40%; /* #B4261A */
-  /* The agency's brand colour as an accent, when it is too light to carry large surfaces. */
-  --portal-brand-accent: var(--portal-amber-soft);
+  --portal-cream: 31.8 68% 95.1%; /* #FBF3EA */
+  --portal-sand: 34.3 46.7% 88.2%; /* #EFE3D3 */
+  --portal-line: 33.8 35.6% 82.4%; /* #E2D4C2 */
+  --portal-ink: 217.5 30.8% 15.3%; /* #1B2433 */
+  --portal-navy: 212.5 100% 18.8%; /* #002C60 */
+  --portal-navy-deep: 213.1 100% 11.4%; /* #001A3A */
+  --portal-amber: 27 74.1% 50%; /* #DE7621 */
+  --portal-amber-ink: 26.1 83.6% 36.1%; /* #A9520F, amber text on cream (AA) */
+  --portal-amber-soft: 28 82.2% 71.4%; /* #F2B27A, amber text on navy (AA) */
+  --portal-muted: 220 13.3% 35.3%; /* #4E5666 */
+  --portal-danger: 4.7 74.8% 40.4%; /* #B4261A */
 
   --portal-font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
   --portal-font-sans: "Jost", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -52,23 +49,25 @@
   --destructive: var(--portal-danger);
   --destructive-foreground: 0 0% 100%;
   --border: var(--portal-line);
-  --input: 218 31% 15% / 0.45;
+  --input: 218 31% 15% / 0.35;
   --ring: var(--portal-amber);
   --radius: 0rem;
 
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: var(--portal-font-sans);
-  font-weight: 400;
-  font-size: 15px;
-  line-height: 1.6;
+  /* The reference sets no base size beyond the browser default; every element carries its own size. Body is Jost Light. */
+  font-weight: 300;
+  font-size: 16px;
+  /* The design sets no base line height (browser default `normal`); every element that needs one states it. */
+  line-height: normal;
   color-scheme: light;
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
 }
 
 .portal-theme ::placeholder {
-  color: #656d7c; /* 4.5:1 on cream */
+  color: #8c93a3; /* the reference placeholder colour */
 }
 
 .portal-theme :focus-visible {
@@ -83,20 +82,20 @@
   font-family: var(--portal-font-serif);
 }
 
-/* Small tracked uppercase label above a heading. 11px is the floor for labels. */
+/* Small tracked uppercase label above a heading (reference .eyebrow: 11px, 400, 0.36em). */
 .portal-eyebrow {
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.3em;
+  font-weight: 400;
+  letter-spacing: 0.36em;
   text-transform: uppercase;
   color: hsl(var(--portal-amber-ink));
 }
 
-/* Field labels and small caps */
+/* Field labels and small caps (reference .caps-label: 11px, 400, 0.24em) */
 .portal-caps-label {
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.2em;
+  font-weight: 400;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: hsl(var(--muted-foreground));
 }
@@ -109,10 +108,56 @@
 .portal-text-ink { color: hsl(var(--portal-ink)); }
 .portal-text-amber-ink { color: hsl(var(--portal-amber-ink)); }
 .portal-text-amber-soft { color: hsl(var(--portal-amber-soft)); }
-.portal-text-brand-accent { color: hsl(var(--portal-brand-accent)); }
-.portal-bg-brand-accent { background-color: hsl(var(--portal-brand-accent)); }
 .portal-border-line { border-color: hsl(var(--portal-line)); }
 .portal-text-danger { color: hsl(var(--portal-danger)); }
+
+/* Filter chip (design .lx-chip: 40px, 0 14px, #D9C7B1 border, 11px / 0.16em, navy when pressed). */
+.portal-chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #d9c7b1;
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--portal-navy));
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.portal-chip[aria-pressed="true"] {
+  background: hsl(var(--portal-navy));
+  border-color: hsl(var(--portal-navy));
+  color: #fff;
+}
+
+/* Underlined multi-line field (design .lx-field on a textarea). */
+.portal-textarea {
+  width: 100%;
+  min-height: 76px;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid hsl(var(--input));
+  border-radius: 0;
+  background: transparent;
+  color: hsl(var(--portal-ink));
+  font-family: var(--portal-font-serif);
+  font-size: 22px;
+  line-height: 1.3;
+  resize: vertical;
+}
+
+/* Sheet entrance (design lxUp). */
+@keyframes portalSheetUp {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.portal-sheet-in {
+  animation: portalSheetUp 0.28s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .portal-sheet-in { animation: none; }
+}
 
 /* The navy fade over a photo hero (also used over the plain navy hero for consistency) */
 .portal-hero-fade {
@@ -159,4 +204,40 @@
     scroll-behavior: auto !important;
   }
 }
+}
+
+/*
+ * The app declares its fonts with `@theme inline`, so the `font-sans` / `font-serif` utilities compile to Poppins / Fraunces
+ * and a custom property cannot change them. Inside the portal they must be Jost / Cormorant. This sits in the utilities
+ * layer with a higher specificity (.portal-theme .font-x) so it wins over the app's utility, in the page and in sheets
+ * and dialogs (which mount inside the wrapper).
+ */
+@layer utilities {
+  .portal-theme .font-sans { font-family: var(--portal-font-sans); }
+  .portal-theme .font-serif { font-family: var(--portal-font-serif); }
+}
+
+@layer base {
+  /* Browsers do not inherit the family into form controls by default. */
+  .portal-theme button,
+  .portal-theme input,
+  .portal-theme select,
+  .portal-theme textarea {
+    font-family: inherit;
+  }
+}
+
+/* Passport scanner: the line that moves over the photo while it is read (design lxScan). */
+@layer components {
+  @keyframes portalScan {
+    0% { top: 6%; }
+    50% { top: 90%; }
+    100% { top: 6%; }
+  }
+  .portal-scan-line {
+    animation: portalScan 1.8s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .portal-scan-line { animation: none; }
+  }
 }

@@ -171,15 +171,20 @@ test.describe("creating a quote", () => {
   // (The drawer steps above are the same as in "a quote created from the client page keeps every value typed
   // into the drawer", which passes, so a problem with the steps themselves shows up there.)
 
-  test("saving with no holiday type shows 'Package type is required' and a 'Can't save yet' message, and saves nothing", async ({ page }) => {
+  test("a new quote starts with Package Holiday chosen, so 'Package type is required' cannot be reached from the screen; the server still refuses a quote with no type", async ({ page }) => {
     const agency = await seedDealsAgency();
-    await signIn(page, agency.agentEmail);
+    const userId = await signIn(page, agency.agentEmail);
     const client = await apiCreateClient(page.request);
     const drawer = await openQuoteDrawerFromClient(page, client.id);
-    await drawer.getByTestId("input-drawer-title").fill("No type");
-    await drawer.getByTestId("form-drawer-submit").click();
-    await expect(drawer.getByText("Package type is required")).toBeVisible();
-    await expectToast(page, "Can't save yet");
+    // The pop-up defaults a new quote to the standard holiday type once the lookups load (quote-rhf-form.tsx), as the enquiry does.
+    await expect(drawer.getByLabel("Holiday Type")).toContainText("Package Holiday");
+    await expect(drawer.getByText("Package type is required")).toHaveCount(0);
+
+    // The rule itself lives on the server: no holiday type is a 400 and leaves no deal behind.
+    const res = await page.request.post("/api/v2/transactions", {
+      data: { client_id: client.id, user_id: userId, quote: { title: "No type", travel_date: "2027-06-14", quote_type: "manual" } },
+    });
+    expect(res.status(), await res.text()).toBe(400);
     expect(await queryRows(`select 1 from transaction where client_id = $1`, [client.id])).toHaveLength(0);
   });
 

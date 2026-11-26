@@ -52,6 +52,22 @@ describe("deal interest messages", () => {
     expect(values).toEqual(expect.arrayContaining(["c1", "client", "❤️ Interested in deal: deal-9", "Interested in deal: deal-9"]));
   });
 
+  it("also recognises the current wording, which ends in the deal's id marker", async () => {
+    await portalRepository.hasClientInterestMessage("c1", "deal-9");
+    const { text, values } = last();
+    expect(text).toContain("right(");
+    expect(values).toContain("[deal:deal-9]");
+  });
+
+  it("finds a deal to be interested in only when it is live on the given agency's portal", async () => {
+    await portalRepository.findDealForInterest("org-a", "deal-9");
+    const { text, values } = last();
+    expect(text).toContain(`"transaction"."org_id" = $`);
+    expect(text).toContain(`"show_on_portal" = $`);
+    expect(text).toContain(`"is_active" = $`);
+    expect(values).toEqual(expect.arrayContaining(["org-a", "deal-9"]));
+  });
+
   it("lists told deals from this customer's own sent messages only", async () => {
     await portalRepository.findToldDealIds("c1");
     const { text, values } = last();

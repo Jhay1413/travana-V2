@@ -56,6 +56,36 @@ afterEach(() => {
   delete process.env.CONNEXA_BASE_URL;
 });
 
+describe("the agency's own name is the signature of an automatic text", () => {
+  const OLD = "Hi {{first_name}}, you are booked. - Tina's Travel";
+  const sentBody = () => {
+    const send = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/api/schedule-message"));
+    return JSON.parse(send?.[1].body).message as string;
+  };
+
+  it("a row seeded with the old fixed signature goes out signed with the sending agency", async () => {
+    vi.mocked(repo.findOrgNameById).mockResolvedValue("Sunny Holidays");
+    vi.mocked(repo.findActiveTemplatesByTrigger).mockResolvedValue([tpl({ body: OLD })] as never);
+    await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "on_booking_create" });
+    expect(sentBody()).toBe("Hi Ann, you are booked. - Sunny Holidays");
+  });
+
+  it("with no agency name found the signature is left off, never a fixed name", async () => {
+    vi.mocked(repo.findOrgNameById).mockResolvedValue(undefined);
+    vi.mocked(repo.findActiveTemplatesByTrigger).mockResolvedValue([tpl({ body: OLD })] as never);
+    await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "on_booking_create" });
+    expect(sentBody()).toBe("Hi Ann, you are booked.");
+  });
+
+  it("an agency really named Tina's Travel is unaffected, and {{company_name}} merges to the agency", async () => {
+    vi.mocked(repo.findOrgNameById).mockResolvedValue("Tina's Travel");
+    vi.mocked(repo.findActiveTemplatesByTrigger).mockResolvedValue([tpl({ body: OLD }), tpl({ id: "t2", body: "Hi - {{company_name}}" })] as never);
+    await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "on_booking_create" });
+    const bodies = fetchMock.mock.calls.filter((c) => String(c[0]).endsWith("/api/schedule-message")).map((c) => JSON.parse(c[1].body).message);
+    expect(bodies).toEqual(["Hi Ann, you are booked. - Tina's Travel", "Hi - Tina's Travel"]);
+  });
+});
+
 describe("the SMS branch keeps today's behaviour", () => {
   it("sends one text per active template with the merged body, logs a sent row and attaches the credit charge", async () => {
     const out = await sendAutoSmsTemplates({ clientId: "c1", autoTrigger: "on_booking_create", triggerSource: "booking.createBooking", dedupeSince: SINCE });

@@ -119,6 +119,7 @@ export const referralWithdrawalService = {
           clientName,
           clientEmail: details.clientEmail ?? null,
           clientPhone: details.clientPhone ?? null,
+          agencyName: details.agencyName ?? null,
           amount: details.amount,
           method: details.method,
           accountName: details.account_name ?? null,

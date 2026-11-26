@@ -239,7 +239,7 @@ function ComposeTab({ canSend }: { canSend: boolean }) {
       .replace(/\{\{?\s*portal_email\s*\}?\}/gi, "john@example.com")
       .replace(/\{\{?\s*portal_pin\s*\}?\}/gi, "1234")
       .replace(/\{\{?\s*agent_name\s*\}?\}/gi, "Tina")
-      .replace(/\{\{?\s*company_name\s*\}?\}/gi, "Tina's Travel");
+      .replace(/\{\{?\s*company_name\s*\}?\}/gi, "Your Agency");
   }, [bodyOverride]);
 
   return (

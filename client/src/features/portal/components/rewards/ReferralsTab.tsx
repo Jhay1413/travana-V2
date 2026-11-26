@@ -77,7 +77,7 @@ function TierSection({ tier, referralCount }: { tier: string | null | undefined;
         <div className="mt-6">
           <div className="flex items-baseline justify-between gap-3 text-[15px]">
             <span className="text-muted-foreground">Progress to {next.label}</span>
-            <span className="font-medium text-primary" data-testid="text-tier-remaining">
+            <span className="font-normal text-primary" data-testid="text-tier-remaining">
               {remainingText(remaining)}
             </span>
           </div>
@@ -176,7 +176,7 @@ function ReferralSteps({ status }: { status: PortalReferral["referralStatus"] })
         return (
           <li key={step.key} className="flex flex-col gap-1.5" aria-current={current ? "step" : undefined}>
             <span className={cn("h-1 w-full", done || current ? "bg-primary" : "bg-secondary")} aria-hidden />
-            <span className={cn("text-[11px] uppercase tracking-[0.14em]", current ? "font-medium text-primary" : done ? "text-foreground" : "text-muted-foreground")}>
+            <span className={cn("text-[11px] uppercase tracking-[0.16em]", current ? "font-normal text-primary" : done ? "text-foreground" : "text-muted-foreground")}>
               {step.label}
               <span className="sr-only">{done ? " (done)" : current ? " (now)" : ""}</span>
             </span>

@@ -1,63 +1,73 @@
 /** Pure route and tab mapping for the customer portal shell. */
 
-export type PortalTabKey = "home" | "trips" | "deals" | "messages" | "account";
+export type PortalTabKey = "home" | "quotes" | "bookings" | "messages" | "agent";
 
 export interface PortalTab {
   key: PortalTabKey;
   label: string;
-  path: string;
+  /** The page the tab opens; null for the agent's tab, which opens the Message sheet over the current page. */
+  path: string | null;
 }
 
-/** Five bottom tabs; there is no separate full-screen menu. */
-export const PORTAL_TABS: readonly PortalTab[] = [
-  { key: "home", label: "Home", path: "/portal" },
-  { key: "trips", label: "Trips", path: "/portal/trips" },
-  { key: "deals", label: "Deals", path: "/portal/deals" },
-  { key: "messages", label: "Messages", path: "/portal/messages" },
-  { key: "account", label: "Account", path: "/portal/account" },
-];
+/** The fifth tab's label when the customer's agent has no usable first name. */
+export const AGENT_TAB_FALLBACK = "Agent";
 
-export type TripsSegment = "quotes" | "bookings";
+/**
+ * The five bottom tabs: Home, Quotes, Bookings, Message (the chat page) and one labelled with the agent's first name,
+ * which opens the "Message <agent>" sheet instead of a page. Deals, Rewards, Travel interests and Account are reached
+ * from the full-screen menu.
+ */
+export function portalTabs(agentFirst: string): readonly PortalTab[] {
+  const named = agentFirst && agentFirst !== "your agent";
+  return [
+    { key: "home", label: "Home", path: "/portal" },
+    { key: "quotes", label: "Quotes", path: "/portal/quotes" },
+    { key: "bookings", label: "Bookings", path: "/portal/bookings" },
+    { key: "messages", label: "Message", path: "/portal/messages" },
+    { key: "agent", label: named ? agentFirst : AGENT_TAB_FALLBACK, path: null },
+  ];
+}
 
-export const TRIPS_SEGMENTS: readonly { key: TripsSegment; label: string; path: string }[] = [
-  { key: "quotes", label: "Quotes", path: "/portal/trips/quotes" },
-  { key: "bookings", label: "Bookings", path: "/portal/trips/bookings" },
-];
+/** The tabs with their fallback label (for code that has no agent name). */
+export const PORTAL_TABS: readonly PortalTab[] = portalTabs("");
 
 function cleanPath(pathname: string): string {
   const path = pathname.split(/[?#]/)[0].replace(/\/+$/, "");
   return path === "" ? "/" : path;
 }
 
-/** Which bottom tab a portal path belongs to; null for pages without one (login, interests). */
+/** Which bottom tab a portal path belongs to; null for pages without one (deals, account, rewards, interests, login). */
 export function activeTabForPath(pathname: string): PortalTabKey | null {
   const path = cleanPath(pathname);
   if (path === "/portal") return "home";
-  if (path === "/portal/trips" || path.startsWith("/portal/trips/")) return "trips";
-  if (path === "/portal/quotes" || path === "/portal/bookings" || path.startsWith("/portal/quote/") || path.startsWith("/portal/booking/")) return "trips";
-  if (path === "/portal/deals") return "deals";
+  if (path === "/portal/quotes" || path.startsWith("/portal/quote/")) return "quotes";
+  if (path === "/portal/bookings" || path.startsWith("/portal/booking/")) return "bookings";
   if (path === "/portal/messages") return "messages";
-  if (path === "/portal/account" || path === "/portal/referrals" || path === "/portal/tags") return "account";
   return null;
 }
 
-/** The Trips segment for a path (a quote opened from a link counts as Quotes). */
-export function tripsSegmentForPath(pathname: string): TripsSegment {
+/** The current row of the full-screen menu for a path (the menu also lists the pages that have no tab). */
+export function menuKeyForPath(pathname: string): string | null {
+  const tab = activeTabForPath(pathname);
+  if (tab) return tab;
   const path = cleanPath(pathname);
-  if (path === "/portal/trips/bookings" || path === "/portal/bookings") return "bookings";
-  return "quotes";
+  if (path === "/portal/deals") return "deals";
+  if (path === "/portal/referrals") return "rewards";
+  if (path === "/portal/tags") return "interests";
+  if (path === "/portal/account") return "account";
+  return null;
 }
 
 /**
  * Where an old URL now lives, or null when the path needs no redirect.
- * /portal/quotes and /portal/bookings are the old tabs; /portal/trips alone opens Quotes.
- * The query string and hash travel with the redirect.
+ * The short-lived Trips tab (/portal/trips, /portal/trips/quotes, /portal/trips/bookings) is gone: quotes and
+ * bookings are separate screens again. The query string and hash travel with the redirect.
  */
 export function portalRedirectTarget(pathname: string, search = "", hash = ""): string | null {
   const path = cleanPath(pathname);
   const suffix = `${search}${hash}`;
-  if (path === "/portal/quotes" || path === "/portal/trips") return `/portal/trips/quotes${suffix}`;
-  if (path === "/portal/bookings") return `/portal/trips/bookings${suffix}`;
+  if (path === "/portal/trips" || path === "/portal/trips/quotes") return `/portal/quotes${suffix}`;
+  if (path === "/portal/trips/bookings") return `/portal/bookings${suffix}`;
   return null;
 }
 

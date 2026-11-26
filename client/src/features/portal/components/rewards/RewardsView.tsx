@@ -23,7 +23,7 @@ const DEFAULT_VIP: PortalVipStatus = {
 
 type PageTab = "referrals" | "wallet";
 
-const TAB = "min-h-12 flex-1 border-b-2 px-2 text-[12px] font-medium uppercase tracking-[0.18em] transition-colors";
+const TAB = "min-h-12 flex-1 border-b-2 px-2 text-xs font-normal uppercase tracking-[0.2em] transition-colors";
 
 /** Rewards: refer friends, earn commission. Tier progress and referrals on one tab, the wallet and withdrawals on the other. */
 export function RewardsView() {
@@ -44,8 +44,8 @@ export function RewardsView() {
 
   return (
     <div data-testid="portal-rewards">
-      <PortalHero className="min-h-[210px]">
-        <Eyebrow className="portal-text-amber-soft">Rewards</Eyebrow>
+      <PortalHero className="h-[480px] md:h-[480px]">
+        <Eyebrow className="text-accent">Rewards</Eyebrow>
         <h1 className="portal-serif text-[44px] font-light leading-none text-white" data-testid="text-rewards-title">
           Your
           <br />

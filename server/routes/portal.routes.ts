@@ -7,13 +7,21 @@ import { referralWithdrawalService } from "../services/referralWithdrawal.servic
 import { walletService } from "../services/wallet.service";
 import { eq, and, isNull, asc } from "drizzle-orm";
 import { verifyPortalToken } from "../v2/modules/portal/portal-auth";
+import { noResponseLog } from "../v2/middlewares/no-response-log";
 import { portalCoreRouter } from "../v2/modules/portal/portal-core.routes";
 import { portalQuotesRouter } from "../v2/modules/portal/portal-quotes.routes";
 import { bridgePortalMessageToChat } from "../services/portal-chat-bridge";
+import { portalService } from "../v2/modules/portal/portal.service";
+import { stripDealInterestMarker } from "../v2/modules/portal/portal-interest-text";
+import { AppError } from "../v2/utils/error-handler";
 import { pushNotificationService } from "../services/push-notification.service";
 import { tagService } from "../services/tag.service";
 
 const portalRouter = Router();
+
+// Nothing a portal route returns may be printed by the global request logger (tokens, wallet and bank details, chat).
+// First in the chain, so the legacy handlers below and both aliased v2 routers are covered.
+portalRouter.use(noResponseLog);
 
 // Phase 0: authentication, deals and bookings now live ONLY in the v2 portal module
 // (server/v2/modules/portal). These paths stay mounted here as aliases so cached
@@ -65,7 +73,7 @@ portalRouter.get("/messages", portalAuth, async (req: Request, res: Response) =>
       id: m.id,
       sender: m.sender as "agent" | "client",
       agent_name: m.agentName || undefined,
-      text: m.text,
+      text: stripDealInterestMarker(m.text),
       timestamp: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
     }));
 
@@ -124,17 +132,11 @@ portalRouter.post("/interest", portalAuth, async (req: Request, res: Response) =
     const { clientId } = (req as any).portalClient;
     const { dealId } = req.body;
 
-    const messageText = `❤️ Interested in deal: ${dealId}`;
-    await db.insert(portalMessages).values({
-      clientId,
-      sender: "client",
-      text: messageText,
-    });
-
-    await bridgePortalMessageToChat(clientId, messageText, true);
-
-    res.json({ success: true });
+    // Same handler as v2: the deal's name (not its id) goes to the agent, once per customer and deal.
+    const { alreadyTold } = await portalService.recordInterest(clientId, String(dealId ?? ""));
+    res.json({ success: true, alreadyTold });
   } catch (err: any) {
+    if (err instanceof AppError) return res.status(err.statusCode).json({ error: err.message });
     res.status(500).json({ error: "Failed to record interest" });
   }
 });

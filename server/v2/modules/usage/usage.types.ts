@@ -15,7 +15,8 @@ export type AiUsageFeature =
   | "social_post"
   | "image_upscale"
   | "embedding"
-  | "staff_chat_test";
+  | "staff_chat_test"
+  | "passport_read";
 
 export interface AiUsageTokens {
   promptTokens: number;

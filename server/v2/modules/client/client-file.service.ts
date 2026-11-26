@@ -11,11 +11,38 @@ import type { Scope } from "../../utils/scope";
 import type { ClientFile } from "@shared/schema";
 
 const S3_KEY_PREFIX = "client-files";
-const PRESIGNED_URL_EXPIRES_IN = 60 * 5; // 5 minutes
+export const PRESIGNED_URL_EXPIRES_IN = 60 * 5; // 5 minutes
 
 // Legacy files were stored as bare filenames (e.g. "1748392910-123.pdf").
 // S3 keys always start with the prefix "client-files/".
 const LOCAL_UPLOADS_DIR = path.join(process.cwd(), "uploads", "client-files");
+
+/**
+ * The legacy disk path for a stored filename, or null when it would escape the uploads directory (a "../" name or an
+ * absolute path). Nothing outside the directory is ever read or deleted.
+ */
+export function resolveLocalUploadPath(filename: string): string | null {
+  const root = path.resolve(LOCAL_UPLOADS_DIR);
+  const resolved = path.resolve(root, filename);
+  return resolved.startsWith(root + path.sep) ? resolved : null;
+}
+
+const ALLOCATION_KINDS = { booking: "booking", quote: "quote", enquiry: "enquiry" } as const;
+
+/**
+ * A file may be linked to a booking, quote or enquiry only when the id is a real record of that kind on THIS client
+ * (the client itself is already known to be in the caller's agency). "None" or blank means not linked.
+ */
+async function assertAllocationValid(clientId: string, type?: string, id?: string): Promise<void> {
+  const normalised = (type ?? "").trim().toLowerCase();
+  if (normalised === "" || normalised === "none") return;
+  const kind = ALLOCATION_KINDS[normalised as keyof typeof ALLOCATION_KINDS];
+  const recordId = (id ?? "").trim();
+  if (!kind || !recordId) throw new AppError("Choose the booking, quote or enquiry to link this file to", 400);
+  if (!(await clientFileRepository.recordBelongsToClient(kind, recordId, clientId))) {
+    throw new AppError("That booking, quote or enquiry does not belong to this client", 400);
+  }
+}
 
 function isS3Key(filename: string): boolean {
   return filename.startsWith(`${S3_KEY_PREFIX}/`);
@@ -58,6 +85,7 @@ export const clientFileService = {
     scope: Scope
   ): Promise<ClientFile> {
     await assertClientInScope(clientId, scope);
+    await assertAllocationValid(clientId, meta.allocationType, meta.allocationId);
 
     const ext = path.extname(file.originalname);
     const s3Key = `${S3_KEY_PREFIX}/${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
@@ -72,6 +100,8 @@ export const clientFileService = {
       })
     );
 
+    const allocationType = meta.allocationType && meta.allocationType.trim() !== "" ? meta.allocationType : null;
+
     try {
       return await clientFileRepository.create({
         clientId,
@@ -81,8 +111,8 @@ export const clientFileService = {
         mimeType: file.mimetype,
         size: file.size,
         category: meta.category || null,
-        allocationType: meta.allocationType || null,
-        allocationId: meta.allocationId || null,
+        allocationType,
+        allocationId: allocationType === null ? null : meta.allocationId?.trim() || null,
         uploadedBy: scope.userId,
       });
     } catch (err) {
@@ -94,7 +124,18 @@ export const clientFileService = {
 
   async getDownloadTarget(id: string, scope: Scope, opts?: { inline?: boolean }): Promise<DownloadTarget> {
     const file = await loadScopedFile(id, scope, { forRead: true });
+    return clientFileService.resolveDownloadTarget(file, opts);
+  },
 
+  /**
+   * Turns an already-authorised file row into a download target (a short-lived signed URL for S3 files, a path for
+   * legacy local ones). The caller is responsible for the access check. `contentDisposition` and `contentType` let a
+   * caller (the customer portal) force its own safe headers on the signed URL instead of the stored ones.
+   */
+  async resolveDownloadTarget(
+    file: Pick<ClientFile, "filename" | "originalName" | "mimeType">,
+    opts?: { inline?: boolean; contentDisposition?: string; contentType?: string },
+  ): Promise<DownloadTarget> {
     // "inline" lets the browser render the file in a preview (e.g. a PDF in an
     // iframe); "attachment" forces a download.
     const disposition = opts?.inline ? "inline" : "attachment";
@@ -105,8 +146,9 @@ export const clientFileService = {
         new GetObjectCommand({
           Bucket: S3_BUCKET,
           Key: file.filename,
-          ResponseContentDisposition: `${disposition}; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
-          ResponseContentType: file.mimeType,
+          ResponseContentDisposition:
+            opts?.contentDisposition ?? `${disposition}; filename*=UTF-8''${encodeURIComponent(file.originalName)}`,
+          ResponseContentType: opts?.contentType ?? file.mimeType,
         }),
         { expiresIn: PRESIGNED_URL_EXPIRES_IN }
       );
@@ -114,8 +156,8 @@ export const clientFileService = {
     }
 
     // Legacy local file
-    const filePath = path.join(LOCAL_UPLOADS_DIR, file.filename);
-    if (!fs.existsSync(filePath)) {
+    const filePath = resolveLocalUploadPath(file.filename);
+    if (!filePath || !fs.existsSync(filePath)) {
       throw new AppError("File not found on disk", 404);
     }
     return { kind: "local", filePath, originalName: file.originalName, mimeType: file.mimeType };
@@ -128,8 +170,8 @@ export const clientFileService = {
       await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: file.filename }));
     } else {
       // Legacy local file — remove from disk if it still exists
-      const filePath = path.join(LOCAL_UPLOADS_DIR, file.filename);
-      if (fs.existsSync(filePath)) {
+      const filePath = resolveLocalUploadPath(file.filename);
+      if (filePath && fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath);
       }
     }

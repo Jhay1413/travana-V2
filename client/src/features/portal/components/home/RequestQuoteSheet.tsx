@@ -46,11 +46,11 @@ export function RequestQuoteSheet({ open, onOpenChange, agent }: { open: boolean
             Request sent.
           </p>
           <p className="text-[15px] leading-relaxed text-muted-foreground">{who} will reply in Messages.</p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <PortalButton onClick={() => setLocation("/portal/messages")} data-testid="button-quote-request-messages">
+          <div className="grid grid-cols-2 gap-2">
+            <PortalButton size="sm" onClick={() => setLocation("/portal/messages")} data-testid="button-quote-request-messages">
               Open Messages
             </PortalButton>
-            <PortalButton variant="outline" onClick={() => onOpenChange(false)} data-testid="button-quote-request-close">
+            <PortalButton variant="outline" size="sm" onClick={() => onOpenChange(false)} data-testid="button-quote-request-close">
               Close
             </PortalButton>
           </div>
@@ -99,11 +99,11 @@ export function RequestQuoteSheet({ open, onOpenChange, agent }: { open: boolean
             />
           </div>
           {request.isError && (
-            <p role="alert" className="portal-text-danger text-[15px]" data-testid="quote-request-error">
+            <p role="alert" className="portal-text-danger text-[13px]" data-testid="quote-request-error">
               That didn&apos;t send. Please try again.
             </p>
           )}
-          <PortalButton type="submit" disabled={request.isPending} data-testid="button-submit-quote-request">
+          <PortalButton type="submit" size="lg" className="w-full" disabled={request.isPending} data-testid="button-submit-quote-request">
             {request.isPending ? "Sending..." : "Send request"}
           </PortalButton>
         </form>

@@ -1,21 +1,31 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { getPortalToken, setPortalToken, usePortalHasTags, PORTAL_PUSH_BANNER_DISMISSED_KEY } from "@/hooks/use-portal-api";
+import { getPortalToken, setPortalToken, usePortalHasTags, usePortalUser, PORTAL_PUSH_BANNER_DISMISSED_KEY } from "@/hooks/use-portal-api";
 import {
   PortalFooter,
   PortalHeader,
+  PortalHeroContext,
+  PortalMenu,
+  PortalMessageSheetProvider,
   PortalTabBar,
   PortalThemeScope,
   activeTabForPath,
+  agentFirstName,
+  menuCount,
+  menuKeyForPath,
+  signOutPortal,
   interestsRedirectTarget,
   usePortalBrandingValue,
+  usePortalMessageSheet,
   usePortalSummary,
   usePortalPush,
+  type PortalMenuItem,
 } from "@/features/portal";
 import { cn } from "@/lib/utils";
 
-/** True inside a PortalLayout, so a page hosted by another page (the Trips segments) does not draw a second shell. */
+/** True inside a PortalLayout, so a page hosted by another page (a nested page) does not draw a second shell. */
 const PortalShellContext = createContext(false);
 
 interface PortalLayoutProps {
@@ -49,6 +59,20 @@ function PortalShell({ children, tone }: Required<PortalLayoutProps>) {
   const { data: hasTagsData, isSuccess: hasTagsLoaded } = usePortalHasTags();
   // The same unanswered-quotes number Home shows ("quotes to consider"), from the same query (nothing here polls).
   const { data: summary } = usePortalSummary();
+  const { data: user } = usePortalUser();
+  const queryClient = useQueryClient();
+  const [menuOpen, setMenuOpen] = useState(false);
+  // How many heroes are on the page; with none, a navy band sits behind the floating header.
+  const [heroes, setHeroes] = useState(0);
+  const heroApi = useMemo(
+    () => ({
+      register: () => {
+        setHeroes((n) => n + 1);
+        return () => setHeroes((n) => n - 1);
+      },
+    }),
+    [],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -98,9 +122,39 @@ function PortalShell({ children, tone }: Required<PortalLayoutProps>) {
   const fullHeight = activeTab === "messages";
   const hideFooter = fullHeight;
 
+  // "← My quotes" on a quote (the design), "← My bookings" on a booking opened from a list, in place of the logo.
+  const back = location.startsWith("/portal/quote/")
+    ? { label: "My quotes", onClick: () => setLocation("/portal/quotes") }
+    : location.startsWith("/portal/booking/")
+      ? { label: "My bookings", onClick: () => setLocation("/portal/bookings") }
+      : undefined;
+
+  const menuCurrent = menuKeyForPath(location);
+  // The design's three rows, then the pages that have no tab, in the same row style.
+  const menuItems = [
+    { key: "home", label: "Home", path: "/portal" },
+    { key: "quotes", label: "My quotes", path: "/portal/quotes", count: menuCount(summary?.counts.quotesAwaiting, "to view") },
+    { key: "bookings", label: "My bookings", path: "/portal/bookings", count: menuCount(summary?.counts.upcomingBookings, "booked") },
+    { key: "messages", label: "Messages", path: "/portal/messages" },
+    { key: "deals", label: "Deals", path: "/portal/deals" },
+    { key: "rewards", label: "Rewards", path: "/portal/referrals" },
+    { key: "interests", label: "Travel interests", path: "/portal/tags" },
+    { key: "account", label: "My account", path: "/portal/account" },
+  ];
+  const logOut = async () => {
+    setMenuOpen(false);
+    await signOutPortal();
+    // Nothing from this customer may linger for the next person on a shared device.
+    queryClient.removeQueries({ queryKey: ["portal"] });
+    setLocation("/portal/login");
+  };
+
   return (
-    <PortalThemeScope className={cn("flex flex-col", fullHeight ? "h-dvh overflow-hidden" : "pb-[calc(76px+env(safe-area-inset-bottom))]")}>
-      <PortalHeader branding={branding} onHome={() => setLocation("/portal")} />
+    <PortalThemeScope className={cn("relative flex flex-col", fullHeight && "h-dvh overflow-hidden")}>
+      <PortalMessageSheetProvider>
+      <PortalHeroContext.Provider value={heroApi}>
+      <PortalHeader branding={branding} onHome={() => setLocation("/portal")} onMenu={() => setMenuOpen(true)} back={back} />
+      {heroes === 0 && <div aria-hidden className="h-[92px] flex-none bg-[#0D2A4E]" data-testid="portal-header-band" />}
 
       <AnimatePresence>
         {showBanner && (
@@ -112,7 +166,7 @@ function PortalShell({ children, tone }: Required<PortalLayoutProps>) {
             role="region"
             aria-label="Notifications"
           >
-            <div className="mx-auto flex max-w-3xl items-center gap-4 px-6 py-3">
+            <div className="mx-auto flex max-w-3xl items-center gap-4 px-6 pb-3 pt-[88px]">
               <div className="min-w-0 flex-1">
                 <p className="portal-serif text-[20px] leading-tight">Get notified</p>
                 <p className="text-[13px] text-white/80">We'll let you know when your agent replies.</p>
@@ -120,7 +174,7 @@ function PortalShell({ children, tone }: Required<PortalLayoutProps>) {
               <button
                 type="button"
                 onClick={dismissBanner}
-                className="min-h-11 px-2 text-[11px] font-medium uppercase tracking-[0.2em] text-white/80 hover:text-white"
+                className="min-h-11 px-2 text-[11px] font-normal uppercase tracking-[0.2em] text-white/80 hover:text-white"
                 data-testid="button-dismiss-push"
               >
                 Later
@@ -128,7 +182,7 @@ function PortalShell({ children, tone }: Required<PortalLayoutProps>) {
               <button
                 type="button"
                 onClick={handleEnableNotifications}
-                className="min-h-11 bg-accent px-4 text-[11px] font-medium uppercase tracking-[0.2em] text-accent-foreground hover:brightness-110"
+                className="min-h-11 bg-accent px-4 text-[11px] font-normal uppercase tracking-[0.2em] text-accent-foreground hover:brightness-110"
                 data-testid="button-enable-push"
               >
                 Enable
@@ -159,7 +213,72 @@ function PortalShell({ children, tone }: Required<PortalLayoutProps>) {
 
       {!hideFooter && <PortalFooter branding={branding} />}
 
-      <PortalTabBar active={activeTab} onNavigate={setLocation} badges={{ trips: quoteCount }} inFlow={fullHeight} />
+      <PortalShellNav
+        activeTab={activeTab}
+        quoteCount={quoteCount}
+        fullHeight={fullHeight}
+        menuOpen={menuOpen}
+        onMenuOpenChange={setMenuOpen}
+        customerName={[user?.firstName, user?.lastName].filter(Boolean).join(" ")}
+        menuItems={menuItems}
+        menuCurrent={menuCurrent}
+        onLogout={logOut}
+      />
+      </PortalHeroContext.Provider>
+      </PortalMessageSheetProvider>
     </PortalThemeScope>
+  );
+}
+
+/** The bottom tab bar and the full-screen menu. Inside the Message sheet's provider, so the agent tab and the menu's "Message <agent>" can open it. */
+function PortalShellNav({
+  activeTab,
+  quoteCount,
+  fullHeight,
+  menuOpen,
+  onMenuOpenChange,
+  customerName,
+  menuItems,
+  menuCurrent,
+  onLogout,
+}: {
+  activeTab: ReturnType<typeof activeTabForPath>;
+  quoteCount: number;
+  fullHeight: boolean;
+  menuOpen: boolean;
+  onMenuOpenChange: (open: boolean) => void;
+  customerName: string;
+  menuItems: readonly PortalMenuItem[];
+  menuCurrent: string | null;
+  onLogout: () => void;
+}) {
+  const [, setLocation] = useLocation();
+  const branding = usePortalBrandingValue();
+  const messageSheet = usePortalMessageSheet();
+  const agent = agentFirstName(branding.agentName ?? "");
+  return (
+    <>
+      <PortalTabBar
+        active={activeTab}
+        onNavigate={setLocation}
+        onOpenAgent={() => messageSheet.open()}
+        agentOpen={messageSheet.isOpen}
+        agent={agent}
+        badges={{ quotes: quoteCount }}
+        inFlow={fullHeight}
+      />
+      <PortalMenu
+        open={menuOpen}
+        onOpenChange={onMenuOpenChange}
+        branding={branding}
+        customerName={customerName}
+        agent={agent}
+        items={menuItems}
+        currentKey={menuCurrent}
+        onNavigate={setLocation}
+        onMessageAgent={() => messageSheet.open()}
+        onLogout={onLogout}
+      />
+    </>
   );
 }

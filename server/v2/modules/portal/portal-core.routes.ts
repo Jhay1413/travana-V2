@@ -1,5 +1,6 @@
 import { Router, type Response } from 'express';
 import { createRateLimiter } from '../../middlewares/rate-limit.middleware';
+import { noResponseLog } from '../../middlewares/no-response-log';
 import { validate } from '../../middlewares/validation.middleware';
 import { portalController } from './portal.controller';
 import { portalAuth, portalErrorHandler } from './portal.middleware';
@@ -26,6 +27,9 @@ import {
  * without the old v1 handlers running.
  */
 export const portalCoreRouter = Router();
+
+// Sign-in answers carry the session token: never let the global request logger print a portal body (also on the /api/portal alias).
+portalCoreRouter.use(noResponseLog);
 
 /** Plain-language 429 for the customer portal: it reads `{ error }`, not the staff envelope. */
 export function portalRateLimitReply(res: Response, retryAfterSeconds: number): void {

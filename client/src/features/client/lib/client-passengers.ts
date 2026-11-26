@@ -8,7 +8,7 @@ import {
   type PassengerErrors,
 } from "@shared/passenger-rules";
 import { londonDayKey } from "@/lib/london-day";
-import type { ClientPassenger } from "@/features/client/api/client-passenger.api";
+import type { ClientPassenger, PassengerSex } from "@/features/client/api/client-passenger.api";
 
 export type RightCardTab = "details" | "portal" | "referrals";
 
@@ -19,6 +19,16 @@ export const RIGHT_CARD_TABS: ReadonlyArray<{ value: RightCardTab; label: string
 ];
 
 export const PASSENGER_TITLES = ["Mr.", "Mrs", "Ms", "Miss"] as const;
+
+export const PASSENGER_SEXES: ReadonlyArray<PassengerSex> = ["M", "F", "X"];
+
+/** The sex as shown on a card: "Male", "Female", "Another" (X on a passport), or "—". */
+export function passengerSexLabel(sex: string | null | undefined): string {
+  if (sex === "M") return "Male";
+  if (sex === "F") return "Female";
+  if (sex === "X") return "Another";
+  return "—";
+}
 
 function parseYmd(value: string): Date | null {
   const d = parse(value, "yyyy-MM-dd", new Date());
@@ -69,6 +79,11 @@ export interface PassengerDraft {
   passportNumber: string;
   passportExpiry: string;
   passportNonUk: boolean;
+  nationality: string;
+  /** "" = not stated, else M / F / X. */
+  sex: string;
+  /** YYYY-MM-DD, or "". */
+  passportIssueDate: string;
 }
 
 export const EMPTY_PASSENGER_DRAFT: PassengerDraft = {
@@ -79,6 +94,9 @@ export const EMPTY_PASSENGER_DRAFT: PassengerDraft = {
   passportNumber: "",
   passportExpiry: "",
   passportNonUk: false,
+  nationality: "",
+  sex: "",
+  passportIssueDate: "",
 };
 
 export function draftFromPassenger(p: ClientPassenger | null): PassengerDraft {
@@ -91,6 +109,9 @@ export function draftFromPassenger(p: ClientPassenger | null): PassengerDraft {
     passportNumber: p.passportNumber ?? "",
     passportExpiry: p.passportExpiry ?? "",
     passportNonUk: p.passportNonUk,
+    nationality: p.nationality ?? "",
+    sex: p.sex ?? "",
+    passportIssueDate: p.passportIssueDate ?? "",
   };
 }
 
@@ -149,5 +170,8 @@ export function draftToInput(draft: PassengerDraft) {
     passportNumber: blank(normalisePassportNumber(draft.passportNumber, draft.passportNonUk)),
     passportExpiry: blank(draft.passportExpiry),
     passportNonUk: draft.passportNonUk,
+    nationality: blank(draft.nationality),
+    sex: PASSENGER_SEXES.find((s) => s === draft.sex) ?? null,
+    passportIssueDate: blank(draft.passportIssueDate),
   };
 }

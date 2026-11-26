@@ -1,4 +1,3 @@
-import { Check } from "lucide-react";
 import { useLocation } from "wouter";
 import type { PortalDeal } from "@/hooks/use-portal-api";
 import { usePortalDealInterest } from "../../api/use-portal-summary";
@@ -42,7 +41,7 @@ export function HomeDeals({ toldDealIds, forYou, latest, interests, agent, loadi
   return (
     <>
       {forYou.length > 0 && (
-        <HomeRail id="home-for-you" eyebrow="Matched to your interests" lead="For" italic="you" label="Deals for you" testId="home-for-you">
+        <HomeRail id="home-for-you" eyebrow="Matched to your interests" lead="For" italic="you" label="Deals for you" hint="Swipe" testId="home-for-you">
           {forYou.map((d) => (
             <DealCard key={d.id} deal={d} interests={interests} agent={agent} told={toldDealIds.includes(d.id)} />
           ))}
@@ -56,6 +55,7 @@ export function HomeDeals({ toldDealIds, forYou, latest, interests, agent, loadi
           lead="Lately,"
           italic="for you"
           label="Latest deals"
+          hint="Swipe"
           testId="home-latest-deals"
         >
           {latest.map((d) => (
@@ -64,7 +64,7 @@ export function HomeDeals({ toldDealIds, forYou, latest, interests, agent, loadi
         </HomeRail>
       )}
 
-      <section className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-7 pb-2 pt-10" data-testid="home-deals-footer">
+      <section className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-7 pb-[88px] pt-6" data-testid="home-deals-footer">
         {failed && nothing && (
           <p role="alert" className="text-[15px] text-muted-foreground" data-testid="home-deals-error">
             We couldn&apos;t load the deals.{" "}
@@ -90,8 +90,8 @@ export function HomeDeals({ toldDealIds, forYou, latest, interests, agent, loadi
           </p>
         )}
         <div className="flex">
-          <PortalButton variant="outline" className="w-full sm:w-auto" onClick={() => setLocation("/portal/deals")} data-testid="home-browse-deals">
-            Browse all deals
+          <PortalButton variant="link" className="text-[11px] text-primary" onClick={() => setLocation("/portal/deals")} data-testid="home-browse-deals">
+            Browse all deals →
           </PortalButton>
         </div>
       </section>
@@ -111,21 +111,23 @@ function DealCard({ deal, interests, agent, told }: { deal: PortalDeal; interest
 
   return (
     <article className="flex w-[260px] flex-none snap-start flex-col gap-3" data-testid={`home-deal-${deal.id}`}>
-      <div className="relative h-[320px] w-[260px] overflow-hidden bg-[hsl(var(--portal-navy-deep))]">
+      <div className="relative h-[320px] w-[260px] overflow-hidden bg-[#0D2A4E]">
         {deal.image_url && <img src={deal.image_url} alt="" loading="lazy" className="size-full object-cover" />}
       </div>
       <div className="flex items-baseline justify-between gap-2.5">
         <span className="min-w-0 truncate text-[11px] uppercase tracking-[0.2em] text-muted-foreground" data-testid={`home-deal-tag-${deal.id}`}>
           {tag}
         </span>
-        {expiring && (
+        {expiring ? (
           <span className="portal-serif flex-none text-[15px] italic portal-text-amber-ink" data-testid={`home-deal-expiring-${deal.id}`}>
             Expiring soon
           </span>
+        ) : (
+          when && <span className="portal-serif flex-none text-[15px] italic text-muted-foreground">{when}</span>
         )}
       </div>
-      <h3 className="portal-serif break-words text-[24px] leading-[1.15] text-primary">{deal.title}</h3>
-      <p className="text-[15px] leading-relaxed text-muted-foreground">
+      <h3 className="portal-serif break-words text-[24px] font-normal leading-[1.15] text-primary">{deal.title}</h3>
+      <p className="text-sm leading-[1.6] text-muted-foreground">
         {deal.destination}
         {detail && (
           <>
@@ -135,25 +137,25 @@ function DealCard({ deal, interests, agent, told }: { deal: PortalDeal; interest
         )}
       </p>
       {deal.price > 0 && (
-        <p className="text-[15px] text-muted-foreground">
-          from <span className="portal-serif text-[26px] portal-text-ink">{formatMoney(deal.price)}</span>
+        <p className="text-[13px] text-muted-foreground">
+          from <span className="portal-serif text-[26px] portal-text-ink">{formatMoney(deal.price)}</span> per person
         </p>
       )}
       {told ? (
         <p
           role="status"
-          className="mt-1 flex min-h-[52px] items-center justify-center gap-2.5 border border-border px-2 text-center text-xs uppercase tracking-[0.2em] portal-text-amber-ink"
+          className="mt-1 flex min-h-[52px] items-center justify-center gap-2.5 border border-border text-center text-xs uppercase tracking-[0.2em] portal-text-amber-ink"
           data-testid={`deal-told-${deal.id}`}
         >
-          <Check className="size-4 flex-none" strokeWidth={1.5} aria-hidden /> {agent === "your agent" ? "Your agent has" : `${agent} has`} been told
+          <span aria-hidden>✓</span> {agent === "your agent" ? "Your agent has" : `${agent} has`} been told
         </p>
       ) : (
-        <PortalButton variant="outline" className="mt-1 w-full px-4" disabled={interest.isPending} onClick={tell} data-testid={`button-deal-interest-${deal.id}`}>
+        <PortalButton variant="outline" className="mt-1 w-full" disabled={interest.isPending} onClick={tell} data-testid={`button-deal-interest-${deal.id}`}>
           I&apos;m interested
         </PortalButton>
       )}
       {interest.isError && (
-        <p role="alert" className="portal-text-danger text-[15px]">
+        <p role="alert" className="portal-text-danger text-[13px]">
           That didn&apos;t send. Please try again.
         </p>
       )}

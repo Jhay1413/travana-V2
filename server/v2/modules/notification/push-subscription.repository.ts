@@ -1,10 +1,16 @@
 import { db } from "../../config/database";
-import { pushSubscriptions } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { pushSubscriptions, clientTable } from "@shared/schema";
+import { eq, and, isNull } from "drizzle-orm";
 
 export const pushSubscriptionRepository = {
-  async findAll() {
-    return db.select().from(pushSubscriptions);
+  /** Subscriptions of live customers of one agency. A subscription whose customer has no agency (or is deleted) is never returned. */
+  async findByOrgId(orgId: string) {
+    const rows = await db
+      .select({ sub: pushSubscriptions })
+      .from(pushSubscriptions)
+      .innerJoin(clientTable, eq(pushSubscriptions.clientId, clientTable.id))
+      .where(and(eq(clientTable.orgId, orgId), isNull(clientTable.deletedAt)));
+    return rows.map((r) => r.sub);
   },
 
   async findByClientId(clientId: string) {

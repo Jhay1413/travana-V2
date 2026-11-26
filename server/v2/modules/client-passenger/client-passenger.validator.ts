@@ -10,6 +10,13 @@ const ymd = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM
 const optionalDate = z.union([z.literal(''), ymd]).nullable();
 const optionalText = (max: number) => z.string().trim().max(max).nullable();
 
+// Read from the passport by the customer portal; staff may view and correct them. Empty clears.
+const extraDetails = {
+  nationality: optionalText(100).optional(),
+  sex: z.union([z.literal(''), z.enum(['M', 'F', 'X'])]).nullable().optional(),
+  passportIssueDate: optionalDate.optional(),
+};
+
 const clientParams = z.object({ clientId: z.string().uuid() });
 const passengerParams = z.object({ clientId: z.string().uuid(), passengerId: z.string().uuid() });
 
@@ -21,6 +28,7 @@ const passengerBody = z.object({
   passportNumber: optionalText(20).optional(),
   passportExpiry: optionalDate.optional(),
   passportNonUk: z.boolean().optional(),
+  ...extraDetails,
 });
 
 export const clientParamsValidator = z.object({ params: clientParams });
@@ -33,6 +41,7 @@ export const setLeadPassportValidator = z.object({
     passportNumber: optionalText(20),
     passportExpiry: optionalDate,
     passportNonUk: z.boolean().optional(),
+    ...extraDetails,
   }),
 });
 
@@ -46,6 +55,7 @@ const createPassengerBody = z.object({
   passportNumber: z.string().trim().min(1, 'Passport number is required').max(20),
   passportExpiry: ymd,
   passportNonUk: z.boolean().optional(),
+  ...extraDetails,
 }).superRefine((b, ctx) => {
   const message = passportNumberError(b.passportNumber, !!b.passportNonUk);
   if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['passportNumber'], message });

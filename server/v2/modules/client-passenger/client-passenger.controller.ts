@@ -12,7 +12,7 @@ export const clientPassengerController = {
   }),
 
   setLead: asyncHandler(async (req: Request, res: Response) => {
-    const body = req.body as { passportNumber?: string | null; passportExpiry?: string | null; passportNonUk?: boolean };
+    const body = req.body as { passportNumber?: string | null; passportExpiry?: string | null; passportNonUk?: boolean; nationality?: string | null; sex?: string | null; passportIssueDate?: string | null };
     const lead = await clientPassengerService.setLeadPassport(req.params.clientId as string, body, getScope(req));
     return successResponse(res, lead, 'Lead passport saved');
   }),

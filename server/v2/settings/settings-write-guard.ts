@@ -18,7 +18,7 @@ interface EverydayWrite {
 
 export const EVERYDAY_WRITES: EverydayWrite[] = [
   // Quick-add modals in features/lookups (add-*-modal.tsx).
-  { methods: ['POST'], path: /^\/(accommodations|board-basis|countries|destinations|lodges|resorts|room-types)\/?$/ },
+  { methods: ['POST'], path: /^\/(accommodations|board-basis|countries|destinations|lodges|parks|resorts|room-types)\/?$/ },
   // Tags tolerate no everyday write here: tags are global, so rename and delete are admin-only.
   // Everyday staff detach a tag from their own quote via DELETE /quotes/:id/tags/:tagId.
 ];

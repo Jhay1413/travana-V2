@@ -1,5 +1,5 @@
 /**
- * Customer portal, Phase 2: the Quotes list (Trips > Quotes) and the quote screen, with the customer's decision
+ * Customer portal, Phase 2: the Quotes list (My quotes) and the quote screen, with the customer's decision
  * ("I'm interested", "Not interested", Undo) and what the agent sees of it on the staff side.
  */
 import { randomUUID } from "node:crypto";
@@ -49,13 +49,13 @@ const notificationCount = async (userId: string, type: string) =>
 test.describe("customer portal: quotes list", () => {
   test("shows each quote with its photo, operator, dates, facts and customer price, and the held line only where there is a real expiry", async ({ page }) => {
     const { full, plain } = await fixture(page);
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
 
     await expect(page.getByTestId("portal-quotes")).toBeVisible();
     await expect(page.getByTestId(`quote-card-${full.id}`)).toBeVisible();
     await expect(page.getByTestId(`quote-card-${plain.id}`)).toBeVisible();
-    // The Trips badge counts both.
-    await expect(page.getByTestId("nav-badge-trips")).toHaveText("2");
+    // The Quotes badge counts both.
+    await expect(page.getByTestId("nav-badge-quotes")).toHaveText("2");
 
     const card = page.getByTestId(`quote-card-${full.id}`);
     // 2400 - 100 discount + 50 service charge + 50 extra not in the package = 2,400; per person 1,200.
@@ -75,17 +75,19 @@ test.describe("customer portal: quotes list", () => {
     await expect(page.getByTestId(`quote-card-${plain.id}`)).not.toContainText(/price held/i);
   });
 
-  test("works from 360px wide: the first quote is on screen without scrolling and nothing overflows sideways", async ({ page }) => {
+  test("works from 360px wide: the list sits under the 480px hero, the first quote is reachable and nothing overflows sideways", async ({ page }) => {
     const { full } = await fixture(page);
     await page.setViewportSize({ width: 360, height: 740 });
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     const first = page.locator('[data-testid^="quote-card-"]').first();
+    await first.scrollIntoViewIfNeeded();
     await expect(first).toBeVisible();
+    // The reference hero is 480px tall, so the list starts below the first screen.
     const box = await first.boundingBox();
-    expect(box?.y ?? 9999, "the list starts above the fold").toBeLessThan(740);
+    expect(box?.y ?? 0).toBeGreaterThan(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     // Tap targets are at least 44px.
-    const nav = await page.getByTestId("trips-segment-quotes").boundingBox();
+    const nav = await page.getByTestId("nav-tab-quotes").boundingBox();
     expect(nav?.height ?? 0).toBeGreaterThanOrEqual(43.5); // 44px, give or take sub-pixel rounding
     await expect(page.getByTestId(`quote-card-${full.id}`)).toBeVisible();
   });
@@ -93,15 +95,15 @@ test.describe("customer portal: quotes list", () => {
   test("a customer with no quotes sees a plain empty state that names their agent", async ({ page }) => {
     const c = await seedPortalCustomer();
     await startSignedIn(page, c);
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await expect(page.getByTestId("quotes-empty")).toBeVisible();
     await expect(page.getByTestId("quotes-empty")).toContainText(/Message .+ to start planning|Message your agent to start planning/);
-    await expect(page.getByTestId("nav-badge-trips")).toHaveCount(0);
+    await expect(page.getByTestId("nav-badge-quotes")).toHaveCount(0);
   });
 
   test("the old /api/portal paths still answer, with the same quotes as the v2 path", async ({ page }) => {
     const { full } = await fixture(page);
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     const auth = { Authorization: `Bearer ${await page.evaluate(() => localStorage.getItem("portal_token"))}` };
     const v1 = await page.request.get("/api/portal/quotes", { headers: auth });
     const v2 = await page.request.get("/api/v2/portal/quotes", { headers: auth });
@@ -116,13 +118,13 @@ test.describe("customer portal: quotes list", () => {
 test.describe("customer portal: the quote screen", () => {
   test("opens from the list and renders the whole itinerary in date order: lounge, outbound flight, hotel, return flight", async ({ page }) => {
     const { full } = await fixture(page);
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await page.getByTestId(`quote-card-${full.id}`).click();
     await expect(page).toHaveURL(new RegExp(`/portal/quote/${full.token}$`));
 
     await expect(page.getByTestId("quote-title")).toContainText("Hotel Playa Azul Majorca");
     await expect(page.getByTestId("quote-total")).toHaveText("£2,400.00");
-    await expect(page.getByTestId("nav-tab-trips")).toHaveAttribute("aria-current", "page");
+    await expect(page.getByTestId("nav-tab-quotes")).toHaveAttribute("aria-current", "page");
 
     const kinds = await page.locator('[data-testid^="journey-item-"]').evaluateAll((els) => els.map((el) => el.getAttribute("data-kind")));
     expect(kinds).toEqual(["lounge", "flight-out", "hotel", "flight-in"]);
@@ -159,31 +161,132 @@ test.describe("customer portal: the quote screen", () => {
     await expect(page.getByTestId("portal-quote")).not.toContainText(/price held/i);
   });
 
-  test("the sticky action bar sits above the tab bar, has big tap targets, and is gone once the customer has decided", async ({ page }) => {
+  /** "I'm interested" full width, with "Not interested" and "Share" on one row directly below it, about half its width each. */
+  async function expectDecisionTrio(page: Page, ids: { primary: string; no: string; share: string }) {
+    const primary = await page.getByTestId(ids.primary).boundingBox();
+    const no = await page.getByTestId(ids.no).boundingBox();
+    const share = await page.getByTestId(ids.share).boundingBox();
+    if (!primary || !no || !share) throw new Error("the decision buttons are not on screen");
+    expect(Math.abs(no.y - share.y), "Not interested and Share are on one row").toBeLessThanOrEqual(1);
+    expect(no.y, "the pair sits below I'm interested").toBeGreaterThanOrEqual(primary.y + primary.height);
+    expect(no.y - (primary.y + primary.height), "directly below").toBeLessThanOrEqual(24);
+    expect(no.x, "Not interested is on the left").toBeLessThan(share.x);
+    for (const b of [no, share]) {
+      expect(b.width).toBeGreaterThan(primary.width * 0.4);
+      expect(b.width).toBeLessThan(primary.width * 0.55);
+      expect(b.height).toBeGreaterThanOrEqual(47.5);
+    }
+    expect(primary.height).toBeGreaterThanOrEqual(51.5);
+  }
+
+  test("the price block has I'm interested full width with Not interested and Share side by side below it, and the navy bar after the details repeats the trio", async ({ page }) => {
     const { full } = await fixture(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`/portal/quote/${full.token}`);
 
-    const bar = page.getByTestId("quote-actionbar");
+    const price = page.getByTestId("quote-price");
+    await expect(price.getByTestId("button-interested")).toHaveText(/I'm interested/);
+    await expect(price.getByTestId("button-not-interested")).toHaveText("Not interested");
+    await expect(price.getByTestId("button-share")).toHaveText("Share");
+    await expect(price.getByTestId("button-share").locator("svg")).toHaveCount(1);
+    const priceBox = await price.boundingBox();
+    const primary = await price.getByTestId("button-interested").boundingBox();
+    expect(Math.abs((primary?.width ?? 0) - ((priceBox?.width ?? 0) - 0)), "full width of the price column (less its padding)").toBeLessThan((priceBox?.width ?? 0) * 0.2);
+    await expectDecisionTrio(page, { primary: "button-interested", no: "button-not-interested", share: "button-share" });
+
+    // The fixed bar and its overflow menu are gone.
+    await expect(page.getByTestId("quote-actionbar")).toHaveCount(0);
+    await expect(page.getByTestId("button-actionbar-more")).toHaveCount(0);
+
+    // The navy bar after "The details": the total, the days left (this quote has an expiry), the same trio.
+    const bar = page.getByTestId("quote-decision-bar");
     await expect(bar).toBeVisible();
+    await expect(bar.getByTestId("quote-bar-total")).toHaveText(/£/);
+    await expect(bar.getByTestId("quote-bar-days-left")).toContainText(/days? left|Last day/);
+    await expect(bar.getByTestId("quote-bar-days-left")).toContainText("at this price");
+    await expectDecisionTrio(page, { primary: "button-bar-interested", no: "button-bar-not-interested", share: "button-bar-share" });
+    const details = await page.getByTestId("quote-details").boundingBox();
     const barBox = await bar.boundingBox();
-    const tabBox = await page.getByTestId("nav-bottom").boundingBox();
-    expect(barBox && tabBox && barBox.y + barBox.height <= tabBox.y + 1, "bar is above the tab bar").toBe(true);
-    const button = await page.getByTestId("button-interested").boundingBox();
-    const more = await page.getByTestId("button-actionbar-more").boundingBox();
-    expect(button?.height ?? 0).toBeGreaterThanOrEqual(44);
-    expect(more?.height ?? 0).toBeGreaterThanOrEqual(44);
-    expect(more?.width ?? 0).toBeGreaterThanOrEqual(44);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-
-    // It stays reachable however far down the page is.
-    await page.getByTestId("quote-interest").scrollIntoViewIfNeeded();
-    await expect(bar).toBeVisible();
-
-    await page.getByTestId("button-interested").click();
-    await expect(page.getByTestId("quote-thanks")).toBeVisible();
-    await expect(bar).toHaveCount(0);
+    expect((barBox?.y ?? 0) >= (details?.y ?? 0) + (details?.height ?? 0), "the bar comes after the details").toBe(true);
   });
+
+  test("a quote with no expiry has no days-left text in the bar", async ({ page }) => {
+    const { plain } = await fixture(page);
+    await page.goto(`/portal/quote/${plain.token}`);
+    await expect(page.getByTestId("quote-decision-bar")).toBeVisible();
+    await expect(page.getByTestId("quote-bar-days-left")).toHaveCount(0);
+  });
+
+  test("an upper I'm interested scrolls to the note field and focuses it; nothing is recorded until the bottom button is pressed", async ({ page }) => {
+    const { full } = await fixture(page);
+    await page.goto(`/portal/quote/${full.token}`);
+
+    for (const id of ["button-interested", "button-bar-interested"]) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.getByTestId(id).click();
+      const note = page.getByTestId("input-interest-note");
+      await expect(note).toBeFocused();
+      await expect(note).toBeInViewport();
+      await expect(page.getByTestId("quote-thanks")).toHaveCount(0);
+      expect(await actionRows(full.id), `nothing is recorded after ${id}`).toHaveLength(0);
+    }
+
+    await page.getByTestId("input-interest-note").fill("Later flight if possible");
+    await page.getByTestId("button-interested-submit").click();
+    await expect(page.getByTestId("quote-thanks")).toBeVisible();
+    const rows = await actionRows(full.id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ action_type: "accepted", message: "Later flight if possible" });
+    // The bottom button was the large one.
+    await expect(page.getByTestId("button-interested")).toHaveCount(0);
+  });
+
+  test("the bottom I'm interested is the large button (58px high)", async ({ page }) => {
+    const { full } = await fixture(page);
+    await page.goto(`/portal/quote/${full.token}`);
+    const box = await page.getByTestId("button-interested-submit").boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(57.5);
+  });
+
+  test("a quote that cannot be decided on shows Ask and Share two-up, with no I'm interested and no Not interested", async ({ page }) => {
+    const { q } = await fixture(page);
+    const deal = await seedPublishedDeal(page, q, { title: "Agency special", token: token(), forClientId: null });
+    await page.goto(`/portal/quote/${deal.token}`);
+    const ask = await page.getByTestId("button-ask-inline").boundingBox();
+    const share = await page.getByTestId("button-share").boundingBox();
+    expect(Math.abs((ask?.y ?? 0) - (share?.y ?? 99))).toBeLessThanOrEqual(1);
+    expect(ask?.height ?? 0).toBeGreaterThanOrEqual(47.5);
+    await expect(page.getByTestId("button-interested")).toHaveCount(0);
+    await expect(page.getByTestId("button-not-interested")).toHaveCount(0);
+    await expect(page.getByTestId("quote-decision-bar")).toHaveCount(0);
+  });
+
+  test("a customer who has said they are interested sees Ask and Share, and no decision buttons", async ({ page }) => {
+    const { full } = await fixture(page);
+    await page.goto(`/portal/quote/${full.token}`);
+    await page.getByTestId("button-interested-submit").click();
+    await expect(page.getByTestId("quote-thanks")).toBeVisible();
+    await expect(page.getByTestId("button-ask-inline")).toBeVisible();
+    await expect(page.getByTestId("button-share")).toBeVisible();
+    await expect(page.getByTestId("button-interested")).toHaveCount(0);
+    await expect(page.getByTestId("button-not-interested")).toHaveCount(0);
+    await expect(page.getByTestId("quote-decision-bar")).toHaveCount(0);
+  });
+
+  for (const width of [360, 390]) {
+    test(`at ${width}px nothing overflows sideways and no decision button label is clipped`, async ({ page }) => {
+      const { full } = await fixture(page);
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/portal/quote/${full.token}`);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      for (const id of ["button-interested", "button-not-interested", "button-share", "button-bar-interested", "button-bar-not-interested", "button-bar-share", "button-interested-submit"]) {
+        const button = page.getByTestId(id);
+        await button.scrollIntoViewIfNeeded();
+        const clipped = await button.evaluate((el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight || el.getBoundingClientRect().right > window.innerWidth);
+        expect(clipped, `${id} is not clipped`).toBe(false);
+      }
+    });
+  }
 
   test("the photo strip opens a viewer with arrow keys, a counter and alt text, and Escape closes it", async ({ page }) => {
     const { full } = await fixture(page);
@@ -248,7 +351,11 @@ test.describe("customer portal: the customer's decision", () => {
     await expect(thanks).toBeVisible();
     await expect(thanks).toContainText("Thank you");
     await expect(thanks).toContainText("A sea view please");
-    await expect(page.getByTestId("quote-actionbar")).toHaveCount(0);
+    await expect(page.getByTestId("button-interested")).toHaveCount(0);
+    await expect(page.getByTestId("quote-decision-bar")).toHaveCount(0);
+    // Not interested is no longer offered once they have said they are interested; Ask and Share are.
+    await expect(page.getByTestId("button-not-interested")).toHaveCount(0);
+    await expect(page.getByTestId("button-ask-inline")).toBeVisible();
 
     // The same record and the same notification the shared page's Accept has always made: the existing "accepted" value.
     const rows = await actionRows(full.id);
@@ -260,7 +367,7 @@ test.describe("customer portal: the customer's decision", () => {
     // It survives a reload, and the list marks the quote.
     await page.reload();
     await expect(page.getByTestId("quote-thanks")).toBeVisible();
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await expect(page.getByTestId(`quote-badge-${full.id}`)).toHaveText("You're interested");
 
     // Staff side: the quote page shows it accepted, with the customer's note.
@@ -301,7 +408,8 @@ test.describe("customer portal: the customer's decision", () => {
     await expect(sheet).toHaveCount(0);
     const banner = page.getByTestId("quote-declined-banner");
     await expect(banner).toContainText("too expensive");
-    await expect(page.getByTestId("quote-actionbar")).toHaveCount(0);
+    await expect(page.getByTestId("button-interested")).toHaveCount(0);
+    await expect(page.getByTestId("quote-decision-bar")).toHaveCount(0);
 
     const rows = await actionRows(plain.id);
     expect(rows).toHaveLength(1);
@@ -309,7 +417,7 @@ test.describe("customer portal: the customer's decision", () => {
     expect(await notificationCount(q.world.agency.agentId, "quote_declined")).toBe(1);
 
     // The list: out of the main list, into "Not for you" with its reason.
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await expect(page.getByTestId(`quote-card-${plain.id}`)).toHaveCount(0);
     const row = page.getByTestId(`declined-row-${plain.id}`);
     await expect(row).toContainText("Tenerife Sun Break");
@@ -323,7 +431,7 @@ test.describe("customer portal: the customer's decision", () => {
     await expect(actions).toContainText("Wants something similar");
 
     // Undo: back in the list, and the agent is told.
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await page.getByTestId(`button-undo-${plain.id}`).click();
     await expect(page.getByTestId(`quote-card-${plain.id}`)).toBeVisible();
     await expect(page.getByTestId(`declined-row-${plain.id}`)).toHaveCount(0);
@@ -339,7 +447,7 @@ test.describe("customer portal: the customer's decision", () => {
     await expect(page.getByTestId("quote-declined-banner")).toBeVisible();
     await page.getByTestId("button-undo-decline").click();
     await expect(page.getByTestId("quote-declined-banner")).toHaveCount(0);
-    await expect(page.getByTestId("quote-actionbar")).toBeVisible();
+    await expect(page.getByTestId("button-interested")).toBeVisible();
     expect((await actionRows(plain.id)).map((r) => r.action_type)).toEqual(["declined", "reopened"]);
   });
 
@@ -377,12 +485,13 @@ test.describe("customer portal: sharing and asking", () => {
     await expect(sheet).toHaveCount(0);
   });
 
-  test("Ask the agent about this quote opens Messages with the composer filled in", async ({ page }) => {
+  test("Ask the agent about this quote opens the Message sheet over the quote with that quote chosen", async ({ page }) => {
     const { full } = await fixture(page);
     await page.goto(`/portal/quote/${full.token}`);
     await page.getByTestId("button-ask-agent").click();
-    await expect(page).toHaveURL(/\/portal\/messages\?about=/);
-    await expect(page.getByTestId("input-message")).toHaveValue("About Hotel Playa Azul Majorca: ");
+    await expect(page.getByTestId("sheet-message")).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/portal/quote/${full.token}$`));
+    await expect(page.getByTestId(`message-about-quote:${full.id}`)).toHaveAttribute("aria-checked", "true");
   });
 });
 
@@ -395,7 +504,11 @@ test.describe("customer portal: published deals are for the agency's own custome
     await page.goto(`/portal/quote/${deal.token}`);
     await expect(page.getByTestId("quote-title")).toContainText("Agency special");
     await expect(page.getByTestId("button-share")).toBeVisible();
-    await expect(page.getByTestId("quote-actionbar")).toHaveCount(0);
+    await expect(page.getByTestId("button-ask-inline")).toBeVisible();
+    // No decision controls anywhere: no "I'm interested", no "Not interested", no navy bar, no interest form.
+    await expect(page.getByTestId("button-interested")).toHaveCount(0);
+    await expect(page.getByTestId("button-not-interested")).toHaveCount(0);
+    await expect(page.getByTestId("quote-decision-bar")).toHaveCount(0);
     await expect(page.getByTestId("quote-interest")).toHaveCount(0);
     const headers = await bearerFor(page);
     expect((await page.request.post(`/api/v2/portal/quotes/${deal.token}/action`, { headers, data: { action: "interested" } })).status()).toBe(404);
@@ -442,7 +555,7 @@ test.describe("customer portal: published deals are for the agency's own custome
   test("a quote on a deal that is no longer live is out of the list and its link is not found", async ({ page }) => {
     const { q, full } = await fixture(page);
     await queryRows(`update transaction set is_active = false where id = (select transaction_id from quote_table where id = $1)`, [full.id]);
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await expect(page.getByTestId(`quote-card-${full.id}`)).toHaveCount(0);
     await page.goto(`/portal/quote/${full.token}`);
     await expect(page.getByTestId("quote-not-found")).toBeVisible();
@@ -450,7 +563,7 @@ test.describe("customer portal: published deals are for the agency's own custome
   });
 });
 
-test.describe("customer portal: the action bar always shows the full price", () => {
+test.describe("customer portal: the decision bar always shows the full price", () => {
   for (const width of [360, 390]) {
     test(`a seven-figure-pence total (£12,345.67) is shown in full at ${width}px`, async ({ page }) => {
       const q = await seedPortalQuoteWorld(page);
@@ -458,11 +571,11 @@ test.describe("customer portal: the action bar always shows the full price", () 
       await startSignedIn(page, q.portal);
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/portal/quote/${big.token}`);
-      const total = page.getByTestId("actionbar-total");
+      const total = page.getByTestId("quote-bar-total");
       await expect(total).toHaveText("£12,345.67");
       const fits = await total.evaluate((el) => el.scrollWidth <= el.clientWidth && el.getBoundingClientRect().right <= window.innerWidth);
       expect(fits, "the total is not clipped or off screen").toBe(true);
-      const button = await page.getByTestId("button-interested").boundingBox();
+      const button = await page.getByTestId("button-bar-interested").boundingBox();
       expect(button?.height ?? 0).toBeGreaterThanOrEqual(43.5);
       expect((button?.x ?? 0) + (button?.width ?? 0)).toBeLessThanOrEqual(width);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
@@ -491,12 +604,12 @@ test.describe("customer portal: lost, archived and booked quotes", () => {
     await setStatus(lost.id, "lost");
     await setStatus(archived.id, "archived");
 
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await expect(page.getByTestId(`quote-card-${full.id}`)).toBeVisible();
     await expect(page.getByTestId(`quote-card-${plain.id}`)).toBeVisible();
     await expect(page.getByTestId(`quote-card-${lost.id}`)).toHaveCount(0);
     await expect(page.getByTestId(`quote-card-${archived.id}`)).toHaveCount(0);
-    await expect(page.getByTestId("nav-badge-trips")).toHaveText("2");
+    await expect(page.getByTestId("nav-badge-quotes")).toHaveText("2");
 
     for (const gone of [lost, archived]) {
       await page.goto(`/portal/quote/${gone.token}`);
@@ -518,7 +631,7 @@ test.describe("customer portal: lost, archived and booked quotes", () => {
     const bookedToken = token();
     await queryRows(`update quote_table set quote_token = $1 where id = $2`, [bookedToken, trip.entityId]);
 
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await expect(page.locator(`[data-testid^="quote-card-"]`)).toHaveCount(2); // the booked one is not listed
 
     await page.goto(`/portal/quote/${bookedToken}`);

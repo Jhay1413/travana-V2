@@ -46,14 +46,14 @@ describe("public quote router: every error path through the real mounted router"
   });
 
   it("booked: 410 with exactly { error, code, agency }", async () => {
-    vi.mocked(quotePublicService.getPublicQuote).mockRejectedValue(new QuoteBlockedError({ code: "BOOKED", agency: { name: "Tinas", phone: null } }));
+    vi.mocked(quotePublicService.getPublicQuote).mockRejectedValue(new QuoteBlockedError({ code: "BOOKED", agency: { name: "Tinas", phone: null, logoUrl: null, iconUrl: null, email: null, address: null } }));
     const res = await fetch(`${base}/ABC234`);
     expect(res.status).toBe(410);
-    expect(await res.json()).toEqual({ error: "This holiday has been booked.", code: "BOOKED", agency: { name: "Tinas", phone: null } });
+    expect(await res.json()).toEqual({ error: "This holiday has been booked.", code: "BOOKED", agency: { name: "Tinas", phone: null, logoUrl: null, iconUrl: null, email: null, address: null } });
   });
 
   it("unavailable on view and share: 410", async () => {
-    const blocked = new QuoteBlockedError({ code: "UNAVAILABLE", agency: { name: null, phone: null } });
+    const blocked = new QuoteBlockedError({ code: "UNAVAILABLE", agency: { name: null, phone: null, logoUrl: null, iconUrl: null, email: null, address: null } });
     vi.mocked(quotePublicService.logView).mockRejectedValue(blocked);
     vi.mocked(quotePublicService.logShare).mockRejectedValue(blocked);
     expect((await post("/ABC234/view", {})).status).toBe(410);

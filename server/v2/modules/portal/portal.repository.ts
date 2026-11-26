@@ -28,6 +28,7 @@ import {
 import { quoteExtrasTotalExpr, bookingExtrasTotalExpr } from '../../utils/commission-sql';
 import { and, asc, desc, eq, exists, ilike, inArray, isNotNull, isNull, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import type { LoginCandidate, WebauthnCredentialRow } from './portal.types';
+import { DEAL_INTEREST_LEGACY_PREFIX, DEAL_INTEREST_PREFIX, dealIdFromInterestText, dealInterestMarker } from './portal-interest-text';
 
 /** The quote belongs to a transaction of the given agency. Every portal deal read
  *  goes through this so one agency's deals can never reach another's clients. */
@@ -112,15 +113,7 @@ export interface PortalBookingRow {
   boardName?: string | null;
 }
 
-/** The message the agent receives when a customer taps "I'm interested" on a deal. The wording must not change. */
-export const DEAL_INTEREST_PREFIX = '❤️ Interested in deal: ';
-const DEAL_INTEREST_LEGACY_PREFIX = 'Interested in deal: ';
-
-/** The deal id in a stored "interested" message (either wording), or null for any other text. */
-export function dealIdFromInterestText(text: string): string | null {
-  const m = /^(?:❤️ )?Interested in deal: (\S+)$/.exec(text);
-  return m ? m[1] : null;
-}
+export { DEAL_INTEREST_PREFIX, dealIdFromInterestText };
 
 export const portalRepository = {
   // ── Auth (email/PIN + WebAuthn) ──────────────────────────────────────────
@@ -179,6 +172,8 @@ export const portalRepository = {
     email: string | null;
     firstName: string | null;
     mustChangePin: boolean;
+    /** The customer's own agency, when it has a name on record. */
+    agencyName: string | null;
   } | undefined> {
     const [row] = await db
       .select({
@@ -186,8 +181,10 @@ export const portalRepository = {
         email: clientTable.email,
         firstName: clientTable.firstName,
         mustChangePin: clientTable.mustChangePin,
+        agencyName: organization.name,
       })
       .from(clientTable)
+      .leftJoin(organization, eq(clientTable.orgId, organization.id))
       .where(and(eq(clientTable.id, clientId), isNull(clientTable.deletedAt)))
       .limit(1);
     return row;
@@ -676,7 +673,22 @@ export const portalRepository = {
       .limit(limit);
   },
 
-  /** The exact texts a customer's "I'm interested" on a deal is stored as (the live wording, and the one the v2 route used to send). */
+  /** The deal a customer may say they are interested in: live on this agency's portal. Null when it is not (or is another agency's). */
+  async findDealForInterest(orgId: string, dealId: string): Promise<{ title: string | null; destinationName: string | null; countryName: string | null } | null> {
+    const [row] = await db
+      .select({ title: quote.title, destinationName: destination.name, countryName: country.country_name })
+      .from(quote)
+      .leftJoin(quote_accomodation, and(eq(quote_accomodation.quote_id, quote.id), eq(quote_accomodation.is_primary, true)))
+      .leftJoin(accomodation_list, eq(quote_accomodation.accomodation_id, accomodation_list.id))
+      .leftJoin(resorts, eq(accomodation_list.resorts_id, resorts.id))
+      .leftJoin(destination, eq(resorts.destination_id, destination.id))
+      .leftJoin(country, eq(destination.country_id, country.id))
+      .where(and(eq(quote.id, dealId), portalDealActiveWhere(orgId)))
+      .limit(1);
+    return row ?? null;
+  },
+
+  /** The texts a customer's "I'm interested" on a deal is stored as: the two older wordings (ending in the bare id) and the current one (ending in the id marker). */
   async hasClientInterestMessage(clientId: string, dealId: string): Promise<boolean> {
     const [row] = await db
       .select({ id: portalMessages.id })
@@ -684,7 +696,14 @@ export const portalRepository = {
       .where(and(
         eq(portalMessages.clientId, clientId),
         eq(portalMessages.sender, 'client'),
-        inArray(portalMessages.text, [`${DEAL_INTEREST_PREFIX}${dealId}`, `${DEAL_INTEREST_LEGACY_PREFIX}${dealId}`]),
+        or(
+          inArray(portalMessages.text, [`${DEAL_INTEREST_PREFIX}${dealId}`, `${DEAL_INTEREST_LEGACY_PREFIX}${dealId}`]),
+          // Current wording: "…Interested in deal: <title> (<destination>) [deal:<id>]".
+          and(
+            ilike(portalMessages.text, '%Interested in deal: %'),
+            sql`right(${portalMessages.text}, ${dealInterestMarker(dealId).length}) = ${dealInterestMarker(dealId)}`,
+          ),
+        ),
       ))
       .limit(1);
     return !!row;

@@ -63,10 +63,10 @@ describe("public quote controller contract", () => {
   });
 
   it("GET a booked quote answers 410 with { error, code, agency } and nothing else", async () => {
-    vi.mocked(quotePublicService.getPublicQuote).mockRejectedValue(new QuoteBlockedError({ code: "BOOKED", agency: { name: "Tinas", phone: "0191" } }));
+    vi.mocked(quotePublicService.getPublicQuote).mockRejectedValue(new QuoteBlockedError({ code: "BOOKED", agency: { name: "Tinas", phone: "0191", logoUrl: null, iconUrl: null, email: null, address: null } }));
     const out = await call([quotePublicController.getQuote], { params: { token: "ABC234" } });
     expect(out.status).toBe(410);
-    expect(out.body).toEqual({ error: "This holiday has been booked.", code: "BOOKED", agency: { name: "Tinas", phone: "0191" } });
+    expect(out.body).toEqual({ error: "This holiday has been booked.", code: "BOOKED", agency: { name: "Tinas", phone: "0191", logoUrl: null, iconUrl: null, email: null, address: null } });
     expect(out.next).toBeUndefined();
   });
 
@@ -88,10 +88,10 @@ describe("public quote controller contract", () => {
   });
 
   it("view of a blocked quote answers 410", async () => {
-    vi.mocked(quotePublicService.logView).mockRejectedValue(new QuoteBlockedError({ code: "UNAVAILABLE", agency: { name: null, phone: null } }));
+    vi.mocked(quotePublicService.logView).mockRejectedValue(new QuoteBlockedError({ code: "UNAVAILABLE", agency: { name: null, phone: null, logoUrl: null, iconUrl: null, email: null, address: null } }));
     const out = await call([quotePublicController.logView], { params: { token: "ABC234" }, ip: "1.1.1.1" });
     expect(out.status).toBe(410);
-    expect(out.body).toEqual({ error: "This quote is no longer available.", code: "UNAVAILABLE", agency: { name: null, phone: null } });
+    expect(out.body).toEqual({ error: "This quote is no longer available.", code: "UNAVAILABLE", agency: { name: null, phone: null, logoUrl: null, iconUrl: null, email: null, address: null } });
   });
 
   it("share answers data: null", async () => {

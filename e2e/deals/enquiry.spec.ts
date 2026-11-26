@@ -198,6 +198,11 @@ test.describe("enquiry drawer", () => {
     const drawer = await openEnquiryDrawer(page, client.id);
     await drawer.getByTestId("input-enquiry-title").fill("Abandoned");
     await page.getByTestId("enquiry-drawer").getByRole("button", { name: "Close" }).click();
+    // The typed title is unsaved work, so the pop-up asks before closing (the redesigned shell's "Discard changes?").
+    const prompt = page.getByTestId("form-discard-confirm");
+    await expect(prompt).toBeVisible();
+    await expect(page.getByTestId("enquiry-drawer")).toBeVisible();
+    await prompt.getByRole("button", { name: "Discard" }).click();
     await expect(page.getByTestId("enquiry-drawer")).toBeHidden();
     expect(await queryRows(`select 1 from transaction where client_id = $1`, [client.id])).toHaveLength(0);
 

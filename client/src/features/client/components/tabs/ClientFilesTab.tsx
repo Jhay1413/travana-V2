@@ -37,6 +37,14 @@ function fileExt(name: string) {
   return name.split(".").pop()?.toUpperCase() || "FILE";
 }
 
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Linked to a real booking, quote or enquiry (not "None" or an old placeholder id): the customer sees it in their portal. */
+function isSharedWithCustomer(f: ClientFileItem): boolean {
+  const type = (f.allocationType ?? "").toLowerCase();
+  return ["booking", "quote", "enquiry"].includes(type) && UUID_SHAPE.test(f.allocationId ?? "");
+}
+
 function isImageMime(mime: string) {
   return mime.startsWith("image/");
 }
@@ -71,6 +79,9 @@ export function ClientFilesTab({
             <Paperclip className="h-4 w-4" strokeWidth={1.8} /> Add files
           </button>
         )}
+        <p className="mt-2 text-xs text-social-muted" data-testid="text-files-portal-note">
+          Files linked to a booking, quote or enquiry are visible to the customer in their portal. Files not linked to anything stay in the CRM only.
+        </p>
         {clientFiles.map((f) => {
           const meta = [
             fileExt(f.originalName),
@@ -95,6 +106,11 @@ export function ClientFilesTab({
                     <span className="truncate text-sm font-semibold" data-testid={`text-file-uploaded-name-${f.id}`}>
                       {f.title || f.originalName}
                     </span>
+                    {isSharedWithCustomer(f) && (
+                      <span className="shrink-0 text-[10px] font-semibold text-social-muted" data-testid={`text-file-shared-${f.id}`}>
+                        Shared with customer
+                      </span>
+                    )}
                     {f.category && (
                       <span className="shrink-0 rounded-full bg-status-scheduled-bg px-2 py-0.5 text-[10px] font-semibold text-status-scheduled-fg">
                         {f.category}

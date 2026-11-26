@@ -53,7 +53,7 @@ export function aboutBookingText(title: string, reference: string): string {
 
 /** Where a booked quote's "view" button goes: straight to its booking when the server named one, else the Bookings list. */
 export function bookedLink(bookingId: string | null | undefined): string {
-  return bookingId ? `/portal/booking/${encodeURIComponent(bookingId)}` : "/portal/trips/bookings";
+  return bookingId ? `/portal/booking/${encodeURIComponent(bookingId)}` : "/portal/bookings";
 }
 
 /** The payments placeholder is only shown when `VITE_PORTAL_PAYMENTS` is switched on ("true" or "1"). */

@@ -45,6 +45,7 @@ for (const size of SIZES) {
     await bookedDeal(page.request, q.world, { title: "Cretan Villa Week", travel_date: daysFromToday(40), num_of_nights: 7, adult: 2, child: 1 });
     // Bookings: one coming up with a flight pair, two hotels, a transfer and an extra, and one that has been travelled.
     const trip = await seedPortalBooking(page, q, { title: "Hotel Playa Azul Majorca", travelDate: 45, itinerary: true });
+    const later = await seedPortalBooking(page, q, { title: "Lisbon City Break", travelDate: 120, salesPrice: "900.00", discounts: "0", serviceCharge: "0" });
     await seedPortalBooking(page, q, { title: "Algarve Golf Escape", travelDate: daysFromToday(-60), salesPrice: "1800.00", discounts: "0", serviceCharge: "0" });
     const deal = await seedPublishedDeal(page, q, { title: "Cyprus Beach Deal", token: token(), forClientId: null, salesPrice: "899.00" });
     await tagDealWithInterest(deal.id, q.portal.tagName);
@@ -72,10 +73,10 @@ for (const size of SIZES) {
     const headers = await auth();
     await page.request.post(`/api/v2/portal/quotes/${interested.token}/action`, { headers, data: { action: "interested", note: "Lovely" } });
     await page.request.post(`/api/v2/portal/quotes/${declined.token}/action`, { headers, data: { action: "declined", reason: "Too expensive", wantsSimilar: true } });
-    await page.goto("/portal/trips/quotes");
+    await page.goto("/portal/quotes");
     await expect(page.getByTestId(`quote-card-${rich.id}`)).toBeVisible();
     await expect(page.getByTestId(`declined-row-${declined.id}`)).toBeVisible();
-    await shot("03-trips-quotes");
+    await shot("03-quotes-list");
 
     // 3. Quote detail: as loaded, scrolled to the journey.
     await page.goto(`/portal/quote/${rich.token}`);
@@ -105,11 +106,15 @@ for (const size of SIZES) {
     await shot("08-thank-you", false);
 
     // 6. Other tabs.
-    await page.goto("/portal/trips/bookings");
+    await page.goto("/portal/bookings");
     await expect(page.getByTestId("nav-bottom")).toBeVisible();
-    await shot("09-trips-bookings");
-    await expect(page.getByTestId(`booking-card-${trip.id}`)).toBeVisible();
-    await shot("09b-trips-bookings-full");
+    // My bookings: the next holiday in full, then the other holidays and the ones already travelled.
+    await expect(page.getByTestId("portal-booking")).toBeVisible();
+    await shot("09-my-bookings", false);
+    await shot("09b-my-bookings-full");
+    await expect(page.getByTestId(`booking-other-${later.id}`)).toBeVisible();
+    await page.getByTestId("bookings-others").scrollIntoViewIfNeeded();
+    await shot("09f-other-holidays", false);
     await page.goto(`/portal/booking/${trip.id}`);
     await expect(page.getByTestId("quote-journey")).toBeVisible();
     await shot("09c-booking-top", false);
@@ -119,6 +124,28 @@ for (const size of SIZES) {
     await page.goto("/portal/account");
     await expect(page.getByTestId("portal-account")).toBeVisible();
     await shot("10-account");
+
+    // 7. The five-tab bar, the menu and the Message sheet (form, then sent).
+    await page.goto("/portal");
+    await expect(page.getByTestId("portal-home")).toBeVisible();
+    await settle(page);
+    await page.getByTestId("nav-bottom").screenshot({ path: path.join(OUT, `${size.name}-20-tab-bar.png`) });
+    await page.getByTestId("button-portal-menu").click();
+    await expect(page.getByTestId("portal-menu")).toBeVisible();
+    await shot("21-menu", false);
+    await page.getByTestId("menu-message-agent").click();
+    await expect(page.getByTestId("sheet-message")).toBeVisible();
+    await shot("22-message-sheet-form", false);
+    await page.getByTestId("message-extra-airport-parking").click();
+    await page.getByTestId("message-text").fill("It is our anniversary, could we have a sea view?");
+    await page.getByTestId("message-send").click();
+    await expect(page.getByTestId("message-sent")).toBeVisible();
+    await shot("23-message-sheet-sent", false);
+    await page.keyboard.press("Escape");
+    await page.getByTestId("nav-tab-agent").click();
+    await expect(page.getByTestId("sheet-message")).toBeVisible();
+    await page.getByTestId("nav-bottom").screenshot({ path: path.join(OUT, `${size.name}-24-tab-bar-sheet-open.png`) });
+    await page.keyboard.press("Escape");
     await page.goto("/portal/messages");
     await expect(page.getByTestId("input-message")).toBeVisible();
     await shot("11-messages");

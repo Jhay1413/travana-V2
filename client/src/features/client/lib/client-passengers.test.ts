@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   RIGHT_CARD_TABS,
+  draftFromPassenger,
   draftToInput,
   formatPassengerDate,
+  passengerSexLabel,
   orDash,
   passengerCountLabel,
   passengerFullName,
@@ -68,7 +70,7 @@ describe("passportFootnote", () => {
 });
 
 describe("passengerDraftErrors", () => {
-  const full = { title: "Mr.", firstName: "A", surname: "B", dateOfBirth: "2000-01-31", passportNumber: "123456789", passportExpiry: "2030-05-01", passportNonUk: false };
+  const full = { title: "Mr.", firstName: "A", surname: "B", dateOfBirth: "2000-01-31", passportNumber: "123456789", passportExpiry: "2030-05-01", passportNonUk: false, nationality: "", sex: "", passportIssueDate: "" };
   const opts = { nextDeparture: null, today: "2026-11-04" };
   it("is empty only when all six fields are valid", () => {
     expect(passengerDraftErrors(full, opts)).toEqual({});
@@ -150,9 +152,31 @@ describe("passportExpiryFlag default day", () => {
 
 describe("passenger draft", () => {
   it("nulls blanks, trims, and upper-cases a Non-UK number", () => {
-    const base = { title: "", firstName: " A ", surname: "B", dateOfBirth: "", passportNumber: " 99 ", passportExpiry: "", passportNonUk: false };
-    expect(draftToInput(base)).toEqual({ title: null, firstName: "A", surname: "B", dateOfBirth: null, passportNumber: "99", passportExpiry: null, passportNonUk: false });
+    const base = { title: "", firstName: " A ", surname: "B", dateOfBirth: "", passportNumber: " 99 ", passportExpiry: "", passportNonUk: false, nationality: "", sex: "", passportIssueDate: "" };
+    expect(draftToInput(base)).toEqual({
+      title: null, firstName: "A", surname: "B", dateOfBirth: null, passportNumber: "99", passportExpiry: null, passportNonUk: false,
+      nationality: null, sex: null, passportIssueDate: null,
+    });
     expect(draftToInput({ ...base, passportNumber: " ab123 ", passportNonUk: true }).passportNumber).toBe("AB123");
+  });
+
+  it("carries nationality, sex and issue date, and drops a sex that is not M, F or X", () => {
+    const base = { title: "", firstName: "A", surname: "B", dateOfBirth: "", passportNumber: "", passportExpiry: "", passportNonUk: false, nationality: " British Citizen ", sex: "F", passportIssueDate: "2022-10-22" };
+    expect(draftToInput(base)).toMatchObject({ nationality: "British Citizen", sex: "F", passportIssueDate: "2022-10-22" });
+    expect(draftToInput({ ...base, sex: "female" }).sex).toBeNull();
+  });
+
+  it("fills the draft from a passenger, blanks for what is not known", () => {
+    const passenger = {
+      id: "p1", isLead: false, title: null, firstName: "A", surname: "B", dateOfBirth: null, passportNumber: null, passportExpiry: null,
+      passportNonUk: false, passportWarning: false, nationality: "British Citizen", sex: "M" as const, passportIssueDate: "2021-02-09",
+    };
+    expect(draftFromPassenger(passenger)).toMatchObject({ nationality: "British Citizen", sex: "M", passportIssueDate: "2021-02-09" });
+    expect(draftFromPassenger({ ...passenger, nationality: null, sex: null, passportIssueDate: null })).toMatchObject({ nationality: "", sex: "", passportIssueDate: "" });
+  });
+
+  it("words the sex for the card", () => {
+    expect(["M", "F", "X", null].map(passengerSexLabel)).toEqual(["Male", "Female", "Another", "—"]);
   });
 });
 

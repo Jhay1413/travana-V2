@@ -3,7 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { DestinationContent, DestinationSection } from "../../lib/quote-destination";
 import { toRoman } from "../../lib/quote-format";
-import { SplitHeading } from "../brand";
+import { PortalButton, SplitHeading } from "../brand";
 
 function Facts({ facts }: { facts: Array<{ label: string; value: string }> }) {
   if (facts.length === 0) return null;
@@ -11,8 +11,8 @@ function Facts({ facts }: { facts: Array<{ label: string; value: string }> }) {
     <dl className="flex flex-col gap-[18px]">
       {facts.map((f) => (
         <div key={f.label} className="flex flex-col gap-1">
-          <dt className="portal-caps-label">{f.label}</dt>
-          <dd className="portal-serif text-[19px] leading-snug text-primary">{f.value}</dd>
+          <dt className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">{f.label}</dt>
+          <dd className="portal-serif text-[19px] leading-[1.35] text-primary">{f.value}</dd>
         </div>
       ))}
     </dl>
@@ -27,12 +27,12 @@ function SectionBody({ section }: { section: DestinationSection }) {
           {section.things.map((t) => (
             <li key={t.name} className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between gap-2.5">
-                <span className="portal-serif text-[21px] leading-tight text-primary">{t.name}</span>
-                {t.tag && <span className="whitespace-nowrap text-[11px] uppercase tracking-[0.18em] portal-text-amber-ink">{t.tag}</span>}
+                <span className="portal-serif text-[21px] leading-[1.2] text-primary">{t.name}</span>
+                {t.tag && <span className="whitespace-nowrap text-[10px] uppercase tracking-[0.22em] portal-text-amber-ink">{t.tag}</span>}
               </div>
-              {t.line && <p className="text-[15px] leading-relaxed text-muted-foreground">{t.line}</p>}
+              {t.line && <p className="text-sm leading-[1.65] text-muted-foreground">{t.line}</p>}
               {t.details.map((d) => (
-                <p key={d} className="text-[15px] leading-relaxed text-muted-foreground">
+                <p key={d} className="text-sm leading-[1.65] text-muted-foreground">
                   {d}
                 </p>
               ))}
@@ -72,43 +72,39 @@ function SectionBody({ section }: { section: DestinationSection }) {
 }
 
 /** "The destination": the guide as an accordion. Sections with nothing in them are not there at all. */
-export function QuoteDestination({ content, askLabel, onAsk }: { content: DestinationContent; askLabel: string; onAsk: () => void }) {
+export function QuoteDestination({ content, agent, askLabel, onAsk }: { content: DestinationContent; agent: string; askLabel: string; onAsk: () => void }) {
+  const who = agent === "your agent" ? "your agent" : agent;
   const [open, setOpen] = useState<string[]>([content.sections[0]?.id ?? ""]);
   return (
     <section aria-labelledby="destination" className="bg-secondary px-7 pb-16 pt-[72px]" data-testid="quote-destination">
       <div className="mx-auto max-w-3xl">
         <p className="portal-eyebrow mb-3.5">The destination</p>
         <SplitHeading id="destination" lead={content.tagline ? `${content.name},` : content.name} italic={content.tagline || undefined} className="mb-[30px]" />
-        <Accordion.Root type="multiple" value={open} onValueChange={setOpen} className="border-b border-[hsl(var(--portal-line))]">
+        <Accordion.Root type="multiple" value={open} onValueChange={setOpen} className="border-b border-[#D9C7B1]">
           {content.sections.map((section, i) => (
-            <Accordion.Item key={section.id} value={section.id} className="border-t border-[hsl(var(--portal-line))]" data-testid={`destination-${section.id}`}>
+            <Accordion.Item key={section.id} value={section.id} className="border-t border-[#D9C7B1]" data-testid={`destination-${section.id}`}>
               <Accordion.Header className="m-0">
-                <Accordion.Trigger className="group flex min-h-[72px] w-full items-start gap-4 py-5 text-left">
-                  <span className="portal-serif w-8 flex-none text-[20px] portal-text-amber-ink" aria-hidden>
+                <Accordion.Trigger className="group flex min-h-20 w-full items-center gap-[18px] py-[18px] text-left">
+                  <span className="portal-serif w-7 flex-none text-[20px] portal-text-amber-ink" aria-hidden>
                     {toRoman(i + 1)}
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="portal-serif text-[23px] font-medium leading-tight text-primary">{section.title}</span>
-                    <span className="text-[15px] text-muted-foreground">{section.sub}</span>
+                    <span className="portal-serif text-[23px] font-medium leading-[1.2] text-primary">{section.title}</span>
+                    <span className="text-[13px] font-light text-muted-foreground">{section.sub}</span>
                   </span>
-                  <ChevronDown className="mt-1.5 size-5 flex-none text-primary transition-transform group-data-[state=open]:rotate-180" strokeWidth={1.5} aria-hidden />
+                  <ChevronDown className="size-5 flex-none text-primary transition-transform group-data-[state=open]:rotate-180" strokeWidth={1.5} aria-hidden />
                 </Accordion.Trigger>
               </Accordion.Header>
-              <Accordion.Content className="pb-6 pl-12">
+              <Accordion.Content className="pb-[30px] pl-[46px]">
                 <SectionBody section={section} />
               </Accordion.Content>
             </Accordion.Item>
           ))}
         </Accordion.Root>
-        <p className="portal-serif mt-[26px] text-[19px] italic leading-snug text-primary">Like the sound of something? Just ask.</p>
-        <button
-          type="button"
-          onClick={onAsk}
-          className="mt-[18px] inline-flex min-h-[52px] w-full items-center justify-center border border-primary px-8 text-xs font-medium uppercase tracking-[0.24em] text-primary hover:bg-primary hover:text-primary-foreground"
-          data-testid="button-ask-add"
-        >
+        <p className="portal-serif mt-[26px] text-lg italic leading-[1.45] text-primary">Like the sound of something? Tell {who} and they can arrange it for you.</p>
+        <PortalButton variant="outline" className="mt-[18px] w-full" onClick={onAsk} data-testid="button-ask-add">
           {askLabel}
-        </button>
+        </PortalButton>
       </div>
     </section>
   );

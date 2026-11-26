@@ -11,7 +11,7 @@ import {
   PortalButton,
   PortalDialog,
   PortalSection,
-  SplitHeading,
+  PortalHero,
   signOutPortal,
   usePortalBrandingValue,
   usePortalFaceId,
@@ -195,10 +195,17 @@ export default function PortalAccountPage() {
 
   return (
     <PortalLayout tone="light">
+      <PortalHero className="h-[480px] md:h-[480px]">
+        <Eyebrow className="text-accent [overflow-wrap:anywhere]">{user?.email ?? "Your details"}</Eyebrow>
+        <h1 className="portal-serif w-full max-w-full text-[50px] font-light leading-none text-white [overflow-wrap:anywhere]">
+          {user?.firstName ? `${user.firstName}'s` : "Your"}
+          <br />
+          <em className="italic">account.</em>
+        </h1>
+        {branding.name && <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/80">With {branding.name}</p>}
+      </PortalHero>
+
       <PortalSection className="pb-14 pt-10" data-testid="portal-account">
-        <Eyebrow>{user?.email ?? "Your details"}</Eyebrow>
-        <SplitHeading as="h1" lead={user?.firstName ? `${user.firstName}'s` : "Your"} italic="account." className="mt-3 text-[48px] leading-[1.08]" />
-        {branding.name && <p className="mt-3 text-[15px] text-muted-foreground">With {branding.name}</p>}
 
         <Group label="Rewards and interests">
           <Row title="Referrals & rewards" description="Refer a friend and track what you've earned." aside={rewardsAside} onClick={() => setLocation("/portal/referrals")} testId="account-row-referrals" />
@@ -227,11 +234,11 @@ export default function PortalAccountPage() {
             aside={
               faceIdSupported ? (
                 faceId.enabled ? (
-                  <PortalButton variant="outline" className="min-h-11 px-4" onClick={removeThisDevice} data-testid="button-face-id-remove">
+                  <PortalButton variant="outline" size="sm" className="px-4" onClick={removeThisDevice} data-testid="button-face-id-remove">
                     Remove
                   </PortalButton>
                 ) : (
-                  <PortalButton variant="outline" className="min-h-11 px-4" onClick={setUpFaceId} disabled={faceId.pending} data-testid="button-face-id-setup">
+                  <PortalButton variant="outline" size="sm" className="px-4" onClick={setUpFaceId} disabled={faceId.pending} data-testid="button-face-id-setup">
                     {faceId.pending ? "Setting up" : "Set up"}
                   </PortalButton>
                 )
@@ -248,7 +255,7 @@ export default function PortalAccountPage() {
                   Device set up{" "}
                   {d.createdAt ? new Date(d.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "earlier"}
                 </span>
-                <PortalButton variant="outline" className="min-h-11 px-4" onClick={() => removeOtherDevice(d.id)} data-testid={`button-face-id-remove-device-${d.id}`}>
+                <PortalButton variant="outline" size="sm" className="px-4" onClick={() => removeOtherDevice(d.id)} data-testid={`button-face-id-remove-device-${d.id}`}>
                   Remove
                 </PortalButton>
               </li>
@@ -301,11 +308,11 @@ export default function PortalAccountPage() {
           <PinField id="account-new-pin" label="New PIN" value={newPin} onChange={setNewPin} autoComplete="new-password" testId="input-account-new-pin" />
           <PinField id="account-confirm-pin" label="Confirm PIN" value={confirmPin} onChange={setConfirmPin} autoComplete="new-password" testId="input-account-confirm-pin" />
           {pinError && (
-            <p role="alert" className="portal-text-danger text-[14px]" data-testid="text-account-pin-error">
+            <p role="alert" className="portal-text-danger text-[13px]" data-testid="text-account-pin-error">
               {pinError}
             </p>
           )}
-          <PortalButton type="submit" disabled={changePin.isPending || newPin.length !== 4 || confirmPin.length !== 4} data-testid="button-account-save-pin">
+          <PortalButton type="submit" size="lg" className="w-full" disabled={changePin.isPending || newPin.length !== 4 || confirmPin.length !== 4} data-testid="button-account-save-pin">
             {changePin.isPending ? "Saving" : "Save PIN"}
           </PortalButton>
         </form>

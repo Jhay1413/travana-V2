@@ -4,6 +4,7 @@ import { customerPrice } from "../../utils/customer-price";
 import { looksLikeQuoteToken } from "../../utils/quote-token";
 import type { Scope } from "../../utils/scope";
 import { assertQuoteReadable } from "./quote-access";
+import { toPortalBranding } from "../portal/portal-branding.service";
 import {
   PUBLIC_SHARE_METHODS,
   QuoteBlockedError,
@@ -27,13 +28,18 @@ function isoDate(value: Date | string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-/** The agency's name and phone for the "please contact" lines; the phone is the profile phone when one is set. */
-function agencyContact(row: Pick<QuoteAccessRow, "agencyName" | "agencySettings">): AgencyContact {
-  const settings = typeof row.agencySettings === "object" && row.agencySettings !== null ? (row.agencySettings as Record<string, unknown>) : {};
-  const profile = typeof settings.profile === "object" && settings.profile !== null ? (settings.profile as Record<string, unknown>) : {};
-  const phone = typeof profile.phone === "string" ? profile.phone.trim().slice(0, 40) : "";
-  const name = typeof row.agencyName === "string" ? row.agencyName.trim().slice(0, 200) : "";
-  return { name: name || null, phone: phone || null };
+/** What a link with no agency behind it carries: the same shape, nothing in it. */
+export function noAgency(): AgencyContact {
+  return { name: null, phone: null, logoUrl: null, iconUrl: null, email: null, address: null };
+}
+
+/**
+ * The agency's identity for the page and its "please contact" lines. Built by the portal's own branding allowlist
+ * (same fields, same http(s)-or-site-relative URL check), then narrowed to the six fields this page shows.
+ */
+function agencyContact(row: Pick<QuoteAccessRow, "agencyName" | "agencyLogoUrl" | "agencySettings">): AgencyContact {
+  const b = toPortalBranding({ name: row.agencyName ?? "", logoUrl: row.agencyLogoUrl, brandColor: null, settings: row.agencySettings });
+  return { name: b.name, phone: b.phone, logoUrl: b.logoUrl, iconUrl: b.iconUrl, email: b.email, address: b.address };
 }
 
 /**
@@ -42,7 +48,7 @@ function agencyContact(row: Pick<QuoteAccessRow, "agencyName" | "agencySettings"
  * ever said of a quote that would otherwise be visible: nothing else is revealed.
  */
 export function blockFor(state: QuoteAccessRow | null): QuoteBlock | null {
-  if (!state) return { code: "UNAVAILABLE", agency: { name: null, phone: null } };
+  if (!state) return { code: "UNAVAILABLE", agency: noAgency() };
   const agency = agencyContact(state);
   if (!state.visible || state.clientDeleted) return { code: "UNAVAILABLE", agency };
   if (state.isBooked) return { code: "BOOKED", agency };
@@ -106,7 +112,7 @@ export function toPublicPayload(data: QuoteRecord, state: QuoteAccessRow | null,
       ? { destination: data.destinationGuru.destination, country: data.destinationGuru.country, data: data.destinationGuru.data }
       : null,
     agent: { name: data.agent.name, avatar: data.agent.avatar },
-    agency: state ? agencyContact(state) : { name: null, phone: null },
+    agency: state ? agencyContact(state) : noAgency(),
     expired,
     expiredOn: expired ? isoDate(expiry) : null,
   };
@@ -175,7 +181,7 @@ export const quotePublicService = {
   async assertOpen(quoteId: string): Promise<QuoteAccessRow> {
     const state = await quotePublicRepository.findAccessState(quoteId);
     const block = blockFor(state);
-    if (block || !state) throw new QuoteBlockedError(block ?? { code: "UNAVAILABLE", agency: { name: null, phone: null } });
+    if (block || !state) throw new QuoteBlockedError(block ?? { code: "UNAVAILABLE", agency: noAgency() });
     return state;
   },
 

@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { displayName, type PortalBranding } from "../api/portal-branding";
+import { useRegisterPortalHero } from "./hero-context";
 
 /** Small tracked uppercase label above a heading. */
 export function Eyebrow({ children, className, as: Tag = "p" }: { children: ReactNode; className?: string; as?: "p" | "h2" | "div" | "span" }) {
@@ -43,21 +44,38 @@ export function SplitHeading({
   );
 }
 
-/** The agency's logo, or its name in serif when it has none. Never a fixed brand. */
+/**
+ * The agency's mark, or its name in serif when it has no image. Never a fixed brand.
+ * `mark` (header, menu, centred blocks) is the design's 48px-wide brand mark: the agency icon, else its logo.
+ * `wordmark` (footer) is the design's 150px wordmark: the agency logo, else its icon.
+ */
 export function AgencyMark({
   branding,
   tone = "light",
+  variant = "mark",
   className,
 }: {
   branding: PortalBranding;
-  /** `dark`: sits on navy, so a logo is placed on a plain white tile and a name is white. */
+  /** `dark`: sits on navy, so an image is turned white and a name is white. */
   tone?: "light" | "dark";
+  variant?: "mark" | "wordmark";
   className?: string;
 }) {
   const name = displayName(branding);
-  if (branding.logoUrl) {
-    const img = <img src={branding.logoUrl} alt={name} className="block h-9 w-auto max-w-[180px] object-contain" data-testid="portal-agency-logo" />;
-    return tone === "dark" ? <div className={cn("inline-flex bg-white px-3 py-2", className)}>{img}</div> : <div className={cn("inline-flex", className)}>{img}</div>;
+  const src = variant === "wordmark" ? branding.logoUrl ?? branding.iconUrl : branding.iconUrl ?? branding.logoUrl;
+  if (src) {
+    const isIcon = src === branding.iconUrl;
+    const size = variant === "wordmark" ? (isIcon ? "w-12" : "w-[150px]") : isIcon ? "w-12" : "max-w-[120px]";
+    // On navy the image is turned white (the design's marks are white on navy), so any logo is visible there.
+    const img = (
+      <img
+        src={src}
+        alt={name}
+        className={cn("block h-auto max-h-12 object-contain", size, tone === "dark" && "brightness-0 invert")}
+        data-testid="portal-agency-logo"
+      />
+    );
+    return <div className={cn("inline-flex", className)}>{img}</div>;
   }
   return (
     <span
@@ -69,21 +87,38 @@ export function AgencyMark({
   );
 }
 
-/** Full-bleed hero with the navy fade. A plain navy hero today; a photo can sit behind the fade later. */
+/** The design's share glyph (box with an arrow out of the top), 16px, 1.5 stroke. */
+export function ShareIcon({ className }: { className?: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={className}>
+      <path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M16 6l-4-4-4 4M12 2v13" />
+    </svg>
+  );
+}
+
+/**
+ * Full-bleed hero, as the reference's PhotoHero: 640px (600 from md) tall unless the screen sets its own height, the photo
+ * filling it, the navy fade over it, the text centred at the bottom. With no photo it is the reference's plain #0D2A4E.
+ * The floating header sits over its top edge.
+ */
 export function PortalHero({
   className,
+  contentClassName,
   children,
   photoUrl,
 }: {
   className?: string;
+  /** Overrides of the text column's gap and bottom padding (each screen's own values in the design). */
+  contentClassName?: string;
   children: ReactNode;
   photoUrl?: string;
 }) {
+  useRegisterPortalHero();
   return (
-    <section className={cn("relative flex flex-col justify-end overflow-hidden bg-primary text-white", className)}>
+    <section className={cn("relative flex h-[640px] flex-col justify-end overflow-hidden bg-[#0D2A4E] text-white md:h-[600px]", className)}>
       {photoUrl && <img src={photoUrl} alt="" className="absolute inset-0 size-full object-cover" />}
       <div aria-hidden className="portal-hero-fade absolute inset-0" />
-      <div className="relative mx-auto flex w-full min-w-0 max-w-xl flex-col items-center gap-[18px] px-7 pb-12 text-center">{children}</div>
+      <div className={cn("relative mx-auto flex w-full min-w-0 max-w-xl flex-col items-center gap-[18px] px-7 pb-12 text-center", contentClassName)}>{children}</div>
     </section>
   );
 }
@@ -112,27 +147,40 @@ export function PortalSection({ className, children, ...rest }: HTMLAttributes<H
 }
 
 export type PortalButtonVariant = "amber" | "navy" | "outline" | "light" | "link";
+export type PortalButtonSize = "default" | "sm" | "xs" | "lg";
 
+// Uppercase, 12px, 0.28em tracking, square corners, 16px icons. Labels wrap rather than clip on narrow screens.
 const BUTTON_BASE =
-  "inline-flex min-h-[52px] items-center justify-center gap-2.5 whitespace-nowrap rounded-none px-8 text-xs font-medium uppercase tracking-[0.24em] transition-colors disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-none text-center text-xs uppercase leading-snug tracking-[0.28em] transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0";
 
 const BUTTON_VARIANTS: Record<PortalButtonVariant, string> = {
-  amber: "bg-accent text-accent-foreground hover:brightness-110",
-  navy: "bg-primary text-primary-foreground hover:brightness-110",
-  outline: "border border-primary bg-transparent text-primary hover:bg-primary hover:text-primary-foreground",
-  light: "border border-white/70 bg-transparent text-white hover:bg-white/10",
-  link: "min-h-11 px-0 text-primary hover:text-[hsl(var(--portal-amber-ink))]",
+  amber: "bg-accent font-medium text-accent-foreground hover:bg-[#E8873A]",
+  navy: "bg-primary font-normal text-primary-foreground hover:brightness-110",
+  outline: "border border-primary bg-transparent font-normal text-primary hover:bg-primary hover:text-primary-foreground",
+  light: "border border-white/60 bg-transparent font-normal text-white",
+  link: "px-0 font-normal text-primary hover:text-[hsl(var(--portal-amber-ink))]",
 };
 
-export function portalButtonClass(variant: PortalButtonVariant = "amber", className?: string): string {
-  return cn(BUTTON_BASE, BUTTON_VARIANTS[variant], className);
+const BUTTON_SIZES: Record<PortalButtonSize, string> = {
+  // Design .lx-btn: 52px tall, 0 30px. `sm` is its paired-button form (0 8px, 11px / 0.18em); `xs` the 48px card form; `lg` 56px.
+  default: "min-h-[52px] px-[30px] py-2",
+  sm: "min-h-[52px] px-2 py-2 text-[11px] tracking-[0.18em]",
+  xs: "min-h-12 px-2 py-2 text-[11px] tracking-[0.18em]",
+  lg: "min-h-14 px-[30px] py-2",
+};
+
+export function portalButtonClass(variant: PortalButtonVariant = "amber", className?: string, size: PortalButtonSize = "default"): string {
+  // Link buttons are text only: h-11 with no horizontal padding, whatever the size.
+  const sizeClass = variant === "link" ? "min-h-11 px-0" : BUTTON_SIZES[size];
+  return cn(BUTTON_BASE, BUTTON_VARIANTS[variant], sizeClass, className);
 }
 
 export function PortalButton({
   variant = "amber",
+  size = "default",
   className,
   type = "button",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: PortalButtonVariant }) {
-  return <button type={type} className={portalButtonClass(variant, className)} {...props} />;
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: PortalButtonVariant; size?: PortalButtonSize }) {
+  return <button type={type} className={portalButtonClass(variant, className, size)} {...props} />;
 }

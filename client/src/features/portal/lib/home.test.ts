@@ -11,7 +11,9 @@ import {
   journeyPlace,
   journeyWhen,
   mergeDeals,
+  nextHolidayParts,
   nextHolidaySentence,
+  nightsBoardLine,
   plural,
   priceHeldLine,
   rewardsTitle,
@@ -82,6 +84,22 @@ describe("wording", () => {
     expect(journeyWhen(30)).toBe("in 30 days.");
     expect(journeyWhen(1)).toBe("tomorrow.");
     expect(journeyWhen(0)).toBe("today.");
+  });
+
+  it("splits the next-holiday sentence so only the figure can be emphasised", () => {
+    for (const n of [12, 1, 0]) {
+      const p = nextHolidayParts(n);
+      expect(p.before + p.strong + p.after).toBe(nextHolidaySentence(n));
+    }
+    expect(nextHolidayParts(12).strong).toBe("12 days");
+    expect(nextHolidayParts(1).strong).toBe("tomorrow");
+  });
+
+  it("writes the nights-and-board line for the next-journey card", () => {
+    expect(nightsBoardLine(7, "All Inclusive")).toBe("7 nights, all inclusive");
+    expect(nightsBoardLine(1, null)).toBe("1 night");
+    expect(nightsBoardLine(null, "Half Board")).toBe("half board");
+    expect(nightsBoardLine(null, null)).toBe("");
   });
 
   it("words the held price with the right plural and the last day", () => {

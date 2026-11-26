@@ -22,7 +22,8 @@ import { consumeChallenge } from './portal-challenge-store';
 import type { WebauthnRp } from './portal-webauthn-rp';
 import type { BiometricLoginResult, WebauthnCheckResult, WebauthnOptionsResult } from './portal.types';
 
-const RP_NAME = 'Tinas Travel';
+/** The name in the phone's Face ID / passkey prompt when the customer's agency has none on record. Display only: the RP ID is separate. */
+export const NEUTRAL_RP_NAME = 'Customer portal';
 
 /** One answer for every way a Face ID sign-in can fail, so nothing reveals whether a credential or client exists. */
 export const BIOMETRIC_LOGIN_FAILED = 'Biometric login failed';
@@ -90,7 +91,7 @@ export const portalWebauthnService = {
 
     const existing = await portalRepository.findVerifiedWebauthnForClient(clientId);
     const options = await generateRegistrationOptions({
-      rpName: RP_NAME,
+      rpName: client.agencyName?.trim() || NEUTRAL_RP_NAME,
       rpID: rp.rpID,
       userName: client.email || clientId,
       userID: new TextEncoder().encode(clientId),

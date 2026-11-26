@@ -89,9 +89,14 @@ export interface PublicQuoteData {
   expiredOn: string | null;
 }
 
+/** The agency as the public page shows it. Every key is always sent; what the agency has not set is null. */
 export interface AgencyContact {
   name: string | null;
   phone: string | null;
+  logoUrl: string | null;
+  iconUrl: string | null;
+  email: string | null;
+  address: string | null;
 }
 
 export type PublicQuoteBlockCode = "BOOKED" | "UNAVAILABLE";
@@ -180,7 +185,7 @@ export function useLogQuoteView() {
 }
 
 /** The share buttons the server accepts (anything else is refused). */
-export type ShareMethod = "WhatsApp" | "Facebook" | "Email" | "Copy Link";
+export type ShareMethod = "WhatsApp" | "Facebook" | "Email" | "Copy Link" | "Text message" | "Share";
 
 export function useShareQuote() {
   return useMutation({

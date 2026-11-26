@@ -6,7 +6,7 @@ import {
   passengers, deal_images, quoteImages, quoteViewsTable, tags, quoteTags,
   accommodation_images, lodge_images,
   package_type, tour_operator, airport, accomodation_list, board_basis,
-  transaction, resorts, destination, country, room_type,
+  transaction, organization, resorts, destination, country, room_type,
   lodges,
   park,
   travel_deal,
@@ -941,8 +941,10 @@ export const newQuoteRepository = {
 
   async findTitleAndPortalVisibilityById(id: string) {
     const [row] = await db
-      .select({ title: quote.title, show_on_portal: quote.show_on_portal })
+      .select({ title: quote.title, show_on_portal: quote.show_on_portal, agencyName: organization.name, orgId: transaction.org_id })
       .from(quote)
+      .leftJoin(transaction, eq(quote.transaction_id, transaction.id))
+      .leftJoin(organization, eq(transaction.org_id, organization.id))
       .where(eq(quote.id, id))
       .limit(1);
     return row;

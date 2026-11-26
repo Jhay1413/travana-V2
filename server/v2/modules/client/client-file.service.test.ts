@@ -3,11 +3,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("../../config/s3", () => ({ s3Client: { send: vi.fn().mockResolvedValue({}) }, S3_BUCKET: "bucket" }));
 vi.mock("@aws-sdk/s3-request-presigner", () => ({ getSignedUrl: vi.fn().mockResolvedValue("https://signed") }));
 vi.mock("./client-file.repository", () => ({
-  clientFileRepository: { findById: vi.fn(), findByClientId: vi.fn(), create: vi.fn(), remove: vi.fn() },
+  clientFileRepository: { findById: vi.fn(), findByClientId: vi.fn(), create: vi.fn(), remove: vi.fn(), recordBelongsToClient: vi.fn() },
 }));
 vi.mock("../neon-client/neon-client.repository", () => ({ neonClientRepository: { findById: vi.fn(), findByIdIncludingDeleted: vi.fn() } }));
 
-import { clientFileService } from "./client-file.service";
+import { clientFileService, resolveLocalUploadPath } from "./client-file.service";
 import { clientFileRepository } from "./client-file.repository";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
 import { s3Client } from "../../config/s3";
@@ -105,5 +105,60 @@ describe("clientFileService - soft-deleted client is read-only", () => {
   it("an admin's upload is still blocked", async () => {
     await expect(clientFileService.upload("c1", MULTER, {}, ADMIN)).rejects.toMatchObject({ statusCode: 404 });
     expect(clientFileRepository.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("upload allocation is validated", () => {
+  const REC = "11111111-1111-4111-8111-111111111111";
+
+  beforeEach(() => {
+    vi.mocked(clientFileRepository.create).mockResolvedValue(FILE as never);
+    vi.mocked(clientFileRepository.recordBelongsToClient).mockResolvedValue(true);
+  });
+
+  it("a real record of that kind on this client is accepted and stored", async () => {
+    await clientFileService.upload("c1", MULTER, { allocationType: "Booking", allocationId: REC }, SCOPE);
+    expect(clientFileRepository.recordBelongsToClient).toHaveBeenCalledWith("booking", REC, "c1");
+    expect(vi.mocked(clientFileRepository.create).mock.calls[0][0]).toMatchObject({ allocationType: "Booking", allocationId: REC });
+  });
+
+  it("a record that is not this client's is a 400 and nothing is stored", async () => {
+    vi.mocked(clientFileRepository.recordBelongsToClient).mockResolvedValue(false);
+    await expect(clientFileService.upload("c1", MULTER, { allocationType: "Quote", allocationId: REC }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+    expect(s3Client.send).not.toHaveBeenCalled();
+    expect(clientFileRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("a type without an id, or an unknown type, is a 400", async () => {
+    await expect(clientFileService.upload("c1", MULTER, { allocationType: "Enquiry" }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+    await expect(clientFileService.upload("c1", MULTER, { allocationType: "Invoice", allocationId: REC }, SCOPE)).rejects.toMatchObject({ statusCode: 400 });
+    expect(clientFileRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("None or blank needs no id, and any id sent with it is dropped", async () => {
+    await clientFileService.upload("c1", MULTER, { allocationType: "None", allocationId: "x" }, SCOPE);
+    expect(vi.mocked(clientFileRepository.create).mock.calls[0][0]).toMatchObject({ allocationType: "None" });
+    await clientFileService.upload("c1", MULTER, {}, SCOPE);
+    expect(vi.mocked(clientFileRepository.create).mock.calls[1][0]).toMatchObject({ allocationType: null, allocationId: null });
+    expect(clientFileRepository.recordBelongsToClient).not.toHaveBeenCalled();
+  });
+});
+
+describe("legacy disk files cannot escape the uploads directory", () => {
+  it.each(["../secret.txt", "../../etc/passwd", "a/../../b", "/etc/passwd", ".."])("refuses %s", (name) => {
+    expect(resolveLocalUploadPath(name)).toBeNull();
+  });
+
+  it("keeps a plain legacy name inside the directory", () => {
+    const p = resolveLocalUploadPath("1748392910-123.pdf");
+    expect(p).not.toBeNull();
+    expect(p).toContain("client-files");
+  });
+
+  it("download of an escaping name is the existing 404, delete removes only the row", async () => {
+    vi.mocked(clientFileRepository.findById).mockResolvedValue({ ...FILE, filename: "../../etc/passwd" } as never);
+    await expect(clientFileService.getDownloadTarget("f1", SCOPE)).rejects.toMatchObject({ statusCode: 404, message: "File not found on disk" });
+    await clientFileService.delete("f1", SCOPE);
+    expect(clientFileRepository.remove).toHaveBeenCalledWith("f1");
   });
 });

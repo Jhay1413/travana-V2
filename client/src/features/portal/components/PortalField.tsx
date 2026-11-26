@@ -18,7 +18,7 @@ export function PortalField({
         id={id}
         aria-invalid={invalid || undefined}
         className={cn(
-          "portal-serif flex min-h-12 w-full rounded-none border-0 border-b border-input bg-transparent px-0 text-[22px] text-foreground transition-colors focus-visible:border-accent focus-visible:outline-none",
+          "portal-serif flex min-h-12 w-full rounded-none border-0 border-b border-input bg-transparent px-0 text-[22px] text-foreground",
           invalid && "border-destructive",
           className,
         )}

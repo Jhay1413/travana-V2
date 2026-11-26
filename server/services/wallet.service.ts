@@ -104,6 +104,7 @@ export const walletService = {
           clientName,
           clientEmail: details.clientEmail ?? null,
           clientPhone: details.clientPhone ?? null,
+          agencyName: details.agencyName ?? null,
           amount: details.amount,
           method: details.source, // "booking_credit" | "bank_transfer"
           accountName: null,
@@ -148,6 +149,7 @@ export const walletService = {
             clientName,
             clientEmail: details.clientEmail ?? null,
             clientPhone: details.clientPhone ?? null,
+            agencyName: details.agencyName ?? null,
             amount: details.amount,
             method: details.source,
             accountName: null,

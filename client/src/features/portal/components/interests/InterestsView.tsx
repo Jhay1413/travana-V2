@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { portalNextTarget } from "../../portal-nav";
 import { canSaveInterests, selectionText, toggleId } from "../../lib/interests";
 import { usePortalBrandingValue } from "../../theme/PortalThemeProvider";
-import { AgencyMark, Eyebrow, PortalButton, SplitHeading } from "../brand";
+import { AgencyMark, Eyebrow, PortalButton, PortalHero } from "../brand";
 
 /**
  * Travel interests. Customers land here on first login (the shell sends them, carrying `next` and a pending
@@ -46,37 +46,30 @@ export function InterestsView() {
   const isLoading = allLoading || myLoading;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background" data-testid="portal-interests">
-      <header className="border-b border-border">
-        <div className="mx-auto flex min-h-16 max-w-3xl items-center justify-between gap-4 px-6 py-2.5">
-          <AgencyMark branding={branding} />
-          {isEditMode && (
-            <button
-              type="button"
-              onClick={() => setLocation("/portal")}
-              className="min-h-11 px-1 text-[11px] font-medium uppercase tracking-[0.2em] text-primary hover:portal-text-amber-ink"
-              data-testid="button-interests-back"
-            >
-              ← Back
-            </button>
-          )}
-        </div>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-7 pb-8 pt-10">
-        <Eyebrow>Travel interests</Eyebrow>
-        <SplitHeading
-          as="h1"
-          lead={isEditMode ? "Travel" : "What are"}
-          italic={isEditMode ? "interests." : "you into?"}
-          className="mt-3 text-[44px]"
-        />
-        <p className="mt-4 max-w-[420px] text-[15px] leading-relaxed text-muted-foreground" data-testid="text-interests-intro">
+    <div className="relative flex min-h-dvh flex-col bg-background" data-testid="portal-interests">
+      <PortalHero className="h-[480px] md:h-[480px]">
+        <Eyebrow className="text-accent">Travel interests</Eyebrow>
+        <h1 className="portal-serif w-full max-w-full text-[50px] font-light leading-none text-white [overflow-wrap:anywhere]">
+          {isEditMode ? "Travel" : "What are"}
+          <br />
+          <em className="italic">{isEditMode ? "interests." : "you into?"}</em>
+        </h1>
+        <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/80" data-testid="text-interests-intro">
           {isEditMode
             ? "Update your interests to get the most relevant deals."
             : "Pick your travel interests so we can show you the most relevant deals and recommendations."}
         </p>
+      </PortalHero>
+      <header className="absolute inset-x-0 top-0 z-20 mx-auto flex max-w-5xl items-center justify-between px-6 py-[22px] text-white">
+        <AgencyMark branding={branding} tone="dark" />
+        {isEditMode && (
+          <PortalButton variant="link" className="text-white hover:text-white/80" onClick={() => setLocation("/portal")} data-testid="button-interests-back">
+            ← Back
+          </PortalButton>
+        )}
+      </header>
 
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-7 pb-8 pt-10">
         {isLoading ? (
           <div role="status" aria-label="Loading interests" className="mt-10 flex animate-pulse flex-wrap gap-2.5" data-testid="interests-loading">
             {[96, 120, 80, 140, 104, 90].map((w, i) => (
@@ -98,7 +91,7 @@ export function InterestsView() {
                     aria-pressed={on}
                     onClick={() => setSelected((prev) => toggleId(prev, tag.id))}
                     className={cn(
-                      "inline-flex min-h-11 max-w-full items-center gap-2 border px-4 text-[13px] font-medium uppercase tracking-[0.14em] transition-colors [overflow-wrap:anywhere]",
+                      "inline-flex min-h-11 max-w-full items-center gap-2 border px-4 text-[11px] font-normal uppercase tracking-[0.16em] transition-colors [overflow-wrap:anywhere]",
                       on ? "border-primary bg-primary text-primary-foreground" : "border-input bg-transparent text-primary hover:bg-secondary",
                     )}
                     data-testid={`button-interest-tag-${tag.id}`}
@@ -123,7 +116,7 @@ export function InterestsView() {
               We couldn&apos;t save your interests. Please try again.
             </p>
           )}
-          <PortalButton className="w-full" onClick={handleContinue} disabled={!canSaveInterests(selected.size, saveTags.isPending)} data-testid="button-save-interests">
+          <PortalButton size="lg" className="w-full" onClick={handleContinue} disabled={!canSaveInterests(selected.size, saveTags.isPending)} data-testid="button-save-interests">
             {saveTags.isPending ? "Saving…" : isEditMode ? "Save interests" : "Continue"}
           </PortalButton>
         </div>

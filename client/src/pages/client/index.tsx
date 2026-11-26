@@ -440,6 +440,8 @@ export default function ClientPage() {
         onOpenChange={fileActions.setShowUploadFileModal}
         clientName={client?.name || "this client"}
         quotes={quotes}
+        enquiries={enquiries}
+        bookings={bookings}
         uploadFile={fileActions.uploadFile}
         setUploadFile={fileActions.setUploadFile}
         onUpload={fileActions.handleUploadFile}

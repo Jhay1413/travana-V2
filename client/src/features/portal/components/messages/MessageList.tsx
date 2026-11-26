@@ -26,7 +26,7 @@ function Bubble({
       )}
       <div
         className={cn(
-          "max-w-[85%] whitespace-pre-wrap px-4 py-3 text-[16px] leading-relaxed [overflow-wrap:anywhere]",
+          "max-w-[85%] whitespace-pre-wrap px-[18px] py-4 text-sm leading-relaxed [overflow-wrap:anywhere]",
           mine ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground",
         )}
         data-testid={`text-message-${message.id}`}
@@ -36,7 +36,7 @@ function Bubble({
       {failed ? (
         <span role="alert" className="flex items-center gap-3 text-[13px] portal-text-danger" data-testid={`message-failed-${message.id}`}>
           Not sent.
-          <button type="button" onClick={onRetry} className="min-h-11 font-medium uppercase tracking-[0.18em] underline underline-offset-4" data-testid={`button-resend-${message.id}`}>
+          <button type="button" onClick={onRetry} className="min-h-11 font-normal uppercase tracking-[0.18em] underline underline-offset-4" data-testid={`button-resend-${message.id}`}>
             Send again
           </button>
         </span>

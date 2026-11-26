@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { noResponseLog } from '../../middlewares/no-response-log';
 import { validate } from '../../middlewares/validation.middleware';
 import { portalController } from './portal.controller';
 import { createClientRateLimiter } from './portal-client-rate-limit';
@@ -13,6 +14,9 @@ import { portalQuoteTokenValidator } from './portal.validator';
  * (the old /user, /quotes and /quote/:token/* paths) so cached PWA clients keep working.
  */
 export const portalQuotesRouter = Router();
+
+// The customer's profile and quotes are personal data: never printed by the global request logger (also on the /api/portal alias).
+portalQuotesRouter.use(noResponseLog);
 
 /** Each action can notify the agent, so a customer cannot flip a decision back and forth without limit (per customer, after sign-in). */
 const actionLimiter = createClientRateLimiter({

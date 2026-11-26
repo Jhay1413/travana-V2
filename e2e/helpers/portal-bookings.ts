@@ -47,6 +47,8 @@ export interface PortalBookingOptions {
 
 export interface SeededPortalBooking {
   id: string;
+  /** The quote the booking was converted from (a file linked to it shows under this booking). */
+  quoteId: string;
   transactionId: string;
   title: string;
   travelDate: string;
@@ -128,5 +130,5 @@ export async function seedPortalBooking(page: Page, q: PortalQuoteWorld, opts: P
       ["/favicon.png", "/opengraph.jpg"].map((url, i) => ({ id: randomUUID(), bookingId: row.id, url, isPrimary: i === 0, position: i })),
     );
   }
-  return { id: row.id, transactionId: deal.transactionId, title: opts.title, travelDate, haysRef, supplierRef };
+  return { id: row.id, quoteId: deal.entityId, transactionId: deal.transactionId, title: opts.title, travelDate, haysRef, supplierRef };
 }

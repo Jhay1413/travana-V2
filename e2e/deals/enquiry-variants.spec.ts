@@ -206,7 +206,8 @@ test.describe("Hot Tub Break enquiry destination", () => {
     await trigger.click();
     const listbox = page.getByRole("listbox").last();
     await listbox.getByRole("textbox").fill(destName);
-    await listbox.getByTestId("button-searchable-add-new").click();
+    // The hot tub destination is a multi-select since the forms redesign: its "Add" button has its own test id.
+    await listbox.getByTestId("button-multi-add-new").click();
 
     const modal = page.getByRole("dialog").filter({ hasText: "Add Destination" });
     await expect(modal).toBeVisible();

@@ -82,17 +82,30 @@ describe("portalSummaryService.getSummary (real database)", () => {
 });
 
 describe("deal interest (real database)", () => {
-  it("messages the agent once per customer and deal, reports it as told, and never shows it to another customer", async () => {
-    const first = await portalService.recordInterest(me.id, "deal-xyz");
-    const again = await portalService.recordInterest(me.id, "deal-xyz");
+  async function liveDeal(inOrg: string, title: string) {
+    const txn = await makeTransaction({ user_id: agent.id, org_id: inOrg, status: "on_quote" });
+    return makeQuote({ transaction_id: txn.id, title, is_active: true, quote_token: `DEAL${Math.random().toString(36).slice(2, 10)}`, show_on_portal: true, isFreeQuote: true, sales_price: "500.00", adult: 2 });
+  }
+
+  it("messages the agent with the deal's name once per customer and deal, reports it as told, and never shows it to another customer", async () => {
+    const deal = await liveDeal(orgId, "Cyprus Beach Deal");
+    const first = await portalService.recordInterest(me.id, deal.id);
+    const again = await portalService.recordInterest(me.id, deal.id);
     expect(first).toEqual({ alreadyTold: false });
     expect(again).toEqual({ alreadyTold: true });
     const rows = await db.select().from(portalMessages).where(eq(portalMessages.clientId, me.id));
-    expect(rows.filter((r) => r.text.includes("deal-xyz"))).toHaveLength(1);
-    expect(rows[0].text).toBe("❤️ Interested in deal: deal-xyz");
+    expect(rows.filter((r) => r.text.includes(deal.id))).toHaveLength(1);
+    expect(rows[0].text).toBe(`❤️ Interested in deal: Cyprus Beach Deal [deal:${deal.id}]`);
+    expect((await portalService.listMessages(me.id))[0].text).toBe("❤️ Interested in deal: Cyprus Beach Deal");
 
-    expect((await portalSummaryService.getSummary(me.id)).toldDealIds).toEqual(["deal-xyz"]);
+    expect((await portalSummaryService.getSummary(me.id)).toldDealIds).toEqual([deal.id]);
     expect((await portalSummaryService.getSummary(other.id)).toldDealIds).toEqual([]);
-    expect(await portalService.recordInterest(other.id, "deal-xyz")).toEqual({ alreadyTold: false });
+    expect(await portalService.recordInterest(other.id, deal.id)).toEqual({ alreadyTold: false });
+  });
+
+  it("refuses a deal that belongs to another agency", async () => {
+    const otherOrg = await makeOrg({ slug: "agency-other" });
+    const foreign = await liveDeal(otherOrg.id, "Foreign deal");
+    await expect(portalService.recordInterest(me.id, foreign.id)).rejects.toMatchObject({ statusCode: 404 });
   });
 });

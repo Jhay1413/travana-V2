@@ -29,7 +29,7 @@ import { DealCard } from "./DealCard";
 import { DealsFilters } from "./DealsFilters";
 
 const TAB =
-  "min-h-12 flex-1 border-b-2 px-2 text-[12px] font-medium uppercase tracking-[0.18em] transition-colors";
+  "min-h-12 flex-1 border-b-2 px-2 text-xs font-normal uppercase tracking-[0.2em] transition-colors";
 
 /** The Deals tab: a modest hero, the two lists (Latest deals, For you), their filters and the cards. */
 export function DealsView() {
@@ -74,8 +74,8 @@ export function DealsView() {
 
   return (
     <div data-testid="portal-deals">
-      <PortalHero className="min-h-[210px]">
-        <Eyebrow className="portal-text-amber-soft">Holiday deals</Eyebrow>
+      <PortalHero className="h-[480px] md:h-[480px]">
+        <Eyebrow className="text-accent">Holiday deals</Eyebrow>
         <h1 className="portal-serif text-[44px] font-light leading-none text-white" data-testid="text-deals-title">
           {isForYou ? "Picked" : "Latest"}
           <br />
@@ -115,7 +115,7 @@ export function DealsView() {
           <button
             type="button"
             onClick={() => void active.refetch()}
-            className="min-h-12 px-1 text-[11px] font-medium uppercase tracking-[0.2em] text-primary hover:portal-text-amber-ink"
+            className="min-h-12 px-1 text-[11px] font-normal uppercase tracking-[0.2em] text-primary hover:portal-text-amber-ink"
             data-testid="button-refresh-deals"
           >
             Refresh

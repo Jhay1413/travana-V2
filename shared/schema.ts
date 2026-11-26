@@ -280,6 +280,11 @@ export const clientPassenger = pgTable("client_passenger", {
   passportNumber: varchar("passport_number", { length: 20 }),
   passportExpiry: date("passport_expiry", { mode: "string" }),
   passportNonUk: boolean("passport_non_uk").notNull().default(false),
+  // Read from the passport by the customer portal (all nullable). The server tolerates these columns being
+  // absent until the owner pushes the schema (see client-passenger-legacy.schema.ts).
+  nationality: varchar("nationality", { length: 100 }),
+  sex: varchar("sex", { length: 1 }),
+  passportIssueDate: date("passport_issue_date", { mode: "string" }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [

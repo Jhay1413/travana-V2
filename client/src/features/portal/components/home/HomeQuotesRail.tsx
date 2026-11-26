@@ -16,7 +16,7 @@ export function HomeQuotesRail({ quotes }: { quotes: PortalQuoteListItem[] }) {
       label="Your quotes"
       testId="home-quotes"
       action={
-        <PortalButton variant="link" className="px-2 text-[11px] text-muted-foreground" onClick={() => setLocation("/portal/trips/quotes")} data-testid="home-quotes-see-all">
+        <PortalButton variant="link" className="text-[11px] tracking-[0.24em] text-muted-foreground" onClick={() => setLocation("/portal/quotes")} data-testid="home-quotes-see-all">
           See all
         </PortalButton>
       }
@@ -41,28 +41,27 @@ function HomeQuoteCard({ quote: q }: { quote: PortalQuoteListItem }) {
       type="button"
       onClick={() => setLocation(q.quote_url)}
       aria-label={`View quote: ${title}, ${dates}, ${formatMoney(q.price)}`}
-      className="group flex w-[260px] flex-none snap-start flex-col gap-3 text-left"
+      className="group flex w-[260px] flex-none snap-start flex-col gap-3.5 text-left"
       data-testid={`home-quote-${q.id}`}
     >
-      <span className="relative block h-[300px] w-[260px] overflow-hidden bg-[hsl(var(--portal-navy-deep))]">
-        {q.image_url && <img src={q.image_url} alt="" loading="lazy" className="size-full object-cover transition group-hover:brightness-105" />}
+      <span className="relative block h-[340px] w-[260px] overflow-hidden bg-[#0D2A4E]">
+        {q.image_url && <img src={q.image_url} alt="" loading="lazy" className="size-full object-cover group-hover:brightness-[1.06]" />}
         {interested && (
-          <span className="absolute left-3 top-3 bg-accent px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.2em] text-accent-foreground" data-testid={`home-quote-badge-${q.id}`}>
+          <span className="absolute left-3 top-3 bg-background px-2.5 py-[7px] text-[10px] uppercase tracking-[0.22em] portal-text-amber-ink" data-testid={`home-quote-badge-${q.id}`}>
             You&apos;re interested
           </span>
         )}
       </span>
-      <span className="flex justify-between gap-2.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-        <span className="min-w-0 truncate">{q.destination}</span>
-        {q.operator_name && <span className="min-w-0 truncate">{q.operator_name}</span>}
+      <span className="flex items-baseline justify-between gap-2.5 text-[11px] uppercase text-muted-foreground">
+        <span className="min-w-0 truncate tracking-[0.2em]">{q.destination}</span>
+        {q.operator_name && <span className="min-w-0 truncate tracking-[0.18em]">{q.operator_name}</span>}
       </span>
       <span className="portal-serif break-words text-[24px] leading-[1.15] text-primary">{title}</span>
-      {dates && <span className="text-[15px] text-muted-foreground">{dates}</span>}
-      <span className="portal-serif text-[24px] leading-tight portal-text-ink">
+      {dates && <span className="text-sm leading-[1.6] text-muted-foreground">{dates}</span>}
+      <span className="portal-serif text-[24px] portal-text-ink">
         {formatMoney(q.price)}
-        {pax && <span className="ml-1.5 font-sans text-[15px] text-muted-foreground">for {pax}</span>}
+        {pax && <span className="font-sans text-[13px] text-muted-foreground"> for {pax}</span>}
       </span>
-      <span className="text-xs uppercase tracking-[0.2em] text-primary group-hover:portal-text-amber-ink">View quote →</span>
     </button>
   );
 }

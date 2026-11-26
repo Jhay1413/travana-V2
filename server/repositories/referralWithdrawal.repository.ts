@@ -1,5 +1,5 @@
 import { db } from "../config/database";
-import { referral_withdrawal, clientTable, referral, booking } from "@shared/schema";
+import { referral_withdrawal, clientTable, organization, referral, booking } from "@shared/schema";
 import type { InsertReferralWithdrawal, ReferralWithdrawal } from "@shared/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -40,6 +40,7 @@ export const referralWithdrawalRepository = {
         clientSurname: clientTable.surename,
         clientEmail: clientTable.email,
         clientPhone: clientTable.phoneNumber,
+        agencyName: organization.name,
         referredName: referral.referredName,
         referredEmail: referral.referredEmail,
         travelDate: referral.travelDate,
@@ -48,6 +49,7 @@ export const referralWithdrawalRepository = {
       })
       .from(referral_withdrawal)
       .leftJoin(clientTable, eq(referral_withdrawal.client_id, clientTable.id))
+      .leftJoin(organization, eq(clientTable.orgId, organization.id))
       .leftJoin(referral, eq(referral_withdrawal.referral_id, referral.id))
       .leftJoin(booking, eq(referral_withdrawal.booking_id, booking.id))
       .where(eq(referral_withdrawal.id, id))

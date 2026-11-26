@@ -8,7 +8,7 @@ import { splitTitle } from "../../lib/quote-title";
 import { usePortalBrandingValue } from "../../theme/PortalThemeProvider";
 import { Eyebrow, PortalButton, PortalHero, PortalSection, SplitHeading } from "../brand";
 
-/** Trips → Quotes: a modest photo hero, then one photo-led card per quote and a compact "Not for you" list. */
+/** My quotes: a photo hero, then one photo-led card per quote and a compact "Not for you" list. */
 export function QuotesView() {
   const { data, isLoading, isError, refetch } = usePortalQuoteList();
   const branding = usePortalBrandingValue();
@@ -18,21 +18,21 @@ export function QuotesView() {
 
   return (
     <div data-testid="portal-quotes">
-      <PortalHero className="min-h-[230px]" photoUrl={heroPhoto}>
-        <Eyebrow className="portal-text-amber-soft">My quotes</Eyebrow>
-        <h1 className="portal-serif text-[44px] font-light leading-none text-white">
+      <PortalHero className="h-[480px] md:h-[480px]" photoUrl={heroPhoto}>
+        <Eyebrow className="text-accent">My quotes</Eyebrow>
+        <h1 className="portal-serif text-[50px] font-light leading-none tracking-[-0.01em] text-white">
           Put together
           <br />
           <em className="italic">for you.</em>
         </h1>
         {!isLoading && !isError && active.length > 0 && (
-          <p className="max-w-[300px] text-[15px] leading-[1.6] text-white/85" data-testid="quotes-count">
-            {active.length} holiday{active.length === 1 ? "" : "s"} {agent === "your agent" ? "your agent has" : `${agent} has`} prepared for you.
+          <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/[0.78]" data-testid="quotes-count">
+            {active.length} {active.length === 1 ? "holiday" : "holidays"} {agent === "your agent" ? "your agent has" : `${agent} has`} prepared for you. Choose one to see every photo and detail.
           </p>
         )}
       </PortalHero>
 
-      <PortalSection className="pb-14 pt-6">
+      <PortalSection className="px-6 pb-[88px] pt-10">
         {isLoading ? (
           <QuotesLoading />
         ) : isError ? (
@@ -113,25 +113,25 @@ function QuoteCard({ quote: q, index, agent }: { quote: PortalQuoteListItem; ind
       className="group flex w-full flex-col gap-3.5 border-b border-border pb-9 pt-8 text-left"
       data-testid={`quote-card-${q.id}`}
     >
-      <span className="flex w-full items-baseline justify-between">
+      <span className="flex w-full items-baseline justify-between px-1">
         <span className="portal-serif text-[22px] portal-text-amber-ink" aria-hidden>
           {toRoman(index + 1)}
         </span>
-        {q.photo_count > 0 && <span className="portal-caps-label">{q.photo_count} photo{q.photo_count === 1 ? "" : "s"}</span>}
+        {q.photo_count > 0 && <span className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{q.photo_count} photo{q.photo_count === 1 ? "" : "s"}</span>}
       </span>
-      <span className="relative block h-[240px] w-full overflow-hidden bg-[hsl(var(--portal-navy-deep))]">
-        {q.image_url && <img src={q.image_url} alt="" loading="lazy" className="size-full object-cover transition group-hover:brightness-105" />}
+      <span className="relative block h-[300px] w-full overflow-hidden bg-[#0D2A4E]">
+        {q.image_url && <img src={q.image_url} alt="" loading="lazy" className="size-full object-cover group-hover:brightness-[1.06]" />}
         {interested && (
-          <span className="absolute left-3 top-3 bg-accent px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.2em] text-accent-foreground" data-testid={`quote-badge-${q.id}`}>
+          <span className="absolute left-3 top-3 bg-background px-2.5 py-[7px] text-[10px] uppercase tracking-[0.22em] portal-text-amber-ink" data-testid={`quote-badge-${q.id}`}>
             You&apos;re interested
           </span>
         )}
       </span>
-      <span className="flex w-full justify-between gap-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+      <span className="flex w-full justify-between gap-3 px-1 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
         <span className="min-w-0 truncate">{q.destination}</span>
         {q.operator_name && <span className="min-w-0 truncate" data-testid={`quote-operator-${q.id}`}>{q.operator_name}</span>}
       </span>
-      <span className="portal-serif break-words text-[30px] leading-[1.12] text-primary" data-testid={`quote-title-${q.id}`}>
+      <span className="portal-serif break-words px-1 text-[30px] leading-[1.12] text-primary" data-testid={`quote-title-${q.id}`}>
         {lead}
         {italic && (
           <>
@@ -140,26 +140,26 @@ function QuoteCard({ quote: q, index, agent }: { quote: PortalQuoteListItem; ind
           </>
         )}
       </span>
-      <span className="flex flex-col gap-0.5">
-        {dates && <span className="text-[15px] portal-text-ink">{dates}</span>}
-        <span className="text-[15px] text-muted-foreground">{factsLine(q.nights, q.board, pax)}</span>
+      <span className="flex flex-col gap-1.5 px-1">
+        {dates && <span className="text-[15px] leading-[1.6] text-foreground">{dates}</span>}
+        <span className="text-sm leading-[1.6] text-muted-foreground">{factsLine(q.nights, q.board, pax)}</span>
       </span>
-      <span className="flex w-full items-end justify-between gap-3 pt-1">
+      <span className="flex w-full items-end justify-between gap-3 px-1 pt-1">
         <span className="flex flex-col gap-0.5">
           <span className="portal-serif text-[34px] leading-none portal-text-ink" data-testid={`quote-price-${q.id}`}>
             {formatMoney(q.price)}
           </span>
-          {q.price_per_person > 0 && <span className="text-[15px] text-muted-foreground">{formatMoney(q.price_per_person)} per person</span>}
+          {q.price_per_person > 0 && <span className="text-[13px] text-muted-foreground">{formatMoney(q.price_per_person)} per person</span>}
         </span>
-        <span className="pb-1 text-xs uppercase tracking-[0.2em] text-primary group-hover:portal-text-amber-ink">View →</span>
+        <span className="pb-1 text-xs font-normal uppercase tracking-[0.28em] text-primary group-hover:text-[hsl(var(--portal-amber-ink))]">View →</span>
       </span>
       {interested ? (
-        <span className="portal-serif text-base italic portal-text-amber-ink" data-testid={`quote-status-${q.id}`}>
+        <span className="portal-serif px-1 text-base italic portal-text-amber-ink" data-testid={`quote-status-${q.id}`}>
           {agent === "your agent" ? "Your agent has" : `${agent} has`} been told, and is checking it&apos;s still available
         </span>
       ) : (
         held && (
-          <span className="portal-serif text-base italic portal-text-amber-ink" data-testid={`quote-held-${q.id}`}>
+          <span className="portal-serif px-1 text-base italic portal-text-amber-ink" data-testid={`quote-held-${q.id}`}>
             {held.text}
           </span>
         )
@@ -172,7 +172,7 @@ function DeclinedList({ quotes }: { quotes: PortalQuoteListItem[] }) {
   return (
     <div className="mt-12" data-testid="quotes-declined">
       <p className="portal-eyebrow mb-3 text-muted-foreground">Not for you</p>
-      <ul className="border-b border-border">
+      <ul>
         {quotes.map((q) => (
           <DeclinedRow key={q.id} quote={q} />
         ))}
@@ -190,18 +190,18 @@ function DeclinedRow({ quote: q }: { quote: PortalQuoteListItem }) {
       ) : (
         <span aria-hidden className="size-16 flex-none bg-secondary" />
       )}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="portal-serif break-words text-[19px] leading-tight text-muted-foreground">{q.title}</span>
-        <span className="text-[15px] text-muted-foreground">{q.decision.reason || "No reason given"}</span>
+      <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+        <span className="portal-serif break-words text-[19px] leading-[1.2] text-muted-foreground">{q.title}</span>
+        <span className="text-xs text-muted-foreground">{q.decision.reason || "No reason given"}</span>
         {undo.isError && (
-          <span role="alert" className="portal-text-danger text-[15px]">
+          <span role="alert" className="portal-text-danger text-[13px]">
             That didn&apos;t work. Try again.
           </span>
         )}
       </div>
       <PortalButton
         variant="link"
-        className="min-w-11 px-2 text-[11px]"
+        className="min-w-11 text-[11px]"
         disabled={undo.isPending}
         onClick={() => undo.mutate({ action: "reopened" })}
         data-testid={`button-undo-${q.id}`}

@@ -9,9 +9,17 @@ export type DateValue = string | Date | null;
 
 export type QuoteBlockCode = "BOOKED" | "UNAVAILABLE";
 
+/**
+ * The agency as the public quote page shows it: allowlisted field by field from the same sources (and URL-safety checks)
+ * as the portal's branding. Keys are always present; an unset value is null.
+ */
 export interface AgencyContact {
   name: string | null;
   phone: string | null;
+  logoUrl: string | null;
+  iconUrl: string | null;
+  email: string | null;
+  address: string | null;
 }
 
 /** The facts the repository reads to decide whether the public link may open a quote. */
@@ -24,6 +32,7 @@ export interface QuoteAccessRow {
   clientDeleted: boolean;
   dateExpiry: Date | string | null;
   agencyName: string | null;
+  agencyLogoUrl: string | null;
   agencySettings: unknown;
 }
 

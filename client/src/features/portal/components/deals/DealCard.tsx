@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
 import type { PortalDeal } from "@/hooks/use-portal-api";
 import { usePortalDealInterest } from "../../api/use-portal-summary";
 import { dealTag, isDealExpiringSoon } from "../../lib/home";
@@ -75,13 +75,13 @@ export function DealCard({ deal, interests, agent, told, onTold }: { deal: Porta
         </PortalButton>
       )}
       {interest.isError && (
-        <p role="alert" className="portal-text-danger text-[15px]">
+        <p role="alert" className="portal-text-danger text-[13px]">
           That didn&apos;t send. Please try again.
         </p>
       )}
       {deal.quote_url && (
         <a href={deal.quote_url} className={portalButtonClass("link", "self-start text-[11px]")} data-testid={`button-view-deal-${deal.id}`}>
-          View deal →
+          View deal <ArrowRight strokeWidth={1.5} aria-hidden />
         </a>
       )}
     </article>

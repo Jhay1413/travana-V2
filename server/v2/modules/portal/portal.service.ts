@@ -8,7 +8,8 @@ import { pushNotificationService } from '../notification/push-notification.servi
 import { quotePublicRepository } from '../quote/quote-public.repository';
 import { quotePublicService } from '../quote/quote-public.service';
 import { bridgePortalMessageToChat } from '../../../services/portal-chat-bridge';
-import { DEAL_INTEREST_PREFIX, portalRepository } from './portal.repository';
+import { portalRepository } from './portal.repository';
+import { buildInterestMessages, stripDealInterestMarker } from './portal-interest-text';
 import { portalQuotesService } from './portal-quotes.service';
 import type {
   PortalMessageDto,
@@ -18,6 +19,8 @@ import type {
 
 // Portal clients are not staff, so wallet/referral reads run with no agency scope.
 const TRUSTED_PORTAL_SCOPE = { orgId: null } as const;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Identical taps running at this moment (a double tap): the second takes the first's answer. */
 const interestInFlight = new Map<string, Promise<{ alreadyTold: boolean }>>();
@@ -39,7 +42,7 @@ export const portalService = {
       id: m.id,
       sender: m.sender as 'agent' | 'client',
       agent_name: m.agentName || undefined,
-      text: m.text,
+      text: stripDealInterestMarker(m.text),
       timestamp: m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString(),
     }));
   },
@@ -63,17 +66,24 @@ export const portalService = {
   /**
    * "I'm interested" on a deal. Idempotent per customer and deal: the first tap messages the agent, any later one
    * (another tab, another device, a repeat) sends nothing and answers `alreadyTold: true`. "Already told" is read
-   * from the customer's own stored message (its text ends with the deal id), so no schema is needed.
+   * from the customer's own stored message (its text ends with a "[deal:<id>]" marker, or with the bare id in older
+   * messages), so no schema is needed. The marker is stripped when the customer's messages are listed.
    */
   async recordInterest(clientId: string, dealId: string): Promise<{ alreadyTold: boolean }> {
     const key = `${clientId}:${dealId}`;
     const running = interestInFlight.get(key);
     if (running) return running;
     const work = (async () => {
+      // A repeat answers "already told" even if the deal has since left the portal.
       if (await portalRepository.hasClientInterestMessage(clientId, dealId)) return { alreadyTold: true };
-      const messageText = `${DEAL_INTEREST_PREFIX}${dealId}`;
-      await portalRepository.insertClientPortalMessage(clientId, messageText);
-      await bridgePortalMessageToChat(clientId, messageText, true);
+      // The deal must be live on the customer's own agency's portal; its id is never shown, only its name.
+      const client = await portalRepository.findClientOrg(clientId);
+      if (!client?.orgId || !UUID.test(dealId)) throw new AppError('Deal not found', 404);
+      const deal = await portalRepository.findDealForInterest(client.orgId, dealId);
+      if (!deal) throw new AppError('Deal not found', 404);
+      const { portalText, chatHtml, preview } = buildInterestMessages({ id: dealId, ...deal });
+      await portalRepository.insertClientPortalMessage(clientId, portalText);
+      await bridgePortalMessageToChat(clientId, portalText, true, { html: chatHtml, preview });
       return { alreadyTold: false };
     })();
     interestInFlight.set(key, work);

@@ -4,7 +4,9 @@ import { usePortalOverlayContainer } from "../theme/PortalThemeProvider";
 
 /**
  * A bottom sheet that mounts inside the `.portal-theme` wrapper (not document.body), so it wears the portal's
- * cream/navy tokens, square corners and fonts. Focus is trapped while it is open and Escape closes it.
+ * cream/navy tokens, square corners and fonts. As the design's sheets: navy 62% overlay, cream panel (12px 24px 32px),
+ * a 40x3 handle, a header row (eyebrow and Close), the 36px serif heading, and the lxUp entrance. Focus is trapped
+ * while it is open and Escape closes it.
  */
 export function PortalSheet({
   open,
@@ -15,6 +17,7 @@ export function PortalSheet({
   description,
   children,
   testId,
+  onCloseAutoFocus,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -26,26 +29,30 @@ export function PortalSheet({
   description?: ReactNode;
   children: ReactNode;
   testId?: string;
+  /** Where focus goes when the sheet closes (default: back to what had it); call `preventDefault` to place it yourself. */
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const container = usePortalOverlayContainer();
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal container={container ?? undefined}>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-[hsl(var(--portal-navy-deep)/0.7)]" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-[rgba(0,26,58,0.62)]" />
         <DialogPrimitive.Content
-          className="fixed inset-x-0 bottom-0 z-[61] mx-auto max-h-[92dvh] w-full max-w-xl overflow-y-auto border-t border-border bg-background px-7 pb-[max(28px,env(safe-area-inset-bottom))] pt-2 text-foreground shadow-xl focus:outline-none"
+          className="portal-sheet-in fixed inset-x-0 bottom-0 z-[61] mx-auto max-h-[94dvh] w-full max-w-xl overflow-y-auto bg-background px-6 pb-[max(32px,env(safe-area-inset-bottom))] pt-3 text-foreground focus:outline-none"
           data-testid={testId}
+          onCloseAutoFocus={onCloseAutoFocus}
         >
+          <div aria-hidden className="mx-auto mb-3.5 h-[3px] w-10 bg-[#D9C7B1]" />
           <div className="flex items-center justify-between">
             <span className="portal-eyebrow">{label}</span>
             <DialogPrimitive.Close
-              className="-mr-3 inline-flex min-h-11 min-w-11 items-center justify-center px-3 text-[11px] font-medium uppercase tracking-[0.2em] text-primary hover:text-[hsl(var(--portal-amber-ink))]"
+              className="inline-flex min-h-11 items-center justify-center p-0 text-[11px] font-normal uppercase tracking-[0.28em] text-primary"
               data-testid="sheet-close"
             >
               Close
             </DialogPrimitive.Close>
           </div>
-          <DialogPrimitive.Title className="portal-serif mt-2 text-[36px] font-light leading-[1.08] text-primary">
+          <DialogPrimitive.Title className="portal-serif mt-[18px] text-4xl font-light leading-[1.05] text-primary">
             {lead}
             {italic && (
               <>
@@ -55,7 +62,7 @@ export function PortalSheet({
             )}
           </DialogPrimitive.Title>
           {description ? (
-            <DialogPrimitive.Description className="mt-3 text-[15px] leading-relaxed text-muted-foreground">{description}</DialogPrimitive.Description>
+            <DialogPrimitive.Description className="mt-2.5 text-sm leading-[1.65] text-muted-foreground">{description}</DialogPrimitive.Description>
           ) : (
             <DialogPrimitive.Description className="sr-only">{label}</DialogPrimitive.Description>
           )}

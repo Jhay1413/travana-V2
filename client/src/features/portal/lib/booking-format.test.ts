@@ -82,9 +82,9 @@ describe("paymentsSectionEnabled", () => {
 describe("bookedLink", () => {
   it("goes straight to the booking when the server named one, else to the Bookings list", () => {
     expect(bookedLink("3f2b8c1e-5d4a-4b7e-9c0d-1a2b3c4d5e6f")).toBe("/portal/booking/3f2b8c1e-5d4a-4b7e-9c0d-1a2b3c4d5e6f");
-    expect(bookedLink(null)).toBe("/portal/trips/bookings");
-    expect(bookedLink(undefined)).toBe("/portal/trips/bookings");
-    expect(bookedLink("")).toBe("/portal/trips/bookings");
+    expect(bookedLink(null)).toBe("/portal/bookings");
+    expect(bookedLink(undefined)).toBe("/portal/bookings");
+    expect(bookedLink("")).toBe("/portal/bookings");
   });
 });
 

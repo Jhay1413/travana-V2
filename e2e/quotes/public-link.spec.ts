@@ -9,6 +9,8 @@
  *  - booked / lost / inactive / unknown tokens: the simple screens and the 410 / 404 answers
  *  - staff preview of a booked quote: the staff bar, no view recorded, Copy Link without ?preview=1
  *  - the old open action endpoint is gone; repeated views do not multiply notifications; share is validated
+ *  - the page is in the portal look and carries the agency's own identity: no "Tina", "Tinas", "Travana" or "0191" anywhere,
+ *    the agency name (and logo when set) shows, and "I'm interested" goes to the portal sign-in with this quote as `next`
  */
 import { randomBytes } from "node:crypto";
 import { request as playwrightRequest, type APIRequestContext, type Browser, type Page } from "@playwright/test";
@@ -79,10 +81,40 @@ test.describe("public quote link", () => {
     // Nothing personal on the screen.
     await expect(visitor.locator("body")).not.toContainText(w.q.world.clientSurname);
 
+    // No fixed brand anywhere: the page is the agency's own.
+    for (const banned of ["Tina", "Tinas", "Travana", "0191"]) {
+      await expect(visitor.locator("body"), banned).not.toContainText(banned);
+    }
+    expect(await visitor.content()).not.toMatch(/Tinas|Travana/);
+    const header = visitor.getByTestId("public-quote-header");
+    await expect(header.getByTestId("portal-agency-name").or(header.getByTestId("portal-agency-logo"))).toBeVisible();
+    await expect(visitor.getByTestId("portal-footer")).toContainText(w.q.world.agency.orgName);
+    // No Menu and no tab bar for a visitor who is not signed in.
+    await expect(visitor.getByTestId("button-portal-menu")).toHaveCount(0);
+    await expect(visitor.getByRole("navigation")).toHaveCount(0);
+
+    // One amber "I'm interested" (price block, navy bar and closing section) leading to the portal sign-in for this quote.
+    const next = encodeURIComponent(`/portal/quote/${w.active.token}`);
+    for (const id of ["button-interested", "button-bar-interested", "button-interested-submit"]) {
+      await expect(visitor.getByTestId(id)).toHaveText("I'm interested");
+      await expect(visitor.getByTestId(id)).toHaveAttribute("href", `/portal/login?next=${next}`);
+    }
+    await expect(visitor.getByTestId("button-not-interested")).toHaveCount(0);
+    await expect(visitor.getByTestId("input-interest-note")).toHaveCount(0);
+    await expect(visitor.getByTestId("quote-interest")).toContainText("You'll be asked to sign in");
+    // The agent block, and a journey with the flights and the hotel the quote has.
+    await expect(visitor.getByTestId("text-agent-name")).toBeVisible();
+    await expect(visitor.getByTestId("quote-journey")).toBeVisible();
+    await expect(visitor.getByTestId("quote-journey").locator("[data-kind=hotel]").first()).toBeVisible();
+    await expect(visitor.getByTestId("quote-journey").locator("[data-kind=flight-out]").first()).toBeVisible();
+
     // Nothing personal in the payload either, and none of the price breakdown.
     const api = await apiResponse;
     const text = await api.text();
     expect(text).not.toContain(w.q.world.clientSurname);
+    // The agency block is exactly its six allowlisted keys.
+    const parsed = JSON.parse(text) as { data?: { agency?: Record<string, unknown> }; agency?: Record<string, unknown> };
+    expect(Object.keys((parsed.data ?? parsed).agency ?? {}).sort()).toEqual(["address", "email", "iconUrl", "logoUrl", "name", "phone"]);
     const keys = keysDeep(JSON.parse(text));
     for (const forbidden of ["clientName", "passengers", "firstName", "lastName", "age", "transactionId", "agentUserId", "salesPrice", "discounts", "serviceCharge", "extrasTotal", "tags"]) {
       expect(keys.has(forbidden), forbidden).toBe(false);
@@ -112,6 +144,49 @@ test.describe("public quote link", () => {
     await expect(visitor.getByTestId("page-public-quote")).toBeVisible();
     await expect(visitor.getByTestId("banner-quote-expired")).toContainText("This price was held until");
     await expect(visitor.getByTestId("banner-quote-expired")).toContainText("to check it is still available");
+    // The banner is a card above the photo strip and the price block.
+    const banner = await visitor.getByTestId("banner-quote-expired").boundingBox();
+    const price = await visitor.getByTestId("quote-price").boundingBox();
+    expect(banner!.y).toBeLessThan(price!.y);
+    await visitor.context().close();
+  });
+
+  test("the agency's own logo shows in the header and the footer when it has one, with its name as the alt text", async ({ page, browser, baseURL }) => {
+    const w = await world(page);
+    await queryRows(`update organization set logo_url = $1 where id = $2`, ["/favicon.ico", w.q.world.agency.orgId]);
+    const visitor = await anonymousPage(browser, baseURL!);
+    await visitor.goto(`/view-quote/${w.active.token}`);
+    const logo = visitor.getByTestId("public-quote-header").getByTestId("portal-agency-logo");
+    await expect(logo).toHaveAttribute("src", "/favicon.ico");
+    await expect(logo).toHaveAttribute("alt", w.q.world.agency.orgName);
+    await expect(visitor.getByTestId("portal-footer").getByTestId("portal-agency-logo")).toHaveAttribute("src", "/favicon.ico");
+    await visitor.context().close();
+  });
+
+  test("the share sheet offers WhatsApp, text, email and copy link; copying records one share; the photo viewer works from the keyboard", async ({ page, browser, baseURL }) => {
+    const w = await world(page);
+    const visitor = await anonymousPage(browser, baseURL!);
+    await visitor.context().grantPermissions(["clipboard-read", "clipboard-write"], { origin: baseURL! });
+    await visitor.goto(`/view-quote/${w.active.token}`);
+    await visitor.getByTestId("button-share").click();
+    const sheet = visitor.getByTestId("sheet-share");
+    for (const id of ["share-whatsapp", "share-sms", "share-email", "button-copy-link"]) await expect(sheet.getByTestId(id)).toBeVisible();
+    await sheet.getByTestId("button-copy-link").click();
+    await expect(sheet.getByTestId("button-copy-link")).toContainText("Copied");
+    expect(await visitor.evaluate(() => navigator.clipboard.readText())).toBe(`${baseURL}/view-quote/${w.active.token}`);
+    await expect.poll(() => shareBellCount(w.q.world.userId)).toBe(1);
+    await visitor.keyboard.press("Escape");
+    await expect(sheet).toHaveCount(0);
+
+    // Photos (when the quote has any): the strip opens the viewer, the arrow keys move, Escape closes it.
+    const first = visitor.getByTestId("quote-photo-0");
+    if ((await first.count()) > 0) {
+      await first.click();
+      await expect(visitor.getByTestId("quote-photo-viewer")).toBeVisible();
+      await visitor.keyboard.press("ArrowRight");
+      await visitor.keyboard.press("Escape");
+      await expect(visitor.getByTestId("quote-photo-viewer")).toHaveCount(0);
+    }
     await visitor.context().close();
   });
 
@@ -125,7 +200,9 @@ test.describe("public quote link", () => {
     await visitor.goto(`/view-quote/${token}`);
     await expect(visitor.getByTestId("blocked-quote-booked")).toBeVisible();
     await expect(visitor.getByTestId("text-blocked-title")).toHaveText("This holiday has been booked.");
-    await expect(visitor.getByTestId("link-view-in-portal")).toHaveAttribute("href", "/portal/trips/bookings");
+    await expect(visitor.getByTestId("link-view-in-portal")).toHaveAttribute("href", "/portal/bookings");
+    await expect(visitor.getByTestId("portal-footer")).toBeVisible();
+    for (const banned of ["Tina", "Travana", "0191"]) await expect(visitor.locator("body"), banned).not.toContainText(banned);
     await expect(visitor.getByTestId("page-public-quote")).toHaveCount(0);
     await expect(visitor.locator("body")).not.toContainText("Barbados");
     await visitor.context().close();
@@ -169,6 +246,7 @@ test.describe("public quote link", () => {
     await expect(visitor.getByTestId("text-blocked-title")).toHaveText("This quote is no longer available.");
     await expect(visitor.getByTestId("text-blocked-contact")).toContainText(`Please contact ${w.q.world.agency.orgName}`);
     await expect(visitor.locator("body")).not.toContainText("Lisbon");
+    for (const banned of ["Tina", "Travana", "0191"]) await expect(visitor.locator("body"), banned).not.toContainText(banned);
     await visitor.context().close();
 
     expect((await anon.get(`/api/public/quote/${newToken()}`)).status()).toBe(404);
@@ -189,8 +267,9 @@ test.describe("public quote link", () => {
     await expect(page.getByTestId("bar-staff-preview")).toHaveText("Staff preview — customers cannot see this quote");
     await expect(page.getByTestId("text-quote-title")).toContainText("Booked Barbados Week");
 
-    await page.getByTestId("button-share-copy").click();
-    await expect(page.getByTestId("button-share-copy")).toContainText("Copied!");
+    await page.getByTestId("button-share").click();
+    await page.getByTestId("button-copy-link").click();
+    await expect(page.getByTestId("button-copy-link")).toContainText("Copied");
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     expect(copied).toContain(`/view-quote/${token}`);
     expect(copied).not.toContain("preview");

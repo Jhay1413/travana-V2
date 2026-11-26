@@ -246,12 +246,14 @@ describe("portal sign-in link + SMS", () => {
       expect(call.body).not.toContain("PIN we shared");
     }
   });
-  it("an edited template that still ends with the seeded signature is not used: no fixed agency name goes out", async () => {
+  it("an edited template that still ends with the old seeded signature is used, signed with this agency's own name", async () => {
     const c = setup();
+    vi.mocked(buildContextForClient).mockResolvedValue({ first_name: "Sam", company_name: "Sunny Holidays" });
     vi.mocked(smsRepository.findTemplateByCategory).mockResolvedValue({ id: "t", name: "Edited", active: true, body: "Tap {{portal_link}} to log in. - Tina's Travel" } as never);
     await send({ clientId: c.id, purpose: "portal_sign_in", channel: "sms" });
     const call = vi.mocked(sendTrackedSms).mock.calls[0][0];
-    expect(call.templateName).toBe("Portal sign-in link");
+    expect(call.templateName).toBe("Edited");
+    expect(call.body).toBe("Tap https://app.example/portal/login?mt=CODE&next=%2Fportal to log in. - Sunny Holidays");
     expect(call.body).not.toMatch(/Tina'?s Travel/i);
   });
   it("a template whose {{company_name}} merges to the seeded signature is not used either", async () => {

@@ -138,8 +138,9 @@ test.describe("customer portal: Messages", () => {
     await startSignedIn(page, c);
     await page.setViewportSize({ width: 360, height: 640 });
     await page.goto("/portal/messages");
+    // The header floats over the navy band, so a long name cannot push the chat down.
     const header = await page.getByTestId("portal-header-home").boundingBox();
-    expect(header && header.height > 70, "the header really is taller than the usual one").toBe(true);
+    expect(header && header.x >= 0 && header.x + header.width <= 360, "the long name stays inside the screen").toBe(true);
     await expectComposerAboveTabBar(page, 640);
   });
 

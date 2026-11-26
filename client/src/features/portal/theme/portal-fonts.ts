@@ -1,6 +1,7 @@
 const FONTS_LINK_ID = "portal-fonts";
-const FONTS_HREF =
-  "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Jost:wght@300;400;500&display=swap";
+/** Exactly the reference design's families and weights (travana-customer-hub/index.html). */
+export const FONTS_HREF =
+  "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Jost:wght@300;400;500&display=swap";
 
 /**
  * Loads Cormorant Garamond and Jost the first time the portal shell mounts. Nothing
