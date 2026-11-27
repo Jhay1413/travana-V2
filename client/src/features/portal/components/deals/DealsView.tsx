@@ -154,7 +154,7 @@ export function DealsView() {
           ) : deals.length === 0 ? (
             <DealsEmpty kind={dealsEmptyKind(tab, filteringByInterests, filters)} onClear={clearFilters} onBrowseAll={() => setFilters((f) => ({ ...f, matchInterests: false }))} onInterests={() => setLocation("/portal/tags")} />
           ) : (
-            <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2" data-testid="deals-list">
+            <div className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2" data-testid="deals-list">
               {deals.map((deal) => (
                 <DealCard key={deal.id} deal={deal} interests={interestNames} agent={agent} told={isTold(deal.id, toldDealIds, sessionTold)} onTold={markTold} />
               ))}
@@ -174,7 +174,7 @@ export function DealsView() {
 
 function DealsLoading() {
   return (
-    <div className="grid gap-x-8 gap-y-10 sm:grid-cols-2" role="status" aria-label="Loading deals" data-testid="deals-loading">
+    <div className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2" role="status" aria-label="Loading deals" data-testid="deals-loading">
       {[0, 1].map((i) => (
         <div key={i} className="animate-pulse">
           <div className="h-[240px] bg-secondary" />

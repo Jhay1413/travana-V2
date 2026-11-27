@@ -52,8 +52,7 @@ test.describe("client page fixes", () => {
     await expect(modal).toBeVisible();
     await chooseOption(page, modal.getByTestId("add-task-type"), "Enquiry call");
 
-    await modal.getByTestId("add-task-assignee").click();
-    await page.getByRole("option", { name: /Bea Agentb/ }).click();
+    await chooseOption(page, modal.getByTestId("add-task-assignee"), /Bea Agentb/);
     await expect(modal.getByTestId("add-task-assignee")).toContainText("Bea Agentb");
     await modal.getByTestId("add-task-submit").click();
     await expect(modal).toBeHidden();

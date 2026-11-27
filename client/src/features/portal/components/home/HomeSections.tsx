@@ -42,7 +42,7 @@ export function HomeHero({ summary, lastName, agent, photo, now }: { summary: Po
           </>
         )}
       </h1>
-      <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/[0.78]" data-testid="home-hero-line">
+      <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/[0.78] [overflow-wrap:anywhere]" data-testid="home-hero-line">
         Everything {agent} is planning for you.
         {next && (
           <>
@@ -81,7 +81,7 @@ export function HomeComingUp({ summary, sections, agent, children }: { summary: 
       <Eyebrow as="h2" className="mx-1 mb-[18px]">
         <span id="home-coming-up">Coming up</span>
       </Eyebrow>
-      <div ref={grid} className="grid gap-2.5 md:grid-cols-2">
+      <div ref={grid} className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
         {sections.comingUp.includes("priceHeld") && priceHeld && <PriceHeldCard held={priceHeld} agent={agent} />}
         {sections.comingUp.includes("rewards") && (
           <ReminderCard label="Rewards" aside={rewards.walletCredit > 0 ? "Wallet" : "Referral"} title={rewardsTitle(rewards.walletCredit, rewards.rewardWaiting)} testId="home-rewards">
@@ -162,7 +162,7 @@ function ReminderCard({ label, aside, title, testId, children }: { label: string
         <span className="text-[10px] uppercase tracking-[0.24em] portal-text-amber-ink">{label}</span>
         <span className="portal-serif text-[15px] italic text-muted-foreground">{aside}</span>
       </div>
-      <h3 className="portal-serif break-words text-[25px] font-normal leading-[1.2] text-primary">{title}</h3>
+      <h3 className="portal-serif [overflow-wrap:anywhere] text-[25px] font-normal leading-[1.2] text-primary">{title}</h3>
       {children}
     </article>
   );
@@ -203,7 +203,7 @@ export function HomeSummaryRows({ summary, sections, agent }: { summary: PortalS
           <span aria-hidden className="w-[54px] flex-none portal-serif text-[64px] font-light leading-[0.9] text-primary">
             {row.n}
           </span>
-          <span aria-hidden className="flex flex-1 flex-col gap-1.5">
+          <span aria-hidden className="flex min-w-0 flex-1 flex-col gap-1.5 [overflow-wrap:anywhere]">
             <span className="portal-serif text-2xl font-medium text-primary">{row.title}</span>
             <span className="text-sm text-muted-foreground">{row.sub}</span>
           </span>
@@ -241,10 +241,10 @@ export function HomeNextJourney({ booking }: { booking: PortalSummaryNextBooking
           {booking.imageUrl && <img src={booking.imageUrl} alt="" loading="lazy" className="size-full object-cover transition group-hover:brightness-[1.06]" />}
         </span>
         <span className="flex justify-between gap-3 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-          <span className="min-w-0 truncate">{booking.destination}</span>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{booking.destination}</span>
           {stay && <span className="portal-serif text-[15px] normal-case italic tracking-normal">{stay}</span>}
         </span>
-        <span className="portal-serif break-words text-[28px] leading-[1.15] text-primary">{booking.title}</span>
+        <span className="portal-serif [overflow-wrap:anywhere] text-[28px] leading-[1.15] text-primary">{booking.title}</span>
         <span className="text-sm leading-[1.6] text-muted-foreground">
           {dates}
           {facts && <> · {facts}</>}
@@ -287,7 +287,7 @@ export function HomeAgentBlock({ branding, agent }: { branding: PortalBranding; 
     <section aria-label="Your travel agent" className="flex flex-col items-center gap-[18px] bg-secondary px-8 py-[76px] text-center" data-testid="home-agent">
       {branding.iconUrl && <img src={branding.iconUrl} alt="" className="block h-auto w-9" />}
       <Eyebrow>Your travel agent</Eyebrow>
-      <p className="portal-serif text-[36px] font-light leading-[1.1] text-primary" data-testid="home-agent-name">
+      <p className="portal-serif max-w-full text-[36px] font-light leading-[1.1] text-primary [overflow-wrap:anywhere]" data-testid="home-agent-name">
         {named ? (
           <>
             {first}
@@ -303,11 +303,11 @@ export function HomeAgentBlock({ branding, agent }: { branding: PortalBranding; 
         )}
       </p>
       {branding.name && (
-        <p className="max-w-[280px] text-sm leading-[1.7] text-muted-foreground" data-testid="home-agency-name">
+        <p className="max-w-[280px] text-sm leading-[1.7] text-muted-foreground [overflow-wrap:anywhere]" data-testid="home-agency-name">
           {branding.name}. Ask about any quote, or tell {agent} where you&apos;d like to go next.
         </p>
       )}
-      <PortalButton variant="outline" className="mt-2" onClick={() => messageSheet.open()} data-testid="home-message-agent">
+      <PortalButton variant="outline" className="mt-2 h-auto min-h-11 max-w-full whitespace-normal py-3 [overflow-wrap:anywhere]" onClick={() => messageSheet.open()} data-testid="home-message-agent">
         {named ? `Message ${agent}` : "Message your agent"}
       </PortalButton>
     </section>

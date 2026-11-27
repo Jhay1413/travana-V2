@@ -30,7 +30,41 @@ export interface SeedFileOptions {
    * client-files/ (the portal answers with a signed link; nothing is fetched from it in the practice environment).
    */
   storage?: "none" | "local" | "s3";
+  /** The bytes written for a "local" file. Default: a real tiny PDF, or a real tiny PNG for an image/png file. */
+  content?: Buffer;
 }
+
+/**
+ * A real, valid one-page PDF (200x200, one line of text) built by hand: header, five objects, a cross-reference table
+ * with the true byte offsets and a trailer. PDF.js opens it and draws a page.
+ */
+export function tinyPdf(text = "Travana test document"): Buffer {
+  const stream = `BT /F1 18 Tf 20 100 Td (${text.replace(/[()\\]/g, "")}) Tj ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let body = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((obj, i) => {
+    offsets.push(Buffer.byteLength(body, "latin1"));
+    body += `${i + 1} 0 obj\n${obj}\nendobj\n`;
+  });
+  const xrefAt = Buffer.byteLength(body, "latin1");
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) body += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
+  return Buffer.from(body, "latin1");
+}
+
+/** A real 1x1 PNG. */
+export const TINY_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 const LOCAL_UPLOADS_DIR = path.join(process.cwd(), "uploads", "client-files");
 
@@ -52,7 +86,7 @@ export async function seedPortalFile(clientId: string, opts: SeedFileOptions): P
   if (opts.storage === "local") {
     mkdirSync(LOCAL_UPLOADS_DIR, { recursive: true });
     const target = path.join(LOCAL_UPLOADS_DIR, stored);
-    writeFileSync(target, "%PDF-1.4 e2e seed file");
+    writeFileSync(target, opts.content ?? ((opts.mimeType ?? "application/pdf") === "image/png" ? TINY_PNG : tinyPdf()));
     writtenLocalFiles.add(target);
   }
   const [row] = await queryRows<{ id: string }>(

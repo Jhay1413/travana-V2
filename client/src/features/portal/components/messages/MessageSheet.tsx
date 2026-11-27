@@ -243,7 +243,7 @@ function MessageSheetBody({
             <div key={i} className="flex max-w-[88%] flex-col gap-2 self-end bg-primary px-[18px] py-4 text-white" data-testid="message-sent-bubble">
               <span className="text-[10px] uppercase tracking-[0.22em] text-[#F2B27A]">About {m.about}</span>
               {m.extras && <span className="portal-serif text-[17px] italic leading-[1.35]">{m.extras}</span>}
-              {m.text && <span className="whitespace-pre-line break-words text-sm leading-[1.6]">{m.text}</span>}
+              {m.text && <span className="whitespace-pre-line [overflow-wrap:anywhere] text-sm leading-[1.6]">{m.text}</span>}
               <span className="text-[11px] text-white/65">Sent {m.at}</span>
             </div>
           ))}

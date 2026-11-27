@@ -1,3 +1,4 @@
+import { chooseOption } from "../helpers/ui";
 import type { Page } from "@playwright/test";
 import { apiCreateClient, apiCreateQuoteDeal, dataOf, dbBookingFor, signIn, type ClientRow } from "../helpers/deals";
 import { expect, expectLoginOk, expectToast, test } from "../helpers/fixtures";
@@ -82,12 +83,10 @@ test.describe("Automatic messages on the Integrations page", () => {
 
     const select = page.getByTestId("select-auto-booking_confirmation");
     await expect(select).toBeEnabled();
-    await select.click();
-    await page.getByRole("option", { name: "booking_confirmed · en_GB" }).click();
+    await chooseOption(page, select, /booking_confirmed · en_GB/);
     // {{1}} defaults to the client's name; {{2}} needs mapping.
     await expect(page.getByTestId("button-save-auto-booking_confirmation")).toBeDisabled();
-    await page.getByRole("combobox", { name: "Source for placeholder 2" }).click();
-    await page.getByRole("option", { name: "Destination" }).click();
+    await chooseOption(page, page.getByRole("combobox", { name: "Source for placeholder 2" }), /Destination/);
     await page.getByTestId("button-save-auto-booking_confirmation").click();
     await expectToast(page, "Booking confirmations will use this template");
     await expect(status).toHaveAttribute("data-state", "ready");
@@ -98,13 +97,11 @@ test.describe("Automatic messages on the Integrations page", () => {
     expect(saved).toMatchObject({ templateName: "booking_confirmed", variables: { "1": { source: "client_first_name" }, "2": { source: "destination" } } });
 
     // Switch the channel to text messages and back.
-    await page.getByTestId("select-auto-channel").click();
-    await page.getByRole("option", { name: "Send by text message" }).click();
+    await chooseOption(page, page.getByTestId("select-auto-channel"), /Send by text message/);
     await expectToast(page, "Automatic messages will go by text");
     expect((await dataOf<{ autoChannel: string }>(await page.request.get(SETTINGS))).autoChannel).toBe("sms");
     await expect(page.getByTestId("select-auto-channel")).toContainText("Send by text message");
-    await page.getByTestId("select-auto-channel").click();
-    await page.getByRole("option", { name: "Send by WhatsApp" }).click();
+    await chooseOption(page, page.getByTestId("select-auto-channel"), /Send by WhatsApp/);
     await expect.poll(async () => (await dataOf<{ autoChannel: string }>(await page.request.get(SETTINGS))).autoChannel).toBe("whatsapp");
   });
 

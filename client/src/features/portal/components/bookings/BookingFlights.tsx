@@ -32,7 +32,7 @@ export function BookingFlights({ items }: { items: JourneyItem[] }) {
               <div className="flex items-start gap-3.5">
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="portal-serif text-4xl leading-none portal-text-ink">{f.flight?.dep || "–"}</span>
-                  <span className="portal-serif break-words text-[19px] leading-[1.2] text-primary">{f.flight?.from}</span>
+                  <span className="portal-serif [overflow-wrap:anywhere] text-[19px] leading-[1.2] text-primary">{f.flight?.from}</span>
                 </div>
                 <span aria-hidden className="mt-[18px] h-px w-7 flex-none bg-accent" />
                 <div className="flex min-w-0 flex-1 flex-col gap-1 text-right">
@@ -40,10 +40,10 @@ export function BookingFlights({ items }: { items: JourneyItem[] }) {
                     {f.flight?.arr || "–"}
                     {f.flight?.nextDay ? " +1" : ""}
                   </span>
-                  <span className="portal-serif break-words text-[19px] leading-[1.2] text-primary">{f.flight?.to}</span>
+                  <span className="portal-serif [overflow-wrap:anywhere] text-[19px] leading-[1.2] text-primary">{f.flight?.to}</span>
                 </div>
               </div>
-              {rest.length > 0 && <p className="text-sm text-muted-foreground">{rest.join(" · ")}</p>}
+              {rest.length > 0 && <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">{rest.join(" · ")}</p>}
             </div>
           );
         })}

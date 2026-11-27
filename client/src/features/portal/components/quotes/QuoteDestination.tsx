@@ -27,8 +27,8 @@ function SectionBody({ section }: { section: DestinationSection }) {
           {section.things.map((t) => (
             <li key={t.name} className="flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between gap-2.5">
-                <span className="portal-serif text-[21px] leading-[1.2] text-primary">{t.name}</span>
-                {t.tag && <span className="whitespace-nowrap text-[10px] uppercase tracking-[0.22em] portal-text-amber-ink">{t.tag}</span>}
+                <span className="portal-serif min-w-0 text-[21px] leading-[1.2] text-primary [overflow-wrap:anywhere]">{t.name}</span>
+                {t.tag && <span className="min-w-0 text-right text-[10px] uppercase tracking-[0.22em] portal-text-amber-ink [overflow-wrap:anywhere]">{t.tag}</span>}
               </div>
               {t.line && <p className="text-sm leading-[1.65] text-muted-foreground">{t.line}</p>}
               {t.details.map((d) => (
@@ -88,7 +88,7 @@ export function QuoteDestination({ content, agent, askLabel, onAsk }: { content:
                   <span className="portal-serif w-7 flex-none text-[20px] portal-text-amber-ink" aria-hidden>
                     {toRoman(i + 1)}
                   </span>
-                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex min-w-0 flex-1 flex-col gap-1 [overflow-wrap:anywhere]">
                     <span className="portal-serif text-[23px] font-medium leading-[1.2] text-primary">{section.title}</span>
                     <span className="text-[13px] font-light text-muted-foreground">{section.sub}</span>
                   </span>

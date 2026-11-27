@@ -1,3 +1,4 @@
+import type { Readable } from 'stream';
 /** A customer's file that passed the visibility join, with the deal it is linked to. */
 export interface PortalLinkedFileRow {
   id: string;
@@ -18,3 +19,13 @@ export interface PortalLinkedFileRow {
 export type PortalDownload =
   | { kind: 'link'; url: string; fileName: string; expiresInSeconds: number }
   | { kind: 'stream'; filePath: string; fileName: string; contentType: string; contentDisposition: string };
+
+/** A document opened for in-app viewing: the bytes to relay, with the one safe type for them. */
+export interface PortalViewStream {
+  stream: Readable;
+  /** Exact content type for the kind (never the stored value verbatim). */
+  contentType: string;
+  fileName: string;
+  /** Exact byte length when known. */
+  size: number | null;
+}

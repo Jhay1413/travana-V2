@@ -23,11 +23,11 @@ export function BookingChecklist({ bookingId }: { bookingId: string }) {
         {rows.map((row) => (
           <li key={row.key} className="flex gap-5 border-t border-border py-[22px]" data-testid={`checklist-${row.key}`}>
             <div className="portal-serif w-7 flex-none text-[22px] portal-text-amber-ink">{row.numeral}</div>
-            <div className="flex flex-1 flex-col gap-1.5">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5 [overflow-wrap:anywhere]">
               <div className="portal-serif text-[22px] font-medium text-primary">{row.label}</div>
               <div className="text-sm leading-[1.6] text-muted-foreground">{row.note}</div>
             </div>
-            <div className={cn("whitespace-nowrap pt-[7px] text-[10px] uppercase tracking-[0.22em]", row.done ? "portal-text-amber-ink" : "text-muted-foreground")} data-testid={`checklist-status-${row.key}`}>
+            <div className={cn("flex-none whitespace-nowrap pt-[7px] text-[10px] uppercase tracking-[0.22em]", row.done ? "portal-text-amber-ink" : "text-muted-foreground")} data-testid={`checklist-status-${row.key}`}>
               {row.status}
             </div>
           </li>

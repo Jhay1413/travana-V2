@@ -106,7 +106,7 @@ export function HomeRail({
         tabIndex={0}
         onScroll={measure}
         onKeyDown={onKeyDown}
-        className={cn("no-scrollbar flex snap-x snap-mandatory scroll-px-7 gap-3.5 overflow-x-auto px-7 focus-visible:outline-offset-[-2px]")}
+        data-scroll-rail className={cn("no-scrollbar flex snap-x snap-mandatory scroll-px-7 gap-3.5 overflow-x-auto px-7 focus-visible:outline-offset-[-2px]")}
         data-testid={`${testId}-track`}
       >
         {children}

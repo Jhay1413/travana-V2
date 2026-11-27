@@ -5,7 +5,7 @@ vi.mock("./portal-documents.repository", () => ({
 }));
 vi.mock("../client/client-file.service", () => ({
   PRESIGNED_URL_EXPIRES_IN: 300,
-  clientFileService: { resolveDownloadTarget: vi.fn() },
+  clientFileService: { resolveDownloadTarget: vi.fn(), readObjectHead: vi.fn(), openObjectStream: vi.fn() },
 }));
 
 import { portalDocumentsService } from "./portal-documents.service";
@@ -47,9 +47,9 @@ describe("list", () => {
     const docs = await portalDocumentsService.list("c1");
     expect(repo.findVisibleFiles).toHaveBeenCalledWith("c1", undefined);
     expect(docs).toEqual([
-      { id: "f1", name: "Tickets", category: "Tickets", kind: "PDF", sizeBytes: 100, uploadedAt: "2026-11-20T10:00:00.000Z", dealId: "d-enquiry", bookingId: null },
+      { id: "f1", name: "Tickets", category: "Tickets", kind: "PDF", sizeBytes: 100, uploadedAt: "2026-11-20T10:00:00.000Z", viewable: true, viewKind: "pdf", dealId: "d-enquiry", bookingId: null },
     ]);
-    expect(Object.keys(docs[0]).sort()).toEqual(["bookingId", "category", "dealId", "id", "kind", "name", "sizeBytes", "uploadedAt"]);
+    expect(Object.keys(docs[0]).sort()).toEqual(["bookingId", "category", "dealId", "id", "kind", "name", "sizeBytes", "uploadedAt", "viewKind", "viewable"]);
   });
 
   it("uses the original file name when there is no title", async () => {

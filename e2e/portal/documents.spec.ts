@@ -10,7 +10,10 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "../helpers/fixtures";
 import { seedPortalCustomer, startSignedIn } from "../helpers/portal";
 import { seedPortalBooking, type SeededPortalBooking } from "../helpers/portal-bookings";
-import { seedPortalFile } from "../helpers/portal-paperwork";
+import { seedPortalFile, seedPortalPassenger } from "../helpers/portal-paperwork";
+import { queryRows } from "../helpers/seed";
+import { BASE_URL } from "../helpers/env";
+import { expectFitsViewport } from "../helpers/ui";
 import { seedPortalQuoteWorld, type PortalQuoteWorld } from "../helpers/portal-quotes";
 
 interface Fixture {
@@ -221,11 +224,319 @@ test.describe("customer portal: my documents", () => {
   test("at 360px the long file name wraps: no sideways scrolling", async ({ page }) => {
     const { q, trip } = await fixture(page);
     await seedPortalFile(q.portal.clientId, { name: `${"VeryLongFileName".repeat(8)}.pdf`, category: "Tickets", bookingId: trip.id });
+    // Explicit long unbroken names, not random suffix widths: the customer (the lead) and two travellers, one with a
+    // saved passport and one without, so the Passports band's name/status rows are in the measured page too.
+    const long = "Abcdefghijklmnopqrstuvwxyz0123";
+    await queryRows(`update client_table set "firstName" = $2, surename = $3 where id = $1`, [q.portal.clientId, long, long]);
+    await seedPortalPassenger(q.portal.clientId, { isLead: true, passportNumber: "531764821", passportExpiry: "2035-02-09" });
+    await seedPortalPassenger(q.portal.clientId, { firstName: long, surname: long, dateOfBirth: "1990-03-03", passportNumber: "548193027", passportExpiry: "2035-02-09" });
+    await seedPortalPassenger(q.portal.clientId, { firstName: long, surname: long, dateOfBirth: "1991-03-03" });
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto(`/portal/booking/${trip.id}`);
     await expect(page.getByTestId("booking-documents")).toBeVisible();
     await expect(page.getByTestId("document-name")).toBeVisible();
-    await page.waitForTimeout(800);
+    await expect(page.getByTestId("passenger-name")).toHaveCount(3);
+    await expect(page.getByTestId("passenger-status")).toHaveCount(3);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   });
+});
+
+/**
+ * "View" opens a document inside the app (a full-screen viewer) instead of only saving it. The bytes are real: a
+ * hand-built one-page PDF and a real PNG written to uploads/client-files by the helper (and removed afterwards), served
+ * by the real /view endpoint, drawn by the real PDF.js worker bundled with the app. Nothing is stubbed except where a
+ * test says so (a forced fetch failure).
+ */
+const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+interface ListedViewable extends ListedDocument {
+  viewable: boolean;
+  viewKind: string | null;
+}
+
+test.describe("customer portal: viewing a document in the app", () => {
+  test("View is offered for a PDF and an image, not for a Word file; Download stays on every row", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const pdf = await seedPortalFile(q.portal.clientId, { name: "confirmation.pdf", title: "Booking confirmation", bookingId: trip.id, storage: "local" });
+    const png = await seedPortalFile(q.portal.clientId, { name: "boarding.png", title: "Boarding photo", mimeType: "image/png", bookingId: trip.id, storage: "local" });
+    const docx = await seedPortalFile(q.portal.clientId, { name: "terms.docx", title: "Terms", mimeType: DOCX, bookingId: trip.id, storage: "local" });
+    // Stored type and extension disagree: not offered, even though one of them looks viewable.
+    const odd = await seedPortalFile(q.portal.clientId, { name: "scan.docx", title: "Odd scan", mimeType: "application/pdf", bookingId: trip.id, storage: "local" });
+
+    await page.goto(`/portal/booking/${trip.id}`);
+    await expect(page.getByTestId("documents-list")).toBeVisible();
+    await expect(page.getByTestId(`document-view-${pdf}`)).toBeVisible();
+    await expect(page.getByTestId(`document-view-${png}`)).toBeVisible();
+    await expect(page.getByTestId(`document-view-${docx}`)).toHaveCount(0);
+    await expect(page.getByTestId(`document-view-${odd}`)).toHaveCount(0);
+    for (const id of [pdf, png, docx, odd]) await expect(page.getByTestId(`document-download-${id}`)).toBeVisible();
+
+    // The server's own answer is what decides.
+    const byId = Object.fromEntries(((await listFor(page, trip.id)) as ListedViewable[]).map((d) => [d.id, d]));
+    expect([byId[pdf].viewable, byId[pdf].viewKind]).toEqual([true, "pdf"]);
+    expect([byId[png].viewable, byId[png].viewKind]).toEqual([true, "image"]);
+    expect([byId[docx].viewable, byId[docx].viewKind]).toEqual([false, null]);
+    expect([byId[odd].viewable, byId[odd].viewKind]).toEqual([false, null]);
+  });
+
+  test("opening a PDF draws its page on a canvas with 'Page 1 of 1', from this site only; Download works inside the viewer", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const fileId = await seedPortalFile(q.portal.clientId, { name: "confirmation.pdf", title: "Booking confirmation", bookingId: trip.id, storage: "local" });
+    const origin = new URL(BASE_URL).origin;
+    const outside: string[] = [];
+    page.on("request", (req) => {
+      const url = req.url();
+      if (!url.startsWith(origin) && !url.startsWith("data:") && !url.startsWith("blob:")) outside.push(url);
+    });
+
+    await page.goto(`/portal/booking/${trip.id}`);
+    await expect(page.getByTestId("documents-list")).toBeVisible();
+    // Only what opening the viewer causes counts (the page's own web fonts load earlier, and are not part of this feature).
+    outside.length = 0;
+    await page.getByTestId(`document-view-${fileId}`).click();
+    await expect(page.getByTestId("document-viewer")).toBeVisible();
+    await expect(page.getByTestId("viewer-doc-title")).toHaveText("Booking confirmation");
+    await expect(page.getByTestId("pdf-page-count")).toHaveText("Page 1 of 1");
+
+    const canvas = page.getByTestId("pdf-canvas").first();
+    await expect.poll(async () => canvas.evaluate((c) => (c as HTMLCanvasElement).width)).toBeGreaterThan(0);
+    const box = await canvas.boundingBox();
+    expect(box?.width ?? 0).toBeGreaterThan(0);
+    expect(box?.height ?? 0).toBeGreaterThan(0);
+    // Something was actually painted: not every pixel is the blank white page.
+    await expect
+      .poll(async () =>
+        canvas.evaluate((c) => {
+          const el = c as HTMLCanvasElement;
+          const data = el.getContext("2d")?.getImageData(0, 0, el.width, el.height).data;
+          if (!data) return false;
+          for (let i = 0; i < data.length; i += 4) if (data[i] < 200 || data[i + 1] < 200 || data[i + 2] < 200) return true;
+          return false;
+        }),
+      )
+      .toBe(true);
+
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("viewer-doc-download").click()]);
+    expect(download.suggestedFilename()).toBe("confirmation.pdf");
+    await expect(page.getByTestId("viewer-doc-download")).toHaveText("Saved ✓");
+    expect(outside, "opening the viewer made no request outside this site").toEqual([]);
+  });
+
+  test("opening an image shows it, named for screen readers, and the viewer covers the whole screen", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const fileId = await seedPortalFile(q.portal.clientId, { name: "boarding.png", title: "Boarding photo", mimeType: "image/png", bookingId: trip.id, storage: "local" });
+    await page.goto(`/portal/booking/${trip.id}`);
+    await page.getByTestId(`document-view-${fileId}`).click();
+    const image = page.getByTestId("viewer-doc-image");
+    await expect(image).toBeVisible();
+    await expect(image).toHaveAttribute("alt", "Boarding photo");
+    await expect(image).toHaveAttribute("src", /^blob:/);
+    await expect.poll(async () => image.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+    const viewport = page.viewportSize();
+    const box = await page.getByTestId("document-viewer").boundingBox();
+    expect(Math.round(box?.width ?? 0)).toBe(viewport?.width);
+    expect(Math.round(box?.height ?? 0)).toBe(viewport?.height);
+  });
+
+  test("Close and Escape both return focus to the row's View button; the image's object URL is released", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const fileId = await seedPortalFile(q.portal.clientId, { name: "boarding.png", title: "Boarding photo", mimeType: "image/png", bookingId: trip.id, storage: "local" });
+    await page.addInitScript(() => {
+      const w = window as unknown as { __revoked: string[] };
+      w.__revoked = [];
+      const revoke = URL.revokeObjectURL.bind(URL);
+      URL.revokeObjectURL = (url: string) => {
+        w.__revoked.push(url);
+        revoke(url);
+      };
+    });
+    await page.goto(`/portal/booking/${trip.id}`);
+    const view = page.getByTestId(`document-view-${fileId}`);
+
+    await view.click();
+    await expect(page.getByTestId("viewer-doc-image")).toBeVisible();
+    const src = await page.getByTestId("viewer-doc-image").getAttribute("src");
+    await page.getByTestId("viewer-doc-close").click();
+    await expect(page.getByTestId("document-viewer")).toHaveCount(0);
+    await expect(view).toBeFocused();
+    expect(await page.evaluate(() => (window as unknown as { __revoked: string[] }).__revoked)).toContain(src);
+
+    await view.click();
+    await expect(page.getByTestId("viewer-doc-image")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("document-viewer")).toHaveCount(0);
+    await expect(view).toBeFocused();
+  });
+
+  test("focus stays inside the open viewer when tabbing", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const fileId = await seedPortalFile(q.portal.clientId, { name: "confirmation.pdf", title: "Booking confirmation", bookingId: trip.id, storage: "local" });
+    await page.goto(`/portal/booking/${trip.id}`);
+    await page.getByTestId(`document-view-${fileId}`).click();
+    await expect(page.getByTestId("pdf-page-count")).toHaveText("Page 1 of 1");
+    for (let i = 0; i < 6; i += 1) {
+      await page.keyboard.press("Tab");
+      expect(await page.evaluate(() => !!document.activeElement?.closest('[data-testid="document-viewer"]'))).toBe(true);
+    }
+  });
+
+  test("/view answers 404 for another customer's file, an unlinked file, a placeholder link, an unknown id and a malformed id; 401 without a session", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const unlinked = await seedPortalFile(q.portal.clientId, { name: "loose.pdf", title: "Loose", storage: "local" });
+    const placeholder = await seedPortalFile(q.portal.clientId, { name: "old.pdf", link: { type: "Booking", id: "booking-1" }, storage: "local" });
+    const other = await seedPortalQuoteWorld(page);
+    const theirTrip = await seedPortalBooking(page, other, { title: "Their Trip", travelDate: 50 });
+    const theirs = await seedPortalFile(other.portal.clientId, { name: "theirs.pdf", bookingId: theirTrip.id, storage: "local" });
+    const crossed = await seedPortalFile(q.portal.clientId, { name: "crossed.pdf", bookingId: theirTrip.id, storage: "local" });
+    await startSignedIn(page, q.portal);
+    await page.goto("/portal");
+    const headers = await authHeaders(page);
+
+    const bodies = new Set<string>();
+    for (const id of [unlinked, placeholder, theirs, crossed, "00000000-0000-4000-8000-000000000000", "not-an-id"]) {
+      const res = await page.request.get(`/api/v2/portal/documents/${id}/view`, { headers });
+      expect(res.status(), id).toBe(404);
+      bodies.add(await res.text());
+    }
+    expect(bodies.size, "every miss reads exactly the same").toBe(1);
+    expect((await page.request.get(`/api/v2/portal/documents/${theirs}/view`)).status()).toBe(401);
+  });
+
+  test("/view sends the exact locked-down headers and the real bytes for a PDF and an image", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const pdf = await seedPortalFile(q.portal.clientId, { name: "Ticket pack.pdf", title: "Tickets", bookingId: trip.id, storage: "local" });
+    const png = await seedPortalFile(q.portal.clientId, { name: "boarding.png", mimeType: "image/png", bookingId: trip.id, storage: "local" });
+    await page.goto("/portal");
+    const headers = await authHeaders(page);
+
+    const pdfRes = await page.request.get(`/api/v2/portal/documents/${pdf}/view`, { headers });
+    expect(pdfRes.status()).toBe(200);
+    const h = pdfRes.headers();
+    expect(h["content-type"]).toBe("application/pdf");
+    expect(h["content-disposition"]).toBe(`inline; filename="Ticket pack.pdf"; filename*=UTF-8''Ticket%20pack.pdf`);
+    expect(h["x-content-type-options"]).toBe("nosniff");
+    expect(h["cache-control"]).toBe("private, no-store");
+    expect(h["content-security-policy"]).toBe("sandbox; default-src 'none'");
+    expect(h["cross-origin-resource-policy"]).toBe("same-origin");
+    const pdfBytes = await pdfRes.body();
+    expect(pdfBytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    expect(Number(h["content-length"])).toBe(pdfBytes.length);
+
+    const pngRes = await page.request.get(`/api/v2/portal/documents/${png}/view`, { headers });
+    expect(pngRes.status()).toBe(200);
+    expect(pngRes.headers()["content-type"]).toBe("image/png");
+    expect(pngRes.headers()["content-disposition"]).toMatch(/^inline; filename="boarding\.png"/);
+    expect((await pngRes.body()).subarray(1, 4).toString("latin1")).toBe("PNG");
+  });
+
+  test("/view refuses a Word file (415) and a file over the preview limit (413), each with a plain message", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const docx = await seedPortalFile(q.portal.clientId, { name: "terms.docx", mimeType: DOCX, bookingId: trip.id, storage: "local" });
+    const huge = await seedPortalFile(q.portal.clientId, { name: "huge.pdf", size: 26 * 1024 * 1024, bookingId: trip.id, storage: "local" });
+    await page.goto("/portal");
+    const headers = await authHeaders(page);
+    const word = await page.request.get(`/api/v2/portal/documents/${docx}/view`, { headers });
+    expect(word.status()).toBe(415);
+    expect(await word.json()).toEqual({ error: "This document can't be previewed. Please download it." });
+    const big = await page.request.get(`/api/v2/portal/documents/${huge}/view`, { headers });
+    expect(big.status()).toBe(413);
+    expect(await big.json()).toEqual({ error: "This file is too large to preview. Please download it." });
+  });
+
+  test("a file named .pdf whose bytes are not a PDF answers 415; the viewer says so with Download, and View goes away", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const fileId = await seedPortalFile(q.portal.clientId, {
+      name: "fake.pdf",
+      title: "Fake paperwork",
+      bookingId: trip.id,
+      storage: "local",
+      content: Buffer.from("<html><script>alert(1)</script></html>"),
+    });
+    await page.goto("/portal");
+    const res = await page.request.get(`/api/v2/portal/documents/${fileId}/view`, { headers: await authHeaders(page) });
+    expect(res.status()).toBe(415);
+
+    await page.goto(`/portal/booking/${trip.id}`);
+    await page.getByTestId(`document-view-${fileId}`).click();
+    await expect(page.getByTestId("viewer-doc-error")).toContainText("This document can't be previewed. Please download it.");
+    await expect(page.getByTestId("viewer-doc-retry")).toHaveCount(0);
+    await expect(page.getByTestId("viewer-doc-error-download")).toBeVisible();
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("viewer-doc-error-download").click()]);
+    expect(download.suggestedFilename()).toBe("fake.pdf");
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("document-viewer")).toHaveCount(0);
+    await expect(page.getByTestId(`document-view-${fileId}`)).toHaveCount(0);
+    await expect(page.getByTestId(`document-download-${fileId}`)).toBeFocused();
+  });
+
+  test("a PDF that PDF.js cannot read says so plainly and offers Download", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    // Right signature, nothing behind it: the server relays it, PDF.js refuses it.
+    const fileId = await seedPortalFile(q.portal.clientId, {
+      name: "broken.pdf",
+      title: "Broken PDF",
+      bookingId: trip.id,
+      storage: "local",
+      content: Buffer.from("%PDF-1.4\nthis is not a real pdf\n"),
+    });
+    await page.goto(`/portal/booking/${trip.id}`);
+    await page.getByTestId(`document-view-${fileId}`).click();
+    await expect(page.getByTestId("viewer-doc-error")).toBeVisible();
+    await expect(page.getByTestId("viewer-doc-error")).toContainText(/damaged|couldn't open/i);
+    await expect(page.getByTestId("viewer-doc-error-download")).toBeVisible();
+  });
+
+  test("a failed fetch says so with Retry and Download, and Retry recovers", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const fileId = await seedPortalFile(q.portal.clientId, { name: "boarding.png", title: "Boarding photo", mimeType: "image/png", bookingId: trip.id, storage: "local" });
+    let fail = true;
+    await page.route(/\/api\/v2\/portal\/documents\/[^/]+\/view$/, async (route) => {
+      if (fail) await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Failed" }) });
+      else await route.continue();
+    });
+    await page.goto(`/portal/booking/${trip.id}`);
+    await page.getByTestId(`document-view-${fileId}`).click();
+    await expect(page.getByTestId("viewer-doc-error")).toContainText("We couldn't open that document. Please try again, or download it.");
+    await expect(page.getByTestId("viewer-doc-error-download")).toBeVisible();
+    fail = false;
+    await page.getByTestId("viewer-doc-retry").click();
+    await expect(page.getByTestId("viewer-doc-image")).toBeVisible();
+  });
+
+  test("a file with nothing stored says it is no longer available", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    // Listed and viewable by type, but nothing is stored for it: the same 404 the download gives.
+    const fileId = await seedPortalFile(q.portal.clientId, { name: "gone.pdf", title: "Old voucher", bookingId: trip.id });
+    await page.goto(`/portal/booking/${trip.id}`);
+    await page.getByTestId(`document-view-${fileId}`).click();
+    await expect(page.getByTestId("viewer-doc-error")).toContainText("That document is no longer available.");
+    await expect(page.getByTestId("viewer-doc-retry")).toHaveCount(0);
+  });
+
+  for (const width of [320, 360]) {
+    test(`at ${width}px a row with View and Download does not overflow, and the viewer's top bar fits`, async ({ page }) => {
+      const { q, trip } = await fixture(page);
+      const name = `${"VeryLongFileName".repeat(4)}.pdf`;
+      const fileId = await seedPortalFile(q.portal.clientId, { name, category: "Tickets", bookingId: trip.id, storage: "local" });
+      await page.setViewportSize({ width, height: 740 });
+      await page.goto(`/portal/booking/${trip.id}`);
+      await expect(page.getByTestId(`document-view-${fileId}`)).toBeVisible();
+      await expect(page.getByTestId(`document-download-${fileId}`)).toBeVisible();
+      await expectFitsViewport(page, width, "documents row with View and Download");
+      for (const id of [`document-view-${fileId}`, `document-download-${fileId}`]) {
+        const box = await page.getByTestId(id).boundingBox();
+        expect((box?.x ?? 0) + (box?.width ?? 0), id).toBeLessThanOrEqual(width);
+      }
+
+      await page.getByTestId(`document-view-${fileId}`).click();
+      await expect(page.getByTestId("pdf-page-count")).toHaveText("Page 1 of 1");
+      for (const id of ["viewer-doc-download", "viewer-doc-close"]) {
+        const box = await page.getByTestId(id).boundingBox();
+        expect(box?.x ?? -1, id).toBeGreaterThanOrEqual(0);
+        expect((box?.x ?? 0) + (box?.width ?? 0), id).toBeLessThanOrEqual(width);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });
+  }
 });

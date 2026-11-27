@@ -12,3 +12,6 @@ export const portalDocumentListValidator = z.object({
 export const portalDocumentDownloadValidator = z.object({
   params: z.object({ id: z.string().min(1, 'Document not found').max(100, 'Document not found') }),
 });
+
+/** `GET /documents/:id/view`: same bounded-but-unchecked id as the download, so every miss is the same 404. */
+export const portalDocumentViewValidator = portalDocumentDownloadValidator;

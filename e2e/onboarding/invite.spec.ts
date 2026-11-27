@@ -1,3 +1,4 @@
+import { chooseOption } from "../helpers/ui";
 import { expect, expectLoginOk, expectToast, loginViaApi, test } from "../helpers/fixtures";
 import {
   INVITE_PASSWORD,
@@ -235,8 +236,7 @@ test.describe("invite and accept", () => {
     await page.getByLabel("First name, row 1").fill("Una");
     await page.getByLabel("Last name, row 1").fill("Interface");
     await page.getByLabel("Email, row 1").fill(email);
-    await page.getByRole("combobox", { name: "Role, row 1" }).click();
-    await page.getByRole("option", { name: "Agent", exact: true }).click();
+    await chooseOption(page, page.getByRole("combobox", { name: "Role, row 1" }), "Agent");
 
     await expect(page.getByTestId("ready-count")).toHaveText("1 invite ready");
     await page.getByTestId("button-send-invites").click();
@@ -260,8 +260,7 @@ test.describe("invite and accept", () => {
     await page.getByLabel("First name, row 1").fill("Una");
     await page.getByLabel("Last name, row 1").fill("Owner");
     await page.getByLabel("Email, row 1").fill(uniqueEmail("ui-owner"));
-    await page.getByRole("combobox", { name: "Role, row 1" }).click();
-    await page.getByRole("option", { name: "Agent", exact: true }).click();
+    await chooseOption(page, page.getByRole("combobox", { name: "Role, row 1" }), "Agent");
     await page.getByRole("combobox", { name: "Branch, row 1" }).click();
     await page.getByRole("option").first().click();
 

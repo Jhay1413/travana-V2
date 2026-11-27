@@ -1,3 +1,4 @@
+import { chooseOption } from "../helpers/ui";
 import { PHONE_ERROR_MESSAGE } from "../../shared/phone";
 import type { Page } from "@playwright/test";
 import { FAKE_POSTCODE } from "../helpers/browser-guard";
@@ -58,12 +59,10 @@ test.describe("clients", () => {
 
     await openNewClientDrawer(page);
     await expect(page.getByTestId("form-drawer-submit")).toBeDisabled();
-    await page.getByTestId("select-title").click();
-    await page.getByRole("option", { name: "Ms", exact: true }).click();
+    await chooseOption(page, page.getByTestId("select-title"), "Ms");
     await fillRequired(page, last);
     await page.getByTestId("input-email").fill(email);
-    await page.getByTestId("select-client-type").click();
-    await page.getByRole("option", { name: "Repeat Client", exact: true }).click();
+    await chooseOption(page, page.getByTestId("select-client-type"), "Repeat Client");
     await expect(page.getByTestId("form-drawer-submit")).toBeEnabled();
     await page.getByTestId("form-drawer-submit").click();
 

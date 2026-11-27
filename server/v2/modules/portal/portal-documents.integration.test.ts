@@ -1,10 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { Readable } from "node:stream";
 
 // Storage is not under test here (no cloud credentials in the test database setup): the signed link is faked.
 vi.mock("../client/client-file.service", () => ({
   PRESIGNED_URL_EXPIRES_IN: 300,
   clientFileService: {
     resolveDownloadTarget: vi.fn().mockResolvedValue({ kind: "s3", url: "https://signed.example/file" }),
+    readObjectHead: vi.fn().mockResolvedValue({ head: Buffer.from("%PDF-1.7
+"), size: 10 }),
+    openObjectStream: vi.fn().mockImplementation(async () => ({ stream: Readable.from([Buffer.from("%PDF-1.7
+")]), size: 10 })),
   },
 }));
 
@@ -156,5 +161,38 @@ describe("only files linked to one of the customer's own deals are visible", () 
   it("a note attachment id is a 404, never a document", async () => {
     await expect(portalDocumentsService.getDownload(customerA.id, noteAttachmentId)).rejects.toMatchObject({ statusCode: 404 });
     expect((await portalDocumentsService.list(customerA.id)).map((d) => d.id)).not.toContain(noteAttachmentId);
+  });
+});
+
+describe("in-app viewing follows exactly the same visibility as the download", () => {
+  it("a linked PDF is viewable and flagged so in the list; hidden, other customers', Word and wrongly-typed files are refused", async () => {
+    const t1 = await deal(customerA.id);
+    const booking = await makeBooking({ transaction_id: t1.id, title: "Rome", booking_status: "BOOKED" });
+    const pdf = await makeFile(customerA.id, { allocationType: "Booking", allocationId: booking.id });
+    const word = await makeFile(customerA.id, {
+      allocationType: "Booking",
+      allocationId: booking.id,
+      originalName: "terms.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    });
+    const mismatched = await makeFile(customerA.id, { allocationType: "Booking", allocationId: booking.id, originalName: "scan.docx" });
+    const unlinked = await makeFile(customerA.id);
+
+    const byId = Object.fromEntries((await portalDocumentsService.list(customerA.id)).map((d) => [d.id, d]));
+    expect(byId[pdf.id]).toMatchObject({ viewable: true, viewKind: "pdf" });
+    expect(byId[word.id]).toMatchObject({ viewable: false, viewKind: null });
+    expect(byId[mismatched.id]).toMatchObject({ viewable: false, viewKind: null });
+
+    const opened = await portalDocumentsService.getView(customerA.id, pdf.id);
+    expect(opened.contentType).toBe("application/pdf");
+    opened.stream.destroy();
+    await expect(portalDocumentsService.getView(customerA.id, word.id)).rejects.toMatchObject({ statusCode: 415 });
+    await expect(portalDocumentsService.getView(customerA.id, mismatched.id)).rejects.toMatchObject({ statusCode: 415 });
+    await expect(portalDocumentsService.getView(customerA.id, unlinked.id)).rejects.toMatchObject({ statusCode: 404, message: "Document not found" });
+    // Another customer's file (even linked to their own booking) is the same 404.
+    const tB = await deal(customerB.id);
+    const bookingB = await makeBooking({ transaction_id: tB.id, title: "B's", booking_status: "BOOKED" });
+    const fileB = await makeFile(customerB.id, { allocationType: "Booking", allocationId: bookingB.id });
+    await expect(portalDocumentsService.getView(customerA.id, fileB.id)).rejects.toMatchObject({ statusCode: 404, message: "Document not found" });
   });
 });

@@ -1,4 +1,4 @@
-import type { PortalDocument } from '@shared/portal-documents';
+import type { PortalDocument, PortalDocumentViewKind } from '@shared/portal-documents';
 import type { PortalLinkedFileRow } from './portal-documents.types';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -99,8 +99,66 @@ export function attachmentDisposition(fileName: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`;
 }
 
+interface ViewType {
+  kind: PortalDocumentViewKind;
+  /** The one content type the view endpoint ever answers for this type. */
+  contentType: string;
+  extensions: readonly string[];
+}
+
+/** What the in-app viewer can show. HEIC/HEIF are left out: most browsers cannot display them. */
+const VIEW_TYPES: Record<string, ViewType> = {
+  'application/pdf': { kind: 'pdf', contentType: 'application/pdf', extensions: ['pdf'] },
+  'image/jpeg': { kind: 'image', contentType: 'image/jpeg', extensions: ['jpg', 'jpeg'] },
+  'image/png': { kind: 'image', contentType: 'image/png', extensions: ['png'] },
+  'image/gif': { kind: 'image', contentType: 'image/gif', extensions: ['gif'] },
+  'image/webp': { kind: 'image', contentType: 'image/webp', extensions: ['webp'] },
+};
+
+/** Lower-cased extension of a file name without the dot ("Ticket.PDF" -> "pdf"), or "". */
+function extensionOf(name: string): string {
+  const last = name.split(/[\\/]/).pop() ?? '';
+  const dot = last.lastIndexOf('.');
+  return dot > 0 ? last.slice(dot + 1).trim().toLowerCase() : '';
+}
+
+/**
+ * How the viewer may show a file, or null. The stored mime type AND the original file's extension must agree on the
+ * same type: either one alone is not trusted (they are both agent-supplied). The bytes are checked again on view.
+ */
+export function viewTypeFor(mimeType: string, originalName: string): { kind: PortalDocumentViewKind; contentType: string } | null {
+  const type = VIEW_TYPES[bareMime(mimeType)];
+  if (!type || !type.extensions.includes(extensionOf(originalName))) return null;
+  return { kind: type.kind, contentType: type.contentType };
+}
+
+/** True when the first bytes are a genuine file of that content type (PDF "%PDF-", JPEG, PNG, GIF, WebP signatures). */
+export function matchesSignature(contentType: string, head: Buffer): boolean {
+  const starts = (bytes: readonly number[], offset = 0): boolean => head.length >= offset + bytes.length && bytes.every((b, i) => head[offset + i] === b);
+  switch (contentType) {
+    case 'application/pdf':
+      return starts([0x25, 0x50, 0x44, 0x46, 0x2d]);
+    case 'image/jpeg':
+      return starts([0xff, 0xd8, 0xff]);
+    case 'image/png':
+      return starts([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case 'image/gif':
+      return starts([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) || starts([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
+    case 'image/webp':
+      return starts([0x52, 0x49, 0x46, 0x46]) && starts([0x57, 0x45, 0x42, 0x50], 8);
+    default:
+      return false;
+  }
+}
+
+/** `inline` header for an already sanitised name (same encoding as the attachment form). */
+export function inlineDisposition(fileName: string): string {
+  return attachmentDisposition(fileName).replace(/^attachment/, 'inline');
+}
+
 /** The customer-facing document: an exact allowlist, never the row itself. */
 export function toPortalDocument(row: PortalLinkedFileRow, bookingId: string | null): PortalDocument {
+  const view = viewTypeFor(row.mimeType, row.originalName);
   return {
     id: row.id,
     name: (row.title ?? '').trim() || row.originalName,
@@ -108,6 +166,8 @@ export function toPortalDocument(row: PortalLinkedFileRow, bookingId: string | n
     kind: kindLabel(row.mimeType),
     sizeBytes: row.size,
     uploadedAt: row.createdAt.toISOString(),
+    viewable: view !== null,
+    viewKind: view?.kind ?? null,
     dealId: row.dealId,
     bookingId,
   };

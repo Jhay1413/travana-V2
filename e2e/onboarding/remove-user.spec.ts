@@ -1,3 +1,4 @@
+import { chooseOption } from "../helpers/ui";
 import type { APIRequestContext } from "@playwright/test";
 import { expect, expectLoginOk, expectToast, loginViaApi, test } from "../helpers/fixtures";
 import { INVITE_PASSWORD, inviteAndAccept, inviteViaApi } from "../helpers/flows";
@@ -56,8 +57,7 @@ test.describe("remove a team member", () => {
 
     // Remove stays disabled until the word is typed.
     await expect(page.getByTestId("button-confirm-remove")).toBeDisabled();
-    await dialog.getByRole("combobox", { name: "New owner" }).click();
-    await page.getByRole("option", { name: /Hana Heir/ }).click();
+    await chooseOption(page, dialog.getByRole("combobox", { name: "New owner" }), /Hana Heir/);
     await page.getByTestId("input-remove-confirm").fill("REMOVE");
     await page.getByTestId("button-confirm-remove").click();
 

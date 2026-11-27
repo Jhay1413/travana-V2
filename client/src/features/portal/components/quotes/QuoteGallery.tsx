@@ -36,7 +36,7 @@ export function QuotePhotoStrip({
   const extra = images.length - shown.length;
   return (
     <section aria-label="Photos" className="mx-auto flex max-w-3xl flex-col gap-3.5 pt-7" data-testid="quote-photos">
-      <div className="flex gap-2 overflow-x-auto px-6 [scrollbar-width:none]">
+      <div data-scroll-rail className="flex gap-2 overflow-x-auto px-6 [scrollbar-width:none]">
         {shown.map((img, i) => {
           const last = i === shown.length - 1 && extra > 0;
           return (
@@ -267,7 +267,7 @@ function PhotoViewer({
         <div className="text-[10px] uppercase tracking-[0.3em] text-accent">{title}</div>
       </div>
 
-      <div ref={stripRef} className="flex gap-1.5 overflow-x-auto px-6 pt-4 [scrollbar-width:none]">
+      <div ref={stripRef} data-scroll-rail className="flex gap-1.5 overflow-x-auto px-6 pt-4 [scrollbar-width:none]">
         {images.map((img, i) => {
           const on = i === index;
           return (

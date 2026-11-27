@@ -1,11 +1,18 @@
 import type { PortalDocument } from '@shared/portal-documents';
 import { AppError } from '../../utils/error-handler';
 import { clientFileService, PRESIGNED_URL_EXPIRES_IN } from '../client/client-file.service';
-import { attachmentDisposition, isUuid, safeContentType, sanitiseFileName, toPortalDocument } from './portal-documents.mapper';
+import { attachmentDisposition, isUuid, matchesSignature, safeContentType, sanitiseFileName, toPortalDocument, viewTypeFor } from './portal-documents.mapper';
 import { portalDocumentsRepository } from './portal-documents.repository';
-import type { PortalDownload, PortalLinkedFileRow } from './portal-documents.types';
+import type { PortalDownload, PortalLinkedFileRow, PortalViewStream } from './portal-documents.types';
 
 const NOT_FOUND_MESSAGE = 'Document not found';
+
+/** The largest file the in-app viewer will relay; anything bigger is download-only. */
+export const MAX_VIEW_BYTES = 25 * 1024 * 1024;
+/** Enough leading bytes to recognise every signature the viewer accepts. */
+const SIGNATURE_BYTES = 16;
+const TOO_LARGE_MESSAGE = 'This file is too large to preview. Please download it.';
+const NOT_VIEWABLE_MESSAGE = "This document can't be previewed. Please download it.";
 
 interface VisibleFile {
   file: PortalLinkedFileRow;
@@ -81,5 +88,36 @@ export const portalDocumentsService = {
       return { kind: 'link', url: target.url, fileName, expiresInSeconds: PRESIGNED_URL_EXPIRES_IN };
     }
     return { kind: 'stream', filePath: target.filePath, fileName, contentType, contentDisposition };
+  },
+
+  /**
+   * Opens one of the customer's own files for in-app viewing. Same visibility rule and same 404 as the download. Only a
+   * PDF or common image whose stored type and extension agree, whose first bytes really are that type, and which is
+   * within the size ceiling is relayed. The caller must pipe (or destroy) the returned stream.
+   */
+  async getView(clientId: string, fileId: string, signal?: AbortSignal): Promise<PortalViewStream> {
+    if (!isUuid(fileId)) throw new AppError(NOT_FOUND_MESSAGE, 404);
+    const [match] = await loadVisible(clientId, fileId);
+    if (!match) throw new AppError(NOT_FOUND_MESSAGE, 404);
+    const { file } = match;
+
+    const view = viewTypeFor(file.mimeType, file.originalName);
+    if (!view) throw new AppError(NOT_VIEWABLE_MESSAGE, 415);
+    if (file.size > MAX_VIEW_BYTES) throw new AppError(TOO_LARGE_MESSAGE, 413);
+
+    const gone = <T>(run: Promise<T>): Promise<T> =>
+      run.catch((err: unknown) => {
+        if (err instanceof AppError && err.statusCode === 404) throw new AppError(NOT_FOUND_MESSAGE, 404);
+        throw err;
+      });
+
+    const { head, size } = await gone(clientFileService.readObjectHead(file, SIGNATURE_BYTES));
+    if (size > MAX_VIEW_BYTES) throw new AppError(TOO_LARGE_MESSAGE, 413);
+    if (!matchesSignature(view.contentType, head)) throw new AppError(NOT_VIEWABLE_MESSAGE, 415);
+
+    const opened = await gone(clientFileService.openObjectStream(file, signal));
+    // Ids only: never the file name or any storage location.
+    console.info(`[portal] document view client=${clientId} file=${file.id}`);
+    return { stream: opened.stream, contentType: view.contentType, fileName: sanitiseFileName(file.originalName), size: opened.size };
   },
 };

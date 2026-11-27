@@ -26,7 +26,7 @@ export function QuotesView() {
           <em className="italic">for you.</em>
         </h1>
         {!isLoading && !isError && active.length > 0 && (
-          <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/[0.78]" data-testid="quotes-count">
+          <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/[0.78] [overflow-wrap:anywhere]" data-testid="quotes-count">
             {active.length} {active.length === 1 ? "holiday" : "holidays"} {agent === "your agent" ? "your agent has" : `${agent} has`} prepared for you. Choose one to see every photo and detail.
           </p>
         )}
@@ -47,8 +47,10 @@ export function QuotesView() {
           <QuotesEmpty agent={agent} />
         ) : (
           <>
+            {/* The list sets its columns explicitly: an implicit grid column is as wide as its widest unbreakable
+                content, which pushed cards with a long place + operator line past the right edge on phones. */}
             {active.length > 0 ? (
-              <div className="grid gap-x-8 md:grid-cols-2" data-testid="quotes-list">
+              <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2" data-testid="quotes-list">
                 {active.map((q, i) => (
                   <QuoteCard key={q.id} quote={q} index={i} agent={agent} />
                 ))}
@@ -110,7 +112,7 @@ function QuoteCard({ quote: q, index, agent }: { quote: PortalQuoteListItem; ind
       type="button"
       onClick={() => setLocation(q.quote_url)}
       aria-label={`View ${title}, ${dates}, ${formatMoney(q.price)}`}
-      className="group flex w-full flex-col gap-3.5 border-b border-border pb-9 pt-8 text-left"
+      className="group flex w-full min-w-0 flex-col gap-3.5 border-b border-border pb-9 pt-8 text-left"
       data-testid={`quote-card-${q.id}`}
     >
       <span className="flex w-full items-baseline justify-between px-1">
@@ -128,10 +130,11 @@ function QuoteCard({ quote: q, index, agent }: { quote: PortalQuoteListItem; ind
         )}
       </span>
       <span className="flex w-full justify-between gap-3 px-1 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-        <span className="min-w-0 truncate">{q.destination}</span>
-        {q.operator_name && <span className="min-w-0 truncate" data-testid={`quote-operator-${q.id}`}>{q.operator_name}</span>}
+        {/* Long names wrap onto a second line instead of being cut off or widening the card. */}
+        <span className="min-w-0 [overflow-wrap:anywhere]">{q.destination}</span>
+        {q.operator_name && <span className="min-w-0 text-right [overflow-wrap:anywhere]" data-testid={`quote-operator-${q.id}`}>{q.operator_name}</span>}
       </span>
-      <span className="portal-serif break-words px-1 text-[30px] leading-[1.12] text-primary" data-testid={`quote-title-${q.id}`}>
+      <span className="portal-serif [overflow-wrap:anywhere] px-1 text-[30px] leading-[1.12] text-primary" data-testid={`quote-title-${q.id}`}>
         {lead}
         {italic && (
           <>
@@ -145,13 +148,13 @@ function QuoteCard({ quote: q, index, agent }: { quote: PortalQuoteListItem; ind
         <span className="text-sm leading-[1.6] text-muted-foreground">{factsLine(q.nights, q.board, pax)}</span>
       </span>
       <span className="flex w-full items-end justify-between gap-3 px-1 pt-1">
-        <span className="flex flex-col gap-0.5">
+        <span className="flex min-w-0 flex-col gap-0.5">
           <span className="portal-serif text-[34px] leading-none portal-text-ink" data-testid={`quote-price-${q.id}`}>
             {formatMoney(q.price)}
           </span>
           {q.price_per_person > 0 && <span className="text-[13px] text-muted-foreground">{formatMoney(q.price_per_person)} per person</span>}
         </span>
-        <span className="pb-1 text-xs font-normal uppercase tracking-[0.28em] text-primary group-hover:text-[hsl(var(--portal-amber-ink))]">View →</span>
+        <span className="flex-none whitespace-nowrap pb-1 text-xs font-normal uppercase tracking-[0.28em] text-primary group-hover:text-[hsl(var(--portal-amber-ink))]">View →</span>
       </span>
       {interested ? (
         <span className="portal-serif px-1 text-base italic portal-text-amber-ink" data-testid={`quote-status-${q.id}`}>
@@ -191,7 +194,7 @@ function DeclinedRow({ quote: q }: { quote: PortalQuoteListItem }) {
         <span aria-hidden className="size-16 flex-none bg-secondary" />
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-        <span className="portal-serif break-words text-[19px] leading-[1.2] text-muted-foreground">{q.title}</span>
+        <span className="portal-serif [overflow-wrap:anywhere] text-[19px] leading-[1.2] text-muted-foreground">{q.title}</span>
         <span className="text-xs text-muted-foreground">{q.decision.reason || "No reason given"}</span>
         {undo.isError && (
           <span role="alert" className="portal-text-danger text-[13px]">

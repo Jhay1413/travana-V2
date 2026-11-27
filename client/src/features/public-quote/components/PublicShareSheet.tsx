@@ -66,7 +66,7 @@ export function PublicShareSheet({
       <div className="flex flex-col gap-[22px]">
         <div className="flex items-center gap-3.5 border border-border bg-card p-3.5">
           {imageUrl && <img src={imageUrl} alt="" className="size-[88px] flex-none object-cover" />}
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-1 [overflow-wrap:anywhere]">
             <span className="portal-serif text-[19px] leading-[1.2] text-primary">{title}</span>
             {dates && <span className="text-[13px] text-muted-foreground">{dates}</span>}
             {total && <span className="portal-serif text-[19px] portal-text-ink">{total}</span>}

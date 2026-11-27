@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { PortalDocument, PortalDocumentDownloadLink } from "@shared/portal-documents";
 import { clearPortalToken, getPortalToken, portalFetch, PortalApiError } from "@/hooks/use-portal-api";
+import { DocumentViewError, viewErrorKindForStatus } from "../lib/document-viewer";
 import { PORTAL_ENDPOINTS } from "./portal-endpoints";
 
 /** Under the "portal" namespace, so signing out (which clears every ["portal", ...] query) clears these too. */
@@ -99,5 +100,34 @@ export async function downloadDocument(
     start(objectUrl, fileNameFromDisposition(res.headers.get("content-disposition"), fallbackName));
   } finally {
     setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  }
+}
+
+/**
+ * Fetches one viewable document's bytes for in-app viewing, with the portal token in the Authorization header (a plain
+ * `<img src>` or `<iframe>` cannot send it). The Blob is returned to the caller, which owns it: nothing is cached in
+ * React Query or any storage. Rejects with a DocumentViewError whose `kind` says what to show; a 401 clears the session
+ * and sends the customer to sign in, like `downloadDocument`.
+ */
+export async function viewDocument(id: string, signal?: AbortSignal): Promise<Blob> {
+  const token = getPortalToken();
+  let res: Response;
+  try {
+    res = await fetch(PORTAL_ENDPOINTS.documentView(id), { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal });
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    throw new DocumentViewError("failed");
+  }
+  if (res.status === 401) {
+    clearPortalToken();
+    window.location.href = "/portal/login";
+    throw new DocumentViewError("failed", "Session expired");
+  }
+  if (!res.ok) throw new DocumentViewError(viewErrorKindForStatus(res.status));
+  try {
+    return await res.blob();
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    throw new DocumentViewError("failed");
   }
 }

@@ -40,13 +40,13 @@ function TravellerBlock({ passenger, index, agent, onScan }: { passenger: Portal
   return (
     <div className="flex flex-col gap-4 border-t border-white/[0.18] py-6" data-testid={`passenger-${passenger.id}`}>
       <div className="flex items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <span className="text-[10px] uppercase tracking-[0.24em] text-white/60">{travellerLabel(index)}</span>
-          <span className="portal-serif text-[26px] leading-[1.1]" data-testid="passenger-name">
+          <span className="portal-serif text-[26px] leading-[1.1] [overflow-wrap:anywhere]" data-testid="passenger-name">
             {name}
           </span>
         </div>
-        <span className={cn("whitespace-nowrap pb-1 text-[10px] uppercase tracking-[0.22em]", STATUS_CLASS[status.tone])} data-testid="passenger-status">
+        <span className={cn("flex-none whitespace-nowrap pb-1 text-[10px] uppercase tracking-[0.22em]", STATUS_CLASS[status.tone])} data-testid="passenger-status">
           {status.label}
         </span>
       </div>

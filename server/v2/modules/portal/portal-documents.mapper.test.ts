@@ -108,7 +108,7 @@ describe("toPortalDocument", () => {
 
   it("exposes exactly the allowlisted keys", () => {
     expect(Object.keys(toPortalDocument(row, null)).sort()).toEqual(
-      ["bookingId", "category", "dealId", "id", "kind", "name", "sizeBytes", "uploadedAt"].sort(),
+      ["bookingId", "category", "dealId", "id", "kind", "name", "sizeBytes", "uploadedAt", "viewKind", "viewable"].sort(),
     );
   });
   it("falls back to the original name when the title is blank, and uses the title when set", () => {
@@ -123,6 +123,8 @@ describe("toPortalDocument", () => {
       kind: "PDF",
       sizeBytes: 1234,
       uploadedAt: "2026-11-20T10:00:00.000Z",
+      viewable: true,
+      viewKind: "pdf",
       dealId: "d1",
       bookingId: "b9",
     });

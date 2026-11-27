@@ -1,3 +1,4 @@
+import { chooseOption } from "./ui";
 import type { Page } from "@playwright/test";
 import { expect } from "./fixtures";
 import { uniqueEmail } from "./seed";
@@ -73,8 +74,7 @@ export async function fillPerson(page: Page, n: number, person: PersonInput): Pr
 
 /** Picks an option in a Radix select by its accessible name. */
 export async function choose(page: Page, selectName: string, optionName: string): Promise<void> {
-  await page.getByRole("combobox", { name: selectName }).click();
-  await page.getByRole("option", { name: optionName, exact: true }).click();
+  await chooseOption(page, page.getByRole("combobox", { name: selectName }), optionName);
 }
 
 export function csvBuffer(text: string): Buffer {

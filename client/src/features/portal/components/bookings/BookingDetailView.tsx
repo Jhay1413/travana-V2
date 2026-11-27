@@ -201,7 +201,7 @@ function BookingBody({ booking: b, children }: { booking: PortalBookingDetail; c
           )}
           <div className="min-w-0 flex-1">
             <p className="portal-caps-label">Your travel agent</p>
-            <p className="portal-serif text-[24px] leading-[1.2] text-primary" data-testid="booking-agent-name">
+            <p className="portal-serif text-[24px] leading-[1.2] text-primary [overflow-wrap:anywhere]" data-testid="booking-agent-name">
               {b.agent.name}
             </p>
             {branding.phone && (

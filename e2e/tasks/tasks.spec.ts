@@ -396,8 +396,7 @@ test.describe("reassigning", () => {
     await openDashboard(page);
     await page.getByTestId(`button-edit-dashboard-task-${t.id}`).click();
     const dialog = page.getByTestId("dialog-edit-task");
-    await dialog.getByTestId("select-edit-task-assign-to").click();
-    await page.getByRole("option", { name: /Bea Agentb/ }).click();
+    await chooseOption(page, dialog.getByTestId("select-edit-task-assign-to"), /Bea Agentb/);
     await dialog.getByTestId("button-confirm-edit-task").click();
     await expectToast(page, "Task updated");
     expect((await dbTask(t.id)).user_id).toBe(w.agentB.id);

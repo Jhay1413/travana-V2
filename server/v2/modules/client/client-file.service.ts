@@ -2,6 +2,7 @@ import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sd
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import path from "path";
 import fs from "fs";
+import { Readable } from "stream";
 import { s3Client, S3_BUCKET } from "../../config/s3";
 import { clientFileRepository, type ClientFileWithUploader } from "./client-file.repository";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
@@ -51,6 +52,26 @@ function isS3Key(filename: string): boolean {
 export type DownloadTarget =
   | { kind: "s3"; url: string }
   | { kind: "local"; filePath: string; originalName: string; mimeType: string };
+
+/** The first bytes of a stored object and its full size, for sniffing a type before anything is streamed. */
+export interface ObjectHead {
+  head: Buffer;
+  size: number;
+}
+
+/** A stored object opened for reading. `size` is the exact byte length when the store reported it. */
+export interface ObjectStream {
+  stream: Readable;
+  size: number | null;
+}
+
+const NOT_FOUND_ON_STORE = new Set(["NoSuchKey", "NotFound", "NoSuchBucket"]);
+
+function isNotFound(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const named = err as { name?: unknown; $metadata?: { httpStatusCode?: number } };
+  return (typeof named.name === "string" && NOT_FOUND_ON_STORE.has(named.name)) || named.$metadata?.httpStatusCode === 404;
+}
 
 // Out-of-scope clients and files read as 404 so existence is never leaked
 // across tenants.
@@ -161,6 +182,70 @@ export const clientFileService = {
       throw new AppError("File not found on disk", 404);
     }
     return { kind: "local", filePath, originalName: file.originalName, mimeType: file.mimeType };
+  },
+
+  /**
+   * The first `bytes` bytes of an already-authorised file plus its total size (a ranged read for object storage, a
+   * short read for a legacy disk file). 404 when the object or file is gone. The caller does the access check.
+   */
+  async readObjectHead(file: Pick<ClientFile, "filename">, bytes: number): Promise<ObjectHead> {
+    if (isS3Key(file.filename)) {
+      try {
+        const res = await s3Client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: file.filename, Range: `bytes=0-${bytes - 1}` }));
+        const head = res.Body ? Buffer.from(await res.Body.transformToByteArray()) : Buffer.alloc(0);
+        const total = /\/(\d+)$/.exec(res.ContentRange ?? "");
+        return { head, size: total ? Number(total[1]) : (res.ContentLength ?? head.length) };
+      } catch (err) {
+        if (isNotFound(err)) throw new AppError("File not found", 404);
+        // A zero-byte object cannot satisfy a range: it is simply empty.
+        if (typeof err === "object" && err !== null && (err as { name?: unknown }).name === "InvalidRange") {
+          return { head: Buffer.alloc(0), size: 0 };
+        }
+        throw err;
+      }
+    }
+    const filePath = resolveLocalUploadPath(file.filename);
+    if (!filePath) throw new AppError("File not found on disk", 404);
+    let handle: fs.promises.FileHandle;
+    try {
+      handle = await fs.promises.open(filePath, "r");
+    } catch {
+      throw new AppError("File not found on disk", 404);
+    }
+    try {
+      const { size } = await handle.stat();
+      const buffer = Buffer.alloc(Math.min(bytes, size));
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+      return { head: buffer.subarray(0, bytesRead), size };
+    } finally {
+      await handle.close();
+    }
+  },
+
+  /**
+   * Opens an already-authorised file as a byte stream for the server to relay (no signed URL leaves the server). The
+   * caller owns the stream: it must be piped or destroyed. Aborting `signal` cancels the upstream read.
+   */
+  async openObjectStream(file: Pick<ClientFile, "filename">, signal?: AbortSignal): Promise<ObjectStream> {
+    if (isS3Key(file.filename)) {
+      try {
+        const res = await s3Client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: file.filename }), { abortSignal: signal });
+        if (!(res.Body instanceof Readable)) throw new Error("Object storage returned a body that cannot be streamed");
+        return { stream: res.Body, size: res.ContentLength ?? null };
+      } catch (err) {
+        if (isNotFound(err)) throw new AppError("File not found", 404);
+        throw err;
+      }
+    }
+    const filePath = resolveLocalUploadPath(file.filename);
+    if (!filePath) throw new AppError("File not found on disk", 404);
+    let size: number;
+    try {
+      size = (await fs.promises.stat(filePath)).size;
+    } catch {
+      throw new AppError("File not found on disk", 404);
+    }
+    return { stream: fs.createReadStream(filePath), size };
   },
 
   async delete(id: string, scope: Scope): Promise<void> {

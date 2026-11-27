@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { portalDocumentDownloadValidator, portalDocumentListValidator } from "./portal-documents.validator";
+import { portalDocumentDownloadValidator, portalDocumentListValidator, portalDocumentViewValidator } from "./portal-documents.validator";
 
 describe("portalDocumentListValidator", () => {
   it("accepts no filter or a uuid", () => {
@@ -17,5 +17,13 @@ describe("portalDocumentDownloadValidator", () => {
     expect(portalDocumentDownloadValidator.safeParse({ params: { id: "anything" } }).success).toBe(true);
     expect(portalDocumentDownloadValidator.safeParse({ params: { id: "" } }).success).toBe(false);
     expect(portalDocumentDownloadValidator.safeParse({ params: { id: "x".repeat(101) } }).success).toBe(false);
+  });
+});
+
+describe("portalDocumentViewValidator", () => {
+  it("bounds the id exactly like the download (format is the service's 404)", () => {
+    expect(portalDocumentViewValidator.safeParse({ params: { id: "anything" } }).success).toBe(true);
+    expect(portalDocumentViewValidator.safeParse({ params: { id: "" } }).success).toBe(false);
+    expect(portalDocumentViewValidator.safeParse({ params: { id: "x".repeat(101) } }).success).toBe(false);
   });
 });

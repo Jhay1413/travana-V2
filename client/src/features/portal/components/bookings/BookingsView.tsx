@@ -92,7 +92,7 @@ function BookingsHero({ line, lineTestId }: { line?: string; lineTestId?: string
         <em className="italic">looking forward.</em>
       </h1>
       {line && (
-        <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/[0.78]" data-testid={lineTestId}>
+        <p className="max-w-[290px] text-[15px] leading-[1.7] text-white/[0.78] [overflow-wrap:anywhere]" data-testid={lineTestId}>
           {line}
         </p>
       )}

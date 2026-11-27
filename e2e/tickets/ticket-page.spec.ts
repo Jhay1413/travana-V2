@@ -44,8 +44,7 @@ test.describe("the four fields", () => {
     await expect.poll(async () => (await dbTicket(t.id)).status).toBe("In Progress");
     await expect(page.getByTestId("ticket-status-select")).toContainText("In Progress");
 
-    await page.getByTestId("ticket-priority-select").click();
-    await page.getByRole("option", { name: "Urgent", exact: true }).click();
+    await chooseOption(page, page.getByTestId("ticket-priority-select"), "Urgent");
     await expect.poll(async () => (await dbTicket(t.id)).priority).toBe("Urgent");
     await expect(page.getByTestId("ticket-priority-select")).toContainText("Urgent");
 

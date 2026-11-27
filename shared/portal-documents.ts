@@ -1,5 +1,8 @@
 /** What the customer portal's "My documents" endpoints return (shared so the client and the server cannot drift). */
 
+/** What the in-app viewer can show: a PDF (rendered page by page) or a picture. */
+export type PortalDocumentViewKind = "pdf" | "image";
+
 /** One file the agency keeps on the customer's profile. Nothing else about the file is ever sent. */
 export interface PortalDocument {
   id: string;
@@ -12,6 +15,10 @@ export interface PortalDocument {
   sizeBytes: number;
   /** ISO timestamp. */
   uploadedAt: string;
+  /** True when the in-app viewer can show this file (stored type AND file extension agree on a PDF or common image). */
+  viewable: boolean;
+  /** What the viewer would show, or null when `viewable` is false. */
+  viewKind: PortalDocumentViewKind | null;
   /** The deal (enquiry, quote or booking) the agency linked the file to. Files not linked to a deal are never sent. */
   dealId: string;
   /** The deal's live booking, whichever of the three the file was linked to; null while the deal has no booking yet. */

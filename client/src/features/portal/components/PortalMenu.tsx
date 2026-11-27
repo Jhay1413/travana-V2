@@ -88,9 +88,9 @@ export function PortalMenu({
                   <span className="portal-serif w-[30px] flex-none text-xl text-accent" aria-hidden>
                     {toRoman(i + 1)}
                   </span>
-                  <span className={cn("portal-serif min-w-0 flex-1 break-words text-[38px] font-light leading-[1.1]", current && "italic")}>{it.label}</span>
+                  <span className={cn("portal-serif min-w-0 flex-1 text-[38px] [overflow-wrap:anywhere] font-light leading-[1.1]", current && "italic")}>{it.label}</span>
                   {it.count && (
-                    <span className="text-xs uppercase tracking-[0.2em] text-white/60" data-testid={`menu-count-${it.key}`}>
+                    <span className="flex-none text-xs uppercase tracking-[0.2em] text-white/60" data-testid={`menu-count-${it.key}`}>
                       {it.count}
                     </span>
                   )}

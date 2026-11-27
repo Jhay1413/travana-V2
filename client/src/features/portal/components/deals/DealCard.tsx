@@ -23,7 +23,7 @@ export function DealCard({ deal, interests, agent, told, onTold }: { deal: Porta
         {deal.image_url && <img src={deal.image_url} alt="" loading="lazy" className="size-full object-cover" data-testid={`img-deal-${deal.id}`} />}
       </div>
       <div className="flex items-baseline justify-between gap-2.5">
-        <span className="min-w-0 truncate text-[11px] uppercase tracking-[0.2em] text-muted-foreground" data-testid={`tag-deal-${deal.id}`}>
+        <span className="min-w-0 text-[11px] [overflow-wrap:anywhere] uppercase tracking-[0.2em] text-muted-foreground" data-testid={`tag-deal-${deal.id}`}>
           {tag}
         </span>
         {expiring && (

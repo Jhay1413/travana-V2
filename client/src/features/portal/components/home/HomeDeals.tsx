@@ -115,7 +115,7 @@ function DealCard({ deal, interests, agent, told }: { deal: PortalDeal; interest
         {deal.image_url && <img src={deal.image_url} alt="" loading="lazy" className="size-full object-cover" />}
       </div>
       <div className="flex items-baseline justify-between gap-2.5">
-        <span className="min-w-0 truncate text-[11px] uppercase tracking-[0.2em] text-muted-foreground" data-testid={`home-deal-tag-${deal.id}`}>
+        <span className="min-w-0 text-[11px] [overflow-wrap:anywhere] uppercase tracking-[0.2em] text-muted-foreground" data-testid={`home-deal-tag-${deal.id}`}>
           {tag}
         </span>
         {expiring ? (
@@ -126,7 +126,7 @@ function DealCard({ deal, interests, agent, told }: { deal: PortalDeal; interest
           when && <span className="portal-serif flex-none text-[15px] italic text-muted-foreground">{when}</span>
         )}
       </div>
-      <h3 className="portal-serif break-words text-[24px] font-normal leading-[1.15] text-primary">{deal.title}</h3>
+      <h3 className="portal-serif [overflow-wrap:anywhere] text-[24px] font-normal leading-[1.15] text-primary">{deal.title}</h3>
       <p className="text-sm leading-[1.6] text-muted-foreground">
         {deal.destination}
         {detail && (

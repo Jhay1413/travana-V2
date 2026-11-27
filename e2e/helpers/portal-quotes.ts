@@ -177,3 +177,39 @@ export async function portalMessageTexts(clientId: string): Promise<string[]> {
   const rows = await queryRows<{ text: string }>(`select text from portal_messages where client_id = $1 and sender = 'client' order by created_at`, [clientId]);
   return rows.map((r) => r.text);
 }
+
+/**
+ * Deliberately long, realistic values for the layout specs. The default seed names are short ("Majorca, Spain",
+ * "E2E Sun Holidays") and the test browser draws fallback fonts, so a card that only breaks with a long place, a long
+ * operator or a long unbroken name would pass. These are written to NEW reference rows (never the shared ones).
+ */
+export const LONG_NAMES = {
+  destination: "Amsterdam, Netherlands and the Dutch Coast",
+  country: "The Netherlands and Belgium Region",
+  operator: "easyJet Holidays International",
+  /** 60 characters. */
+  hotel: "The Grand Imperial Riverside Resort and Spa Amsterdam Centre",
+  /** 30 characters, no spaces. */
+  surname: "Abcdefghijklmnopqrstuvwxyz0123",
+  agent: "Bartholomew-Maximilian-Alexander",
+  agency: "The Very Long Named Holiday Company of Great Britain Limited",
+  file: `${"VeryLongFileName".repeat(8)}.pdf`,
+} as const;
+
+/** Points a quote's and/or booking's primary hotel, destination, country and operator at the long names above. Needs the seeded itinerary. */
+export async function giveLongNames(target: { quoteId?: string; bookingId?: string }): Promise<void> {
+  const [country] = await queryRows<{ id: string }>(`insert into country_table (country_name) values ($1) returning id`, [`${LONG_NAMES.country} ${unique("c")}`]);
+  const [dest] = await queryRows<{ id: string }>(`insert into destination_table (name, country_id) values ($1, $2) returning id`, [LONG_NAMES.destination, country.id]);
+  const [resort] = await queryRows<{ id: string }>(`insert into resorts_table (name, destination_id) values ($1, $2) returning id`, [`Resort ${unique("r")}`, dest.id]);
+  const [hotel] = await queryRows<{ id: string }>(`insert into accomodation_list_table (name, resorts_id) values ($1, $2) returning id`, [LONG_NAMES.hotel, resort.id]);
+  await queryRows(`insert into tour_operator_table (name) values ($1) on conflict do nothing`, [LONG_NAMES.operator]);
+  const [operator] = await queryRows<{ id: string }>(`select id from tour_operator_table where lower(name) = lower($1)`, [LONG_NAMES.operator]);
+  if (target.quoteId) {
+    await queryRows(`update quote_accomodation set accomodation_id = $2 where quote_id = $1 and is_primary = true`, [target.quoteId, hotel.id]);
+    await queryRows(`update quote_table set main_tour_operator_id = $2 where id = $1`, [target.quoteId, operator.id]);
+  }
+  if (target.bookingId) {
+    await queryRows(`update booking_accomodation set accomodation_id = $2 where booking_id = $1 and is_primary = true`, [target.bookingId, hotel.id]);
+    await queryRows(`update booking_table set main_tour_operator_id = $2 where id = $1`, [target.bookingId, operator.id]);
+  }
+}

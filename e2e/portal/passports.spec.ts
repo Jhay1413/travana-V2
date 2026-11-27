@@ -301,6 +301,7 @@ test.describe("customer portal: passports", () => {
     const { trip, emmaId } = await fixture(page);
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto(`/portal/booking/${trip.id}`);
+    await expect(page.getByTestId(`passenger-add-${emmaId}`)).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     await page.getByTestId(`passenger-add-${emmaId}`).click();
     const upload = await page.getByText("Upload a photo instead").boundingBox();
@@ -308,5 +309,27 @@ test.describe("customer portal: passports", () => {
     const typeIn = await page.getByTestId("scanner-type-instead").boundingBox();
     expect(typeIn?.height ?? 0).toBeGreaterThanOrEqual(43.5);
     expect(await scanner(page).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  });
+
+  test("very long unbroken names wrap inside the Passports band at 360px and 320px: the status label keeps its size and nothing scrolls sideways", async ({ page }) => {
+    const { q, trip } = await fixture(page);
+    const long = "Abcdefghijklmnopqrstuvwxyz0123";
+    await queryRows(`update client_table set "firstName" = $2, surename = $3 where id = $1`, [q.portal.clientId, long, long]);
+    await seedPortalPassenger(q.portal.clientId, { firstName: long, surname: long, dateOfBirth: "1990-03-03", passportNumber: "548193027", passportExpiry: "2035-02-09" });
+    await seedPortalPassenger(q.portal.clientId, { firstName: long, surname: long, dateOfBirth: "1991-03-03" });
+    for (const width of [360, 320]) {
+      await page.setViewportSize({ width, height: 740 });
+      await page.goto(`/portal/booking/${trip.id}`);
+      await expect(page.getByTestId("passenger-name")).toHaveCount(4);
+      await expect(page.getByTestId("passenger-status")).toHaveCount(4);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth), `page width at ${width}px`).toBeLessThanOrEqual(width);
+      const statuses = page.getByTestId("passenger-status");
+      for (let i = 0; i < 4; i += 1) {
+        const box = await statuses.nth(i).boundingBox();
+        expect((box?.x ?? 0) + (box?.width ?? 0), `status ${i} stays inside the screen at ${width}px`).toBeLessThanOrEqual(width + 0.5);
+        // "✓ ADDED" / "NEEDED" stay on one line.
+        expect(box?.height ?? 99, `status ${i} is one line`).toBeLessThan(24);
+      }
+    }
   });
 });

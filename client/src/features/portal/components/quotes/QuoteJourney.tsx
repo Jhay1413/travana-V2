@@ -13,12 +13,12 @@ export function QuoteJourney({ items }: { items: JourneyItem[] }) {
           </span>
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <span className="portal-caps-label">{s.kicker}</span>
-            <span className="portal-serif break-words text-[23px] font-medium leading-[1.2] text-primary">{s.title}</span>
+            <span className="portal-serif [overflow-wrap:anywhere] text-[23px] font-medium leading-[1.2] text-primary">{s.title}</span>
             {s.flight && (s.flight.dep || s.flight.arr) && (
               <div className="my-1 flex items-center gap-3">
                 <span className="flex min-w-0 flex-col">
                   <span className="portal-serif text-[30px] leading-none portal-text-ink">{s.flight.dep || "–"}</span>
-                  <span className="mt-1 truncate text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{s.flight.from}</span>
+                  <span className="mt-1 text-[11px] [overflow-wrap:anywhere] uppercase tracking-[0.2em] text-muted-foreground">{s.flight.from}</span>
                 </span>
                 <span aria-hidden className="h-px min-w-6 flex-1 bg-border" />
                 <span className="flex min-w-0 flex-col text-right">
@@ -26,7 +26,7 @@ export function QuoteJourney({ items }: { items: JourneyItem[] }) {
                     {s.flight.arr || "–"}
                     {s.flight.nextDay ? " +1" : ""}
                   </span>
-                  <span className="mt-1 truncate text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{s.flight.to}</span>
+                  <span className="mt-1 text-[11px] [overflow-wrap:anywhere] uppercase tracking-[0.2em] text-muted-foreground">{s.flight.to}</span>
                 </span>
               </div>
             )}

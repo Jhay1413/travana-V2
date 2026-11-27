@@ -57,7 +57,7 @@ function Row({
 }) {
   const body = (
     <>
-      <span className="flex min-w-0 flex-1 flex-col gap-1 text-left">
+      <span className="flex min-w-0 flex-1 flex-col gap-1 text-left [overflow-wrap:anywhere]">
         <span className="portal-serif text-[22px] font-medium leading-tight text-primary">{title}</span>
         {description && <span className="text-[14px] leading-snug text-muted-foreground">{description}</span>}
       </span>

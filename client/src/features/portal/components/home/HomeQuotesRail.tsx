@@ -41,7 +41,7 @@ function HomeQuoteCard({ quote: q }: { quote: PortalQuoteListItem }) {
       type="button"
       onClick={() => setLocation(q.quote_url)}
       aria-label={`View quote: ${title}, ${dates}, ${formatMoney(q.price)}`}
-      className="group flex w-[260px] flex-none snap-start flex-col gap-3.5 text-left"
+      className="group flex w-[260px] min-w-0 flex-none snap-start flex-col gap-3.5 text-left"
       data-testid={`home-quote-${q.id}`}
     >
       <span className="relative block h-[340px] w-[260px] overflow-hidden bg-[#0D2A4E]">
@@ -53,10 +53,10 @@ function HomeQuoteCard({ quote: q }: { quote: PortalQuoteListItem }) {
         )}
       </span>
       <span className="flex items-baseline justify-between gap-2.5 text-[11px] uppercase text-muted-foreground">
-        <span className="min-w-0 truncate tracking-[0.2em]">{q.destination}</span>
-        {q.operator_name && <span className="min-w-0 truncate tracking-[0.18em]">{q.operator_name}</span>}
+        <span className="min-w-0 tracking-[0.2em] [overflow-wrap:anywhere]">{q.destination}</span>
+        {q.operator_name && <span className="min-w-0 text-right tracking-[0.18em] [overflow-wrap:anywhere]">{q.operator_name}</span>}
       </span>
-      <span className="portal-serif break-words text-[24px] leading-[1.15] text-primary">{title}</span>
+      <span className="portal-serif [overflow-wrap:anywhere] text-[24px] leading-[1.15] text-primary">{title}</span>
       {dates && <span className="text-sm leading-[1.6] text-muted-foreground">{dates}</span>}
       <span className="portal-serif text-[24px] portal-text-ink">
         {formatMoney(q.price)}

@@ -1,3 +1,4 @@
+import { chooseOption } from "../helpers/ui";
 import type { Page } from "@playwright/test";
 import { expect, test } from "../helpers/fixtures";
 import { boardWorld, bookedDeal, card, cardIn, column, enquiryDeal, markLost, openBoard, parkFuture, quoteDeal, type BoardWorld } from "../helpers/pipeline";
@@ -288,8 +289,7 @@ test.describe("owner scope and sort", () => {
     await expect(cardIn(page, "Quoted", mine.transactionId)).toBeVisible();
     await expect(page.getByTestId("select-agent-filter")).toBeVisible();
 
-    await page.getByTestId("select-agent-filter").click();
-    await page.getByRole("option", { name: /Colin Colleague/ }).click();
+    await chooseOption(page, page.getByTestId("select-agent-filter"), /Colin Colleague/);
     await expect(cardIn(page, "Quoted", theirs.transactionId)).toBeVisible();
     await expect(card(page, mine.transactionId)).toHaveCount(0);
 
@@ -313,12 +313,10 @@ test.describe("owner scope and sort", () => {
     expect(initial).not.toEqual(["Zulu big", "Alpha mid", "Mike small"]);
     expect(initial).not.toEqual(["Alpha mid", "Mike small", "Zulu big"]);
 
-    await page.getByTestId("select-pipeline-sort").click();
-    await page.getByRole("option", { name: "Value, high to low" }).click();
+    await chooseOption(page, page.getByTestId("select-pipeline-sort"), /Value, high to low/);
     await expect.poll(order).toEqual(["Zulu big", "Alpha mid", "Mike small"]);
 
-    await page.getByTestId("select-pipeline-sort").click();
-    await page.getByRole("option", { name: "Deal name" }).click();
+    await chooseOption(page, page.getByTestId("select-pipeline-sort"), /Deal name/);
     await expect.poll(order).toEqual(["Alpha mid", "Mike small", "Zulu big"]);
   });
 });

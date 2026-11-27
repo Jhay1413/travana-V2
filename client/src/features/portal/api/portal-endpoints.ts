@@ -21,6 +21,8 @@ export const PORTAL_ENDPOINTS = {
   /** "My documents": the files on the customer's profile (optional `?bookingId=`), and one file's short-lived download link. */
   documents: "/api/v2/portal/documents",
   documentDownload: (id: string) => `/api/v2/portal/documents/${encodeURIComponent(id)}/download`,
+  /** The file's bytes for in-app viewing (PDF or image only), relayed by the server to the signed-in customer. */
+  documentView: (id: string) => `/api/v2/portal/documents/${encodeURIComponent(id)}/view`,
   /** Passengers and passports: list / add a passenger, save one's passport, and read a passport photo (multipart, field "photo"). */
   passengers: "/api/v2/portal/passengers",
   passengerPassport: (id: string) => `/api/v2/portal/passengers/${encodeURIComponent(id)}/passport`,
