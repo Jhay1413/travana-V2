@@ -30,6 +30,19 @@ export const pushSubscriptionRepository = {
       .where(and(eq(pushSubscriptions.clientId, clientId), eq(pushSubscriptions.endpoint, endpoint)));
   },
 
+  /** Deletes the one subscription whose endpoint AND both keys match. Anything less matches nothing. */
+  async removeByEndpointAndKeys(input: { endpoint: string; p256dh: string; auth: string }): Promise<void> {
+    await db
+      .delete(pushSubscriptions)
+      .where(
+        and(
+          eq(pushSubscriptions.endpoint, input.endpoint),
+          eq(pushSubscriptions.p256dh, input.p256dh),
+          eq(pushSubscriptions.auth, input.auth),
+        ),
+      );
+  },
+
   async removeById(id: string): Promise<void> {
     await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, id));
   },

@@ -218,6 +218,9 @@ export const portalPushSubscribeValidator = z.object({
   }),
 });
 
+/** The retired old worker has no session: it proves the subscription is its own by sending the endpoint and both keys. */
+export const portalPushRetireValidator = portalPushSubscribeValidator;
+
 export const portalPushUnsubscribeValidator = z.object({
   body: z.object({
     endpoint: required('Endpoint required', 2048),
@@ -266,5 +269,6 @@ export type PortalQuoteRequestBody = z.infer<typeof portalQuoteRequestValidator>
 export type PortalInterestBody = z.infer<typeof portalInterestValidator>['body'];
 export type PortalSetTagsBody = z.infer<typeof portalSetTagsValidator>['body'];
 export type PortalPushSubscribeBody = z.infer<typeof portalPushSubscribeValidator>['body'];
+export type PortalPushRetireBody = z.infer<typeof portalPushRetireValidator>['body'];
 export type PortalPushUnsubscribeBody = z.infer<typeof portalPushUnsubscribeValidator>['body'];
 export type PortalWithdrawBody = z.infer<typeof portalWithdrawValidator>['body'];

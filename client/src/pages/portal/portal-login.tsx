@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { usePortalLogin, setPortalToken, getPortalToken, usePortalBiometricLogin, portalMagicLogin, getPortalOrgSlug, hasLocalBiometric, clearLocalBiometric, registerPortalBiometric, setPortalOrgSlug } from "@/hooks/use-portal-api";
+import { usePortalLogin, setPortalToken, getPortalToken, usePortalBiometricLogin, portalMagicLogin, getPortalOrgSlug, hasLocalBiometric, clearLocalBiometric, isPlatformAuthenticatorAvailable, registerPortalBiometric, setPortalOrgSlug } from "@/hooks/use-portal-api";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { normalizeOrgSlug } from "@/lib/portal-org-slug";
+import { offerRegistrationAfterPin, showFaceIdOnLogin } from "@/features/portal/lib/face-id-affordance";
 import {
   AgencyMark,
   Eyebrow,
@@ -96,10 +97,21 @@ export default function PortalLoginPage() {
       };
     }
 
-    // Show the Face ID button only if this device remembers having set it up.
+    // Face ID: a device that remembers a set-up shows the button; one that does not shows it quietly when the browser says a
+    // built-in biometric exists (a passkey may have carried over when the portal moved to its own address).
     const savedEmail = localStorage.getItem("portal_email");
     if (savedEmail) setEmail(savedEmail);
-    if (hasLocalBiometric()) setShowBiometric(true);
+    const hasMarker = hasLocalBiometric();
+    if (hasMarker) setShowBiometric(true);
+    else {
+      let alive = true;
+      void isPlatformAuthenticatorAvailable().then((available) => {
+        if (alive && showFaceIdOnLogin({ hasMarker: false, hasWebAuthn: !!window.PublicKeyCredential, platformAuthenticatorAvailable: available })) setShowBiometric(true);
+      });
+      return () => {
+        alive = false;
+      };
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setLocation]);
 
@@ -122,7 +134,7 @@ export default function PortalLoginPage() {
         localStorage.setItem("portal_email", email);
 
         // Offer Face ID set-up only right after a PIN sign-in, and only when the server could actually check.
-        if (!result.hasBiometric && !result.biometricCheckFailed && "credentials" in navigator) {
+        if (offerRegistrationAfterPin({ hasBiometric: result.hasBiometric, biometricCheckFailed: !!result.biometricCheckFailed, credentialsApi: "credentials" in navigator })) {
           try {
             await registerPortalBiometric();
           } catch {}
@@ -137,6 +149,7 @@ export default function PortalLoginPage() {
 
   const handleBiometricLogin = async () => {
     setError("");
+    const hadMarker = hasLocalBiometric();
     try {
       const result = await biometricLogin.mutateAsync();
       if (result?.token) {
@@ -144,6 +157,8 @@ export default function PortalLoginPage() {
         setLocation(getRedirectTarget());
       }
     } catch (err) {
+      // A device with no remembered set-up was only trying: a cancelled or failed attempt goes back to the PIN form quietly.
+      if (!hadMarker) return;
       // A cancelled prompt keeps the button; a rejected or unusable credential is forgotten.
       if (!(err instanceof DOMException && err.name === "NotAllowedError")) clearLocalBiometric();
       setError("Biometric login failed. Please use your PIN.");

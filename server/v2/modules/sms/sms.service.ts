@@ -1,5 +1,5 @@
 import { smsRepository } from './sms.repository';
-import { getPublicBaseUrl } from '../../utils/public-url';
+import { portalUrl } from '../../utils/hosts';
 import { AppError } from '../../utils/error-handler';
 import { formatUkDate, placeholderBalanceDueDate } from '../../utils/balance-due';
 import { maskLoginCodes } from '../../utils/mask-login-code';
@@ -218,13 +218,23 @@ function formatDate(value: unknown): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function buildPortalLink(): string {
-  return `${getPublicBaseUrl()}/portal/login`;
+/** The customer portal sign-in page. Customer links use the portal host (the one host when there is only one). */
+export function buildPortalLink(): string {
+  return portalUrl('/portal/login');
 }
 
-function buildQuoteUrl(token: string): string {
-  // Portal quote view (requires portal login), not the public /view-quote page.
-  return `${getPublicBaseUrl()}/portal/quote/${token}`;
+/** Portal quote view (requires portal login), not the public /view-quote page. */
+export function buildQuoteUrl(token: string): string {
+  return portalUrl(`/portal/quote/${token}`);
+}
+
+/**
+ * Magic-login quote link: a short single-use code rides in the URL so tapping it logs the client straight into the
+ * portal and lands on their quote. The portal login page exchanges `?mt=` for a real session.
+ */
+export function buildMagicLoginQuoteUrl(code: string, token: string): string {
+  const next = encodeURIComponent(`/portal/quote/${token}`);
+  return portalUrl(`/portal/login?mt=${code}&next=${next}`);
 }
 
 /**
@@ -240,7 +250,7 @@ export function buildPublicQuoteUrl(token: string): string {
   // Public quote view — no login/PIN required; anyone with the link can view
   // the quote. Used when the sender explicitly shares the public link instead
   // of the portal one, so we never seed a PIN or magic-login token for it.
-  return `${getPublicBaseUrl()}/view-quote/${token}`;
+  return portalUrl(`/view-quote/${token}`);
 }
 
 /** Renders the public-link quote message for one client + quote token. */

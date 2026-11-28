@@ -151,6 +151,14 @@ export default function PortalAccountPage() {
     else setFaceIdNote({ kind: "error", text: result.message });
   };
 
+  const useFaceIdHere = async () => {
+    setFaceIdNote(null);
+    const result = await faceId.useHere();
+    if (result.status === "done") setFaceIdNote({ kind: "info", text: "Face ID is on for this device." });
+    else if (result.status === "cancelled") setFaceIdNote({ kind: "info", text: "That was cancelled. You can try again any time." });
+    else setFaceIdNote({ kind: "info", text: "We couldn't find your Face ID on this device. You can set it up here." });
+  };
+
   const removeThisDevice = async () => {
     setFaceIdNote(null);
     try {
@@ -191,7 +199,7 @@ export default function PortalAccountPage() {
 
   const pushToggleable = push.state === "on" || push.state === "off";
   const installed = typeof window !== "undefined" && window.matchMedia("(display-mode: standalone)").matches;
-  const faceIdSupported = typeof window !== "undefined" && !!window.PublicKeyCredential;
+  const faceIdSupported = faceId.affordance !== "unavailable";
 
   return (
     <PortalLayout tone="light">
@@ -233,9 +241,13 @@ export default function PortalAccountPage() {
             }
             aside={
               faceIdSupported ? (
-                faceId.enabled ? (
+                faceId.affordance === "on" ? (
                   <PortalButton variant="outline" size="sm" className="px-4" onClick={removeThisDevice} data-testid="button-face-id-remove">
                     Remove
+                  </PortalButton>
+                ) : faceId.affordance === "use-here" ? (
+                  <PortalButton variant="outline" size="sm" className="px-4" onClick={useFaceIdHere} disabled={faceId.pending} data-testid="button-face-id-use-here">
+                    {faceId.pending ? "Checking" : "Use Face ID on this device"}
                   </PortalButton>
                 ) : (
                   <PortalButton variant="outline" size="sm" className="px-4" onClick={setUpFaceId} disabled={faceId.pending} data-testid="button-face-id-setup">

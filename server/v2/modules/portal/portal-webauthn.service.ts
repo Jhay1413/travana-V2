@@ -127,7 +127,7 @@ export const portalWebauthnService = {
       verification = await verifyRegistrationResponse({
         response: input.response,
         expectedChallenge: claims.challenge,
-        expectedOrigin: rp.origin,
+        expectedOrigin: rp.origins ?? rp.origin,
         expectedRPID: rp.rpID,
         requireUserVerification: true,
       });
@@ -194,7 +194,7 @@ export const portalWebauthnService = {
       verification = await verifyAuthenticationResponse({
         response: input.response,
         expectedChallenge: claims.challenge,
-        expectedOrigin: rp.origin,
+        expectedOrigin: rp.origins ?? rp.origin,
         expectedRPID: rp.rpID,
         credential: {
           id: cred.credentialId,

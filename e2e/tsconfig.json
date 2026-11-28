@@ -1,7 +1,7 @@
 {
   "comment": "Type-check scope for the Playwright suite: npx tsc -p e2e/tsconfig.json. Not part of check:ci (tsconfig.ci.json does not include e2e/).",
   "extends": "../tsconfig.json",
-  "include": ["./**/*", "../playwright.config.ts"],
+  "include": ["./**/*", "../playwright.config.ts", "../playwright.hosts.config.ts"],
   "exclude": ["node_modules", "../node_modules"],
   "compilerOptions": {
     "incremental": false,

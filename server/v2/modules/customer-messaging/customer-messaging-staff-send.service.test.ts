@@ -492,3 +492,18 @@ describe("access rules", () => {
     await expect(send({ clientId: "c", purpose: "portal_sign_in", channel: "sms" }, scope({ orgId: "" }))).rejects.toMatchObject({ statusCode: 400 });
   });
 });
+
+describe("two hosts (PORTAL_BASE_URL set): the sign-in link is a customer link", () => {
+  it("is built on the portal host; with the setting unset it is the site address (pinned above)", async () => {
+    process.env.PORTAL_BASE_URL = "https://portal.app.example";
+    try {
+      const c = setup();
+      await send({ clientId: c.id, purpose: "portal_sign_in", channel: "sms" });
+      const body = vi.mocked(sendTrackedSms).mock.calls[0][0].body;
+      expect(body).toContain("https://portal.app.example/portal/login?mt=CODE&next=%2Fportal");
+      expect(body).not.toContain("https://app.example/portal");
+    } finally {
+      delete process.env.PORTAL_BASE_URL;
+    }
+  });
+});

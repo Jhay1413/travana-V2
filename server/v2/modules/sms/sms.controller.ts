@@ -15,13 +15,15 @@ import {
   attachChargeToMessage,
   resolveQuoteToken,
   buildPublicQuoteUrl,
+  buildPortalLink,
+  buildQuoteUrl,
+  buildMagicLoginQuoteUrl,
 } from './sms.service';
 import { withAgencySignature } from '../customer-messaging/customer-messaging.seeds';
 import {
   platformAdminCreditsRepository,
   startOfMonthUtc,
 } from '../platform-admin/platform-admin-credits.repository';
-import { getPublicBaseUrl } from '../../utils/public-url';
 import { MAGIC_LINK_TTL_MS } from '../portal/portal-auth';
 import { portalLoginTokenRepository } from '../portal/portal-login-token.repository';
 import bcrypt from 'bcryptjs';
@@ -131,27 +133,14 @@ function assertMayChangeAutomaticMessages(req: Request): void {
   }
 }
 
-function buildPortalLink() {
-  return `${getPublicBaseUrl()}/portal/login`;
-}
-
-function buildQuoteUrl(token: string): string {
-  // Portal quote view (requires the client to log into the portal), not the
-  // public /view-quote page. Pairs with the portal_email/portal_pin merge
-  // fields so the SMS gives the client both the link and how to sign in.
-  return `${getPublicBaseUrl()}/portal/quote/${token}`;
-}
-
 /**
  * Magic-login quote link: a short single-use code rides in the URL so tapping it
  * logs the client straight into the portal and lands on their quote — no typing
- * a PIN, and no long-lived token sitting in the SMS. The portal login page
- * exchanges `?mt=` for a real session.
+ * a PIN, and no long-lived token sitting in the SMS. The link itself is built by sms.service.
  */
 async function buildAutoLoginQuoteUrl(clientId: string, token: string): Promise<string> {
   const code = await portalLoginTokenRepository.create(clientId, MAGIC_LINK_TTL_MS, 'staff');
-  const next = encodeURIComponent(`/portal/quote/${token}`);
-  return `${getPublicBaseUrl()}/portal/login?mt=${code}&next=${next}`;
+  return buildMagicLoginQuoteUrl(code, token);
 }
 
 /** Random 4-digit portal PIN, zero-padded (matches the /^\d{4}$/ login rule). */

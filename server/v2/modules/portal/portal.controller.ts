@@ -5,9 +5,11 @@ import { portalBookingsService } from './portal-bookings.service';
 import { portalWebauthnService, BIOMETRIC_LOGIN_FAILED, REGISTRATION_FAILED } from './portal-webauthn.service';
 import { resolveWebauthnRp, type WebauthnRp } from './portal-webauthn-rp';
 import { getPublicBaseUrl } from '../../utils/public-url';
+import { getPortalBaseUrl, getStaffOrigin } from '../../utils/hosts';
 import { isProductionRuntime, requestOrigin } from '../../utils/link-base';
 import { portalDealsService } from './portal-deals.service';
 import { portalService } from './portal.service';
+import { portalHostCheckService } from './portal-host-check.service';
 import { handle, handleAuthed } from './portal-handlers';
 import type {
   ListPortalDealsQuery,
@@ -17,6 +19,7 @@ import type {
   PortalInterestBody,
   PortalLoginBody,
   PortalMagicLoginBody,
+  PortalPushRetireBody,
   PortalPushSubscribeBody,
   PortalPushUnsubscribeBody,
   PortalQuoteRequestBody,
@@ -39,6 +42,8 @@ function webauthnRp(req: Request, failure: () => AppError): WebauthnRp {
     configured: getPublicBaseUrl(),
     requestOrigin: requestOrigin(req),
     isProduction: isProductionRuntime(),
+    portalOrigin: getPortalBaseUrl(),
+    staffOrigin: getStaffOrigin(),
   });
   if (rp) return rp;
   if (!loggedRpFailure) {
@@ -194,9 +199,20 @@ export const portalController = {
     res.json(portalService.getVapidKey());
   }),
 
+  hostCheck: handle('Failed to check the host', async (req, res) => {
+    res.json(portalHostCheckService.check(req.hostname));
+  }),
+
   pushSubscribe: handleAuthed('Failed to subscribe', async (req, res) => {
     const { subscription } = req.body as PortalPushSubscribeBody;
     await portalService.subscribePush(req.portalClient.clientId, subscription);
+    res.json({ success: true });
+  }),
+
+  pushRetire: handle('Failed to retire the subscription', async (req, res) => {
+    const { subscription } = req.body as PortalPushRetireBody;
+    await portalService.retirePush(subscription);
+    // Always the same answer: nothing reveals whether a subscription was there.
     res.json({ success: true });
   }),
 

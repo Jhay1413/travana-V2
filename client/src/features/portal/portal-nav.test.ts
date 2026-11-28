@@ -128,3 +128,17 @@ describe("interestsRedirectTarget", () => {
     expect(interestsRedirectTarget("/portal/account", "?change-pin=0")).toBe("/portal/tags");
   });
 });
+
+describe("portalNextTarget with two hosts: absolute URLs are never followed, even to the portal host itself", () => {
+  it.each([
+    "https://portal.travana.app/portal",
+    "http://portal.travana.app/portal/account",
+    "https://travana.app/clients",
+    "//portal.travana.app/portal",
+    "https:/portal.travana.app/portal",
+    "javascript:alert(1)",
+    "\\\\evil.example\\portal",
+  ])("%s falls back to the portal home", (next) => {
+    expect(portalNextTarget(`?next=${encodeURIComponent(next)}`)).toBe("/portal");
+  });
+});

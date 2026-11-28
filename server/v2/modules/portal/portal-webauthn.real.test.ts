@@ -150,3 +150,41 @@ describe("Face ID login through the real @simplewebauthn/server", () => {
     expect(repo.updateWebauthnCounter).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("two hosts: a passkey registered on the staff host is used on the portal host (real verification)", () => {
+  // RP ID is the staff hostname, the page is on its portal subdomain: what resolveWebauthnRp returns for that set-up.
+  const twoHosts = {
+    rpID: "app.example.com",
+    origin: "https://portal.app.example.com",
+    origins: ["https://portal.app.example.com", "https://app.example.com"],
+  };
+
+  it("an assertion made on the PORTAL origin against the STAFF-host RP ID signs in", async () => {
+    const { options, challengeToken } = await portalWebauthnService.loginOptions(twoHosts);
+    expect(options.rpId).toBe("app.example.com");
+    const response = toResponse(makeAssertion(options.challenge, 6, { origin: "https://portal.app.example.com" }));
+    const result = await portalWebauthnService.login({ challengeToken, response }, twoHosts);
+    expect(result).toMatchObject({ clientId: "c1" });
+  });
+
+  it("an assertion made on the STAFF origin still signs in while both are in use", async () => {
+    const { options, challengeToken } = await portalWebauthnService.loginOptions(twoHosts);
+    const response = toResponse(makeAssertion(options.challenge, 6, { origin: "https://app.example.com" }));
+    expect((await portalWebauthnService.login({ challengeToken, response }, twoHosts)).clientId).toBe("c1");
+  });
+
+  it("a third origin is rejected with the generic 401", async () => {
+    const { options, challengeToken } = await portalWebauthnService.loginOptions(twoHosts);
+    const response = toResponse(makeAssertion(options.challenge, 6, { origin: "https://evil.app.example.com" }));
+    const err = await failure(portalWebauthnService.login({ challengeToken, response }, twoHosts));
+    expect([err.statusCode, err.message]).toEqual([401, BIOMETRIC_LOGIN_FAILED]);
+  });
+
+  it("with an unrelated portal host the RP ID is the portal's, so a staff-host RP ID assertion is rejected", async () => {
+    const unrelated = { rpID: "portal.other.example", origin: "https://portal.other.example", origins: ["https://portal.other.example", "https://app.example.com"] };
+    const { options, challengeToken } = await portalWebauthnService.loginOptions(unrelated);
+    const response = toResponse(makeAssertion(options.challenge, 6, { origin: "https://portal.other.example", rpID: "app.example.com" }));
+    const err = await failure(portalWebauthnService.login({ challengeToken, response }, unrelated));
+    expect(err.statusCode).toBe(401);
+  });
+});

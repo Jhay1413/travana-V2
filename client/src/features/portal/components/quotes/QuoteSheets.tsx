@@ -2,6 +2,7 @@ import { useEffect, useReducer, useState } from "react";
 import { PORTAL_DECLINE_REASONS } from "@shared/portal-quotes";
 import { INITIAL_DECLINE_FORM, declineFormReducer } from "../../lib/quote-decision";
 import { SHARE_METHOD, mailtoHref, shareMessage, shareNotice, shareUrl, smsHref, whatsAppHref } from "../../lib/quote-share";
+import { customerOrigin } from "@/config/env";
 import { PortalButton, portalButtonClass, ShareIcon } from "../brand";
 import { PortalSheet } from "../PortalSheet";
 
@@ -153,7 +154,7 @@ export function ShareSheet({
   onShared: (method: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const url = shareUrl(window.location.origin, token);
+  const url = shareUrl(customerOrigin(window.location.origin), token);
   const message = shareMessage({ title, dates, url, agencyName });
 
   useEffect(() => {

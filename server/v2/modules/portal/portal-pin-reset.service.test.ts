@@ -91,6 +91,18 @@ describe("processReset", () => {
     expect(decodeURIComponent(link ?? "")).toContain("next=/portal/account?change-pin=1");
   });
 
+  it("with a portal host configured the forgotten-PIN link is on the portal host", async () => {
+    process.env.PORTAL_BASE_URL = "https://my.portal.example";
+    try {
+      sender.mockImplementation(async (input) => ({ status: "sent", viaTemplate: !(await input.reserve()) }));
+      await reset();
+      const link = await reserveOnce();
+      expect(link).toContain("https://my.portal.example/portal/login?mt=CODE1234abcd&next=");
+    } finally {
+      delete process.env.PORTAL_BASE_URL;
+    }
+  });
+
   it("never reserves a link (nothing is minted) when the sender decides nothing can be sent", async () => {
     sender.mockResolvedValue({ status: "skipped", reason: "no_template" });
     vi.spyOn(console, "warn").mockImplementation(() => undefined);

@@ -1,7 +1,7 @@
 import type { BrowserContext, Route } from "@playwright/test";
 import { appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { BASE_URL, BROWSER_LOG } from "./env";
+import { BASE_URL, BROWSER_LOG, PORTAL_HOSTNAME, PORTAL_ORIGIN, TWO_HOSTS } from "./env";
 
 /**
  * Browser-side half of the outbound block. Every request the page makes that is not to the test
@@ -21,8 +21,20 @@ export const IGNORED_HOSTS: Record<string, string> = {
   "fonts.gstatic.com": "Google Fonts font files; typography only",
 };
 
-/** Chromium flag as a second layer: every hostname except localhost fails to resolve. */
-export const BROWSER_ARGS = ["--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1"];
+/**
+ * Chromium flag as a second layer: every hostname except the listed ones fails to resolve. Exact names only (never a
+ * wildcard), so in the two-host run portal.localhost resolves and any other name, other.localhost included, does not.
+ */
+export function browserArgsFor(hostnames: readonly string[]): string[] {
+  return [`--host-resolver-rules=MAP * ~NOTFOUND, ${hostnames.map((h) => `EXCLUDE ${h}`).join(", ")}`];
+}
+
+export const BROWSER_ARGS = browserArgsFor(TWO_HOSTS ? ["localhost", "127.0.0.1", PORTAL_HOSTNAME] : ["localhost", "127.0.0.1"]);
+
+/** The only origins the page may talk to: the test server, and in the two-host run its portal host name (same server). */
+export function allowedOriginsFor(testOrigin: string, portalOrigin: string | null): Set<string> {
+  return new Set(portalOrigin ? [testOrigin, portalOrigin] : [testOrigin]);
+}
 
 export const FAKE_POSTCODE = { postcode: "NE1 4ST", district: "Newcastle upon Tyne", country: "England" } as const;
 
@@ -33,7 +45,7 @@ export interface AbortedRequest {
   ignored: boolean;
 }
 
-const testOrigin = new URL(BASE_URL).origin;
+const allowedOrigins = allowedOriginsFor(new URL(BASE_URL).origin, TWO_HOSTS ? new URL(PORTAL_ORIGIN).origin : null);
 
 function fakePostcodeResponse(url: URL): { status: number; body: unknown } {
   const asked = decodeURIComponent(url.pathname.split("/").pop() ?? "").replace(/\s+/g, "").toUpperCase();
@@ -63,7 +75,7 @@ export function recordBrowserViolation(entry: AbortedRequest, logFile: string = 
 export async function installBrowserGuard(context: BrowserContext): Promise<AbortedRequest[]> {
   const aborted: AbortedRequest[] = [];
   await context.route(
-    (url) => url.origin !== testOrigin && (url.protocol === "http:" || url.protocol === "https:" || url.protocol === "ws:" || url.protocol === "wss:"),
+    (url) => !allowedOrigins.has(url.origin) && (url.protocol === "http:" || url.protocol === "https:" || url.protocol === "ws:" || url.protocol === "wss:"),
     async (route: Route) => {
       const url = new URL(route.request().url());
       if (url.hostname === "api.postcodes.io" && route.request().method() === "GET") {

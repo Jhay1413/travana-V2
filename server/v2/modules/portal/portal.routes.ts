@@ -47,6 +47,9 @@ portalRouter.get('/my-tags', portalAuth, portalController.myTags);
 // ── Push notifications ──────────────────────────────────────────────────────
 portalRouter.get('/push/vapid-key', portalController.vapidKey);
 
+// Switch-over check (public): which host the server thinks it was asked on. Nothing else about the configuration.
+portalRouter.get('/host-check', portalController.hostCheck);
+
 // ── VIP / referral / wallet ─────────────────────────────────────────────────
 portalRouter.get('/vip', portalAuth, portalController.vip);
 portalRouter.get('/vip/referrals', portalAuth, portalController.vipReferrals);

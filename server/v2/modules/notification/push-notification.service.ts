@@ -27,6 +27,18 @@ export const pushNotificationService = {
     await pushSubscriptionRepository.removeByClientAndEndpoint(clientId, endpoint);
   },
 
+  /**
+   * Forgets a subscription on the strength of what only the device (and this server) knows: the push endpoint address and
+   * its two keys. No customer session is needed, which is what a retired old worker has. Never says whether one existed.
+   */
+  async retire(subscription: { endpoint: string; keys: { p256dh: string; auth: string } }): Promise<void> {
+    await pushSubscriptionRepository.removeByEndpointAndKeys({
+      endpoint: subscription.endpoint,
+      p256dh: subscription.keys.p256dh,
+      auth: subscription.keys.auth,
+    });
+  },
+
   /** Customer-facing broadcast, limited to the portal customers of one agency. No org id sends nothing. */
   async sendToOrg(orgId: string, payload: { title: string; body: string; icon?: string; url?: string }): Promise<number> {
     if (!orgId) return 0;

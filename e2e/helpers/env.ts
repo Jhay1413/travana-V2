@@ -17,8 +17,17 @@ export const CANARY_FILE = path.join(E2E_STATE_DIR, "outbound-canary.json");
 
 /** The disposable Postgres from docker-compose.test.yml. Fixed on purpose: the guard rejects anything else. */
 export const TEST_DATABASE_URL = "postgres://postgres:postgres@localhost:55432/travana_test";
-export const E2E_PORT = 5055;
+/**
+ * The two-host run (npm run test:e2e:hosts, playwright.hosts.config.ts): the same machinery on its own port, with the app
+ * also told to serve the customer portal from its own host name. Set by helpers/two-hosts-flag.ts, and handed on to the
+ * server process by buildServerEnv. The main suite never sets it and stays single-host on 5055.
+ */
+export const TWO_HOSTS = process.env.E2E_TWO_HOSTS === "1";
+export const E2E_PORT = TWO_HOSTS ? 5057 : 5055;
 export const BASE_URL = `http://localhost:${E2E_PORT}`;
+/** Chromium resolves any *.localhost name to this machine, so no DNS or hosts-file entry is needed. */
+export const PORTAL_HOSTNAME = "portal.localhost";
+export const PORTAL_ORIGIN = `http://${PORTAL_HOSTNAME}:${E2E_PORT}`;
 /** Where the loopback fake of the SMS and WhatsApp providers listens (helpers/fake-providers.ts). */
 export const FAKE_PROVIDERS_PORT = 5056;
 export const FAKE_PROVIDERS_URL = `http://127.0.0.1:${FAKE_PROVIDERS_PORT}`;
@@ -81,6 +90,8 @@ export function buildServerEnv(parent: Record<string, string | undefined> = proc
     EMAIL_PROVIDER: "console",
     E2E_OUTBOUND_LOG: OUTBOUND_LOG,
     E2E_OUTBOUND_CANARY: CANARY_FILE,
+    // The two-host run only: the portal and public quote page live on their own host name (same server, same port).
+    ...(TWO_HOSTS ? { PORTAL_BASE_URL: PORTAL_ORIGIN, E2E_TWO_HOSTS: "1" } : {}),
   };
   assertSafeServerEnv(env);
   return env;

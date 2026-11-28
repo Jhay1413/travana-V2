@@ -1,6 +1,7 @@
 import type { NeonClient } from "@shared/schema";
 import { AppError } from "../../utils/error-handler";
 import { getPublicBaseUrl } from "../../utils/public-url";
+import { getPortalBaseUrl, SITE_ADDRESS_ERROR, tryPortalUrl } from "../../utils/hosts";
 import { createRecentSendGuard } from "../../utils/recent-send-guard";
 import { holdsHomeworkerRole, type Scope } from "../../utils/scope";
 import { neonClientRepository } from "../neon-client/neon-client.repository";
@@ -128,19 +129,25 @@ async function templateNameFor(ctx: Ctx): Promise<string | null> {
   }
 }
 
+/** Is there an address to put in front of a customer link? The portal host when there is one, else the site address. */
+function hasSiteAddress(): boolean {
+  return Boolean(getPortalBaseUrl() ?? getPublicBaseUrl());
+}
+
 /**
  * A one-time sign-in link, for a caller that already checked the site address. A customer with no PIN is flagged to choose
  * one at the portal PIN gate (no PIN value is ever written). The customer's older unused staff links stop working.
  */
 async function mintSignInLink(ctx: Ctx): Promise<string> {
-  const base = getPublicBaseUrl();
-  if (!base) throw new AppError("The site address is not configured", 500);
+  if (!hasSiteAddress()) throw new AppError("The site address is not configured", 500);
   const { client } = ctx;
   if (!client.portalPin) await neonClientRepository.setPortalPin(client.id, null, { mustChange: true });
   await portalLoginTokenRepository.retireStaffLinks(client.id);
   const code = await portalLoginTokenRepository.create(client.id, MAGIC_LINK_TTL_MS, "staff");
   ctx.minted = true;
-  return `${base}/portal/login?mt=${code}&next=${encodeURIComponent("/portal")}`;
+  const link = tryPortalUrl(`/portal/login?mt=${code}&next=${encodeURIComponent("/portal")}`);
+  if (!link) throw new AppError(SITE_ADDRESS_ERROR, 500);
+  return link;
 }
 
 /**
@@ -261,7 +268,7 @@ async function signInBySms(ctx: Ctx): Promise<StaffSendResult> {
     await record(ctx, "sms", { status: "skipped", reason: blocked });
     return notSent("sms", blocked);
   }
-  if (!getPublicBaseUrl()) {
+  if (!hasSiteAddress()) {
     await record(ctx, "sms", { status: "skipped", reason: "no_public_url" });
     return notSent("sms", "no_public_url");
   }
@@ -299,7 +306,7 @@ async function signInByWhatsapp(ctx: Ctx): Promise<StaffSendResult> {
     return notSent("whatsapp", "no_phone");
   }
   // No site address, no link: nothing is minted and nothing is offered.
-  if (!getPublicBaseUrl()) {
+  if (!hasSiteAddress()) {
     await record(ctx, "whatsapp", { status: "skipped", reason: "no_public_url" });
     return notSent("whatsapp", "no_public_url");
   }

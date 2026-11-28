@@ -44,7 +44,7 @@ export function clearPortalToken() {
   localStorage.removeItem(PORTAL_TOKEN_KEY);
   localStorage.removeItem("portal_client_id");
   localStorage.removeItem("portal_email");
-  localStorage.removeItem("portal_credential_id");
+  localStorage.removeItem(LOCAL_CREDENTIAL_KEY);
   // Reset the notification banner so it shows again on the next login.
   sessionStorage.removeItem(PORTAL_PUSH_BANNER_DISMISSED_KEY);
 }
@@ -574,7 +574,7 @@ export function useRequestWalletWithdraw() {
 
 /** Whether this device remembers a Face ID / Touch ID set-up. Purely local — the server is never asked who has biometrics. */
 export function hasLocalBiometric(): boolean {
-  return !!localStorage.getItem("portal_credential_id") && !!window.PublicKeyCredential;
+  return !!localStorage.getItem(LOCAL_CREDENTIAL_KEY) && !!window.PublicKeyCredential;
 }
 
 /**
@@ -604,46 +604,75 @@ export async function registerPortalBiometric(): Promise<void> {
                   navigator.userAgent.includes("Android") ? "Android" : "Device",
     }),
   });
-  localStorage.setItem("portal_credential_id", credential.id);
+  rememberLocalBiometric(credential.id);
+}
+
+const LOCAL_CREDENTIAL_KEY = "portal_credential_id";
+
+/** Does this browser report a built-in biometric (Face ID, Touch ID, Windows Hello)? False when it cannot say. */
+export async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
+  try {
+    if (!window.PublicKeyCredential || !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) return false;
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch {
+    return false;
+  }
+}
+
+/** Remember which passkey this device used, so the sign-in screen and the Account page know Face ID works here. */
+export function rememberLocalBiometric(credentialId: string): void {
+  localStorage.setItem(LOCAL_CREDENTIAL_KEY, credentialId);
+}
+
+export interface PortalBiometricSignIn {
+  token: string;
+  clientId: string;
+  firstName: string;
+  mustChangePin?: boolean;
+  /** The passkey the device used (discoverable: the server was never told which one to expect). */
+  credentialId: string;
+}
+
+/**
+ * The Face ID sign-in ceremony: fetch a challenge, have the device pick a passkey for this site and sign it, send the
+ * assertion back. No credential id is sent, so it works on a device that has never been used here (e.g. after the portal
+ * moved to its own address with the passkey carried over). Stores nothing; callers decide what to keep.
+ */
+export async function signInWithPortalBiometric(): Promise<PortalBiometricSignIn> {
+  const optRes = await fetch("/api/v2/portal/webauthn/login/options", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!optRes.ok) throw new Error("Biometric login failed");
+  const { options, challengeToken } = (await optRes.json()) as { options: RequestOptionsJSON; challengeToken: string };
+
+  const credential = (await navigator.credentials.get({ publicKey: toRequestOptions(options) })) as PublicKeyCredential | null;
+  if (!credential) throw new Error("Biometric login failed");
+
+  const res = await fetch("/api/v2/portal/webauthn/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challengeToken, response: authenticationToJSON(credential) }),
+  });
+  if (!res.ok) throw new Error("Biometric login failed");
+  const data = (await res.json()) as Omit<PortalBiometricSignIn, "credentialId">;
+  return { ...data, credentialId: credential.id };
 }
 
 /** Forget this device's remembered Face ID (used when a sign-in with it was rejected, so a dead button does not return). */
 export function clearLocalBiometric() {
-  localStorage.removeItem("portal_credential_id");
+  localStorage.removeItem(LOCAL_CREDENTIAL_KEY);
 }
 
-/** Two-step Face ID / Touch ID sign-in: fetch a challenge, have the device sign it, send the assertion back. */
+/** Face ID / Touch ID sign-in from the sign-in screen. A success also remembers the passkey on this device. */
 export function usePortalBiometricLogin() {
-  return useMutation<
-    { token: string; clientId: string; firstName: string; mustChangePin?: boolean },
-    Error,
-    void
-  >({
-    mutationFn: async () => {
-      const optRes = await fetch("/api/v2/portal/webauthn/login/options", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      if (!optRes.ok) throw new Error("Biometric login failed");
-      const { options, challengeToken } = (await optRes.json()) as { options: RequestOptionsJSON; challengeToken: string };
-
-      const credential = (await navigator.credentials.get({ publicKey: toRequestOptions(options) })) as PublicKeyCredential | null;
-      if (!credential) throw new Error("Biometric login failed");
-
-      const res = await fetch("/api/v2/portal/webauthn/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ challengeToken, response: authenticationToJSON(credential) }),
-      });
-      if (!res.ok) {
-        throw new Error("Biometric login failed");
-      }
-      return res.json();
-    },
+  return useMutation<PortalBiometricSignIn, Error, void>({
+    mutationFn: signInWithPortalBiometric,
     onSuccess: (data) => {
       if (data?.token) {
         setPortalToken(data.token);
+        if (data.credentialId) rememberLocalBiometric(data.credentialId);
       }
     },
   });

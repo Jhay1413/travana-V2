@@ -26,3 +26,15 @@ describe("findByOrgId", () => {
     expect(values).toContain("org-a");
   });
 });
+
+describe("removeByEndpointAndKeys", () => {
+  it("matches the endpoint AND both keys, never one of them alone", async () => {
+    await pushSubscriptionRepository.removeByEndpointAndKeys({ endpoint: "https://push.example/e", p256dh: "P", auth: "A" });
+    const { text, values } = captured.queries[0];
+    expect(text).toMatch(/^delete from "push_subscriptions"/i);
+    expect(text).toContain(`"endpoint" = $1`);
+    expect(text).toContain(`"p256dh" = $2`);
+    expect(text).toContain(`"auth" = $3`);
+    expect(values).toEqual(["https://push.example/e", "P", "A"]);
+  });
+});

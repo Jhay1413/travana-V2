@@ -19,6 +19,9 @@ vi.mock("./sms.service", () => ({
   attachChargeToMessage: vi.fn(),
   resolveQuoteToken: vi.fn(),
   buildPublicQuoteUrl: vi.fn(),
+  buildPortalLink: () => "https://app.example/portal/login",
+  buildQuoteUrl: (token: string) => `https://app.example/portal/quote/${token}`,
+  buildMagicLoginQuoteUrl: (code: string, token: string) => `https://app.example/portal/login?mt=${code}&next=${encodeURIComponent(`/portal/quote/${token}`)}`,
 }));
 vi.mock("../platform-admin/platform-admin-credits.repository", () => ({ platformAdminCreditsRepository: {}, startOfMonthUtc: vi.fn() }));
 vi.mock("../portal/portal-auth", () => ({ MAGIC_LINK_TTL_MS: 5 }));

@@ -13,6 +13,8 @@ const isCI = Boolean(process.env.CI);
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "**/*.spec.ts",
+  // The two-host specs run only under playwright.hosts.config.ts (npm run test:e2e:hosts): they need the portal host name.
+  testIgnore: "**/hosts/**",
   globalSetup: "./e2e/global-setup.ts",
   outputDir: "./test-results",
 

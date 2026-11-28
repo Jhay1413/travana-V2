@@ -8,6 +8,8 @@ import { errorHandler } from "./middlewares/error.middleware";
 import quotePublicRoutes from "./v2/modules/quote/quote-public.routes";
 import { publicQuoteHeaders } from "./v2/middlewares/public-quote-headers";
 import { createRequestLogger } from "./v2/middlewares/request-log";
+import { hostApiGate } from "./v2/middlewares/host-routing";
+import { portalServiceWorker } from "./v2/middlewares/portal-sw";
 import websitePublicRoutes from "./routes/website-public.routes";
 import portalRoutes from "./routes/portal.routes";
 import { warmPool } from "./v2/config/database";
@@ -48,6 +50,10 @@ export function log(message: string, source = "express") {
 app.use(createRequestLogger((line) => log(line)));
 
 (async () => {
+  // Two-host set-up (PORTAL_BASE_URL): on the portal host only the portal and public-quote APIs are answered. A no-op
+  // when the setting is unset. The page redirects live in front of the SPA fallback (static.ts / vite.ts).
+  app.use(hostApiGate);
+
   // The page itself is never cached or indexed and does not leak its address in Referer (the router sets the same for the API).
   app.use("/view-quote", publicQuoteHeaders);
   app.use("/api/public/quote", quotePublicRoutes);

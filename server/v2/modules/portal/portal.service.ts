@@ -124,6 +124,10 @@ export const portalService = {
     await pushNotificationService.subscribe(clientId, subscription);
   },
 
+  async retirePush(subscription: PushSubscriptionInput): Promise<void> {
+    await pushNotificationService.retire(subscription);
+  },
+
   async unsubscribePush(clientId: string, endpoint: string): Promise<void> {
     await pushNotificationService.unsubscribe(clientId, endpoint);
   },

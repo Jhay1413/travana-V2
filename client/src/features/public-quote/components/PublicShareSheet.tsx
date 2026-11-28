@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { customerOrigin } from "@/config/env";
 import { PortalButton, ShareIcon, portalButtonClass } from "@/features/portal";
 import { PortalSheet } from "@/features/portal/components/PortalSheet";
 import { SHARE_METHOD, mailtoHref, shareMessage, shareUrl, smsHref, whatsAppHref } from "@/features/portal/lib/quote-share";
@@ -33,7 +34,7 @@ export function PublicShareSheet({
   onShared: (method: ShareMethod) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const url = shareUrl(window.location.origin, token);
+  const url = shareUrl(customerOrigin(window.location.origin), token);
   const message = shareMessage({ title, dates, url, agencyName });
 
   useEffect(() => {

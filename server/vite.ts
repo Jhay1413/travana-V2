@@ -5,6 +5,10 @@ import viteConfig from "../vite.config";
 import fs from "fs";
 import path from "path";
 import { nanoid } from "nanoid";
+import { getPortalBaseUrl } from "./v2/utils/hosts";
+import { hostPageRouting } from "./v2/middlewares/host-routing";
+import { setIndexCacheHeaders } from "./v2/utils/index-html";
+import { renderIndexHtml } from "./v2/modules/page-meta/page-meta.controller";
 
 const viteLogger = createLogger();
 
@@ -31,7 +35,7 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use(vite.middlewares);
 
-  app.use("/{*path}", async (req, res, next) => {
+  app.use("/{*path}", hostPageRouting, async (req, res, next) => {
     const url = req.originalUrl;
 
     try {
@@ -48,7 +52,9 @@ export async function setupVite(server: Server, app: Express) {
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
       );
-      const page = await vite.transformIndexHtml(url, template);
+      const page = await renderIndexHtml(await vite.transformIndexHtml(url, template), req);
+      // Dev serves no caching headers today; with a portal host the page still must not be shared between hosts.
+      if (getPortalBaseUrl()) setIndexCacheHeaders(res);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);

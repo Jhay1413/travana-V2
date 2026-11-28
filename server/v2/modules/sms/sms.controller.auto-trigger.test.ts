@@ -5,7 +5,7 @@ vi.mock("./sms.repository", () => ({
 }));
 vi.mock("./sms.service", () => ({
   pingSmsConnection: vi.fn(), sendSms: vi.fn(), mergeTemplate: vi.fn(), normalisePhone: vi.fn(), consumeSmsCredit: vi.fn(),
-  attachChargeToMessage: vi.fn(), resolveQuoteToken: vi.fn(), buildPublicQuoteUrl: vi.fn(), QUOTE_SHARE_COMPANY_NAME: "Co",
+  attachChargeToMessage: vi.fn(), resolveQuoteToken: vi.fn(), buildPublicQuoteUrl: vi.fn(), buildPortalLink: vi.fn(), buildQuoteUrl: vi.fn(), buildMagicLoginQuoteUrl: vi.fn(), QUOTE_SHARE_COMPANY_NAME: "Co",
 }));
 vi.mock("../platform-admin/platform-admin-credits.repository", () => ({ platformAdminCreditsRepository: {}, startOfMonthUtc: vi.fn() }));
 vi.mock("../portal/portal-auth", () => ({ DEFAULT_PORTAL_PIN: "0000", MAGIC_LINK_TTL_MS: 1 }));

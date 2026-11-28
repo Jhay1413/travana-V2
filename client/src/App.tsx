@@ -20,6 +20,8 @@ import { PortalThemeProvider } from "@/features/portal";
 import { Loader2 } from "lucide-react";
 import type { OrgRole } from "@/types/auth/auth.types";
 import { BotSettingsPage, KnowledgeBasePage } from "@/features/ai-assistant";
+import { env, portalHref, staffHref } from "@/config/env";
+import { hostGuardAction, safeHostChangeTarget } from "@/config/hosts";
 import { canRunOnboarding, onboardingRedirectFor, shouldHoldForOnboarding, useOnboardingGate } from "@/features/onboarding";
 
 // ── Lazy page imports ──────────────────────────────────────────────────────────
@@ -267,7 +269,48 @@ function AuthenticatedRouter() {
   );
 }
 
-function AppRouter() {
+/** The customer portal screens, behind the PIN gate and the agency theme. */
+function PortalRoutes() {
+  return (
+    <PortalThemeProvider>
+      <PortalPinGate>
+        <Switch>
+          <Route path="/portal/login" component={PortalLoginPage} />
+          <Route path="/portal/tags" component={PortalTagsPage} />
+          <Route path="/portal/quote/:token" component={PortalQuoteViewPage} />
+          <Route path="/portal/booking/:id" component={PortalBookingViewPage} />
+          <Route path="/portal/quotes" component={PortalQuotesPage} />
+          <Route path="/portal/bookings" component={PortalBookingsPage} />
+          {/* The short-lived Trips tab: its paths now redirect to the separate screens. */}
+          <Route path="/portal/trips" component={PortalLegacyRedirect} />
+          <Route path="/portal/trips/quotes" component={PortalLegacyRedirect} />
+          <Route path="/portal/trips/bookings" component={PortalLegacyRedirect} />
+          <Route path="/portal/account" component={PortalAccountPage} />
+          <Route path="/portal/deals" component={PortalDealsPage} />
+          <Route path="/portal/messages" component={PortalMessagesPage} />
+          <Route path="/portal/referrals" component={PortalReferralsPage} />
+          <Route path="/portal" component={PortalHomePage} />
+          <Route path="/portal/:rest*" component={PortalHomePage} />
+        </Switch>
+      </PortalPinGate>
+    </PortalThemeProvider>
+  );
+}
+
+function PublicQuoteRoutes() {
+  return (
+    <Switch>
+      <Route path="/view-quote/:token" component={PublicQuotePage} />
+    </Switch>
+  );
+}
+
+function isPortalPath(location: string): boolean {
+  return location === "/portal" || location.startsWith("/portal/");
+}
+
+/** Everything on the main host (and on the only host when there is just one): staff session plumbing plus every page. */
+function StaffHostRouter() {
   const { isLoading, isAuthenticated } = useAuth();
   const [location] = useLocation();
 
@@ -282,32 +325,7 @@ function AppRouter() {
     return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
   }, []);
 
-  if (location === "/portal" || location.startsWith("/portal/")) {
-    return (
-      <PortalThemeProvider>
-        <PortalPinGate>
-          <Switch>
-            <Route path="/portal/login" component={PortalLoginPage} />
-            <Route path="/portal/tags" component={PortalTagsPage} />
-            <Route path="/portal/quote/:token" component={PortalQuoteViewPage} />
-            <Route path="/portal/booking/:id" component={PortalBookingViewPage} />
-            <Route path="/portal/quotes" component={PortalQuotesPage} />
-            <Route path="/portal/bookings" component={PortalBookingsPage} />
-            {/* The short-lived Trips tab: its paths now redirect to the separate screens. */}
-            <Route path="/portal/trips" component={PortalLegacyRedirect} />
-            <Route path="/portal/trips/quotes" component={PortalLegacyRedirect} />
-            <Route path="/portal/trips/bookings" component={PortalLegacyRedirect} />
-            <Route path="/portal/account" component={PortalAccountPage} />
-            <Route path="/portal/deals" component={PortalDealsPage} />
-            <Route path="/portal/messages" component={PortalMessagesPage} />
-            <Route path="/portal/referrals" component={PortalReferralsPage} />
-            <Route path="/portal" component={PortalHomePage} />
-            <Route path="/portal/:rest*" component={PortalHomePage} />
-          </Switch>
-        </PortalPinGate>
-      </PortalThemeProvider>
-    );
-  }
+  if (isPortalPath(location)) return <PortalRoutes />;
 
   if (location === "/travana" || location.startsWith("/travana/")) {
     return <TravanaRouter />;
@@ -317,13 +335,7 @@ function AppRouter() {
     return <CruiseQuotePreviewPage />;
   }
 
-  if (location.startsWith("/view-quote/")) {
-    return (
-      <Switch>
-        <Route path="/view-quote/:token" component={PublicQuotePage} />
-      </Switch>
-    );
-  }
+  if (location.startsWith("/view-quote/")) return <PublicQuoteRoutes />;
 
   if (location === "/forgot-password") {
     return <ForgotPasswordPage />;
@@ -369,6 +381,38 @@ function AppRouter() {
   );
 }
 
+/**
+ * The portal host: only customer pages ever render here, so none of the staff plumbing (the /api/auth/user session
+ * check, the staff 401 listener) is mounted. The route guard below has already sent every other page to the staff host.
+ */
+function PortalHostRouter({ location }: { location: string }) {
+  return isPortalPath(location) ? <PortalRoutes /> : <PublicQuoteRoutes />;
+}
+
+/**
+ * Two-host set-up: before anything renders, a page that belongs to the other host is replaced with its address there
+ * (nothing flashes); with one host (kind "single") this is a no-op and the old router runs as before.
+ */
+function AppRouter() {
+  const [location] = useLocation();
+  const action = hostGuardAction(env.hostKind, location, window.location.search);
+  // A host change never goes to an address on the origin we are already on (that could only loop); then the page just renders.
+  const target =
+    action.type === "redirect"
+      ? safeHostChangeTarget((action.host === "portal" ? portalHref : staffHref)(`${action.path}${window.location.hash}`), window.location.origin)
+      : action.type === "same-host-path"
+        ? `${action.path}${window.location.search}`
+        : null;
+
+  useEffect(() => {
+    if (target) window.location.replace(target);
+  }, [target]);
+
+  if (target) return null;
+  if (env.hostKind === "portal") return <PortalHostRouter location={location} />;
+  return <StaffHostRouter />;
+}
+
 // Runs the single backend session validation and mirrors it into the auth store.
 // Rendered once inside QueryClientProvider; renders nothing.
 function AuthSync() {
@@ -381,6 +425,8 @@ function App() {
   // them doesn't hit a lazy-load (Suspense) spinner. import() is deduped by the
   // bundler, so this just primes the same chunks the lazy() imports use.
   useEffect(() => {
+    // The portal host never shows staff pages, so their chunks are not worth fetching there.
+    if (env.hostKind === "portal") return;
     const t = setTimeout(() => {
       void import("@/pages/agent-overview");
       void import("@/pages/clients");
@@ -394,7 +440,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <AuthSync />
+        {/* The staff session check calls /api/auth/user, which the portal host refuses. */}
+        {env.hostKind !== "portal" && <AuthSync />}
         <MenuModeProvider>
           <Suspense fallback={<LoadingScreen />}>
             <AppRouter />

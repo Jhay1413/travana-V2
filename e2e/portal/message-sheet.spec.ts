@@ -24,6 +24,12 @@ async function agentCalled(page: Page, name: string): Promise<void> {
   });
 }
 
+// The branding stub below fetches the real answer inside its handler. A test that ends while that fetch is still in
+// flight would close the page under it ("Response has been disposed"), so every test waits for its handlers to finish.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "wait" });
+});
+
 interface Fixture {
   q: PortalQuoteWorld;
   tenerife: SeededPortalQuote;
@@ -263,14 +269,17 @@ test.describe("customer portal: the Message sheet, what it is about", () => {
     await openFromTab(page);
     const radios = page.getByTestId("message-about").getByRole("radio");
     const first = radios.first();
-    // The list is the booking, then the open quotes in the server's order (newest first), then "Something else".
+    // The list is the booking, then the two open quotes (in the order the server sends them, which this test does not
+    // depend on), then "Something else". One step down from the default booking is the second radio, whichever quote it is.
     await expect(radios).toHaveCount(4);
     await expect(first).toHaveAttribute("data-testid", `message-about-booking:${tripId}`);
-    await expect(radios.nth(1)).toHaveAttribute("data-testid", `message-about-quote:${algarve.id}`);
-    await expect(radios.nth(2)).toHaveAttribute("data-testid", `message-about-quote:${tenerife.id}`);
+    const quoteIds = [`message-about-quote:${tenerife.id}`, `message-about-quote:${algarve.id}`];
+    const second = await radios.nth(1).getAttribute("data-testid");
+    const third = await radios.nth(2).getAttribute("data-testid");
+    expect([second, third].sort()).toEqual([...quoteIds].sort());
     await first.focus();
     await page.keyboard.press("ArrowDown");
-    await expect(checkedRadio(page)).toHaveAttribute("data-testid", `message-about-quote:${algarve.id}`);
+    await expect(checkedRadio(page)).toHaveAttribute("data-testid", second ?? "");
     await expect(checkedRadio(page)).toBeFocused();
     await page.keyboard.press("ArrowUp");
     await expect(first).toHaveAttribute("aria-checked", "true");

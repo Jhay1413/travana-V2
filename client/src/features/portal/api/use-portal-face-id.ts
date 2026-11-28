@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { PortalApiError, clearLocalBiometric, getPortalToken, hasLocalBiometric, portalFetch, registerPortalBiometric } from "@/hooks/use-portal-api";
+import { PortalApiError, clearLocalBiometric, getPortalToken, hasLocalBiometric, portalFetch, registerPortalBiometric, rememberLocalBiometric, signInWithPortalBiometric } from "@/hooks/use-portal-api";
+import { faceIdAffordance, type FaceIdAffordance } from "../lib/face-id-affordance";
 import { PORTAL_ENDPOINTS } from "./portal-endpoints";
 
 /** The server's code for "set-up needs a PIN sign-in from the last 10 minutes". */
@@ -18,6 +19,8 @@ export interface FaceIdDevice {
 }
 
 export const faceIdKeys = { devices: ["portal", "webauthn-credentials"] as const };
+
+export type FaceIdUseHereResult = { status: "done" } | { status: "cancelled" } | { status: "not-here" };
 
 export type FaceIdSetupResult =
   | { status: "done" }
@@ -56,6 +59,7 @@ export function usePortalFaceId() {
   const queryClient = useQueryClient();
   const [localEnabled, setLocalEnabled] = useState(() => hasLocalBiometric());
   const [pending, setPending] = useState(false);
+  const [useHereFailed, setUseHereFailed] = useState(false);
 
   const devicesQuery = useQuery<FaceIdDevice[]>({
     queryKey: faceIdKeys.devices,
@@ -93,6 +97,34 @@ export function usePortalFaceId() {
     }
   }, [queryClient]);
 
+  /**
+   * The account already has a Face ID (set up on the old address, or on another device) but this device has not used it
+   * here yet: run a sign-in ceremony and remember the passkey it picks. Starts no registration (that would be refused when the
+   * device already holds the passkey). Does not replace the session. A passkey that belongs to someone else is not kept.
+   */
+  const useHere = useCallback(async (): Promise<FaceIdUseHereResult> => {
+    setPending(true);
+    try {
+      const result = await signInWithPortalBiometric();
+      if (result.clientId !== localStorage.getItem("portal_client_id")) {
+        setUseHereFailed(true);
+        return { status: "not-here" };
+      }
+      rememberLocalBiometric(result.credentialId);
+      setLocalEnabled(true);
+      await queryClient.invalidateQueries({ queryKey: faceIdKeys.devices });
+      return { status: "done" };
+    } catch (err) {
+      const cancelled = typeof DOMException !== "undefined" && err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "AbortError");
+      // A cancelled prompt may be tried again; anything else means there is no usable passkey on this device.
+      if (cancelled) return { status: "cancelled" };
+      setUseHereFailed(true);
+      return { status: "not-here" };
+    } finally {
+      setPending(false);
+    }
+  }, [queryClient]);
+
   /** Deletes one set-up on the server. Throws if the server refuses, so nothing is forgotten locally by mistake. */
   const removeDevice = useCallback(
     async (id: string) => {
@@ -122,5 +154,12 @@ export function usePortalFaceId() {
     await queryClient.invalidateQueries({ queryKey: faceIdKeys.devices });
   }, [queryClient]);
 
-  return { enabled, pending, setUp, remove, removeDevice, devices, thisDeviceId: findThisDevice(devices, localStorage.getItem(LOCAL_CREDENTIAL_KEY))?.id ?? null };
+  const affordance: FaceIdAffordance = faceIdAffordance({
+    supported: typeof window !== "undefined" && !!window.PublicKeyCredential,
+    enabledHere: enabled,
+    accountHasCredential: devices.length > 0,
+    useHereFailed,
+  });
+
+  return { enabled, affordance, pending, setUp, useHere, remove, removeDevice, devices, thisDeviceId: findThisDevice(devices, localStorage.getItem(LOCAL_CREDENTIAL_KEY))?.id ?? null };
 }

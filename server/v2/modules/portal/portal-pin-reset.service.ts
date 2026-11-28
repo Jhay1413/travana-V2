@@ -1,3 +1,4 @@
+import { getPortalBaseUrl, tryPortalUrl } from '../../utils/hosts';
 import { getPublicBaseUrl } from '../../utils/public-url';
 import { normalisePhone } from '../sms/sms.service';
 import { normalizeOrgSlug } from './portal-org-slug';
@@ -84,8 +85,7 @@ async function resetPin(input: PortalPinResetBody): Promise<void> {
   if (!phone) return;
 
   // A link with no site address in front of it is useless: send nothing.
-  const baseUrl = getPublicBaseUrl();
-  if (!baseUrl) {
+  if (!(getPortalBaseUrl() ?? getPublicBaseUrl())) {
     console.warn(`[portal-pin-reset] nothing sent for client ${target.id}: no_public_url`);
     return;
   }
@@ -119,7 +119,7 @@ async function resetPin(input: PortalPinResetBody): Promise<void> {
     }
     if (!result.reserved) return null;
     limiter.record(key);
-    return `${baseUrl}/portal/login?mt=${result.code}&next=${encodeURIComponent(PIN_RESET_NEXT_PATH)}`;
+    return tryPortalUrl(`/portal/login?mt=${result.code}&next=${encodeURIComponent(PIN_RESET_NEXT_PATH)}`);
   };
 
   // The agency's channel for automatic customer messages (WhatsApp unless it has chosen SMS).
